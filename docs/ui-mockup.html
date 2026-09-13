@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — UI direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --mist:#F5F1F4; --blush:#F1DCE6; --lavender:#DCD5EE; --sage:#DCE8DF; --coral:#F0D6D2;
+  --ink:#2B2733; --ink-soft:#6A6377; --plum:#4E3A78; --good:#3B7A57; --watch:#B8741A; --act:#C24A3A;
+  --glass:rgba(255,255,255,.55); --paper:rgba(255,255,255,.92);
+  --r-sheet:28px; --r-tile:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{font-family:'Outfit',system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.page{max-width:1240px;margin:0 auto;padding:48px 24px 80px}
+h1{font-weight:400;font-size:28px;letter-spacing:-.01em}
+.lede{color:var(--ink-soft);margin-top:8px;max-width:60ch;line-height:1.5}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:40px;margin-top:40px;align-items:start}
+.col-title{font-size:14px;color:var(--ink-soft);margin-bottom:14px}
+
+.phone{width:100%;max-width:372px;margin:0 auto;background:#1c1a20;border-radius:48px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:38px;overflow:hidden;min-height:760px;padding:18px 20px 96px}
+.screen::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 25% 12%,rgba(255,255,255,.65),transparent 55%);pointer-events:none}
+.wash-stable{background:linear-gradient(160deg,var(--lavender) 0%,var(--blush) 45%,var(--sage) 100%)}
+.wash-watch{background:linear-gradient(160deg,var(--blush) 0%,#F3E6E0 50%,var(--lavender) 100%)}
+.screen>*{position:relative}
+.statusbar{display:flex;justify-content:space-between;font-size:14px;color:var(--ink-soft);padding:6px 8px 0}
+.statusbar b{font-weight:500;color:var(--ink)}
+
+.tile{background:var(--glass);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.7);box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 8px 24px rgba(60,40,80,.06);border-radius:var(--r-tile);padding:20px;margin-top:12px}
+.tile.paper{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none}
+.pill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(255,255,255,.8);background:var(--paper);color:var(--ink);font-weight:500;cursor:default}
+.pill.plum{background:var(--plum);color:#fff;border-color:var(--plum)}
+.pill.coral{background:#F7E4E1;border-color:#EFCFCA;color:#7A2E24}
+.chip{display:inline-block;background:var(--glass);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.75);border-radius:12px;padding:6px 10px;font-size:13px;color:var(--ink);margin:6px 6px 0 0}
+.cap{color:var(--ink-soft)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:10px;vertical-align:middle}
+.d-good{background:var(--good)} .d-watch{background:var(--watch)} .d-act{background:var(--act)}
+
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;display:flex;justify-content:space-around;padding:12px 6px 14px;border-radius:999px;background:var(--glass);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.75)}
+.tabbar span{color:var(--ink-soft);font-size:14px}
+.tabbar span.on{color:var(--plum);font-weight:500}
+
+.dad .hero{padding:26px 6px 6px}
+.dad .hero .greet{font-size:20px}
+.dad .hero .big{font-size:64px;font-weight:500;line-height:1;margin-top:10px}
+.dad .hero .sub{font-size:20px;margin-top:6px}
+.dad .tile{padding:22px}
+.dad .tile .name{font-size:24px;font-weight:500;line-height:1.15}
+.dad .tile .why{font-size:18px;color:var(--ink-soft);margin-top:4px}
+.dad .tile .btn{margin-top:16px;width:100%;height:56px;font-size:20px}
+.dad .cap{font-size:16px}
+.dad .tabbar span{font-size:16px}
+.pillrow{display:flex;gap:14px;align-items:center}
+.pillimg{width:56px;height:56px;border-radius:50%;background:linear-gradient(145deg,#fff,#E9E2F1);border:1px solid rgba(78,58,120,.15);display:flex;align-items:center;justify-content:center}
+.pillimg i{display:block;width:26px;height:12px;border-radius:999px;background:#fff;border:1.5px solid var(--plum);position:relative}
+.pillimg i::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1.5px;background:var(--plum)}
+.pillimg.round i{width:18px;height:18px;border-radius:50%}
+.pillimg.round i::after{display:none}
+.family{display:flex;gap:12px;align-items:flex-start}
+.avatar{width:40px;height:40px;border-radius:50%;background:var(--plum);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:500;flex:none}
+.photo{width:100%;height:96px;border-radius:14px;margin-top:12px;background:linear-gradient(135deg,#E5DDEF,#F4E4EA 60%,#DDE9E1)}
+
+.chief .top{display:flex;justify-content:space-between;align-items:center;padding:20px 4px 0}
+.chief .top .who{display:flex;align-items:center;gap:10px}
+.chief .top .who .name{font-size:20px;font-weight:500}
+.chief .hero{padding:22px 6px 6px}
+.chief .hero .label{font-size:14px;color:var(--ink-soft)}
+.chief .hero .big{font-size:54px;font-weight:300;line-height:1.05;margin-top:6px}
+.chief .hero .sub{font-size:18px;color:var(--ink-soft);margin-top:4px}
+.chief .tile .t{font-size:16px;font-weight:500}
+.chief .tile .n{font-size:36px;font-weight:400;line-height:1;margin-top:6px}
+.chief .tile .cap{font-size:13px;margin-top:6px}
+.chief .list{list-style:none;margin-top:10px}
+.chief .list li{padding:10px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px;line-height:1.45}
+.chief .list li:first-child{border-top:0}
+.chief .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chief .two .tile{margin-top:12px}
+.ask{position:absolute;left:20px;right:20px;bottom:86px;height:52px;border-radius:999px;background:var(--paper);border:1px solid rgba(255,255,255,.8);display:flex;align-items:center;padding:0 18px;gap:12px;color:var(--ink-soft);font-size:15px;box-shadow:0 8px 24px rgba(60,40,80,.08)}
+.ask .mic{width:32px;height:32px;border-radius:50%;background:var(--plum);flex:none}
+.spark{width:100%;height:64px;margin-top:10px}
+
+.tokens .sheet{background:var(--paper);border:1px solid rgba(255,255,255,.9);border-radius:var(--r-sheet);padding:24px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.tokens h2{font-size:16px;font-weight:500;margin:0 0 12px}
+.tokens section+section{margin-top:26px;padding-top:22px;border-top:1px solid rgba(43,39,51,.08)}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.sw{height:44px;border-radius:12px;border:1px solid rgba(43,39,51,.08)}
+.sw-l{font-size:12px;color:var(--ink-soft);margin-top:4px;text-align:center}
+.washes{display:grid;gap:8px}
+.wash{height:52px;border-radius:14px;display:flex;align-items:center;padding:0 16px;font-size:14px}
+.anat{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px;border-radius:20px;background:linear-gradient(160deg,var(--lavender),var(--blush) 60%,var(--sage))}
+.anat .tile{margin:0;padding:16px}
+.anat .tile b{display:block;font-weight:500;font-size:15px}
+.anat .tile span{font-size:13px;color:var(--ink-soft)}
+.scale div{display:flex;align-items:baseline;justify-content:space-between;padding:6px 0}
+.scale .lab{font-size:13px;color:var(--ink-soft)}
+.rules{list-style:none;font-size:15px;line-height:1.55}
+.rules li{padding:6px 0 6px 18px;position:relative}
+.rules li::before{content:"";position:absolute;left:0;top:14px;width:6px;height:6px;border-radius:50%;background:var(--plum)}
+@media (prefers-reduced-motion:no-preference){.tile.paper .btn{transition:transform .15s ease}}
+@media (max-width:420px){.screen{padding:16px 14px 92px}.dad .hero .big{font-size:56px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Nura — UI direction</h1>
+  <p class="lede">Light washes tinted by the person's state, glass for chrome, paper for anything a decision depends on. Two densities of the same language: Dad's Today screen and Ash's Home screen.</p>
+
+  <div class="row">
+
+    <div>
+      <div class="col-title">Dad — Today (stable wash, paper-first)</div>
+      <div class="phone"><div class="screen wash-stable dad">
+        <div class="statusbar"><b>7:42</b><span>Hokkien voice</span></div>
+        <div class="hero">
+          <div class="greet">Good morning, Pa</div>
+          <div class="big">2</div>
+          <div class="sub">medicines with breakfast</div>
+        </div>
+
+        <div class="tile paper">
+          <div class="pillrow">
+            <div class="pillimg"><i></i></div>
+            <div><div class="name">Amlodipine 5 mg</div><div class="why">For your blood pressure</div></div>
+          </div>
+          <div class="pill btn">Taken</div>
+        </div>
+
+        <div class="tile paper">
+          <div class="pillrow">
+            <div class="pillimg round"><i></i></div>
+            <div><div class="name">Aspirin 100 mg</div><div class="why">For your heart, after food</div></div>
+          </div>
+          <div class="pill btn">Taken</div>
+        </div>
+
+        <div class="tile">
+          <div class="name" style="font-size:22px">Thursday, 10 in the morning</div>
+          <div class="why">Dr Tan, heart clinic. Mei is driving.</div>
+          <div style="margin-top:12px"><span class="chip">Your questions are ready</span><span class="chip">Bring the pressure log</span></div>
+        </div>
+
+        <div class="tile">
+          <div class="family">
+            <div class="avatar">M</div>
+            <div><div class="name" style="font-size:20px">From Mei</div><div class="why">The grandkids at the park this morning.</div></div>
+          </div>
+          <div class="photo"></div>
+        </div>
+
+        <div class="pill coral btn" style="width:100%;height:60px;margin-top:14px;font-size:20px">I'm not feeling well</div>
+
+        <div class="tabbar"><span class="on">Today</span><span>Medicines</span><span>Ask</span><span>Visits</span></div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-title">Ash — Home (watch wash, glass-first)</div>
+      <div class="phone"><div class="screen wash-watch chief">
+        <div class="statusbar"><b>8:15</b><span>Tuesday</span></div>
+        <div class="top">
+          <div class="who"><div class="avatar" style="background:#8C7BB0">P</div><div class="name">Pa</div></div>
+          <span class="cap" style="font-size:14px">Changed since Sunday</span>
+        </div>
+        <div class="hero">
+          <div class="label">Most likely state</div>
+          <div class="big">Stable</div>
+          <div class="sub">watch blood pressure</div>
+          <svg class="spark" viewBox="0 0 320 64" aria-hidden="true">
+            <rect x="0" y="22" width="320" height="22" rx="6" fill="rgba(78,58,120,.08)"/>
+            <polyline fill="none" stroke="#2B2733" stroke-width="1.5" stroke-linejoin="round" points="0,44 36,42 72,43 108,38 144,36 180,33 216,30 252,24 288,18 318,14"/>
+            <circle cx="318" cy="14" r="4" fill="#B8741A"/>
+          </svg>
+          <div><span class="chip">148 this morning</span><span class="chip">Amlodipine unchanged</span><span class="chip">Salt high, 3 meals</span></div>
+        </div>
+
+        <div class="tile paper">
+          <div class="t">What changed</div>
+          <ul class="list">
+            <li><span class="dot d-watch"></span>Kidney panel arrived from Gleneagles. Creatinine slightly up.</li>
+            <li><span class="dot d-act"></span>Sunday evening dose unconfirmed. Helper was off.</li>
+            <li><span class="dot d-good"></span>Mei added a note about the walk. 22 minutes.</li>
+          </ul>
+        </div>
+
+        <div class="two">
+          <div class="tile">
+            <div class="t">Next visit</div>
+            <div class="n" style="font-size:24px">Thu 10:00</div>
+            <div class="cap">Dr Tan. GL approved. 6 questions ready.</div>
+          </div>
+          <div class="tile">
+            <div class="t">Reorder</div>
+            <div class="n">3</div>
+            <div class="cap">Metformin left. Order today.</div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="t">Gap</div>
+          <div class="cap" style="font-size:15px;color:var(--ink);margin-top:6px">No lipid panel in 14 months. Added to Thursday's questions.</div>
+        </div>
+
+        <div class="ask"><div class="mic"></div>Ask about Pa</div>
+        <div class="tabbar"><span class="on">Home</span><span>Timeline</span><span>Medicines</span><span>Plan</span><span>Family</span></div>
+      </div></div>
+    </div>
+
+    <div class="tokens">
+      <div class="col-title">Tokens</div>
+      <div class="sheet">
+        <section>
+          <h2>Palette</h2>
+          <div class="swatches">
+            <div><div class="sw" style="background:#F5F1F4"></div><div class="sw-l">Mist</div></div>
+            <div><div class="sw" style="background:#F1DCE6"></div><div class="sw-l">Blush</div></div>
+            <div><div class="sw" style="background:#DCD5EE"></div><div class="sw-l">Lavender</div></div>
+            <div><div class="sw" style="background:#DCE8DF"></div><div class="sw-l">Sage</div></div>
+            <div><div class="sw" style="background:#2B2733"></div><div class="sw-l">Ink</div></div>
+            <div><div class="sw" style="background:#4E3A78"></div><div class="sw-l">Plum</div></div>
+          </div>
+        </section>
+        <section>
+          <h2>The background is the status</h2>
+          <div class="washes">
+            <div class="wash" style="background:linear-gradient(90deg,#DCD5EE,#F1DCE6 50%,#DCE8DF)">Stable</div>
+            <div class="wash" style="background:linear-gradient(90deg,#F1DCE6,#F3E6E0 50%,#DCD5EE)">Watch</div>
+            <div class="wash" style="background:linear-gradient(90deg,#F0D6D2,#F2E0DE 50%,#DCD5EE)">Act</div>
+          </div>
+        </section>
+        <section>
+          <h2>Glass and paper</h2>
+          <div class="anat">
+            <div class="tile"><b>Glass</b><span>Chrome and context. Blur 18, white 55%.</span></div>
+            <div class="tile paper"><b>Paper</b><span>Numbers, doses, dates, buttons. White 92%.</span></div>
+          </div>
+        </section>
+        <section>
+          <h2>Type — Outfit, weight is the persona dial</h2>
+          <div class="scale">
+            <div><span style="font-size:36px;font-weight:300">148</span><span class="lab">Chief display, 300</span></div>
+            <div><span style="font-size:36px;font-weight:500">148</span><span class="lab">Dad display, 500</span></div>
+            <div><span style="font-size:20px;font-weight:500">Thursday, 10 in the morning</span><span class="lab">Title</span></div>
+            <div><span style="font-size:16px">Sugar is better than March.</span><span class="lab">Body, Chief 16</span></div>
+            <div><span style="font-size:20px">Sugar is better than March.</span><span class="lab">Body, Dad 20</span></div>
+          </div>
+        </section>
+        <section>
+          <h2>Rules</h2>
+          <ul class="rules">
+            <li>One big number per screen. Everything else is body size.</li>
+            <li>Decisions sit on paper, never on glass.</li>
+            <li>One plum button per screen. Coral only for "not feeling well".</li>
+            <li>Motion only answers an action.</li>
+            <li>Every card has a voice-note twin.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

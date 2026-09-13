@@ -1,0 +1,1 @@
+Write today's progress report to docs/progress/<today>.md: what merged since the last report, what is in flight (branch and PR), what is blocked and why, which PRs are waiting for a human, and the next three stories you would promote. Keep it under a page.

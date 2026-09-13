@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — feed, search and upload</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--mist:#F5F1F4;--blush:#F1DCE6;--lavender:#DCD5EE;--sage:#DCE8DF;--coral:#F0D6D2;--ink:#2B2733;--ink-soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--glass:rgba(255,255,255,.55);--paper:rgba(255,255,255,.92)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+.page{max-width:1240px;margin:0 auto;padding:48px 24px 80px}
+h1{font-weight:400;font-size:28px}
+.lede{color:var(--ink-soft);margin-top:8px;max-width:64ch;line-height:1.5}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:40px;margin-top:40px;align-items:start}
+.col-title{font-size:14px;color:var(--ink-soft);margin-bottom:14px}
+.phone{width:100%;max-width:372px;margin:0 auto;background:#1c1a20;border-radius:48px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:38px;overflow:hidden;min-height:780px;padding:18px 18px 96px}
+.screen::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 25% 12%,rgba(255,255,255,.65),transparent 55%);pointer-events:none}
+.wash-stable{background:linear-gradient(160deg,var(--lavender),var(--blush) 45%,var(--sage))}
+.wash-watch{background:linear-gradient(160deg,var(--blush),#F3E6E0 50%,var(--lavender))}
+.screen>*{position:relative}
+.statusbar{display:flex;justify-content:space-between;font-size:14px;color:var(--ink-soft);padding:6px 8px 0}
+.statusbar b{font-weight:500;color:var(--ink)}
+.tile{background:var(--glass);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.7);box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 8px 24px rgba(60,40,80,.06);border-radius:20px;padding:18px;margin-top:12px}
+.tile.paper{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none}
+.pill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid rgba(255,255,255,.8);background:var(--paper);color:var(--ink);font-weight:500}
+.pill.plum{background:var(--plum);color:#fff;border-color:var(--plum)}
+.pill.coral{background:#F7E4E1;border-color:#EFCFCA;color:#7A2E24}
+.chip{display:inline-block;background:var(--glass);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.75);border-radius:12px;padding:6px 10px;font-size:13px;margin:6px 6px 0 0}
+.cap{color:var(--ink-soft);font-size:13px}
+.why{font-size:13px;color:var(--ink-soft);margin-top:10px;padding-top:10px;border-top:1px solid rgba(43,39,51,.08)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.d-good{background:var(--good)}.d-watch{background:var(--watch)}.d-act{background:var(--act)}
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;display:flex;justify-content:space-around;padding:12px 6px 14px;border-radius:999px;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.75)}
+.tabbar span{color:var(--ink-soft);font-size:14px}
+.tabbar span.on{color:var(--plum);font-weight:500}
+.search{display:flex;align-items:center;gap:12px;height:56px;border-radius:999px;background:var(--paper);border:1px solid rgba(255,255,255,.85);padding:0 8px 0 18px;margin-top:14px;box-shadow:0 8px 24px rgba(60,40,80,.08);font-size:17px;color:var(--ink-soft)}
+.search .mic{width:40px;height:40px;border-radius:50%;background:var(--plum);flex:none;margin-left:auto}
+.search .cam{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--plum);flex:none}
+.section{font-size:14px;color:var(--ink-soft);margin:18px 6px 0}
+.dad .tile .name{font-size:22px;font-weight:500;line-height:1.15}
+.dad .tile .sub{font-size:17px;color:var(--ink-soft);margin-top:4px}
+.dad .tile .btn{margin-top:14px;width:100%;height:54px;font-size:19px}
+.clip{display:flex;gap:14px;align-items:center}
+.thumb{width:84px;height:84px;border-radius:14px;flex:none;background:linear-gradient(135deg,#E5DDEF,#F4E4EA 60%,#DDE9E1);position:relative}
+.thumb::after{content:"";position:absolute;left:50%;top:50%;width:0;height:0;border-left:16px solid var(--plum);border-top:10px solid transparent;border-bottom:10px solid transparent;transform:translate(-40%,-50%)}
+.thumb.big{width:100%;height:120px;margin-top:12px}
+.dad .tabbar span{font-size:16px}
+.sheet{background:var(--paper);border-radius:28px;padding:20px;margin-top:16px;border:1px solid rgba(255,255,255,.9)}
+.opt{display:flex;align-items:center;gap:14px;padding:14px 4px;border-top:1px solid rgba(43,39,51,.08);font-size:18px}
+.opt:first-of-type{border-top:0}
+.opt i{width:36px;height:36px;border-radius:12px;background:#EFE9F5;flex:none;display:block}
+.prog{list-style:none;margin-top:8px}
+.prog li{font-size:15px;padding:8px 0;color:var(--ink-soft)}
+.prog li.done{color:var(--ink)}
+.prog li.done::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:10px}
+.prog li.now::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--plum);margin-right:10px}
+.field{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;border-bottom:1px solid rgba(43,39,51,.06)}
+.field b{font-weight:500;border-bottom:2px solid var(--good)}
+.field b.ask{border-bottom:2px dotted var(--watch)}
+.chief .q{font-size:17px;color:var(--ink)}
+.chief .ans{margin-top:12px}
+.chief .ans .n{font-size:32px;font-weight:300;line-height:1}
+.list{list-style:none}
+.list li{padding:9px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px;line-height:1.45}
+.list li:first-child{border-top:0}
+.watching li{display:flex;justify-content:space-between;gap:10px}
+.watching span{color:var(--ink-soft);font-size:13px;white-space:nowrap}
+@media (max-width:420px){.screen{padding:16px 14px 92px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Feed first, search on top, upload in one tap</h1>
+  <p class="lede">The Today screen is an intelligence feed. Every card is generated for this person, says why it's there and where it came from. Search and voice sit above it. Adding a record is one button and the system does the organising.</p>
+
+  <div class="row">
+
+    <div>
+      <div class="col-title">Dad — Today is the feed</div>
+      <div class="phone"><div class="screen wash-stable dad">
+        <div class="statusbar"><b>7:42</b><span>Tuesday 15 Sep</span></div>
+        <div class="search"><span>Ask or search</span><div class="cam"></div><div class="mic"></div></div>
+
+        <div class="section">Now</div>
+        <div class="tile paper">
+          <div class="name">Amlodipine 5 mg, with breakfast</div>
+          <div class="sub">For your blood pressure. 12 left.</div>
+          <div class="pill btn">Taken</div>
+        </div>
+
+        <div class="section">For you today</div>
+        <div class="tile paper">
+          <div class="clip">
+            <div class="thumb"></div>
+            <div><div class="name" style="font-size:19px">Your kidney test, in 20 seconds</div><div class="sub" style="font-size:15px">It is a little higher than in June. It is not a worry. Ash will ask Dr Tan about it on Thursday.</div></div>
+          </div>
+          <div class="why">You are seeing this because a new test came from Gleneagles on 9 September. You can hear it in Hokkien.</div>
+        </div>
+
+        <div class="tile paper">
+          <div class="name" style="font-size:19px">Water pill and bananas</div>
+          <div class="sub" style="font-size:15px">A heart doctor talks about the water pill and bananas. It is 30 seconds long. We kept only the part that matters for you.</div>
+          <div class="thumb big"></div>
+          <div class="why">You are seeing this because you started the water pill on 1 September. The doctor is from a hospital.</div>
+        </div>
+
+        <div class="tile">
+          <div class="name" style="font-size:19px">Thursday, 10 in the morning</div>
+          <div class="sub" style="font-size:15px">Dr Tan. Mei will drive you. Your questions are on a card.</div>
+          <div><span class="chip">Bring your blood pressure book</span><span class="chip">Insurance letter is ready</span></div>
+        </div>
+
+        <div class="tile">
+          <div class="name" style="font-size:19px">More dengue in Air Itam</div>
+          <div class="sub" style="font-size:15px">Pour out any water in the pots on the balcony.</div>
+          <div class="why">You are seeing this because you live near there. It comes from the Penang health office this week.</div>
+        </div>
+
+        <div class="pill coral btn" style="width:100%;height:56px;font-size:19px;margin-top:14px">I'm not feeling well</div>
+        <div class="tabbar"><span class="on">Today</span><span>Medicines</span><span>Records</span><span>Visits</span></div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-title">Adding a record — one tap, then the system organises</div>
+      <div class="phone"><div class="screen wash-stable dad">
+        <div class="statusbar"><b>7:50</b><span>Records</span></div>
+
+        <div class="sheet">
+          <div style="font-size:14px;color:var(--ink-soft);margin-bottom:6px">Add to Pa's record</div>
+          <div class="opt"><i></i>Take a photo</div>
+          <div class="opt"><i></i>From photos or screenshots</div>
+          <div class="opt"><i></i>A file or PDF</div>
+          <div class="opt"><i></i>Forward it on WhatsApp</div>
+          <div class="opt"><i></i>Record a visit</div>
+        </div>
+
+        <div class="tile paper">
+          <div style="font-size:16px;font-weight:500">Reading 3 pages</div>
+          <ul class="prog">
+            <li class="done">Read the pages</li>
+            <li class="done">Found a kidney test, 9 September, Gleneagles</li>
+            <li class="done">Put it with Dr Tan's visit</li>
+            <li class="now">Checking it against your tablets and old tests</li>
+            <li>Making a short explanation for you</li>
+          </ul>
+        </div>
+
+        <div class="tile paper">
+          <div style="font-size:18px;font-weight:500">Kidney test, 9 September</div>
+          <div class="cap">Gleneagles Penang, ordered by Dr Tan</div>
+          <div style="margin-top:10px">
+            <div class="field"><span>Kidney number</span><b>98</b></div>
+            <div class="field"><span>Kidney filter</span><b>68</b></div>
+            <div class="field"><span>Potassium, a body salt</span><b class="ask">4.9</b></div>
+          </div>
+          <div class="cap" style="margin-top:10px">A dotted line means: please check this number against the paper.</div>
+          <div class="pill plum btn" style="width:100%;height:52px;font-size:18px;margin-top:14px">Looks right</div>
+          <div class="why">Saved under Kidneys. A short explanation is on your Today page. Ash will ask Dr Tan one question on Thursday.</div>
+        </div>
+
+        <div class="tabbar"><span>Today</span><span>Medicines</span><span class="on">Records</span><span>Visits</span></div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="col-title">Ash — ask or find, and what the system is watching</div>
+      <div class="phone"><div class="screen wash-watch chief">
+        <div class="statusbar"><b>8:15</b><span>Pa</span></div>
+        <div class="search" style="color:var(--ink)"><span class="q">Has his potassium ever been high?</span><div class="mic"></div></div>
+        <div><span class="chip">Records</span><span class="chip">Web</span><span class="chip">Providers</span><span class="chip">Videos</span></div>
+
+        <div class="tile paper ans">
+          <div class="n">4.9</div>
+          <div class="cap">mmol/L on 9 Sep, the highest in two years. Upper limit 5.0. He started a water pill on 1 Sep.</div>
+          <ul class="list" style="margin-top:10px">
+            <li><span class="dot d-watch"></span>Gleneagles kidney panel, 9 Sep</li>
+            <li><span class="dot d-good"></span>4.2 in June, 4.3 in February</li>
+            <li><span class="dot d-good"></span>Dr Tan's consult, 1 Sep, at 04:12: "we'll recheck in a few weeks"</li>
+          </ul>
+          <div class="why">Worth raising Thursday. Added to the questions.</div>
+        </div>
+
+        <div class="section">Watching for Pa</div>
+        <div class="tile">
+          <ul class="list watching">
+            <li>Amlodipine and diuretic safety notices<span>HSA, NPRA</span></li>
+            <li>Kidney-friendly hawker options<span>weekly</span></li>
+            <li>Dengue and haze, Air Itam<span>daily</span></li>
+            <li>Gleneagles cardiology waiting times<span>before visits</span></li>
+            <li>Explainers for new results and medicines<span>on change</span></li>
+          </ul>
+          <div class="why">Sources are limited to health authorities, hospital groups and professional bodies.</div>
+        </div>
+
+        <div class="tile">
+          <div style="font-size:15px;font-weight:500">Sent to Pa this week</div>
+          <ul class="list">
+            <li><span class="dot d-good"></span>Kidney result explainer, 20 s. Opened, played twice.</li>
+            <li><span class="dot d-watch"></span>Water pill and bananas, 30 s. Not opened. Voice note sent instead.</li>
+          </ul>
+        </div>
+
+        <div class="tabbar"><span class="on">Home</span><span>Timeline</span><span>Medicines</span><span>Plan</span><span>Family</span></div>
+      </div></div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

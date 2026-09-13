@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — heart concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--lav:#DCD5EE;--blush:#F1DCE6;--sage:#DCE8DF;--mist:#F5F1F4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:44px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.concept{margin-top:36px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:28px;padding:28px 30px;box-shadow:0 8px 24px rgba(60,40,80,.05)}
+.concept h2{font-size:18px;font-weight:500}
+.concept p{font-size:14px;color:var(--soft);line-height:1.55;margin-top:4px;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:22px}
+.cell{border-radius:20px;display:flex;align-items:center;justify-content:center;min-height:210px;padding:20px;position:relative}
+.cell.paper{background:#FBF9FA;border:1px solid rgba(43,39,51,.06)}
+.cell.wash{background:linear-gradient(160deg,var(--lav),var(--blush) 50%,var(--sage))}
+.cell.plum{background:var(--plum)}
+.cell.ink{background:#231F2B}
+.cell .lab{position:absolute;left:14px;top:12px;font-size:11px;color:var(--soft)}
+.cell.plum .lab,.cell.ink .lab{color:rgba(255,255,255,.6)}
+.wm{font-weight:500;font-size:54px;letter-spacing:-.02em;color:var(--plum);line-height:1}
+.lockup{display:flex;align-items:center;gap:16px}
+.icon{width:132px;height:132px;border-radius:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 14px 34px rgba(60,40,80,.18)}
+.icon.wash{background:linear-gradient(160deg,var(--lav),var(--blush) 50%,var(--sage))}
+.icon.plum{background:var(--plum)}
+.icon.white{background:#fff}
+.small{display:flex;gap:14px;align-items:flex-end}
+.small .icon{box-shadow:none}
+.pick{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;background:#EEEDFE;color:#3C3489;margin-left:8px;vertical-align:middle;font-weight:500}
+.notes{margin-top:36px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 28px;font-size:14px;line-height:1.6;color:var(--soft)}
+.notes b{color:var(--ink);font-weight:500}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Nura — heart concepts</h1>
+  <p class="lede">Five original hearts in the app's tone. None is a fingerprint, a pulse line or a letter cut into a heart. Each one says a specific thing about the product: two people, an aura, a cradle, a voice, a family.</p>
+
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <linearGradient id="aura" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B9A6E0"/><stop offset="1" stop-color="#F0C9DA"/></linearGradient>
+    <linearGradient id="auraR" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0C9DA"/><stop offset="1" stop-color="#B9A6E0"/></linearGradient>
+    <linearGradient id="plumG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4E3A78"/><stop offset="1" stop-color="#6B4F9E"/></linearGradient>
+    <clipPath id="left"><rect x="0" y="0" width="100" height="200"/></clipPath>
+    <clipPath id="right"><rect x="100" y="0" width="100" height="200"/></clipPath>
+  </defs></svg>
+
+  <!-- A. OPEN HEART -->
+  <div class="concept">
+    <h2>A. Open heart, two halves <span class="pick">recommended</span></h2>
+    <p>A heart drawn as two strokes that meet at the top and never quite close at the bottom. The left half is plum, the right is the aura. Two people, the patient and the person who cares for him, and an opening at the bottom because the care is never finished. The dot inside is him. One colour version still reads.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="170" height="170" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#aura)" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#4E3A78"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#aura)" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#4E3A78"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#4E3A78"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#aura)" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#FFFFFF"/></svg></div>
+      </div>
+      <div class="cell ink"><span class="lab">Small and mono</span>
+        <div class="small">
+          <div class="icon white" style="width:60px;height:60px;border-radius:14px"><svg width="44" height="44" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="#C9B6E6" stroke-width="22" stroke-linecap="round"/><circle cx="100" cy="112" r="13" fill="#4E3A78"/></svg></div>
+          <div class="icon white" style="width:40px;height:40px;border-radius:10px"><svg width="30" height="30" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="24" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="#C9B6E6" stroke-width="24" stroke-linecap="round"/><circle cx="100" cy="112" r="14" fill="#4E3A78"/></svg></div>
+          <svg width="28" height="28" viewBox="0 0 200 200"><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" opacity=".65"/><circle cx="100" cy="112" r="15" fill="#FFFFFF"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B. AURA HEART -->
+  <div class="concept">
+    <h2>B. Aura heart</h2>
+    <p>Three hearts, one inside the other, fading outward from plum to blush: the person, the family, the system around them. The glow made of the shape itself. Strong on dark backgrounds and as a Lock Screen glyph; the outer ring can animate softly when Nura speaks.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="170" height="170" viewBox="0 0 200 200"><g transform="translate(100 110)"><path transform="scale(1)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#F0C9DA" stroke-width="7"/><path transform="scale(.74)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#B9A6E0" stroke-width="12"/><path transform="scale(.47)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="#4E3A78"/></g></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><g transform="translate(100 110)"><path d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#F0C9DA" stroke-width="7"/><path transform="scale(.74)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#B9A6E0" stroke-width="12"/><path transform="scale(.47)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="#4E3A78"/></g></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><g transform="translate(100 110)"><path d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#FFFFFF" stroke-width="7" opacity=".8"/><path transform="scale(.74)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#FFFFFF" stroke-width="12"/><path transform="scale(.47)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="#4E3A78"/></g></svg></div>
+      </div>
+      <div class="cell ink"><span class="lab">Lock Screen</span>
+        <svg width="96" height="96" viewBox="0 0 200 200"><g transform="translate(100 110)"><path d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#FFFFFF" stroke-width="7" opacity=".35"/><path transform="scale(.74)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="none" stroke="#FFFFFF" stroke-width="12" opacity=".65"/><path transform="scale(.47)" d="M0 62C-40 34 -66 4 -56 -26c9-24 42-26 56-4 14-22 47-20 56 4 10 30-16 60-56 88z" fill="#FFFFFF"/></g></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- C. CRADLE HEART -->
+  <div class="concept">
+    <h2>C. Cradle heart</h2>
+    <p>A soft filled heart in the aura, with the cradle from the first mark inside it: a white bowl holding a plum dot. Heart as the shelter, cradle as the holding. The most illustrative of the five; good for the App Store tile and onboarding, a little heavy at favicon size.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="170" height="170" viewBox="0 0 200 200"><path d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M76 96v12a24 24 0 0 0 48 0V96" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/><circle cx="100" cy="112" r="9" fill="#4E3A78"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M76 96v12a24 24 0 0 0 48 0V96" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/><circle cx="100" cy="112" r="9" fill="#4E3A78"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="#4E3A78"/><path d="M76 96v12a24 24 0 0 0 48 0V96" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round"/><circle cx="100" cy="112" r="9" fill="#F0C9DA"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M76 96v12a24 24 0 0 0 48 0V96" fill="none" stroke="#4E3A78" stroke-width="14" stroke-linecap="round"/><circle cx="100" cy="112" r="9" fill="#4E3A78"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- D. SPEAKING HEART -->
+  <div class="concept">
+    <h2>D. Speaking heart</h2>
+    <p>A heart that is also a speech bubble, with a small tail and three dots: Nura speaks, on WhatsApp and in voice notes. It says "someone is about to say something kind". Natural as the chat avatar and the notification icon.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="170" height="170" viewBox="0 0 200 200"><path d="M100 168C58 140 30 108 42 78c10-27 46-30 58-6 12-24 48-21 58 6 12 30-16 62-58 90z" fill="#4E3A78"/><path d="M92 156L76 192l36-24z" fill="#4E3A78"/><circle cx="78" cy="104" r="8" fill="#F0C9DA"/><circle cx="100" cy="104" r="8" fill="#FFFFFF"/><circle cx="122" cy="104" r="8" fill="#B9A6E0"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 168C58 140 30 108 42 78c10-27 46-30 58-6 12-24 48-21 58 6 12 30-16 62-58 90z" fill="#4E3A78"/><path d="M92 156L76 192l36-24z" fill="#4E3A78"/><circle cx="78" cy="104" r="8" fill="#F0C9DA"/><circle cx="100" cy="104" r="8" fill="#FFFFFF"/><circle cx="122" cy="104" r="8" fill="#B9A6E0"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 168C58 140 30 108 42 78c10-27 46-30 58-6 12-24 48-21 58 6 12 30-16 62-58 90z" fill="#4E3A78"/><path d="M92 156L76 192l36-24z" fill="#4E3A78"/><circle cx="78" cy="104" r="8" fill="#F0C9DA"/><circle cx="100" cy="104" r="8" fill="#FFFFFF"/><circle cx="122" cy="104" r="8" fill="#B9A6E0"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M100 168C58 140 30 108 42 78c10-27 46-30 58-6 12-24 48-21 58 6 12 30-16 62-58 90z" fill="url(#aura)"/><path d="M92 156L76 192l36-24z" fill="url(#aura)"/><circle cx="78" cy="104" r="8" fill="#4E3A78"/><circle cx="100" cy="104" r="8" fill="#4E3A78"/><circle cx="122" cy="104" r="8" fill="#4E3A78"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- E. TWO-TONE HEART -->
+  <div class="concept">
+    <h2>E. Held heart</h2>
+    <p>A small aura heart resting in the cradle from the first mark. Someone's heart, held. It is the gentlest of the five and the one that most directly says what a caregiver does. Works as a solid shape for print and stickers.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="170" height="170" viewBox="0 0 200 200"><path transform="translate(100 96) scale(.55) translate(-100 -110)" d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M50 118v12a50 50 0 0 0 100 0v-12" fill="none" stroke="#4E3A78" stroke-width="18" stroke-linecap="round"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path transform="translate(100 96) scale(.55) translate(-100 -110)" d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M50 118v12a50 50 0 0 0 100 0v-12" fill="none" stroke="#4E3A78" stroke-width="18" stroke-linecap="round"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path transform="translate(100 96) scale(.55) translate(-100 -110)" d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="#4E3A78"/><path d="M50 118v12a50 50 0 0 0 100 0v-12" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path transform="translate(100 96) scale(.55) translate(-100 -110)" d="M100 176C58 146 30 112 42 80c10-27 46-30 58-6 12-24 48-21 58 6 12 32-16 66-58 96z" fill="url(#aura)"/><path d="M50 118v12a50 50 0 0 0 100 0v-12" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <b>Recommendation.</b> A, the open heart of two halves. It carries the most meaning with the fewest parts, it is a stroke rather than a fill so it sits lightly on the glass and paper surfaces of the app, and it survives one colour and 16 pixels. Use B's fading rings as the "Nura is speaking" animation and D as the WhatsApp avatar, so the hearts stay one family. E is the gentlest if you want the cradle idea carried through from the first family of marks.
+  </div>
+</div>
+</body>
+</html>

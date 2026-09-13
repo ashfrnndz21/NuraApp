@@ -1,0 +1,28 @@
+name: Nightly orchestrator
+on:
+  schedule:
+    - cron: "0 20 * * *"   # 04:00 Malaysia time
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+jobs:
+  promote-and-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote the next stories and write the report
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are the nightly orchestrator for Nura. Using `gh`:
+            1. List open issues with label story. For each, read its depends-on lines. A story is ready when every dependency issue is closed and it has no agent:ready or agent:working label.
+            2. Count issues currently labelled agent:ready or agent:working. Promote ready stories in T1-then-priority order until three are in flight. Never promote a story that has failed twice (label agent:failed x2) without a human comment since the last failure.
+            3. Write docs/progress/<today>.md: merged yesterday, in flight, blocked and why, what you promoted and why, and any PR waiting for a human. Include the spend line if the JSON totals are available.
+            4. Open a PR for the report titled "Progress <today>".
+          claude_args: "--max-turns 40 --allowedTools Read,Write,Glob,Grep,Bash(gh:*),Bash(git:*)"

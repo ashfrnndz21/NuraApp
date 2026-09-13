@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — the appointment planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.page{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:68ch;line-height:1.5;font-size:15px}
+.feel{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;align-items:center}
+.feel span{font-size:13px;color:var(--soft);margin-right:4px}
+.fc{background:#fff;border:1.5px solid rgba(43,39,51,.12);border-radius:999px;padding:8px 14px;font-size:14px}
+.fc.on{border-color:var(--plum);color:var(--plum);font-weight:500;background:#F3EEF8}
+.wrap{display:grid;grid-template-columns:400px 1fr;gap:36px;margin-top:26px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:840px;padding:16px 16px 30px;overflow-y:auto;scrollbar-width:none;background:linear-gradient(160deg,#E3E7F3,#EBE3F0 55%,#F3E6E0);transition:background .6s}
+.screen.act{background:linear-gradient(160deg,#F0D6D2,#F2E0DE 50%,#DCD5EE)}
+.screen::-webkit-scrollbar{display:none}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.title{padding:14px 6px 0}
+.title .t{font-size:22px;font-weight:500;line-height:1.15}
+.title .s{font-size:14px;color:var(--soft);margin-top:3px;line-height:1.4}
+.sec{font-size:13px;color:var(--soft);margin:16px 6px 0}
+.tl{margin-top:8px}
+.ev{display:flex;gap:12px;padding:10px 0;align-items:flex-start;position:relative}
+.ev .d{width:58px;flex:none;font-size:13px;color:var(--soft);padding-top:3px;line-height:1.2}
+.ev .d b{display:block;font-size:15px;color:var(--ink);font-weight:500}
+.ev .b{flex:1;background:var(--paper);border-radius:16px;padding:12px 14px;box-shadow:0 6px 18px rgba(60,40,80,.06);border-left:4px solid transparent}
+.ev .b .n{font-size:15px;font-weight:500;line-height:1.25}
+.ev .b .w{font-size:13px;color:var(--soft);margin-top:3px;line-height:1.4}
+.ev.keep .b{border-left-color:#D3D1C7}
+.ev.fwd .b{border-left-color:var(--watch)}
+.ev.add .b{border-left-color:var(--plum)}
+.ev.urgent .b{border-left-color:var(--act)}
+.ev.old .b{opacity:.5;text-decoration:line-through}
+.tag{display:inline-block;font-size:11px;padding:3px 8px;border-radius:999px;margin-top:6px;margin-right:4px}
+.tag.fwd{background:#FAEEDA;color:#854F0B}.tag.add{background:#EEEDFE;color:#3C3489}.tag.keep{background:#F1EFE8;color:#5F5E5A}.tag.urgent{background:#FCEBEB;color:#A32D2D}.tag.link{background:#E1F5EE;color:#0F6E56}
+.pill{display:flex;align-items:center;justify-content:center;height:46px;border-radius:999px;background:var(--paper);font-size:15px;font-weight:500;margin-top:10px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pill.plum{background:var(--plum);color:#fff}
+.row2{display:flex;gap:8px}.row2 .pill{flex:1}
+.pacard{background:var(--paper);border-radius:20px;padding:16px;margin-top:10px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.pacard .t{font-size:19px;font-weight:500;line-height:1.2}
+.pacard .s{font-size:16px;color:var(--soft);margin-top:6px;line-height:1.45}
+.side{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 26px;position:sticky;top:24px}
+.side h2{font-size:16px;font-weight:500}
+.side p{font-size:13px;color:var(--soft);line-height:1.55;margin-top:4px}
+.rec{margin-top:14px;padding:14px;border-radius:16px;background:#FBF9FA;border-left:4px solid #D3D1C7}
+.rec.fwd{border-left-color:var(--watch)}.rec.add{border-left-color:var(--plum)}.rec.urgent{border-left-color:var(--act)}.rec.watch{border-left-color:#B4B2A9}
+.rec .h{font-size:15px;font-weight:500}
+.rec .why{font-size:14px;line-height:1.5;margin-top:6px}
+.rec .src{font-size:12px;color:var(--soft);margin-top:6px}
+.rec .if{font-size:13px;color:var(--soft);margin-top:4px}
+.rec .act{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.rec .act button{border-radius:999px;padding:7px 12px;font-size:13px;font-weight:500;background:#F3EEF8;color:var(--plum)}
+.rules{margin-top:18px;padding-top:14px;border-top:1px solid rgba(43,39,51,.08)}
+.rules li{font-size:13px;line-height:1.5;color:var(--soft);padding:3px 0 3px 14px;position:relative;list-style:none}
+.rules li::before{content:"";position:absolute;left:0;top:11px;width:5px;height:5px;border-radius:50%;background:var(--plum)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#2B2733;color:#fff;border-radius:16px;padding:12px 18px;font-size:14px;display:none;z-index:9;max-width:420px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>The appointment planner</h1>
+  <p class="lede">A six-month review is on the calendar. The planner reads everything that has happened since it was booked and says whether it should move, what should happen before it, what else is due, and in what order. Tap a feeling to see the plan re-sequence and the reasons change.</p>
+
+  <div class="feel"><span>Pa taps this week:</span>
+    <button class="fc on" onclick="setFeel('none',this)">Nothing new</button>
+    <button class="fc" onclick="setFeel('dizzy',this)">Dizzy on standing</button>
+    <button class="fc" onclick="setFeel('blurry',this)">Blurry eyes, slowly</button>
+    <button class="fc" onclick="setFeel('sudden',this)">Blurry eyes, sudden</button>
+    <button class="fc" onclick="setFeel('ankles',this)">Swollen ankles and heavier</button>
+  </div>
+
+  <div class="wrap">
+    <div class="phone"><div class="screen" id="sc">
+      <div class="status"><b>Plan</b><span>Pa · next 6 months</span></div>
+      <div class="title"><div class="t" id="pt">Bring the heart review forward</div><div class="s" id="ps">Booked for March. Too far, given what has changed since August. Here is the sequence I'd suggest, and why.</div></div>
+
+      <div class="sec">What's booked</div>
+      <div class="tl">
+        <div class="ev keep"><div class="d"><b>Nov 4</b>Tue</div><div class="b"><div class="n">Polyclinic Air Itam, sugar clinic</div><div class="w">Routine, every four months.</div><span class="tag keep">keep</span></div></div>
+        <div class="ev keep old" id="oldcardio"><div class="d"><b>Mar 15</b>2027</div><div class="b"><div class="n">Dr Tan, heart review</div><div class="w">Six-month follow-up, booked in August.</div></div></div>
+      </div>
+
+      <div class="sec">Suggested sequence</div>
+      <div class="tl" id="plan"></div>
+
+      <div class="row2"><div class="pill plum" onclick="toast('Three messages drafted: Gleneagles heart clinic, Gleneagles lab, polyclinic eye screening. Nothing sent yet.')">Draft the messages</div><div class="pill" onclick="toast('Kept as booked. I will raise it again if anything changes.')">Keep as booked</div></div>
+
+      <div class="sec">What Pa sees</div>
+      <div class="pacard"><div class="t" id="pat">See Dr Tan sooner</div><div class="s" id="pas">First you have a blood test on Monday 29 September. Then you see Dr Tan on Thursday 30 October, not in March. Mei will drive you.</div><div class="pill" onclick="toast('OK from Pa. Ash will book it.')">OK with me</div></div>
+    </div></div>
+
+    <aside class="side">
+      <h2>Why</h2>
+      <p>Each recommendation names the rule it came from, the evidence, and what happens if it's left. The clinic decides urgency; the planner only asks.</p>
+      <div id="why"></div>
+      <ul class="rules">
+        <li>Results before reviews: a test is sequenced so the doctor who needs it has it.</li>
+        <li>Medicine changes set their own monitoring: a diuretic change means electrolytes and kidney function within two weeks.</li>
+        <li>Conditions carry cadences: eyes and feet yearly with diabetes, lipids yearly, sugar every three to six months.</li>
+        <li>Feelings adjust urgency, not specialty, unless they match a red flag.</li>
+        <li>Same hospital, same day, where the calendar allows. Family logistics and panel status are constraints, not afterthoughts.</li>
+        <li>Nothing is booked without a confirm; red flags bypass the plan and go to the same-day path.</li>
+      </ul>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var PLANS={
+ none:{cls:'',pt:'Bring the heart review forward',ps:'Booked for March. Too far, given what has changed since August. Here is the sequence I\'d suggest, and why.',pat:'See Dr Tan sooner',pas:'First you have a blood test on Monday 29 September. Then you see Dr Tan on Thursday 30 October, not in March. Mei will drive you.',
+  plan:[
+   ['Sep 29','Mon','add','Blood test, Gleneagles lab','Electrolytes, kidney function, and add cholesterol. Fasting.','add','Letter requested'],
+   ['Oct 30','Thu','fwd','Dr Tan, heart review','Brought forward from March. Results from the 29th in hand.','fwd','Mei drives Thursdays'],
+   ['Nov 4','Tue','keep','Polyclinic sugar clinic','Keep. Ask them to do the eye screening the same morning.','keep','Same site'],
+   ['Nov 4','Tue','add','Eye screening, polyclinic','Overdue by 14 months. Not urgent. Pair with the sugar clinic.','add','Same visit'],
+   ['Mar 15','2027','keep','Dr Tan, heart review','Becomes the next six-month follow-up after October.','keep','']
+  ],
+  why:[
+   ['fwd','Bring Dr Tan forward to late October','The water pill started 1 Sep and the dose is changing. Potassium was 4.9 on 9 Sep, the top of the range. Morning readings drifted from 131 to 148. A six-month gap after a medicine change is longer than the discharge plan intended.','Discharge plan 3 Feb; result 9 Sep; nine home readings; recording 1 Sep at 04:12.','If left: five months without review during a dose change.',['Draft to the heart clinic','Ask Dr Tan\'s nurse']],
+   ['add','Bloods on 29 Sep, before anything else','Diuretic changes need electrolytes and kidney function checked within two weeks, and Dr Tan asked for them. Adding cholesterol closes a fourteen-month gap in the same draw.','Monitoring rule for diuretics; recording 1 Sep at 04:12; gap in the record.','If left: the October review happens without the numbers it needs.',['Request the letter','Add cholesterol']],
+   ['add','Eye screening, paired with the November sugar clinic','Yearly with diabetes; last one fourteen months ago. Nothing suggests urgency, so it goes with a visit that already exists, same building.','Condition cadence; providers directory; polyclinic calendar.','If left: it drifts another year.',['Ask the polyclinic']],
+   ['watch','Kidney specialist: not yet','Creatinine is a little up but eGFR is 68. The threshold that would change this is a fall below 60 on the 29th, or potassium above 5.5. I\'ll re-plan when the result arrives.','eGFR 9 Sep; standard referral thresholds.','',[]]
+  ]},
+ dizzy:{cls:'',pt:'Dizzy on standing changes the timing, not the plan',ps:'It fits the water pill. The bloods should move up a week and Dr Tan should hear about it before October.',pat:'Blood test one week earlier',pas:'Because you feel dizzy, the blood test is now Monday 22 September. Ash will message Dr Tan today. Stand up slowly.',
+  plan:[
+   ['Sep 22','Mon','fwd','Blood test, Gleneagles lab','Moved up a week. Potassium and kidney function while dizzy on the water pill.','fwd','Letter requested'],
+   ['Today','','add','Message to Dr Tan\'s clinic','Dizziness on standing four mornings since the dose. Ask whether to adjust before October.','add','Drafted'],
+   ['Oct 30','Thu','fwd','Dr Tan, heart review','Brought forward from March.','fwd','Mei drives'],
+   ['Nov 4','Tue','keep','Polyclinic sugar clinic and eye screening','Unchanged.','keep',''],
+   ['Mar 15','2027','keep','Dr Tan, heart review','Next six-month follow-up.','keep','']
+  ],
+  why:[
+   ['fwd','Bloods a week earlier','Dizziness on standing with a diuretic is usually the dose or fluid balance, but with potassium already at the top of the range the numbers should be checked sooner, not later.','Feeling taps, four mornings; result 9 Sep; diuretic monitoring rule.','If left: two more weeks of guessing.',['Move the lab booking']],
+   ['add','Tell the clinic now, don\'t wait for October','A symptom that started with a dose change is something the prescriber wants to hear about the same week. This is a message, not a visit.','Recording 1 Sep at 04:12: "tell me if he gets dizzy".','',['Draft the message']],
+   ['watch','No new specialist','Nothing here points outside cardiology. Feelings adjust urgency; they don\'t add doctors unless they match a red flag.','Planner rule.','',[]]
+  ]},
+ blurry:{cls:'',pt:'Blurry eyes moves the eye screening up',ps:'Slow blurring with diabetes and an overdue eye check: the screening stops being routine and comes forward to the next two to three weeks.',pat:'Eye test sooner',pas:'A doctor should check your eyes before November. Ash is booking it for the next 2 weeks.',
+  plan:[
+   ['Sep 29','Mon','add','Blood test, Gleneagles lab','Unchanged. Sugar control matters for the eyes too.','add',''],
+   ['Oct 7','Tue','fwd','Eye screening, polyclinic or eye clinic','Brought forward from November. Slow blurring, diabetes, fourteen months since the last check.','fwd','Referral may be needed for the panel'],
+   ['Oct 30','Thu','fwd','Dr Tan, heart review','Unchanged.','fwd','Mei drives'],
+   ['Nov 4','Tue','keep','Polyclinic sugar clinic','Unchanged.','keep',''],
+   ['Mar 15','2027','keep','Dr Tan, heart review','Next six-month follow-up.','keep','']
+  ],
+  why:[
+   ['fwd','Eye screening within three weeks','Gradual blurring in someone with diabetes and an overdue retinal check is the definition of a screening that should not wait for a convenient day. Still not an emergency; a sudden change would be.','Feeling tap; condition cadence; gap of 14 months.','If left: a treatable problem found late.',['Ask the polyclinic','Check the panel for an eye clinic']],
+   ['watch','Sugar control and the eyes','If the three-month sugar on the 29th is up, that strengthens the case. I will re-rank when it arrives.','Planner rule: results feed the plan.','',[]]
+  ]},
+ sudden:{cls:'act',pt:'Sudden blurring is not a planning question',ps:'This bypasses the plan. Same-day eye assessment, family told, and the rest of the sequence waits.',pat:'See an eye doctor today',pas:'Your eyes went blurry all at once. A doctor must see you today. Ash is coming. Gleneagles is 15 minutes away.',
+  plan:[
+   ['Today','','urgent','Same-day eye assessment','Sudden visual change with diabetes and blood pressure history. A&E or an eye clinic today.','urgent','Ash called'],
+   ['Sep 29','Mon','keep','Blood test','Kept, unless today changes it.','keep',''],
+   ['Oct 30','Thu','keep','Dr Tan, heart review','Kept. Today\'s findings will be sent to him.','keep',''],
+   ['Nov 4','Tue','keep','Polyclinic','Kept.','keep','']
+  ],
+  why:[
+   ['urgent','Same day, no sequencing','Sudden blurring is on his red-flag list from his conditions. Red flags do not enter the planner; they go to the same-day path and the family.','Red-flag rules; discharge plan; conditions.','',['Call Ash','Nearest option on the panel']]
+  ]},
+ ankles:{cls:'',pt:'Swelling and weight up: the heart review moves to this week',ps:'Two signs together, on a heart-failure history, after a diuretic dose change. This is a clinic call today and a visit within days, not October.',pat:'See Dr Tan this week',pas:'Your legs are swollen and you are heavier. Dr Tan should see you this week. Ash is calling the clinic now. Please stand on the scale every morning.',
+  plan:[
+   ['Today','','urgent','Call Dr Tan\'s clinic','Ankles swollen and 1.1 kg up in three days on a lower diuretic dose. Same-day advice; likely a visit within days.','urgent','Drafted'],
+   ['This wk','','fwd','Dr Tan, heart review','Brought forward from October to this week, if the clinic agrees.','fwd','Mei or Ash'],
+   ['Sep 29','Mon','keep','Blood test','Kept; the clinic may want it sooner.','keep',''],
+   ['Nov 4','Tue','keep','Polyclinic sugar clinic and eye screening','Unchanged.','keep',''],
+   ['Mar 15','2027','keep','Dr Tan, heart review','Next follow-up.','keep','']
+  ],
+  why:[
+   ['urgent','Clinic today, visit this week','Weight up a kilo in two to three days with swelling is the discharge plan\'s own rule for calling the same day. The dose was just halved; fluid may be building.','Discharge plan 3 Feb; scale photos; feeling taps.','If left: the pattern that put him in hospital in February.',['Call the clinic','Draft the message']],
+   ['watch','Bloods may move with it','If Dr Tan sees him this week he may draw bloods then; the 29th stays until he says.','Planner rule: the clinic decides urgency.','',[]]
+  ]}
+};
+function setFeel(k,b){document.querySelectorAll('.fc').forEach(function(x){x.classList.remove('on')});b.classList.add('on');render(k)}
+function render(k){var P=PLANS[k];var sc=document.getElementById('sc');sc.className='screen '+P.cls;document.getElementById('pt').textContent=P.pt;document.getElementById('ps').textContent=P.ps;document.getElementById('pat').textContent=P.pat;document.getElementById('pas').textContent=P.pas;
+  var tl=document.getElementById('plan');tl.innerHTML='';P.plan.forEach(function(e){var d=document.createElement('div');d.className='ev '+e[2];d.innerHTML='<div class="d"><b>'+e[0]+'</b>'+e[1]+'</div><div class="b"><div class="n">'+e[3]+'</div><div class="w">'+e[4]+'</div><span class="tag '+e[5]+'">'+({add:'add',fwd:'bring forward',keep:'keep',urgent:'today'})[e[5]]+'</span>'+(e[6]?'<span class="tag link">'+e[6]+'</span>':'')+'</div>';tl.appendChild(d)});
+  var w=document.getElementById('why');w.innerHTML='';P.why.forEach(function(r){var d=document.createElement('div');d.className='rec '+r[0];d.innerHTML='<div class="h">'+r[1]+'</div><div class="why">'+r[2]+'</div><div class="src">'+r[3]+'</div>'+(r[4]?'<div class="if">'+r[4]+'</div>':'')+(r[5].length?'<div class="act">'+r[5].map(function(a){return '<button onclick="toast(\''+a+': drafted, nothing sent.\')">'+a+'</button>'}).join('')+'</div>':'');w.appendChild(d)});}
+var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(function(){t.style.display='none'},2600)}
+render('none');
+</script>
+</body>
+</html>

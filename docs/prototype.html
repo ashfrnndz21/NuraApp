@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — interactive reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--mist:#F5F1F4;--blush:#F1DCE6;--lavender:#DCD5EE;--sage:#DCE8DF;--coral:#F0D6D2;--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--glass:rgba(255,255,255,.55);--paper:rgba(255,255,255,.92)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding:22px 28px;border-bottom:1px solid rgba(43,39,51,.08)}
+.top h1{font-size:20px;font-weight:400}
+.top p{font-size:14px;color:var(--soft)}
+.switch{display:flex;background:#EAE4EF;border-radius:999px;padding:4px}
+.switch button{padding:8px 18px;border-radius:999px;font-size:14px;color:var(--soft)}
+.switch button.on{background:#fff;color:var(--plum);font-weight:500;box-shadow:0 2px 8px rgba(60,40,80,.12)}
+.stage{display:grid;grid-template-columns:420px 1fr;gap:40px;max-width:1240px;margin:0 auto;padding:36px 28px 80px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:1fr}}
+.phone{position:relative;width:392px;max-width:100%;margin:0 auto;background:#1c1a20;border-radius:52px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;height:820px;border-radius:42px;overflow-y:auto;overflow-x:hidden;padding:16px 16px 110px;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.wash-stable{background:linear-gradient(160deg,var(--lavender),var(--blush) 45%,var(--sage))}
+.wash-watch{background:linear-gradient(160deg,var(--blush),#F3E6E0 50%,var(--lavender))}
+.wash-act{background:linear-gradient(160deg,var(--coral),#F2E0DE 50%,var(--lavender))}
+.wash-chat{background:#EFE9E3}
+.light{position:absolute;inset:0;border-radius:42px;background:radial-gradient(circle at 25% 10%,rgba(255,255,255,.65),transparent 55%);pointer-events:none}
+.persona,.view{display:none}.persona.on,.view.on{display:block}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 8px 0}
+.status b{font-weight:500;color:var(--ink)}
+.tile{background:var(--glass);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border:1px solid rgba(255,255,255,.7);box-shadow:0 1px 0 rgba(255,255,255,.8) inset,0 8px 24px rgba(60,40,80,.06);border-radius:20px;padding:18px;margin-top:12px;position:relative}
+.tile.paper{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none}
+.tile.tap{cursor:pointer}
+.tile .t{font-size:20px;font-weight:500;line-height:1.15}
+.tile .s{font-size:16px;color:var(--soft);margin-top:4px;line-height:1.4}
+.tile .why{font-size:13px;color:var(--soft);margin-top:12px;padding-top:10px;border-top:1px solid rgba(43,39,51,.08)}
+.tile .n{font-size:32px;font-weight:300;line-height:1;margin-top:6px}
+.pa .tile .n{font-weight:500}
+.pill{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;border:1px solid rgba(255,255,255,.85);background:var(--paper);color:var(--ink);font-weight:500;height:52px;padding:0 20px;font-size:17px;width:100%;margin-top:14px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pill.plum{background:var(--plum);color:#fff;border-color:var(--plum)}
+.pill.coral{background:#F7E4E1;border-color:#EFCFCA;color:#7A2E24}
+.pill.done{background:#E6F0E9;color:#2F6247;border-color:#D3E4D9}
+.pill.sm{height:40px;font-size:14px;width:auto;margin-top:8px;padding:0 14px}
+.row2{display:flex;gap:10px}.row2 .pill{margin-top:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{background:var(--glass);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.75);border-radius:12px;padding:8px 12px;font-size:14px;color:var(--ink)}
+.chip.on{background:var(--plum);color:#fff;border-color:var(--plum)}
+.section{font-size:14px;color:var(--soft);margin:20px 6px 0}
+.search{display:flex;align-items:center;gap:10px;height:56px;border-radius:999px;background:var(--paper);border:1px solid rgba(255,255,255,.85);padding:0 8px 0 18px;margin-top:14px;box-shadow:0 8px 24px rgba(60,40,80,.08);font-size:17px;color:var(--soft);cursor:pointer}
+.search span{flex:1}
+.ic{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center}
+.ic.plum{background:var(--plum);color:#fff}.ic.line{border:1.5px solid var(--plum);color:var(--plum)}
+.ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.scene{border-radius:16px;height:110px;margin-top:12px;position:relative;overflow:hidden}
+.scene.morning{background:linear-gradient(135deg,#F6E6EC,#E6DDF1 55%,#DDE9E1)}
+.scene.food{background:linear-gradient(135deg,#F7E7DA,#F1DCE6 60%,#E6DDF1)}
+.scene.clinic{background:linear-gradient(135deg,#E3E7F3,#EBE3F0 60%,#F3E6E0)}
+.scene.family{background:linear-gradient(135deg,#E9E2F1,#F4E4EA 60%,#DDE9E1)}
+.scene.walk{background:linear-gradient(135deg,#DDE9E1,#E9E2F1 60%,#F3E6E0)}
+.scene i{position:absolute;border-radius:50%;background:rgba(255,255,255,.55)}
+.scene i:nth-child(1){width:140px;height:140px;right:-30px;top:-50px}
+.scene i:nth-child(2){width:70px;height:70px;left:20px;bottom:-20px;background:rgba(78,58,120,.12)}
+.play{position:absolute;left:14px;bottom:12px;background:var(--paper);border-radius:999px;padding:6px 12px 6px 8px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.play::before{content:"";width:0;height:0;border-left:10px solid var(--plum);border-top:6px solid transparent;border-bottom:6px solid transparent}
+.tabbar{position:absolute;left:26px;right:26px;bottom:26px;display:flex;justify-content:space-around;padding:12px 6px 14px;border-radius:999px;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.75);box-shadow:0 8px 24px rgba(60,40,80,.1)}
+.tabbar button{color:var(--soft);font-size:15px;padding:4px 6px}
+.tabbar button.on{color:var(--plum);font-weight:500}
+.pillimg{width:52px;height:52px;border-radius:50%;background:linear-gradient(145deg,#fff,#E9E2F1);border:1px solid rgba(78,58,120,.15);display:flex;align-items:center;justify-content:center;flex:none}
+.pillimg i{display:block;width:24px;height:11px;border-radius:999px;background:#fff;border:1.5px solid var(--plum);position:relative}
+.pillimg i::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1.5px;background:var(--plum)}
+.pillimg.round i{width:16px;height:16px;border-radius:50%}.pillimg.round i::after{display:none}
+.pillimg.oval i{background:#F1DCE6}
+.medrow{display:flex;gap:12px;align-items:center}
+.list{list-style:none}
+.list li{padding:10px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px;line-height:1.45;display:flex;gap:10px;align-items:flex-start}
+.list li:first-child{border-top:0}
+.list li .r{margin-left:auto;color:var(--soft);font-size:13px;white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px}
+.g{background:var(--good)}.w{background:var(--watch)}.a{background:var(--act)}
+.spark{width:100%;height:60px;margin-top:8px}
+.over{position:absolute;inset:0;border-radius:42px;background:rgba(43,39,51,.28);display:none;align-items:flex-end;z-index:5}
+.over.on{display:flex}
+.sheet{width:100%;max-height:92%;overflow-y:auto;background:#FBF8FA;border-radius:28px 28px 42px 42px;padding:14px 18px 28px;scrollbar-width:none}
+.sheet::-webkit-scrollbar{display:none}
+.handle{width:44px;height:5px;border-radius:999px;background:#D9D2DE;margin:0 auto 14px}
+.sheet h3{font-size:20px;font-weight:500}
+.sheet .x{position:absolute;right:22px;top:20px;font-size:14px;color:var(--soft)}
+.opt{display:flex;align-items:center;gap:14px;padding:14px 4px;border-top:1px solid rgba(43,39,51,.08);font-size:18px;width:100%;text-align:left}
+.opt:first-of-type{border-top:0}
+.opt i{width:38px;height:38px;border-radius:12px;background:#EFE9F5;flex:none;display:flex;align-items:center;justify-content:center;color:var(--plum)}
+.opt i svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.prog{list-style:none;margin-top:10px}
+.prog li{font-size:15px;padding:8px 0;color:#B9B2C0;display:flex;gap:10px;align-items:center}
+.prog li::before{content:"";width:8px;height:8px;border-radius:50%;background:#DDD6E2;flex:none}
+.prog li.now{color:var(--ink)}.prog li.now::before{background:var(--plum)}
+.prog li.done{color:var(--ink)}.prog li.done::before{background:var(--good)}
+.field{display:flex;justify-content:space-between;padding:8px 0;font-size:15px;border-bottom:1px solid rgba(43,39,51,.06)}
+.field b{font-weight:500;border-bottom:2px solid var(--good)}.field b.ask{border-bottom:2px dotted var(--watch)}
+.toast{position:absolute;left:26px;right:26px;top:22px;background:var(--ink);color:#fff;border-radius:16px;padding:12px 16px;font-size:14px;line-height:1.4;display:none;z-index:9}
+.toast.on{display:block}
+.big{font-size:56px;font-weight:300;line-height:1;margin-top:6px}
+.pa .big{font-weight:500}
+.hero{padding:22px 6px 4px}
+.hero .lab{font-size:14px;color:var(--soft)}
+.hero .sub{font-size:17px;color:var(--soft);margin-top:4px}
+.q{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.q button{background:var(--paper);border:1px solid rgba(255,255,255,.9);border-radius:14px;padding:10px 14px;font-size:15px;text-align:left;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pa .q button{font-size:17px}
+textarea,input[type=text]{width:100%;font:inherit;font-size:15px;border:1px solid #DDD6E2;border-radius:14px;padding:12px;background:#fff;resize:vertical;color:var(--ink)}
+.preview{border:1px dashed rgba(78,58,120,.4);border-radius:20px;padding:14px;margin-top:12px;background:linear-gradient(160deg,var(--lavender),var(--blush))}
+.toggle{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px}
+.toggle:first-child{border-top:0}
+.sw{width:44px;height:26px;border-radius:999px;background:#D9D2DE;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--plum)}.sw.on::after{left:21px}
+.steps{display:flex;gap:6px;margin-top:10px}
+.steps div{flex:1;height:6px;border-radius:999px;background:#E6E0EA}
+.steps div.on{background:var(--plum)}.steps div.done{background:var(--good)}
+.week{display:flex;gap:6px;margin-top:10px}
+.week div{flex:1;height:34px;border-radius:8px;background:#E6F0E9;display:flex;align-items:center;justify-content:center;font-size:12px;color:#2F6247}
+.week div.m{background:#F7E4E1;color:#7A2E24}.week div.u{background:#F5EBD9;color:#7A4E0F}
+.chat{padding:8px 4px}
+.msg{max-width:84%;padding:10px 14px;border-radius:18px;font-size:15px;line-height:1.45;margin-top:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.msg.me{margin-left:auto;background:#DCF4D5}
+.msg .ts{font-size:11px;color:#8A8492;text-align:right;margin-top:4px}
+.msg .btns{display:flex;gap:8px;margin-top:8px}
+.msg .btns button{flex:1;background:#fff;border:1px solid #DDD6E2;border-radius:10px;padding:8px;font-size:14px;color:var(--plum);font-weight:500}
+.notes{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:26px 28px}
+.notes h2{font-size:18px;font-weight:500}
+.notes p{font-size:14px;color:var(--soft);line-height:1.55;margin-top:6px}
+.notes h3{font-size:14px;font-weight:500;margin-top:22px}
+.notes ul{list-style:none;margin-top:8px}
+.notes li{font-size:14px;line-height:1.55;padding:5px 0 5px 16px;position:relative}
+.notes li::before{content:"";position:absolute;left:0;top:13px;width:6px;height:6px;border-radius:50%;background:var(--plum)}
+.notes li b{font-weight:500}
+.emg{background:#fff;border-radius:22px;padding:18px;margin-top:12px;border:2px solid #7A2E24}
+.emg .t{font-size:22px;font-weight:500}
+.emg .kv{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(43,39,51,.08);font-size:17px}
+.emg .kv:first-of-type{border-top:0}
+.emg .kv span:first-child{color:var(--soft)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div><h1 style="display:flex;align-items:center;gap:10px"><svg width="28" height="28" viewBox="0 0 200 200" aria-label="Nura" style="vertical-align:middle"><defs><linearGradient id="nuraAura" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B9A6E0"/><stop offset="1" stop-color="#F0C9DA"/></linearGradient></defs><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#nuraAura)" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#4E3A78"/></svg>Nura — interactive reference</h1><p>Everything in the phone is tappable. Switch who is holding it.</p></div>
+  <div class="switch"><button class="on" onclick="setPersona('pa',this)">Pa</button><button onclick="setPersona('ash',this)">Ash</button><button onclick="setPersona('helper',this)">Helper</button></div>
+</div>
+
+<div class="stage">
+<div class="phone">
+<div class="screen wash-stable pa" id="screen">
+<div class="light"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ================= PA ================= -->
+<div class="persona on" id="p-pa">
+
+  <div class="view on" data-v="today">
+    <div class="status"><b>7:42</b><span>Tuesday 15 Sep</span></div>
+    <div class="search" onclick="openOv('ask')"><span>Ask me anything</span><div class="ic line" onclick="event.stopPropagation();openOv('add')"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="ic plum"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg></div></div>
+
+    <div class="section">Now</div>
+    <div class="tile paper">
+      <div class="medrow"><div class="pillimg"><i></i></div><div><div class="t">Your blood pressure tablet</div><div class="s">One with breakfast. Amlodipine, 5 mg.</div></div></div>
+      <button class="pill" id="take1" onclick="take(this,'c1')">Taken</button>
+    </div>
+
+    <div class="section">For you today</div>
+    <div class="tile paper tap" onclick="openOv('clip')">
+      <div class="scene morning"><i></i><i></i><div class="play">20 seconds</div></div>
+      <div class="t" style="margin-top:12px">Your kidney test, in simple words</div>
+      <div class="s">It is a little higher than in June. It is not a worry. Ash will ask Dr Tan about it on Thursday.</div>
+      <div class="why">You are seeing this because a new test came from Gleneagles on 9 September. You can hear it in Hokkien.</div>
+    </div>
+
+    <div class="tile paper tap" onclick="openOv('clip2')">
+      <div class="scene food"><i></i><i></i><div class="play">30 seconds</div></div>
+      <div class="t" style="margin-top:12px">Water pill and bananas</div>
+      <div class="s">A heart doctor talks about the water pill and bananas. It is 30 seconds long. We kept only the part that matters for you.</div>
+      <div class="why">You are seeing this because you started the water pill on 1 September. The doctor is from Mount Elizabeth.</div>
+    </div>
+
+    <div class="tile tap" onclick="go('pa','visits')">
+      <div class="t">Thursday, 10 in the morning</div>
+      <div class="s">Dr Tan, heart clinic. Mei will drive you. Your questions are on a card.</div>
+      <div class="chips"><span class="chip">Bring your blood pressure book</span><span class="chip">Insurance letter is ready</span></div>
+    </div>
+
+    <div class="tile paper tap" onclick="openOv('food')">
+      <div class="scene food"><i></i><i></i></div>
+      <div class="t" style="margin-top:12px">Take a photo of your lunch</div>
+      <div class="s">I will tell you if it is OK for your blood pressure and sugar.</div>
+    </div>
+
+    <div class="tile">
+      <div class="scene family"><i></i><i></i></div>
+      <div class="t" style="margin-top:12px">From Mei</div>
+      <div class="s">The grandkids at the park this morning.</div>
+      <button class="pill sm" onclick="toast('Mei will see your thumbs up.')">Send a thumbs up</button>
+    </div>
+
+    <div class="tile">
+      <div class="t">More dengue in Air Itam</div>
+      <div class="s">Pour out any water in the pots on the balcony.</div>
+      <div class="why">You are seeing this because you live near there. It comes from the Penang health office this week.</div>
+    </div>
+
+    <div class="tile tap" onclick="openOv('clip3')">
+      <div class="scene walk"><i></i><i></i><div class="play">Your week, 30 seconds</div></div>
+      <div class="t" style="margin-top:12px">Last week was good</div>
+      <div class="s">You walked on 6 days out of 7. Your blood pressure was steady. One tablet was late.</div>
+    </div>
+
+    <button class="pill coral" onclick="openOv('unwell')">I'm not feeling well</button>
+  </div>
+
+  <div class="view" data-v="meds">
+    <div class="status"><b>Medicines</b><span>6 tablets a day</span></div>
+    <div class="search" onclick="openOv('add')"><span>New medicine? Take a photo of the bag</span><div class="ic line"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div></div>
+    <div class="section">Morning</div>
+    <div class="tile paper">
+      <div class="medrow"><div class="pillimg"><i></i></div><div><div class="t">Blood pressure tablet</div><div class="s">Amlodipine, 5 mg. <b id="c1">12</b> left. Buy more by Thursday 25 September.</div></div></div>
+      <button class="pill" onclick="take(this,'c1')">Taken</button>
+      <div class="why">If your ankles swell, tell Ash. Do not eat grapefruit with this tablet.</div>
+    </div>
+    <div class="tile paper">
+      <div class="medrow"><div class="pillimg round"><i></i></div><div><div class="t">Heart tablet</div><div class="s">Aspirin, 100 mg. After food. <b id="c2">40</b> left.</div></div></div>
+      <button class="pill" onclick="take(this,'c2')">Taken</button>
+    </div>
+    <div class="section">Dinner</div>
+    <div class="tile paper">
+      <div class="medrow"><div class="pillimg oval"><i></i></div><div><div class="t">Sugar tablet</div><div class="s">Metformin, 500 mg. With food. <b id="c3">3</b> left.</div></div></div>
+      <div class="row2"><button class="pill plum" onclick="toast('Ash will order it. She usually does it the same day.')">Ask Ash to order</button><button class="pill" onclick="toast('Take a photo of the strip. I will count again.')">I have more</button></div>
+      <div class="why">On fasting days, do not take it. Always take it with food, or it can upset your stomach.</div>
+    </div>
+    <div class="tile paper">
+      <div class="medrow"><div class="pillimg"><i></i></div><div><div class="t">Water pill</div><div class="s">Furosemide, 20 mg. Take it in the morning. Not after 2 in the afternoon. <b>18</b> left.</div></div></div>
+      <button class="pill" onclick="take(this,'c4')">Taken</button>
+      <div class="why">This tablet makes you pass more urine. Dr Tan said eat a banana most days.</div>
+    </div>
+    <div class="section">Ask about a pill</div>
+    <div class="tile tap" onclick="toast('Point the camera at the pill. I will tell you what it is for.')">
+      <div class="t">What is this white pill?</div><div class="s">Take a photo. I will tell you what it is for.</div>
+    </div>
+  </div>
+
+  <div class="view" data-v="records">
+    <div class="status"><b>Records</b><span>2 years</span></div>
+    <button class="pill plum" onclick="openOv('add')">Add something</button>
+    <div class="chips" id="recchips"><button class="chip on" onclick="chipOnly(this)">By time</button><button class="chip" onclick="chipOnly(this)">By body</button><button class="chip" onclick="chipOnly(this)">By doctor</button><button class="chip" onclick="chipOnly(this)">By type</button></div>
+    <div class="section">This month</div>
+    <div class="tile paper tap" id="rec-new" style="display:none" onclick="openOv('clip')"><div class="t">Kidney test</div><div class="s">This was on 9 September at Gleneagles. It is a little higher than in June.</div><div class="why">I added this just now. There is a short explanation on your Today page.</div></div>
+    <div class="tile paper tap" onclick="openOv('clip')"><div class="t">You saw Dr Tan</div><div class="s">You saw him on 1 September at the heart clinic. He started the water pill. You will have a blood test again in a few weeks.</div><button class="pill sm">Hear what he said</button></div>
+    <div class="tile paper"><div class="t">Your blood pressure</div><div class="s">You check it every morning. It has gone up a little in the last 9 days.</div>
+      <svg class="spark" viewBox="0 0 320 60"><rect x="0" y="20" width="320" height="22" rx="6" fill="rgba(78,58,120,.08)"/><polyline fill="none" stroke="#2B2733" stroke-width="1.5" points="0,44 40,42 80,43 120,38 160,36 200,32 240,26 280,20 318,14"/><circle cx="318" cy="14" r="4" fill="#B8741A"/></svg></div>
+    <div class="section">June</div>
+    <div class="tile paper"><div class="t">Kidney test</div><div class="s">This was on 12 June at Gleneagles. It was normal.</div></div>
+    <div class="tile paper"><div class="t">Sugar test</div><div class="s">This was on 12 June. It was better than in March.</div></div>
+    <div class="section">Always with you</div>
+    <div class="tile tap" onclick="openOv('emergency')"><div class="t">Emergency card</div><div class="s">Works with no internet. Show it to any doctor or nurse.</div></div>
+  </div>
+
+  <div class="view" data-v="visits">
+    <div class="status"><b>Visits</b><span>Next in 2 days</span></div>
+    <div class="tile paper">
+      <div class="scene clinic"><i></i><i></i></div>
+      <div class="t" style="margin-top:12px">Thursday, 10 in the morning</div>
+      <div class="s">Dr Tan, heart clinic, Gleneagles. Mei will pick you up at 9.</div>
+      <div class="chips"><span class="chip">Bring your blood pressure book</span><span class="chip">Insurance letter is ready</span><span class="chip">No food before</span></div>
+      <button class="pill" onclick="tog('qs')">Your questions, 4</button>
+      <div id="qs" style="display:none">
+        <ul class="list" style="margin-top:8px">
+          <li><span class="dot w"></span>Is the water pill bad for my kidneys?</li>
+          <li><span class="dot w"></span>My blood pressure is high in the morning. Is that OK?</li>
+          <li><span class="dot g"></span>Do I need all my blood pressure tablets?</li>
+          <li><span class="dot g"></span>When is my next blood test?</li>
+        </ul>
+        <button class="pill sm" onclick="toast('I will read them to you in Hokkien.')">Hear them</button>
+      </div>
+    </div>
+    <div class="section">Last time</div>
+    <div class="tile paper tap" onclick="openOv('clip')">
+      <div class="t">Dr Tan, 1 Sep</div>
+      <div class="s">He started a water pill for your swollen legs. Take it in the morning. Eat a banana most days. Blood test again in a few weeks.</div>
+      <button class="pill sm">Hear what he said</button>
+    </div>
+    <div class="tile"><div class="t">What you said you will do</div><div class="s">"Walk after dinner. Less salt at lunch. Bring my blood pressure book on Thursday."</div><div class="why">Your words, 1 September.</div></div>
+    <div class="tile tap" onclick="openOv('emergency')"><div class="t">Emergency card</div><div class="s">Tap to show.</div></div>
+  </div>
+
+  <div class="tabbar"><button class="on" onclick="go('pa','today',this)">Today</button><button onclick="go('pa','meds',this)">Medicines</button><button onclick="go('pa','records',this)">Records</button><button onclick="go('pa','visits',this)">Visits</button></div>
+</div>
+
+<!-- ================= ASH ================= -->
+<div class="persona" id="p-ash">
+
+  <div class="view on" data-v="home">
+    <div class="status"><b>8:15</b><span>Pa</span></div>
+    <div class="search" onclick="openOv('askash')"><span>Ask or find anything about Pa</span><div class="ic plum"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg></div></div>
+    <div class="hero"><div class="lab">Most likely state</div><div class="big">Stable</div><div class="sub">watch blood pressure</div>
+      <svg class="spark" viewBox="0 0 320 60"><rect x="0" y="20" width="320" height="22" rx="6" fill="rgba(78,58,120,.08)"/><polyline fill="none" stroke="#2B2733" stroke-width="1.5" points="0,44 40,42 80,43 120,38 160,36 200,32 240,26 280,20 318,14"/><circle cx="318" cy="14" r="4" fill="#B8741A"/></svg>
+      <div class="chips"><span class="chip">148 this morning</span><span class="chip">Pressure tablet unchanged</span><span class="chip">Salty lunches, 3</span></div>
+    </div>
+    <div class="tile paper"><div class="t" style="font-size:16px">What changed since Sunday</div>
+      <ul class="list"><li><span class="dot w"></span>Kidney check arrived from Gleneagles. A little up.<span class="r">9 Sep</span></li><li><span class="dot a"></span>Sunday dinner tablet not confirmed. Helper was off.<span class="r">Sun</span></li><li><span class="dot g"></span>Mei logged a 22-minute walk.<span class="r">Mon</span></li></ul></div>
+    <div class="row2">
+      <div class="tile tap" style="flex:1" onclick="go('ash','plan')"><div class="t" style="font-size:15px">Next visit</div><div class="n" style="font-size:22px">Thu 10:00</div><div class="why">Dr Tan. Letter approved. 4 questions.</div></div>
+      <div class="tile tap" style="flex:1" onclick="go('ash','meds')"><div class="t" style="font-size:15px">Reorder</div><div class="n">3</div><div class="why">Sugar tablets left. Order today.</div></div>
+    </div>
+    <div class="tile"><div class="t" style="font-size:16px">Gap</div><div class="s" style="font-size:15px;color:var(--ink)">No cholesterol check in 14 months. Added to Thursday's questions.</div></div>
+    <div class="section">Watching for Pa</div>
+    <div class="tile"><ul class="list"><li>Safety notices for his tablets<span class="r">daily</span></li><li>Kidney-friendly hawker options<span class="r">weekly</span></li><li>Dengue and haze, Air Itam<span class="r">daily</span></li><li>Gleneagles heart clinic waiting times<span class="r">before visits</span></li><li>Explainers for new results and medicines<span class="r">on change</span></li></ul><button class="pill sm" onclick="toast('Tell me what to watch for and I will add it.')">Add a watch</button></div>
+    <div class="section">Sent to Pa this week</div>
+    <div class="tile"><ul class="list"><li><span class="dot g"></span>Kidney check explainer, 20 s. Opened, played twice.</li><li><span class="dot w"></span>Water pill and bananas, 30 s. Not opened. Voice note sent instead.</li></ul></div>
+  </div>
+
+  <div class="view" data-v="timeline">
+    <div class="status"><b>Timeline</b><span>2 years</span></div>
+    <div class="chips" id="sys"><button class="chip on" onclick="filt('all',this)">All</button><button class="chip" onclick="filt('heart',this)">Heart</button><button class="chip" onclick="filt('kidney',this)">Kidneys</button><button class="chip" onclick="filt('sugar',this)">Sugar</button></div>
+    <div class="section">September</div>
+    <div class="tile paper" data-sys="kidney"><div class="t" style="font-size:16px">Kidney check, 9 Sep</div><div class="s" style="font-size:14px">Gleneagles. Kidney number 98, potassium 4.9. Ordered by Dr Tan.</div><div class="why">Linked to the swelling episode. Question added.</div></div>
+    <div class="tile paper tap" data-sys="heart" onclick="openOv('clip')"><div class="t" style="font-size:16px">Visit, Dr Tan, 1 Sep</div><div class="s" style="font-size:14px">Started water pill 20 mg. Recheck bloods in a few weeks. Recording, 14 min.</div></div>
+    <div class="tile paper" data-sys="heart"><div class="t" style="font-size:16px">Morning readings, 9 days</div><div class="s" style="font-size:14px">131 to 148. Drifting up since the water pill started.</div></div>
+    <div class="section">June</div>
+    <div class="tile paper" data-sys="kidney"><div class="t" style="font-size:16px">Kidney check, 12 Jun</div><div class="s" style="font-size:14px">Normal. Potassium 4.2.</div></div>
+    <div class="tile paper" data-sys="sugar"><div class="t" style="font-size:16px">Three-month sugar, 12 Jun</div><div class="s" style="font-size:14px">6.8, down from 7.4 in March.</div></div>
+    <div class="section">February</div>
+    <div class="tile paper" data-sys="heart"><div class="t" style="font-size:16px">Discharge, Gleneagles, 3 Feb</div><div class="s" style="font-size:14px">Two nights for breathlessness. Follow-up plan completed.</div></div>
+  </div>
+
+  <div class="view" data-v="meds">
+    <div class="status"><b>Medicines</b><span>Reconciled 1 Sep</span></div>
+    <div class="tile paper"><div class="t" style="font-size:16px">This week</div><div class="week"><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div class="u">S</div></div><div class="why">Green confirmed, yellow unconfirmed, red missed. Sunday dinner unconfirmed.</div></div>
+    <div class="tile paper"><div class="medrow"><div class="pillimg"><i></i></div><div><div class="t" style="font-size:16px">Amlodipine 5 mg, morning</div><div class="s" style="font-size:14px">Blood pressure. Dr Tan, since Feb. From pharmacy label, 1 Sep. 12 left.</div></div></div><button class="pill sm" onclick="tog('story1')">Medication story</button><div id="story1" style="display:none"><ul class="list" style="margin-top:8px"><li>Started Feb 2026 after the discharge.</li><li>Dose unchanged since. Two labels confirm 5 mg.</li><li>Interacts with grapefruit. Ankle swelling is a known effect and is why the water pill was added.</li></ul></div></div>
+    <div class="tile paper"><div class="medrow"><div class="pillimg"><i></i></div><div><div class="t" style="font-size:16px">Furosemide 20 mg, morning</div><div class="s" style="font-size:14px">Water pill. Dr Tan, since 1 Sep. From consult recording and label. 18 left.</div></div></div></div>
+    <div class="tile paper"><div class="medrow"><div class="pillimg oval"><i></i></div><div><div class="t" style="font-size:16px">Metformin 500 mg, dinner</div><div class="s" style="font-size:14px">Sugar. Polyclinic, since 2024. 3 left.</div></div></div><button class="pill sm plum" onclick="toast('Message to Guardian Gurney drafted. Confirm to send.')">Draft reorder</button></div>
+    <div class="tile paper"><div class="medrow"><div class="pillimg round"><i></i></div><div><div class="t" style="font-size:16px">Aspirin 100 mg, morning</div><div class="s" style="font-size:14px">Heart. Dr Tan, since Feb. 40 left.</div></div></div></div>
+    <div class="section">Things to raise on Thursday</div>
+    <div class="tile"><ul class="list"><li><span class="dot w"></span>Water pill and potassium: potassium rose to 4.9 after it started. Ask whether to recheck sooner.</li><li><span class="dot w"></span>Two blood pressure medicines plus a water pill at 74: ask whether all three are still needed.</li><li><span class="dot g"></span>Aspirin with no stomach protection: ask if that is intended.</li></ul><div class="why">Talking points only. Nothing here changes a dose. Criteria: STOPP and Beers, 2023 editions.</div></div>
+  </div>
+
+  <div class="view" data-v="plan">
+    <div class="status"><b>Plan</b><span>This week</span></div>
+    <div class="section">Thursday's visit</div>
+    <div class="tile paper"><div class="t" style="font-size:16px">Dr Tan, 10:00, Gleneagles</div>
+      <div class="chips"><span class="chip">Brief ready</span><span class="chip">4 questions</span><span class="chip">Mei driving</span></div>
+      <div class="row2"><button class="pill" onclick="toast('One-page brief opened. Share link expires in 72 hours.')">Doctor's page</button><button class="pill" onclick="toast('Packet bundled: summary, medicines, key results, prior opinions.')">Second-opinion packet</button></div>
+    </div>
+    <div class="tile paper"><div class="t" style="font-size:16px">Insurance letter</div>
+      <div class="steps" id="gl"><div class="done"></div><div class="done"></div><div class="on"></div><div></div></div>
+      <div class="s" style="font-size:14px" id="gltxt">Requested Mon. Approved Wed. Expires 30 Sep. Not yet used.</div>
+      <button class="pill sm" onclick="toast('Claim will be tracked automatically from the receipt.')">Track the claim</button>
+    </div>
+    <div class="tile paper"><div class="t" style="font-size:16px">Costs this year</div><div class="n" style="font-size:26px">RM 4,860</div><div class="s" style="font-size:14px">RM 3,200 claimed, RM 1,660 out of pocket. Two receipts waiting.</div></div>
+    <div class="section">Routine</div>
+    <div class="tile paper">
+      <div class="toggle">Morning tablets with breakfast<div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="toggle">Pressure reading after tablets<div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="toggle">Walk after dinner, 20 minutes<div class="sw on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="toggle">Weigh on Mondays<div class="sw" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+    <div class="section">Who does what</div>
+    <div class="tile paper"><ul class="list"><li>Thu drive to Gleneagles<span class="r">Mei</span></li><li>Sugar tablet refill<span class="r">Ash</span></li><li>Weekend dinner tablets<span class="r">Helper off, Ash</span></li></ul></div>
+    <div class="section">Send Pa something</div>
+    <div class="tile paper">
+      <textarea id="compose" rows="3">Pa, walk after dinner tonight? The grandkids want to come on Saturday.</textarea>
+      <div class="chips"><button class="chip on" id="fmt-card" onclick="fmt('card')">Card</button><button class="chip" id="fmt-voice" onclick="fmt('voice')">Voice note</button><button class="chip" id="fmt-clip" onclick="fmt('clip')">Short clip</button></div>
+      <div class="preview" id="preview"><div style="font-size:12px;color:var(--soft)">Pa will see</div><div style="background:var(--paper);border-radius:16px;padding:14px;margin-top:8px"><div style="font-size:20px;font-weight:500" id="pv-text">Pa, walk after dinner tonight? The grandkids want to come on Saturday.</div><div style="font-size:14px;color:var(--soft);margin-top:4px">From Ash, in Hokkien</div><div class="pill" style="height:44px;font-size:16px">OK, tonight</div></div></div>
+      <button class="pill plum" onclick="sendPush()">Send at 5 pm</button>
+    </div>
+  </div>
+
+  <div class="view" data-v="family">
+    <div class="status"><b>Family</b><span>4 people</span></div>
+    <div class="tile paper"><ul class="list"><li>Ash<span class="r">Chief, everything</span></li><li>Mei<span class="r">Caregiver, no notes</span></li><li>Aunt Lily<span class="r">Viewer, visits only</span></li><li>Siti<span class="r">Helper, today's list</span></li></ul><button class="pill sm" onclick="toast('Invite sent by WhatsApp with a consent link.')">Invite someone</button></div>
+    <div class="section">Helper on WhatsApp</div>
+    <div class="tile paper"><div class="toggle">Today's medicine list at 7 am<div class="sw on" onclick="this.classList.toggle('on')"></div></div><div class="toggle">"Given" replies count as confirmed<div class="sw on" onclick="this.classList.toggle('on')"></div></div><div class="toggle">"He is not well" alerts Ash<div class="sw on" onclick="this.classList.toggle('on')"></div></div><div class="why">Bahasa Indonesia. No access to history.</div></div>
+    <div class="section">Family thread</div>
+    <div class="tile paper"><ul class="list"><li><span class="dot g"></span>Mei: Walked 22 minutes, he was in a good mood.<span class="r">Mon</span></li><li><span class="dot w"></span>Pa: Confirmed morning tablets.<span class="r">Tue</span></li><li><span class="dot g"></span>Ash: Insurance letter approved for Thursday.<span class="r">Wed</span></li></ul></div>
+    <div class="section">Who looked at what</div>
+    <div class="tile"><ul class="list"><li>Ash asked about potassium<span class="r">Tue 8:15</span></li><li>Mei opened Thursday's visit<span class="r">Mon</span></li><li>Pa marked one note "only me"<span class="r">Sun</span></li></ul><div class="why">Pa sees this list too.</div></div>
+  </div>
+
+  <div class="tabbar"><button class="on" onclick="go('ash','home',this)">Home</button><button onclick="go('ash','timeline',this)">Timeline</button><button onclick="go('ash','meds',this)">Medicines</button><button onclick="go('ash','plan',this)">Plan</button><button onclick="go('ash','family',this)">Family</button></div>
+</div>
+
+<!-- ================= HELPER ================= -->
+<div class="persona" id="p-helper">
+  <div class="status"><b>Nura</b><span>WhatsApp</span></div>
+  <div class="chat">
+    <div class="msg">Selamat pagi Siti. Obat Pak hari ini:<br><b>Pagi</b> tablet tekanan darah (putih, panjang), aspirin (bulat kecil), pil air.<br><b>Malam</b> tablet gula (oval, pink) bersama makan.<div class="ts">7:00</div></div>
+    <div class="msg me">Pagi sudah diberi<div class="ts">7:48</div></div>
+    <div class="msg">Terima kasih. Dicatat: tablet pagi diberi 7:48.<div class="btns"><button onclick="toast('Ash and Mei notified. Pa\'s not-feeling-well flow opened.')">Pak tidak sehat</button><button onclick="toast('Recorded: dinner tablet given.')">Malam sudah diberi</button></div><div class="ts">7:48</div></div>
+    <div class="msg">Kamis: Pak ke klinik jam 10. Mei jemput jam 9. Tolong siapkan buku catatan tekanan darah.<div class="ts">7:49</div></div>
+  </div>
+</div>
+
+<!-- ================= OVERLAYS ================= -->
+<div class="over" id="ov-ask"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('ask')">Close</button><h3>Ask me anything</h3><p style="color:var(--soft);font-size:15px;margin-top:4px">Talk, or tap one.</p>
+  <div class="q"><button onclick="ans('a1')">When did I last see Dr Tan?</button><button onclick="ans('a2')">What did he say about the water pill?</button><button onclick="ans('a3')">Is my sugar OK?</button><button onclick="ans('a4')">What can I eat at the kopitiam?</button></div>
+  <div id="ansbox"></div></div></div>
+
+<div class="over" id="ov-askash"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('askash')">Close</button><h3>Ask or find</h3>
+  <div class="chips"><span class="chip on">Records</span><span class="chip">Web</span><span class="chip">Doctors</span><span class="chip">Videos</span></div>
+  <div class="q"><button onclick="ans('b1')">Has his potassium ever been high?</button><button onclick="ans('b2')">Who should we see for a second opinion?</button><button onclick="ans('b3')">Order the sugar tablets</button></div>
+  <div id="ansbox2"></div></div></div>
+
+<div class="over" id="ov-add"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('add')">Close</button>
+  <div id="add1"><h3>Add to Pa's record</h3>
+    <button class="opt" onclick="addStart()"><i><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></i>Take a photo</button>
+    <button class="opt" onclick="addStart()"><i><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></i>From photos or screenshots</button>
+    <button class="opt" onclick="addStart()"><i><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg></i>A file or PDF</button>
+    <button class="opt" onclick="toast('Forward anything to +60 12 345 6789 and it files itself.')"><i><svg viewBox="0 0 24 24"><path d="M4 20l2-5a8 8 0 1 1 3 3z"/></svg></i>Forward it on WhatsApp</button>
+    <button class="opt" onclick="toast('Recording asks the doctor first, then listens.')"><i><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg></i>Record a visit</button></div>
+  <div id="add2" style="display:none"><h3>Organising 3 pages</h3><ul class="prog" id="prog"><li>Reading the pages</li><li>Found a kidney check, 9 Sep, Gleneagles</li><li>Linked to Dr Tan's visit and the swelling episode</li><li>Checked against medicines and past results</li><li>Preparing a 20-second explainer</li></ul></div>
+  <div id="add3" style="display:none"><h3>Kidney check, 9 Sep</h3><p style="color:var(--soft);font-size:14px">Gleneagles Penang, ordered by Dr Tan</p>
+    <div style="margin-top:10px"><div class="field"><span>Kidney number</span><b>98</b></div><div class="field"><span>Kidney filter score</span><b>68</b></div><div class="field"><span>Potassium</span><b class="ask">4.9</b></div></div>
+    <p style="color:var(--soft);font-size:13px;margin-top:10px">Dotted means please check the number against the paper.</p>
+    <button class="pill plum" onclick="addDone()">Looks right</button></div>
+</div></div>
+
+<div class="over" id="ov-unwell"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('unwell')">Close</button>
+  <div id="u1"><h3>What is wrong, Pa?</h3><p style="color:var(--soft);font-size:15px;margin-top:4px">Say it, or tap one.</p>
+    <div class="q"><button onclick="unwell(2)">Dizzy</button><button onclick="unwell(2)">Chest tight</button><button onclick="unwell(2)">Very tired</button><button onclick="unwell(2)">Swollen legs</button><button onclick="unwell(2)">Something else</button></div></div>
+  <div id="u2" style="display:none"><h3>Checking</h3><ul class="prog" id="uprog"><li>Your readings this week</li><li>Your tablets this morning</li><li>What Dr Tan said on 1 Sep</li></ul></div>
+  <div id="u3" style="display:none"><h3>Sit down. Rest for 20 minutes.</h3><p style="font-size:17px;line-height:1.5;margin-top:8px">This morning your blood pressure was 148. You took the water pill. Both can make you dizzy. Drink a glass of water. Sit for 20 minutes. If you are still dizzy, or your chest hurts, we go to the clinic.</p>
+    <div class="tile paper" style="margin-top:14px"><div class="t" style="font-size:16px">Ash and Mei know</div><div class="s" style="font-size:14px">Ash will call you in a few minutes.</div></div>
+    <div class="row2"><button class="pill" onclick="toast('Timer set. I will check on you at 8:20.')">Check on me in 20 minutes</button><button class="pill coral" onclick="toast('Calling Ash.')">Call Ash now</button></div></div>
+</div></div>
+
+<div class="over" id="ov-emergency"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('emergency')">Close</button><h3>Emergency card</h3>
+  <div class="emg"><div class="t">Lim Ah Kow, 74</div>
+    <div class="kv"><span>Conditions</span><span>Heart failure, high blood pressure, diabetes</span></div>
+    <div class="kv"><span>Medicines</span><span>Amlodipine, furosemide, aspirin, metformin</span></div>
+    <div class="kv"><span>Allergies</span><span>Penicillin</span></div>
+    <div class="kv"><span>Blood</span><span>O positive</span></div>
+    <div class="kv"><span>Call</span><span>Ash 012 345 6789</span></div>
+    <div class="kv"><span>Insurer</span><span>AIA, policy on file</span></div>
+    <div class="kv"><span>Doctor</span><span>Dr Tan, Gleneagles Penang</span></div>
+  </div><p style="color:var(--soft);font-size:13px;margin-top:10px">It is also in Malay and Chinese. It works with no internet. There is a paper copy in his wallet.</p>
+</div></div>
+
+<div class="over" id="ov-food"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('food')">Close</button><h3>Your lunch</h3>
+  <div class="scene food" style="height:130px"><i></i><i></i></div>
+  <div class="tile paper" style="margin-top:14px"><div class="t">Nasi lemak with fried chicken</div><div class="big" style="font-size:36px">Too much salt</div><div class="s">This meal has half of all the salt you should have in one day.</div><div class="chips"><span class="chip">Blood pressure</span><span class="chip">Kidneys</span></div><div class="why">Eat a light dinner tonight. Your blood pressure has been going up since June.</div></div>
+  <button class="pill" onclick="closeOv('food');toast('Logged. Dinner suggestion coming at 5 pm.')">Got it</button>
+</div></div>
+
+<div class="over" id="ov-clip"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip')">Close</button><h3>Your kidney test, in simple words</h3>
+  <div class="scene morning" style="height:160px"><i></i><i></i><div class="play" onclick="playClip('cap1')">Play, 20 seconds</div></div>
+  <p id="cap1" style="font-size:17px;line-height:1.55;margin-top:14px;color:var(--soft)">Captions appear here as it plays.</p>
+  <div class="why">This is in Hokkien. It was made from your Gleneagles test on 9 September. It is not a doctor's advice. Ask Dr Tan on Thursday.</div>
+  <div class="row2"><button class="pill" onclick="toast('Sent to the family group.')">Send to family</button><button class="pill" onclick="toast('Added: Is the water pill bad for my kidneys?')">Ask Dr Tan this</button></div>
+</div></div>
+
+<div class="over" id="ov-clip2"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip2')">Close</button><h3>Water pill and bananas</h3>
+  <div class="scene food" style="height:160px"><i></i><i></i><div class="play" onclick="playClip('cap2')">Play, 30 seconds</div></div>
+  <p id="cap2" style="font-size:17px;line-height:1.55;margin-top:14px;color:var(--soft)">Captions appear here as it plays.</p>
+  <div class="why">This is a heart doctor from Mount Elizabeth. We kept only the part that matters for you. You are seeing it because you started the water pill on 1 September.</div>
+</div></div>
+
+<div class="over" id="ov-clip3"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip3')">Close</button><h3>Your week</h3>
+  <div class="scene walk" style="height:160px"><i></i><i></i><div class="play" onclick="playClip('cap3')">Play, 30 seconds</div></div>
+  <p id="cap3" style="font-size:17px;line-height:1.55;margin-top:14px;color:var(--soft)">Captions appear here as it plays.</p>
+  <button class="pill" onclick="toast('Sent to the family group.')">Send to family</button>
+</div></div>
+
+</div><!-- screen -->
+</div><!-- phone -->
+
+<aside class="notes">
+  <h2>What this prototype covers</h2>
+  <p>Plain words on every screen Pa sees: purpose first, medicine name small and second, numbers explained in a sentence. The same record is shown to Ash with names and sources, and to the helper as a WhatsApp list in her language.</p>
+  <h3>Pa</h3>
+  <ul>
+    <li><b>Today</b> — the feed. Ask bar (tap), camera (add), Now card with Taken, explainer clips (tap to play with captions), visit card, food snap, family note, local alert, weekly clip, not-feeling-well.</li>
+    <li><b>Medicines</b> — purpose-first cards, Taken decrements the count, reorder actions, what-is-this-pill.</li>
+    <li><b>Records</b> — Add flow (photo, screenshots, PDF, WhatsApp, record a visit) → organising → review with confidence underlines → filed, feed and questions update. Four ways to browse. Emergency card.</li>
+    <li><b>Visits</b> — next visit with logistics, insurance letter status, questions (expand, hear them), last visit with clip, what he agreed in his words.</li>
+    <li><b>Not feeling well</b> — three steps: what's wrong, checking his readings and tablets, what to do now, family told.</li>
+  </ul>
+  <h3>Ash</h3>
+  <ul>
+    <li><b>Home</b> — ask-or-find (records, web, doctors, videos), most likely state with drivers, what changed, next visit, reorder, gaps, what the system is watching, what Pa opened.</li>
+    <li><b>Timeline</b> — filter by body system.</li>
+    <li><b>Medicines</b> — week of confirmations, reconciled list with sources, medication story, draft reorder, things to raise on Thursday (talking points, never dose changes).</li>
+    <li><b>Plan</b> — doctor's page and second-opinion packet, insurance letter tracker, costs, routine toggles, who does what, send Pa something with live preview in his format.</li>
+    <li><b>Family</b> — roles and scopes, helper settings, family thread, who looked at what.</li>
+  </ul>
+  <h3>Helper</h3>
+  <ul><li>WhatsApp only, in Bahasa Indonesia: today's list with pill descriptions, "given" replies, "he is not well" button, Thursday's reminder.</li></ul>
+  <h3>Not in this file</h3>
+  <ul><li>Real photography or illustration in place of the gradient scenes; real voice; Hokkien, Malay, Mandarin text; onboarding health biography; care navigation results; clip generation.</li></ul>
+</aside>
+</div>
+
+<script>
+var cur='pa';
+var counts={c1:12,c2:40,c3:3,c4:18};
+var screen=document.getElementById('screen');
+function setPersona(p,btn){cur=p;document.querySelectorAll('.persona').forEach(function(e){e.classList.remove('on')});document.getElementById('p-'+p).classList.add('on');document.querySelectorAll('.switch button').forEach(function(b){b.classList.remove('on')});btn.classList.add('on');screen.className='screen '+(p==='pa'?'wash-stable pa':p==='ash'?'wash-watch':'wash-chat');screen.scrollTop=0;closeAll();}
+function go(p,v,btn){var per=document.getElementById('p-'+p);per.querySelectorAll('.view').forEach(function(e){e.classList.toggle('on',e.dataset.v===v)});var tabs=per.querySelectorAll('.tabbar button');tabs.forEach(function(b){b.classList.remove('on')});if(btn){btn.classList.add('on')}else{tabs.forEach(function(b){if(b.textContent.toLowerCase().indexOf(v.slice(0,4))===0)b.classList.add('on')})}screen.scrollTop=0;}
+function openOv(id){document.getElementById('ov-'+id).classList.add('on')}
+function closeOv(id){document.getElementById('ov-'+id).classList.remove('on');if(id==='add'){resetAdd()}if(id==='unwell'){unwell(1)}}
+function closeAll(){document.querySelectorAll('.over').forEach(function(e){e.classList.remove('on')})}
+var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(function(){t.classList.remove('on')},2600)}
+function take(btn,key){if(btn.classList.contains('done'))return;btn.classList.add('done');var d=new Date();btn.textContent='Taken at '+d.getHours()+':'+('0'+d.getMinutes()).slice(-2);counts[key]=Math.max(0,counts[key]-1);var el=document.getElementById(key);if(el)el.textContent=counts[key];toast('Ash and Siti can see this. Well done.')}
+function tog(id){var e=document.getElementById(id);e.style.display=e.style.display==='none'?'block':'none'}
+function chipOnly(b){b.parentNode.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');toast('Same records, grouped '+b.textContent.toLowerCase()+'.')}
+function filt(s,b){b.parentNode.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')});b.classList.add('on');document.querySelectorAll('#p-ash [data-sys]').forEach(function(t){t.style.display=(s==='all'||t.dataset.sys===s)?'block':'none'})}
+var A={
+a1:['You saw Dr Tan on 1 September. That was 2 weeks ago.','He started the water pill for your swollen legs. He wants a blood test in a few weeks. You see him again this Thursday at 10.','Hear what he said'],
+a2:['Take it in the morning. Not after 2 in the afternoon.','Dr Tan said: "It will make you pass more urine. Eat a banana most days. We check your blood in a few weeks." 1 September.','Hear him say it'],
+a3:['Your sugar is better than in March.','In June it was 6.8. In March it was 7.4. Lower is better. Next test in December.','Hear it in Hokkien'],
+a4:['Chicken rice with less rice. Or fish soup.','Less salt than nasi lemak. Ask for no extra soy sauce. Your blood pressure has been going up a little.','Show me more'],
+b1:['4.9 on 9 Sep, the highest in two years.','Upper limit 5.0. It was 4.2 in June and 4.3 in February. He started the water pill on 1 Sep. Dr Tan said "we will recheck in a few weeks" at 4:12 in the recording.','Add to Thursday\'s questions'],
+b2:['Dr Ong at Island Hospital, or Dr Wong at Penang Adventist.','Both heart specialists, both on the AIA panel, neither in Dr Tan\'s group. Island is 15 minutes from home with easier parking. Quietest slots are Tuesday mornings. I can draft the WhatsApp to the clinic.','Draft the message'],
+b3:['Metformin 500 mg, 60 tablets, Guardian Gurney.','Last price RM 38. Generic available at RM 22. Message drafted, nothing sent yet.','Send the order']
+};
+function ans(k){var r=A[k];var box=document.getElementById(k[0]==='a'?'ansbox':'ansbox2');box.innerHTML='<div class="tile paper"><div class="t">'+r[0]+'</div><div class="s">'+r[1]+'</div><button class="pill" onclick="toast(\''+r[2]+'\')">'+r[2]+'</button><div class="why">From Pa\'s record. Sources shown on tap.</div></div>'}
+function addStart(){document.getElementById('add1').style.display='none';document.getElementById('add2').style.display='block';var lis=document.querySelectorAll('#prog li');lis.forEach(function(l,i){setTimeout(function(){lis.forEach(function(x){x.classList.remove('now')});l.classList.add('now');if(i>0)lis[i-1].classList.add('done')},400+i*650)});setTimeout(function(){lis[lis.length-1].classList.add('done');document.getElementById('add2').style.display='none';document.getElementById('add3').style.display='block'},400+lis.length*650+300)}
+function addDone(){closeOv('add');document.getElementById('rec-new').style.display='block';toast('Filed under Kidneys. A 20-second explainer is on the feed. One question added for Thursday.')}
+function resetAdd(){document.getElementById('add1').style.display='block';document.getElementById('add2').style.display='none';document.getElementById('add3').style.display='none';document.querySelectorAll('#prog li').forEach(function(l){l.className=''})}
+function unwell(n){['u1','u2','u3'].forEach(function(id,i){document.getElementById(id).style.display=(i===n-1)?'block':'none'});if(n===2){var lis=document.querySelectorAll('#uprog li');lis.forEach(function(l){l.className=''});lis.forEach(function(l,i){setTimeout(function(){l.classList.add('done')},400+i*500)});setTimeout(function(){unwell(3);screen.className='screen wash-watch pa'},400+lis.length*500+400)}}
+function fmt(f){['card','voice','clip'].forEach(function(x){document.getElementById('fmt-'+x).classList.toggle('on',x===f)});var pv=document.getElementById('preview');var txt=document.getElementById('compose').value;if(f==='card'){pv.innerHTML='<div style="font-size:12px;color:var(--soft)">Pa will see</div><div style="background:var(--paper);border-radius:16px;padding:14px;margin-top:8px"><div style="font-size:20px;font-weight:500">'+txt+'</div><div style="font-size:14px;color:var(--soft);margin-top:4px">From Ash, in Hokkien</div><div class="pill" style="height:44px;font-size:16px">OK, tonight</div></div>'}else if(f==='voice'){pv.innerHTML='<div style="font-size:12px;color:var(--soft)">Pa will hear</div><div style="background:var(--paper);border-radius:16px;padding:14px;margin-top:8px;display:flex;gap:12px;align-items:center"><div class="ic plum">▶</div><div><div style="font-size:16px;font-weight:500">Voice note, 12 seconds</div><div style="font-size:14px;color:var(--soft)">In Hokkien, your words</div></div></div>'}else{pv.innerHTML='<div style="font-size:12px;color:var(--soft)">Pa will watch</div><div class="scene family" style="margin-top:8px"><i></i><i></i><div class="play">15 seconds</div></div><div style="font-size:14px;color:var(--soft);margin-top:8px">Your message over the park photo, narrated in Hokkien</div>'}}
+document.getElementById('compose').addEventListener('input',function(){var on=document.querySelector('[id^=fmt-].on').id.replace('fmt-','');fmt(on)});
+function sendPush(){toast('Scheduled for 5 pm. You will see when Pa opens it.')}
+var CAPS={cap1:['Pa, your kidney test came back on 9 September.','It is a little higher than in June.','It is not a worry. The new water pill can do this.','Ash will ask Dr Tan on Thursday.'],cap2:['The water pill takes a body salt away. Doctors call it potassium.','A banana most days puts it back.','Do not buy potassium tablets. Only if your doctor says.','That is the part that matters for you.'],cap3:['You walked 6 days out of 7. Well done.','Your blood pressure was steady all week.','One dinner tablet was late on Sunday.','Thursday you see Dr Tan. Mei will drive.']};
+function playClip(id){var el=document.getElementById(id);var lines=CAPS[id];el.style.color='var(--ink)';lines.forEach(function(l,i){setTimeout(function(){el.textContent=l},i*1800)});setTimeout(function(){el.textContent=lines.join(' ');el.style.color='var(--soft)'},lines.length*1800)}
+</script>
+</body>
+</html>

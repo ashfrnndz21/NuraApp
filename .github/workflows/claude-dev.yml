@@ -1,0 +1,36 @@
+name: Dev agent
+on:
+  issues:
+    types: [labeled]
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+concurrency:
+  group: dev-agent
+  cancel-in-progress: false
+jobs:
+  build-story:
+    if: github.event.label.name == 'agent:ready'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "backend[dev]"
+      - name: Build the story
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are building one backlog story for Nura. The issue is #${{ github.event.issue.number }}: "${{ github.event.issue.title }}".
+            Read CLAUDE.md, the issue body, and the spec section it names. Follow .claude/rules. Work on a new branch named after the story ID.
+            Write the acceptance test first, implement, run `make test`, `make lint` and `make plain-words` until green.
+            Do not touch .github/, .claude/, CLAUDE.md or files owned by CODEOWNERS unless the issue is labelled risk:high and says so.
+            Open a pull request that starts with the story ID and includes "Closes #${{ github.event.issue.number }}", the acceptance line, and the plain-words output.
+            If you run out of turns, open a draft PR with what you have and a comment on the issue saying what is left.
+          claude_args: "--max-turns 80 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"

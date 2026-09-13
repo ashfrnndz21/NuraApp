@@ -1,0 +1,38 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "backend[dev]"
+      - run: make test
+      - run: make lint
+      - run: make plain-words
+  ios:
+    if: contains(github.event.pull_request.changed_files, 'ios/') || github.event_name == 'push'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd ios && xcodegen generate
+      - run: make ios-test
+      - name: Screenshot for review
+        run: |
+          xcrun simctl boot "iPhone 16" || true
+          xcrun simctl io booted screenshot ios/build/screenshot.png || true
+      - uses: actions/upload-artifact@v4
+        with: { name: ios-screenshot, path: ios/build/screenshot.png, if-no-files-found: ignore }
+  automerge:
+    needs: [backend]
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'risk:low')
+    runs-on: ubuntu-latest
+    permissions: { contents: write, pull-requests: write }
+    steps:
+      - run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"
+        env: { GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }

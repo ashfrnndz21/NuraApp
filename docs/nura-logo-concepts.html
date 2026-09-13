@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — logo concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--lav:#DCD5EE;--blush:#F1DCE6;--sage:#DCE8DF;--mist:#F5F1F4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:var(--mist);-webkit-font-smoothing:antialiased}
+.page{max-width:1180px;margin:0 auto;padding:44px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.concept{margin-top:36px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:28px;padding:28px 30px;box-shadow:0 8px 24px rgba(60,40,80,.05)}
+.concept h2{font-size:18px;font-weight:500}
+.concept p{font-size:14px;color:var(--soft);line-height:1.55;margin-top:4px;max-width:70ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:22px;align-items:stretch}
+.cell{border-radius:20px;display:flex;align-items:center;justify-content:center;min-height:200px;padding:20px;position:relative}
+.cell.wash{background:linear-gradient(160deg,var(--lav),var(--blush) 50%,var(--sage))}
+.cell.paper{background:#FBF9FA;border:1px solid rgba(43,39,51,.06)}
+.cell.plum{background:var(--plum)}
+.cell.ink{background:#231F2B}
+.cell .lab{position:absolute;left:14px;top:12px;font-size:11px;color:var(--soft);letter-spacing:.01em}
+.cell.plum .lab,.cell.ink .lab{color:rgba(255,255,255,.6)}
+.wm{font-family:'Outfit',sans-serif;font-weight:500;font-size:54px;letter-spacing:-.02em;color:var(--plum);line-height:1}
+.wm.light{color:#fff}
+.wm.thin{font-weight:300}
+.lockup{display:flex;align-items:center;gap:18px}
+.icon{width:132px;height:132px;border-radius:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 14px 34px rgba(60,40,80,.18)}
+.icon.wash{background:linear-gradient(160deg,var(--lav),var(--blush) 50%,var(--sage))}
+.icon.plum{background:var(--plum)}
+.icon.white{background:#fff}
+.small{display:flex;gap:14px;align-items:flex-end}
+.small .icon{box-shadow:none}
+.palette{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:22px}
+.sw{height:56px;border-radius:14px;border:1px solid rgba(43,39,51,.08)}
+.swl{font-size:12px;color:var(--soft);margin-top:4px;text-align:center}
+.notes{margin-top:36px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 28px;font-size:14px;line-height:1.6;color:var(--soft)}
+.notes b{color:var(--ink);font-weight:500}
+.notes ul{margin-top:8px;padding-left:18px}
+.pick{display:inline-block;font-size:11px;padding:3px 9px;border-radius:999px;background:#EEEDFE;color:#3C3489;margin-left:8px;vertical-align:middle;font-weight:500}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Nura — logo concepts</h1>
+  <p class="lede">Four original marks in the app's own tone: lavender, blush and sage washes, plum as the single accent, Outfit for the wordmark. Each is shown as the mark alone, the lockup, and the app icon on the wash and on plum. None borrows a heart, a pulse line or a cross.</p>
+
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="gWash" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#DCD5EE"/><stop offset=".55" stop-color="#F1DCE6"/><stop offset="1" stop-color="#DCE8DF"/></linearGradient>
+      <linearGradient id="gAura" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B9A6E0"/><stop offset="1" stop-color="#F0C9DA"/></linearGradient>
+      <linearGradient id="gPlum" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4E3A78"/><stop offset="1" stop-color="#7A5BA8"/></linearGradient>
+      <linearGradient id="gLight" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9E0F3"/></linearGradient>
+      <radialGradient id="gGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#F1DCE6"/><stop offset="1" stop-color="#F1DCE6" stop-opacity="0"/></radialGradient>
+    </defs>
+  </svg>
+
+  <!-- CONCEPT 1 -->
+  <div class="concept">
+    <h2>1. Shelter and cradle <span class="pick">recommended</span></h2>
+    <p>The first two letters of the name, stacked. The "n" is an arch: a roof, shelter, someone standing over you. The "u" is a bowl: a cradle, holding. The dot is the person. Read together it is the "nu" of Nura; read as a picture it is care around a person. It scales to a favicon and survives being cut into a Lock Screen glyph.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="160" height="160" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="url(#gAura)" stroke-width="22" stroke-linecap="round"/><circle cx="90" cy="139" r="11" fill="#4E3A78"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="url(#gAura)" stroke-width="22" stroke-linecap="round"/><circle cx="90" cy="139" r="11" fill="#4E3A78"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/><circle cx="90" cy="139" r="11" fill="#4E3A78"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="url(#gAura)" stroke-width="22" stroke-linecap="round"/><circle cx="90" cy="139" r="11" fill="#FFFFFF"/></svg></div>
+      </div>
+      <div class="cell ink"><span class="lab">Small sizes</span>
+        <div class="small">
+          <div class="icon white" style="width:60px;height:60px;border-radius:14px"><svg width="44" height="44" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#4E3A78" stroke-width="24" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="#C9B6E6" stroke-width="24" stroke-linecap="round"/><circle cx="90" cy="139" r="12" fill="#4E3A78"/></svg></div>
+          <div class="icon white" style="width:40px;height:40px;border-radius:10px"><svg width="30" height="30" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#4E3A78" stroke-width="26" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="#C9B6E6" stroke-width="26" stroke-linecap="round"/><circle cx="90" cy="139" r="13" fill="#4E3A78"/></svg></div>
+          <svg width="26" height="26" viewBox="0 0 200 200"><path d="M60 85V65a30 30 0 0 1 60 0v20" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round"/><path d="M52 117v10a38 38 0 0 0 76 0v-10" fill="none" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round" opacity=".7"/><circle cx="90" cy="139" r="14" fill="#FFFFFF"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONCEPT 2 -->
+  <div class="concept">
+    <h2>2. Halo n</h2>
+    <p>The "n" alone, drawn as one soft stroke, with a ring of light resting on its shoulder. The aura made literal, but quiet. Works well where the wordmark is set beside it; the ring picks up the wash colours and the stroke stays plum.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="160" height="160" viewBox="0 0 200 200"><circle cx="122" cy="72" r="34" fill="none" stroke="url(#gAura)" stroke-width="12"/><path d="M52 150V92a34 34 0 0 1 68 0v58" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><circle cx="122" cy="72" r="34" fill="none" stroke="url(#gAura)" stroke-width="12"/><path d="M52 150V92a34 34 0 0 1 68 0v58" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><circle cx="122" cy="72" r="34" fill="none" stroke="#FFFFFF" stroke-width="12"/><path d="M52 150V92a34 34 0 0 1 68 0v58" fill="none" stroke="#4E3A78" stroke-width="22" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><circle cx="122" cy="72" r="34" fill="none" stroke="url(#gAura)" stroke-width="12"/><path d="M52 150V92a34 34 0 0 1 68 0v58" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONCEPT 3 -->
+  <div class="concept">
+    <h2>3. Aura rings</h2>
+    <p>A person, and three soft arcs around them that fade outward: the aura, and the family and system around one man. The arcs open upward like a cradle. It is the most abstract of the four and the most at home on a dark Lock Screen.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="160" height="160" viewBox="0 0 200 200"><path d="M26 108a74 74 0 0 0 148 0" fill="none" stroke="#F0C9DA" stroke-width="10" stroke-linecap="round"/><path d="M48 108a52 52 0 0 0 104 0" fill="none" stroke="#B9A6E0" stroke-width="13" stroke-linecap="round"/><path d="M70 108a30 30 0 0 0 60 0" fill="none" stroke="#4E3A78" stroke-width="16" stroke-linecap="round"/><circle cx="100" cy="90" r="14" fill="#4E3A78"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M26 108a74 74 0 0 0 148 0" fill="none" stroke="#F0C9DA" stroke-width="10" stroke-linecap="round"/><path d="M48 108a52 52 0 0 0 104 0" fill="none" stroke="#B9A6E0" stroke-width="13" stroke-linecap="round"/><path d="M70 108a30 30 0 0 0 60 0" fill="none" stroke="#4E3A78" stroke-width="16" stroke-linecap="round"/><circle cx="100" cy="90" r="14" fill="#4E3A78"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M26 108a74 74 0 0 0 148 0" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity=".7"/><path d="M48 108a52 52 0 0 0 104 0" fill="none" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round"/><path d="M70 108a30 30 0 0 0 60 0" fill="none" stroke="#4E3A78" stroke-width="16" stroke-linecap="round"/><circle cx="100" cy="90" r="14" fill="#4E3A78"/></svg></div>
+      </div>
+      <div class="cell ink"><span class="lab">Lock Screen</span>
+        <svg width="96" height="96" viewBox="0 0 200 200"><path d="M26 108a74 74 0 0 0 148 0" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" opacity=".35"/><path d="M48 108a52 52 0 0 0 104 0" fill="none" stroke="#FFFFFF" stroke-width="13" stroke-linecap="round" opacity=".6"/><path d="M70 108a30 30 0 0 0 60 0" fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round"/><circle cx="100" cy="90" r="14" fill="#FFFFFF"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONCEPT 4 -->
+  <div class="concept">
+    <h2>4. Dawn</h2>
+    <p>The morning card is Nura's main moment, and the app's background is a dawn wash. So: a sun at the horizon with two thin rings of light above it. Warm, calm, and it doubles as the "stable" state glyph inside the app.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Mark</span>
+        <svg width="160" height="160" viewBox="0 0 200 200"><path d="M22 136a78 78 0 0 1 156 0" fill="none" stroke="#F0C9DA" stroke-width="8" stroke-linecap="round"/><path d="M40 136a60 60 0 0 1 120 0" fill="none" stroke="#B9A6E0" stroke-width="10" stroke-linecap="round"/><path d="M60 136a40 40 0 0 1 80 0z" fill="url(#gPlum)"/><path d="M30 148h140" stroke="#4E3A78" stroke-width="10" stroke-linecap="round"/></svg>
+      </div>
+      <div class="cell paper" style="grid-column:span 2"><span class="lab">Lockup</span>
+        <div class="lockup"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M22 136a78 78 0 0 1 156 0" fill="none" stroke="#F0C9DA" stroke-width="8" stroke-linecap="round"/><path d="M40 136a60 60 0 0 1 120 0" fill="none" stroke="#B9A6E0" stroke-width="10" stroke-linecap="round"/><path d="M60 136a40 40 0 0 1 80 0z" fill="url(#gPlum)"/><path d="M30 148h140" stroke="#4E3A78" stroke-width="10" stroke-linecap="round"/></svg><span class="wm">nura</span></div>
+      </div>
+      <div class="cell wash"><span class="lab">App icon, wash</span>
+        <div class="icon wash"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M22 136a78 78 0 0 1 156 0" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" opacity=".7"/><path d="M40 136a60 60 0 0 1 120 0" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/><path d="M60 136a40 40 0 0 1 80 0z" fill="#4E3A78"/><path d="M30 148h140" stroke="#4E3A78" stroke-width="10" stroke-linecap="round"/></svg></div>
+      </div>
+      <div class="cell plum"><span class="lab">App icon, plum</span>
+        <div class="icon plum"><svg width="96" height="96" viewBox="0 0 200 200"><path d="M22 136a78 78 0 0 1 156 0" fill="none" stroke="#B9A6E0" stroke-width="8" stroke-linecap="round" opacity=".7"/><path d="M40 136a60 60 0 0 1 120 0" fill="none" stroke="#F0C9DA" stroke-width="10" stroke-linecap="round"/><path d="M60 136a40 40 0 0 1 80 0z" fill="url(#gLight)"/><path d="M30 148h140" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WORDMARK OPTIONS -->
+  <div class="concept">
+    <h2>Wordmark</h2>
+    <p>Outfit, the same face as the app. Lowercase reads warmer and sits better next to a soft mark; the light weight matches the reference you sent, the medium weight holds up at small sizes.</p>
+    <div class="grid">
+      <div class="cell paper"><span class="lab">Medium, lowercase</span><span class="wm">nura</span></div>
+      <div class="cell paper"><span class="lab">Light, lowercase</span><span class="wm thin">nura</span></div>
+      <div class="cell paper"><span class="lab">Medium, uppercase</span><span class="wm" style="letter-spacing:.06em;font-size:44px">NURA</span></div>
+      <div class="cell plum"><span class="lab">On plum</span><span class="wm light">nura</span></div>
+      <div class="cell wash"><span class="lab">On the wash</span><span class="wm">nura</span></div>
+    </div>
+    <div class="palette">
+      <div><div class="sw" style="background:#4E3A78"></div><div class="swl">Plum · mark</div></div>
+      <div><div class="sw" style="background:#B9A6E0"></div><div class="swl">Aura violet</div></div>
+      <div><div class="sw" style="background:#F0C9DA"></div><div class="swl">Aura blush</div></div>
+      <div><div class="sw" style="background:#DCD5EE"></div><div class="swl">Lavender wash</div></div>
+      <div><div class="sw" style="background:#F1DCE6"></div><div class="swl">Blush wash</div></div>
+      <div><div class="sw" style="background:#DCE8DF"></div><div class="swl">Sage wash</div></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <b>Recommendation.</b> Concept 1, shelter and cradle. It is built from the name, it means what the product does, it has no medical clichés, it works in one colour, and it is the only one of the four that still reads at 16 pixels. Use the halo ring from concept 2 as the "Nura is speaking" animation in the app, and the dawn from concept 4 as the stable-state glyph, so the family of shapes stays consistent.
+    <ul>
+      <li>Mark in plum on light backgrounds; white on plum; never on a photo without the paper surface behind it.</li>
+      <li>The cradle stroke takes the aura gradient; the arch and the dot stay solid so the mark keeps its weight.</li>
+      <li>Clear space equal to the dot's diameter on all sides. Minimum size 16 px for the mark, 80 px for the lockup.</li>
+      <li>App icon: the mark on the wash for the App Store; the plum variant for dark mode and the Lock Screen.</li>
+      <li>Separate SVG files are provided for the recommended mark, the lockup and the icon.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

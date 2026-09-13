@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — set up, bind, probe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.page{max-width:1280px;margin:0 auto;padding:44px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:36px;margin-top:36px;align-items:start}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding:0 6px}
+.head b{font-size:16px;font-weight:500}
+.head span{font-size:13px;color:var(--soft)}
+.phone{width:100%;max-width:372px;margin:0 auto;background:#1c1a20;border-radius:48px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:38px;overflow:hidden;height:800px;padding:18px 18px 100px;background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF)}
+.screen.watch{background:linear-gradient(160deg,#F1DCE6,#F3E6E0 50%,#DCD5EE)}
+.screen::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 25% 10%,rgba(255,255,255,.65),transparent 55%);pointer-events:none}
+.screen>*{position:relative}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.prog{display:flex;gap:5px;margin:14px 4px 0}
+.prog i{flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.6)}
+.prog i.on{background:var(--plum)}
+.step{display:none}.step.on{display:block}
+h2{font-size:24px;font-weight:500;line-height:1.15;margin-top:22px;padding:0 4px}
+.sub{font-size:16px;color:var(--soft);margin-top:6px;padding:0 4px;line-height:1.45}
+.card{background:var(--paper);border-radius:20px;padding:16px;margin-top:14px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.card.glass{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7)}
+.card .t{font-size:17px;font-weight:500}
+.card .s{font-size:14px;color:var(--soft);margin-top:3px;line-height:1.4}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.opt{background:var(--paper);border-radius:16px;padding:14px 16px;font-size:17px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 4px 14px rgba(60,40,80,.06);border:1.5px solid transparent}
+.opt.on{border-color:var(--plum)}
+.opt span{font-size:13px;color:var(--soft)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{background:var(--paper);border-radius:999px;padding:9px 14px;font-size:15px;border:1.5px solid transparent}
+.chip.on{border-color:var(--plum);color:var(--plum);font-weight:500}
+.cam{height:150px;border-radius:18px;margin-top:14px;background:linear-gradient(135deg,#E9E2F1,#F4E4EA 60%,#DDE9E1);display:flex;align-items:center;justify-content:center;color:var(--plum);font-size:15px;font-weight:500;border:1.5px dashed rgba(78,58,120,.4)}
+.found{list-style:none;margin-top:10px}
+.found li{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px}
+.found li:first-child{border-top:0}
+.found li i{width:9px;height:9px;border-radius:50%;background:var(--good);flex:none}
+.found li i.w{background:var(--watch)}
+.found li .r{margin-left:auto;font-size:13px;color:var(--soft)}
+.tog{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px}
+.tog:first-child{border-top:0}
+.tog small{display:block;font-size:12px;color:var(--soft)}
+.sw{width:42px;height:25px;border-radius:999px;background:#D9D2DE;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:var(--plum)}.sw.on::after{left:20px}
+.sw.lock{background:#EADFE0}.sw.lock::after{background:#F7F1F2}
+.nav{position:absolute;left:14px;right:14px;bottom:18px;display:flex;gap:10px}
+.nav button{flex:1;height:52px;border-radius:999px;background:var(--paper);font-size:16px;font-weight:500;box-shadow:0 6px 18px rgba(60,40,80,.08)}
+.nav button.plum{background:var(--plum);color:#fff;flex:2}
+.pill{display:flex;align-items:center;justify-content:center;height:50px;border-radius:999px;background:var(--paper);font-size:16px;font-weight:500;margin-top:12px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pill.plum{background:var(--plum);color:#fff}
+.voice{display:flex;gap:12px;align-items:center;background:var(--paper);border-radius:18px;padding:14px;margin-top:14px}
+.voice .m{width:44px;height:44px;border-radius:50%;background:var(--plum);flex:none;position:relative}
+.voice .m::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:12px;height:18px;border-radius:6px;border:2px solid #fff}
+.voice b{display:block;font-size:15px;font-weight:500}
+.voice span{font-size:13px;color:var(--soft)}
+.person{display:flex;gap:12px;align-items:center}
+.av{width:42px;height:42px;border-radius:50%;background:var(--plum);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:500;flex:none}
+.av.m{background:#8C7BB0}.av.l{background:#B49AC4}.av.s{background:#6F9A82}
+.person b{display:block;font-size:16px;font-weight:500}
+.person span{font-size:13px;color:var(--soft)}
+.q{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.q button{background:var(--paper);border-radius:16px;padding:13px 16px;font-size:16px;text-align:left;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.ans{margin-top:12px}
+.ans .big{font-size:26px;font-weight:500;line-height:1.15}
+.ans .why{font-size:12px;color:var(--soft);margin-top:10px;padding-top:8px;border-top:1px solid rgba(43,39,51,.08)}
+.deny{border-left:3px solid var(--watch);border-radius:0 16px 16px 0}
+.scope{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.scope span{font-size:12px;padding:5px 9px;border-radius:999px;background:#E9EFE9;color:#2F6247}
+.scope span.no{background:#F0EBEE;color:#8A8492;text-decoration:line-through}
+.preview{margin-top:14px;border-radius:22px;padding:14px;background:linear-gradient(160deg,#DCD5EE,#F1DCE6);border:1px dashed rgba(78,58,120,.35)}
+.preview .lab{font-size:12px;color:var(--soft)}
+.preview .one{background:var(--paper);border-radius:16px;padding:14px;margin-top:8px}
+.preview .one b{display:block;font-size:19px;font-weight:500}
+.preview .one span{font-size:14px;color:var(--soft)}
+.preview .one .btn{margin-top:10px;height:42px;border-radius:999px;background:var(--plum);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500}
+.key{margin-top:28px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:22px;padding:22px 26px;font-size:14px;line-height:1.55;color:var(--soft)}
+.key b{color:var(--ink);font-weight:500}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Set up Pa, bind the family, probe with what you're allowed</h1>
+  <p class="lede">The app starts with the patient. Setup configures his context once, and everything he sees is rendered from it. Family members are bound to that context with scoped grants and his consent. A bound person can then ask about him, and gets answers only from the parts they were given.</p>
+
+  <div class="row">
+
+    <!-- PANE 1: SETUP -->
+    <div>
+      <div class="head"><b>1. Set up Pa</b><span>Ash's phone, day 0</span></div>
+      <div class="phone"><div class="screen" id="p1">
+        <div class="status"><b>Set up</b><span>about 15 minutes</span></div>
+        <div class="prog" id="prog1"></div>
+
+        <div class="step on">
+          <h2>Who is this for?</h2>
+          <div class="sub">I'll shape everything around them.</div>
+          <div class="opts"><div class="opt">Me</div><div class="opt on">Someone I care for<span>my father</span></div></div>
+          <div class="card"><div class="t">Lim Ah Kow, 74</div><div class="s">Penang. Lives with Siti, the helper.</div></div>
+        </div>
+
+        <div class="step">
+          <h2>How does Pa like to be spoken to?</h2>
+          <div class="sub">This sets his voice, his text size and his screen.</div>
+          <div class="chips"><span class="chip on">Hokkien</span><span class="chip">Malay</span><span class="chip">Mandarin</span><span class="chip">English</span></div>
+          <div class="card"><div class="tog">Voice first<small>Every card also arrives as a voice note</small><div class="sw on"></div></div><div class="tog">Large text<small>Reading glasses not always on</small><div class="sw on"></div></div><div class="tog">One thing at a time<small>No lists, no swipes</small><div class="sw on"></div></div><div class="tog">WhatsApp as his main way in<small>Old Android, patchy data</small><div class="sw on"></div></div></div>
+        </div>
+
+        <div class="step">
+          <h2>What is Pa living with?</h2>
+          <div class="sub">Tap what you know, or snap his last discharge letter and I'll find out.</div>
+          <div class="chips"><span class="chip on">Heart</span><span class="chip on">Blood pressure</span><span class="chip on">Sugar</span><span class="chip">Kidneys</span><span class="chip">Joints</span><span class="chip">Breathing</span><span class="chip">Memory</span></div>
+          <div class="cam">Snap the discharge letter</div>
+          <div class="card"><ul class="found"><li><i></i>Heart failure, Feb 2026<span class="r">discharge letter</span></li><li><i></i>High blood pressure<span class="r">discharge letter</span></li><li><i></i>Diabetes, on tablets<span class="r">polyclinic 2024</span></li><li><i class="w"></i>Kidneys: watch<span class="r">June result</span></li></ul></div>
+        </div>
+
+        <div class="step">
+          <h2>Snap the medicine bag</h2>
+          <div class="sub">Boxes, labels and the receipt together. I'll read them.</div>
+          <div class="cam">Photo taken, 3 items</div>
+          <div class="card"><ul class="found"><li><i></i>Blood pressure tablet, morning<span class="r">label</span></li><li><i></i>Water pill, morning<span class="r">label</span></li><li><i></i>Heart tablet, morning<span class="r">box</span></li><li><i></i>Sugar tablet, dinner<span class="r">label</span></li><li><i class="w"></i>A brown bottle with no label<span class="r">ask Pa</span></li></ul></div>
+        </div>
+
+        <div class="step">
+          <h2>His doctors, hospital and insurance</h2>
+          <div class="sub">Found from the papers. Add or fix anything.</div>
+          <div class="card"><ul class="found"><li><i></i>Dr Tan, heart, Gleneagles Penang<span class="r">3 visits</span></li><li><i></i>Polyclinic Air Itam, sugar<span class="r">2 visits</span></li><li><i></i>Guardian Gurney, pharmacy<span class="r">receipts</span></li></ul></div>
+          <div class="cam">Snap the insurance card</div>
+          <div class="card"><div class="t">AIA, Pa's policy on file</div><div class="s">Gleneagles is on the panel. Letter needed for admissions. Renews in March.</div></div>
+        </div>
+
+        <div class="step">
+          <h2>His day</h2>
+          <div class="sub">Tablets are tied to meals, not the clock.</div>
+          <div class="card"><div class="tog">Breakfast<small>Morning tablets, pressure reading</small><span style="font-size:15px;font-weight:500">7:30</span></div><div class="tog">Dinner<small>Sugar tablet with food</small><span style="font-size:15px;font-weight:500">7:00</span></div><div class="tog">Walk after dinner<small>He agreed to this with Dr Tan</small><div class="sw on"></div></div></div>
+          <div class="voice"><div class="m"></div><div><b>Pa's own words</b><span>"Walk after dinner. Less salt at lunch." Recorded 1 Sep.</span></div></div>
+        </div>
+
+        <div class="step">
+          <h2>Pa's app is ready</h2>
+          <div class="sub">Everything he sees is now rendered from this.</div>
+          <div class="card"><ul class="found"><li><i></i>Hokkien voice, large text, WhatsApp first</li><li><i></i>4 conditions, 4 medicines, 3 doctors</li><li><i></i>Thursday's visit found. Questions started.</li><li><i></i>Emergency card made, in three languages</li><li><i></i>Watching for safety notices and dengue</li></ul></div>
+          <div class="preview"><div class="lab">His Today screen</div><div class="one"><b>Your blood pressure tablet</b><span>One with breakfast. 12 left.</span><div class="btn">Taken</div></div></div>
+        </div>
+
+        <div class="nav"><button onclick="step('p1',-1)">Back</button><button class="plum" onclick="step('p1',1)">Next</button></div>
+      </div></div>
+    </div>
+
+    <!-- PANE 2: BIND -->
+    <div>
+      <div class="head"><b>2. Bind the family</b><span>Ash's phone, day 0</span></div>
+      <div class="phone"><div class="screen" id="p2">
+        <div class="status"><b>Family</b><span>Pa owns his record</span></div>
+        <div class="prog" id="prog2"></div>
+
+        <div class="step on">
+          <h2>Who helps with Pa's care?</h2>
+          <div class="sub">Each person gets their own key, cut to what they need.</div>
+          <div class="opts">
+            <div class="opt"><div class="person"><div class="av">A</div><div><b>Ash</b><span>me, runs his care</span></div></div><span>Chief</span></div>
+            <div class="opt on"><div class="person"><div class="av m">M</div><div><b>Mei</b><span>sister, drives on Thursdays</span></div></div><span>set up</span></div>
+            <div class="opt"><div class="person"><div class="av l">L</div><div><b>Aunt Lily</b><span>checks in weekly</span></div></div><span>Viewer</span></div>
+            <div class="opt"><div class="person"><div class="av s">S</div><div><b>Siti</b><span>helper, gives the tablets</span></div></div><span>Helper</span></div>
+          </div>
+          <div class="pill">Add someone</div>
+        </div>
+
+        <div class="step">
+          <h2>What can Mei see and do?</h2>
+          <div class="sub">A role sets the defaults. Change anything.</div>
+          <div class="chips"><span class="chip">Chief</span><span class="chip on">Caregiver</span><span class="chip">Viewer</span><span class="chip">Helper</span><span class="chip">Emergency only</span></div>
+          <div class="card">
+            <div class="tog">Medicines and confirmations<div class="sw on"></div></div>
+            <div class="tog">Visits and questions<div class="sw on"></div></div>
+            <div class="tog">Readings and results<div class="sw on"></div></div>
+            <div class="tog">Records and recordings<div class="sw on"></div></div>
+            <div class="tog">Ask about Pa<small>Answers only from what's ticked above</small><div class="sw on"></div></div>
+            <div class="tog">Send Pa cards and voice notes<div class="sw on"></div></div>
+            <div class="tog">Private notes<small>Pa's "only me" notes</small><div class="sw lock"></div></div>
+            <div class="tog">Insurance and costs<div class="sw"></div></div>
+            <div class="tog">Change medicines or routine<div class="sw"></div></div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h2>For how long?</h2>
+          <div class="sub">Keys can be temporary.</div>
+          <div class="opts"><div class="opt on">Always, until Pa or Ash changes it</div><div class="opt">Next 30 days<span>after a discharge</span></div><div class="opt">Thursday only<span>the visit</span></div></div>
+          <div class="card glass"><div class="t">Mei will see</div><div class="scope"><span>Medicines</span><span>Visits</span><span>Readings</span><span>Records</span><span>Ask</span><span>Send</span><span class="no">Private notes</span><span class="no">Money</span><span class="no">Change anything</span></div></div>
+        </div>
+
+        <div class="step">
+          <h2>Pa agrees</h2>
+          <div class="sub">His record, his say. Recorded in his language, kept with the key.</div>
+          <div class="voice"><div class="m"></div><div><b>"Mei can see my medicines and visits. OK."</b><span>Hokkien, 9 seconds, Tuesday 8:02. Transcribed and stored.</span></div></div>
+          <div class="card"><div class="t">If Pa can't decide one day</div><div class="s">Attach the Lasting Power of Attorney or a doctor's letter here. Until then, Pa can change any key himself.</div><div class="pill">Attach a document</div></div>
+        </div>
+
+        <div class="step">
+          <h2>Invite sent to Mei</h2>
+          <div class="sub">On WhatsApp, with what she'll see spelled out.</div>
+          <div class="card"><div class="person"><div class="av m">M</div><div><b>Mei accepted</b><span>Tuesday 8:10. Caregiver. Sees medicines, visits, readings, records.</span></div></div></div>
+          <div class="card"><ul class="found"><li><i></i>Ash, Chief, everything</li><li><i></i>Mei, Caregiver, no notes or money</li><li><i></i>Aunt Lily, Viewer, visits only</li><li><i></i>Siti, Helper, today's list on WhatsApp</li></ul></div>
+          <div class="card glass"><div class="t">Pa can see who looked</div><div class="s">Every question anyone asks about him is listed on his Me tab. He can mark any note "only me".</div></div>
+        </div>
+
+        <div class="nav"><button onclick="step('p2',-1)">Back</button><button class="plum" onclick="step('p2',1)">Next</button></div>
+      </div></div>
+    </div>
+
+    <!-- PANE 3: PROBE -->
+    <div>
+      <div class="head"><b>3. Mei probes Pa's context</b><span>Mei's phone, any day</span></div>
+      <div class="phone"><div class="screen watch" id="p3">
+        <div class="status"><b>Pa</b><span>Caregiver</span></div>
+        <div class="prog" id="prog3"></div>
+
+        <div class="step on">
+          <h2>Is Pa OK this week?</h2>
+          <div class="card ans"><div class="big">Stable, watch his pressure</div><div class="s">148 this morning, up from 131 nine days ago. Tablets taken every day except Sunday dinner. Kidney check came back a little high on 9 Sep, not urgent.</div><div class="why">From his readings, confirmations and the Gleneagles result. Mei's key: medicines, visits, readings, records.</div></div>
+          <div class="q"><button onclick="step('p3',1)">What did Dr Tan say about the water pill?</button><button onclick="jump('p3',3)">What should I ask on Thursday?</button><button onclick="jump('p3',2)">Show me his private notes</button></div>
+        </div>
+
+        <div class="step">
+          <h2>What did Dr Tan say about the water pill?</h2>
+          <div class="card ans"><div class="big">"Take it in the morning. Eat a banana most days."</div><div class="s">1 September, 4 minutes 12 seconds into the recording. He also said the blood test should be repeated in a few weeks; that's Thursday.</div><div class="pill plum">Play that part</div><div class="why">Recording captured by Ash with Dr Tan's consent. Shared with Mei under Records.</div></div>
+        </div>
+
+        <div class="step">
+          <h2>Show me his private notes</h2>
+          <div class="card ans deny"><div class="big">Pa keeps those to himself.</div><div class="s">Your key covers medicines, visits, readings and records. Pa marked two notes "only me". He can change that from his phone; Ash can ask him.</div><div class="why">Pa will see that you asked. That's how it works for everyone.</div></div>
+        </div>
+
+        <div class="step">
+          <h2>What should I ask on Thursday?</h2>
+          <div class="card ans"><ul class="found"><li><i class="w"></i>Is the water pill pushing his kidney number up?</li><li><i class="w"></i>His pressure is higher in the mornings. OK?</li><li><i></i>Does he still need both pressure tablets?</li><li><i></i>When is the next blood test?</li></ul><div class="why">From the gaps in his record, his own memo, and what changed this week. Ash added the first one.</div><div class="pill">Add a question</div><div class="pill plum" onclick="step('p3',1)">Send Pa a reminder for tonight</div></div>
+        </div>
+
+        <div class="step">
+          <h2>Send Pa a reminder</h2>
+          <div class="card"><div class="t">Mei writes</div><div class="s">Pa, I'll pick you up at 9 on Thursday. Bring the pressure book.</div></div>
+          <div class="preview"><div class="lab">Pa will hear, in Hokkien</div><div class="one"><b>Mei picks you up at 9 on Thursday</b><span>Bring the pressure book. Voice note, 8 seconds.</span><div class="btn">OK</div></div></div>
+          <div class="card glass"><div class="t">Sent at 5 pm</div><div class="s">You'll see when he opens it. If he doesn't by 8, it goes to Siti's list.</div></div>
+        </div>
+
+        <div class="nav"><button onclick="step('p3',-1)">Back</button><button class="plum" onclick="step('p3',1)">Next</button></div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="key">
+    <b>How the three panes connect.</b> Setup writes Pa's context once: language, how he reads, conditions, medicines, doctors, insurance, routine, his own words. That context is the State every card, voice note and clip is rendered from. Binding does not share the account; it cuts a key per person with a role, a scope, a time window and Pa's recorded consent, and it leaves an audit trail he can read. Probing runs a bound person's question over Pa's memory, answers with provenance, and refuses politely and visibly when the question falls outside the key. The same three mechanisms serve a spouse, a sibling, a helper, and later a clinic.
+  </div>
+</div>
+
+<script>
+var S={};
+function init(id){var sc=document.getElementById(id);var steps=sc.querySelectorAll('.step');S[id]={i:0,n:steps.length};var p=document.getElementById('prog'+id.slice(1));p.innerHTML='';for(var k=0;k<steps.length;k++){p.innerHTML+='<i'+(k===0?' class="on"':'')+'></i>'}}
+function render(id){var sc=document.getElementById(id);var steps=sc.querySelectorAll('.step');var i=S[id].i;steps.forEach(function(s,k){s.classList.toggle('on',k===i)});var bars=document.getElementById('prog'+id.slice(1)).querySelectorAll('i');bars.forEach(function(b,k){b.classList.toggle('on',k<=i)});var nav=sc.querySelector('.nav .plum');nav.textContent=(i===S[id].n-1)?'Done':'Next';sc.scrollTop=0}
+function step(id,d){var s=S[id];s.i=Math.max(0,Math.min(s.n-1,s.i+d));render(id)}
+function jump(id,i){S[id].i=i;render(id)}
+['p1','p2','p3'].forEach(init);
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — feeling cloud and smart nudges</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.page{max-width:1240px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.states{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px;align-items:center}
+.states span{font-size:13px;color:var(--soft);margin-right:4px}
+.st{background:#fff;border:1.5px solid rgba(43,39,51,.12);border-radius:999px;padding:8px 14px;font-size:14px}
+.st.on{border-color:var(--plum);color:var(--plum);font-weight:500;background:#F3EEF8}
+.wrap{display:grid;grid-template-columns:400px 1fr;gap:40px;margin-top:28px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:820px;padding:16px 16px 40px;overflow-y:auto;scrollbar-width:none;transition:background .8s}
+.screen::-webkit-scrollbar{display:none}
+.w-stable{background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF)}
+.w-watch{background:linear-gradient(160deg,#F1DCE6,#F3E6E0 50%,#DCD5EE)}
+.w-act{background:linear-gradient(160deg,#F0D6D2,#F2E0DE 50%,#DCD5EE)}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.sec{font-size:14px;color:var(--soft);margin:18px 6px 0}
+.card{background:var(--paper);border-radius:20px;padding:16px;margin-top:12px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.card.glass{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7)}
+.card .t{font-size:20px;font-weight:500;line-height:1.15}
+.card .s{font-size:15px;color:var(--soft);margin-top:4px;line-height:1.45}
+.pill{display:flex;align-items:center;justify-content:center;height:50px;border-radius:999px;background:var(--paper);font-size:17px;font-weight:500;margin-top:12px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pill.plum{background:var(--plum);color:#fff}
+.pill.coral{background:#F7E4E1;color:#7A2E24}
+.feel{margin-top:12px;padding:14px 14px 12px;border-radius:20px;background:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.65)}
+.feel .q{font-size:15px;color:var(--soft)}
+.cloud{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;align-items:center}
+.f{border-radius:999px;padding:7px 12px;background:rgba(255,255,255,.75);font-size:14px;color:#544D5E;border:1.5px solid transparent;transition:all .25s}
+.f.s2{font-size:16px;color:var(--ink);background:rgba(255,255,255,.9)}
+.f.s3{font-size:18px;font-weight:500;color:var(--ink);background:#fff}
+.f.on{background:var(--plum);color:#fff}
+.f.fine{color:var(--good)}
+.f.new{animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.fu{margin-top:10px;background:#F3EEF8;border-radius:16px;padding:12px 14px;animation:pop .3s ease-out}
+.fu .qq{font-size:15px;font-weight:500}
+.fu .o{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.fu .o button{background:#fff;border-radius:999px;padding:7px 12px;font-size:14px;border:1.5px solid transparent}
+.fu .o button.on{border-color:var(--plum);color:var(--plum);font-weight:500}
+.infer{margin-top:12px;background:var(--paper);border-radius:20px;padding:16px;box-shadow:0 8px 24px rgba(60,40,80,.06);animation:pop .3s ease-out}
+.infer.red{border:2px solid #C24A3A}
+.infer .h{font-size:18px;font-weight:500;line-height:1.2}
+.infer p{font-size:15px;line-height:1.5;margin-top:6px}
+.infer ul{list-style:none;margin-top:8px}
+.infer li{font-size:14px;padding:6px 0;border-top:1px solid rgba(43,39,51,.08);display:flex;gap:8px}
+.infer li i{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;margin-top:7px}
+.infer li i.w{background:var(--watch)}.infer li i.a{background:var(--act)}
+.infer .why{font-size:12px;color:var(--soft);margin-top:10px;padding-top:8px;border-top:1px solid rgba(43,39,51,.08)}
+.side{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 26px;position:sticky;top:24px}
+.side h2{font-size:16px;font-weight:500}
+.side p{font-size:13px;color:var(--soft);line-height:1.55;margin-top:4px}
+.day{margin-top:16px}
+.day b{font-size:13px;font-weight:500;color:var(--soft)}
+.nd{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid rgba(43,39,51,.06)}
+.nd:first-of-type{border-top:0}
+.nd .k{font-size:11px;padding:3px 8px;border-radius:999px;background:#F3EEF8;color:var(--plum);flex:none;margin-top:2px;white-space:nowrap}
+.nd .k.p{background:#DDF2EA;color:#0F6E56}.nd .k.c{background:#FAEEDA;color:#854F0B}.nd .k.r{background:#E6F0E9;color:#2F6247}.nd .k.q{background:#E6F1FB;color:#185FA5}.nd .k.a{background:#FAE4DB;color:#993C1D}
+.nd span{font-size:14px;line-height:1.45}
+.rules{margin-top:18px;padding-top:14px;border-top:1px solid rgba(43,39,51,.08)}
+.rules li{font-size:13px;line-height:1.5;color:var(--soft);padding:3px 0 3px 14px;position:relative;list-style:none}
+.rules li::before{content:"";position:absolute;left:0;top:11px;width:5px;height:5px;border-radius:50%;background:var(--plum)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#2B2733;color:#fff;border-radius:16px;padding:12px 18px;font-size:14px;display:none;z-index:9;max-width:420px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Are you feeling like…</h1>
+  <p class="lede">A five-second check-in that is never a questionnaire. The words come from the person's own conditions, medicines and what has changed this week. Tap one and it asks one thing back, then says what it will do. Change the state above the phone and watch the cloud and the week's nudges change with it.</p>
+
+  <div class="states"><span>His state this week:</span>
+    <button class="st on" onclick="setState('base',this)">Steady</button>
+    <button class="st" onclick="setState('water',this)">Water pill started</button>
+    <button class="st" onclick="setState('bp',this)">Pressure rising</button>
+    <button class="st" onclick="setState('statin',this)">Statin started</button>
+    <button class="st" onclick="setState('post',this)">Home from hospital</button>
+    <button class="st" onclick="setState('haze',this)">Haze week</button>
+  </div>
+
+  <div class="wrap">
+    <div class="phone"><div class="screen w-stable" id="sc">
+      <div class="status"><b>4:10</b><span>Tuesday</span></div>
+      <div class="sec">Now</div>
+      <div class="card"><div class="t" id="nowT">Nothing to take until dinner</div><div class="s" id="nowS">Sugar tablet at 7, with food.</div></div>
+
+      <div class="feel" id="feel">
+        <div class="q" id="feelq">Are you feeling like…</div>
+        <div class="cloud" id="cloud"></div>
+      </div>
+      <div id="fu"></div>
+      <div id="infer"></div>
+
+      <div class="sec">For you today</div>
+      <div class="card" id="nudge1"><div class="t" style="font-size:17px">Mei saw your blood pressure this morning</div><div class="s">She said your walk yesterday was a good one.</div></div>
+      <div class="card glass" id="nudge2"><div class="t" style="font-size:17px">You said less salt at lunch</div><div class="s">How did today go?</div><div style="display:flex;gap:8px"><div class="pill" style="flex:1;height:44px;font-size:15px" onclick="toast('Good. 3 days in a row.')">Went well</div><div class="pill" style="flex:1;height:44px;font-size:15px" onclick="toast('That is OK. Tomorrow is another lunch.')">Not today</div></div></div>
+    </div></div>
+
+    <aside class="side">
+      <h2>Nudges this week</h2>
+      <p>Generated from his state, not a calendar. At most two non-reminder nudges a day, none in quiet hours, none on a day that already carries an alert.</p>
+      <div id="week"></div>
+      <ul class="rules">
+        <li>Presence: what family did, said in one line.</li>
+        <li>Commitment: his own words from the memo, with one tap.</li>
+        <li>Pattern: what the system is watching, with reassurance.</li>
+        <li>Check-in: the feeling cloud, only after a change.</li>
+        <li>Recognition: the number that only goes up, quietly.</li>
+        <li>Anticipation: what is coming, one day ahead.</li>
+        <li>Curiosity: a twenty-second explainer tied to this week.</li>
+        <li>Context: haze, dengue, fasting, festive food.</li>
+      </ul>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var WORDS={
+ tired:{l:'Tired',fu:{q:'More than usual?',o:['A bit','A lot','Since the new tablet']}},
+ dizzy:{l:'Dizzy',fu:{q:'When?',o:['Standing up','All the time','After tablets']}},
+ breath:{l:'Short of breath',fu:{q:'When?',o:['Walking','Lying flat','Sitting still']},red:'Sitting still'},
+ ankles:{l:'Swollen ankles',fu:{q:'Both legs?',o:['Both','One side','Not sure']},red:'One side'},
+ chest:{l:'Chest tight',red:true},
+ head:{l:'Headache',fu:{q:'How bad?',o:['Mild','Bad','Worst ever']},red:'Worst ever'},
+ sleep:{l:'Poor sleep',fu:{q:'Why?',o:['Passing water','Breathing','Worry']}},
+ appetite:{l:'No appetite'},
+ thirst:{l:'Very thirsty',fu:{q:'Passing water a lot too?',o:['Yes','No']}},
+ cramps:{l:'Cramps',fu:{q:'Where?',o:['Legs','Hands','Both']}},
+ numb:{l:'Numb feet'},
+ blurry:{l:'Blurry eyes',fu:{q:'Sudden?',o:['Came on slowly','Sudden']},red:'Sudden'},
+ low:{l:'Low',fu:{q:'For how long?',o:['Today','A few days','A while now']}},
+ confused:{l:'Muddled',red:true},
+ fell:{l:'Had a fall',red:true},
+ pain:{l:'Pain',fu:{q:'Where?',o:['Back','Knees','Stomach','Somewhere else']}},
+ cough:{l:'Cough',fu:{q:'When?',o:['At night','With the haze','All day']}},
+ fever:{l:'Feverish'},
+ stomach:{l:'Stomach upset'},
+ muscle:{l:'Muscle aches',fu:{q:'Where?',o:['Thighs','Shoulders','All over']}},
+ water:{l:'Passing water a lot'},
+ weight:{l:'Heavier',fu:{q:'By how much?',o:['A little','A kilo or more','Not sure']},red:'A kilo or more'},
+ eyes:{l:'Eyes stinging'},
+ shaky:{l:'Shaky and sweaty',red:true},
+ fine:{l:'Fine today'}
+};
+var BASE=['tired','dizzy','head','sleep','appetite','pain','cough','stomach','fine'];
+var STATES={
+ base:{wash:'w-stable',emph:{},add:[],now:['Nothing to take until dinner','Your sugar tablet is at 7, with food.'],q:'Are you feeling like…',
+   week:[['Tue','p','Mei saw your reading this morning.'],['Tue','c','You said less salt at lunch. How did today go?'],['Wed','q','Why your pressure is higher in the morning, 20 seconds.'],['Thu','a','Dr Tan tomorrow at 10. Mei picks you up at 9.'],['Fri','r','Forty-one days with every tablet taken.'],['Sun','p','Your week, 30 seconds. Six walks out of seven.']]},
+ water:{wash:'w-watch',emph:{dizzy:3,cramps:3,thirst:2,water:2,tired:2},add:['cramps','thirst','water'],now:['Your water pill, with breakfast','This one is new. You started it on Monday.'],q:'New tablet this week. Are you feeling like…',
+   week:[['Tue','k','Are you feeling like… dizzy, cramps, thirsty. Tap if yes.'],['Tue','q','Why the water pill makes you pass water, 20 seconds.'],['Wed','w','Your morning readings: I am watching them this week. Nothing to do.'],['Thu','c','You said a banana most days. Had one?'],['Fri','p','Ash added a question for Dr Tan about the dose.'],['Sat','r','First week on the water pill done.']]},
+ bp:{wash:'w-watch',emph:{head:3,dizzy:3,blurry:2,sleep:2},add:['blurry'],now:['Check your blood pressure after breakfast','Yesterday it was 148.'],q:'Your blood pressure is up. Are you feeling like…',
+   week:[['Tue','w','Pressure higher three mornings running. Not urgent. I am watching, and Ash knows.'],['Tue','k','Are you feeling like… headache, dizzy, blurry. Tap if yes.'],['Wed','c','You said less salt at lunch. How did today go?'],['Wed','q','Salt and your pressure, in 20 seconds.'],['Thu','a','Bring the pressure book tomorrow. Dr Tan will want to see it.'],['Sun','p','Your week: pressure steadier since Thursday.']]},
+ statin:{wash:'w-stable',emph:{muscle:3,tired:2,stomach:2},add:['muscle'],now:['Nothing to take until dinner','Your cholesterol tablet is at bedtime. It is new. You started it on Sunday.'],q:'New tablet this week. Are you feeling like…',
+   week:[['Tue','k','Are you feeling like… muscle aches, tired. Tap if yes, or ignore this.'],['Wed','q','What the cholesterol tablet does, 20 seconds.'],['Thu','c','You said walk after dinner. Three this week already.'],['Fri','p','Mei: the grandkids on Saturday?'],['Sat','r','Nothing missed this week.']]},
+ post:{wash:'w-act',emph:{breath:3,ankles:3,weight:3,confused:2,appetite:2,tired:2},add:['weight','confused'],now:['Stand on the scale before breakfast','It is 4 days since you came home from hospital. Take a photo of the scale.'],q:'Day 4 at home. Are you feeling like…',
+   week:[['Tue','k','Are you feeling like… short of breath, swollen, heavier. This one matters this week.'],['Tue','a','Weigh before breakfast. A kilo up in two days is the thing to catch.'],['Wed','p','Ash reconciled the new medicines with the old bag. Two changed.'],['Wed','w','Day 5. Breathing, weight, appetite all steady so far.'],['Thu','a','Follow-up at Gleneagles next Tuesday. Letter requested.'],['Sun','r','First week home done. Siti has the new list.']]},
+ haze:{wash:'w-watch',emph:{cough:3,eyes:3,breath:2},add:['eyes'],now:['Nothing to take until dinner','The air is bad today. Keep the windows shut. Walk indoors.'],q:'Haze this week. Are you feeling like…',
+   week:[['Tue','x','Air quality unhealthy in Air Itam. Walk indoors today.'],['Tue','k','Are you feeling like… cough, eyes stinging, short of breath.'],['Wed','x','Still hazy. Inhaler within reach if you have one.'],['Thu','a','Dr Tan tomorrow at 10. Mask in the car.'],['Fri','p','Mei saw your reading. Steady despite the week.']]}
+};
+var KIND={p:'presence',c:'commitment',w:'pattern',k:'check-in',r:'recognition',a:'anticipation',q:'curiosity',x:'context'};
+var state='base', chosen=null, answer=null;
+
+function setState(s,btn){state=s; chosen=null; answer=null; document.querySelectorAll('.st').forEach(function(b){b.classList.remove('on')}); btn.classList.add('on'); var S=STATES[s]; var sc=document.getElementById('sc'); sc.className='screen '+S.wash; document.getElementById('nowT').textContent=S.now[0]; document.getElementById('nowS').textContent=S.now[1]; document.getElementById('feelq').textContent=S.q; renderCloud(true); document.getElementById('fu').innerHTML=''; document.getElementById('infer').innerHTML=''; renderWeek();}
+function renderCloud(anim){var S=STATES[state]; var ids=S.add.concat(BASE.filter(function(b){return S.add.indexOf(b)<0})); var c=document.getElementById('cloud'); c.innerHTML=''; ids.forEach(function(id){var w=WORDS[id]; var b=document.createElement('button'); var e=S.emph[id]||1; b.className='f s'+e+(chosen===id?' on':'')+(id==='fine'?' fine':'')+(anim&&S.add.indexOf(id)>=0?' new':''); b.textContent=w.l; b.onclick=function(){pick(id)}; c.appendChild(b)});}
+function pick(id){if(id==='fine'){chosen=null;answer=null;renderCloud(false);document.getElementById('fu').innerHTML='';document.getElementById('infer').innerHTML='';toast('Good. I will ask again only if something changes.');return}
+  chosen=id; answer=null; renderCloud(false); var w=WORDS[id]; var fu=document.getElementById('fu'); fu.innerHTML='';
+  if(w.red===true){infer(id,null);return}
+  if(w.fu){var d=document.createElement('div'); d.className='fu'; d.innerHTML='<div class="qq">'+w.fu.q+'</div>'; var o=document.createElement('div'); o.className='o'; w.fu.o.forEach(function(opt){var b=document.createElement('button'); b.textContent=opt; b.onclick=function(){answer=opt; o.querySelectorAll('button').forEach(function(z){z.classList.remove('on')}); b.classList.add('on'); infer(id,opt)}; o.appendChild(b)}); d.appendChild(o); fu.appendChild(d); document.getElementById('infer').innerHTML=''}
+  else infer(id,null);
+}
+function infer(id,opt){var w=WORDS[id]; var box=document.getElementById('infer'); var red=(w.red===true)||(w.red&&opt===w.red); var S=state; var h,p,acts,why;
+  if(red){h="This one we do not wait for."; p=id==='chest'?"Your chest is tight. You have a heart problem. Sit down now. If it lasts more than a few minutes, or you start to sweat, we go to the hospital.":id==='fell'?"A fall: are you hurt anywhere? Ash and Mei have been told and will call.":id==='confused'?"Feeling muddled can come from a tablet or an infection. Someone should be with you.":id==='shaky'?"Shaky and sweaty can be low sugar. Have something sweet now, then rest.":"That pattern is one your doctor said to act on."; acts=[['a','Ash and Mei know now'],['a','Help page is open'],['w','I wrote it down with the time']]; why='Dr Tan wrote about this in your hospital letter. It tells us when to get help.';}
+  else if(id==='dizzy'&&opt==='Standing up'&&(S==='water'||S==='bp')){h='You feel dizzy when you stand up. The water pill can do this.'; p='It is common in the first weeks. Stand up slowly. Sit a moment first. It is not dangerous by itself.'; acts=[['w','I wrote it down with the time and your tablets'],['w','I will watch your morning blood pressure this week'],['a','Ash will ask Dr Tan on Thursday: is the water pill too strong?']]; why='Because you started the water pill on Monday. Your blood pressure was 148 this morning.';}
+  else if(id==='cramps'&&S==='water'){h='Cramps can come from the water pill.'; p='It takes a body salt away. A banana most days helps. Do not buy potassium tablets. Only if Dr Tan says.'; acts=[['w','I wrote it down'],['a','Ash will ask Dr Tan: blood test sooner?'],['w','Your June blood test was already a little high, so this matters']]; why='Because of the water pill and your June blood test.';}
+  else if(id==='muscle'&&S==='statin'){h='Muscle aches can come from the cholesterol tablet.'; p='This happens to some people. It is not dangerous. Dr Tan may change the tablet. Keep taking it until he says.'; acts=[['w','I wrote it down, with the new tablet'],['a','Ash will ask Dr Tan on Thursday'],['w','I will ask you again in a week']]; why='Because the cholesterol tablet started on Sunday.';}
+  else if(id==='breath'&&S==='post'){h='You are short of breath, 4 days after coming home.'; p='When you walk, that is normal. When you lie flat, that is not normal. Stand on the scale now.'; acts=[['w','I wrote it down'],['a','Take a photo of the scale. If you are 1 kg heavier, we call the clinic today'],['a','Ash knows']]; why='Because of your hospital letter and your heart.';}
+  else if(id==='weight'&&S==='post'){h='You are heavier this week.'; p='A little is normal. 1 kg or more in 2 days is water in the body. The clinic wants to know the same day.'; acts=[['w','I wrote it down'],['w','I will watch this with your breathing and your ankles'],['a','If it is 1 kg, Ash will know']]; why='From your hospital letter.';}
+  else if(id==='head'&&S==='bp'){h='You have a headache, and your blood pressure is high.'; p='Rest. Drink water. Check your blood pressure now. A small headache is common. The worst headache of your life is not. Tell us if it is.'; acts=[['w','I wrote it down'],['a','Check your blood pressure now'],['w','I will watch this with your morning numbers']]; why='Because your blood pressure has been up for 3 mornings.';}
+  else if(id==='cough'&&S==='haze'){h='The haze can give you a cough.'; p='Keep the windows shut. Stay indoors today. Keep your inhaler near you. If breathing is hard when you sit, we call the clinic.'; acts=[['w','I wrote it down'],['w','I will watch your breathing this week'],['x','I will tell you when the air is clean again']]; why='Because of the haze in Air Itam and your heart.';}
+  else {h='I wrote down that you feel '+w.l.toLowerCase()+'.'; p='I kept the time and your tablets for today with it. If it is still there in a few days, or gets worse, tell me again. Then Ash will ask Dr Tan.'; acts=[['w','I wrote it down'],['w','With your tablets and blood pressure today']]; why='Everything you tap is kept in your own words, with the time.';}
+  box.innerHTML='<div class="infer'+(red?' red':'')+'"><div class="h">'+h+'</div><p>'+p+'</p><ul>'+acts.map(function(a){return '<li><i class="'+a[0]+'"></i>'+a[1]+'</li>'}).join('')+'</ul><div class="why">'+why+'</div></div>';
+  if(red){document.getElementById('sc').className='screen w-act'}
+}
+function renderWeek(){var S=STATES[state]; var w=document.getElementById('week'); w.innerHTML=''; var days={}; S.week.forEach(function(n){(days[n[0]]=days[n[0]]||[]).push(n)}); Object.keys(days).forEach(function(d){var el=document.createElement('div'); el.className='day'; el.innerHTML='<b>'+d+'</b>'; days[d].forEach(function(n){var r=document.createElement('div'); r.className='nd'; r.innerHTML='<span class="k '+n[1]+'">'+(KIND[n[1]]||n[1])+'</span><span>'+n[2]+'</span>'; el.appendChild(r)}); w.appendChild(el)});}
+var tt; function toast(m){var t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; clearTimeout(tt); tt=setTimeout(function(){t.style.display='none'},2600)}
+renderCloud(false); renderWeek();
+</script>
+</body>
+</html>

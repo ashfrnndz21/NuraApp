@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — the whole system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--teal:#0F6E56;--coral:#993C1D;--paper:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.top{padding:22px 28px 14px;border-bottom:1px solid rgba(43,39,51,.08);background:#F5F1F4;position:sticky;top:0;z-index:5}
+.top h1{font-size:20px;font-weight:400}
+.top p{font-size:13px;color:var(--soft);margin-top:4px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.bar input{height:36px;border-radius:999px;border:1px solid rgba(43,39,51,.15);padding:0 14px;width:240px;background:#fff}
+.seg{display:flex;background:#EAE4EF;border-radius:999px;padding:3px}
+.seg button{padding:6px 12px;border-radius:999px;font-size:13px;color:var(--soft)}
+.seg button.on{background:#fff;color:var(--plum);font-weight:500;box-shadow:0 2px 8px rgba(60,40,80,.12)}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--soft);margin-left:auto}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.layout{display:grid;grid-template-columns:240px 1fr 320px;gap:0;min-height:calc(100vh - 120px)}
+@media (max-width:1100px){.layout{grid-template-columns:1fr}.side,.detail{position:static!important;height:auto!important}}
+.side{padding:18px 16px;border-right:1px solid rgba(43,39,51,.08);position:sticky;top:120px;height:calc(100vh - 120px);overflow:auto}
+.side h3{font-size:12px;color:var(--soft);font-weight:500;margin:14px 0 6px}
+.side h3:first-child{margin-top:0}
+.sc{display:block;width:100%;text-align:left;padding:9px 10px;border-radius:12px;font-size:14px;line-height:1.3;margin-top:4px}
+.sc:hover{background:#EFE9F5}
+.sc.on{background:var(--plum);color:#fff}
+.sc small{display:block;font-size:11px;opacity:.75}
+.main{padding:18px 22px 60px;overflow:auto}
+.layer{margin-top:14px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:18px;padding:12px 16px 14px}
+.layer h2{font-size:14px;font-weight:500;display:flex;justify-content:space-between;align-items:baseline}
+.layer h2 span{font-size:12px;color:var(--soft);font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.f{border-radius:999px;padding:6px 11px;font-size:13px;background:#F3EEF8;color:var(--ink);border:1.5px solid transparent;display:inline-flex;align-items:center;gap:6px;transition:opacity .15s}
+.f:hover{border-color:rgba(78,58,120,.4)}
+.f .t{font-size:10px;padding:1px 5px;border-radius:6px;background:rgba(43,39,51,.08);color:var(--soft)}
+.f.sel{background:var(--plum);color:#fff}.f.sel .t{background:rgba(255,255,255,.25);color:#fff}
+.f.up{background:#DDF2EA;color:var(--teal);border-color:#9FE1CB}
+.f.down{background:#FAE4DB;color:var(--coral);border-color:#F5C4B3}
+.f.dim{opacity:.28}
+.f .n{width:18px;height:18px;border-radius:50%;background:var(--plum);color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;font-weight:500}
+.f.step{background:#fff;border-color:var(--plum);color:var(--ink)}
+.detail{padding:18px 18px;border-left:1px solid rgba(43,39,51,.08);position:sticky;top:120px;height:calc(100vh - 120px);overflow:auto;background:#FBF9FA}
+.detail .kicker{font-size:12px;color:var(--soft)}
+.detail h2{font-size:20px;font-weight:500;line-height:1.2;margin-top:4px}
+.detail p{font-size:14px;line-height:1.55;margin-top:10px}
+.detail h4{font-size:12px;color:var(--soft);font-weight:500;margin-top:18px}
+.detail ul{list-style:none;margin-top:6px}
+.detail li{font-size:13px;line-height:1.45;padding:5px 0;border-top:1px solid rgba(43,39,51,.06)}
+.detail li:first-child{border-top:0}
+.detail li button{color:var(--plum);font-weight:500;text-align:left}
+.detail .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.detail .tag{font-size:12px;padding:4px 9px;border-radius:999px;background:#F3EEF8;color:var(--plum)}
+.detail .story{font-size:14px;line-height:1.55}
+.detail .story b{display:block;font-weight:500;margin-top:10px}
+.empty{color:var(--soft);font-size:14px;line-height:1.55}
+.counts{font-size:12px;color:var(--soft);margin-top:8px}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>The whole system, connected</h1>
+  <p>Every feature, in the layer it lives in. Click one to see what feeds it and what it enables. Pick a scenario on the left to watch one event travel through the layers.</p>
+  <div class="bar">
+    <input id="q" type="text" placeholder="Search features" oninput="applyFilters()">
+    <div class="seg" id="who"><button class="on" onclick="segp(this,'who')">Everyone</button><button onclick="segp(this,'who')">Patient</button><button onclick="segp(this,'who')">Caregiver</button><button onclick="segp(this,'who')">Helper</button><button onclick="segp(this,'who')">Clinic</button><button onclick="segp(this,'who')">System</button></div>
+    <div class="seg" id="tier"><button class="on" onclick="segp(this,'tier')">All tiers</button><button onclick="segp(this,'tier')">T1</button><button onclick="segp(this,'tier')">T2</button><button onclick="segp(this,'tier')">T3</button></div>
+    <div class="legend"><span><i style="background:#4E3A78"></i>selected</span><span><i style="background:#9FE1CB"></i>feeds it</span><span><i style="background:#F5C4B3"></i>it enables</span></div>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="side">
+    <h3>Scenarios</h3>
+    <div id="scen"></div>
+    <div class="counts" id="counts"></div>
+  </aside>
+  <main class="main" id="main"></main>
+  <aside class="detail" id="detail"><div class="empty">Click any feature, or pick a scenario. The map is the product: twelve layers, and every arrow is a real data dependency in the build.</div></aside>
+</div>
+
+<script>
+var LAYERS=[
+ ['id','Identity and access','Who a person is, what they own, what they may see'],
+ ['onb','Onboarding and context','How the app learns someone before it shows them anything'],
+ ['cap','Capture and ingestion','Turning paper, photos, voice and devices into facts'],
+ ['mem','Memory','What is kept, with provenance'],
+ ['st','State','The single input every downstream decision reads'],
+ ['rsn','Reasoning','What the system works out from memory and state'],
+ ['srch','Search and jobs','Asking about the person, finding in the world, acting'],
+ ['del','Delivery','Deciding what to show, say, or send, and when'],
+ ['chan','Channels and surfaces','Where it appears: app, WhatsApp, widgets, links'],
+ ['fam','Family','Roles, rosters and threads'],
+ ['saf','Safety and regulatory','The lines the product never crosses'],
+ ['plat','Platform','What everything runs on']
+];
+// id, layer, name, who, tier, what, feeds-from
+var F=[
+['id.person','id','Person account','System','T1','Register by phone code, email link, Apple or Google. No passwords. A person owns at most one profile and holds any number of keys.',[]],
+['id.profile','id','Profile: the health graph','System','T1','Exactly one owner. Stewarded until claimed. Every fact, artefact and card hangs off it.',['onb.doors','id.claim']],
+['id.claim','id','Proxy setup and claim','Caregiver','T1','A caregiver creates a profile against the patient\'s phone number. The patient replies OK on WhatsApp and becomes the owner; the caregiver becomes a key holder.',['id.person','onb.doors']],
+['id.consent','id','Consent record','Patient','T1','Recorded in the owner\'s language at claim and at every key. Versioned, exportable, revocable.',['id.claim']],
+['id.key','id','Keys: role, scope, window, basis','Caregiver','T1','Chief, caregiver, viewer, helper, emergency, clinic. Scope by category, window by time, basis by consent or LPA.',['id.consent','onb.doors','fam.handover']],
+['id.scope','id','Scope enforcement','System','T1','One module below every read. A sibling\'s question and a clinic\'s link pass through the same check.',['id.key']],
+['id.audit','id','Audit trail','Patient','T1','Every read logged and visible to the owner. Refusals are visible too.',['id.scope']],
+['id.switch','id','Profile switcher','Caregiver','T1','Me, then each profile a key opens. Switching changes wash, language, density and tabs.',['id.key']],
+
+['onb.doors','onb','Three doors','Everyone','T1','For me. For someone I care for. I was invited. Deduplicated by phone number so two siblings cannot create two fathers.',['id.person']],
+['onb.about','onb','About you','Patient','T1','Name, birth year, sex, height, weight, language, detailed or simple. Sets reference ranges and how the app talks.',['onb.doors']],
+['onb.cloud','onb','Dynamic word cloud','Patient','T1','Plain-word conditions that open into what goes with them, three levels deep, with inline follow-ups. Captures what the person believes about their health.',['onb.about']],
+['onb.replay','onb','Read-back validation','Patient','T1','Sentences the system understood, each with Yes or No. Disputed statements are greyed, never built on.',['onb.cloud']],
+['onb.records','onb','Assistant-led records upload','Patient','T1','The assistant explains what each record type teaches it and invites any papers, any order. Each upload shows what was learned.',['onb.replay']],
+['onb.rq','onb','Questions from records','Patient','T1','Reconciles the papers with what was said: a water pill in the bag that was never mentioned.',['cap.review']],
+['onb.gaps','onb','Gaps and unlocks','Patient','T1','Every missing fact is a card: what is missing, what having it unlocks, one action, Later. A gap exists only when a capability needs the fact.',['rsn.gapdetect']],
+['onb.bio','onb','Health biography session','Caregiver','T1','The optional do-it-all-now path for the organised caregiver with a shoebox of papers.',['onb.records']],
+
+['cap.photo','cap','Photo to structured facts','Patient','T1','Labs, reports, prescriptions, letters, receipts. OCR plus extraction with confidence and a source page.',['onb.records','cap.wa_in','cap.share']],
+['cap.hand','cap','Handwriting recognition','Patient','T1','Clinic slips and handwritten prescriptions, the Malaysian GP reality.',['cap.photo']],
+['cap.pdf','cap','PDF import','Patient','T1','Portal downloads, emailed reports, discharge summaries.',['onb.records','cap.share']],
+['cap.shot','cap','Screenshots','Patient','T1','A screenshot of a hospital or insurer app is treated as a photo with OCR.',['cap.share']],
+['cap.share','cap','Share Extension','Patient','T1','Add to the record from Photos, Files or WhatsApp without opening the app.',[]],
+['cap.email','cap','Email connector, read-only','Caregiver','T2','Approved senders only: labs, hospitals, insurers, pharmacies. Attachments first; every item shown before it is stored. Never the whole inbox.',['id.consent','mem.providers']],
+['cap.photos','cap','Photos scan, on device','Patient','T1','Finds documents, boxes and portal screenshots in the camera roll without uploading anything until confirmed.',['id.consent']],
+['cap.calendar','cap','Calendar, read-only','Caregiver','T1','Events matching a provider or a health keyword become candidate appointments on the spine.',['id.consent','mem.providers']],
+['cap.sms','cap','SMS on the patient\'s Android','Patient','T3','Clinic reminders and result-ready messages from allowlisted numbers. Not available on iPhone.',['id.consent']],
+['cap.wa_group','cap','Family health group','Everyone','T2','The app\'s number in a dedicated group where the platform allows; reads only what is posted there; other people\'s messages are dropped before storage.',['chan.wa','id.consent']],
+['cap.wa_in','cap','WhatsApp inbound','Everyone','T1','Forward anything to the app\'s number and it files itself with a confirmation reply.',['chan.wa']],
+['cap.consult','cap','Consult recording','Caregiver','T1','Consent prompt first, then transcription, speaker separation, timestamps.',['saf.recconsent']],
+['cap.note','cap','Scribbles and voice notes','Everyone','T1','Attached to any event; searchable.',[]],
+['cap.device','cap','Reading by photo of a device screen','Patient','T1','Blood pressure cuff, glucometer, scale. Never a typed number.',[]],
+['cap.health','cap','HealthKit and devices','Patient','T2','Bluetooth cuffs and scales through Health; wearables where present.',[]],
+['cap.bag','cap','Medicine bag photo','Patient','T1','One frame usually holds the pack, the dispensing label and the receipt; three sources cross-checked.',['onb.records']],
+['cap.pill','cap','Pill and box identification','Patient','T2','Registration number on the pack is the strongest key for local generics.',['cap.bag']],
+['cap.receipt','cap','Pharmacy receipt','Caregiver','T2','Price and quantity feed the count and the ledger.',['cap.bag']],
+['cap.review','cap','Capture review card','Patient','T1','What was read, solid or dotted per field, one Looks-right tap, and what changed as a result.',['cap.photo','cap.hand','cap.pdf','cap.shot','cap.device','cap.pill','cap.receipt','cap.email','cap.photos','cap.calendar','cap.sms','cap.wa_group']],
+['cap.dedupe','cap','Deduplication','System','T1','Same document twice is one artefact; same reading twice is one fact.',['cap.review']],
+
+['mem.episodic','mem','Episodic store','System','T1','Raw artefacts and recordings, timestamped. Recall plays the clip, not a paraphrase.',['cap.review','cap.consult','cap.note','cap.dedupe']],
+['mem.semantic','mem','Semantic store','System','T1','Facts with provenance and confidence: conditions, medicines, values, providers, coverage.',['cap.review','onb.replay','onb.rq','cap.device','cap.health']],
+['mem.working','mem','Working memory','System','T1','The current episode and the current conversation.',['st.compute']],
+['mem.spine','mem','Appointments spine','Everyone','T1','Last check-up, last visit, next visit. Everything hangs off one of them.',['mem.semantic','rsn.postvisit','rsn.discharge']],
+['mem.episodes','mem','Episodes and events','Caregiver','T1','A concern over time, grouping visits, results and symptoms.',['mem.semantic']],
+['mem.providers','mem','Providers directory','Caregiver','T1','Every doctor, clinic, hospital and pharmacy used, with history and notes.',['mem.semantic']],
+['mem.medlist','mem','Reconciled medication list','Everyone','T1','Source and confidence per line. The list a clinic will trust.',['rsn.medrecon']],
+['mem.policy','mem','Policy on file','Caregiver','T2','Insurer, plan, panel, limits, when a letter is needed, in plain language.',['cap.photo']],
+['mem.memo','mem','Memo cards','Everyone','T1','Commitments in the person\'s own words, filed to the next appointment.',['rsn.memo']],
+['mem.prov','mem','Provenance links','System','T1','Every fact points at the page, the timestamp or the reading it came from.',['mem.semantic','mem.episodic']],
+['mem.index','mem','Recall index','System','T1','Search over artefacts, transcripts and facts.',['mem.episodic','mem.semantic']],
+
+['st.compute','st','State model','System','T1','Recomputed on every new fact: clinical, functional, cognitive, situational, preference, family. Nothing renders without it.',['mem.semantic','onb.about','del.taken','del.feedback']],
+['st.wash','st','State tints the screen','Patient','T1','Stable, watch, act as a gradient wash. Never a red banner.',['st.compute']],
+['st.density','st','Density mode','Patient','T1','Simple or detailed is a profile setting; a key holder gets the caregiver view.',['onb.about','id.key']],
+
+['rsn.ranges','rsn','Lab trends with adjusted ranges','Everyone','T1','Direction in words, range band by age, sex and lab.',['mem.semantic','onb.about']],
+['rsn.correlate','rsn','Cross-signal correlation','System','T2','Readings against medicines, meals, sleep, symptoms; nothing shown below threshold.',['mem.semantic','st.compute']],
+['rsn.flags','rsn','Pattern flags','Everyone','T2','With provenance and confidence, phrased as things to raise with a clinician. Suppressed, visibly, when a needed fact is missing.',['rsn.correlate','saf.boundary','saf.samd']],
+['rsn.medid','rsn','Drug identification','System','T1','Pack, label and receipt to a registered product via NPRA and HSA registers and a licensed database.',['cap.bag','cap.pill','plat.drugdb']],
+['rsn.medrecon','rsn','Medication reconciliation','Caregiver','T1','Refill, dose change or new line. Verbal changes become proposals; a label closes them.',['rsn.medid','rsn.postvisit','rsn.discharge','saf.highrisk']],
+['rsn.interact','rsn','Interaction check','System','T1','On every addition, including supplements and TCM, from a licensed database.',['mem.medlist','plat.drugdb']],
+['rsn.poly','rsn','Polypharmacy review','Caregiver','T2','Five or more medicines against Beers and STOPP/START, output as talking points, never instructions to stop.',['mem.medlist']],
+['rsn.count','rsn','Running count and reorder date','Everyone','T1','Dispensed quantity minus confirmed doses, with lead time per source; recount photo only when thin.',['mem.medlist','del.taken','cap.receipt']],
+['rsn.medstory','rsn','Medication story','Everyone','T1','Purpose in the person\'s words, how to take it, watch-outs that apply to them, what to avoid, if missed.',['mem.medlist','plat.drugdb','st.compute']],
+['rsn.previsit','rsn','Pre-visit brief','Caregiver','T1','Purpose, what changed, open questions, what to bring, coverage, logistics. Three days out.',['mem.spine','mem.memo','rsn.questions','rsn.coverage','rsn.logistics','rsn.planner']],
+['rsn.questions','rsn','Questions to ask','Everyone','T1','From gaps, memos, flags and the polypharmacy review. Editable. One card for the patient.',['rsn.gapdetect','mem.memo','rsn.flags','rsn.poly','rsn.interact','rsn.symptom']],
+['rsn.logistics','rsn','Logistics','Patient','T1','Time, place, parking, who drives, what to bring.',['mem.spine','fam.roster']],
+['rsn.postvisit','rsn','Post-visit summary','Everyone','T1','In the patient\'s language within minutes: what was said, actions, medicine changes as proposals, follow-ups.',['cap.consult']],
+['rsn.memo','rsn','Memo consolidation','System','T1','Every conversation ends with decisions and commitments in the person\'s words.',['mem.working','rsn.postvisit']],
+['rsn.discharge','rsn','Discharge reconciliation','Caregiver','T2','Old versus new medicines, follow-ups extracted, red flags in plain words.',['cap.pdf']],
+['rsn.readmit','rsn','Thirty-day watch','Everyone','T2','Daily check-in, weight and symptom triggers, escalation to the roster.',['rsn.discharge','st.compute']],
+['rsn.coverage','rsn','Coverage, letters, claims, ledger','Caregiver','T2','Panel status, letter requested to approved, claims to paid, costs per episode and year.',['mem.policy','cap.receipt']],
+['rsn.cost','rsn','Cost expectation','Caregiver','T3','Likely bill range for a visit, test or procedure at a named hospital.',['mem.policy']],
+['rsn.food','rsn','Food verdict','Patient','T2','A meal photo routed through the person\'s conditions and medicines: what matters for them, not the calories.',['cap.photo','st.compute','mem.medlist']],
+['rsn.gapdetect','rsn','Gap detection','System','T1','Which facts capabilities need and do not have.',['st.compute']],
+['rsn.planner','rsn','Appointment planner','Caregiver','T2','Reads everything since a visit was booked and recommends bring forward, add, sequence or consolidate, with the rule, the evidence and what happens if left. Results before reviews; medicine changes set their own monitoring; feelings adjust urgency; red flags bypass the plan.',['mem.spine','st.compute','rsn.flags','rsn.feelinfer','rsn.gapdetect','mem.medlist','mem.providers','rsn.coverage','fam.roster','plat.drugdb']],
+['rsn.navigate','rsn','Care navigation','Caregiver','T3','Which doctor and why, second opinion from a different group, best time, easiest route.',['mem.providers','srch.find','rsn.cost','fam.roster']],
+['rsn.recall','rsn','Recall with timestamps','Everyone','T1','When did I last see Dr Tan. What did he say. Plays the moment.',['mem.index','mem.prov']],
+['rsn.screening','rsn','Screening and vaccinations','Everyone','T2','Localised schedules; due items reach the feed and the visit questions.',['onb.about','mem.semantic']],
+['rsn.unwell','rsn','Not-feeling-well triage','Patient','T1','What is wrong by voice, checked against readings and medicines, then rest, call the clinic, or go now.',['st.compute','mem.medlist']],
+['rsn.symptom','rsn','Symptoms and photo timelines','Patient','T1','Logged in the person\'s words; wounds and swelling compared over time.',['cap.note','cap.photo','chan.feel']],
+['rsn.feelinfer','rsn','Feeling inference','System','T1','A tapped feeling plus one follow-up, read against medicines, readings and what changed this week. Red flags escalate; everything else is logged, watched, or added to the visit questions.',['chan.feel','mem.medlist','st.compute','saf.boundary']],
+
+['srch.ask','srch','Ask about the profile','Everyone','T1','Runs over memory within the asker\'s scope; answers cite the artefact; refuses visibly outside the key.',['mem.index','id.scope','rsn.recall']],
+['srch.find','srch','Find in the world','Caregiver','T2','Web, video and provider search scoped by State.',['srch.allow','srch.jobs']],
+['srch.act','srch','Act with confirmation','Caregiver','T2','Order the tablets, add to the questions, send a reminder. Nothing leaves without a confirm.',['srch.ask','del.reorder','rsn.navigate','rsn.planner']],
+['srch.jobs','srch','Self-search jobs','System','T2','Explainers, safety notices, local risk, food, providers, procedure prep; created from State, re-run on change.',['st.compute']],
+['srch.allow','srch','Source allowlist','System','T2','Health authorities, hospital groups, professional bodies. No forums, no supplement pages.',[]],
+['srch.compress','srch','Compression','System','T2','Text to three sentences and one action. Video to the twenty seconds that apply to this person. Own data to one number and one direction.',['srch.find','st.compute']],
+
+['del.feed','del','Feed ranking','Everyone','T1','Urgency, relevance, novelty, format fit, freshness. Now and two cards on top; explore below. Every card says why.',['st.compute','rsn.flags','srch.compress','rsn.ranges','rsn.food','rsn.screening','del.feedback']],
+['del.cards','del','Card grammar','Everyone','T1','One number, one direction, one colour, one action, a provenance line.',['mem.prov','del.push']],
+['del.voice','del','Voice notes','Patient','T1','Every card has a spoken twin in the person\'s language.',['del.cards']],
+['del.clips','del','Thirty-second clips','Patient','T3','Explainers, post-visit, compressed video, captioned.',['srch.compress']],
+['del.recap','del','Weekly recap','Patient','T3','What went well, what to watch, what is coming. Forwardable.',['st.compute','del.gapnudge']],
+['del.triggers','del','Trigger taxonomy and caps','System','T1','Rule, pattern and event triggers, each with a channel and a daily cap.',['st.compute','rsn.readmit','rsn.count']],
+['del.reminders','del','Reminders','Patient','T1','Doses tied to meals, appointments, refills.',['del.triggers','mem.medlist','rsn.logistics']],
+['del.taken','del','Taken confirmations','Patient','T1','One tap, by the patient or the helper. The ground truth for adherence and counts.',['chan.today','chan.wa','chan.helper','chan.widget']],
+['del.reorder','del','Reorder card','Patient','T1','Ask to order or I have more. Drafts the pharmacy message.',['rsn.count']],
+['del.escalate','del','Escalation ladder','System','T1','Patient, helper, caregiver on duty, chief. Two ignored nudges and the third goes to the roster.',['del.triggers','fam.roster','rsn.unwell','rsn.feelinfer']],
+['del.feedback','del','Format feedback','System','T2','Opened, played, dismissed. Text becomes voice; clips become cards. The format adapts.',['chan.today','chan.wa']],
+['del.memonudge','del','Memo nudges','Patient','T1','Reminders that quote the person\'s own commitment, never a system target.',['mem.memo']],
+['del.gapnudge','del','Gap nudges','Patient','T1','One a day at most, with what it unlocks. Later once, then stop.',['onb.gaps']],
+['del.smart','del','Smart nudges','Patient','T1','Presence, commitment, pattern, check-in, recognition, anticipation, curiosity, context. Generated from State, at most two a day, none in quiet hours or on an alert day.',['st.compute','mem.memo','fam.thread','srch.compress','rsn.feelinfer']],
+['del.proud','del','The number that only goes up','Patient','T1','Days with every tablet taken, or walks this month. No streak to break, no red.',['del.taken']],
+['del.push','del','Caregiver push composer','Caregiver','T1','Write once; preview exactly what the patient will see as card, voice note or clip; schedule.',['id.key','st.density']],
+
+['chan.tabs','chan','Three tabs','Everyone','T1','Today, Ask, and Me or the person\'s name. Never more.',['id.switch','st.wash','st.density']],
+['chan.today','chan','Today','Patient','T1','One thing, two cards, five chips.',['del.feed','del.reminders','del.memonudge','del.gapnudge','del.smart','chan.feel','chan.tabs']],
+['chan.ask','chan','Ask','Patient','T1','Voice-first. Also Siri via App Intents.',['srch.ask','chan.tabs']],
+['chan.me','chan','Me','Patient','T1','One proud number that only goes up, emergency card, family, language, who looked.',['id.audit','del.proud','chan.tabs']],
+['chan.meds','chan','Medicines sheet','Patient','T1','Purpose first, name small, count and buy-by date, Taken.',['mem.medlist','rsn.medstory','del.reorder']],
+['chan.records','chan','Records sheet','Patient','T1','By time, body, doctor, type. Add is one button.',['mem.episodes','cap.review']],
+['chan.visits','chan','Visits sheet','Patient','T1','Next with questions and logistics, last with the clip, what was agreed.',['mem.spine','rsn.previsit','rsn.questions']],
+['chan.family','chan','Family sheet','Caregiver','T1','Roles, scopes, helper settings, thread, audit.',['id.key','fam.thread']],
+['chan.money','chan','Money sheet','Caregiver','T2','Policy, letters, claims, ledger.',['rsn.coverage']],
+['chan.widget','chan','Widgets and Live Activity','Patient','T1','Home Screen dose with Taken; visit day in the Dynamic Island.',['del.reminders','rsn.logistics']],
+['chan.emergency','chan','Emergency card','Patient','T1','Offline, Lock Screen, printable, three languages.',['mem.medlist','mem.semantic']],
+['chan.feel','chan','Feeling cloud','Patient','T1','Are you feeling like… a handful of plain words sized by the person\'s state, shown only after a change, one tap and one follow-up, never a questionnaire.',['st.compute','mem.medlist','del.smart']],
+['chan.unwell','chan','Not-feeling-well flow','Patient','T1','One button, three steps, family told.',['rsn.unwell']],
+['chan.wa','chan','WhatsApp mirror','Everyone','T1','Cards, voice notes, replies, forwards in. The patient can do a full day without opening the app.',['del.cards','del.voice','del.escalate','del.recap']],
+['chan.helper','chan','Helper list','Helper','T2','Today\'s medicines with pill descriptions in her language; given replies; he-is-not-well.',['id.key','del.reminders']],
+['chan.share','chan','Doctor share link and packet','Clinic','T2','A one-page brief that expires; a second-opinion bundle readable in three minutes.',['rsn.previsit','id.scope','mem.medlist']],
+['chan.simple','chan','Simple mode and Assistive Access','Patient','T1','Large type, one action, no gestures; works inside the OS accessibility mode.',['st.density']],
+
+['fam.roster','fam','Duty roster and tasks','Caregiver','T1','Who drives, who refills, who covers the helper\'s day off.',['id.key']],
+['fam.thread','fam','Family thread and digests','Everyone','T1','Health cards and human messages together; digests, not a stream.',['del.taken','id.key']],
+['fam.load','fam','Caregiver load view','Caregiver','T3','Hours and tasks by person, so the load is visible to the siblings.',['fam.roster']],
+['fam.handover','fam','Incapacity and handover','Caregiver','T3','LPA or letter attached; ownership transfers or the profile is sealed; keys expire.',['id.consent']],
+
+['saf.boundary','saf','The boundary','Everyone','T1','Organises, prepares, surfaces patterns to discuss; does not diagnose or treat. On every inferring screen.',[]],
+['saf.highrisk','saf','High-risk drug rule','System','T1','Warfarin, insulin, digoxin, methotrexate, opioids need a label photo before a dose is saved.',[]],
+['saf.recconsent','saf','Recording consent','Caregiver','T1','Doctor told aloud or by printed notice; consent stored with the recording; counsel-reviewed in SG and MY.',[]],
+['saf.samd','saf','SaMD boundary review','System','T1','HSA and MDA: guideline-referenced, non-real-time, informational. Signed off before any flag ships.',[]],
+['saf.pdpa','saf','PDPA data map and breach process','System','T1','Both countries; DPO; portability; deletion.',[]],
+['saf.connect','saf','Connector rules','System','T2','Purpose-bound, allowlisted, shown before stored, per-profile consent, revocable, third parties dropped, nothing trains anything.',['saf.pdpa']],
+['saf.export','saf','Export and deletion','Patient','T2','FHIR bundle and PDFs; full deletion in region.',['mem.episodic','mem.semantic']],
+
+['plat.region','plat','In-region hosting','System','T1','Singapore and Malaysia deployments; profiles pinned; per-profile encryption keys.',['saf.pdpa']],
+['plat.drugdb','plat','Licensed drug knowledge','System','T1','Registries plus a licensed database and interaction API. The model writes the sentence, never the pharmacology.',[]],
+['plat.agent','plat','Agent runtime and memory','System','T1','Agent loops and the three memory stores on managed infrastructure.',[]],
+['plat.obs','plat','Observability','System','T1','Every card logged with the State it came from; every read to the audit table.',['id.audit']]
+];
+
+var SCEN=[
+ ['A lab result arrives','Photo or PDF in, a card out, in the patient\'s language.',['cap.photo','cap.review','mem.semantic','st.compute','rsn.ranges','rsn.correlate','rsn.flags','rsn.questions','srch.jobs','srch.find','srch.compress','del.feed','chan.today','del.voice','chan.wa']],
+ ['Morning dose','The one thing, and what one tap sets off.',['del.triggers','del.reminders','chan.widget','chan.wa','del.taken','rsn.count','del.reorder','fam.thread','st.compute']],
+ ['A new medicine is bought','One photo of the bag to a trusted list.',['cap.bag','rsn.medid','rsn.medrecon','saf.highrisk','rsn.interact','mem.medlist','rsn.medstory','rsn.count','chan.meds','chan.emergency']],
+ ['Three days before a visit','The brief assembles itself.',['mem.spine','st.compute','rsn.gapdetect','rsn.questions','rsn.coverage','rsn.logistics','rsn.previsit','chan.visits','chan.widget','chan.share']],
+ ['The visit, and after','Consent, recording, summary, memo, nudge.',['saf.recconsent','cap.consult','mem.episodic','rsn.postvisit','rsn.medrecon','rsn.memo','mem.memo','del.memonudge','chan.today']],
+ ['Discharged from hospital','The letter becomes a plan and a thirty-day watch.',['cap.pdf','rsn.discharge','rsn.medrecon','mem.spine','rsn.readmit','del.triggers','del.escalate','fam.roster','chan.wa']],
+ ['Not feeling well','One button, three steps, family told.',['chan.unwell','rsn.unwell','st.compute','mem.medlist','del.escalate','chan.wa','fam.thread']],
+ ['A family member is invited','A key is cut, consent recorded, a question answered, a refusal shown.',['onb.doors','id.key','id.consent','id.scope','chan.family','srch.ask','id.audit','chan.me']],
+ ['Something is missing','A gap becomes a nudge, and closes itself.',['st.compute','rsn.gapdetect','onb.gaps','del.gapnudge','chan.today','cap.photo','cap.review','mem.semantic']],
+ ['Feeling a bit off','A new tablet this week, one tap on the cloud, one question back, and the system decides what to do with it.',['st.compute','del.smart','chan.feel','rsn.feelinfer','mem.medlist','rsn.symptom','rsn.questions','del.escalate','chan.wa']],
+ ['The inbox does the work','A lab result lands in email; approved sender, attachment read, shown once, filed, trend updated, nobody opened the app.',['cap.email','saf.connect','cap.review','mem.semantic','st.compute','rsn.ranges','mem.spine','del.smart','chan.wa']],
+ ['A six-month review is on the calendar','Since it was booked: a medicine change, a result at the top of the range, drifting readings, four dizzy mornings. The planner re-sequences and says why.',['mem.spine','st.compute','rsn.feelinfer','rsn.flags','rsn.gapdetect','rsn.planner','rsn.coverage','fam.roster','srch.act','rsn.previsit','chan.wa']],
+ ['Ask a question','Recall with the clip at the timestamp, inside the asker\'s scope.',['chan.ask','id.scope','srch.ask','mem.index','rsn.recall','del.cards','chan.ask']]
+];
+
+var byId={}; F.forEach(function(f){byId[f[0]]=f});
+var outs={}; F.forEach(function(f){f[6].forEach(function(src){(outs[src]=outs[src]||[]).push(f[0])})});
+var sel=null, scen=null;
+
+function build(){
+  var m=document.getElementById('main'); m.innerHTML='';
+  LAYERS.forEach(function(L){var d=document.createElement('div'); d.className='layer'; d.id='L-'+L[0]; var n=F.filter(function(f){return f[1]===L[0]}).length; d.innerHTML='<h2>'+L[1]+'<span>'+L[2]+' · '+n+'</span></h2><div class="chips"></div>'; var c=d.querySelector('.chips'); F.filter(function(f){return f[1]===L[0]}).forEach(function(f){var b=document.createElement('button'); b.className='f'; b.id='f-'+f[0]; b.innerHTML='<span class="lbl">'+f[2]+'</span><span class="t">'+f[4]+'</span>'; b.onclick=function(){select(f[0])}; c.appendChild(b)}); m.appendChild(d)});
+  var s=document.getElementById('scen'); SCEN.forEach(function(S,i){var b=document.createElement('button'); b.className='sc'; b.innerHTML=S[0]+'<small>'+S[1]+'</small>'; b.onclick=function(){trace(i)}; s.appendChild(b)});
+  document.getElementById('counts').textContent=F.length+' features · '+LAYERS.length+' layers · '+F.filter(function(f){return f[4]==='T1'}).length+' in T1';
+}
+function clearMarks(){document.querySelectorAll('.f').forEach(function(b){b.classList.remove('sel','up','down','dim','step'); var n=b.querySelector('.n'); if(n)n.remove()}); document.querySelectorAll('.sc').forEach(function(b){b.classList.remove('on')})}
+function select(id){scen=null; sel=id; clearMarks(); var f=byId[id]; var ups=f[6], downs=outs[id]||[]; document.querySelectorAll('.f').forEach(function(b){var fid=b.id.slice(2); if(fid===id)b.classList.add('sel'); else if(ups.indexOf(fid)>=0)b.classList.add('up'); else if(downs.indexOf(fid)>=0)b.classList.add('down'); else b.classList.add('dim')}); applyFilters(true);
+  var L=LAYERS.filter(function(l){return l[0]===f[1]})[0];
+  var d=document.getElementById('detail'); d.innerHTML='<div class="kicker">'+L[1]+'</div><h2>'+f[2]+'</h2><div class="tags"><span class="tag">'+f[3]+'</span><span class="tag">'+f[4]+'</span></div><p>'+f[5]+'</p>'+
+   '<h4>Fed by</h4><ul>'+(ups.length?ups.map(function(u){return '<li><button onclick="select(\''+u+'\')">'+byId[u][2]+'</button></li>'}).join(''):'<li>Nothing upstream; this is a source.</li>')+'</ul>'+
+   '<h4>Enables</h4><ul>'+(downs.length?downs.map(function(u){return '<li><button onclick="select(\''+u+'\')">'+byId[u][2]+'</button></li>'}).join(''):'<li>An end point: something a person sees or a line the product holds.</li>')+'</ul>';
+  document.getElementById('f-'+id).scrollIntoView({block:'center',behavior:'smooth'});
+}
+function trace(i){sel=null; scen=i; clearMarks(); var S=SCEN[i]; document.querySelectorAll('.sc')[i].classList.add('on'); var order={}; S[2].forEach(function(id,k){if(order[id]===undefined)order[id]=k+1}); document.querySelectorAll('.f').forEach(function(b){var fid=b.id.slice(2); if(order[fid]){b.classList.add('step'); var n=document.createElement('span'); n.className='n'; n.textContent=order[fid]; b.insertBefore(n,b.firstChild)} else b.classList.add('dim')}); applyFilters(true);
+  var d=document.getElementById('detail'); d.innerHTML='<div class="kicker">Scenario</div><h2>'+S[0]+'</h2><p>'+S[1]+'</p><div class="story">'+S[2].map(function(id,k){var f=byId[id]; var L=LAYERS.filter(function(l){return l[0]===f[1]})[0]; return '<b>'+(k+1)+'. '+f[2]+' <span style="font-weight:400;color:var(--soft);font-size:12px">· '+L[1]+'</span></b>'+f[5]}).join('')+'</div>';
+  document.getElementById('f-'+S[2][0]).scrollIntoView({block:'center',behavior:'smooth'});
+}
+function segp(b,id){document.getElementById(id).querySelectorAll('button').forEach(function(x){x.classList.remove('on')}); b.classList.add('on'); applyFilters()}
+function applyFilters(keep){
+  var q=document.getElementById('q').value.toLowerCase(); var who=document.getElementById('who').querySelector('.on').textContent; var tier=document.getElementById('tier').querySelector('.on').textContent;
+  document.querySelectorAll('.f').forEach(function(b){var f=byId[b.id.slice(2)]; var ok=true; if(q&&(f[2]+' '+f[5]).toLowerCase().indexOf(q)<0)ok=false; if(who!=='Everyone'&&f[3]!==who&&f[3]!=='Everyone')ok=false; if(tier!=='All tiers'&&f[4]!==tier)ok=false; b.style.display=ok?'':'none'});
+  if(!keep&&(sel||scen!==null)){clearMarks(); sel=null; scen=null; document.getElementById('detail').innerHTML='<div class="empty">Filtered. Click any feature, or pick a scenario.</div>'}
+}
+build();
+</script>
+</body>
+</html>

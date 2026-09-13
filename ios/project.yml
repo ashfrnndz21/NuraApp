@@ -1,0 +1,20 @@
+name: Nura
+options:
+  bundleIdPrefix: com.nura
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  Nura:
+    type: application
+    platform: iOS
+    sources: [Nura]
+    settings:
+      SWIFT_VERSION: "6.0"
+      INFOPLIST_KEY_NSCameraUsageDescription: "To read your medicine boxes, letters and results."
+      INFOPLIST_KEY_NSMicrophoneUsageDescription: "So you can talk to Nura and record a visit with your doctor's permission."
+      INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "To find health papers and photos you already have."
+  NuraTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [NuraTests]
+    dependencies: [{ target: Nura }]

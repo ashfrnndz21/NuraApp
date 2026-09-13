@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — where the health feed lives</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+.page{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:36px;margin-top:32px;align-items:start}
+.head{font-size:14px;color:var(--soft);margin-bottom:12px;padding:0 6px}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:840px;padding:16px 16px 40px;overflow-y:auto;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.pa{background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF)}
+.ash{background:linear-gradient(160deg,#F1DCE6,#F3E6E0 50%,#DCD5EE)}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.sec{font-size:14px;color:var(--soft);margin:18px 6px 0;display:flex;justify-content:space-between;align-items:baseline}
+.sec span{font-size:12px}
+.card{background:var(--paper);border-radius:20px;padding:16px;margin-top:12px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.card.glass{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7)}
+.card .t{font-size:19px;font-weight:500;line-height:1.2}
+.card .s{font-size:16px;color:var(--soft);margin-top:6px;line-height:1.45}
+.card .why{font-size:13px;color:var(--soft);margin-top:12px;padding-top:10px;border-top:1px solid rgba(43,39,51,.08);line-height:1.4}
+.scene{border-radius:16px;height:100px;margin-bottom:12px;position:relative;overflow:hidden}
+.scene.a{background:linear-gradient(135deg,#F7E7DA,#F1DCE6 60%,#E6DDF1)}
+.scene.b{background:linear-gradient(135deg,#E3E7F3,#EBE3F0 60%,#F3E6E0)}
+.scene.c{background:linear-gradient(135deg,#DDE9E1,#E9E2F1 60%,#F3E6E0)}
+.scene .play{position:absolute;left:12px;bottom:10px;background:var(--paper);border-radius:999px;padding:5px 12px 5px 8px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px}
+.scene .play::before{content:"";border-left:9px solid var(--plum);border-top:6px solid transparent;border-bottom:6px solid transparent}
+.small .t{font-size:16px}.small .s{font-size:14px}
+.tag{display:inline-block;font-size:11px;padding:3px 8px;border-radius:999px;background:#F3EEF8;color:var(--plum);margin-right:4px;margin-bottom:6px}
+.tag.w{background:#FAEEDA;color:#854F0B}.tag.g{background:#E1F5EE;color:#0F6E56}
+.pill{display:flex;align-items:center;justify-content:center;height:46px;border-radius:999px;background:var(--paper);font-size:15px;font-weight:500;margin-top:12px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.list{list-style:none}
+.list li{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid rgba(43,39,51,.08);font-size:14px;line-height:1.4}
+.list li:first-child{border-top:0}
+.list li span{color:var(--soft);font-size:12px;white-space:nowrap}
+.key{margin-top:26px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:22px;padding:20px 24px;font-size:14px;line-height:1.55;color:var(--soft)}
+.key b{color:var(--ink);font-weight:500}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Where the health feed lives</h1>
+  <p class="lede">The feed is not a news app inside the app. For Pa it is one or two cards a day under the one thing, and a short "more for you" if he scrolls. For Ash it is a list with sources, and the panel that shows what the system is searching for on his behalf.</p>
+
+  <div class="row">
+    <div>
+      <div class="head">Pa — Today</div>
+      <div class="phone"><div class="screen pa">
+        <div class="status"><b>7:42</b><span>Tuesday 15 September</span></div>
+        <div class="sec">Now</div>
+        <div class="card"><div class="t">Your blood pressure tablet</div><div class="s">Take one with breakfast. You have 12 left.</div><div class="pill">Taken</div></div>
+
+        <div class="sec">For you today</div>
+        <div class="card"><div class="scene a"><div class="play">20 seconds</div></div><div class="t">Your kidney test, in simple words</div><div class="s">It is a little higher than in June. It is not a worry. Ash will ask Dr Tan about it on Thursday.</div><div class="why">You are seeing this because a new test came from Gleneagles on 9 September. You can hear it in Hokkien.</div></div>
+        <div class="card"><div class="scene b"><div class="play">30 seconds</div></div><div class="t">Water pill and bananas</div><div class="s">A heart doctor talks about the water pill and bananas. It is 30 seconds long. We kept only the part that matters for you.</div><div class="why">You are seeing this because you started the water pill on 1 September. The doctor is from Mount Elizabeth.</div></div>
+
+        <div class="sec">More for you <span>if you want</span></div>
+        <div class="card small"><div class="t">More dengue in Air Itam</div><div class="s">Pour out any water in the pots on the balcony.</div><div class="why">You are seeing this because you live near there. It comes from the Penang health office this week.</div></div>
+        <div class="card small"><div class="t">Chicken rice or fish soup at the kopitiam</div><div class="s">Both have less salt than nasi lemak. Ask for no extra soy sauce.</div><div class="why">You are seeing this because your blood pressure has been going up a little. It comes from the Ministry of Health food pages.</div></div>
+        <div class="card small"><div class="t">Why your blood pressure is higher in the morning</div><div class="s">A short explanation, 20 seconds. Many people have this. Dr Tan will look at your morning numbers on Thursday.</div><div class="why">You are seeing this because your morning numbers have been higher for 9 days. It comes from the Singapore Heart Foundation.</div></div>
+        <div class="card glass small"><div class="s">That is all for today. Nothing else is new for you.</div></div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="head">Ash — For Pa this week</div>
+      <div class="phone"><div class="screen ash">
+        <div class="status"><b>For Pa</b><span>this week</span></div>
+        <div class="sec">New for him <span>3 sent, 2 held</span></div>
+        <div class="card small"><span class="tag g">sent · opened twice</span><span class="tag">explainer</span><div class="t">Kidney test explainer, 20 s</div><div class="s">Built from the 9 Sep result and HealthHub's kidney pages. Hokkien voice.</div></div>
+        <div class="card small"><span class="tag w">sent · not opened</span><span class="tag">video, compressed</span><div class="t">Water pill and bananas, 30 s</div><div class="s">From a Mount Elizabeth cardiology video (2025), the 30 seconds about diuretics and potassium. Voice note sent instead on Wednesday.</div></div>
+        <div class="card small"><span class="tag g">sent</span><span class="tag">local</span><div class="t">Dengue, Air Itam</div><div class="s">Penang health office bulletin, 14 Sep.</div></div>
+        <div class="card small"><span class="tag w">held for you</span><span class="tag">worth knowing</span><div class="t">Home readings now preferred for adjusting pressure tablets</div><div class="s">Recent guidance. Framed as a question for Thursday: should his log guide the dose? Not sent to Pa; it's a doctor question.</div><div class="pill" style="height:40px;font-size:14px">Add to Thursday's questions</div></div>
+        <div class="card small"><span class="tag w">held · nothing to do</span><span class="tag">safety notice</span><div class="t">Recall on one batch of a sugar tablet brand</div><div class="s">NPRA notice 12 Sep. His pack is batch 4471, not affected. Checked against the bag photo. Not sent to Pa.</div></div>
+
+        <div class="sec">Watching for Pa</div>
+        <div class="card"><ul class="list"><li>Safety notices for his 4 medicines<span>NPRA, HSA · daily</span></li><li>Kidney-friendly hawker food<span>MOH nutrition · weekly</span></li><li>Dengue and haze, Air Itam<span>Penang health office · daily</span></li><li>Gleneagles heart clinic waiting times<span>hospital site · before visits</span></li><li>New explainers when a result or medicine changes<span>allowlisted · on change</span></li></ul><div class="pill" style="height:40px;font-size:14px">Add a watch</div></div>
+
+        <div class="sec">Sources allowed</div>
+        <div class="card glass small"><div class="s">Health authorities (MOH, HSA, NPRA), hospital groups (Gleneagles, Sunway, KPJ, SingHealth), professional bodies (heart, kidney, diabetes societies), and their video channels. No forums, no supplement pages, no news sites.</div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="key">
+    <b>The rule that keeps it small.</b> A card reaches Pa only if it is about him, from an allowed source, rewritten in plain words, and one of at most two non-reminder cards that day. Anything that is really a question for the doctor goes to Ash and the Doctor Memo, not to Pa. Anything with nothing to do is held. The feed for Pa says "That is all for today" and means it.
+  </div>
+</div>
+</body>
+</html>

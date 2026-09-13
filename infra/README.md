@@ -1,0 +1,1 @@
+AWS CDK (Python). One stack per region: ap-southeast-1 (Singapore) and ap-southeast-5 (Malaysia). Aurora PostgreSQL, S3 with per-profile KMS keys, OpenSearch, EventBridge, Step Functions, Cognito, and the agent runtime. Profiles are pinned to a region; nothing replicates across.

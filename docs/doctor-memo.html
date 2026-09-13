@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — the Doctor Memo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--act:#C24A3A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.page{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:36px;margin-top:32px;align-items:start}
+.head{font-size:14px;color:var(--soft);margin-bottom:12px;padding:0 6px}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:840px;padding:16px 16px 30px;overflow-y:auto;scrollbar-width:none;background:linear-gradient(160deg,#E3E7F3,#EBE3F0 55%,#F3E6E0)}
+.screen::-webkit-scrollbar{display:none}
+.screen.pa{background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF)}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.title{padding:14px 6px 0}
+.title .t{font-size:22px;font-weight:500;line-height:1.15}
+.title .s{font-size:14px;color:var(--soft);margin-top:3px}
+.tabs{display:flex;background:rgba(255,255,255,.55);border-radius:999px;padding:4px;margin-top:14px}
+.tabs button{flex:1;height:38px;border-radius:999px;font-size:14px;color:var(--soft)}
+.tabs button.on{background:#fff;color:var(--plum);font-weight:500;box-shadow:0 2px 8px rgba(60,40,80,.12)}
+.v{display:none}.v.on{display:block}
+.sec{font-size:13px;color:var(--soft);margin:16px 6px 0}
+.card{background:var(--paper);border-radius:20px;padding:14px 16px;margin-top:10px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.card.glass{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7)}
+.card .t{font-size:16px;font-weight:500}
+.card .s{font-size:14px;color:var(--soft);margin-top:3px;line-height:1.45}
+.list{list-style:none}
+.list li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid rgba(43,39,51,.08);font-size:14px;line-height:1.45}
+.list li:first-child{border-top:0}
+.dot{width:9px;height:9px;border-radius:50%;flex:none;margin-top:7px}
+.g{background:var(--good)}.w{background:var(--watch)}.a{background:var(--act)}
+.src{display:block;font-size:12px;color:var(--soft);margin-top:2px}
+.q{padding:10px 0;border-top:1px solid rgba(43,39,51,.08)}
+.q:first-child{border-top:0}
+.q .n{display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--plum);color:#fff;font-size:12px;align-items:center;justify-content:center;margin-right:8px;vertical-align:-4px;font-weight:500}
+.q .txt{font-size:15px;line-height:1.4}
+.q .pa{display:none;font-size:15px;line-height:1.4;color:var(--plum)}
+.q.showpa .txt{display:none}.q.showpa .pa{display:block}
+.q .src{margin-left:30px}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(43,39,51,.08);font-size:15px;line-height:1.4}
+.chk:first-child{border-top:0}
+.chk i{width:24px;height:24px;border-radius:8px;border:1.5px solid rgba(78,58,120,.4);flex:none;margin-top:1px;background:#fff}
+.chk.done i{background:var(--plum);border-color:var(--plum)}
+.chk.done span{color:var(--soft);text-decoration:line-through}
+.pill{display:flex;align-items:center;justify-content:center;height:48px;border-radius:999px;background:var(--paper);font-size:15px;font-weight:500;margin-top:10px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.pill.plum{background:var(--plum);color:#fff}
+.pill.rec{background:#FBEBEB;color:#7A2E24}
+.row2{display:flex;gap:8px}.row2 .pill{flex:1}
+.tog{font-size:12px;color:var(--plum);font-weight:500}
+.spark{width:100%;height:44px;margin-top:6px}
+.ans{margin-left:30px;margin-top:6px;background:#F3EEF8;border-radius:12px;padding:8px 10px;font-size:14px;line-height:1.45}
+.ans b{font-weight:500}
+.ans .ts{font-size:12px;color:var(--soft)}
+.carry{margin-left:30px;font-size:13px;color:var(--watch);margin-top:4px}
+.prop{background:#F3EEF8;border-radius:14px;padding:10px 12px;margin-top:8px}
+.prop b{display:block;font-size:14px;font-weight:500}
+.prop span{font-size:13px;color:var(--soft)}
+.prop .btns{display:flex;gap:6px;margin-top:8px}
+.prop .btns button{flex:1;background:#fff;border-radius:999px;padding:7px;font-size:13px;color:var(--plum);font-weight:500;border:1.5px solid transparent}
+.prop .btns button.on{border-color:var(--plum)}
+.memo{font-size:17px;line-height:1.5;font-style:normal;padding:4px 0}
+.memo q{color:var(--ink)}
+.rem li{font-size:14px}
+.pacard{background:var(--paper);border-radius:22px;padding:18px;margin-top:14px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.pacard .lab{font-size:13px;color:var(--soft)}
+.pacard .t{font-size:22px;font-weight:500;line-height:1.15;margin-top:4px}
+.pacard .s{font-size:17px;color:var(--soft);margin-top:6px;line-height:1.45}
+.pacard ol{margin:10px 0 0 22px;font-size:18px;line-height:1.5}
+.pacard .pill{height:52px;font-size:17px}
+.why{font-size:12px;color:var(--soft);margin-top:10px;padding-top:8px;border-top:1px solid rgba(43,39,51,.08)}
+.key{margin-top:26px;background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:22px;padding:20px 24px;font-size:14px;line-height:1.55;color:var(--soft)}
+.key b{color:var(--ink);font-weight:500}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#2B2733;color:#fff;border-radius:16px;padding:12px 18px;font-size:14px;display:none;z-index:9;max-width:420px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>The Doctor Memo</h1>
+  <p class="lede">One living document per visit. Before: what changed, what to ask and why, what's worth knowing this month, what to bring. During: the questions as a checklist while it records. After: every question closed with the answer at its timestamp, changes as proposals, a new memo in his words, and the reminders that come out of it.</p>
+
+  <div class="row">
+    <div>
+      <div class="head">Ash's memo — tap Before, During, After</div>
+      <div class="phone"><div class="screen">
+        <div class="status"><b>Dr Tan</b><span>Thursday 10:00</span></div>
+        <div class="title"><div class="t">Heart clinic, Gleneagles</div><div class="s">Why: follow-up on the water pill, recheck bloods. Letter approved. Mei driving at 9.</div></div>
+        <div class="tabs"><button class="on" onclick="tab(0,this)">Before</button><button onclick="tab(1,this)">During</button><button onclick="tab(2,this)">After</button></div>
+
+        <!-- BEFORE -->
+        <div class="v on">
+          <div class="sec">Since last time, 1 Sep</div>
+          <div class="card">
+            <div class="t">Pressure creeping up</div>
+            <svg class="spark" viewBox="0 0 320 44"><rect x="0" y="14" width="320" height="18" rx="6" fill="rgba(78,58,120,.08)"/><polyline fill="none" stroke="#2B2733" stroke-width="1.5" points="0,32 40,30 80,31 120,27 160,25 200,22 240,17 280,12 318,8"/><circle cx="318" cy="8" r="3.5" fill="#B8741A"/></svg>
+            <ul class="list">
+              <li><span class="dot w"></span>Morning readings 131 to 148 over nine days.</li>
+              <li><span class="dot w"></span>Dizzy on standing, four mornings. From his own taps.</li>
+              <li><span class="dot w"></span>Kidney check 9 Sep: potassium 4.9, top of range. Creatinine a little up.</li>
+              <li><span class="dot g"></span>Water pill taken 15 of 16 days. Weight steady, 70.3.</li>
+              <li><span class="dot a"></span>Aspirin stopped Tuesday, per Mei. No recording of that visit.</li>
+            </ul>
+          </div>
+
+          <div class="sec">Questions, ranked <button class="tog" style="float:right" onclick="togpa()">Show in Pa's words</button></div>
+          <div class="card" id="qs">
+            <div class="q"><span class="n">1</span><span class="txt">Is the diuretic driving the potassium and creatinine change? Recheck sooner than planned?</span><span class="pa">Is the water pill bad for my kidneys?</span><span class="src">From the 9 Sep result and the 1 Sep start.</span></div>
+            <div class="q"><span class="n">2</span><span class="txt">Orthostatic dizziness most mornings. Is the 20 mg dose right, or the timing?</span><span class="pa">I feel dizzy when I stand up. Is the water pill too strong?</span><span class="src">From his feeling taps, four mornings.</span></div>
+            <div class="q"><span class="n">3</span><span class="txt">Morning readings trending up despite adherence. Adjust, or watch?</span><span class="pa">My blood pressure is high in the morning. Is that OK?</span><span class="src">From nine home readings.</span></div>
+            <div class="q"><span class="n">4</span><span class="txt">Aspirin: restart after the bloods, or stop for good?</span><span class="pa">When can I take the aspirin again?</span><span class="src">From Mei's report, Tuesday.</span></div>
+            <div class="q"><span class="n">5</span><span class="txt">Two antihypertensives plus a diuretic at 74. All three still needed?</span><span class="pa">Do I need all my blood pressure tablets?</span><span class="src">Polypharmacy review, STOPP criteria.</span></div>
+            <div class="q"><span class="n">6</span><span class="txt">No lipid panel in 14 months. Due?</span><span class="pa">When is my next cholesterol test?</span><span class="src">Gap in the record.</span></div>
+          </div>
+
+          <div class="sec">Worth knowing this month</div>
+          <div class="card">
+            <ul class="list">
+              <li><span class="dot g"></span>Home readings are now preferred over clinic readings for adjusting pressure tablets in recent guidance. <b>Ask:</b> should his log guide the dose?<span class="src">Illustrative. Source shown on tap. Framed as a question, never as advice.</span></li>
+              <li><span class="dot g"></span>A newer heart-failure medicine has been added to the panel formulary. <b>Ask:</b> does it apply to him?<span class="src">Illustrative. Panel list, this month.</span></li>
+              <li><span class="dot w"></span>Safety notice on a brand of his sugar tablet, one batch. His box is a different batch. Nothing to do.<span class="src">NPRA, checked against the pack photo.</span></li>
+            </ul>
+          </div>
+
+          <div class="sec">Bring</div>
+          <div class="card"><ul class="list"><li><span class="dot g"></span>Pressure log, last 30 days. Made as a one-page PDF.</li><li><span class="dot g"></span>Medicine list, reconciled 1 Sep.</li><li><span class="dot g"></span>Insurance card. Letter approved, expires 30 Sep.</li><li><span class="dot w"></span>Nothing to eat after midnight if bloods are drawn.</li></ul>
+            <div class="row2"><div class="pill" onclick="toast('Doctor\'s page opened. Link expires in 72 hours.')">Doctor's page</div><div class="pill" onclick="toast('Sent to Pa as a card and a voice note.')">Send Pa his card</div></div></div>
+
+          <div class="sec">Reminders set</div>
+          <div class="card glass"><ul class="list rem"><li><span class="dot g"></span>Today: this memo, to you.</li><li><span class="dot g"></span>Wednesday 6 pm: Pa, bring the pressure book; nothing to eat after midnight.</li><li><span class="dot g"></span>Thursday 8 am: Mei, pick up at 9. Pa, Mei is coming at 9.</li><li><span class="dot g"></span>Thursday afternoon: summary to Pa and to you.</li></ul></div>
+        </div>
+
+        <!-- DURING -->
+        <div class="v">
+          <div class="pill rec" onclick="toast('Dr Tan, may I record this so Pa can listen later? Consent stored with the recording.')">Recording, 06:12</div>
+          <div class="sec">Tick as answered</div>
+          <div class="card" id="chk">
+            <div class="chk done" onclick="this.classList.toggle('done')"><i></i><span>Water pill and the kidney numbers</span></div>
+            <div class="chk done" onclick="this.classList.toggle('done')"><i></i><span>Dizzy on standing, dose or timing</span></div>
+            <div class="chk" onclick="this.classList.toggle('done')"><i></i><span>Morning pressure trend</span></div>
+            <div class="chk" onclick="this.classList.toggle('done')"><i></i><span>Aspirin: restart or stop</span></div>
+            <div class="chk" onclick="this.classList.toggle('done')"><i></i><span>All three pressure medicines still needed</span></div>
+            <div class="chk" onclick="this.classList.toggle('done')"><i></i><span>Cholesterol check due</span></div>
+            <div class="chk" onclick="this.classList.toggle('done')"><i></i><span>Home log to guide the dose</span></div>
+          </div>
+          <div class="card glass"><div class="t">Quick note</div><div class="s">Tap the mic and say it. "He wants the bloods before the 29th."</div><div class="pill" onclick="toast('Noted at 08:40 in the recording.')">Say a note</div></div>
+          <div class="card glass"><div class="s">Nothing pops up during the visit. The list is here if you glance at it. Everything else is done afterwards from the recording.</div></div>
+        </div>
+
+        <!-- AFTER -->
+        <div class="v">
+          <div class="card"><div class="t">What Dr Tan said, for Pa</div><div class="s">1. From Friday, take half a water pill, not a whole one.<br>2. Blood test on Monday 29 September. No food after 12 midnight the night before. Water is OK.<br>3. Do not take the aspirin for now. Dr Tan will say when to start again.<br>4. Every morning, stand on the scale before breakfast.<br>5. See Dr Tan again in six weeks. Ash will book it.</div><div class="pill" onclick="toast('Sent to Pa as a voice note in Hokkien. Played twice.')">Sent to Pa in Hokkien</div></div>
+
+          <div class="sec">Questions, closed</div>
+          <div class="card">
+            <div class="q"><span class="n">1</span><span class="txt">Water pill and the kidney numbers</span><div class="ans"><b>"Yes, that's the diuretic. We'll halve it and recheck in two weeks."</b><div class="ts">Recording 04:12</div></div></div>
+            <div class="q"><span class="n">2</span><span class="txt">Dizzy on standing</span><div class="ans"><b>"The lower dose should settle that. Stand up slowly."</b><div class="ts">Recording 05:03</div></div></div>
+            <div class="q"><span class="n">3</span><span class="txt">Morning pressure trend</span><div class="ans"><b>"Bring the log next time; I'll adjust from that, not from today's reading."</b><div class="ts">Recording 07:40</div></div></div>
+            <div class="q"><span class="n">4</span><span class="txt">Aspirin</span><div class="ans"><b>"Stay off it until the bloods. Then we decide."</b><div class="ts">Recording 09:15</div></div></div>
+            <div class="q"><span class="n">5</span><span class="txt">All three pressure medicines</span><div class="carry">Not answered. Carried to the six-week visit.</div></div>
+            <div class="q"><span class="n">6</span><span class="txt">Cholesterol check</span><div class="ans"><b>"Add it to the bloods on the 29th."</b><div class="ts">Recording 11:02</div></div></div>
+          </div>
+
+          <div class="sec">Changes to confirm</div>
+          <div class="card">
+            <div class="prop"><b>Furosemide 20 mg to 10 mg, from Friday</b><span>Proposal from the recording at 04:30. Confirm, or wait for the label.</span><div class="btns"><button class="on" onclick="toast('Confirmed. Pa\'s card and Siti\'s list updated for Friday.')">Confirm</button><button>Wait for label</button></div></div>
+            <div class="prop"><b>Aspirin stays stopped</b><span>Until the 29 Sep bloods.</span><div class="btns"><button class="on">Confirm</button></div></div>
+            <div class="prop"><b>Blood test, 29 Sep, fasting; add cholesterol</b><span>Put on the spine. Letter to request.</span><div class="btns"><button class="on">Confirm</button></div></div>
+            <div class="prop"><b>Follow-up in six weeks</b><span>Suggested Thu 30 Oct. Draft the WhatsApp to the clinic?</span><div class="btns"><button class="on">Draft</button><button>Later</button></div></div>
+          </div>
+
+          <div class="sec">Pa's new memo</div>
+          <div class="card"><div class="memo"><q>"From Friday I take half a water pill.<br>Monday 29 September, blood test. No food after midnight.<br>No aspirin for now.<br>Every morning I stand on the scale."</q></div><div class="why">In his words, recorded on the way home. One idea per line. This is what the nudges will quote.</div></div>
+
+          <div class="sec">Reminders created</div>
+          <div class="card glass"><ul class="list rem"><li><span class="dot g"></span>Friday: new dose on the morning card. Siti's list updated.</li><li><span class="dot g"></span>28 Sep, 6 pm: nothing to eat after midnight.</li><li><span class="dot g"></span>29 Sep: blood test. Letter requested.</li><li><span class="dot g"></span>Daily: weigh before breakfast, one tap.</li><li><span class="dot w"></span>Six weeks: carried question about the three pressure medicines goes on the next memo.</li></ul></div>
+        </div>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="head">What Pa gets: three cards</div>
+      <div class="phone"><div class="screen pa">
+        <div class="status"><b>Wednesday, 6 pm</b><span>Voice note too</span></div>
+        <div class="pacard"><div class="lab">Tomorrow</div><div class="t">Dr Tan, 10 in the morning</div><div class="s">Mei will pick you up at 9.<br>Bring your blood pressure book.<br>No food after 12 midnight tonight. You have a blood test tomorrow. Water is OK.</div><div class="pill plum" onclick="toast('Good. See you tomorrow.')">OK</div></div>
+
+        <div class="status" style="margin-top:22px"><b>Thursday, 9:40</b><span>In the car</span></div>
+        <div class="pacard"><div class="lab">To ask Dr Tan</div><ol><li>Is the water pill bad for my kidneys?</li><li>I feel dizzy when I stand up. Is the water pill too strong?</li><li>My blood pressure is high in the morning. Is that OK?</li><li>When can I take the aspirin again?</li></ol><div class="row2"><div class="pill" onclick="toast('Reading them out in Hokkien.')">Hear them</div><div class="pill" onclick="toast('Big print, to show on the table.')">Show the doctor</div></div><div class="why">Ash will ask two more questions. You do not need to remember these. The card is here for you.</div></div>
+
+        <div class="status" style="margin-top:22px"><b>Thursday, 2:15</b><span>Home</span></div>
+        <div class="pacard"><div class="lab">What Dr Tan said</div><div class="t">From Friday, take half a water pill</div><div class="s">Half a tablet, not a whole one.<br>Blood test on Monday 29 September. No food after midnight the night before.<br>Do not take the aspirin for now.<br>Every morning, stand on the scale.<br>See Dr Tan again in six weeks. Ash will book it.</div><div class="row2"><div class="pill" onclick="toast('Playing, 25 seconds.')">Hear it</div><div class="pill plum" onclick="toast('Good. Friday\'s card will show the new dose.')">Got it</div></div><div class="why">From the recording. Ash confirmed the new dose.</div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="key">
+    <b>How the memo is built.</b> "Since last time" is the State diff between the last visit and today: readings, feeling taps, results, adherence, weight, and anything the family reported. Questions come from six sources, each shown: results, feeling taps, readings, family reports, the polypharmacy review, and gaps in the record; they are ranked by what changed most, and every question has a clinician wording and a patient wording. "Worth knowing" comes from the self-search jobs, allowlisted sources only, checked against his actual medicines and packs, and always phrased as a question for the doctor. After the visit, each question is closed with the sentence from the recording at its timestamp; unanswered ones carry forward; changes are proposals until confirmed or a label arrives; and the new memo in his words becomes what the nudges quote until the next visit.
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+function tab(i,b){document.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.v').forEach(function(v,k){v.classList.toggle('on',k===i)});document.querySelector('.screen').scrollTop=0}
+var pa=false;function togpa(){pa=!pa;document.querySelectorAll('#qs .q').forEach(function(q){q.classList.toggle('showpa',pa)});document.querySelector('.tog').textContent=pa?"Show clinician wording":"Show in Pa's words"}
+var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(function(){t.style.display='none'},2600)}
+</script>
+</body>
+</html>

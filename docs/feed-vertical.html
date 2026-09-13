@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — the vertical feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--paper:rgba(255,255,255,.92)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.page{max-width:1100px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.wrap{display:grid;grid-template-columns:400px 1fr;gap:40px;margin-top:28px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:820px}
+.feed{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none}
+.feed::-webkit-scrollbar{display:none}
+.slide{height:820px;scroll-snap-align:start;scroll-snap-stop:always;position:relative;padding:60px 22px 110px;display:flex;flex-direction:column;justify-content:flex-end}
+.slide.s1{background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF)}
+.slide.s2{background:linear-gradient(160deg,#F7E7DA,#F1DCE6 60%,#E6DDF1)}
+.slide.s3{background:linear-gradient(160deg,#E3E7F3,#EBE3F0 60%,#F3E6E0)}
+.slide.s4{background:linear-gradient(160deg,#DDE9E1,#E9E2F1 60%,#F3E6E0)}
+.slide.s5{background:linear-gradient(160deg,#E9E2F1,#F4E4EA 60%,#DDE9E1)}
+.slide.gate{background:#F5F1F4;justify-content:center;align-items:center;text-align:center}
+.slide::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 15%,rgba(255,255,255,.7),transparent 55%);pointer-events:none}
+.slide>*{position:relative}
+.top{position:absolute;left:22px;right:22px;top:20px;display:flex;justify-content:space-between;font-size:13px;color:var(--soft)}
+.top b{font-weight:500;color:var(--ink)}
+.kind{font-size:13px;color:var(--soft);margin-bottom:8px}
+.scene{position:absolute;left:22px;right:22px;top:70px;height:300px;border-radius:24px;overflow:hidden}
+.scene i{position:absolute;border-radius:50%;background:rgba(255,255,255,.55)}
+.scene i:nth-child(1){width:220px;height:220px;right:-60px;top:-70px}
+.scene i:nth-child(2){width:120px;height:120px;left:20px;bottom:-30px;background:rgba(78,58,120,.12)}
+.scene .num{position:absolute;left:24px;bottom:22px;font-size:64px;font-weight:500;line-height:1}
+.scene .num small{display:block;font-size:16px;font-weight:400;color:var(--soft);margin-top:4px}
+.scene .avatar{position:absolute;left:24px;top:24px;width:44px;height:44px;border-radius:50%;background:var(--plum);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:500}
+.play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:76px;height:76px;border-radius:50%;background:var(--paper);box-shadow:0 10px 30px rgba(60,40,80,.18)}
+.play::after{content:"";position:absolute;left:52%;top:50%;transform:translate(-50%,-50%);border-left:24px solid var(--plum);border-top:14px solid transparent;border-bottom:14px solid transparent}
+.dur{position:absolute;right:16px;bottom:14px;background:var(--paper);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:500}
+.t{font-size:28px;font-weight:500;line-height:1.15}
+.b{font-size:19px;color:var(--ink);margin-top:10px;line-height:1.45}
+.cap{font-size:19px;line-height:1.45;margin-top:10px;min-height:56px;color:var(--plum)}
+.why{font-size:14px;color:var(--soft);margin-top:14px;padding-top:10px;border-top:1px solid rgba(43,39,51,.12);line-height:1.4}
+.act{position:absolute;right:14px;bottom:110px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.act button{width:58px;height:58px;border-radius:50%;background:var(--paper);box-shadow:0 8px 24px rgba(60,40,80,.12);display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:11px;color:var(--plum);font-weight:500;line-height:1.1}
+.act button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:3px}
+.one{position:absolute;left:22px;right:88px;bottom:34px}
+.one .pill{height:54px;border-radius:999px;background:var(--plum);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:500;box-shadow:0 8px 24px rgba(78,58,120,.3)}
+.one .pill.soft{background:var(--paper);color:var(--ink)}
+.one .pill.done{background:#E6F0E9;color:#2F6247}
+.hint{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-size:12px;color:var(--soft)}
+.gate .t{font-size:26px}
+.gate .b{font-size:18px;color:var(--soft)}
+.gate .pill{height:54px;width:220px;margin:18px auto 0;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:500;background:var(--paper);box-shadow:0 8px 24px rgba(60,40,80,.1)}
+.gate .pill.plum{background:var(--plum);color:#fff}
+.side{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 26px;position:sticky;top:24px}
+.side h2{font-size:16px;font-weight:500}
+.side p{font-size:14px;color:var(--soft);line-height:1.55;margin-top:6px}
+.side h3{font-size:13px;font-weight:500;margin-top:18px}
+.side ul{list-style:none;margin-top:6px}
+.side li{font-size:14px;line-height:1.55;padding:4px 0 4px 14px;position:relative}
+.side li::before{content:"";position:absolute;left:0;top:12px;width:5px;height:5px;border-radius:50%;background:var(--plum)}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#2B2733;color:#fff;border-radius:16px;padding:12px 18px;font-size:14px;display:none;z-index:9;max-width:420px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 style="display:flex;align-items:center;gap:10px"><svg width="30" height="30" viewBox="0 0 200 200" aria-label="Nura" style="vertical-align:middle"><defs><linearGradient id="nuraAura" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#B9A6E0"/><stop offset="1" stop-color="#F0C9DA"/></linearGradient></defs><path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round"/><path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#nuraAura)" stroke-width="20" stroke-linecap="round"/><circle cx="100" cy="112" r="12" fill="#4E3A78"/></svg>The feed, one screen at a time</h1>
+  <p class="lede">TikTok's shape, without TikTok's appetite. One card fills the screen. Swipe up for the next. Each one speaks when it arrives. Today's cards come first; after them, a gentle gate; after that, as much as he wants, all still about him.</p>
+
+  <div class="wrap">
+    <div class="phone"><div class="screen"><div class="feed" id="feed"></div><div class="hint">Swipe up for the next one</div></div></div>
+
+    <aside class="side">
+      <h2>How this stays right for him</h2>
+      <p>The interaction is the simplest one on any phone: one thing, then swipe up. That's why it suits an older person better than a list. What changes is the supply.</p>
+      <h3>Order of supply</h3>
+      <ul>
+        <li><b>Now</b> — the tablet, the reading, the visit. Always first.</li>
+        <li><b>Today</b> — one or two cards made for him today, from his own data and allowed sources.</li>
+        <li><b>The gate</b> — "That is all that is new. Keep going?" One tap to continue.</li>
+        <li><b>His own story</b> — recall cards: what Dr Tan said, how his sugar has changed, the walk on Sunday, the grandkids at the park.</li>
+        <li><b>Learning</b> — short explainers about his conditions and tablets, from allowed sources, in his language. Endless, evergreen, never news.</li>
+      </ul>
+      <h3>What it never does</h3>
+      <ul>
+        <li>Autoplay the next card. Each one waits for him.</li>
+        <li>Show anything not about him, or from a source not on the list.</li>
+        <li>Count, badge, or reward. No "you watched 12".</li>
+        <li>Put a doctor question or a safety notice in front of him. Those go to Ash.</li>
+        <li>Optimise for time in the feed. Opens of the tablet card matter; minutes do not.</li>
+      </ul>
+      <h3>For Ash and for people managing their own health</h3>
+      <p>The same vertical feed with no gate, denser cards, sources on every one, and the doctor questions inline. Genuinely endless, because their appetite is different.</p>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var CARDS=[
+ {s:'s1',kind:'Now',scene:'now',t:'Your blood pressure tablet',b:'Take one with breakfast. You have 12 left.',why:'',action:'Taken',cap:''},
+ {s:'s3',kind:'For you today',scene:'clip',dur:'20 seconds',t:'Your kidney test, in simple words',b:'',caps:['Pa, your kidney test came back on 9 September.','It is a little higher than in June.','It is not a worry. The new water pill can do this.','Ash will ask Dr Tan about it on Thursday.'],why:'You are seeing this because a new test came from Gleneagles on 9 September.'},
+ {s:'s2',kind:'For you today',scene:'clip',dur:'30 seconds',t:'Water pill and bananas',b:'A heart doctor talks about the water pill and bananas. We kept only the part that matters for you.',caps:['The water pill takes a body salt away. Doctors call it potassium.','A banana most days puts it back.','Do not buy potassium tablets. Only if your doctor says.'],why:'You are seeing this because you started the water pill on 1 September. The doctor is from Mount Elizabeth.'},
+ {s:'gate'},
+ {s:'s4',kind:'Your story',scene:'num',num:'6.8',small:'Your sugar test, June',t:'Your sugar is better than in March',b:'In June it was 6.8. In March it was 7.4. Lower is better. Your next test is in December.',why:'This is from your own tests at the polyclinic.'},
+ {s:'s5',kind:'Your story',scene:'family',t:'The grandkids at the park',b:'Mei sent this on Monday. She said your walk was a good one.',why:'This is from Mei in the family group.',action:'Send a thumbs up',soft:true},
+ {s:'s3',kind:'Your story',scene:'clip',dur:'25 seconds',t:'What Dr Tan said on 1 September',b:'',caps:['He started the water pill for your swollen legs.','Take it in the morning. Not after 2 in the afternoon.','Eat a banana most days.','Blood test again in a few weeks.'],why:'This is from the recording Ash made at the clinic, with Dr Tan\'s permission.'},
+ {s:'s1',kind:'Learning',scene:'clip',dur:'20 seconds',t:'Why your blood pressure is higher in the morning',b:'',caps:['Many people have higher blood pressure in the morning.','It is normal for the body to wake up this way.','Dr Tan will look at your morning numbers on Thursday.'],why:'This is from the Singapore Heart Foundation. It is not a doctor\'s advice.'},
+ {s:'s2',kind:'Learning',scene:'clip',dur:'20 seconds',t:'Chicken rice or fish soup at the kopitiam',b:'',caps:['Both have less salt than nasi lemak.','Ask for no extra soy sauce.','A small change at lunch helps your blood pressure.'],why:'This is from the Ministry of Health food pages.'},
+ {s:'s4',kind:'Learning',scene:'clip',dur:'20 seconds',t:'What the sugar tablet does',b:'',caps:['The sugar tablet helps your body use sugar from food.','Take it with dinner, or it can upset your stomach.','On fasting days, do not take it.'],why:'This is from the Diabetes Society. It is not a doctor\'s advice.'}
+];
+var EVERGREEN=[
+ {s:'s5',kind:'Learning',scene:'clip',dur:'20 seconds',t:'Why walking after dinner helps',b:'',caps:['A short walk after dinner helps your sugar and your blood pressure.','Twenty minutes is enough.','You said you would do this. You have done it 6 days out of 7.'],why:'This is from the Ministry of Health. The last line is from your own words.'},
+ {s:'s3',kind:'Learning',scene:'clip',dur:'20 seconds',t:'Standing up slowly',b:'',caps:['With the water pill, stand up slowly.','Sit on the edge of the bed for a moment first.','This stops the dizzy feeling.'],why:'This is from the Heart Foundation, because you started the water pill.'},
+ {s:'s1',kind:'Your story',scene:'num',num:'41',small:'days with every tablet taken',t:'Forty-one days',b:'Every tablet, every day, since 5 August. This number only goes up.',why:'This is from your own taps.'},
+ {s:'s2',kind:'Learning',scene:'clip',dur:'20 seconds',t:'What the cholesterol tablet does',b:'',caps:['The cholesterol tablet keeps fat from building up in your blood vessels.','Take it at bedtime.','Tell Ash if your muscles ache.'],why:'This is from the Heart Foundation. It is not a doctor\'s advice.'}
+];
+var feed=document.getElementById('feed'); var n=0;
+function icon(k){return {hear:'<svg viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>',ask:'<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></svg>',send:'<svg viewBox="0 0 24 24"><path d="M4 20l2-5a8 8 0 1 1 3 3z"/></svg>',no:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>'}[k]}
+function slide(c){
+  var d=document.createElement('section'); d.className='slide '+c.s; n++;
+  if(c.s==='gate'){d.innerHTML='<div class="t">That is all that is new today.</div><div class="b">Would you like to keep going? The next ones are about you and your health, not news.</div><div class="pill plum" onclick="gateGo(this)">Keep going</div><div class="pill" onclick="toast(\'Good. See you tomorrow.\')">That is enough</div>'; return d}
+  var scene='';
+  if(c.scene==='clip')scene='<div class="scene"><i></i><i></i><div class="play" onclick="playCaps(this)"></div><div class="dur">'+c.dur+'</div></div>';
+  else if(c.scene==='num')scene='<div class="scene"><i></i><i></i><div class="num">'+c.num+'<small>'+c.small+'</small></div></div>';
+  else if(c.scene==='family')scene='<div class="scene"><i></i><i></i><div class="avatar">M</div></div>';
+  else if(c.scene==='now')scene='<div class="scene"><i></i><i></i><div class="num" style="font-size:44px">12<small>tablets left</small></div></div>';
+  var caps=c.caps?'<div class="cap" data-caps=\''+JSON.stringify(c.caps).replace(/'/g,'&#39;')+'\'>Tap play to hear it in Hokkien.</div>':'';
+  var act=c.action?'<div class="one"><div class="pill'+(c.soft?' soft':'')+'" onclick="done(this)">'+c.action+'</div></div>':'';
+  d.innerHTML='<div class="top"><b>'+c.kind+'</b><span>'+(n)+'</span></div>'+scene+'<div class="t">'+c.t+'</div>'+(c.b?'<div class="b">'+c.b+'</div>':'')+caps+(c.why?'<div class="why">'+c.why+'</div>':'')+
+   '<div class="act"><button onclick="hear(this)">'+icon('hear')+'Hear</button><button onclick="toast(\'Ask me anything about this.\')">'+icon('ask')+'Ask</button><button onclick="toast(\'Sent to the family group.\')">'+icon('send')+'Family</button><button onclick="toast(\'OK. I will not show this kind again.\')">'+icon('no')+'Not for me</button></div>'+act;
+  return d;
+}
+CARDS.forEach(function(c){feed.appendChild(slide(c))});
+var ev=0;
+feed.addEventListener('scroll',function(){ if(feed.scrollTop+feed.clientHeight>=feed.scrollHeight-40){ for(var i=0;i<2;i++){feed.appendChild(slide(EVERGREEN[ev%EVERGREEN.length])); ev++} } });
+function gateGo(b){toast('OK. These are about you.'); feed.scrollBy({top:820,behavior:'smooth'})}
+function done(b){b.classList.add('done'); b.textContent=b.textContent==='Taken'?'Taken at 7:52':'Sent'; toast(b.textContent==='Sent'?'Mei will see it.':'Ash and Siti can see this. Well done.')}
+function playCaps(p){var cap=p.closest('.slide').querySelector('.cap'); if(!cap)return; var lines=JSON.parse(cap.dataset.caps); cap.textContent=''; lines.forEach(function(l,i){setTimeout(function(){cap.textContent=l},i*1800)}); setTimeout(function(){cap.textContent=lines.join(' ')},lines.length*1800)}
+function hear(b){var p=b.closest('.slide').querySelector('.play'); if(p)playCaps(p); else toast('Reading it to you in Hokkien.')}
+var tt;function toast(m){var t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(tt);tt=setTimeout(function(){t.style.display='none'},2400)}
+</script>
+</body>
+</html>

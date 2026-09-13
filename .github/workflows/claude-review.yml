@@ -1,0 +1,25 @@
+name: Review agent
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Safety and plain-words review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Review this pull request for Nura. Run the clinical-safety-reviewer subagent on the diff, and the plain-words-reviewer on every patient-facing string that changed.
+            Post one review comment with both reports: each check as pass or fail with file and line, and the rewritten lines for any string that failed.
+            If any safety check fails, request changes. If the PR touches backend/app/keys, consent, audit, medicines, reasoning, safety, WhatsApp outbound or a migration, add the label risk:high if it is missing.
+          claude_args: "--max-turns 30 --allowedTools Read,Glob,Grep,Bash(git:*)"
