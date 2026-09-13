@@ -1,11 +1,11 @@
 # Paths that never auto-merge and always need a human review.
-/.github/            @OWNER
-/.claude/            @OWNER
-/CLAUDE.md           @OWNER
-/backend/app/keys/   @OWNER
-/backend/app/consent/ @OWNER
-/backend/app/audit/  @OWNER
-/backend/app/safety/ @OWNER
-/backend/app/reasoning/medicines/ @OWNER
-/backend/app/channels/whatsapp/outbound/ @OWNER
-/backend/alembic/versions/ @OWNER
+/.github/            @ashfrnndz21
+/.claude/            @ashfrnndz21
+/CLAUDE.md           @ashfrnndz21
+/backend/app/keys/   @ashfrnndz21
+/backend/app/consent/ @ashfrnndz21
+/backend/app/audit/  @ashfrnndz21
+/backend/app/safety/ @ashfrnndz21
+/backend/app/reasoning/medicines/ @ashfrnndz21
+/backend/app/channels/whatsapp/outbound/ @ashfrnndz21
+/backend/alembic/versions/ @ashfrnndz21
