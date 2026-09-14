@@ -883,6 +883,8 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
     ("PUT", f"{P}/emergency-card/insurer"): "sets his insurer on the typer's yes; returns it",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
+    ("POST", f"{P}/push-subscriptions"): "keeps this phone for his reminders; returns its id",
+    ("DELETE", f"{P}/push-subscriptions"): "stops reminders on this phone; returns nothing",
     ("POST", f"{P}/feelings/{{tap_id}}/answer"): "answers a tap; returns the note it wrote",
     ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
     ("POST", f"{P}/nudges/{{nudge_id}}/response"): "writes what he did with a nudge",

@@ -1029,4 +1029,6 @@ export interface CardClipOut {
 export interface DeploymentOut {
   region: "SG" | "MY";
   demo: boolean;
+  /** The Web Push key the home-screen app subscribes with; null when there is no Web Push. */
+  push_key?: string | null;
 }
