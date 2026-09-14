@@ -51,10 +51,16 @@
   }
 }
 
-.feed-card,
+.feed-card {
+  height: 100%;
+  height: 100cqh;
+}
 .feed-end {
   min-height: 100%;
   min-height: 100cqh;
+}
+.feed-card,
+.feed-end {
   scroll-snap-align: start;
   scroll-snap-stop: always; /* one card at a time, never flung past */
   padding: var(--space-2) var(--space-3);
@@ -69,6 +75,50 @@
 }
 .feed-end {
   justify-content: center;
+}
+
+/* The card's tile never outgrows the card: a column of the lines, then the buttons. */
+.feed-card > .tile {
+  max-height: 100%;
+  min-height: 0;
+}
+
+/* The lines. When they are taller than the space above the buttons they scroll here, inside
+   the card, and a soft shadow at the edge says there is more. The shadow is this region's own
+   background — painted behind the text, never over it (the "scrolling shadows" technique:
+   covers that move with the content hide it at either end). A scroll that reaches the end
+   carries on to the pager, so a swipe still moves to the next card. */
+.feed-body {
+  --cover: var(--white);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  outline: none;
+  background:
+    linear-gradient(var(--cover) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), var(--cover) 70%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(78, 58, 120, 0.2), rgba(78, 58, 120, 0)) center top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(78, 58, 120, 0.28), rgba(78, 58, 120, 0)) center bottom / 100% 14px no-repeat scroll;
+}
+.tile.glass .feed-body {
+  --cover: rgba(255, 255, 255, 0.8);
+}
+.feed-body:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+/* The one action and the side actions: after the lines, in normal flow. */
+.feed-controls {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .feed-section {
@@ -116,25 +166,13 @@
   vertical-align: middle;
 }
 
-/* The four side actions: always visible, each a word beside its icon, each a full target.
-   On a card taller than the screen (a learning card at 20px), they stay pinned to the bottom
-   of the pager while its lines scroll under them, so "Not for me" is never below the fold. */
+/* The four side actions: always visible, each a word beside its icon, each a full target
+   (56px in the patient's density — on a short phone the lines scroll, the buttons never
+   shrink). The pager ends above the tab bar, so the tab bar never covers them. */
 .feed-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-1);
-  margin: var(--space-1) calc(-1 * var(--space-1)) 0;
-  padding: var(--space-1);
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  border-radius: var(--radius-tile);
-  background: var(--white);
-}
-.tile.glass .feed-actions {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
 }
 .feed-actions.one {
   grid-template-columns: 1fr;

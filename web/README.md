@@ -54,8 +54,7 @@ is still on the first card; once he is reading on, nothing moves under his finge
 **A card is the backend's.** Headline, body, the boundary an inferring card ends on (shown
 apart, last), the why line, the spoken twin, the State id (`data-state-id`); the catalogue
 only names the section and the buttons. A type the client does not know is shown as its own
-lines. Every card has four visible buttons — *Hear*, *Ask*, *Family*, *Not for me* — 56px and
-more, pinned to the bottom of the screen on a card taller than it; the gate keeps *Hear* and
+lines. Every card has four visible buttons — *Hear*, *Ask*, *Family*, *Not for me* — 56px and more, below the card's lines in normal flow: a card taller than the space above them scrolls its lines inside the card, under a scroll shadow painted behind the text, so nothing is ever drawn over a line; the gate keeps *Hear* and
 its one action, *Keep going*. The now card's one action goes to Today, where *Taken* is and
 where the backend says which dose is due. *Not for me* posts `dismissed` (E21's engagement
 kind; for the owner the backend then holds that kind of card for the day). *Family* posts a

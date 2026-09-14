@@ -306,3 +306,18 @@ export async function expireEveryKeptPage(page: Page): Promise<number> {
       }),
   );
 }
+
+/** A visit with Dr Tan two days from the frozen Monday, written down on Pa's own yes (E03):
+ *  the feed then has a visit card for the week. */
+export async function seedVisit(request: APIRequestContext, token: string, profileId: string, at = "2026-09-16T09:00:00+08:00"): Promise<void> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const provider = await request.post(`${API}/profiles/${profileId}/providers`, { headers, data: { name: "Dr Tan", kind: "doctor" } });
+  if (provider.status() !== 201) throw new Error(`provider: ${provider.status()} ${await provider.text()}`);
+  const provider_id = ((await provider.json()) as { provider_id: string }).provider_id;
+  const purpose = "blood pressure review";
+  const yes = await request.post(`${API}/profiles/${profileId}/confirmations`, { headers, data: { subject: "appointment", provider_id, scheduled_at: at, purpose } });
+  if (yes.status() !== 201) throw new Error(`yes: ${yes.status()} ${await yes.text()}`);
+  const confirmation_id = ((await yes.json()) as { confirmation_id: string }).confirmation_id;
+  const visit = await request.post(`${API}/profiles/${profileId}/appointments`, { headers, data: { provider_id, scheduled_at: at, purpose, confirmation_id } });
+  if (visit.status() !== 201) throw new Error(`visit: ${visit.status()} ${await visit.text()}`);
+}

@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
 import {
   API,
@@ -10,6 +10,7 @@ import {
   freshPhone,
   medicinesInIndexedDb,
   seedFeed,
+  seedVisit,
   seedWarfarinLabel,
   setBackendClock,
   shotAs,
@@ -465,3 +466,73 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   expect(await medicinesInIndexedDb(page)).toEqual([]);
   await context.setOffline(false);
 });
+
+/** Nothing is ever drawn over a line. At the centre of every line of the card — scrolled to
+ *  inside the card's own region when it is below the fold — the element the page hits is that
+ *  line: never a button, the tab bar or another card. After the region is scrolled to its end
+ *  the last boundary line is hit too. Every button is hit at its own centre, clear of the tab
+ *  bar, and (patient density) at least 56 by 56. */
+async function everyLineReadable(card: Locator): Promise<string[]> {
+  return card.evaluate(async (article) => {
+    const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    const body = article.querySelector<HTMLElement>(".feed-body")!;
+    const problems: string[] = [];
+    const hit = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return at !== null && (at === element || element.contains(at));
+    };
+    const lines = [...body.querySelectorAll<HTMLElement>("h2, p")];
+    if (lines.length === 0) problems.push("no lines");
+    body.scrollTop = 0;
+    await frame();
+    for (const line of lines) {
+      const region = body.getBoundingClientRect();
+      const box = line.getBoundingClientRect();
+      if (box.bottom > region.bottom) body.scrollTop += box.bottom - region.bottom + 2;
+      else if (box.top < region.top) body.scrollTop -= region.top - box.top + 2;
+      await frame();
+      if (!hit(line)) problems.push(`covered: ${line.textContent}`);
+    }
+    body.scrollTop = body.scrollHeight;
+    await frame();
+    const lastBoundary = body.querySelector<HTMLElement>(".boundary p:last-child");
+    if (lastBoundary && !hit(lastBoundary)) problems.push(`the last boundary line is covered at the end: ${lastBoundary.textContent}`);
+    if (!hit(lines.at(-1)!)) problems.push(`the last line is covered at the end: ${lines.at(-1)!.textContent}`);
+    const bar = document.querySelector("nav.tabbar")!.getBoundingClientRect();
+    for (const button of article.querySelectorAll<HTMLElement>(".feed-controls button")) {
+      const box = button.getBoundingClientRect();
+      if (box.bottom > bar.top) problems.push(`under the tab bar: ${button.textContent}`);
+      if (box.height < 56 || box.width < 56) problems.push(`smaller than 56: ${button.textContent}`);
+      if (!hit(button)) problems.push(`button covered: ${button.textContent}`);
+    }
+    return problems;
+  });
+}
+
+for (const [label, viewport] of [
+  ["Pixel 5", null],
+  ["a small phone, 360 by 640", { width: 360, height: 640 }],
+] as const) {
+  test.describe(`nothing covers a line — ${label}`, () => {
+    if (viewport) test.use({ viewport });
+
+    test(`a visit, a reorder and a learning card: every line readable, the boundary last and readable, the buttons clear of the tab bar (${label})`, async ({ page, request }) => {
+      const pa = await seedFeed(request);
+      await seedVisit(request, pa.token, pa.profileId);
+      await signInThroughTheApp(page, pa.phone, "Pa");
+      await expect(page.getByTestId("proud")).toBeVisible();
+      await openPager(page);
+      for (const type of ["visit", "reorder", "learning"]) {
+        await pageUntil(page, type);
+        const { index } = await onScreen(page);
+        const card = page.locator(`article.feed-card[data-index="${index}"]`);
+        expect(await everyLineReadable(card), `${type} card, ${label}`).toEqual([]);
+        if (type === "learning") {
+          await expect(card.getByTestId("boundary").locator("p").last()).toHaveText("Ask your doctor.");
+          if (viewport) await shotAs(page, "w2-feed-learning-card-small-phone-end");
+        }
+      }
+    });
+  });
+}

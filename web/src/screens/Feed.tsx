@@ -218,7 +218,12 @@ interface FeedCardProps {
 }
 
 /** One card: the section it came from, the backend's headline and lines, its boundary, its
- *  why; for the caregiver, what became of it; one action at most; the four side actions. */
+ *  why; for the caregiver, what became of it; one action at most; the four side actions.
+ *
+ *  The card is a column the height of the pager: the lines take what is left above the
+ *  buttons and scroll inside the card when they need more, and the buttons follow in normal
+ *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
+ *  readable, scrolled to if need be. */
 function FeedCard({ entry, index, view, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
@@ -243,6 +248,9 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
       aria-label={view.spoken.join(" ")}
     >
       <div class={paper ? "tile paper" : "tile glass"}>
+        {/* Every line of the card, in a region that scrolls inside the card when it is taller
+            than the space above the buttons; the buttons sit below it, never over it. */}
+        <div class="feed-body" data-testid="card-body" tabIndex={0}>
         {section && <p class="feed-section">{section}</p>}
         <h2 class="title">{view.headline}</h2>
         {!declined && (
@@ -283,6 +291,8 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
             {note === "cannotShare" && <p>{s.feed.cannotShare}</p>}
           </div>
         )}
+        </div>
+        <div class="feed-controls">
         {!declined && view.action === "keepGoing" && (
           <button type="button" class="pill plum" onClick={onKeepGoing} data-testid="keep-going">
             {s.feed.keepGoing}
@@ -297,6 +307,7 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
           {actions.map((action) => (
             <SideButton key={action} action={action} s={s} onClick={{ hear: () => onHear(view), ask: onAsk, family: onFamily, notForMe: onNotForMe }[action]} />
           ))}
+        </div>
         </div>
       </div>
     </article>
