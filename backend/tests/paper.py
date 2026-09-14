@@ -27,10 +27,56 @@ year of birth and his sex on the header, for the lab trend (E09-01)."""
 WARFARIN_LABEL = "warfarin-label-2024-03-12"
 """A dispensing label for warfarin 5 mg, dispensed 12 March 2024, instructions in Malay."""
 
+CLINIC_SLIP = "clinic-slip-2026-09-10"
+"""A clinic slip in Dr Tan's hand, 10 September 2026: amlodipine, the frequency unreadable."""
+
+HANDWRITTEN_PRESCRIPTION = "handwritten-prescription-2026-08-28"
+"""A handwritten prescription for metformin, 28 August 2026: drug, dose and frequency."""
+
+DISCHARGE_LETTER = "discharge-letter-2026-08-20"
+"""A two-page hospital discharge letter as a PDF from a portal, 20 August 2026."""
+
+RECEIPT = "receipt-2026-09-01"
+"""A shop receipt as a PDF, forwarded by mistake: not a health paper."""
+
+BP_CUFF = "bp-cuff-2026-09-14"
+"""A blood pressure machine's screen, 14 September 2026 at 7.42: 138/84, pulse 72."""
+
+GLUCOMETER = "glucometer-2026-09-14"
+"""A glucometer's screen, 14 September 2026 at 6.55: 6.8 mmol/L."""
+
+PDF_HEADER = b"%PDF-1.4\n"
+
 
 def placeholder_png(label: str) -> bytes:
     """The bytes that stand in for one redacted photo. Same label, same bytes, same digest."""
     return PNG_SIGNATURE + b"nura-paper-placeholder:" + label.encode("ascii") + b"\n"
+
+
+def placeholder_pdf(label: str) -> bytes:
+    """The bytes that stand in for one redacted PDF: a PDF header and a label."""
+    return PDF_HEADER + b"nura-paper-placeholder:" + label.encode("ascii") + b"\n"
+
+
+def placeholder_of(label: str) -> bytes:
+    """The placeholder for a paper, by the format its fixture names (a photo unless a PDF)."""
+    path = PAPER / f"{label}.json"
+    kind = json.loads(path.read_text()).get("format", "png") if path.exists() else "png"
+    return placeholder_pdf(label) if kind == "pdf" else placeholder_png(label)
+
+
+def papers() -> list[str]:
+    """Every paper fixture's label — the files the extractor answers from, not the labelled
+    answers beside them (`*.expected.json`)."""
+    return sorted(
+        path.stem for path in PAPER.glob("*.json") if not path.name.endswith(".expected.json")
+    )
+
+
+def expected(label: str) -> dict[str, Any]:
+    """What the paper says, labelled by hand: what the accuracy harness measures against."""
+    found: dict[str, Any] = json.loads((PAPER / f"{label}.expected.json").read_text())
+    return found
 
 
 def fixture(label: str) -> dict[str, Any]:

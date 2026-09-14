@@ -14,6 +14,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
+from app.channels.strings import (
+    COULD_NOT_HEAR,
+    COULD_NOT_READ,
+    NOT_A_HEALTH_PAPER,
+    NOT_A_MACHINE_SCREEN,
+)
 from app.consent.models import (
     DOCUMENTED_BASES,
     Consent,
@@ -41,10 +47,18 @@ from app.family.thread import Digest, DigestEntry
 from app.family.trail import TrailDay, TrailLine
 from app.identity.doors import Claimable, Doors, Evidence
 from app.identity.models import Person, Profile, Stewardship
-from app.ingestion.extract import DocumentKind
-from app.ingestion.models import FieldState, ReviewCard, ReviewField
+from app.ingestion.documents import MAX_PDF_BYTES
+from app.ingestion.extract import DOCUMENT_HINTS, PHOTO_HINTS, DocumentKind
+from app.ingestion.models import (
+    DocumentSource,
+    FieldState,
+    NoteKind,
+    ReviewCard,
+    ReviewField,
+)
+from app.ingestion.notes import MAX_VOICE_BYTES, NoteView
 from app.ingestion.photos import MAX_PHOTO_BYTES
-from app.ingestion.review import Decision
+from app.ingestion.review import Decision, Notice, notice_of
 from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
@@ -71,7 +85,7 @@ from app.medicines.service import (
 )
 from app.medicines.service import Outcome as MedicineOutcome
 from app.medicines.story import Story
-from app.memory.models import ArtifactKind, ConfidenceState, Event, Fact
+from app.memory.models import LABEL_LENGTH, ArtifactKind, ConfidenceState, Event, Fact
 from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
@@ -1199,26 +1213,80 @@ class StateOut(BaseModel):
 # --- capture: photos and review cards ----------------------------------------------------
 
 
-class PhotoIn(BaseModel):
-    """A photo of a page, as the app sends it: the bytes in base64, what kind of image, and
-    when it was taken. The bytes go to the region's object store; nothing of them is kept
-    on any row."""
+def _is_base64(value: str) -> str:
+    try:
+        base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as not_base64:
+        raise ValueError("data is base64") from not_base64
+    return value
+
+
+class ScreenPhotoIn(BaseModel):
+    """A photo of a machine's screen — a blood pressure machine, a glucometer, a scale — as
+    the app sends it (E02-08): the bytes in base64, what kind of image, when it was taken."""
 
     data: str = Field(min_length=1, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
     content_type: str = Field(min_length=1, max_length=128)
     captured_at: datetime
 
-    @field_validator("data")
+    _base64 = field_validator("data")(classmethod(lambda cls, value: _is_base64(value)))
+
+    def as_bytes(self) -> bytes:
+        return base64.b64decode(self.data, validate=True)
+
+
+class PhotoIn(ScreenPhotoIn):
+    """A photo of a page, as the app sends it: the bytes in base64, what kind of image, and
+    when it was taken. The bytes go to the region's object store; nothing of them is kept
+    on any row. `document_kind` is what the person says the page is — a clinic slip, a
+    prescription written by hand (E02-02) — passed to the extractor as a hint, never taken
+    as the answer."""
+
+    document_kind: DocumentKind | None = None
+
+    @field_validator("document_kind")
     @classmethod
-    def _base64(cls, value: str) -> str:
-        try:
-            base64.b64decode(value, validate=True)
-        except (binascii.Error, ValueError) as not_base64:
-            raise ValueError("data is base64") from not_base64
+    def _a_paper(cls, value: DocumentKind | None) -> DocumentKind | None:
+        if value is not None and value not in PHOTO_HINTS:
+            raise ValueError(f"a photo of a page may be offered as one of {sorted(PHOTO_HINTS)}")
+        return value
+
+
+class ImportIn(BaseModel):
+    """A PDF from a hospital portal, an email or another app's share sheet (E02-03): the
+    bytes in base64, their content type, when it came, where from, and — if the person says
+    — what kind of paper it is, as a hint to the extractor."""
+
+    data: str = Field(min_length=1, max_length=MAX_PDF_BYTES * 4 // 3 + 4)
+    content_type: str = Field(min_length=1, max_length=128)
+    captured_at: datetime
+    source: DocumentSource
+    document_kind: DocumentKind | None = None
+
+    _base64 = field_validator("data")(classmethod(lambda cls, value: _is_base64(value)))
+
+    @field_validator("document_kind")
+    @classmethod
+    def _a_document(cls, value: DocumentKind | None) -> DocumentKind | None:
+        if value is not None and value not in DOCUMENT_HINTS:
+            raise ValueError(f"a PDF may be offered as one of {sorted(DOCUMENT_HINTS)}")
         return value
 
     def as_bytes(self) -> bytes:
         return base64.b64decode(self.data, validate=True)
+
+
+class TypedIn(BaseModel):
+    """The value a person typed into one field of an open card: what the paper says."""
+
+    value: Any
+
+    @field_validator("value")
+    @classmethod
+    def _something(cls, value: Any) -> Any:
+        if value is None:
+            raise ValueError("a typed value says what the paper says")
+        return value
 
 
 class ReviewFieldOut(BaseModel):
@@ -1233,14 +1301,31 @@ class ReviewFieldOut(BaseModel):
     unit: str | None
     confidence: float
     needs_confirm: bool
-    span: dict[str, float] | None
+    unreadable: bool
+    """Nura saw this field and could not read it: `value` is null and `prompt` asks for it."""
+    prompt: list[str] | None
+    """The lines the card shows beside a field nobody has typed yet (E02-02)."""
+    page: int | None
+    """For a PDF of several pages, the page the field was read on, counting from 1."""
+    span: dict[str, float | int] | None
     state: FieldState
     corrected_value: Any | None
+    corrected_by_person_id: uuid.UUID | None
+    """Who typed or corrected the value kept, where it is not what was read."""
     fact_id: uuid.UUID | None
 
     @classmethod
     def of(cls, field: ReviewField) -> ReviewFieldOut:
+        waiting = (
+            field.unreadable
+            and field.corrected_value is None
+            and field.state is FieldState.PROPOSED
+        )
         return cls(
+            unreadable=field.unreadable,
+            prompt=list(COULD_NOT_READ) if waiting else None,
+            page=field.page,
+            corrected_by_person_id=field.corrected_by_person_id,
             field_id=field.id,
             position=field.position,
             subject=field.subject,
@@ -1256,15 +1341,26 @@ class ReviewFieldOut(BaseModel):
         )
 
 
+NOTICE_LINES: dict[Notice, tuple[str, ...]] = {
+    Notice.NOT_A_HEALTH_PAPER: NOT_A_HEALTH_PAPER,
+    Notice.NOT_A_MACHINE_SCREEN: NOT_A_MACHINE_SCREEN,
+}
+
+
 class ReviewCardOut(BaseModel):
-    """A review card: the photo it came from, what kind of paper and its date, whether the
-    label rule guards the drug it names, its fields, and — once confirmed — by whom."""
+    """A review card: the photo or PDF it came from, what kind of paper and its date, what
+    it was offered as and where it came from, whether the label rule guards the drug it
+    names, a notice where the page is not what it was offered as, its fields, and — once
+    confirmed — by whom."""
 
     card_id: uuid.UUID
     profile_id: uuid.UUID
     artifact_id: uuid.UUID
     document_kind: DocumentKind
     document_date: date | None
+    asked_as: DocumentKind | None
+    source: DocumentSource | None
+    notice: list[str] | None
     high_risk_class: str | None
     created_at: datetime
     confirmed_at: datetime | None
@@ -1279,12 +1375,20 @@ class ReviewCardOut(BaseModel):
             artifact_id=card.artifact_id,
             document_kind=card.document_kind,
             document_date=card.document_date,
+            asked_as=card.asked_as,
+            source=card.source,
+            notice=_notice_lines(card),
             high_risk_class=card.high_risk_class,
             created_at=utc(card.created_at),
             confirmed_at=None if card.confirmed_at is None else utc(card.confirmed_at),
             confirmed_by_person_id=card.confirmed_by_person_id,
             fields=[ReviewFieldOut.of(field) for field in fields],
         )
+
+
+def _notice_lines(card: ReviewCard) -> list[str] | None:
+    notice = notice_of(card)
+    return None if notice is None else list(NOTICE_LINES[notice])
 
 
 class ReviewConfirmIn(BaseModel):
@@ -1331,10 +1435,80 @@ class FactOut(BaseModel):
 
 
 class ReviewConfirmedOut(BaseModel):
-    """What closing the card did: the card as it stands, and the facts it wrote."""
+    """What closing the card did: the card as it stands, the facts it wrote, and the event
+    it recorded — the reading off a machine's screen, the discharge a hospital letter
+    records, the visit of a clinic slip — which those facts name."""
 
     card: ReviewCardOut
     facts: list[FactOut]
+    event_id: uuid.UUID | None = None
+
+
+# --- capture: notes on an event (E02-06) -------------------------------------------------
+
+
+class EventNoteIn(BaseModel):
+    """A note on one event: a voice note or a scribble, its bytes in base64, their content
+    type, when it was made, whether it is private (the notes scope) or shared with whoever
+    holds the record, and an optional label of one short line."""
+
+    kind: NoteKind
+    data: str = Field(min_length=1, max_length=MAX_VOICE_BYTES * 4 // 3 + 4)
+    content_type: str = Field(min_length=1, max_length=128)
+    captured_at: datetime
+    private: bool = False
+    label: str | None = Field(default=None, max_length=LABEL_LENGTH * 4)
+
+    _base64 = field_validator("data")(classmethod(lambda cls, value: _is_base64(value)))
+
+    def as_bytes(self) -> bytes:
+        return base64.b64decode(self.data, validate=True)
+
+
+class TranscriptOut(BaseModel):
+    """The words the transcriber heard, how sure it was, in which language. Never a fact."""
+
+    text: str
+    confidence: float
+    language: str | None
+
+
+class EventNoteOut(BaseModel):
+    """A note as recall shows it: what it is, whose eyes it is for, its label, the artefact
+    to hear or see again (`…/notes/{note_id}/content`), and the words heard in a voice note
+    — or, for a voice note nothing was heard in, the lines that say so."""
+
+    note_id: uuid.UUID
+    event_id: uuid.UUID
+    kind: NoteKind
+    private: bool
+    label: str | None
+    artifact_id: uuid.UUID
+    content_type: str
+    transcript: TranscriptOut | None
+    notice: list[str] | None
+    written_by_person_id: uuid.UUID
+    written_at: datetime
+
+    @classmethod
+    def of(cls, view: NoteView) -> EventNoteOut:
+        note, heard = view.note, view.transcript
+        unheard = note.kind is NoteKind.VOICE and heard is None
+        return cls(
+            note_id=note.id,
+            event_id=note.event_id,
+            kind=note.kind,
+            private=note.private,
+            label=note.label,
+            artifact_id=note.artifact_id,
+            content_type=view.artifact.content_type,
+            transcript=None
+            if heard is None
+            else TranscriptOut(text=heard.text, confidence=heard.confidence, language=heard.language),
+            notice=list(COULD_NOT_HEAR) if unheard else None,
+            written_by_person_id=note.written_by_person_id,
+            written_at=utc(note.written_at),
+        )
 
 
 # --- family (E12) --------------------------------------------------------------------------

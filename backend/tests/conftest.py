@@ -39,6 +39,7 @@ from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.transcribe import FixtureTranscriber
 from app.keys import confirm  # noqa: F401
 from app.reasoning.ranges import FixtureRanges
 from app.regions import Region
@@ -47,6 +48,7 @@ from app.settings import Settings
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
 from tests.paper import PAPER
+from tests.voice_notes import VOICE
 
 WHATSAPP_SECRET = "nura-test-webhook-secret"
 """The fixed secret the fixture provider signs with in the tests; nothing real."""
@@ -147,6 +149,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         code_sender=sender,
         object_store=objects,
         extractor=FixtureExtractor(PAPER),
+        transcriber=FixtureTranscriber(VOICE, region),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),

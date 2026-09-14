@@ -1,0 +1,95 @@
+{
+  "placeholder": "discharge-letter-2026-08-20",
+  "sha256": "2b0b5558a5e22630c51a323af0d67d2ff85254320f6993fa8d00092f40a3f6bc",
+  "format": "pdf",
+  "pages": 2,
+  "note": "Redacted sample. A two-page hospital discharge letter downloaded from a hospital portal: the patient's name, IC and hospital numbers, the ward and the doctors' full names and registration numbers were removed, and the PDF is not committed; the bytes the extractor is shown are the PDF placeholder named above (tests/paper.py). Every field says the page it was read on (E02-03). The follow-up doctor's name on page 2 is read at low confidence and dotted.",
+  "document_kind": "discharge_letter",
+  "document_date": "2026-08-20",
+  "fields": [
+    {
+      "subject": "discharge",
+      "attribute": "admitted_on",
+      "value": "2026-08-16",
+      "unit": null,
+      "confidence": 0.95,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.22,
+        "x1": 0.6,
+        "y1": 0.27,
+        "page": 1
+      }
+    },
+    {
+      "subject": "discharge",
+      "attribute": "discharged_on",
+      "value": "2026-08-20",
+      "unit": null,
+      "confidence": 0.96,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.27,
+        "x1": 0.6,
+        "y1": 0.32,
+        "page": 1
+      }
+    },
+    {
+      "subject": "discharge",
+      "attribute": "reason",
+      "value": "heart failure",
+      "unit": null,
+      "confidence": 0.89,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.36,
+        "x1": 0.6,
+        "y1": 0.41,
+        "page": 1
+      }
+    },
+    {
+      "subject": "discharge",
+      "attribute": "weight_at_discharge",
+      "value": 68.5,
+      "unit": "kg",
+      "confidence": 0.91,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.18,
+        "x1": 0.6,
+        "y1": 0.23,
+        "page": 2
+      }
+    },
+    {
+      "subject": "visit",
+      "attribute": "next_visit",
+      "value": "2026-09-29",
+      "unit": null,
+      "confidence": 0.84,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.44,
+        "x1": 0.6,
+        "y1": 0.49,
+        "page": 2
+      }
+    },
+    {
+      "subject": "visit",
+      "attribute": "doctor",
+      "value": "Dr Tan",
+      "unit": null,
+      "confidence": 0.74,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.49,
+        "x1": 0.6,
+        "y1": 0.54,
+        "page": 2
+      }
+    }
+  ]
+}

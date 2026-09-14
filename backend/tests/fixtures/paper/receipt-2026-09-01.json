@@ -1,0 +1,10 @@
+{
+  "placeholder": "receipt-2026-09-01",
+  "sha256": "99a444034d675f0ec9c27b714a24b46c261d8f4fa4e2dd2b6c406cd6854680f9",
+  "format": "pdf",
+  "pages": 1,
+  "note": "Redacted sample. A shop receipt forwarded by email by mistake: the shop's name and address and the card digits were removed, and the PDF is not committed. It is not a health paper, so the extractor says so (not_health) and takes nothing off it: the card is open, with no fields, and says so in words (E02-03).",
+  "document_kind": "not_health",
+  "document_date": null,
+  "fields": []
+}
