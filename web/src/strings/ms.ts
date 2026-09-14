@@ -570,6 +570,8 @@ export const ms = {
         weight_at_discharge: "Berat anda semasa pulang",
       },
       blood_sugar: { glucose: "Nombor gula" },
+      lab_report: { lab: "Tempat darah diuji" },
+      person: { birth_year: "Tahun lahir", sex: "Lelaki atau perempuan" },
       medicine: {
         name: "Ubat itu",
         strength: "Berapa kuat ubat itu",

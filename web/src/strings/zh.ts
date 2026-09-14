@@ -570,6 +570,8 @@ export const zh = {
         weight_at_discharge: "回家时的体重",
       },
       blood_sugar: { glucose: "血糖数字" },
+      lab_report: { lab: "验血的地方" },
+      person: { birth_year: "出生年份", sex: "男或女" },
       medicine: {
         name: "这种药",
         strength: "药有多强",

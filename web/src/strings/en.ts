@@ -572,6 +572,8 @@ export const en = {
         weight_at_discharge: "Your weight when you came home",
       },
       blood_sugar: { glucose: "The sugar number" },
+      lab_report: { lab: "Where the blood was tested" },
+      person: { birth_year: "The year of birth", sex: "Male or female" },
       medicine: {
         name: "The medicine",
         strength: "How strong it is",
