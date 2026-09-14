@@ -1181,5 +1181,7 @@ export const zh = {
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
     NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 团队可以和您一起停止它。"],
+    DocumentTooLarge: "那个文件太大了，Nura 打不开。",
+    CalendarTooLarge: "那个日历文件太大了，Nura 打不开。",
   },
 } satisfies Strings;

@@ -1185,5 +1185,7 @@ export const en = {
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
     NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "The Nura team can stop it with you."],
+    DocumentTooLarge: "That file is too big for Nura.",
+    CalendarTooLarge: "That calendar file is too big for Nura.",
   },
 } satisfies Strings;

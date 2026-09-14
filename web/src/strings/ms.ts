@@ -1181,5 +1181,7 @@ export const ms = {
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
     NotStoppedInTheApp: ["Nura belum boleh hentikan ini dalam aplikasi.", "Pasukan Nura boleh hentikannya bersama anda."],
+    DocumentTooLarge: "Dokumen itu terlalu besar untuk Nura.",
+    CalendarTooLarge: "Dokumen kalendar itu terlalu besar untuk Nura.",
   },
 } satisfies Strings;
