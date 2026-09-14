@@ -46,6 +46,17 @@ event
 
 A row no rule reaches stops the upgrade rather than take a value nobody chose.
 
+Feed cards are dropped. A card (`feed_item`) is a cache rendered from State and the record,
+made again on the next read of the feed; a card composed before this revision may cite rows a
+reader of its scope may not see (a paper story citing a medicine fact, or the family's
+message). So every card is deleted, and with the cards the page cache that lists their ids
+(`feed_page`, written again on the next read) and each person's engagement with a card
+(`feed_engagement`, whose foreign key holds the card). What he did with a card is not lost:
+every engagement was also written as an ENGAGEMENT event, which stays on the record with every
+preference fact resting on it — "not for me" is a `declined` fact, which the ranking reads. A
+card he had seen may be shown once more. The downgrade does not bring cards back; the next
+read of the feed renders them.
+
 Revision ID: 0019_row_scope
 Revises: 0017_trends_routines_calendar
 Create Date: 2026-09-15
@@ -79,6 +90,13 @@ SCOPE = sa.Enum(
 )
 
 TABLES = ("artifact", "event")
+
+FEED_CACHE: tuple[str, ...] = (
+    # The engagements first: their foreign key holds the card.
+    "DELETE FROM feed_engagement",
+    "DELETE FROM feed_page",
+    "DELETE FROM feed_item",
+)
 
 _STILL_OPEN = "written_scope IS NULL"
 
@@ -157,6 +175,8 @@ def upgrade() -> None:
         _refuse_if_any(table)
         with op.batch_alter_table(table) as batch:
             batch.alter_column("written_scope", existing_type=SCOPE, nullable=False)
+    for statement in FEED_CACHE:
+        op.execute(statement)
 
 
 def downgrade() -> None:

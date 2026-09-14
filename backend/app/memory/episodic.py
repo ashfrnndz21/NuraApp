@@ -423,3 +423,25 @@ async def withheld_provenance(
             for row in rows
         ],
     )
+
+
+async def row_is_there(
+    session: AsyncSession, model: type[Artifact | Event], ident: uuid.UUID
+) -> bool:
+    """Whether a row this request wrote itself is still in its table: a yes or no, never the
+    row. For the keepers that replay a write after a rollback (`app.db.keep_on_refusal`),
+    which write the row again only if the rollback took it. Nothing a key asks for is read."""
+    return await session.get(model, ident) is not None
+
+
+async def artifact_kind_on_profile(
+    session: AsyncSession, *, context: KeyContext, artifact_id: uuid.UUID
+) -> ArtifactKind | None:
+    """The kind of an artefact on this profile, or None: all a rule on a write needs to know
+    of the artefact the write rests on (the label-photo rule, `app.safety.high_risk`),
+    whatever scope it was written under. The kind only, never the row: the write read the
+    artefact through the door a moment ago (`app.memory.semantic._check_provenance`)."""
+    artifact = await session.get(Artifact, artifact_id)
+    if artifact is None or artifact.profile_id != context.profile_id:
+        return None
+    return artifact.kind

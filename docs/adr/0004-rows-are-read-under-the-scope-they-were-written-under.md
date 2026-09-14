@@ -46,6 +46,16 @@ different kinds written under different scopes, so rows leaked across:
    exactly what they folded before.
 8. **A card cites only what its scope opens.** A story about a paper is a RECORDS card: it is
    made only for an artefact written under RECORDS, and its `why` cites the record's facts.
+9. **Cards composed before this are dropped.** 0019 deletes every `feed_item` — a cache made
+   again from State on the next read — so no card composed under the old rules keeps a
+   citation its reader may not see. With them go the page cache (`feed_page`) and each
+   engagement with a card (`feed_engagement`, whose foreign key holds the card); every
+   engagement is also an ENGAGEMENT event on the record, which stays with the preference facts
+   resting on it. A card he had seen may be shown once more.
+10. **No raw read of the three tables outside `app/memory`.** A test fails on `select(Fact)`,
+   `select(Artifact)`, `select(Event)`, a `session.get` of them, or a raw reader handed one of
+   them, anywhere else; the one exception is the safety rules' read as the system
+   (`red_flags._system_read`, ADR 0002), which returns nothing to the caller.
 
 ## Backfill (0019)
 
@@ -60,4 +70,7 @@ no rule reaches stops the upgrade. The rules are in the migration's docstring.
   fails.
 - A narrower key's read now writes one more line on the trail when it checks which
   references it may follow.
-- Feed items already stored keep what they cited when they were composed.
+- Every feed card is rendered again after the upgrade (decision 9).
+- FastAPI, Starlette and SQLAlchemy are pinned exactly (`backend/pyproject.toml`): the route
+  registry test enumerates the app's routes, and a newer FastAPI stores included routers
+  differently.

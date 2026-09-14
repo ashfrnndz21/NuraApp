@@ -494,3 +494,12 @@ async def open_disputes(
         ),
     )
     return sorted(found, key=lambda dispute: as_utc(dispute.asserted_at))
+
+
+async def fact_is_on_profile(
+    session: AsyncSession, *, context: KeyContext, fact_id: uuid.UUID
+) -> bool:
+    """Whether a fact by this id is on this profile: a yes or no, never the fact. For State,
+    checking that the fact a recompute was handed as its trigger is this profile's."""
+    fact = await session.get(Fact, fact_id)
+    return fact is not None and fact.profile_id == context.profile_id

@@ -35,7 +35,6 @@ from typing import Any
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from fastapi.routing import APIRoute
 from sqlalchemy import Connection, create_engine, inspect, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -813,19 +812,46 @@ answers with what the caller wrote."""
 
 
 def _profile_routes() -> Iterator[tuple[str, str]]:
-    from app.channels.api import create_app
+    """Every (method, path) the app serves under `/profiles/{profile_id}`, found two ways that
+    do not depend on how a FastAPI version keeps an included router: walking the routes
+    recursively through included routers and mounts, and reading the OpenAPI paths. The
+    `/api` twin of a route (`app.channels.api.API_PREFIX`) is the same route."""
+    from app.channels.api import API_PREFIX, create_app
     from tests.whatsapp_support import deployment as whatsapp_deployment
 
     settings, providers = whatsapp_deployment(Path("."))
-    for route in create_app(settings, None, providers).routes:  # type: ignore[arg-type]
-        if isinstance(route, APIRoute) and (route.path == P or route.path.startswith(P + "/")):
-            for method in sorted(route.methods):
-                yield method, route.path
+    app = create_app(settings, None, providers)  # type: ignore[arg-type]
+
+    def walk(routes: Any, prefix: str = "") -> Iterator[tuple[str, str]]:
+        for route in routes:
+            path = getattr(route, "path", "") or ""
+            methods = getattr(route, "methods", None)
+            inner = getattr(route, "routes", None)
+            if inner is None and getattr(route, "router", None) is not None:
+                inner = getattr(route.router, "routes", None)
+            if methods:
+                for method in set(methods) - {"HEAD", "OPTIONS"}:
+                    yield method, prefix + path
+            elif inner is not None:
+                yield from walk(inner, prefix + (getattr(route, "prefix", "") or path))
+
+    found = set(walk(app.routes))
+    for path, operations in app.openapi().get("paths", {}).items():
+        for method in operations:
+            if method.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+                found.add((method.upper(), path))
+    for method, path in sorted(found):
+        if path.startswith(API_PREFIX + "/"):
+            path = path[len(API_PREFIX) :]
+        if path == P or path.startswith(P + "/"):
+            yield method, path
 
 
 def test_every_profile_route_is_in_the_matrix() -> None:
     walked = {(w.method, w.path) for w in READ_ROUTES}
     routes = set(_profile_routes())
+    # An enumeration that found nothing would call every route stale: say so plainly instead.
+    assert ("GET", f"{P}/facts") in routes and len(routes) > 50, sorted(routes)
     missing = sorted(routes - walked - set(NOT_WALKED))
     assert missing == [], f"add these to READ_ROUTES (or, for a write, NOT_WALKED): {missing}"
     assert not walked & set(NOT_WALKED)
@@ -1111,6 +1137,39 @@ def test_only_the_emergency_card_reads_across_written_scopes() -> None:
     )
     assert callers == ["audit/access.py", "keys/repository.py", "safety/emergency_card.py"]
 
+
+RAW_READS = re.compile(
+    r"(?<![\w.])select\(\s*(Fact|Artifact|Event)\b"
+    r"|\.get\(\s*(Fact|Artifact|Event)\s*,"
+    r"|\bmodel\s*=\s*(Fact|Artifact|Event)\b"
+)
+APPROVED_RAW_READS = {
+    "safety/red_flags.py": (
+        "the safety rules' own read of the record as the system (`_system_read`, ADR 0002): "
+        "nothing it reads reaches the caller, only whether a flag is held back"
+    ),
+}
+
+
+def test_no_raw_read_of_the_row_scoped_tables_outside_the_approved_readers() -> None:
+    """Artefacts, events and facts are read through the doors, which narrow them by the scope
+    each row sits under; the raw reads that need no key — a keeper replaying its own write,
+    the kind of an artefact a rule looks at — live in `app/memory`, where the scope is. A raw
+    `select`, `session.get` or raw reader of the three tables anywhere else fails here."""
+    import app
+
+    root = Path(app.__file__).resolve().parent
+    found: dict[str, list[int]] = {}
+    for path in sorted(root.rglob("*.py")):
+        where = str(path.relative_to(root))
+        if where.startswith("memory/"):
+            continue
+        source = path.read_text()
+        lines = [source[: m.start()].count("\n") + 1 for m in RAW_READS.finditer(source)]
+        if lines:
+            found[where] = lines
+    assert set(found) == set(APPROVED_RAW_READS), found
+
 # --- the migration's backfill ---------------------------------------------------------------------
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -1214,8 +1273,21 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
         event("engagement", "engagement")
         assert question
 
+        # A card composed before row scope, someone's engagement with it, and the page cache.
+        card = uuid.uuid4().hex
+        _fill(connection, "feed_item", id=card, profile_id=profile)
+        _fill(connection, "feed_engagement", profile_id=profile, item_id=card, event_id=ids["visit"])
+        _fill(connection, "feed_page", profile_id=profile)
+
         with Operations.context(MigrationContext.configure(connection)):
             row_scope.upgrade()
+        # The cards are gone, to be rendered again under the new rules; the event under the
+        # engagement stays on the record.
+        for table in ("feed_item", "feed_engagement", "feed_page"):
+            assert connection.execute(text(f"SELECT count(*) FROM {table}")).scalar() == 0, table
+        assert connection.execute(
+            text("SELECT count(*) FROM event WHERE id = :id"), {"id": ids["visit"]}
+        ).scalar() == 1
         written = {
             row.id: row.written_scope
             for table in ("artifact", "event")

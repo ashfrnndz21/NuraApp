@@ -61,7 +61,7 @@ from app.memory.models import (
     EventKind,
     Fact,
 )
-from app.memory.semantic import NoSuchFact, current_facts
+from app.memory.semantic import NoSuchFact, current_facts, fact_is_on_profile
 from app.memory.working import open_episodes
 from app.safety.boundary import Surface, is_boundary_line
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, AFTER_VISIT_WINDOW, derive
@@ -354,10 +354,10 @@ async def _write_snapshot(
         raise TriggerWithoutItsFact("a recompute caused by a fact names the fact")
     if trigger is not StateTrigger.NEW_FACT and fact_id is not None:
         raise FactWithoutItsTrigger("a fact is named only by a recompute a fact caused")
-    if fact_id is not None:
-        named = await session.get(Fact, fact_id)
-        if named is None or named.profile_id != context.profile_id:
-            raise NoSuchFact("no such fact on this profile")
+    if fact_id is not None and not await fact_is_on_profile(
+        session, context=context, fact_id=fact_id
+    ):
+        raise NoSuchFact("no such fact on this profile")
 
     derived = derive(
         facts=inputs.facts,

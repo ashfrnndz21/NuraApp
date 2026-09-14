@@ -2,7 +2,18 @@
 name = "nura-backend"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["fastapi", "uvicorn[standard]", "sqlalchemy[asyncio]>=2", "alembic", "pydantic>=2", "asyncpg", "httpx"]
+# FastAPI, Starlette and SQLAlchemy are pinned exactly: a newer FastAPI stores included routers
+# differently and CI resolved one the laptops did not (PR #120). Bump them together, on purpose.
+dependencies = [
+    "fastapi==0.116.1",
+    "starlette==0.47.2",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]==2.0.43",
+    "alembic",
+    "pydantic>=2",
+    "asyncpg",
+    "httpx",
+]
 [project.optional-dependencies]
 # aiosqlite is tests only: it is how the regional stores run in memory, one database per region.
 dev = ["pytest", "pytest-asyncio", "ruff==0.16.7", "mypy", "httpx", "aiosqlite"]
