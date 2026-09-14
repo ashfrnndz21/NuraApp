@@ -13,12 +13,14 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import audited_read, audited_write, record_share
+from app.audit.models import Action, Channel
+from app.audit.trail import record
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.models import Key
-from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import DEFAULT_WINDOW, ROLE_SCOPES, KeyRole, KeyWindow, Scope, window_ends_at
 
 
@@ -52,6 +54,8 @@ async def grant_key(
     `scopes` narrows the role's preset; it can never widen past what the granter holds.
     `basis` is what the grant rests on — the owner's recorded consent, an LPA, a letter.
     Consent itself is recorded by the consent service (E00-02); this only names the basis.
+
+    Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     _may_cut_keys(context)
     moment = now or utcnow()
@@ -59,14 +63,16 @@ async def grant_key(
     granted = asked & context.scopes
 
     # One person holds one key on one profile: a new key replaces the one before it.
-    for existing in await session.scalars(scoped_select(Key, context, Scope.FAMILY)):
+    for existing in await audited_read(session, Key, context, Scope.FAMILY, now=moment):
         if existing.holder_person_id == holder.id and existing.is_active(moment):
             existing.revoked_at = moment
 
-    key = scoped_new(
+    key = await audited_write(
+        session,
         Key,
         context,
         Scope.FAMILY,
+        now=moment,
         holder_person_id=holder.id,
         role=role,
         scopes=sorted(scope.value for scope in granted),
@@ -75,15 +81,22 @@ async def grant_key(
         granted_at=moment,
         expires_at=window_ends_at(window or DEFAULT_WINDOW[role], moment),
     )
-    session.add(key)
-    await session.flush()
+    await record_share(
+        session,
+        context=context,
+        scope=Scope.FAMILY,
+        target=Key.__tablename__,
+        channel=Channel.APP,
+        shared_with_person_id=holder.id,
+        target_id=key.id,
+        now=moment,
+    )
     return key
 
 
 async def list_keys(session: AsyncSession, *, context: KeyContext) -> Sequence[Key]:
     """Every key ever cut on this profile, so the owner can read who holds what."""
-    result = await session.scalars(scoped_select(Key, context, Scope.FAMILY))
-    return result.all()
+    return await audited_read(session, Key, context, Scope.FAMILY)
 
 
 async def revoke_key(
@@ -95,10 +108,24 @@ async def revoke_key(
 ) -> Key:
     """Close a key. The row stays, so the owner can still read that it was held."""
     _may_cut_keys(context)
-    key = await session.scalar(scoped_select(Key, context, Scope.FAMILY).where(Key.id == key_id))
-    if key is None:
+    moment = now or utcnow()
+    found = await audited_read(
+        session, Key, context, Scope.FAMILY, where=(Key.id == key_id,), now=moment
+    )
+    if not found:
         raise NoKeyToClose(f"no key {key_id} on profile {context.profile_id}")
+    key = found[0]
     if key.revoked_at is None:
-        key.revoked_at = now or utcnow()
+        key.revoked_at = moment
     await session.flush()
+    await record(
+        session,
+        context=context,
+        action=Action.WRITE,
+        scope=Scope.FAMILY,
+        target=Key.__tablename__,
+        target_id=key.id,
+        rows=1,
+        now=moment,
+    )
     return key

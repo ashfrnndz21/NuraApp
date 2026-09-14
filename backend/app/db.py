@@ -63,7 +63,10 @@ class ProfileScoped:
 
     if TYPE_CHECKING:
         # Every table carrying this mixin also inherits Base, which is where the real
-        # constructor comes from. Declaring it here is what lets `scoped_new` stay generic.
+        # constructor and table name come from. Declaring them here is what lets
+        # `scoped_new` and the audit trail stay generic over any table of profile data.
+        __tablename__: str
+
         def __init__(self, **values: Any) -> None: ...
 
 

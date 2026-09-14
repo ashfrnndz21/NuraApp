@@ -2,21 +2,23 @@
 
 The real tables of the health graph — Artifact, Event, Fact — arrive with E00-03. `Note` is
 a test-only table with the same shape: it carries `ProfileScoped` and it is reached only
-through `scoped_select` and `scoped_new`, exactly as those tables will be.
+through `app.audit.access`, which is how those tables will be reached — the scope check and
+the audit line in the same call.
 """
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.audit.access import audited_read, audited_write
 from app.db import Base, ProfileScoped, enum_column
 from app.keys.context import KeyContext
-from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
 
 
@@ -29,16 +31,21 @@ class Note(ProfileScoped, Base):
 
 
 async def add_note(
-    session: AsyncSession, context: KeyContext, *, scope: Scope, body: str
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    scope: Scope,
+    body: str,
+    now: datetime | None = None,
 ) -> Note:
-    note = scoped_new(Note, context, scope, scope=scope, body=body)
-    session.add(note)
-    await session.flush()
-    return note
+    return await audited_write(session, Note, context, scope, now=now, scope=scope, body=body)
 
 
 async def read_notes(
-    session: AsyncSession, context: KeyContext, *, scope: Scope
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    scope: Scope,
+    now: datetime | None = None,
 ) -> Sequence[Note]:
-    result = await session.scalars(scoped_select(Note, context, scope).where(Note.scope == scope))
-    return result.all()
+    return await audited_read(session, Note, context, scope, where=(Note.scope == scope,), now=now)
