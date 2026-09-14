@@ -4,7 +4,7 @@ Outside the 24-hour customer-service window a business may send nothing but a te
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11) — is one of these twelve, submitted once and named here: its slots, and the words a patient reads in each
+message (E11) — is one of these fourteen, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -34,6 +34,9 @@ class Template:
     slots: tuple[str, ...]
     text: Mapping[str, str]
     """The body per language; every `{slot}` in it is one of `slots`."""
+    approved: bool = True
+    """Whether Meta has approved it. A pending template is sent on a dev run only; anywhere
+    else `send` refuses it (`TemplateNotApproved`) and the delivery tries its next channel."""
 
 
 # @patient
@@ -125,6 +128,7 @@ DOSE_REMINDER = Template(
         "ms": "{name}, ini Nura.\nSudahkah anda ambil {medicine} {anchor}?\nBila sudah, balas Sudah ambil.",
         "zh": "{name}，我是 Nura。\n您{anchor}吃了{medicine}吗？\n吃了的话，请回复“吃了”。",
     },
+    approved=False,
 )
 """The first rung of the ladder (E11-06): the tablet's window closed with no Taken."""
 
@@ -145,6 +149,7 @@ DOSE_CHECK = Template(
         ),
         "zh": "{name}{anchor}的{medicine}还没有说“吃了”。\n请去看看{name}。\n{name}吃了以后，请回复“给了”。",
     },
+    approved=False,
 )
 """The rungs after him: the helper, the one on duty, the chief."""
 
@@ -157,6 +162,7 @@ REORDER_FAMILY = Template(
         "ms": "Ubat {name} hampir habis.\n{medicine} habis pada {day}.\nTolong pesan lagi untuk {name}.",
         "zh": "{name}的药快吃完了。\n{medicine}{day}就吃完了。\n请再为{name}订一些。",
     },
+    approved=False,
 )
 """The reorder date reached, to the one who orders (E04's count)."""
 
@@ -177,6 +183,7 @@ DOSES_COUNT = Template(
         ),
         "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数，不用担心。\n您可以在应用里看是哪几次。",
     },
+    approved=False,
 )
 """The pattern (three or more in seven days), to the one on duty: a count, never a finding."""
 
@@ -189,6 +196,7 @@ PAPERS_WAITING = Template(
         "ms": "Surat baru untuk {name} menunggu jawapan ya anda.\nAnda boleh semak dalam aplikasi.",
         "zh": "{name}有新文件在等您确认。\n您可以在应用里看。",
     },
+    approved=False,
 )
 """A paper read into a review card, to the chief: that there are papers, never what they say."""
 
@@ -201,8 +209,46 @@ FAMILY_NOTE = Template(
         "ms": "{who} menghantar mesej kepada anda.\n{message}",
         "zh": "{who}给您发了一条消息。\n{message}",
     },
+    approved=False,
 )
 """A chief's message to him, come due (E12-06): her previewed lines, exactly."""
+
+# @patient
+RED_FLAG_NOTICE_SELF = Template(
+    "red_flag_notice_self",
+    ("name", "doctor"),
+    {
+        "en": "This one we do not wait for.\n{name} is not feeling well.\nCall {doctor} today.",
+        "ms": "Yang ini kita tidak tunggu.\n{name} tidak sihat.\nTelefon {doctor} hari ini.",
+        "zh": "这个不能等。\n{name}不舒服。\n今天就打电话给{doctor}。",
+    },
+    approved=False,
+)
+"""The red-flag notice when he raised it himself: his name, no one else's word about him."""
+
+# @patient
+RED_FLAG_NOTICE_AMBIGUOUS = Template(
+    "red_flag_notice_ambiguous",
+    ("who", "name"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{who} said someone in the family is not well.\n"
+            "It may be about {name}.\n"
+            "Call {who} now."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{who} kata seseorang dalam keluarga tidak sihat.\n"
+            "Mungkin tentang {name}.\n"
+            "Telefon {who} sekarang."
+        ),
+        "zh": "这个不能等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
+    },
+    approved=False,
+)
+"""A red flag from someone on more than one family's list, before they said which: raised on
+each, and each family told it may be about theirs."""
 
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
@@ -219,10 +265,13 @@ TEMPLATES: Mapping[str, Template] = {
         DOSES_COUNT,
         PAPERS_WAITING,
         FAMILY_NOTE,
+        RED_FLAG_NOTICE_SELF,
+        RED_FLAG_NOTICE_AMBIGUOUS,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""The twelve, in the order they are submitted for approval: E19's six, then E11's six."""
+"""All fourteen, in the order they are submitted: E19's six (approved), then E11's eight
+(pending Meta's approval, `approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

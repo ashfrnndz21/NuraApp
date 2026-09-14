@@ -16,18 +16,20 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage, WhatsAppThread
 from app.clock import FrozenClock
 from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
-from app.identity.service import register_person
+from app.identity.service import create_own_profile, register_person
+from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.medicines.models import DoseTaken
 from app.memory.models import Artifact, Event
 from app.regions import Region
 from app.safety.red_flags import Feeling, Flag
 from tests.medicines_support import add, label
-from tests.support import agree_to_family_sharing
+from tests.support import OPENING_CONSENT, agree_to_family_sharing
 from tests.whatsapp_support import KIT, MEI, PA, family
 
 FIXED = (
@@ -121,3 +123,64 @@ async def test_taken_writes_the_tap_for_the_tablet_whose_window_is_open(
         "I did not write anything down.",
     ]
     assert len((await sg.scalars(select(DoseTaken))).all()) == 1
+
+
+async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name_settles_it(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Mei is chief on Pa's profile and on Ma's, and writes "he fell" with nothing to say which:
+    the flag is raised on both at once, each marked ambiguous, each family told it may be
+    theirs; she is asked which; "It is Pa" closes Ma's ladder, on Ma's trail in her name."""
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    ma = await register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6591110009", language="en"
+    )
+    ma_profile = await create_own_profile(sg, region=Region.SG, owner=ma, consent=OPENING_CONSENT)
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    await agree_to_family_sharing(sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter")
+    await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
+
+    handled = await home.inbound(sg, MEI, "he fell in the bathroom")
+    assert handled.outcome == "red_flag_ambiguous"
+    flags = (await sg.scalars(select(Flag))).all()
+    assert {flag.profile_id for flag in flags} == {home.profile.id, ma_profile.id}
+    assert all(flag.ambiguous_profile and flag.feeling is Feeling.FALL for flag in flags)
+    assert (await sg.scalars(select(Artifact))).all() == []
+    assert home.whatsapp.sent[-1].to_e164 == MEI
+    assert home.whatsapp.sent[-1].text.splitlines() == [
+        "This one we do not wait for.",
+        "I put it first in the family's app for Pa and Ma.",
+        "Who is it about?",
+        "Send me the name, Pa or Ma.",
+    ]
+    told = [one for one in home.whatsapp.sent if one.to_e164 == KIT]
+    assert told[-1].text.splitlines() == [
+        "This one we do not wait for.",
+        "Mei said someone in the family is not well.",
+        "It may be about Pa.",
+        "Call Mei now.",
+    ]
+    assert len((await sg.scalars(select(Ladder))).all()) == 2
+
+    answered = await home.inbound(sg, MEI, "It is Pa")
+    assert answered.outcome == "which_one" and answered.profile_id == home.profile.id
+    assert home.whatsapp.sent[-1].text.splitlines() == [
+        "Thank you, it is about Pa.",
+        "I stopped asking the other family.",
+    ]
+    ladders = {ladder.profile_id: ladder for ladder in (await sg.scalars(select(Ladder))).all()}
+    assert ladders[ma_profile.id].closed_because == "not_this_one"
+    assert ladders[home.profile.id].closed_at is None
+    closing = (
+        await sg.scalars(
+            select(AuditEntry).where(
+                AuditEntry.profile_id == ma_profile.id,
+                AuditEntry.target == "delivery_ladder",
+                AuditEntry.actor_person_id == home.mei.id,
+            )
+        )
+    ).all()
+    assert closing

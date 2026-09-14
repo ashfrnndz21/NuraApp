@@ -11,9 +11,10 @@ could not be reached. Whatever the answer, one `Delivery` row records the attemp
 rule, and a delivery that reached a person is a SHARE on the trail, under the scope of what
 it spoke of.
 
-Everything here runs in the context of the profile's owner — the patient's graph, sent about
-the patient on his agreement, the way his Level 0 day is (`level0`) — and every row and line
-says so. A `Run` is one evaluation at one moment: it reads what it needs once and remembers.
+Everything here runs as Nura itself with the reach of the profile's owner (the steward before a
+claim): the patient's graph, sent about the patient on his agreement, and every line on the
+trail is the system's (no actor, the system channel), which his trail folds into one line a
+day. A `Run` is one evaluation at one moment: it reads what it needs once and remembers.
 """
 
 from __future__ import annotations
@@ -50,7 +51,12 @@ from app.delivery.triggers.rules import RULES, Config, config_of
 from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile, Stewardship
-from app.keys.context import KeyContext, holds_the_profile, resolve_key_context
+from app.keys.context import (
+    KeyContext,
+    as_the_system,
+    holds_the_profile,
+    resolve_key_context,
+)
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
@@ -278,8 +284,12 @@ async def open_run(
         if steward is None:
             raise NoOneToActFor(f"profile {profile_id} has nobody to act for it")
         acting_id = steward.steward_person_id
-    acting = await resolve_key_context(
-        session, region=via.settings.region, person_id=acting_id, profile_id=profile.id
+    # Nura's own reach, with the reach of the person it acts for: its reads and writes are
+    # the system's on the trail, never the patient's (`keys.context.as_the_system`).
+    acting = as_the_system(
+        await resolve_key_context(
+            session, region=via.settings.region, person_id=acting_id, profile_id=profile.id
+        )
     )
     settings = await audited_read(
         session,

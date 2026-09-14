@@ -4,7 +4,9 @@ Three tables of profile data, every row tied to its profile the way the family t
 (0013): a ladder's medicine line and red flag, a delivery's ladder and WhatsApp message. The
 settings are a history (a change is a new row). And four columns on the feed item for the
 card grammar (E11-03): one number, one direction, one colour, one action — nullable for the
-rows written before the grammar was a column.
+rows written before the grammar was a column. The audit actor may be empty for Nura's own
+reach (the delivery engine), on the system channel only; and a red flag carries whether the
+person who raised it is on more than one profile.
 
 Revision ID: 0019_delivery
 Revises: 0017_trends_routines_calendar
@@ -170,9 +172,30 @@ def upgrade() -> None:
     with op.batch_alter_table("feed_item") as batch:
         for column, length in GRAMMAR:
             batch.add_column(sa.Column(column, sa.String(length=length), nullable=True))
+    # Nura's own reach is written with no person as the actor, on the system channel only.
+    with op.batch_alter_table("audit_entry") as batch:
+        batch.alter_column("actor_person_id", existing_type=sa.Uuid(), nullable=True)
+        batch.create_check_constraint(
+            "ck_audit_entry_actor_or_system", "actor_person_id IS NOT NULL OR channel = 'system'"
+        )
+    # A red flag from someone on more than one profile, raised on each of them.
+    with op.batch_alter_table("red_flag") as batch:
+        batch.add_column(
+            sa.Column("ambiguous_profile", sa.Boolean(), nullable=False, server_default=sa.false())
+        )
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    if bind.execute(sa.text("SELECT 1 FROM audit_entry WHERE actor_person_id IS NULL")).first():
+        raise RuntimeError(
+            "the trail holds lines written by the system; 0019 is not downgraded over them"
+        )
+    with op.batch_alter_table("red_flag") as batch:
+        batch.drop_column("ambiguous_profile")
+    with op.batch_alter_table("audit_entry") as batch:
+        batch.drop_constraint("ck_audit_entry_actor_or_system", type_="check")
+        batch.alter_column("actor_person_id", existing_type=sa.Uuid(), nullable=False)
     with op.batch_alter_table("feed_item") as batch:
         for column, _ in reversed(GRAMMAR):
             batch.drop_column(column)

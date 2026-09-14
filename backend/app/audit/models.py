@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, utcnow
@@ -51,10 +51,19 @@ class AuditEntry(ProfileScoped, Base):
     """
 
     __tablename__ = "audit_entry"
+    __table_args__ = (
+        CheckConstraint(
+            "actor_person_id IS NOT NULL OR channel = 'system'",
+            name="ck_audit_entry_actor_or_system",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
-    actor_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    # None only for Nura's own reach (channel SYSTEM): the delivery engine acting for him.
+    actor_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), index=True, default=None
+    )
     # The owner reaches his own graph without a key, so there is no role and no key to name.
     actor_role: Mapped[KeyRole | None] = mapped_column(enum_column(KeyRole, "key_role"))
     key_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("key.id"), default=None)

@@ -375,22 +375,35 @@ async def _doctor(run: Run, language: str) -> str:
 
 
 def flag_message(run: Run, flag: Flag) -> Say:
-    """The approved red-flag notice: "This one we do not wait for. Mei said Pa is not well.
-    Call Dr Tan today." In the reader's language, naming who said it."""
+    """The red-flag notice, in the reader's language: "This one we do not wait for. Mei said Pa
+    is not well. Call Dr Tan today." When he raised it himself, "Pa is not feeling well."; when
+    the person who raised it is on more than one family's list and has not said which, "It may
+    be about Pa." — each variant only where the number approves it, the approved notice
+    otherwise, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
         lang = language_of(person.language)
         raiser = await run.person(flag.raised_by_person_id)
+        name = run.profile.display_name
+        who = raiser.display_name if raiser is not None else name
+        doctor = await _doctor(run, lang)
+        approves = run.via.number.approves
+        # The approved notice always goes; its two variants go where the number approves them.
+        kind, params = "red_flag_notice", {"name": name, "who": who, "doctor": doctor}
+        if flag.ambiguous_profile and approves("red_flag_notice_ambiguous"):
+            kind, params = "red_flag_notice_ambiguous", {"who": who, "name": name}
+        elif (
+            raiser is not None
+            and raiser.id == run.profile.owner_person_id
+            and approves("red_flag_notice_self")
+        ):
+            kind, params = "red_flag_notice_self", {"name": name, "doctor": doctor}
         return await send(
             run.session,
             context=run.acting,
             to_person=person,
-            kind="red_flag_notice",
-            params={
-                "name": run.profile.display_name,
-                "who": raiser.display_name if raiser is not None else run.profile.display_name,
-                "doctor": await _doctor(run, lang),
-            },
+            kind=kind,
+            params=params,
             provider=run.via.providers.whatsapp,
             number=run.via.number,
             language=lang,

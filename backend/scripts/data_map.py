@@ -462,6 +462,7 @@ CLASSES: dict[str, str] = {
     "red_flag.raised_at": HEALTH,
     "red_flag.told": IDENTIFIER,
     "red_flag.suppressed_because": HEALTH,
+    "red_flag.ambiguous_profile": HEALTH,
     # E05: the columns a flag heard at a visit needs — what it is and what it rests on is
     # health; when a person closed it is operational — and the visit loop's tables. The brief,
     # a question, a memo and a summary are his health said back to him; a person named on one

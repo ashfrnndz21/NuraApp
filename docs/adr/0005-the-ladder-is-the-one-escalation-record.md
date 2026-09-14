@@ -1,4 +1,4 @@
-# ADR 0004 — The ladder is the one record of who is told; the trigger engine has no scheduler of its own
+# ADR 0005 — The ladder is the one record of who is told; the trigger engine has no scheduler of its own
 
 **Date** 2026-09-15 · **Status** proposed · **Decided by** the operator, for the owner · **Stories** E00-05, E11-05, E11-06 (and E13/E14, E19-05, E05 as the doors a red flag comes in by)
 

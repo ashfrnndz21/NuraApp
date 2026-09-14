@@ -176,9 +176,10 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
         ("on_duty", 0),
         ("key_holder", 5),
     ]
+    # He raised it himself: the notice says his name, not "Pa said Pa is not well."
     assert h.sent_to(h.mei)[-1].splitlines() == [
         "This one we do not wait for.",
-        "Pa said Pa is not well.",
+        "Pa is not feeling well.",
         "Call your doctor today.",
     ]
     # Nobody answered: five minutes on, still at night, the next rung is asked.

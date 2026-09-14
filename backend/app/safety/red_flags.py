@@ -61,7 +61,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
-from sqlalchemy import JSON, ForeignKey, String, or_, select
+from sqlalchemy import JSON, Boolean, ForeignKey, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -513,6 +513,8 @@ class Flag(ProfileScoped, Base):
     raised_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     told: Mapped[list[str]] = mapped_column(JSON, default=list)
     suppressed_because: Mapped[str | None] = mapped_column(String(64), default=None)
+    ambiguous_profile: Mapped[bool] = mapped_column(Boolean, default=False)
+    """Raised by someone on more than one profile before they said which: raised on each (E11)."""
     resolved_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
@@ -712,6 +714,7 @@ async def raise_flag(
     feeling: Feeling,
     event_id: uuid.UUID,
     channel: Channel = Channel.APP,
+    ambiguous_profile: bool = False,
 ) -> Flag:
     """Raise a red flag on the event in which the feeling was said, and tell the family.
 
@@ -739,6 +742,7 @@ async def raise_flag(
         raised_at=moment,
         told=told,
         suppressed_because=suppressed,
+        ambiguous_profile=ambiguous_profile,
     )
     for person in told:
         await record_share(

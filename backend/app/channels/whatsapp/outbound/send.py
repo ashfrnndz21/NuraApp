@@ -17,8 +17,8 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write, record_share
-from app.audit.models import Channel
+from app.audit.access import audited_guard, audited_read, audited_write, record_share
+from app.audit.models import Action, Channel
 from app.channels.whatsapp.config import BusinessNumber
 from app.channels.whatsapp.models import (
     Direction,
@@ -56,8 +56,9 @@ class OutsideTheWindow(Refusal):
     """More than 24 hours since the person's last message: only a template may go out."""
 
 
-class NotApproved(Refusal):
-    """A template this number has not had approved is not sent."""
+class TemplateNotApproved(Refusal):
+    """A template Meta has not approved for this number is not sent: the refusal is on the
+    trail, and a delivery tries its next channel."""
 
 
 class NotPlainWords(Refusal):
@@ -179,7 +180,12 @@ async def send(
     state_id: uuid.UUID | None = None
     if template_name is not None:
         if not number.approves(template_name):
-            raise NotApproved(f"{template_name} is not approved on {number.phone_e164}")
+            async with audited_guard(
+                session, context, Action.SHARE, Scope.SEND, MESSAGE, channel=Channel.WHATSAPP
+            ):
+                raise TemplateNotApproved(
+                    f"{template_name} is not approved on {number.phone_e164}"
+                )
         if state is None or state.stale is not False or state.profile_id != context.profile_id:
             raise NotFromState(f"{template_name} is composed from a current State of this profile")
         state_id = state.id

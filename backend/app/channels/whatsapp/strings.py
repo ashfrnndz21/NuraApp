@@ -211,6 +211,27 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("这个不能等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
     },
+    # A red-flag word from someone on more than one family's list: raised on each, then asked.
+    "red_flag_which": {
+        "en": (
+            "This one we do not wait for.",
+            "I put it first in the family's app for {both}.",
+            "Who is it about?",
+            "Send me the name, {either}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "Saya letak ia paling atas dalam aplikasi keluarga untuk {both}.",
+            "Ini tentang siapa?",
+            "Hantar nama kepada saya, {either}.",
+        ),
+        "zh": ("这个不能等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
+    },
+    "red_flag_which_thanks": {
+        "en": ("Thank you, it is about {name}.", "I stopped asking the other family."),
+        "ms": ("Terima kasih, ini tentang {name}.", "Saya berhenti bertanya keluarga yang lain."),
+        "zh": ("谢谢，是关于{name}的。", "我不再问另一个家庭了。"),
+    },
     "not_understood": {
         "en": ("I did not understand that.", "Send a photo, or your blood pressure as 2 numbers."),
         "ms": ("Saya tidak faham.", "Hantar gambar, atau tekanan darah anda sebagai 2 nombor."),
@@ -238,6 +259,9 @@ YOU: Mapping[str, str] = {"en": "You", "ms": "Anda", "zh": "您"}
 # @patient phrase
 AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
 
+# @patient phrase
+OR: Mapping[str, str] = {"en": " or ", "ms": " atau ", "zh": "还是"}
+
 
 def reply(key: str, language: str | None, **params: str) -> str:
     """The catalogue reply, whole lines joined, with its slots filled."""
@@ -248,11 +272,11 @@ def reply(key: str, language: str | None, **params: str) -> str:
     return "\n".join(line.format(**params) for line in lines[lang])
 
 
-def join_names(names: list[str], language: str | None) -> str:
-    """'Mei', 'Mei and Kit', 'Mei, Kit and Ash'."""
+def join_names(names: list[str], language: str | None, *, either: bool = False) -> str:
+    """'Mei', 'Mei and Kit', 'Mei, Kit and Ash' — or with `either`, 'Pa or Ma'."""
     lang = language_of(language)
     if not names:
         return ""
     if len(names) == 1:
         return names[0]
-    return ", ".join(names[:-1]) + AND[lang] + names[-1]
+    return ", ".join(names[:-1]) + (OR if either else AND)[lang] + names[-1]

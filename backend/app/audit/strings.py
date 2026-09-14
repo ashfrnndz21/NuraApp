@@ -31,6 +31,19 @@ YOU: Mapping[str, str] = {"en": "You", "ms": "Anda", "zh": "您"}
 """The patient, as the subject of his own line."""
 
 # @patient phrase
+NURA: Mapping[str, str] = {"en": "Nura", "ms": "Nura", "zh": "Nura"}
+"""Nura itself, as the subject of a line: the reminders it sends, the checks it makes."""
+
+# @patient
+SYSTEM_CHECKS: Mapping[str, str] = {
+    "en": "On {day}, Nura checked your papers {count} times to remind you on time.",
+    "ms": "Pada {day}, Nura menyemak surat-surat anda {count} kali untuk ingatkan anda tepat pada masanya.",
+    "zh": "{day}，Nura 查看了您的文件 {count} 次，好按时提醒您。",
+}
+"""The day's reads by Nura itself, folded into one line (the delivery engine checks every few
+minutes; one line, not hundreds)."""
+
+# @patient phrase
 TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "profile": "your record",

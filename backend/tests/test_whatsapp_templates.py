@@ -1,4 +1,4 @@
-"""E19-01, E11: the twelve approved templates, their slots, and the business number that approves them."""
+"""E19-01, E11: the fourteen templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.regions import Region
 from app.safety.plain_words import verify
 from app.settings import Settings
 
-TWELVE = (
+FOURTEEN = (
     "morning_card",
     "visit_reminder",
     "reorder",
@@ -31,9 +31,15 @@ TWELVE = (
     "doses_count",
     "papers_waiting",
     "family_note",
+    "red_flag_notice_self",
+    "red_flag_notice_ambiguous",
 )
-"""E19's six, then E11's six (the ladder's two asks, the reorder to the family, the count,
-the papers waiting, a family message), in the order they are submitted for approval."""
+"""E19's six, then E11's eight (the ladder's two asks, the reorder to the family, the count,
+the papers waiting, a family message, and the red-flag notice's two variants), in the order
+they are submitted for approval."""
+
+E19_SIX = FOURTEEN[:6]
+"""Approved: the only templates a deployment's number carries until Meta approves E11's."""
 
 DOSES = {
     "en": "Take 1 tablet of your blood pressure tablet with breakfast.",
@@ -73,11 +79,13 @@ FILL = {
     "anchor": "with breakfast",
     "message": "Mei will pick you up at 9.",
     "emergency_number": "995",
+    "both": "Pa and Ma",
+    "either": "Pa or Ma",
 }
 
 
-def test_there_are_twelve_and_each_has_every_language() -> None:
-    assert TEMPLATE_NAMES == TWELVE
+def test_there_are_fourteen_and_each_has_every_language() -> None:
+    assert TEMPLATE_NAMES == FOURTEEN
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)
         for language, body in template.text.items():
@@ -85,7 +93,7 @@ def test_there_are_twelve_and_each_has_every_language() -> None:
                 assert f"{{{slot}}}" in body, (template.name, language, slot)
 
 
-@pytest.mark.parametrize("name", TWELVE)
+@pytest.mark.parametrize("name", FOURTEEN)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
     fill = {
@@ -126,7 +134,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     assert sandbox.region is Region.MY
     assert sandbox.provider_name == "fixture"
     assert sandbox.verification is VerificationState.SANDBOX
-    assert sandbox.templates == TWELVE
+    assert sandbox.templates == FOURTEEN
     assert sandbox.approves("morning_card") and not sandbox.approves("marketing_blast")
     named = business_number_for(
         Settings(
@@ -138,3 +146,13 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     )
     assert named.phone_e164 == "+6581234567"
     assert named.verification is VerificationState.PENDING
+
+
+def test_e11s_templates_wait_for_meta_and_a_deployment_carries_only_the_approved() -> None:
+    pending = [template.name for template in TEMPLATES.values() if not template.approved]
+    assert pending == list(FOURTEEN[6:])
+    live = business_number_for(
+        Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False)
+    )
+    assert live.templates == E19_SIX
+    assert live.approves("morning_card") and not live.approves("dose_reminder")

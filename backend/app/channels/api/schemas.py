@@ -750,7 +750,8 @@ class AuditOut(BaseModel):
 
     entry_id: uuid.UUID
     at: datetime
-    actor_person_id: uuid.UUID
+    actor_person_id: uuid.UUID | None
+    """None for Nura's own reach (channel `system`): the delivery engine acting for him."""
     actor_role: KeyRole | None
     key_id: uuid.UUID | None
     action: Action
@@ -2157,10 +2158,18 @@ class TrailLineOut(BaseModel):
     who: str
     sentences: list[str]
     outcome: Outcome
+    detail: list[str] = []
+    """For the chief, under Nura's folded line: what it checked, and how often."""
 
     @classmethod
     def of(cls, line: TrailLine) -> TrailLineOut:
-        return cls(at=line.at, who=line.who, sentences=line.sentences, outcome=line.outcome)
+        return cls(
+            at=line.at,
+            who=line.who,
+            sentences=line.sentences,
+            outcome=line.outcome,
+            detail=list(line.detail),
+        )
 
 
 class TrailDayOut(BaseModel):
