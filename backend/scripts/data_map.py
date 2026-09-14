@@ -30,6 +30,7 @@ import app.consent.models
 import app.delivery.feed.models
 import app.family.models
 import app.identity.models
+import app.ingestion.connectors.models
 import app.ingestion.models
 import app.keys.confirm
 import app.keys.models
@@ -37,7 +38,9 @@ import app.keys.privacy
 import app.medicines.models
 import app.memory.models
 import app.notes.models
+import app.reasoning.models
 import app.reasoning.visits.models
+import app.routines.models
 import app.safety.models
 import app.safety.red_flags
 import app.state.models  # noqa: F401
@@ -106,6 +109,10 @@ CLASSES: dict[str, str] = {
     "document.id": HEALTH,
     "roster_slot.id": IDENTIFIER,
     "privacy.id": CONSENT,
+    "trend_card.id": HEALTH,
+    "routine.id": HEALTH,
+    "connector.id": CONSENT,
+    "appointment_proposal.id": HEALTH,
     # --- accounts and the graph's ownership -------------------------------------------------
     "person.display_name": IDENTIFIER,
     "person.language": OPERATIONAL,
@@ -607,6 +614,52 @@ CLASSES: dict[str, str] = {
     "safety_escalation.roster": IDENTIFIER,
     "safety_escalation.told": IDENTIFIER,
     "safety_escalation.created_at": HEALTH,
+    # --- trends, the routine, the calendar (E09-01, E10-01, E18-02) ---------------------------
+    # A trend card is what was shown to him about his results: the analyte, the facts, the
+    # direction, the lines and the boundary line are health, like a feed card's.
+    "trend_card.analyte": HEALTH,
+    "trend_card.language": OPERATIONAL,
+    "trend_card.fact_ids": HEALTH,
+    "trend_card.direction": HEALTH,
+    "trend_card.lines": HEALTH,
+    "trend_card.rendered_for_person_id": IDENTIFIER,
+    "trend_card.rendered_at": OPERATIONAL,
+    "trend_card.state_id": HEALTH,
+    "trend_card.boundary": HEALTH,
+    # His day: when he wakes, eats and sleeps, and what he is prompted to check, is about his
+    # care; who set it points at a person.
+    "routine.anchors": HEALTH,
+    "routine.reading_prompts": HEALTH,
+    "routine.walks": HEALTH,
+    "routine.morning_card_at": OPERATIONAL,
+    "routine.supersedes_id": HEALTH,
+    "routine.superseded_at": OPERATIONAL,
+    "routine.set_by_person_id": IDENTIFIER,
+    "routine.set_at": OPERATIONAL,
+    # A connector is a standing permission to read, resting on a consent: consent. A proposal
+    # is a candidate visit — with whom, when, where — which is health; the digest is of the
+    # event's UID, not its content.
+    "connector.kind": CONSENT,
+    "connector.source": OPERATIONAL,
+    "connector.consent_id": CONSENT,
+    "connector.connected_by_person_id": IDENTIFIER,
+    "connector.connected_at": CONSENT,
+    "appointment_proposal.connector_id": CONSENT,
+    "appointment_proposal.event_digest": OPERATIONAL,
+    "appointment_proposal.title": HEALTH,
+    "appointment_proposal.location": HEALTH,
+    "appointment_proposal.starts_at": HEALTH,
+    "appointment_proposal.all_day": HEALTH,
+    "appointment_proposal.matched_by": OPERATIONAL,
+    "appointment_proposal.keyword": HEALTH,
+    "appointment_proposal.provider_id": HEALTH,
+    "appointment_proposal.provider_name": HEALTH,
+    "appointment_proposal.provider_kind": HEALTH,
+    "appointment_proposal.status": HEALTH,
+    "appointment_proposal.found_at": OPERATIONAL,
+    "appointment_proposal.decided_at": OPERATIONAL,
+    "appointment_proposal.decided_by_person_id": IDENTIFIER,
+    "appointment_proposal.appointment_id": HEALTH,
     # Capture extras (E02-02, E02-03, E02-06, E02-08): the kind a page was offered as and
     # where an imported PDF came from; who typed a field Nura could not read; and a note on
     # an event, whose recording or image is an artefact and whose heard words are in the

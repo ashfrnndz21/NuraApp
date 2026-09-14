@@ -6,7 +6,7 @@ that the person's own name replaces it when he signs in (`app.identity.login`). 
 nullable: every account made before this, and every one a person made himself, has none.
 
 Revision ID: 0019_person_named_by
-Revises: 0012_visits
+Revises: 0017_trends_routines_calendar
 Create Date: 2026-09-15
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_person_named_by"
-down_revision = "0012_visits"
+down_revision = "0017_trends_routines_calendar"
 branch_labels = None
 depends_on = None
 

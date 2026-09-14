@@ -38,8 +38,10 @@ from app.drafts import (
     FactDraft,
     KeyChangeDraft,
     OnlyMeDraft,
+    ProposalDraft,
     PushDraft,
     ReviewDraft,
+    RoutineDraft,
     TaskDoneDraft,
     digest_of,
 )
@@ -75,6 +77,12 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, PushDraft):
         return Scope.SEND
+    if isinstance(draft, RoutineDraft):
+        # The day is read where the helper reads today's tablets (E10).
+        return Scope.MEDICINES
+    if isinstance(draft, ProposalDraft):
+        # A calendar proposal becomes a visit on the spine (E18-02).
+        return Scope.VISITS
     # A visit's booking, its status, a question for it and its summary are all the visits'.
     return Scope.VISITS
 
