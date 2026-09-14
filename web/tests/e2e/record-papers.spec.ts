@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { API, fixClock, seedMedicine } from "./helpers";
-import { auth, EVERY_PART, letIn, LOOKS, lookAs, LPA_PDF, openOwn, placeholderPng, readable, setUpOnLpa, signInAs, signUp } from "./record-helpers";
-import { freshPhone } from "./helpers";
+import { auth, EVERY_PART, letIn, LOOKS, lookAs, LPA_PDF, openOwn, placeholderPng, readable, setUpOnLpa, signInAs, signUp, uniquePhone } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
  *  E02-08 a blood pressure read off the machine's screen with no typing, E12-09 the lasting
@@ -102,7 +101,7 @@ for (const look of LOOKS) {
   });
 
   test(`the family's papers (${look}): the lasting power of attorney kept and shown backing the stewardship`, async ({ page, request }) => {
-    const mei = await signUp(request, freshPhone("+659336"), "Mei");
+    const mei = await signUp(request, uniquePhone(), "Mei");
     await setUpOnLpa(request, mei);
     await signInAs(page, mei, "Mei", true);
     await lookAs(page, look);

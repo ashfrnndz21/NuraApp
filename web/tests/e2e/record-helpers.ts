@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { API, backendClock, codeFromLog, codesSoFar, freshPhone, nothingDrawnOverLines, signInThroughTheApp } from "./helpers";
+import { API, backendClock, codeFromLog, codesSoFar, nothingDrawnOverLines, signInThroughTheApp } from "./helpers";
 
 /** What the Record's walks (W5) seed over the API, and the two checks every screen gets:
  *  the density it is walked in, and nothing drawn over a line (56px targets in his). */
@@ -26,6 +26,14 @@ export function unknownPng(): Buffer {
 
 /** The lasting power of attorney's placeholder PDF (checkpoint 13's bytes). */
 export const LPA_PDF = Buffer.from("%PDF-1.4\n% nura-lpa-placeholder: a lasting power of attorney, redacted\n");
+
+/** A Singapore-shaped number nobody on this dev database has yet: `+658` and seven random
+ *  digits. The dev database keeps every account from every run, so four random digits (the
+ *  shared helper's) come round again within a few runs; seven do not, and `+658` keeps clear
+ *  of every `+659…` prefix the other specs use. */
+export function uniquePhone(): string {
+  return `+658${String(randomInt(0, 10_000_000)).padStart(7, "0")}`;
+}
 
 export interface Person {
   phone: string;
@@ -55,7 +63,7 @@ export async function holdWording(request: APIRequestContext): Promise<string> {
 
 /** Pa, with his own papers, in English. */
 export async function openOwn(request: APIRequestContext, name = "Pa"): Promise<Papers> {
-  const person = await signUp(request, freshPhone("+659333"), name);
+  const person = await signUp(request, uniquePhone(), name);
   const opened = await request.post(`${API}/profiles/mine`, {
     ...auth(person.token),
     data: { consent: { wording_version: await holdWording(request), language: "en", captured_via: "app" }, display_name: name, language: "en" },
@@ -66,7 +74,7 @@ export async function openOwn(request: APIRequestContext, name = "Pa"): Promise<
 
 /** He lets someone in to these parts, on his own yes, and cuts her a key with this role. */
 export async function letIn(request: APIRequestContext, pa: Pick<Papers, "token" | "profileId">, name: string, role: string, scopes: string[]): Promise<Person> {
-  const person = await signUp(request, freshPhone("+659334"), name);
+  const person = await signUp(request, uniquePhone(), name);
   const agreed = await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
     ...auth(pa.token),
     data: { holder_phone_e164: person.phone, holder_display_name: name, scopes, relationship: null, language: "en", captured_via: "app" },
@@ -147,7 +155,7 @@ export async function setUpOnLpa(request: APIRequestContext, mei: Person): Promi
   const opened = await request.post(`${API}/profiles/for-someone`, {
     ...auth(mei.token),
     data: {
-      patient_phone_e164: freshPhone("+659335"),
+      patient_phone_e164: uniquePhone(),
       display_name: "Pa",
       language: "en",
       consent: { wording_version: await holdWording(request), language: "en", captured_via: "app" },
