@@ -81,11 +81,8 @@ class VoiceScript:
 
 # --- numbers -----------------------------------------------------------------------------------
 
-_EN_ONES = (
-    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
-    "fifteen sixteen seventeen eighteen nineteen"
-).split()
-_EN_TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+_EN_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+_EN_TENS = ["_", "_", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
 _EN_ORDINAL = {
     "one": "first",
     "two": "second",
@@ -153,7 +150,7 @@ def english_year(n: int) -> str:
     return english_number(n)
 
 
-_MS_ONES = "sifar satu dua tiga empat lima enam tujuh lapan sembilan".split()
+_MS_ONES = ["sifar", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "lapan", "sembilan"]
 
 
 def malay_number(n: int) -> str:
@@ -251,10 +248,8 @@ _WEEKDAYS = {
     "ms": ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad"),
 }
 _MONTHS = {
-    "en": (
-        "January February March April May June July August September October November December"
-    ).split(),
-    "ms": "Januari Februari Mac April Mei Jun Julai Ogos September Oktober November Disember".split(),
+    "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    "ms": ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai", "Ogos", "September", "Oktober", "November", "Disember"],
 }
 
 

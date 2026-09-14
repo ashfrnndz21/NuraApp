@@ -6,11 +6,11 @@ names. It is not profile data and carries no `profile_id`; the source a review w
 allowlist is the existing global `source` row, whose `review_status` already keeps a pending
 source unused. See docs/adr/0007-the-pharmacist-review-queue.md.
 
-Follows main's head when this story was written (0017_trends_routines_calendar); the operator
-repoints `down_revision` if another story lands first (0019 and 0020 are open elsewhere).
+Follows main's head when this story was pushed (0019_row_scope); the operator repoints
+`down_revision` if another story lands first.
 
 Revision ID: 0021_language
-Revises: 0017_trends_routines_calendar
+Revises: 0019_row_scope
 Create Date: 2026-09-15
 """
 
@@ -20,7 +20,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0021_language"
-down_revision = "0017_trends_routines_calendar"
+down_revision = "0019_row_scope"
 branch_labels = None
 depends_on = None
 

@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.channels.api.schemas import FactOut, utc
+from app.channels.api.voice_schemas import VoiceScriptOut
 from app.ingestion.models import EventNote
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
@@ -513,6 +514,8 @@ class AnswerOut(BaseModel):
     honest: list[str]
     boundary: list[str]
     spoken: list[str]
+    voice_script: VoiceScriptOut
+    """`spoken` as it is said (E22-03), the longer pause before the boundary."""
     withheld: list[Scope]
 
     @classmethod
@@ -531,5 +534,8 @@ class AnswerOut(BaseModel):
             honest=list(answer.honest),
             boundary=list(answer.boundary),
             spoken=answer.spoken,
+            voice_script=VoiceScriptOut.of(
+                answer.spoken, answer.language, "\n".join(answer.boundary)
+            ),
             withheld=list(answer.withheld),
         )

@@ -9,6 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.channels.api.voice_schemas import VoiceScriptOut
 from app.delivery.feed.models import (
     EngagementChannel,
     EngagementKind,
@@ -49,6 +50,9 @@ class FeedItemOut(BaseModel):
     source_id: uuid.UUID | None
     cite: dict[str, Any] | None
     boundary: str | None = None
+    voice_script: VoiceScriptOut
+    """The card as it is said (E22-03), computed from `voice` and nothing else: the digest is
+    what its pre-rendered audio is kept under."""
     day: str
     created_at: datetime
     expires_at: datetime

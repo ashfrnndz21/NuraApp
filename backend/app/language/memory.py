@@ -123,19 +123,23 @@ class Memory:
             self._patterns[language] = found
         return self._patterns[language]
 
-    def fill_of(self, line: str, language: str) -> Filled | None:
-        """The catalogue line a rendered line was filled from, and what went into each slot;
-        the most specific template wins. None for words that are not the catalogue's (a
-        compressed page, a memo, his own words)."""
+    def fills_of(self, line: str, language: str) -> Iterator[Filled]:
+        """Every catalogue line a rendered line could have been filled from, most specific
+        first, with what went into each slot."""
         text = line.strip()
         tries = [text, text[:1].lower() + text[1:]] if text[:1].isupper() else [text]
         for entry, pattern, names, _ in self._index(language):
             for candidate in tries:
                 match = pattern.fullmatch(candidate)
                 if match:
-                    values = {name: match.group(f"s{i}") for i, name in enumerate(names)}
-                    return entry, values
-        return None
+                    yield entry, {name: match.group(f"s{i}") for i, name in enumerate(names)}
+                    break
+
+    def fill_of(self, line: str, language: str) -> Filled | None:
+        """The catalogue line a rendered line was filled from, and what went into each slot;
+        the most specific template wins. None for words that are not the catalogue's (a
+        compressed page, a memo, his own words)."""
+        return next(self.fills_of(line, language), None)
 
     def __len__(self) -> int:
         return len(self.entries)

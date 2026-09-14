@@ -105,7 +105,7 @@ His words for things, in the three languages Nura speaks, so a line says the sam
 | This one we do not wait for | yang ini kita tidak tunggu | 这个我们不等 | zh "这个不能等"; zh "这个我们不能等" |
 | hospital letter | surat hospital | 出院信 | zh "医院信" |
 | insurance letter | surat insurans | 保险信 | |
-| your papers | surat-surat anda | 文件 | en "your record"; en "'s record"; ms "rekod" |
+| your papers | surat | 文件 | en "your record"; en "'s record"; ms "rekod" |
 | Today page | halaman Hari Ini | “今天”页面 | zh "今日页面" |
 | In simple words | kata-kata mudah | 简单的话 | |
 | not a doctor's advice | bukan nasihat doktor | 不是医生的意见 | zh "医生的建议" |

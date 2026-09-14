@@ -14,16 +14,19 @@ the promise the pager keeps.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
+from app.db import nested_unit_of_work
 from app.delivery.feed.models import (
     CAPS_OF,
     SUPPLY_OF,
@@ -43,6 +46,8 @@ from app.safety.plain_words import Finding, verify
 from app.state.service import NoBoundaryLine, StateView, render_from_state
 
 FEED_TARGET = FeedItem.__tablename__
+
+log = logging.getLogger("nura.delivery.feed")
 
 PRIORITY: dict[CardType, int] = {
     CardType.FLAG: 100,
@@ -168,7 +173,7 @@ async def create_item(
         surface = surface if surface is not None else SURFACE_OF.get(type)
         if surface is not None and not _ends_on_its_line(lines):
             raise NoBoundaryLine(f"a {type.value} card ends on the boundary line it carries")
-        return await render_from_state(
+        item = await render_from_state(
             session,
             FeedItem,
             context,
@@ -196,3 +201,18 @@ async def create_item(
             dedupe_key=dedupe_key,
             expires_at=expires_at,
         )
+    await _sample(session, item)
+    return item
+
+
+async def _sample(session: AsyncSession, item: FeedItem) -> None:
+    """One of the first fifty renderings of its type goes to the pharmacist's queue, de-identified
+    (E22-04, `app.language.review`). In a savepoint of its own: a sample that cannot be kept is
+    written to the log and never costs him the card."""
+    from app.language.review import sample_card
+
+    try:
+        async with nested_unit_of_work(session):
+            await sample_card(session, item)
+    except (Refusal, SQLAlchemyError) as skipped:
+        log.warning("review sample skipped: %s", type(skipped).__name__)

@@ -216,9 +216,11 @@ def test_twins_that_fill_other_slots_fail(tmp_path: Path) -> None:
         tmp_path,
         (
             "backend/app/cards/strings.py",
-            "# @patient\n"
-            'LINES = {"en": ("Call {doctor} today.",), "ms": ("Telefon hari ini.",),'
-            ' "zh": ("今天就打电话给{doctor}。",)}\n',
+            (
+                "# @patient\n"
+                'LINES = {"en": ("Call {doctor} today.",), "ms": ("Telefon hari ini.",),'
+                ' "zh": ("今天就打电话给{doctor}。",)}\n'
+            ),
         ),
     )
     assert _checks(report) == [("slots", "fail")]
@@ -231,10 +233,12 @@ def test_a_card_said_in_more_lines_in_one_language_is_one_card(tmp_path: Path) -
         tmp_path,
         (
             "backend/app/cards/strings.py",
-            "# @patient\n"
-            'READING = {"en": ("On {date} it was {top} over {bottom}.",),'
-            ' "ms": ("Pada {date} ia {top} atas {bottom}.",),'
-            ' "zh": ("{date}您量了血压。", "是{top}比{bottom}。")}\n',
+            (
+                "# @patient\n"
+                'READING = {"en": ("On {date} it was {top} over {bottom}.",),'
+                ' "ms": ("Pada {date} ia {top} atas {bottom}.",),'
+                ' "zh": ("{date}您量了血压。", "是{top}比{bottom}。")}\n'
+            ),
         ),
     )
     assert report.findings == []
@@ -245,15 +249,19 @@ def test_one_english_line_said_two_ways_fails_and_the_glossary_says_which(tmp_pa
         tmp_path,
         (
             "backend/app/cards/strings.py",
-            "# @patient\n"
-            'CARD = {"en": ("This one we do not wait for.",), "ms": ("Yang ini kita tidak tunggu.",),'
-            ' "zh": ("这个我们不等。",)}\n',
+            (
+                "# @patient\n"
+                'CARD = {"en": ("This one we do not wait for.",), "ms": ("Yang ini kita tidak tunggu.",),'
+                ' "zh": ("这个我们不等。",)}\n'
+            ),
         ),
         (
             "backend/app/replies/strings.py",
-            "# @patient\n"
-            'REPLY = {"en": ("This one we do not wait for.",), "ms": ("Yang ini kita tidak tunggu.",),'
-            ' "zh": ("这个我们不能等。",)}\n',
+            (
+                "# @patient\n"
+                'REPLY = {"en": ("This one we do not wait for.",), "ms": ("Yang ini kita tidak tunggu.",),'
+                ' "zh": ("这个我们不能等。",)}\n'
+            ),
         ),
     )
     phrase = [f for f in report.findings if f.check == "phrase"]
@@ -269,9 +277,11 @@ def test_words_that_change_only_as_a_new_version_are_a_note(tmp_path: Path) -> N
         tmp_path,
         (
             "backend/app/consent/texts.py",
-            "# @patient\n"
-            'WORDS = {"en": ("It stays in your record.",), "ms": ("Ia kekal dalam rekod anda.",),'
-            ' "zh": ("它留在您的文件里。",)}\n',
+            (
+                "# @patient\n"
+                'WORDS = {"en": ("It stays in your record.",), "ms": ("Ia kekal dalam rekod anda.",),'
+                ' "zh": ("它留在您的文件里。",)}\n'
+            ),
         ),
     )
     assert {(f.check, f.severity) for f in report.findings} == {("never", "note")}
@@ -284,9 +294,11 @@ def test_a_word_the_glossary_rules_out_fails_in_any_language(tmp_path: Path) -> 
         tmp_path,
         (
             "backend/app/cards/strings.py",
-            "# @patient\n"
-            'LETTER = {"en": ("It is in your hospital letter.",),'
-            ' "ms": ("Ia dalam surat hospital anda.",), "zh": ("它在您的医院信里。",)}\n',
+            (
+                "# @patient\n"
+                'LETTER = {"en": ("It is in your hospital letter.",),'
+                ' "ms": ("Ia dalam surat hospital anda.",), "zh": ("它在您的医院信里。",)}\n'
+            ),
         ),
     )
     assert ("never", "fail") in _checks(report)
@@ -300,9 +312,11 @@ def test_his_word_for_a_thing_is_the_same_phrase_in_malay_and_chinese(tmp_path: 
         tmp_path,
         (
             "backend/app/cards/strings.py",
-            "# @patient\n"
-            'PILL = {"en": ("Take the water pill with breakfast.",),'
-            ' "ms": ("Ambil ubat air bersama sarapan.",), "zh": ("早餐时吃去水药。",)}\n',
+            (
+                "# @patient\n"
+                'PILL = {"en": ("Take the water pill with breakfast.",),'
+                ' "ms": ("Ambil ubat air bersama sarapan.",), "zh": ("早餐时吃去水药。",)}\n'
+            ),
         ),
     )
     assert _checks(report) == [("term", "fail")]
