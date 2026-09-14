@@ -206,12 +206,17 @@ async def current_facts(
     subject: str | None = None,
     attribute: str | None = None,
     at: datetime | None = None,
+    scope: Scope = Scope.RECORDS,
     now: datetime | None = None,
 ) -> Sequence[Fact]:
     """The facts that hold at `at` (default now): unsuperseded, inside their window.
 
     Passing `at` is how the timeline asks what was known on a day; the window is on the
     fact's own validity, so a fact asserted later about an earlier time is still found.
+
+    Facts are records, and are read as such unless the caller names the scope the subject
+    falls under — the medicine list is read under `Scope.MEDICINES`, which is the key a
+    caregiver or a helper holds.
     """
     moment = at or now or utcnow()
     where: list[ColumnElement[bool]] = [
@@ -223,5 +228,5 @@ async def current_facts(
         where.append(Fact.subject == subject)
     if attribute is not None:
         where.append(Fact.attribute == attribute)
-    found = await audited_read(session, Fact, context, Scope.RECORDS, where=where, now=now)
+    found = await audited_read(session, Fact, context, scope, where=where, now=now)
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))

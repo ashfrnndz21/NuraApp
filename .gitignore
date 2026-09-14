@@ -6,3 +6,5 @@ ios/*.xcodeproj
 ios/build/
 infra/cdk.out/
 .env
+backend/*.db
+backend/*.db-journal

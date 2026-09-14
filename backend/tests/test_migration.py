@@ -22,9 +22,10 @@ from alembic.operations import Operations
 from sqlalchemy import Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
-from app.identity.models import Person, Profile
+from app.identity.models import LoginChallenge, LoginSession, Person, Profile
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.notes.models import Note
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
@@ -39,6 +40,9 @@ TABLES: tuple[Table, ...] = (
     Episode.__table__,
     Provider.__table__,
     Appointment.__table__,
+    LoginChallenge.__table__,
+    LoginSession.__table__,
+    Note.__table__,
 )
 
 
