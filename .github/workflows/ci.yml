@@ -14,6 +14,30 @@ jobs:
       - run: make test
       - run: make lint
       - run: make plain-words
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: npm, cache-dependency-path: web/package-lock.json }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: cd web && npm ci
+      - run: cd web && npm test
+      - run: cd web && npm run build
+      - run: cd web && npm run plain-words
+      - run: pip install -e "backend[dev]"
+      - run: cd web && npx playwright install --with-deps chromium
+      - name: Start the backend serving the build (make dev, in the background)
+        run: |
+          make migrate
+          nohup make dev > /tmp/make-dev.out 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/health && break; sleep 1; done
+          curl -sf -o /dev/null http://127.0.0.1:8000/app/
+      - run: cd web && npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report, path: web/playwright-report, if-no-files-found: ignore }
   ios:
     # macOS runners are billed at 10x minutes and exhausted the private-repo free tier in a
     # day while ios/ holds one smoke test. Off until Session 10 generates a real app; flip the
@@ -32,7 +56,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: ios-screenshot, path: ios/build/screenshot.png, if-no-files-found: ignore }
   automerge:
-    needs: [backend]
+    needs: [backend, web]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'risk:low')
     runs-on: ubuntu-latest
     # Auto-merge is not available on this private repository's plan; the operator merges

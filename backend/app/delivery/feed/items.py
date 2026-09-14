@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
+from app.delivery.feed.grammar import Action as CardAction
 from app.delivery.feed.grammar import (
-    Action,
     Direction,
     Grammar,
     action_for,
@@ -154,7 +154,7 @@ async def create_item(
     search_job_id: uuid.UUID | None = None,
     number: str | None = None,
     direction: Direction | None = None,
-    action: Action | None = None,
+    action: CardAction | None = None,
 ) -> FeedItem:
     """Write one card, or refuse it.
 

@@ -27,6 +27,7 @@ from app.safety.boundary import (
     INFERRING_SURFACES,
     LANGUAGES,
     NOT_ADVICE,
+    URGENT_CLOSING,
     WHAT_NURA_DID,
     Surface,
     boundary_line,
@@ -258,3 +259,36 @@ async def test_state_carries_the_boundary_in_the_profiles_language(deployment: D
     )
     assert hers.status_code == 200, hers.text
     assert hers.json()["boundary"] == seen.json()["boundary"]
+
+
+def test_an_urgent_card_closes_on_one_line_and_never_sends_him_to_his_doctor() -> None:
+    """A red flag's not-feeling-well card: the reassurance, the calls (the card's own lines,
+    between), and one closing line. After an emergency number nothing says "Ask your doctor."."""
+    assert boundary_lines(Surface.NOT_FEELING_WELL, "en", told="Mei", urgent=True) == (
+        "Mei knows now.",
+        "Nura does not decide what is wrong.",
+    )
+    assert boundary_lines(Surface.NOT_FEELING_WELL, "en", urgent=True) == (
+        "You did right to say so.",
+        "Nura does not decide what is wrong.",
+    )
+    for language in LANGUAGES:
+        urgent = boundary_lines(Surface.NOT_FEELING_WELL, language, told="Mei", urgent=True)
+        assert len(urgent) == 2 and urgent[-1] == URGENT_CLOSING[language]
+        assert NOT_ADVICE[language][0] not in urgent
+        assert is_boundary_line(Surface.NOT_FEELING_WELL, "\n".join(urgent))
+        assert not [f for f in verify(urgent[-1], language) if f.severity == "fail"]
+        # The ordinary card keeps the standard closing.
+        ordinary = boundary_lines(Surface.NOT_FEELING_WELL, language, told="Mei")
+        assert ordinary[-2] == NOT_ADVICE[language][0] and URGENT_CLOSING[language] not in ordinary
+    lettered = boundary_line(
+        Surface.NOT_FEELING_WELL, "en", told="Ash", letter="Come back today.", urgent=True
+    )
+    assert is_boundary_line(Surface.NOT_FEELING_WELL, lettered)
+    assert not is_boundary_line(Surface.NOT_FEELING_WELL, "Nura does not decide what is wrong.")
+    assert not is_boundary_line(
+        Surface.NOT_FEELING_WELL, "Mei knows now.\nNura does not decide what is wrong.\nAsk your doctor."
+    )
+    assert not is_boundary_line(Surface.BRIEF, "Mei knows now.\nNura does not decide what is wrong.")
+    with pytest.raises(ValueError):
+        boundary_lines(Surface.BRIEF, "en", urgent=True)

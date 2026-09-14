@@ -13,9 +13,12 @@ A rung is a `Delivery` row, audited as a SHARE when it reached a person; nobody 
 whose key does not cover the part it is about — the medicines for a dose, the emergency card
 for a flag — "only me" taken out. A rung with nobody on it is skipped and costs no wait.
 
-`escalate_flag` is the one door a red flag is escalated through: the WhatsApp thread calls it
-the moment a flag is heard, the feeling cloud the moment one is tapped, and E13's
-not-feeling-well notices call it too; the five-minute engine run is only the net under it.
+`escalate_flag` is the one door a red flag is escalated through, and the ladder is the one
+record of who is told: the WhatsApp thread calls it the moment a flag is heard, the feeling
+cloud the moment one is tapped, the not-feeling-well button and the symptom log (E13/E14) the
+moment one is said; the five-minute engine run is only the net under it. E19's `Escalation`
+rows and E13's per-person red-flag notices are no longer written: a ladder rung and its
+`Delivery` row are what they were.
 """
 
 from __future__ import annotations
@@ -74,11 +77,10 @@ RUNG_OF = {PATIENT: 0, HELPER: 1, ON_DUTY: 2, CHIEF: 3, KEY_HOLDER: 4}
 DOSE_RUNGS: tuple[tuple[str, int], ...] = ((PATIENT, 0), (HELPER, 30), (ON_DUTY, 30), (CHIEF, 30))
 """Him when the window closes; the helper half an hour later; whoever is on duty half an hour
 after that; the chief half an hour after that. The minutes are after the rung before."""
-FLAG_RUNGS: tuple[tuple[str, int], ...] = ((ON_DUTY, 0), (CHIEF, 5))
+FLAG_RUNGS: tuple[tuple[str, int], ...] = ((ON_DUTY, 0), (CHIEF, 5), (KEY_HOLDER, 5))
 """Whoever the roster puts on duty (the helper or a caregiver), at once; the chief five
-minutes later if nobody has answered."""
-FLAG_FALLBACK: tuple[tuple[str, int], ...] = ((KEY_HOLDER, 0),)
-"""With nobody on duty and no chief, everyone whose key holds the emergency card, at once."""
+minutes later if nobody has answered; then everyone else whose key holds the emergency card.
+With nobody on duty, the chief is asked at once; with no chief either, everyone else is."""
 
 
 class NotOnTheLadder(Refusal):
@@ -91,6 +93,10 @@ class Escalated:
 
     ladder: Ladder | None
     told: tuple[uuid.UUID, ...]
+    """Who a message reached, now."""
+    asked: tuple[uuid.UUID, ...]
+    """Who the ladder called first — the flag leads their feed, and a message went to them
+    by the first channel that could carry it (none, where none could)."""
     deliveries: tuple[Delivery, ...]
 
 
@@ -166,8 +172,6 @@ async def start(
         if ladder.dedupe_key == dedupe_key:
             return ladder
     rungs = await rungs_for(run, spec, scope, exclude)
-    if not rungs and subject is Subject.FLAG:
-        rungs = await rungs_for(run, FLAG_FALLBACK, scope, exclude)
     row = await audited_write(
         run.session,
         Ladder,
@@ -440,7 +444,7 @@ async def escalate_flag(
     if flag.profile_id != context.profile_id:
         raise NotOnTheLadder("the flag is on another profile")
     if flag.suppressed_because is not None:
-        return Escalated(ladder=None, told=(), deliveries=())
+        return Escalated(ladder=None, told=(), asked=(), deliveries=())
     run = await open_run(session, via=via, profile_id=context.profile_id, at=at or utcnow())
     ladder = await flag_ladder(run, flag, exclude=told_already)
     await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
@@ -449,8 +453,14 @@ async def escalate_flag(
         for sent in run.report
         if sent.delivery.outcome is DeliveryOutcome.SENT and sent.delivery.to_person_id is not None
     )
+    asked = tuple(
+        uuid.UUID(step["person_id"]) for step in ladder.rungs if step["after_minutes"] == 0
+    )
     return Escalated(
-        ladder=ladder, told=reached, deliveries=tuple(sent.delivery for sent in run.report)
+        ladder=ladder,
+        told=reached,
+        asked=asked,
+        deliveries=tuple(sent.delivery for sent in run.report),
     )
 
 

@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
 from app.db import as_utc, utcnow
-from app.delivery.feed.grammar import Direction, NotCardGrammar
+from app.delivery.feed.grammar import Direction
 from app.delivery.feed.items import NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
     CardFormat,

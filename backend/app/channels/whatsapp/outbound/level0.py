@@ -349,9 +349,9 @@ __all__ = [
     "Morning",
     "NoPatientYet",
     "compose_morning",
-    "send_morning",
     "run_family_notice",
     "run_feeling_check_in",
     "run_morning",
     "run_visit_card",
+    "send_morning",
 ]

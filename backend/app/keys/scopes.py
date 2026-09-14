@@ -82,6 +82,20 @@ _SUBJECT_SCOPES: dict[str, Scope] = {
 }
 
 
+READING_PREFIX = "reading:"
+"""A subject named `reading:<thing>` is a reading, whatever the thing."""
+
+NAMED_SUBJECTS = frozenset(_SUBJECT_SCOPES)
+"""Every subject this module names a scope for; any other sits under RECORDS."""
+
+
+def subjects_under(scope: Scope) -> frozenset[str]:
+    """The named subjects whose facts sit under `scope`. READINGS also takes every subject
+    starting `reading:`, and RECORDS every subject not named here (`scope_for_subject`), so
+    a query narrowing facts to one scope says the same thing this module says."""
+    return frozenset(subject for subject, held in _SUBJECT_SCOPES.items() if held is scope)
+
+
 def scope_for_subject(subject: str | None) -> Scope:
     """Which scope a fact about `subject` sits under. Decided here, never by the caller.
 
@@ -90,7 +104,7 @@ def scope_for_subject(subject: str | None) -> Scope:
     """
     if subject is None:
         return Scope.RECORDS
-    if subject.startswith("reading:"):
+    if subject.startswith(READING_PREFIX):
         return Scope.READINGS
     return _SUBJECT_SCOPES.get(subject, Scope.RECORDS)
 

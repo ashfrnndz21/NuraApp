@@ -67,11 +67,16 @@ from app.medicines.service import LineView, active_lines
 from app.medicines.strings import say_date
 from app.memory.spine import upcoming_appointments
 from app.regions import REGION_TZ
-from app.safety.red_flags import Escalation, open_flags
+from app.safety.red_flags import open_flags
 
 PATTERN_DAYS = 7
 PATTERN_AT_LEAST = 3
 """Three untapped tablets in seven days: a count the family is told, never a diagnosis."""
+
+
+def _line_start(words: str) -> str:
+    """His words for a thing, at the start of a line: "The water pill runs out on …"."""
+    return words[:1].upper() + words[1:]
 
 
 class NothingToSay(Refusal):
@@ -122,16 +127,7 @@ async def _flags(run: Run) -> None:
     for flag in await open_flags(run.session, context=run.acting):
         if flag.suppressed_because is not None:
             continue
-        written = await audited_read(
-            run.session,
-            Escalation,
-            run.acting,
-            Scope.EMERGENCY,
-            where=(Escalation.flag_id == flag.id,),
-            channel=Channel.SYSTEM,
-        )
-        knew = [uuid.UUID(one) for row in written for one in row.told]
-        ladder = await flag_ladder(run, flag, exclude=knew)
+        ladder = await flag_ladder(run, flag, exclude=())
         await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
 
 
@@ -255,10 +251,12 @@ async def _reorder(run: Run, lines: Sequence[LineView]) -> None:
                 kind="reorder_family",
                 params={
                     "name": run.profile.display_name,
-                    "medicine": theirs(
-                        medicine_words(run.via.providers.drug_registry, generic, lang),
-                        run.profile.display_name,
-                        lang,
+                    "medicine": _line_start(
+                        theirs(
+                            medicine_words(run.via.providers.drug_registry, generic, lang),
+                            run.profile.display_name,
+                            lang,
+                        )
                     ),
                     "day": say_date(runs_out, lang),  # type: ignore[arg-type]
                 },

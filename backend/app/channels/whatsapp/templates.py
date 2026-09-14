@@ -153,7 +153,7 @@ REORDER_FAMILY = Template(
     "reorder_family",
     ("name", "medicine", "day"),
     {
-        "en": "{name}'s tablets are running low.\nThe last of {medicine} is on {day}.\nPlease order more for {name}.",
+        "en": "{name}'s tablets are running low.\n{medicine} runs out on {day}.\nCan you order more for {name}?",
         "ms": "Ubat {name} hampir habis.\n{medicine} habis pada {day}.\nTolong pesan lagi untuk {name}.",
         "zh": "{name}的药快吃完了。\n{medicine}{day}就吃完了。\n请再为{name}订一些。",
     },

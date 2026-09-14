@@ -58,9 +58,11 @@ from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
+from app.memory.attach import attach_from_ingestion
 from app.memory.episodic import held_here, record_event, require_artifact
 from app.memory.models import Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
+from app.memory.working import require_open_episode
 from app.regions import REGION_TZ
 from app.safety.high_risk import high_risk_class
 
@@ -396,9 +398,11 @@ async def review_draft_for(
     context: KeyContext,
     card_id: uuid.UUID,
     decisions: Sequence[Decision],
+    episode_id: uuid.UUID | None = None,
 ) -> ReviewDraft:
     """What the person is saying yes to: this card, its photo, every field with his
-    decision. The surface mints the confirmation over this; the confirm recomputes it."""
+    decision — and, when he named one, the open episode the card goes into (E03-02). The
+    surface mints the confirmation over this; the confirm recomputes it."""
     card = await require_review_card(session, context=context, card_id=card_id)
     if not card.is_open:
         raise AlreadyConfirmed(f"review card {card_id} was confirmed at {card.confirmed_at}")
@@ -407,6 +411,7 @@ async def review_draft_for(
         card_id=card.id,
         artifact_id=card.artifact_id,
         fields=tuple(_decided(fields, decisions, context.person_id)),
+        episode_id=episode_id,
     )
 
 
@@ -430,6 +435,7 @@ async def _write_fact_for(
     unit: str | None,
     event_id: uuid.UUID | None,
     valid_from: datetime,
+    episode_id: uuid.UUID | None = None,
 ) -> Fact:
     draft = FactDraft(
         subject=subject,
@@ -440,7 +446,7 @@ async def _write_fact_for(
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
         artifact_id=card.artifact_id,
         event_id=event_id,
-        episode_id=None,
+        episode_id=episode_id,
         supersedes_id=None,
     )
     yes = await confirm(session, context, draft)
@@ -456,6 +462,7 @@ async def _write_fact_for(
         confirmation_id=yes.id,
         artifact_id=draft.artifact_id,
         event_id=draft.event_id,
+        episode_id=draft.episode_id,
         valid_from=valid_from,
     )
 
@@ -468,6 +475,7 @@ async def confirm_review_card(
     card_id: uuid.UUID,
     decisions: Sequence[Decision],
     confirmation_id: uuid.UUID,
+    episode_id: uuid.UUID | None = None,
 ) -> tuple[ReviewCard, Sequence[ReviewField], Sequence[Fact]]:
     """Close the card on the person's yes and write the facts it decided.
 
@@ -484,8 +492,16 @@ async def confirm_review_card(
     as the event it records, on the date on the paper, which its facts name beside the page.
     A value typed in before the yes, or corrected in it, leaves the field CORRECTED and
     naming who typed it.
+
+    With `episode_id` the yes was for the card going into that open episode: the event and
+    each fact name the episode, and the photo hangs off it (`attach_from_ingestion`, E03-02)
+    under the same yes — the automatic way a paper joins the concern it belongs to.
     """
-    draft = await review_draft_for(session, context=context, card_id=card_id, decisions=decisions)
+    draft = await review_draft_for(
+        session, context=context, card_id=card_id, decisions=decisions, episode_id=episode_id
+    )
+    if episode_id is not None:
+        await require_open_episode(session, context=context, episode_id=episode_id)
     card = await require_review_card(session, context=context, card_id=card_id)
     artifact = await require_artifact(session, context=context, artifact_id=card.artifact_id)
     fields = await card_fields(session, context=context, card_id=card_id)
@@ -497,11 +513,22 @@ async def confirm_review_card(
     try:
         if card.document_kind is DocumentKind.DEVICE_SCREEN:
             fact_of = await _write_reading(
-                session, context=context, card=card, artifact=artifact, draft=draft, now=moment
+                session,
+                context=context,
+                card=card,
+                artifact=artifact,
+                draft=draft,
+                now=moment,
+                episode_id=episode_id,
             )
         else:
             fact_of = await _write_paper(
-                session, context=context, card=card, artifact=artifact, draft=draft
+                session,
+                context=context,
+                card=card,
+                artifact=artifact,
+                draft=draft,
+                episode_id=episode_id,
             )
         written = list(dict.fromkeys(fact_of.values()))
         for field in fields:
@@ -540,6 +567,14 @@ async def confirm_review_card(
         )
     finally:
         session.info.pop(REVIEW_IN_PROGRESS, None)
+    if episode_id is not None:
+        await attach_from_ingestion(
+            session,
+            context=context,
+            artifact_id=card.artifact_id,
+            episode_id=episode_id,
+            by_person_id=yes.person_id,
+        )
     return card, fields, written
 
 
@@ -550,6 +585,7 @@ async def _write_paper(
     card: ReviewCard,
     artifact: Artifact,
     draft: ReviewDraft,
+    episode_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, Fact]:
     """One fact per kept field, valid from the date on the paper; for a paper that records a
     moment (`DOCUMENT_EVENTS`), the event first, on that date, and every fact names it."""
@@ -566,6 +602,7 @@ async def _write_paper(
             occurred_at=opens,
             label=label,
             artifact_id=artifact.id,
+            episode_id=episode_id,
         )
         event_id = event.id
     fact_of: dict[uuid.UUID, Fact] = {}
@@ -580,6 +617,7 @@ async def _write_paper(
             unit=decided.unit,
             event_id=event_id,
             valid_from=opens,
+            episode_id=episode_id,
         )
     return fact_of
 
@@ -592,6 +630,7 @@ async def _write_reading(
     artifact: Artifact,
     draft: ReviewDraft,
     now: datetime,
+    episode_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, Fact]:
     """A machine's screen: one READING event at the time on the screen — or when the photo
     was taken, if that was rejected — and the facts of the reading, each naming the event
@@ -607,6 +646,7 @@ async def _write_reading(
         occurred_at=taken_at,
         label=reading.label,
         artifact_id=artifact.id,
+        episode_id=episode_id,
     )
     fact_of: dict[uuid.UUID, Fact] = {}
     for measured in reading.facts:
@@ -620,6 +660,7 @@ async def _write_reading(
             unit=measured.unit,
             event_id=event.id,
             valid_from=taken_at,
+            episode_id=episode_id,
         )
         for field_id in measured.field_ids:
             fact_of[field_id] = fact

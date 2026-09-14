@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, and_, not_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -34,7 +34,13 @@ from app.drafts import FactDraft
 from app.errors import Refusal
 from app.keys.confirm import NotAConfirmerHere, consume_confirmation
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope, scope_for_subject
+from app.keys.scopes import (
+    NAMED_SUBJECTS,
+    READING_PREFIX,
+    Scope,
+    scope_for_subject,
+    subjects_under,
+)
 from app.memory.episodic import (
     NoSuchArtifact,
     NoSuchEvent,
@@ -44,6 +50,21 @@ from app.memory.episodic import (
 )
 from app.memory.models import ConfidenceState, Fact
 from app.memory.working import require_open_episode
+
+
+def fact_is_under(scope: Scope) -> ColumnElement[bool]:
+    """The facts whose subject sits under `scope`, as `app.keys.scopes.scope_for_subject`
+    decides it — for a read that gathers facts one scope at a time, so a key reads the
+    subjects its scopes cover and never a row of another scope's subject."""
+    if scope is Scope.RECORDS:
+        return and_(
+            Fact.subject.not_in(sorted(NAMED_SUBJECTS)),
+            not_(Fact.subject.startswith(READING_PREFIX)),
+        )
+    named = Fact.subject.in_(sorted(subjects_under(scope)))
+    if scope is Scope.READINGS:
+        return or_(named, Fact.subject.startswith(READING_PREFIX))
+    return named
 
 
 class NoProvenance(Refusal):

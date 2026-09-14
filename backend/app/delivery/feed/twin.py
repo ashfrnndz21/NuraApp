@@ -15,10 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard, audited_read
 from app.audit.models import Action
+from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.models import FeedItem
 from app.delivery.voice import Voice, Voiced, voice_language, voiced
 from app.errors import Refusal
-from app.delivery.feed.engagement import NoSuchItem
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope

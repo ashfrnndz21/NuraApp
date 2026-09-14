@@ -12,7 +12,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
+from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
 from app.channels.whatsapp.provider import NotAWebhook
@@ -26,6 +28,11 @@ from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
+from app.delivery.feed.twin import NotInThatLanguage
+from app.delivery.triggers.deliver import NoOneToActFor
+from app.delivery.triggers.engine import NothingToSay
+from app.delivery.triggers.ladder import NotOnTheLadder
+from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
@@ -47,16 +54,19 @@ from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
+from app.ingestion.voice import VoiceNoteTooLong
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.memory.attach import AlreadyHangsThere
+from app.memory.providers import NotAPlaceNote, NoteNamesHealth
+from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
+from app.memory.timeline import NotACursor
+from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
-from app.delivery.feed.twin import NotInThatLanguage
-from app.delivery.triggers.deliver import NoOneToActFor
-from app.delivery.triggers.engine import NothingToSay
-from app.delivery.triggers.ladder import NotOnTheLadder
-from app.state.service import NoState
+from app.search.ask import NotAQuestion
+from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
@@ -96,6 +106,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoWordsInThatLanguage, 404),
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
@@ -104,12 +115,31 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NothingToSay, 404),
     # Only someone a flag's ladder reached, whose key covers it, answers it (E11-06).
     (NotOnTheLadder, 403),
-    # A card's spoken twin is said in the card's own language (E11-04).
-    (NotInThatLanguage, 409),
+    # No audio for this card (E11-04): not its language, no voice in it yet, too long to say.
+    # The web client then says it with the phone's own voice.
+    (NotInThatLanguage, 404),
+    (NoVoiceFor, 404),
+    (TooLongToSay, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
+    # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
+    # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
+    (NoSuchAppointment, 404),
+    (NoSuchEpisode, 404),
+    (NoSuchProvider, 404),
+    (AlreadyHangsThere, 409),
+    (EpisodeAlreadyOpen, 409),
+    (EpisodeAlreadyClosed, 409),
+    (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
+    (VoiceNoteTooLong, 413),
+    # The record moved past the State a card was composed from: read it again, compose again.
+    (StaleState, 409),
+    # A safety template failed the plain-words standard at run time: the fault is the
+    # catalogue's, not the caller's. (E12's `NotPlainWords` — words the caller offered — is a
+    # 400 with its findings, below.)
+    (CatalogueNotPlainWords, 500),
     # Free text needs the 24-hour window; outside it only a template goes.
     (OutsideTheWindow, 409),
     # A PDF or a note on an event is not this big (E02-03, E02-06).
@@ -140,8 +170,15 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    # The timeline's (E03): a place note that is not one line, or that names a medicine or a
+    # condition; a cursor that is not the last page's; a question that is not one line.
+    NotAPlaceNote,
+    NoteNamesHealth,
+    NotACursor,
+    NotAQuestion,
 )
-"""Named so that a reader of this file sees every family refusal; each is a 400."""
+"""Named so that a reader of this file sees every family and timeline refusal; each is a
+400."""
 
 
 def status_of(refusal: Refusal) -> int:

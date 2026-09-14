@@ -51,6 +51,7 @@ from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
+from app.db import as_utc, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import Via
 from app.delivery.triggers.ladder import (
@@ -60,7 +61,6 @@ from app.delivery.triggers.ladder import (
     escalate_flag,
     medicine_words,
 )
-from app.db import as_utc, unit_of_work, utcnow
 from app.drafts import FactDraft
 from app.errors import Refusal
 from app.identity.models import Person, Profile
@@ -86,14 +86,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
-from app.safety.red_flags import (
-    Flag,
-    detect,
-    escalate,
-    raise_flag,
-    record_the_moment,
-    roster_for,
-)
+from app.safety.red_flags import Flag, detect, raise_flag, record_the_moment
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -364,7 +357,6 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             artifact_id=artifact.id,
             flag_id=flag.id,
         )
-    roster = await roster_for(session, context=work.context)
     doctor = await _doctor(session, work)
     # The ladder at once (E11-06): straight to the roster, whatever the hour, whatever the
     # caps. The reply names exactly who it reached — nobody is said to know who was not told.
@@ -388,11 +380,8 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         await _say(session, work, key, doctor=doctor, names=join_names(names, work.language))
     else:
         await _say(session, work, "red_flag_alone", doctor=doctor)
-    # The calling order, and who has had the word so far: the poster and whoever the
-    # ladder's first rung reached. Later rungs are the ladder's own rows (`Delivery`).
-    await escalate(
-        session, context=work.context, flag=flag, roster=roster, told=[work.person.id, *reached]
-    )
+    # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
+    # and who is still to be asked; nothing else is written beside it.
     return Handled(
         outcome="red_flag",
         replies=tuple(work.replies),

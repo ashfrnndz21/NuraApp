@@ -523,6 +523,7 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         "backend/app/safety/boundary.py",
         "backend/app/safety/recording.py",
         "ios/Nura/**",
+        "web/src/strings/**",
     ]
     assert patient_paths("no front matter") == []
 

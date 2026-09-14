@@ -96,7 +96,7 @@ def seconds_to_say(text: str, language: str) -> float:
 
 def silence(seconds: float) -> bytes:
     """A mono 8-bit WAV of silence, `seconds` long."""
-    data = b"\x80" * int(round(seconds * SAMPLE_RATE))
+    data = b"\x80" * round(seconds * SAMPLE_RATE)
     fmt = struct.pack("<IHHIIHH", 16, 1, 1, SAMPLE_RATE, SAMPLE_RATE, 1, 8)
     return (
         b"RIFF"

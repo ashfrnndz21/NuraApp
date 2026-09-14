@@ -18,10 +18,9 @@ or steward reads the caregiver's list, narrowed to the parts of the record the k
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
-
-import logging
 
 from fastapi import APIRouter, Query, Request, Response, status
 
@@ -101,8 +100,11 @@ async def feed_voice(
     session: Db,
     language: str | None = Query(default=None, max_length=8),
 ) -> Response:
-    """The card's spoken twin as audio (E11-04): under thirty seconds, from the region's cache
-    when it has been said before. Played on a tap; nothing here plays anything by itself."""
+    """The card's spoken twin as audio (E11-04): the bytes themselves, with their content type,
+    under thirty seconds, from the region's cache when it has been said before. 404 when there
+    is no audio for this card in that language (no voice for it yet, too long to say, or not
+    the card's language): the phone then says it with its own voice. Played on a tap; nothing
+    here plays anything by itself."""
     providers = providers_of(request)
     said = await spoken_twin(
         session,
@@ -118,7 +120,7 @@ async def feed_voice(
         headers={
             "X-Duration-Seconds": f"{said.spoken.duration_seconds:.1f}",
             "X-Voice-Cache": "hit" if said.cached else "miss",
-            "Cache-Control": "private, max-age=86400",
+            "Cache-Control": "private",
         },
     )
 

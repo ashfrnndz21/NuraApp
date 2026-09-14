@@ -31,8 +31,8 @@ from app.channels.whatsapp.strings import REPLIES, reply
 from app.channels.whatsapp.templates import TEMPLATES, language_of, render
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
-from app.delivery.voice import Voice, voiced
 from app.db import as_utc, utcnow
+from app.delivery.voice import Voice, voiced
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.ingestion.objects import ObjectStore

@@ -41,6 +41,10 @@ class Settings:
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
     to start."""
+    web_dist: str | None = None
+    """NURA_WEB_DIST: the built web client (`web/dist`, from `make build-web`). When the
+    directory exists the API serves it at `/app`, so one origin serves the app and its API;
+    when it is unset or missing there is no `/app` and the API is unchanged."""
     whatsapp_provider: str = "fixture"
     """NURA_WHATSAPP_PROVIDER: which business solution provider carries WhatsApp
     (`app.channels.whatsapp.provider`). Only the fixture is built, and it runs only on a
@@ -83,6 +87,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
+        web_dist=source.get("NURA_WEB_DIST") or None,
         whatsapp_provider=source.get("NURA_WHATSAPP_PROVIDER", "fixture"),
         whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
         whatsapp_dev_secret=source.get("NURA_WHATSAPP_DEV_SECRET") or None,
