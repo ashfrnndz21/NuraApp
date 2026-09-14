@@ -53,16 +53,23 @@ from app.memory.models import ConfidenceState, Fact
 from app.regions import REGION_TZ, Region
 from app.safety.models import Notice
 from app.safety.not_feeling_well import (
+    BUTTON_SCOPE,
     REPORTED,
     SYMPTOM,
     Escalated,
+    Family,
     Heard,
     Line,
+    Situation,
     capture,
+    compose,
+    decide,
     escalate,
     family_of,
+    within_the_boundary,
     write_the_moment,
 )
+from app.safety.people import key_holder
 from app.safety.red_flags import Feeling, detect
 from app.safety.symptoms import Duration, Symptom, parse_symptoms
 from app.state.models import Posture
@@ -112,6 +119,9 @@ class Logged:
     notified_person_ids: list[uuid.UUID]
     notices: list[Notice]
     suppressed: list[Feeling]
+    card: tuple[Line, ...] | None = None
+    """When a red flag was raised: the not-feeling-well button's urgent card, the lines he is
+    shown next (W7). None otherwise."""
 
 
 def _lines(
@@ -232,6 +242,7 @@ async def log_symptom(
     notified: list[uuid.UUID] = []
     posture: Posture | None = None
     escalated: Escalated | None = None
+    card: tuple[Line, ...] | None = None
     if feeling is not None:
         family = await family_of(session, context=context, profile=profile)
         escalated = await escalate(
@@ -241,6 +252,9 @@ async def log_symptom(
             flag_id = escalated.first.id
             notified = list(escalated.asked)
             posture = Posture.ACT
+            card = await _urgent_card(
+                session, context=context, family=family, asked=escalated.asked, language=lang
+            )
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
 
     _event, written = await write_the_moment(
@@ -276,7 +290,39 @@ async def log_symptom(
         notified_person_ids=notified or [notice.to_person_id for notice in notices],
         notices=notices,
         suppressed=list(heard.suppressed),
+        card=card,
     )
+
+
+async def _urgent_card(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    family: Family,
+    asked: Sequence[uuid.UUID],
+    language: str,
+) -> tuple[Line, ...]:
+    """The button's urgent card for a red flag said in the log: the same lines the button shows
+    — whoever the ladder called first as who knows, the ambulance, the chief, the one closing
+    line — from the same table, verified the same way. Nothing is written here: the flag, the
+    notices and the ladder were written before it, as the button writes them."""
+    if asked:
+        first = await key_holder(session, context, asked[0], scope=BUTTON_SCOPE)
+        if first is not None:
+            family = Family(chief=first, to_tell=family.to_tell, everyone=family.everyone)
+    situation = Situation(
+        red_flag=True,
+        heard=True,
+        missed=None,
+        chief=family.chief,
+        others_told=bool(family.everyone),
+        region=context.region,
+    )
+    told = None if family.chief is None else family.chief.display_name
+    lines = compose(
+        decide(situation), language=language, chief=family.chief, missed_medicine=None, doctor=None
+    )
+    return tuple(within_the_boundary(lines, language=language, doctor=None, told=told, urgent=True))
 
 
 @audited(Action.READ, SYMPTOM_SCOPE, Fact.__tablename__)

@@ -10,6 +10,12 @@ import { RecordScreen } from "./screens/record/Record";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
 import { TodayScreen } from "./screens/Today";
 import { VisitScreen } from "./screens/Visit";
+import { BriefScreen } from "./screens/Brief";
+import { FeelingScreen } from "./screens/Feeling";
+import { NotWellScreen } from "./screens/NotWell";
+import { QuestionsScreen } from "./screens/Questions";
+import { SymptomsScreen } from "./screens/Symptoms";
+import { WhatToDoScreen } from "./screens/WhatToDo";
 import { profile, restored, token } from "./store/session";
 import { afterRestoreFailure } from "./restore";
 
@@ -62,5 +68,17 @@ export function App(): JSX.Element | null {
       return <RecordScreen at={current.at ?? { name: "hub" }} />;
     case "onboarding":
       return <OnboardingScreen />;
+    case "notWell":
+      return <NotWellScreen />;
+    case "whatToDo":
+      return <WhatToDoScreen lines={current.lines} offline={current.offline} refusal={current.refusal} />;
+    case "feeling":
+      return <FeelingScreen tap={current.tap} />;
+    case "symptoms":
+      return <SymptomsScreen />;
+    case "brief":
+      return <BriefScreen appointmentId={current.appointmentId} />;
+    case "questions":
+      return <QuestionsScreen appointmentId={current.appointmentId} />;
   }
 }

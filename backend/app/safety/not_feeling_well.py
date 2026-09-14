@@ -970,6 +970,60 @@ async def not_feeling_well(
     )
 
 
+# --- when the phone cannot reach Nura --------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class OfflineCards:
+    """The two cards the phone keeps for when it cannot reach Nura at all (the web client, W7).
+
+    When either is shown, nothing was written and nobody was told, and the phone cannot read
+    what he said for a red flag. `red_flag` is for a red word on the feeling cloud tapped with
+    no network: the urgent card's shape — the reassurance, that the family was not told, the
+    ambulance, then the chief — and the one closing line. `unknown` is for the button pressed
+    with no network, whatever he said: call the family now, and the ambulance if it is very
+    bad. Both end on "Nura does not decide what is wrong.", never "Ask your doctor." after an
+    emergency number (`app.safety.boundary`). Every line is the catalogue's, through `render`.
+    Nothing is written by reading them."""
+
+    language: str
+    emergency_number: str
+    red_flag: tuple[Line, ...]
+    unknown: tuple[Line, ...]
+
+
+OFFLINE_TARGET = "offline_card"
+
+
+@audited(Action.READ, BUTTON_SCOPE, OFFLINE_TARGET)
+async def offline_cards(
+    session: AsyncSession, *, context: KeyContext, language: str | None = None
+) -> OfflineCards:
+    """The two offline cards for this profile, in `language` or the profile's own, naming the
+    chief the button would name now (`family_of`) and the region's ambulance number. Read
+    under the button's door, which every key holds: whoever is with him may need them."""
+    profile = await audited_profile_read(session, context)
+    lang = language_of(language or profile.language)
+    family = await family_of(session, context=context, profile=profile)
+    chief = family.chief.display_name if family.chief is not None else None
+    number = EMERGENCY_NUMBER[context.region]
+    red = ["nfw.offline_not_sent", f"nfw.call_{number}"]
+    red += ["nfw.then_call_chief"] if chief else []
+    unknown = [
+        "nfw.offline_not_sent",
+        "nfw.offline_call_chief" if chief else "nfw.offline_call_family",
+        f"nfw.offline_bad_{number}",
+    ]
+
+    def card(ids: list[str]) -> tuple[Line, ...]:
+        lines = [Line(one, render(one, lang, chief=chief or "")) for one in ids]
+        return tuple(within_the_boundary(lines, language=lang, doctor=None, told=None, urgent=True))
+
+    return OfflineCards(
+        language=lang, emergency_number=number, red_flag=card(red), unknown=card(unknown)
+    )
+
+
 __all__ = [
     "ANCHOR_HOURS",
     "BUTTON_SCOPE",
@@ -982,6 +1036,7 @@ __all__ = [
     "Heard",
     "Line",
     "NothingSaid",
+    "OfflineCards",
     "SaidTwice",
     "Situation",
     "WhatToDoNow",
@@ -991,5 +1046,6 @@ __all__ = [
     "family_of",
     "not_feeling_well",
     "notice_lines",
+    "offline_cards",
     "write_the_moment",
 ]

@@ -32,7 +32,7 @@ from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_car
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType, FeedItem
-from app.delivery.nudges.models import Nudge, NudgeKind
+from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import theirs
 from app.delivery.triggers.deliver import (
     Firing,
@@ -519,6 +519,27 @@ async def _nudges(run: Run) -> None:
         where=(Nudge.day == run.day, Nudge.send_after <= run.at, Nudge.expires_at > run.at),
         channel=Channel.SYSTEM,
     )
+    # What he did with them in the app (W7): a nudge he accepted or said "Not today" to there is
+    # not sent to him again.
+    answered = {
+        row.nudge_id
+        for row in (
+            await audited_read(
+                run.session,
+                NudgeResponse,
+                run.acting,
+                Scope.PROFILE,
+                where=(
+                    NudgeResponse.nudge_id.in_([nudge.id for nudge in nudges]),
+                    NudgeResponse.person_id == run.patient.id,
+                    NudgeResponse.kind.in_((ResponseKind.ACCEPTED, ResponseKind.DISMISSED)),
+                ),
+                channel=Channel.SYSTEM,
+            )
+            if nudges
+            else []
+        )
+    }
     rows = [*await run.deliveries(), *(sent.delivery for sent in run.report)]
     reminded = {
         str(row.why.get("appointment_id"))
@@ -551,6 +572,16 @@ async def _nudges(run: Run) -> None:
                 state=await run.state(),
             )
 
+        if nudge.id in answered:
+            if not any(row.dedupe_key == firing.dedupe_key for row in rows):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason="answered in the app",
+                )
+            continue
         visit = str((nudge.reason or {}).get("appointment_id"))
         if nudge.kind is NudgeKind.ANTICIPATION and visit in reminded:
             # The visit reminder reached him today: the nudge would say it a second time.

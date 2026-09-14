@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
@@ -718,3 +718,45 @@ async def respond(
         event_id=event.id,
         at=moment,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class DayNudge:
+    """One nudge handed over for the day, and what the person reading has done with it."""
+
+    nudge: Nudge
+    responses: tuple[ResponseKind, ...]
+
+
+@audited(Action.READ, Scope.PROFILE, NUDGE)
+async def day_nudges(
+    session: AsyncSession, *, context: KeyContext, day: date | None = None
+) -> tuple[date, tuple[DayNudge, ...], int]:
+    """The nudges handed over for `day` (today on his wall by default), best first, each with
+    what this person has done with it — for the app to show and answer. A push carries no
+    words (`app.delivery.push`): the phone reads the nudge here. A nudge written under a part
+    the key does not hold is counted in the third value and never shown (ADR 0004)."""
+    day = day or _local(utcnow(), context).date()
+    rows = await audited_read(
+        session, Nudge, context, Scope.PROFILE, where=(Nudge.day == day.isoformat(),)
+    )
+    readable = [nudge for nudge in rows if context.allows(nudge.scope)]
+    mine: dict[uuid.UUID, list[ResponseKind]] = {}
+    if readable:
+        answered = await audited_read(
+            session,
+            NudgeResponse,
+            context,
+            Scope.PROFILE,
+            where=(
+                NudgeResponse.nudge_id.in_([nudge.id for nudge in readable]),
+                NudgeResponse.person_id == context.person_id,
+            ),
+        )
+        for row in sorted(answered, key=lambda one: as_utc(one.at)):
+            mine.setdefault(row.nudge_id, []).append(row.kind)
+    shown = tuple(
+        DayNudge(nudge, tuple(mine.get(nudge.id, ())))
+        for nudge in sorted(readable, key=lambda n: (-n.priority, as_utc(n.handed_over_at)))
+    )
+    return day, shown, len(rows) - len(readable)

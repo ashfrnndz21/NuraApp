@@ -172,6 +172,8 @@ export interface FeedItemOut {
   day: string;
   created_at: string;
   expires_at: string;
+  /** For today's top three (E11-02): alert, reminder or insight. */
+  category?: string | null;
 }
 
 export interface FeedPageOut {
@@ -394,6 +396,13 @@ export interface SummaryItemOut {
   /** Where in the recording this was said (E02-05); null when the notes were typed. */
   clip_start_s: number | null;
   clip_end_s: number | null;
+  /** Where in the transcript it was heard, by character; null when there is none. */
+  span?: { start: number; end: number } | null;
+  /** Once the card is confirmed, what the item became. */
+  memo_id?: string | null;
+  appointment_id?: string | null;
+  fact_id?: string | null;
+  flag_id?: string | null;
 }
 
 /** The post-visit card (E05-05): the lines for him, the boundary last, the items behind them. */
@@ -409,6 +418,8 @@ export interface VisitSummaryOut {
   boundary: string | null;
   items: SummaryItemOut[];
   created_at: string;
+  /** When his yes closed the card (E05-05); null while it waits for it. */
+  confirmed_at?: string | null;
   recording_artifact_id: string | null;
 }
 
@@ -998,6 +1009,319 @@ export interface MoreOut {
   event_id: string;
   quantity: number;
   count: CountOut | null;
+}
+
+// --- W7: the patient's day (E05-01, E05-02, E05-05, E13-02, E14-01, E17, E11-07, E21-03) -----
+
+/** One line the backend wrote, with the template it came from. */
+export interface IdLineOut {
+  id: string;
+  text: string;
+}
+
+/** One line of the pre-visit brief: its section (purpose, changed, questions, bring,
+ *  boundary), the words as printed and as said. */
+export interface BriefLineOut {
+  section: string;
+  key: string;
+  text: string;
+  spoken: string;
+  sources: string[];
+}
+
+/** The pre-visit brief (E05-01, `GET …/appointments/{appt}/brief`), ending on its boundary. */
+export interface BriefOut {
+  brief_id: string;
+  appointment_id: string;
+  language: string;
+  state_id: string;
+  built_at: string;
+  lines: BriefLineOut[];
+  boundary: string | null;
+}
+
+/** One question for the visit (E05-02), with its source. */
+export interface VisitQuestionOut {
+  question_id: string;
+  appointment_id: string;
+  text: string;
+  language: string;
+  source: string;
+  source_kind: string | null;
+  source_ids: string[];
+  priority: number;
+  added_by_person_id: string | null;
+  supersedes_id: string | null;
+  removed: boolean;
+  state_id: string;
+  created_at: string;
+}
+
+/** The questions, and his one card: the first three, a reassurance, the boundary. */
+export interface VisitQuestionsOut {
+  questions: VisitQuestionOut[];
+  card: string[];
+  spoken_card: string[];
+}
+
+/** Add (`text`), edit (`text`, `question_id`) or remove (`question_id`, `remove`) one. */
+export interface QuestionChange {
+  text?: string;
+  question_id?: string;
+  remove?: boolean;
+}
+
+export interface ItemDecision {
+  item_id: string;
+  decision: "confirmed" | "rejected";
+}
+
+export interface MemoOut {
+  memo_id: string;
+  appointment_id: string | null;
+  kind: string;
+  source: string;
+  text: string;
+  language: string;
+  state_id: string;
+  created_at: string;
+}
+
+/** What his yes to a post-visit card wrote (E05-05): never a medicine. */
+export interface SummaryConfirmedOut {
+  summary: VisitSummaryOut;
+  memos: MemoOut[];
+  appointments: AppointmentOut[];
+  facts: FactOut[];
+  flag_ids: string[];
+}
+
+/** The memo card (`GET /profiles/{id}/memos`): the lines, ending on the boundary. */
+export interface MemoCardOut {
+  memos: MemoOut[];
+  card: string[];
+  spoken_card: string[];
+}
+
+/** What he said: typed words, or a voice note as base64 with its content type. */
+export interface Said {
+  words?: string;
+  audio?: string;
+  content_type?: string;
+}
+
+/** The what-to-do-now card (E13-02): `lines` in the order he reads them, never re-ordered. */
+export interface WhatToDoOut {
+  card_id: string | null;
+  state_id: string | null;
+  kind: "red_flag" | "missed_dose" | "rest" | string;
+  posture: Posture | null;
+  language: string;
+  lines: IdLineOut[];
+  artifact_id: string | null;
+  event_id: string | null;
+  fact_id: string | null;
+  heard: boolean;
+  by_voice: boolean;
+  transcript_confidence: number;
+  red_flags: string[];
+  suppressed: string[];
+  symptoms: string[];
+  flag_id: string | null;
+  notified_person_ids: string[];
+  check_in_at: string | null;
+  missed_medicine: string | null;
+}
+
+/** The two cards the phone keeps for when it cannot reach Nura (W7): fixed, verified lines. */
+export interface OfflineCardsOut {
+  language: string;
+  emergency_number: string;
+  red_flag: IdLineOut[];
+  unknown: IdLineOut[];
+}
+
+export interface SymptomEntryOut {
+  fact_id: string;
+  event_id: string | null;
+  artifact_id: string | null;
+  at: string;
+  symptoms: string[];
+  red_flags: string[];
+  severity: number | null;
+  severity_words: string | null;
+  duration: string | null;
+  by_voice: boolean;
+  heard: boolean;
+  confidence: number;
+  lines: IdLineOut[];
+}
+
+/** A symptom written down (E14-01): the entry in plain words, and a red flag if one was said. */
+export interface SymptomLoggedOut {
+  entry: SymptomEntryOut;
+  posture: Posture | null;
+  flag_id: string | null;
+  notified_person_ids: string[];
+  suppressed: string[];
+  /** A red flag in what he said: the button's urgent card, in its order (null otherwise). */
+  card?: IdLineOut[] | null;
+}
+
+/** The log, oldest first, every entry's lines in order (or the one line for an empty log). */
+export interface SymptomLogOut {
+  since: string;
+  entries: SymptomEntryOut[];
+  lines: IdLineOut[];
+}
+
+/** One word on the feeling cloud. `reasons` are for the audit, never for his screen. */
+export interface CloudWordOut {
+  word: string;
+  label: string;
+  weight: number;
+  red: boolean;
+  reasons: Record<string, unknown>[];
+}
+
+/** The feeling cloud on Today (E17-01): whether it shows, the question, the words. */
+export interface CloudOut {
+  state_id: string | null;
+  language: string;
+  show: boolean;
+  because: string;
+  prompt: string[];
+  words: CloudWordOut[];
+}
+
+export interface FeelingQuestionOut {
+  follow_up: string;
+  words: string;
+  /** `red`: this answer makes the word a red flag, so a failure to send it shows the red card. */
+  answers: { answer: string; label: string; red?: boolean }[];
+}
+
+/** A note kept for the visit (E17-02): the headline, what to tell, who does the next thing,
+ *  and the boundary it ends on. */
+export interface FeelingNoteOut {
+  note_id: string;
+  tap_id: string;
+  word: string;
+  answer: string;
+  language: string;
+  headline: string;
+  lines: string[];
+  then: string;
+  voice: string[];
+  boundary: string;
+  outcome: string;
+  appointment_id: string | null;
+  rendered_from_state: string;
+  created_at: string;
+}
+
+/** What the red-flag path wrote, when it ran: the flag, who was told, the ladder, the card. */
+export interface RedPathOut {
+  red_flag: boolean;
+  flag_id: string | null;
+  told: string[];
+  suppressed_because: string | null;
+  escalation_id: string | null;
+  opens: string | null;
+  card: WhatToDoOut | null;
+}
+
+/** A tap on the cloud: a red word's path, or the one question back. */
+export interface FeelingOut extends RedPathOut {
+  event_id: string;
+  word: string;
+  tap_id: string;
+  language: string;
+  question: FeelingQuestionOut | null;
+  lines: string[];
+}
+
+/** His one answer: a note, or — a yes that made the word red — the red-flag path. */
+export interface AnsweredOut extends RedPathOut {
+  tap_id: string;
+  answer: string;
+  lines: string[];
+  note: FeelingNoteOut | null;
+  note_withheld_because: string | null;
+}
+
+export interface NudgeDraftOut {
+  kind: string;
+  lines: string[];
+  voice: string[];
+  language: string;
+  why: string;
+  cap_class: string;
+  day: string;
+  send_after: string;
+  expires_at: string;
+  state_id: string;
+  priority: number;
+  dedupe_key: string;
+}
+
+/** The day's plan (E17-03): at most what goes, what is held and why. */
+export interface NudgePlanOut {
+  day: string;
+  drafts: NudgeDraftOut[];
+  held: { kind: string; because: string; priority: number | null }[];
+  none_because: string | null;
+}
+
+export interface NudgeOut {
+  nudge_id: string;
+  kind: string;
+  day: string;
+  lines: string[];
+  why: string;
+  cap_class: string;
+  send_after: string;
+  expires_at: string;
+  rendered_from_state: string;
+  handed_over_at: string;
+}
+
+export interface HandedOverOut {
+  plan: NudgePlanOut;
+  nudge: NudgeOut;
+}
+
+/** A nudge handed over for the day (`GET /profiles/{id}/nudges`), and what the reader did. */
+export interface DayNudgeOut extends NudgeOut {
+  voice: string[];
+  responses: string[];
+}
+
+export interface DayNudgesOut {
+  day: string;
+  nudges: DayNudgeOut[];
+  withheld: number;
+}
+
+export type NudgeAnswer = "seen" | "accepted" | "dismissed";
+
+/** The Me page (`GET /profiles/{id}/me-summary`): the number that only goes up, in his words. */
+export interface MeSummaryOut {
+  name: string;
+  language: string;
+  proud_days: number;
+  as_of: string;
+  lines: string[];
+}
+
+/** A stretch of a consult recording one line of a feed card was said in (E21-03): the
+ *  memo card's `cite.clips`. `line` is the card's own line, its caption. */
+export interface CardClipOut {
+  line: string;
+  artifact_id: string;
+  start_s: number;
+  end_s: number;
+  doctor: string;
 }
 
 /** `GET /api/deployment`: the region this backend serves, and whether it is a demo (ADR 0008). */

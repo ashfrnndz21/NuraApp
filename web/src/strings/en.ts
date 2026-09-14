@@ -399,6 +399,108 @@ export const en = {
     // @patient
     noMicSub: "You can write it down yourself instead.",
   },
+  day: {
+    // @patient headline
+    topThree: "3 things for today",
+    // @patient phrase
+    notWell: "I am not feeling well",
+    // @patient headline
+    notWellTitle: "Tell Nura how you feel",
+    // @patient
+    notWellLead: "Say it or type it in your own words.",
+    // @patient phrase
+    wordsLabel: "What you feel",
+    // @patient phrase
+    send: "Tell Nura",
+    // @patient phrase
+    sayIt: "Say it out loud",
+    // @patient phrase
+    stopAndSend: "Stop and send",
+    // @patient
+    sending: "Nura is sending this now.",
+    // @patient headline
+    whatToDo: "What to do now",
+    // @patient phrase
+    backToday: "Back to Today",
+    // @patient phrase
+    symptomsOpen: "Write down how you feel",
+    // @patient headline
+    symptomsTitleSelf: "How you have felt",
+    // @patient headline
+    symptomsTitleOther: "How {name} has felt",
+    // @patient
+    symptomsLead: "Say what you feel, how bad it is and since when.",
+    // @patient phrase
+    symptomsKeep: "Keep this",
+    // @patient
+    // @patient phrase
+    sendAgain: "Send it again",
+    symptomsSaved: "Nura wrote this down.",
+    // @patient phrase
+    nudgeOk: "OK",
+    // @patient phrase
+    nudgeWentWell: "It went well",
+    // @patient phrase
+    nudgeNotToday: "Not today",
+    // @patient phrase
+    briefOpen: "Read before your visit",
+    // @patient headline
+    briefTitle: "Before your visit",
+    // @patient phrase
+    questionsOpen: "Your questions for the doctor",
+    // @patient headline
+    questionsTitle: "Questions for your visit",
+    // @patient phrase
+    questionLabel: "Your question",
+    // @patient phrase
+    questionAdd: "Keep this question",
+    // @patient
+    questionCheck: "Is this what you want to ask?",
+    // @patient phrase
+    questionYes: "Yes, keep it",
+    // @patient phrase
+    questionRemove: "Take this question off",
+    // @patient
+    questionRemoveCheck: "Take this question off your list?",
+    // @patient phrase
+    questionRemoveYes: "Yes, take it off",
+    // @patient
+    questionKept: "Nura kept your question.",
+    // @patient
+    questionRemoved: "Nura took the question off your list.",
+    // @patient
+    summaryLead: "Check each line, then say yes.",
+    // @patient phrase
+    summaryLeaveOut: "Leave this out",
+    // @patient
+    summaryLeftOut: "Nura will leave this out.",
+    // @patient
+    summaryFromNotes: "This comes from the notes you wrote.",
+    // @patient phrase
+    summaryYes: "Yes, keep this card",
+    // @patient
+    summaryKept: "Nura kept what {doctor} said.",
+    // @patient
+    summaryWaiting: "This card is waiting for your yes.",
+    fallback: {
+      // @patient
+      youDidRight: "You did right to say so.",
+      // @patient action
+      notSent: "Nura could not send this to your family.",
+      // @patient action
+      call995: "Call the ambulance now on 995.",
+      // @patient action
+      call999: "Call the ambulance now on 999.",
+      // @patient action
+      callFamily: "Call your family now.",
+      // @patient action
+      bad995: "If you feel very bad, call the ambulance now on 995.",
+      // @patient action
+      bad999: "If you feel very bad, call the ambulance now on 999.",
+      // @patient
+      closing: "Nura does not decide what is wrong.",
+    },
+  },
   onboarding: {
     // @patient phrase
     next: "Next",

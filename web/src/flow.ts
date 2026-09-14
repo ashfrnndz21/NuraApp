@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 import * as nura from "./api/nura";
-import type { ClaimableOut, DoorsOut, FeedItemOut, ProfileOut } from "./api/types";
+import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
 import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
@@ -32,7 +32,15 @@ export type Screen =
   /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
    *  and the family's papers; `at` is the one screen under it. */
   | { name: "record"; at?: RecordAt }
-  | { name: "onboarding" };
+  | { name: "onboarding" }
+  /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
+   *  symptom log, the whole pre-visit brief, the questions for the visit. */
+  | { name: "notWell" }
+  | { name: "whatToDo"; lines: string[]; offline: "network" | "server" | null; refusal: string | null }
+  | { name: "feeling"; tap: FeelingOut }
+  | { name: "symptoms" }
+  | { name: "brief"; appointmentId: string }
+  | { name: "questions"; appointmentId: string };
 
 export const screen = signal<Screen>({ name: "loading" });
 
