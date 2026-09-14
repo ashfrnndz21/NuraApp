@@ -538,6 +538,29 @@ def test_name(subject: str, language: str | None) -> str:
     return names[subject] if subject in names else names["paper"]
 
 
+# @patient
+PUSH_LINE: Mapping[str, str] = {
+    "en": "Nura has something for you.",
+    "ms": "Nura ada sesuatu untuk anda.",
+    "zh": "Nura 有东西给您。",
+}
+"""The whole of an app push (E11-05): no health content rides through a phone maker's
+servers; the app opens and reads the card from the region."""
+
+
+def theirs(medicine: str, name: str, language: str | None) -> str:
+    """His words for a medicine, said about him to someone else: "your blood pressure tablet"
+    to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes."""
+    code = language_for(language)
+    if code == "en" and medicine.startswith("your "):
+        return f"{name}'s {medicine[len('your '):]}"
+    if code == "ms" and medicine.endswith(" anda"):
+        return f"{medicine[: -len(' anda')]} {name}"
+    if code == "zh" and medicine.startswith("您的"):
+        return f"{name}的{medicine[len('您的'):]}"
+    return medicine
+
+
 # --- the caregiver's lines -----------------------------------------------------------------
 # Not patient strings: the caregiver's screens keep the fuller words (docs/plain-words.md §3).
 

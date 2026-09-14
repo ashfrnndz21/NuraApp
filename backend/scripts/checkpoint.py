@@ -3024,20 +3024,20 @@ def checkpoint_9(client: httpx.Client) -> None:
         "Pa reads the emergency lines of his trail",
     )
     steps = [e["target"] for e in reversed(trail) if e["action"] == "write"]
-    if "red_flag" not in steps or "safety_escalation" not in steps:
+    if "red_flag" not in steps or "delivery_ladder" not in steps:
         raise fail("Pa reads the emergency lines of his trail", why=f"got {steps}")
-    if steps.index("red_flag") > steps.index("safety_escalation"):
+    if steps.index("red_flag") > steps.index("delivery_ladder"):
         raise fail("Pa reads the emergency lines of his trail", why=f"flag after ladder: {steps}")
     ok(
         'Mei posted "he fell in the bathroom": a red flag (the word table in app/safety/red_flags.py) '
         "— the moment it was said (a SYMPTOM event) and the Flag on it were written first, before the "
-        "message was even kept, then the message, then the "
-        "escalation record naming the ladder from the keys table (owner, chief keys, others; the "
-        "poster left out); nothing was extracted, no proposal. The reply in her thread, at once:"
+        "message was even kept, then the message, then the ladder (E11-06, the one record of who "
+        "is told: straight to the roster, never his own rung, the poster left out); nothing was "
+        "extracted, no proposal. The reply in her thread names only who the ladder reached:"
     )
     print_reply(fell)
     for row in reversed(trail):
-        if row["action"] == "write" and row["target"] in ("red_flag", "safety_escalation"):
+        if row["action"] == "write" and row["target"] in ("red_flag", "delivery_ladder"):
             print(f"    {row['at'][:19]}  Mei  write emergency {row['target']}  {row['channel']}")
 
     # 9. Pa's own word about himself: written down without a second yes.
@@ -3143,6 +3143,7 @@ CHECKPOINTS = {
     16: lambda client: checkpoints.cp16.run(BASE_URL, DEV_LOG) and sys.exit(1),
     17: lambda client: checkpoints.cp17.run(BASE_URL, DEV_LOG) and sys.exit(1),
     18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    20: lambda client: checkpoints.cp20.run(BASE_URL, DEV_LOG) and sys.exit(1),
     21: lambda client: checkpoints.cp21.run(BASE_URL, DEV_LOG) and sys.exit(1),
     22: lambda client: checkpoints.cp22.run(BASE_URL, DEV_LOG) and sys.exit(1),
     23: lambda client: checkpoints.cp23.run(BASE_URL, DEV_LOG) and sys.exit(1),

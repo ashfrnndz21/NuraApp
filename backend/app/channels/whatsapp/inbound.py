@@ -1,9 +1,12 @@
 """One inbound message, from the provider's webhook to the reply in the thread (E19-02).
 
 The order is the design: the sender's number is resolved to a Person and to the one profile
-they may act on; the profile's WHATSAPP consent is checked; the thread is found and its
-window opened; the words are read for a red flag *before* anything else, and a flag is
-written first; then the classifier says what the message is, and the thread does the one
+they may act on; the words are read for a red flag *before* anything else — before "ignore",
+and before the profile's WHATSAPP consent — and a flag is written first. "Ignore that, he
+fell" is still a fall; and on a profile whose patient has not agreed to WhatsApp, a fall is
+still raised, on the word alone (the message is not kept), escalated through the family's app
+rather than to anyone's WhatsApp, and answered with one fixed line. Then the consent is
+checked, the thread is found and its window opened; then the classifier says what the message is, and the thread does the one
 thing that kind allows — a document through the review card, a health event as a proposal,
 a yes or a no against the poster's own open proposal, coordination kept for the family, and
 everything else not kept at all. Every step runs inside the sender's key context through
@@ -15,9 +18,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,6 +53,17 @@ from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
 from app.db import as_utc, unit_of_work, utcnow
+from app.delivery.strings import EMERGENCY_NUMBER, theirs
+from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.ladder import (
+    acknowledge_dose,
+    acknowledge_flag,
+    close,
+    dose_for_reply,
+    escalate_flag,
+    medicine_words,
+)
+from app.delivery.triggers.models import Ladder
 from app.drafts import FactDraft
 from app.errors import Refusal
 from app.identity.models import Person, Profile
@@ -59,6 +75,7 @@ from app.keys.confirm import confirm
 from app.keys.context import KeyContext, OutOfScope, owned_profile, resolve_key_context
 from app.keys.models import Key
 from app.keys.scopes import Scope, scope_for_subject
+from app.medicines.service import record_dose_taken
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Artifact,
@@ -71,8 +88,8 @@ from app.memory.models import (
     SourceChannel,
 )
 from app.memory.semantic import assert_fact
-from app.regions import OutOfRegion, Region, guard_region
-from app.safety.red_flags import detect, escalate, raise_flag, record_the_moment, roster_for
+from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
+from app.safety.red_flags import FLAG_WINDOW, Flag, detect, raise_flag, record_the_moment
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -343,21 +360,31 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             artifact_id=artifact.id,
             flag_id=flag.id,
         )
-    roster = await roster_for(session, context=work.context)
     doctor = await _doctor(session, work)
+    # The ladder at once (E11-06): straight to the roster, whatever the hour, whatever the
+    # caps. The reply names exactly who it reached — nobody is said to know who was not told.
+    reached = await _escalate(
+        session,
+        settings=work.settings,
+        providers=work.providers,
+        number=work.number,
+        context=work.context,
+        flag=flag,
+        told=(work.person.id,),
+        at=work.message.at,
+    )
     names: list[str] = []
-    for step in roster:
-        person = await session.get(Person, uuid.UUID(step["person_id"]))
-        if person is not None and person.display_name:
+    for person_id in reached:
+        person = await session.get(Person, person_id)
+        if person is not None and person.display_name and person.display_name not in names:
             names.append(person.display_name)
     if names:
         key = "red_flag_one" if len(names) == 1 else "red_flag"
         await _say(session, work, key, doctor=doctor, names=join_names(names, work.language))
     else:
         await _say(session, work, "red_flag_alone", doctor=doctor)
-    # The in-thread word has gone to the poster; the roster is told by E11's ladder, which
-    # reads this row. Here `told` is who has heard it so far: the poster.
-    await escalate(session, context=work.context, flag=flag, roster=roster, told=[work.person.id])
+    # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
+    # and who is still to be asked; nothing else is written beside it.
     return Handled(
         outcome="red_flag",
         replies=tuple(work.replies),
@@ -365,6 +392,355 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         message_id=row.id,
         artifact_id=artifact.id,
         flag_id=flag.id,
+    )
+
+
+async def _whatsapp_agreed(session: AsyncSession, *, context: KeyContext) -> bool:
+    """Whether the patient's WHATSAPP consent is in force. A refusal here is written down,
+    as the gate's refusal always is; it only decides which way a red flag goes."""
+    try:
+        await require_consent(
+            session,
+            context=context,
+            purpose=ConsentPurpose.WHATSAPP,
+            scope=Scope.PROFILE,
+            channel=Channel.WHATSAPP,
+        )
+    except NoConsent:
+        return False
+    return True
+
+
+async def _escalate(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    context: KeyContext,
+    flag: Flag,
+    told: Sequence[uuid.UUID],
+    at: datetime,
+) -> tuple[uuid.UUID, ...]:
+    """The flag's ladder, started now; who it reached. A ladder that cannot start does not
+    take the flag down with it: the flag leads the family's feed either way."""
+    try:
+        escalated = await escalate_flag(
+            session,
+            context,
+            flag,
+            told_already=told,
+            via=Via(settings=settings, providers=providers, number=number),
+            at=at,
+        )
+    except Refusal as refusal:
+        log.warning("whatsapp: the ladder refused %s; the flag stands", type(refusal).__name__)
+        return ()
+    return escalated.told
+
+
+async def _red_flag_unagreed(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    person: Person,
+    context: KeyContext,
+    profile: Profile,
+    message: InboundMessage,
+) -> Handled:
+    """A red-flag word on a profile whose patient has not agreed to WhatsApp.
+
+    The flag is raised on the word's code alone — the SYMPTOM moment and the flag, the same
+    rows the feeling cloud writes — and the message itself is not kept: no artefact, no
+    thread, no message row. It is escalated through the family's app: the ladder's WhatsApp
+    channel is closed without his agreement, so every rung goes to the app, and the flag
+    card leads the family's feed. The poster gets one fixed line straight from the provider,
+    written down as a share of a notice, the way the consent refusal's line is.
+    """
+    feeling = detect(message.text)
+    assert feeling is not None
+    try:
+        async with unit_of_work(session):
+            said = await record_the_moment(
+                session,
+                context=context,
+                feeling=feeling,
+                occurred_at=message.at,
+                source_channel=SourceChannel.WHATSAPP,
+                channel=Channel.WHATSAPP,
+            )
+            flag = await raise_flag(
+                session,
+                context=context,
+                feeling=feeling,
+                event_id=said.id,
+                channel=Channel.WHATSAPP,
+            )
+            if flag.suppressed_because is None:
+                await _escalate(
+                    session,
+                    settings=settings,
+                    providers=providers,
+                    number=number,
+                    context=context,
+                    flag=flag,
+                    told=(person.id,),
+                    at=message.at,
+                )
+    except Refusal as refusal:
+        log.info(
+            "whatsapp: red flag refused %s for %s",
+            type(refusal).__name__,
+            _handle(person.id, message.from_e164),
+        )
+        return Handled(outcome="refused", profile_id=profile.id, refused=type(refusal).__name__)
+    text = reply(
+        "red_flag_fixed", person.language, emergency_number=EMERGENCY_NUMBER[settings.region.value]
+    )
+    await providers.whatsapp.send_text(message.from_e164, text)
+    await record(
+        session,
+        context=context,
+        action=Action.SHARE,
+        scope=Scope.EMERGENCY,
+        target="red_flag_notice",
+        channel=Channel.WHATSAPP,
+        rows=1,
+        shared_with_person_id=person.id,
+        shared_with_label="red_flag_fixed",
+    )
+    return Handled(outcome="red_flag_unagreed", profile_id=profile.id, flag_id=flag.id)
+
+
+async def _red_flag_everywhere(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    person: Person,
+    profiles: Sequence[uuid.UUID],
+    message: InboundMessage,
+) -> Handled | None:
+    """A red-flag word from someone on more than one family's list who has not said which.
+
+    It never waits on the answer: the flag is raised on every profile where the sender's key
+    holds the emergency card, each marked `ambiguous_profile`, and each ladder starts at once
+    with a notice that says it may be about theirs. The message itself is not kept — it may
+    be about someone else — only the moment and the flag, as on a profile without WhatsApp.
+    The sender is asked which one, in one fixed line, written down as a share on each. None
+    when the sender holds the emergency card on none of them.
+    """
+    feeling = detect(message.text)
+    assert feeling is not None
+    raised: list[tuple[Profile, KeyContext, Flag]] = []
+    for profile_id in profiles:
+        context = await resolve_key_context(
+            session, region=settings.region, person_id=person.id, profile_id=profile_id
+        )
+        if not context.allows(Scope.EMERGENCY):
+            continue
+        profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
+        try:
+            async with unit_of_work(session):
+                said = await record_the_moment(
+                    session,
+                    context=context,
+                    feeling=feeling,
+                    occurred_at=message.at,
+                    source_channel=SourceChannel.WHATSAPP,
+                    channel=Channel.WHATSAPP,
+                )
+                flag = await raise_flag(
+                    session,
+                    context=context,
+                    feeling=feeling,
+                    event_id=said.id,
+                    channel=Channel.WHATSAPP,
+                    ambiguous_profile=True,
+                )
+                if flag.suppressed_because is None:
+                    await _escalate(
+                        session,
+                        settings=settings,
+                        providers=providers,
+                        number=number,
+                        context=context,
+                        flag=flag,
+                        told=(person.id,),
+                        at=message.at,
+                    )
+        except Refusal as refusal:
+            log.info(
+                "whatsapp: red flag refused %s on one of several profiles for %s",
+                type(refusal).__name__,
+                _handle(person.id, message.from_e164),
+            )
+            continue
+        raised.append((profile, context, flag))
+    if not raised:
+        return None
+    names = [profile.display_name for profile, _, _ in raised]
+    text = reply(
+        "red_flag_which",
+        person.language,
+        both=join_names(names, person.language),
+        either=join_names(names, person.language, either=True),
+    )
+    await providers.whatsapp.send_text(message.from_e164, text)
+    for _, context, _ in raised:
+        await record(
+            session,
+            context=context,
+            action=Action.SHARE,
+            scope=Scope.EMERGENCY,
+            target="red_flag_notice",
+            channel=Channel.WHATSAPP,
+            rows=1,
+            shared_with_person_id=person.id,
+            shared_with_label="red_flag_which",
+        )
+    return Handled(outcome="red_flag_ambiguous", flag_id=raised[0][2].id)
+
+
+async def _which_one(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    person: Person,
+    profiles: Sequence[uuid.UUID],
+    message: InboundMessage,
+) -> Handled | None:
+    """The answer to "who is it about?": a message naming exactly one of the profiles whose
+    ambiguous flag from this sender is still climbing. That ladder goes on; the others close
+    ("not_this_one"), each closing on the trail of its own profile, in the sender's name.
+    None when there is no such question open, or the message names none or several."""
+    words = (message.text or "").lower()
+    if not words:
+        return None
+    moment = utcnow()
+    open_: list[tuple[Profile, KeyContext, list[Ladder]]] = []
+    for profile_id in profiles:
+        context = await resolve_key_context(
+            session, region=settings.region, person_id=person.id, profile_id=profile_id
+        )
+        if not context.allows(Scope.EMERGENCY):
+            continue
+        flags = await audited_read(
+            session,
+            Flag,
+            context,
+            Scope.EMERGENCY,
+            where=(
+                Flag.raised_by_person_id == person.id,
+                Flag.ambiguous_profile.is_(True),
+                Flag.raised_at > moment - FLAG_WINDOW,
+            ),
+            channel=Channel.WHATSAPP,
+        )
+        if not flags:
+            continue
+        ladders = await audited_read(
+            session,
+            Ladder,
+            context,
+            Scope.EMERGENCY,
+            where=(Ladder.flag_id.in_([flag.id for flag in flags]), Ladder.closed_at.is_(None)),
+            channel=Channel.WHATSAPP,
+        )
+        profile = await session.get(Profile, profile_id)
+        if ladders and profile is not None:
+            open_.append((profile, context, list(ladders)))
+    if len(open_) < 2:
+        return None
+    named = [
+        one
+        for one in open_
+        if re.search(rf"(?<!\w){re.escape(one[0].display_name.lower())}(?!\w)", words)
+    ]
+    if len(named) != 1:
+        return None
+    chosen, chosen_context, _ = named[0]
+    for profile, context, ladders in open_:
+        if profile.id == chosen.id:
+            continue
+        for ladder in ladders:
+            await close(session, context, ladder, "not_this_one", channel=Channel.WHATSAPP)
+    text = reply("red_flag_which_thanks", person.language, name=chosen.display_name)
+    await providers.whatsapp.send_text(message.from_e164, text)
+    await record(
+        session,
+        context=chosen_context,
+        action=Action.SHARE,
+        scope=Scope.EMERGENCY,
+        target="red_flag_notice",
+        channel=Channel.WHATSAPP,
+        rows=1,
+        shared_with_person_id=person.id,
+        shared_with_label="red_flag_which_thanks",
+    )
+    return Handled(outcome="which_one", profile_id=chosen.id)
+
+
+async def _taken(session: AsyncSession, work: _Work) -> Handled:
+    """ "Taken" from him, "given" from the helper: the Taken tap, said as a reply (E11-01).
+
+    It is about the tablet the ladder last asked this person about today, else the one whose
+    window is open now with no Taken yet; with neither, nothing is written and the reply says
+    so. The tap is written the way the app's button writes it — the tap is the yes, under
+    the medicines scope the helper's key holds — on the WhatsApp channel, and the ladder for
+    that tablet stops at once.
+    """
+    registry = work.providers.drug_registry
+    asked = await dose_for_reply(
+        session, context=work.context, registry=registry, at=work.message.at
+    )
+    if asked is None:
+        await _say(session, work, "taken_nothing_due")
+        return Handled(
+            outcome="nothing_due", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    artifact = await _keep_text(session, work=work, scope=Scope.MEDICINES)
+    row = await _keep_row(session, work=work, kind=MessageKind.TAKEN, artifact=artifact)
+    await record_dose_taken(
+        session,
+        context=work.context,
+        line_id=asked.line_id,
+        anchor=asked.anchor,
+        source_channel=SourceChannel.WHATSAPP,
+        channel=Channel.WHATSAPP,
+    )
+    day = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]).date().isoformat()
+    await acknowledge_dose(
+        session,
+        context=work.context,
+        line_id=asked.line_id,
+        anchor=asked.anchor,
+        day=day,
+        channel=Channel.WHATSAPP,
+    )
+    if work.thread.is_patient:
+        who = await _who_checks(session, work)
+        if who != YOU[work.language]:
+            await _say(session, work, "taken_patient", who=who)
+        else:
+            await _say(session, work, "taken_alone")
+    else:
+        medicine = theirs(
+            medicine_words(registry, asked.generic, work.language),
+            work.profile.display_name,
+            work.language,
+        )
+        await _say(session, work, "given", name=work.profile.display_name, medicine=medicine)
+    return Handled(
+        outcome="taken",
+        replies=tuple(work.replies),
+        profile_id=work.profile.id,
+        message_id=row.id,
+        artifact_id=artifact.id,
     )
 
 
@@ -517,6 +893,19 @@ async def _answer(session: AsyncSession, work: _Work, yes: bool) -> Handled:
     try:
         proposal, fact = await answer(session, context=work.context, yes=yes)
     except NoOpenProposal:
+        if yes and work.context.allows(Scope.EMERGENCY):
+            answered = await acknowledge_flag(
+                session, context=work.context, channel=Channel.WHATSAPP
+            )
+            if answered is not None:
+                await _say(session, work, "flag_seen")
+                return Handled(
+                    outcome="flag_acknowledged",
+                    replies=tuple(work.replies),
+                    profile_id=work.profile.id,
+                    message_id=row.id,
+                    artifact_id=artifact.id,
+                )
         await _say(session, work, "nothing_open")
         return Handled(
             outcome="nothing_open",
@@ -595,6 +984,8 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
     if what.kind is Kind.ANSWER:
         assert what.answer is not None
         return await _answer(session, work, what.answer)
+    if what.kind is Kind.TAKEN:
+        return await _taken(session, work)
     if what.kind is Kind.COORDINATION:
         return await _coordination(session, work)
     return await _other(session, work)
@@ -651,8 +1042,11 @@ async def handle_inbound(
         # A number pinned elsewhere is, to this deployment, a stranger: same words, nothing
         # about where it is known written anywhere here.
         return await _stranger(providers, message)
+    # A red-flag word is looked for first: "ignore" never cancels one in the same message.
+    flagged = detect(message.text) is not None
     if (
-        message.text
+        not flagged
+        and message.text
         and classifier.classify(text=message.text, content_type=None).kind is Kind.IGNORE
     ):
         log.info("whatsapp: ignored by request %s", _handle(person.id, message.from_e164))
@@ -665,6 +1059,26 @@ async def handle_inbound(
     if len(reachable) > 1:
         recent = await _most_recent_thread(session, person=person, profiles=reachable)
         if recent is None:
+            # On more than one family's list and nothing to say which: a red flag never waits
+            # on "which one?" — it is raised on each — and a name answers the question.
+            settled = (
+                await _red_flag_everywhere(
+                    session,
+                    settings=settings,
+                    providers=providers,
+                    number=number,
+                    person=person,
+                    profiles=reachable,
+                    message=message,
+                )
+                if flagged
+                else await _which_one(
+                    session, settings=settings, providers=providers, person=person,
+                    profiles=reachable, message=message,
+                )
+            )
+            if settled is not None:
+                return settled
             return await _stranger(
                 providers, message, key="more_than_one", language=person.language
             )
@@ -673,6 +1087,17 @@ async def handle_inbound(
         session, region=region, person_id=person.id, profile_id=profile_id
     )
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
+    if flagged and not await _whatsapp_agreed(session, context=context):
+        return await _red_flag_unagreed(
+            session,
+            settings=settings,
+            providers=providers,
+            number=number,
+            person=person,
+            context=context,
+            profile=profile,
+            message=message,
+        )
 
     async def work_for() -> _Work:
         thread = await thread_for(session, context=context, person=person)

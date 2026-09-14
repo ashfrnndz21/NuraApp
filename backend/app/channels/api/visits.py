@@ -33,6 +33,7 @@ from pydantic import AwareDatetime
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
+from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     AppointmentOut,
@@ -169,6 +170,7 @@ async def transcript(
         store=served.object_store,
         summariser=served.summariser,
         registry=served.drug_registry,
+        via=via_of(request),
     )
     return SummaryOut.of(
         summary, await summary_items(session, context=context, summary_id=summary.id)

@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.whatsapp.provider import WhatsAppProvider
 from app.db import unit_of_work
 from app.delivery.feed.compress import Compressor, Searcher
+from app.delivery.push import NoDevices, PushSender
+from app.delivery.voice import FixtureVoice, Voice
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
@@ -70,6 +72,12 @@ class Providers:
     table until a licensed one is signed off. `main` chooses it by `NURA_REFERENCE_RANGES`; the
     default is there so a test that builds `Providers` for another purpose need not name it,
     the way `retriever` is."""
+    voice: Voice = field(default_factory=FixtureVoice)
+    """What says a card aloud (E11-04), behind its port (`app.delivery.voice`); `main` passes
+    the fixture on a dev run and refuses to start anywhere else until a speech provider exists."""
+    push: PushSender = field(default_factory=NoDevices)
+    """What reaches a person's app with a content-free push (`app.delivery.push`); nobody
+    until the app registers devices, so the app channel falls through."""
     speaker_separator: SpeakerSeparator | None = None
     """Who spoke when in a consult recording, in this deployment's region (E02-05): the
     fixture one on a laptop; None where no separator is configured, and then a recording is

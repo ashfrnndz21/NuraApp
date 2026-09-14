@@ -2,8 +2,9 @@
 
 Outside the 24-hour customer-service window a business may send nothing but a template Meta
 has approved, with its slots filled. So everything proactive — the morning card, the visit
-card, the reorder, the family digest, the feeling check-in, the red-flag notice — is one of
-these six, submitted once and named here: its slots, and the words a patient reads in each
+card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
+ladder's two asks, the reorder to the family, the count, the papers waiting and a family
+message (E11) — is one of these fifteen, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -33,6 +34,9 @@ class Template:
     slots: tuple[str, ...]
     text: Mapping[str, str]
     """The body per language; every `{slot}` in it is one of `slots`."""
+    approved: bool = True
+    """Whether Meta has approved it. A pending template is sent on a dev run only; anywhere
+    else `send` refuses it (`TemplateNotApproved`) and the delivery tries its next channel."""
 
 
 # @patient
@@ -119,6 +123,150 @@ RED_FLAG_NOTICE = Template(
 # and the replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02); `make language` notes
 # the difference as a follow-up, and the template changes only when it is submitted again.
 
+# @patient
+DOSE_REMINDER = Template(
+    "dose_reminder",
+    ("name", "medicine", "anchor"),
+    {
+        "en": "{name}, this is Nura.\nHave you had {medicine} {anchor}?\nWhen you have, reply Taken.",
+        "ms": "{name}, ini Nura.\nSudahkah anda ambil {medicine} {anchor}?\nBila sudah, balas Sudah ambil.",
+        "zh": "{name}，我是 Nura。\n您{anchor}吃了{medicine}吗？\n吃了的话，请回复“吃了”。",
+    },
+    approved=False,
+)
+"""The first rung of the ladder (E11-06): the tablet's window closed with no Taken."""
+
+# @patient
+DOSE_CHECK = Template(
+    "dose_check",
+    ("name", "medicine", "anchor"),
+    {
+        "en": (
+            "{name} has not said Taken for {medicine} {anchor} yet.\n"
+            "Please check on {name}.\n"
+            "When {name} has had it, reply given."
+        ),
+        "ms": (
+            "{name} belum kata Sudah ambil untuk {medicine} {anchor}.\n"
+            "Tolong tengok {name}.\n"
+            "Bila {name} sudah ambil, balas sudah beri."
+        ),
+        "zh": "{name}{anchor}的{medicine}还没有说“吃了”。\n请去看看{name}。\n{name}吃了以后，请回复“给了”。",
+    },
+    approved=False,
+)
+"""The rungs after him: the helper, the one on duty, the chief."""
+
+# @patient
+REORDER_FAMILY = Template(
+    "reorder_family",
+    ("name", "medicine", "day"),
+    {
+        "en": "{name}'s tablets are running low.\n{medicine} runs out on {day}.\nCan you order more for {name}?",
+        "ms": "Ubat {name} hampir habis.\n{medicine} habis pada {day}.\nTolong pesan lagi untuk {name}.",
+        "zh": "{name}的药快吃完了。\n{medicine}{day}就吃完了。\n请再为{name}订一些。",
+    },
+    approved=False,
+)
+"""The reorder date reached, to the one who orders (E04's count)."""
+
+# @patient
+DOSES_COUNT = Template(
+    "doses_count",
+    ("name", "count"),
+    {
+        "en": (
+            "{name} did not say Taken {count} times this week.\n"
+            "This is a count, not a worry.\n"
+            "You can see which ones in the app."
+        ),
+        "ms": (
+            "Minggu ini {name} tidak kata Sudah ambil sebanyak {count} kali.\n"
+            "Ini kiraan sahaja, bukan sesuatu yang merisaukan.\n"
+            "Anda boleh lihat yang mana dalam aplikasi."
+        ),
+        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数，不用担心。\n您可以在应用里看是哪几次。",
+    },
+    approved=False,
+)
+"""The pattern (three or more in seven days), to the one on duty: a count, never a finding."""
+
+# @patient
+PAPERS_WAITING = Template(
+    "papers_waiting",
+    ("name",),
+    {
+        "en": "New papers for {name} are waiting for your yes.\nYou can check them in the app.",
+        "ms": "Surat baru untuk {name} menunggu jawapan ya anda.\nAnda boleh semak dalam aplikasi.",
+        "zh": "{name}有新文件在等您确认。\n您可以在应用里看。",
+    },
+    approved=False,
+)
+"""A paper read into a review card, to the chief: that there are papers, never what they say."""
+
+# @patient
+FAMILY_NOTE = Template(
+    "family_note",
+    ("who", "message"),
+    {
+        "en": "{who} sent you a message.\n{message}",
+        "ms": "{who} menghantar mesej kepada anda.\n{message}",
+        "zh": "{who}给您发了一条消息。\n{message}",
+    },
+    approved=False,
+)
+"""A chief's message to him, come due (E12-06): her previewed lines, exactly."""
+
+# @patient
+RED_FLAG_NOTICE_SELF = Template(
+    "red_flag_notice_self",
+    ("name", "doctor"),
+    {
+        "en": "This one we do not wait for.\n{name} is not feeling well.\nCall {doctor} today.",
+        "ms": "Yang ini kita tidak tunggu.\n{name} rasa tidak sihat.\nTelefon {doctor} hari ini.",
+        "zh": "这个不能等。\n{name}不舒服。\n今天就打电话给{doctor}。",
+    },
+    approved=False,
+)
+"""The red-flag notice when he raised it himself: his name, no one else's word about him."""
+
+# @patient
+RED_FLAG_NOTICE_AMBIGUOUS = Template(
+    "red_flag_notice_ambiguous",
+    ("who", "name"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{who} said someone in the family is not well.\n"
+            "It may be about {name}.\n"
+            "Call {who} now."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{who} kata seseorang dalam keluarga tidak sihat.\n"
+            "Mungkin tentang {name}.\n"
+            "Telefon {who} sekarang."
+        ),
+        "zh": "这个不能等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
+    },
+    approved=False,
+)
+"""A red flag from someone on more than one family's list, before they said which: raised on
+each, and each family told it may be about theirs."""
+
+# @patient
+NUDGE = Template(
+    "nudge",
+    ("message",),
+    {
+        "en": "Nura has a note for you.\n{message}",
+        "ms": "Nura ada nota untuk anda.\n{message}",
+        "zh": "Nura 有一句话要告诉您。\n{message}",
+    },
+    approved=False,
+)
+"""The day's smart nudge (E17-03), sent by E11's engine: the planner's lines, exactly."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -128,10 +276,20 @@ TEMPLATES: Mapping[str, Template] = {
         FAMILY_DIGEST,
         FEELING_CHECK_IN,
         RED_FLAG_NOTICE,
+        DOSE_REMINDER,
+        DOSE_CHECK,
+        REORDER_FAMILY,
+        DOSES_COUNT,
+        PAPERS_WAITING,
+        FAMILY_NOTE,
+        RED_FLAG_NOTICE_SELF,
+        RED_FLAG_NOTICE_AMBIGUOUS,
+        NUDGE,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""The six, in the order they are submitted for approval."""
+"""All fifteen, in the order they are submitted: E19's six (approved), then E11's nine
+(pending Meta's approval, `approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

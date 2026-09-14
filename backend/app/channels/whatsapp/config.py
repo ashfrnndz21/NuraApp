@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.channels.whatsapp.templates import TEMPLATE_NAMES
+from app.channels.whatsapp.templates import TEMPLATES
 from app.regions import Region
 from app.settings import Settings
 
@@ -52,5 +52,9 @@ def business_number_for(settings: Settings) -> BusinessNumber:
         provider_name=settings.whatsapp_provider,
         verification=VerificationState.SANDBOX if fixture else VerificationState.PENDING,
         display_name="Nura",
-        templates=TEMPLATE_NAMES,
+        # A dev run sends every template, pending ones included; a deployment only the ones
+        # Meta has approved (`Template.approved`).
+        templates=tuple(
+            name for name, template in TEMPLATES.items() if template.approved or settings.dev_code_sender
+        ),
     )

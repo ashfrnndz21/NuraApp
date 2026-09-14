@@ -40,6 +40,7 @@ from tests.feelings_support import (
     REGISTRY,
     STORE,
     TRANSCRIBER,
+    VIA,
     blood_pressure,
     check_in_setting,
     new_medicine,
@@ -118,6 +119,7 @@ async def test_none_on_a_day_with_a_red_flag(sg: AsyncSession) -> None:
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     today = await _plan(sg, owner)
     assert today.none_because == "red_flag" and today.drafts == () and today.held == ()
@@ -155,6 +157,7 @@ async def test_the_red_flag_day_is_his_day_on_his_wall(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert (await _plan(sg, owner)).none_because == "red_flag"
     tomorrow = await _plan(sg, owner, TOMORROW)
@@ -242,6 +245,7 @@ async def test_a_check_in_follows_a_change_he_has_not_answered(sg: AsyncSession)
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert NudgeKind.CHECK_IN not in {d.kind for d in (await _plan(sg, owner)).drafts}
 
@@ -251,7 +255,9 @@ async def test_a_watched_feeling_is_asked_about_again_a_week_later(
 ) -> None:
     _, owner = await _home(sg)
     tapped = await record_tap(
-        sg, context=owner, word=Feeling.LOW, registry=REGISTRY, store=STORE, transcriber=TRANSCRIBER
+        sg, context=owner, word=Feeling.LOW, registry=REGISTRY, store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
     )
     answered = await answer_tap(
         sg,
@@ -261,6 +267,7 @@ async def test_a_watched_feeling_is_asked_about_again_a_week_later(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert answered.note is not None
     clock.step(timedelta(days=7))
@@ -319,6 +326,7 @@ async def test_a_commitment_quotes_his_own_words_and_adds_no_target(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     [draft] = (await _plan(sg, owner)).drafts
     assert draft.kind is NudgeKind.COMMITMENT
@@ -343,6 +351,7 @@ async def test_a_memo_from_the_visit_loop_is_quoted_once_exactly_as_it_was_filed
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     memo = await write_memo(
         sg,
@@ -365,6 +374,7 @@ async def test_a_memo_from_the_visit_loop_is_quoted_once_exactly_as_it_was_filed
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     again = await _plan(sg, owner)
     assert NudgeKind.COMMITMENT not in {d.kind for d in again.drafts} | {
