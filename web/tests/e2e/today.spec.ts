@@ -54,8 +54,17 @@ test("sign in, agree, Today, Taken, Hear, sign out", async ({ page, request }) =
   await expect(page.getByTestId("state-card")).toContainText("Ask your doctor.");
   await expect(page.getByTestId("reading-prompt")).toContainText("Write down this morning's number.");
 
-  // No badges, no counts on the tabs; the layout is vertical only.
+  // No badges, no counts on the tabs; the layout is vertical only; the fixed tab bar sits at
+  // the bottom of the viewport and the last card scrolls clear of it.
   await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Me\s*$/);
+  const bar = await page.locator("nav.tabbar").boundingBox();
+  const viewport = page.viewportSize()!;
+  expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);
+  expect(bar!.y).toBeGreaterThan(viewport.height * 0.8);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const lastCard = await page.locator("main.screen > section").last().boundingBox();
+  const barAtBottom = await page.locator("nav.tabbar").boundingBox();
+  expect(lastCard!.y + lastCard!.height).toBeLessThanOrEqual(barAtBottom!.y - 8);
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
