@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
+from app.keys import context as keys_context
 from app.keys.scopes import Scope
 from app.regions import Region
 from tests.api import CONSENT, bearer, let_in, own_profile, register_by_phone
@@ -104,12 +105,15 @@ async def test_a_caregiver_key_scoped_to_medicines_and_visits_cannot_read_notes(
     trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
     assert trail.status_code == 200
     refusals = [entry for entry in trail.json() if entry["outcome"] == "refused"]
-    assert [
+    # With the clock standing still no line is newer than another, so the order is not the point.
+    assert sorted(
         (e["actor_person_id"], e["scope"], e["refused_because"], e["action"]) for e in refusals
-    ] == [
-        (daughter["person_id"], "notes", "OutOfScope", "write"),
-        (daughter["person_id"], "notes", "OutOfScope", "read"),
-    ]
+    ) == sorted(
+        [
+            (daughter["person_id"], "notes", "OutOfScope", "write"),
+            (daughter["person_id"], "notes", "OutOfScope", "read"),
+        ]
+    )
     allowed = [e for e in trail.json() if e["outcome"] == "allowed" and e["scope"] == "medicines"]
     assert [(e["actor_person_id"], e["rows"]) for e in allowed] == [(daughter["person_id"], 0)]
     assert PRIVATE not in trail.text
@@ -222,16 +226,15 @@ async def test_no_profile_route_is_reachable_without_a_key_context(
     assert nowhere.status_code == 403
     assert nowhere.json() == {"refusal": "NoKey"}
 
-    # The reach with no key is in the owner's trail: a refused read of the profile, under a
-    # context that holds nothing, so the owner sees who came to the door.
+    # A person the profile has never known leaves nothing in its trail: a line would let
+    # anyone fill it by repeating a known id (`app.keys.context`). The reach is counted out
+    # of band instead, for the channel to alarm on; the owner sees ex-key-holders, not
+    # strangers (`test_an_ex_key_holders_reach_appears_in_the_owners_trail`).
     trail = await deployment.client.get(
         f"/profiles/{profile_id}/audit", headers=bearer(pa["token"])
     )
-    reaches = [e for e in trail.json() if e["actor_person_id"] == stranger["person_id"]]
-    assert [(e["action"], e["scope"], e["outcome"], e["refused_because"]) for e in reaches] == [
-        ("read", "profile", "refused", "NoKey")
-    ]
-    assert reaches[0]["key_id"] is None and reaches[0]["actor_role"] is None
+    assert [e for e in trail.json() if e["actor_person_id"] == stranger["person_id"]] == []
+    assert keys_context.unknown_reaches[uuid.UUID(stranger["person_id"])] >= 2
     assert PRIVATE not in trail.text
 
     # The profile that does not exist got no line anywhere: there is no graph to write under.
@@ -322,7 +325,7 @@ async def test_a_person_owns_one_profile_and_reads_its_face_through_the_trail(
     # Opening the graph was written down as a write to it; reading its face, as reads.
     trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
     profile_lines = [(e["action"], e["outcome"]) for e in trail.json() if e["target"] == "profile"]
-    assert profile_lines == [("read", "allowed"), ("read", "allowed"), ("write", "allowed")]
+    assert sorted(profile_lines) == [("read", "allowed"), ("read", "allowed"), ("write", "allowed")]
     assert all(e["actor_person_id"] == pa["person_id"] for e in trail.json())
 
 

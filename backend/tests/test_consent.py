@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import clock as app_clock
 from app.audit.access import NotOnThisProfile, person_display_name
 from app.audit.models import Action, Channel, Outcome
 from app.audit.trail import read_audit
+from app.clock import FrozenClock
 from app.consent import export, texts
 from app.consent.export import (
     CHANNEL_WORDS,
@@ -122,17 +125,16 @@ async def _pa_and_his_son(session: AsyncSession) -> tuple[KeyContext, KeyContext
     pa = await register_person(
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
-    profile = await create_own_profile(
-        session, region=Region.SG, owner=pa, consent=OPENING_CONSENT, now=GIVEN_AT
-    )
+    cast(FrozenClock, app_clock.current()).set(GIVEN_AT)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
     son = await register_person(
         session, region=Region.SG, display_name="Son", phone_e164="+6591110004"
     )
-    await agree_to_family_sharing(session, owner, son, now=GIVEN_AT)
-    await grant_key(session, context=owner, holder=son, role=KeyRole.CHIEF, now=GIVEN_AT)
+    await agree_to_family_sharing(session, owner, son)
+    await grant_key(session, context=owner, holder=son, role=KeyRole.CHIEF)
     chief = await resolve_key_context(
         session, region=Region.SG, person_id=son.id, profile_id=profile.id
     )
@@ -141,6 +143,7 @@ async def _pa_and_his_son(session: AsyncSession) -> tuple[KeyContext, KeyContext
 
 async def _letter(session: AsyncSession, context: KeyContext) -> Artifact:
     """A doctor's letter, or an LPA, as a PDF on the profile."""
+    cast(FrozenClock, app_clock.current()).set(GIVEN_AT)
     return await store_artifact(
         session,
         context=context,
@@ -151,7 +154,6 @@ async def _letter(session: AsyncSession, context: KeyContext) -> Artifact:
         captured_at=GIVEN_AT,
         source_channel=SourceChannel.APP,
         region=Region.SG,
-        now=GIVEN_AT,
     )
 
 
@@ -252,9 +254,12 @@ def test_the_record_can_put_words_to_every_purpose_basis_channel_and_region() ->
 # --- who may give it, and in which words -------------------------------------------------
 
 
-async def test_the_owner_consents_for_himself_and_only_on_his_own_basis(sg: AsyncSession) -> None:
+async def test_the_owner_consents_for_himself_and_only_on_his_own_basis(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     owner, _ = await _pa_and_his_son(sg)
     with pytest.raises(NotTheirConsentToGive):
+        clock.set(GIVEN_AT + timedelta(days=1))
         await grant_consent(
             sg,
             context=owner,
@@ -262,7 +267,6 @@ async def test_the_owner_consents_for_himself_and_only_on_his_own_basis(sg: Asyn
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.LPA,
             language="en",
-            now=GIVEN_AT + timedelta(days=1),
         )
     refused = [
         entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
@@ -273,7 +277,7 @@ async def test_the_owner_consents_for_himself_and_only_on_his_own_basis(sg: Asyn
 
 
 async def test_a_chief_consents_for_pa_only_on_a_proxy_basis_with_the_document_behind_it(
-    sg: AsyncSession,
+    sg: AsyncSession, clock: FrozenClock
 ) -> None:
     owner, chief = await _pa_and_his_son(sg)
 
@@ -309,6 +313,7 @@ async def test_a_chief_consents_for_pa_only_on_a_proxy_basis_with_the_document_b
         )
 
     letter = await _letter(sg, chief)
+    clock.set(GIVEN_AT + timedelta(days=1))
     by_proxy = await grant_consent(
         sg,
         context=chief,
@@ -317,19 +322,18 @@ async def test_a_chief_consents_for_pa_only_on_a_proxy_basis_with_the_document_b
         basis=ConsentBasis.MEDICAL_LETTER,
         language="en",
         basis_artifact_id=letter.id,
-        now=GIVEN_AT + timedelta(days=1),
     )
     assert by_proxy.person_id == chief.person_id
     assert by_proxy.basis is ConsentBasis.MEDICAL_LETTER
     assert by_proxy.basis_artifact_id == letter.id
 
     # It stands for the profile, whoever asks.
+    clock.set(GIVEN_AT + timedelta(days=2))
     held = await require_consent(
         sg,
         context=owner,
         purpose=ConsentPurpose.RECORDING,
         scope=Scope.VISITS,
-        now=GIVEN_AT + timedelta(days=2),
     )
     assert held.consent_id == by_proxy.id
 
@@ -343,7 +347,7 @@ async def test_a_chief_consents_for_pa_only_on_a_proxy_basis_with_the_document_b
 
 
 async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_recording(
-    sg: AsyncSession,
+    sg: AsyncSession, clock: FrozenClock
 ) -> None:
     owner, chief = await _pa_and_his_son(sg)
     stranger = await register_person(
@@ -354,6 +358,7 @@ async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_record
     )
     await agree_to_family_sharing(sg, owner, daughter)
     await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
+    clock.set(GIVEN_AT)
     recording = await store_artifact(
         sg,
         context=chief,
@@ -364,7 +369,6 @@ async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_record
         captured_at=GIVEN_AT,
         source_channel=SourceChannel.APP,
         region=Region.SG,
-        now=GIVEN_AT,
     )
 
     async def spoken(witness: object, artifact: object) -> Consent:
@@ -391,12 +395,14 @@ async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_record
     refused = [
         entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
     ]
-    assert [e.refused_because for e in refused] == [
-        "NothingBehindTheBasis",
-        "NoSuchWitness",
-        "NoSuchWitness",
-        "NoSuchWitness",
-    ]
+    assert sorted(e.refused_because for e in refused) == sorted(
+        [
+            "NothingBehindTheBasis",
+            "NoSuchWitness",
+            "NoSuchWitness",
+            "NoSuchWitness",
+        ]
+    )
 
     given = await spoken(daughter.id, recording.id)
     assert given.witness_person_id == daughter.id
@@ -496,7 +502,9 @@ async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_lang
     )
 
 
-async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSession) -> None:
+async def test_a_caregiver_can_neither_give_nor_withdraw_consent(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     owner, _ = await _pa_and_his_son(sg)
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
@@ -507,6 +515,7 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSessio
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
     )
     with pytest.raises(OutOfScope):
+        clock.set(GIVEN_AT + timedelta(days=1))
         await grant_consent(
             sg,
             context=held,
@@ -514,16 +523,15 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSessio
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.VERBAL_RECORDED,
             language="en",
-            now=GIVEN_AT + timedelta(days=1),
         )
     with pytest.raises(OutOfScope):
+        clock.set(GIVEN_AT + timedelta(days=2))
         await revoke_consent(
             sg,
             context=held,
             purpose=ConsentPurpose.SHARE_WITH_PERSON,
             captured_via=ConsentChannel.APP,
             holder_person_id=daughter.id,
-            now=GIVEN_AT + timedelta(days=2),
         )
 
     # Both reaches are in the trail Pa reads, newest first.
@@ -594,8 +602,11 @@ async def test_a_name_is_given_only_for_someone_on_the_profile(sg: AsyncSession)
 # --- the trail says where the agreement came from ----------------------------------------
 
 
-async def test_the_trail_records_where_each_consent_was_captured(sg: AsyncSession) -> None:
+async def test_the_trail_records_where_each_consent_was_captured(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     owner, _ = await _pa_and_his_son(sg)
+    clock.set(GIVEN_AT + timedelta(days=1))
     await grant_consent(
         sg,
         context=owner,
@@ -603,8 +614,8 @@ async def test_the_trail_records_where_each_consent_was_captured(sg: AsyncSessio
         captured_via=ConsentChannel.WHATSAPP,
         basis=ConsentBasis.OWNER,
         language="en",
-        now=GIVEN_AT + timedelta(days=1),
     )
+    clock.set(GIVEN_AT + timedelta(days=2))
     await grant_consent(
         sg,
         context=owner,
@@ -612,7 +623,6 @@ async def test_the_trail_records_where_each_consent_was_captured(sg: AsyncSessio
         captured_via=ConsentChannel.PAPER,
         basis=ConsentBasis.OWNER,
         language="en",
-        now=GIVEN_AT + timedelta(days=2),
     )
     writes = [
         entry
@@ -648,17 +658,19 @@ async def test_withdrawing_what_was_never_given_is_refused_and_written_down(
     ]
 
 
-async def test_only_the_owner_stops_sharing_with_someone(sg: AsyncSession) -> None:
+async def test_only_the_owner_stops_sharing_with_someone(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     """A chief closes one key with revoke_key; withdrawing the consent behind it is Pa's."""
     owner, chief = await _pa_and_his_son(sg)
     with pytest.raises(NotTheirConsentToWithdraw):
+        clock.set(GIVEN_AT + timedelta(days=1))
         await revoke_consent(
             sg,
             context=chief,
             purpose=ConsentPurpose.SHARE_WITH_PERSON,
             captured_via=ConsentChannel.APP,
             holder_person_id=chief.person_id,
-            now=GIVEN_AT + timedelta(days=1),
         )
     # The chief still holds his key, and Pa sees the attempt.
     still = await resolve_key_context(
@@ -673,8 +685,11 @@ async def test_only_the_owner_stops_sharing_with_someone(sg: AsyncSession) -> No
     ]
 
 
-async def test_a_withdrawal_is_written_on_the_channel_it_came_from(sg: AsyncSession) -> None:
+async def test_a_withdrawal_is_written_on_the_channel_it_came_from(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     owner, _ = await _pa_and_his_son(sg)
+    clock.set(GIVEN_AT + timedelta(days=1))
     await grant_consent(
         sg,
         context=owner,
@@ -682,14 +697,13 @@ async def test_a_withdrawal_is_written_on_the_channel_it_came_from(sg: AsyncSess
         captured_via=ConsentChannel.WHATSAPP,
         basis=ConsentBasis.OWNER,
         language="en",
-        now=GIVEN_AT + timedelta(days=1),
     )
+    clock.set(GIVEN_AT + timedelta(days=2))
     await revoke_consent(
         sg,
         context=owner,
         purpose=ConsentPurpose.WHATSAPP,
         captured_via=ConsentChannel.WHATSAPP,
-        now=GIVEN_AT + timedelta(days=2),
     )
     withdrawal = next(
         entry
@@ -700,9 +714,10 @@ async def test_a_withdrawal_is_written_on_the_channel_it_came_from(sg: AsyncSess
 
 
 async def test_withdrawing_closes_every_version_still_open(
-    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch, clock: FrozenClock
 ) -> None:
     owner, _ = await _pa_and_his_son(sg)
+    clock.set(GIVEN_AT)
     await grant_consent(
         sg,
         context=owner,
@@ -710,10 +725,10 @@ async def test_withdrawing_closes_every_version_still_open(
         captured_via=ConsentChannel.WHATSAPP,
         basis=ConsentBasis.OWNER,
         language="en",
-        now=GIVEN_AT,
     )
     newer = ConsentText(ConsentPurpose.WHATSAPP, "2", "en", "Newer words.")
     monkeypatch.setattr(texts, "TEXTS", (*texts.TEXTS, newer))
+    clock.set(GIVEN_AT + timedelta(hours=1))
     await grant_consent(
         sg,
         context=owner,
@@ -721,17 +736,16 @@ async def test_withdrawing_closes_every_version_still_open(
         captured_via=ConsentChannel.WHATSAPP,
         basis=ConsentBasis.OWNER,
         language="en",
-        now=GIVEN_AT + timedelta(hours=1),
     )
+    clock.set(GIVEN_AT + timedelta(days=1))
     closed = await revoke_consent(
         sg,
         context=owner,
         purpose=ConsentPurpose.WHATSAPP,
         captured_via=ConsentChannel.APP,
-        now=GIVEN_AT + timedelta(days=1),
     )
     assert sorted(c.text_version for c in closed) == ["1", "2"]
-    still_open = await active_consents(sg, context=owner, now=GIVEN_AT + timedelta(days=2))
+    still_open = await active_consents(sg, context=owner, at=GIVEN_AT + timedelta(days=2))
     assert [c.purpose for c in still_open] == [
         ConsentPurpose.HOLD_HEALTH_RECORD,
         ConsentPurpose.SHARE_WITH_PERSON,

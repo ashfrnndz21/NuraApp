@@ -7,8 +7,6 @@ belong to E01; this story covers only a person opening his own graph.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,7 +78,6 @@ async def create_own_profile(
     consent: RecordConsent,
     display_name: str | None = None,
     language: str | None = None,
-    now: datetime | None = None,
 ) -> Profile:
     """Open the health graph this person owns. It is pinned here and it never moves.
 
@@ -99,7 +96,7 @@ async def create_own_profile(
     if await owned_profile(session, region=region, owner_person_id=owner.id) is not None:
         raise ProfileAlreadyOwned(f"person {owner.id} already owns a profile")
 
-    moment = now or utcnow()
+    moment = utcnow()
     profile = Profile(
         region=region,
         display_name=display_name or owner.display_name,
@@ -111,7 +108,7 @@ async def create_own_profile(
     await session.flush()
 
     context = await resolve_key_context(
-        session, region=region, person_id=owner.id, profile_id=profile.id, now=moment
+        session, region=region, person_id=owner.id, profile_id=profile.id
     )
     # Opening a graph is a write to it, written down under the owner's own context.
     await record(
@@ -122,7 +119,6 @@ async def create_own_profile(
         target=Profile.__tablename__,
         target_id=profile.id,
         rows=1,
-        now=moment,
     )
     await grant_consent(
         session,
@@ -132,6 +128,5 @@ async def create_own_profile(
         basis=ConsentBasis.OWNER,
         language=consent.language,
         text_version=consent.text_version,
-        now=moment,
     )
     return profile

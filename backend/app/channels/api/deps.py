@@ -18,16 +18,12 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import PROFILE_TARGET
-from app.audit.models import Action, Outcome
-from app.audit.trail import record
 from app.db import unit_of_work
 from app.errors import Refusal
 from app.identity.login import resolve_session
 from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
-from app.keys.context import KeyContext, NoKey, profile_by_id, resolve_key_context
-from app.keys.scopes import Scope
+from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
 from app.settings import Settings
 
@@ -131,12 +127,13 @@ async def key_context(
 ) -> KeyContext:
     """The key context for the profile in the path, or a refusal.
 
-    A `NoKey` on a profile that is here, in this region, is written into that profile's
-    trail as a refused read under `Scope.PROFILE`, with a context that holds nothing — the
-    owner wants to see the person whose key he closed still reaching. A profile that is not
-    here, or is pinned elsewhere, gets no line: there is no graph in this region to write it
-    under, and an `OutOfRegion` must leave nothing of another region's profile behind. Both
-    go to the channel log by a short handle, never by id.
+    A `NoKey` from a person the profile knows — its owner, or someone who once held a key —
+    is written into that profile's trail by the resolver itself (`app.keys.context`), as a
+    refused read under `Scope.PROFILE` with a context that holds nothing: the owner wants to
+    see the person whose key he closed still reaching. A stranger, a profile that is not
+    here, or one pinned elsewhere gets no line: nothing can be found or placed by asking, and
+    an `OutOfRegion` must leave nothing of another region's profile behind. Every refusal
+    goes to the channel log by a short handle, never by id.
     """
     region = settings_of(request).region
     try:
@@ -150,23 +147,7 @@ async def key_context(
             _reach_id(person.id, profile_id),
             _route_of(request),
         )
-        if isinstance(refusal, NoKey):
-            profile = await profile_by_id(session, region=region, profile_id=profile_id)
-            if profile is not None:
-                await record(
-                    session,
-                    context=KeyContext(
-                        profile_id=profile.id,
-                        region=region,
-                        person_id=person.id,
-                        scopes=frozenset(),
-                    ),
-                    action=Action.READ,
-                    scope=Scope.PROFILE,
-                    target=PROFILE_TARGET,
-                    outcome=Outcome.REFUSED,
-                    refused_because=type(refusal).__name__,
-                )
+        # The trail line for a person the profile knows is written by the resolver itself.
         raise
 
 

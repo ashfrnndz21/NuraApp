@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import FrozenClock
 from app.identity.models import Profile
 from app.identity.service import ProfileAlreadyOwned, create_own_profile, register_person
 from app.keys.context import NoKey, OutOfScope, resolve_key_context
@@ -65,6 +66,7 @@ async def test_the_patient_owns_every_row_of_his_health_graph(sg: AsyncSession) 
 
 async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     sg: AsyncSession,
+    clock: FrozenClock,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
     profile = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
@@ -144,8 +146,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     # The window closes on its own.
     later = datetime.now(UTC) + timedelta(days=31)
     with pytest.raises(NoKey):
+        clock.set(later)
         await resolve_key_context(
-            sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id, now=later
+            sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id
         )
 
     # And the owner can close it sooner.

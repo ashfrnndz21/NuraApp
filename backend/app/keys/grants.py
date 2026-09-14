@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +33,7 @@ class NoKeyToClose(Refusal):
     """There is no such key on this profile."""
 
 
-async def may_cut_keys(session: AsyncSession, context: KeyContext, *, now: datetime | None) -> None:
+async def may_cut_keys(session: AsyncSession, context: KeyContext) -> None:
     """Only the owner or a chief holding the family scope. A refusal is written down.
 
     Public so a channel can ask before it does anything on the asker's behalf — resolving
@@ -53,7 +52,6 @@ async def may_cut_keys(session: AsyncSession, context: KeyContext, *, now: datet
             target=Key.__tablename__,
             outcome=Outcome.REFUSED,
             refused_because=type(refusal).__name__,
-            now=now,
         )
         raise
 
@@ -66,7 +64,6 @@ async def grant_key(
     role: KeyRole,
     scopes: Iterable[Scope] | None = None,
     window: KeyWindow | None = None,
-    now: datetime | None = None,
 ) -> Key:
     """Cut a key for one person on the profile in the context.
 
@@ -82,15 +79,14 @@ async def grant_key(
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
-    await may_cut_keys(session, context, now=now)
-    moment = now or utcnow()
+    await may_cut_keys(session, context)
+    moment = utcnow()
     consent = await require_consent(
         session,
         context=context,
         purpose=ConsentPurpose.SHARE_WITH_PERSON,
         scope=Scope.FAMILY,
         holder_person_id=holder.id,
-        now=moment,
     )
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     # Every key opens the face of the graph it is cut on: narrowing never removes PROFILE.
@@ -100,7 +96,7 @@ async def grant_key(
         granted &= consent.scopes | {Scope.PROFILE}
 
     # One person holds one key on one profile: a new key replaces the one before it.
-    for existing in await audited_read(session, Key, context, Scope.FAMILY, now=moment):
+    for existing in await audited_read(session, Key, context, Scope.FAMILY):
         if existing.holder_person_id == holder.id and existing.is_active(moment):
             existing.revoked_at = moment
 
@@ -109,7 +105,6 @@ async def grant_key(
         Key,
         context,
         Scope.FAMILY,
-        now=moment,
         holder_person_id=holder.id,
         role=role,
         scopes=sorted(scope.value for scope in granted),
@@ -126,7 +121,6 @@ async def grant_key(
         channel=Channel.APP,
         shared_with_person_id=holder.id,
         target_id=key.id,
-        now=moment,
     )
     return key
 
@@ -141,14 +135,11 @@ async def revoke_key(
     *,
     context: KeyContext,
     key_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Key:
     """Close a key. The row stays, so the owner can still read that it was held."""
-    await may_cut_keys(session, context, now=now)
-    moment = now or utcnow()
-    found = await audited_read(
-        session, Key, context, Scope.FAMILY, where=(Key.id == key_id,), now=moment
-    )
+    await may_cut_keys(session, context)
+    moment = utcnow()
+    found = await audited_read(session, Key, context, Scope.FAMILY, where=(Key.id == key_id,))
     if not found:
         raise NoKeyToClose(f"no key {key_id} on profile {context.profile_id}")
     key = found[0]
@@ -163,6 +154,5 @@ async def revoke_key(
         target=Key.__tablename__,
         target_id=key.id,
         rows=1,
-        now=moment,
     )
     return key

@@ -122,7 +122,7 @@ async def _holder(session: Db, *, request: Request, body: KeyGrant | SharingCons
 async def grant(body: KeyGrant, request: Request, context: Context, session: Db) -> KeyOut:
     # Authorise first: nothing is done on the asker's behalf, not even naming the holder,
     # until the key context says he may cut keys at all.
-    await may_cut_keys(session, context, now=None)
+    await may_cut_keys(session, context)
     holder = await _holder(session, request=request, body=body)
     key = await grant_key(
         session,

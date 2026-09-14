@@ -95,9 +95,8 @@ async def _start(
     secret: str,
     display_name: str | None,
     language: str | None,
-    now: datetime | None,
 ) -> LoginChallenge:
-    moment = now or utcnow()
+    moment = utcnow()
     # One live challenge per address: asking again closes the one before.
     for earlier in await _open_challenges(session, channel=channel, address=address):
         earlier.consumed_at = moment
@@ -127,7 +126,6 @@ async def start_phone_login(
     phone_e164: str,
     display_name: str | None = None,
     language: str | None = None,
-    now: datetime | None = None,
 ) -> LoginChallenge:
     """Send a six-digit code to the phone. The code is given to the sender and to nobody else."""
     code = _six_digits()
@@ -139,7 +137,6 @@ async def start_phone_login(
         secret=code,
         display_name=display_name,
         language=language,
-        now=now,
     )
     await sender.send_phone_code(phone_e164, code)
     return challenge
@@ -153,7 +150,6 @@ async def start_email_login(
     email: str,
     display_name: str | None = None,
     language: str | None = None,
-    now: datetime | None = None,
 ) -> LoginChallenge:
     """Send a link with a one-time token to the email address."""
     token = secrets.token_urlsafe(32)
@@ -165,7 +161,6 @@ async def start_email_login(
         secret=token,
         display_name=display_name,
         language=language,
-        now=now,
     )
     await sender.send_email_link(email, token)
     return challenge
@@ -206,9 +201,8 @@ async def _verify(
     channel: LoginChannel,
     address: str,
     secret: str,
-    now: datetime | None,
 ) -> tuple[LoginSession, str]:
-    moment = now or utcnow()
+    moment = utcnow()
     open_challenges = await _open_challenges(session, channel=channel, address=address)
     if not open_challenges:
         raise NoOpenChallenge(f"no open challenge for this {channel}")
@@ -238,7 +232,7 @@ async def _verify(
         keep_on_refusal(session, _purge_again(channel, address))
         raise
     challenge.person_id = person.id
-    return await open_session(session, region=region, person=person, now=moment)
+    return await open_session(session, region=region, person=person)
 
 
 def _count_wrong_try(challenge_id: uuid.UUID) -> Callable[[AsyncSession], Awaitable[None]]:
@@ -269,11 +263,10 @@ async def verify_phone_code(
     region: Region,
     phone_e164: str,
     code: str,
-    now: datetime | None = None,
 ) -> tuple[LoginSession, str]:
     """Prove the phone with the code sent to it. The session, and the token, once."""
     return await _verify(
-        session, region=region, channel=LoginChannel.PHONE, address=phone_e164, secret=code, now=now
+        session, region=region, channel=LoginChannel.PHONE, address=phone_e164, secret=code
     )
 
 
@@ -283,11 +276,10 @@ async def verify_email_link(
     region: Region,
     email: str,
     token: str,
-    now: datetime | None = None,
 ) -> tuple[LoginSession, str]:
     """Prove the email address with the token in the link sent to it."""
     return await _verify(
-        session, region=region, channel=LoginChannel.EMAIL, address=email, secret=token, now=now
+        session, region=region, channel=LoginChannel.EMAIL, address=email, secret=token
     )
 
 
@@ -296,10 +288,9 @@ async def open_session(
     *,
     region: Region,
     person: Person,
-    now: datetime | None = None,
 ) -> tuple[LoginSession, str]:
     """Issue a session for a person who has just proved who he is. Returns the token once."""
-    moment = now or utcnow()
+    moment = utcnow()
     token = secrets.token_urlsafe(32)
     login = LoginSession(
         region=region,
@@ -318,10 +309,9 @@ async def resolve_session(
     *,
     region: Region,
     token: str | None,
-    now: datetime | None = None,
 ) -> tuple[Person, LoginSession]:
     """Who this token is. `NoSession` for anything but an open token issued in this region."""
-    moment = now or utcnow()
+    moment = utcnow()
     if not token:
         raise NoSession("no token")
     login = await session.scalar(
@@ -342,5 +332,5 @@ async def logout(
 ) -> None:
     """Close the session. The row stays, closed; the token is no longer anyone."""
     if login.revoked_at is None:
-        login.revoked_at = now or utcnow()
+        login.revoked_at = utcnow()
         await session.flush()

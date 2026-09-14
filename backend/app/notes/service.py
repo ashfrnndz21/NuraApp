@@ -24,19 +24,16 @@ async def write_note(
     *,
     context: KeyContext,
     text: str,
-    now: datetime | None = None,
 ) -> Note:
     line = text.strip()
     if not line or len(line) > NOTE_LENGTH:
         raise NotANote(f"a note is a line of at most {NOTE_LENGTH} characters")
-    return await audited_write(
-        session, Note, context, Scope.NOTES, now=now, text=line, written_at=now or utcnow()
-    )
+    return await audited_write(session, Note, context, Scope.NOTES, text=line, written_at=utcnow())
 
 
 async def list_notes(
     session: AsyncSession, *, context: KeyContext, now: datetime | None = None
 ) -> Sequence[Note]:
     """Every note on the profile, oldest first."""
-    found = await audited_read(session, Note, context, Scope.NOTES, now=now)
+    found = await audited_read(session, Note, context, Scope.NOTES)
     return sorted(found, key=lambda note: as_utc(note.written_at))

@@ -277,7 +277,7 @@ async def export_consent_record(
     *,
     context: KeyContext,
     renderer: ConsentRenderer | None = None,
-    now: datetime | None = None,
+    at: datetime | None = None,
 ) -> ConsentRecord:
     """Every consent ever given on this profile, as a document the person can keep.
 
@@ -286,16 +286,16 @@ async def export_consent_record(
     is written down as a share, to the person who asked for it. Every person named on the
     page is named by a consent row, so no name can refuse the page.
     """
-    moment = now or utcnow()
-    consents = await all_consents(session, context=context, now=moment)
-    profile = await audited_profile_read(session, context, now=moment)
+    moment = at or utcnow()
+    consents = await all_consents(session, context=context)
+    profile = await audited_profile_read(session, context)
     region = profile.region
 
     names: dict[uuid.UUID, str] = {}
 
     async def name_of(person_id: uuid.UUID) -> str:
         if person_id not in names:
-            names[person_id] = await person_display_name(session, context, person_id, now=moment)
+            names[person_id] = await person_display_name(session, context, person_id)
         return names[person_id]
 
     patient = profile.display_name
@@ -368,6 +368,5 @@ async def export_consent_record(
         target=EXPORT_TARGET,
         channel=Channel.APP,
         shared_with_person_id=context.person_id,
-        now=moment,
     )
     return ConsentRecord(document=document, rendered=rendered, region=region)

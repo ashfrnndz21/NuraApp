@@ -14,7 +14,7 @@ from datetime import datetime
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
@@ -38,21 +38,22 @@ class NoSuchEpisode(Refusal):
     """No open episode by that id on this profile."""
 
 
+@audited(Action.READ, Scope.RECORDS, Episode.__tablename__)
 async def open_episodes(
     session: AsyncSession,
     *,
     context: KeyContext,
     kind: EpisodeKind | None = None,
-    now: datetime | None = None,
 ) -> Sequence[Episode]:
     """What is going on now, oldest first."""
     where: list[ColumnElement[bool]] = [Episode.closed_at.is_(None)]
     if kind is not None:
         where.append(Episode.kind == kind)
-    found = await audited_read(session, Episode, context, Scope.RECORDS, where=where, now=now)
+    found = await audited_read(session, Episode, context, Scope.RECORDS, where=where)
     return sorted(found, key=lambda episode: as_utc(episode.opened_at))
 
 
+@audited(Action.WRITE, Scope.RECORDS, Episode.__tablename__)
 async def open_episode(
     session: AsyncSession,
     *,
@@ -60,7 +61,6 @@ async def open_episode(
     kind: EpisodeKind,
     label: str,
     opened_at: datetime | None = None,
-    now: datetime | None = None,
 ) -> Episode:
     """Start an episode, refused while one of the same kind is open."""
     # Keeping an episode rests on the consent to hold the record (E00-02).
@@ -69,29 +69,27 @@ async def open_episode(
         context=context,
         purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
         scope=Scope.RECORDS,
-        now=now,
     )
     named = short_label(label)
-    if await open_episodes(session, context=context, kind=kind, now=now):
+    if await open_episodes(session, context=context, kind=kind):
         raise EpisodeAlreadyOpen(f"an episode of kind {kind} is already open")
     return await audited_write(
         session,
         Episode,
         context,
         Scope.RECORDS,
-        now=now,
         kind=kind,
         label=named,
-        opened_at=opened_at or now or utcnow(),
+        opened_at=opened_at or utcnow(),
     )
 
 
+@audited(Action.READ, Scope.RECORDS, Episode.__tablename__)
 async def require_open_episode(
     session: AsyncSession,
     *,
     context: KeyContext,
     episode_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Episode:
     """The open episode by that id on this profile. Nothing attaches to a closed one."""
     found = await audited_read(
@@ -100,31 +98,30 @@ async def require_open_episode(
         context,
         Scope.RECORDS,
         where=(Episode.id == episode_id, Episode.closed_at.is_(None)),
-        now=now,
     )
     if not found:
         raise NoSuchEpisode(f"no open episode {episode_id} on profile {context.profile_id}")
     return found[0]
 
 
+@audited(Action.WRITE, Scope.RECORDS, Episode.__tablename__)
 async def close_episode(
     session: AsyncSession,
     *,
     context: KeyContext,
     episode_id: uuid.UUID,
     closed_at: datetime | None = None,
-    now: datetime | None = None,
 ) -> Episode:
     """End an episode. The row stays, so the timeline still shows it."""
     found = await audited_read(
-        session, Episode, context, Scope.RECORDS, where=(Episode.id == episode_id,), now=now
+        session, Episode, context, Scope.RECORDS, where=(Episode.id == episode_id,)
     )
     if not found:
         raise NoSuchEpisode(f"no episode {episode_id} on profile {context.profile_id}")
     episode = found[0]
     if episode.closed_at is not None:
         raise EpisodeAlreadyClosed(f"episode {episode_id} closed at {episode.closed_at}")
-    episode.closed_at = closed_at or now or utcnow()
+    episode.closed_at = closed_at or utcnow()
     await session.flush()
     await record(
         session,
@@ -134,6 +131,5 @@ async def close_episode(
         target=Episode.__tablename__,
         target_id=episode.id,
         rows=1,
-        now=now,
     )
     return episode

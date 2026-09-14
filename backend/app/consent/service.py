@@ -201,7 +201,6 @@ async def _check_basis(
             context,
             Scope.FAMILY,
             where=(Key.holder_person_id == witness_person_id,),
-            now=moment,
         )
         if not any(key.is_active(moment) for key in heard_by):
             return NoSuchWitness(f"person {witness_person_id} holds no key here")
@@ -217,7 +216,6 @@ async def _check_basis(
             context,
             Scope.RECORDS,
             where=(Artifact.id == basis_artifact_id,),
-            now=moment,
         )
         if not behind:
             return NothingBehindTheBasis(f"no artefact {basis_artifact_id} on this profile")
@@ -236,7 +234,6 @@ async def grant_consent(
     basis_artifact_id: uuid.UUID | None = None,
     witness_person_id: uuid.UUID | None = None,
     text_version: str | None = None,
-    now: datetime | None = None,
 ) -> Consent:
     """Record that the person in the context agreed to `purpose`, in the words at `text_version`.
 
@@ -252,7 +249,7 @@ async def grant_consent(
     agreement made before the words moved on, and it does not stand for the current
     version. Whichever version, the words are on file and are copied onto the row as read.
     """
-    moment = now or utcnow()
+    moment = utcnow()
     channel = AUDIT_CHANNEL[captured_via]
     version = text_version or current_version(purpose)
 
@@ -294,7 +291,6 @@ async def grant_consent(
         context,
         Scope.FAMILY,
         channel=channel,
-        now=moment,
         person_id=context.person_id,
         purpose=purpose,
         holder_person_id=sharing.holder.id if sharing is not None else None,
@@ -314,11 +310,11 @@ async def active_consents(
     session: AsyncSession,
     *,
     context: KeyContext,
-    now: datetime | None = None,
+    at: datetime | None = None,
 ) -> list[Consent]:
     """Every consent in force on this profile at this moment, oldest first, whatever its version."""
-    moment = now or utcnow()
-    rows = await audited_read(session, Consent, context, Scope.FAMILY, now=moment)
+    moment = at or utcnow()
+    rows = await audited_read(session, Consent, context, Scope.FAMILY)
     return sorted(
         (row for row in rows if row.is_active(moment)), key=lambda row: as_utc(row.granted_at)
     )
@@ -328,10 +324,9 @@ async def all_consents(
     session: AsyncSession,
     *,
     context: KeyContext,
-    now: datetime | None = None,
 ) -> list[Consent]:
     """Every consent ever given on this profile, withdrawn ones included, oldest first."""
-    rows = await audited_read(session, Consent, context, Scope.FAMILY, now=now)
+    rows = await audited_read(session, Consent, context, Scope.FAMILY)
     return sorted(rows, key=lambda row: as_utc(row.granted_at))
 
 
@@ -365,7 +360,6 @@ async def require_consent(
     scope: Scope,
     holder_person_id: uuid.UUID | None = None,
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
 ) -> ConsentCheck:
     """The gate: the consent for `purpose` that is in force right now, or a refusal.
 
@@ -377,7 +371,7 @@ async def require_consent(
     (`app.audit.access.person_display_name` says the same). `channel` is where the act came
     from, and both the check and any refusal are written into the trail on it.
     """
-    moment = now or utcnow()
+    moment = utcnow()
     scope = read_scope(purpose, scope)
     misshapen = _shape(purpose, holder_person_id)
     if misshapen is not None:
@@ -390,7 +384,6 @@ async def require_consent(
         scope,
         where=_about(purpose, holder_person_id),
         channel=channel,
-        now=moment,
     )
     active = [row for row in rows if row.is_active(moment)]
     wanted = current_version(purpose)
@@ -426,7 +419,6 @@ async def revoke_consent(
     purpose: ConsentPurpose,
     captured_via: ConsentChannel,
     holder_person_id: uuid.UUID | None = None,
-    now: datetime | None = None,
 ) -> Sequence[Consent]:
     """Withdraw every consent to `purpose` still in force, whichever wording it was given to.
 
@@ -443,7 +435,7 @@ async def revoke_consent(
     Withdrawing `HOLD_HEALTH_RECORD` stops anything more being kept; what is already kept
     is the deletion story's to remove, not this one's.
     """
-    moment = now or utcnow()
+    moment = utcnow()
     channel = AUDIT_CHANNEL[captured_via]
     misshapen = _shape(purpose, holder_person_id)
     if misshapen is not None:
@@ -456,7 +448,6 @@ async def revoke_consent(
         Scope.FAMILY,
         where=_about(purpose, holder_person_id),
         channel=channel,
-        now=moment,
     )
     refusal: Refusal | None = None
     open_rows = [row for row in rows if row.is_active(moment)]
@@ -480,7 +471,6 @@ async def revoke_consent(
         target=Consent.__tablename__,
         rows=len(open_rows),
         channel=channel,
-        now=moment,
     )
 
     if purpose in PER_HOLDER:
@@ -504,7 +494,6 @@ async def _close_keys_held_by(
         Scope.FAMILY,
         where=(Key.holder_person_id == holder_person_id,),
         channel=channel,
-        now=moment,
     )
     closed = 0
     for key in keys:
@@ -521,7 +510,6 @@ async def _close_keys_held_by(
             target=Key.__tablename__,
             rows=closed,
             channel=channel,
-            now=moment,
         )
 
 
@@ -543,7 +531,6 @@ async def _refused_read(
         outcome=Outcome.REFUSED,
         refused_because=type(refusal).__name__,
         channel=channel,
-        now=moment,
     )
 
 
@@ -564,5 +551,4 @@ async def _refused_write(
         outcome=Outcome.REFUSED,
         refused_because=type(refusal).__name__,
         channel=channel,
-        now=moment,
     )

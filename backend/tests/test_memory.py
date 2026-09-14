@@ -10,8 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
+from app.clock import FrozenClock
+from app.db import as_utc
+from app.drafts import AppointmentDraft, Draft, FactDraft
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
+from app.keys.confirm import confirm
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
@@ -55,7 +59,7 @@ from app.memory.working import (
     open_episodes,
 )
 from app.regions import OutOfRegion, Region
-from tests.support import OPENING_CONSENT, agree_to_family_sharing
+from tests.support import OPENING_CONSENT, agree_to_family_sharing, refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -70,6 +74,27 @@ async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
     )
 
 
+async def _yes(session: AsyncSession, context: KeyContext, draft: Draft) -> uuid.UUID:
+    """The person asking says yes to exactly this, the way the surface writes it down."""
+    return (await confirm(session, context, draft)).id
+
+
+def _next(old: Fact, value: object, *, unit: str | None = None) -> FactDraft:
+    """The draft `supersede_fact` will write for `old`: same statement, provenance carried."""
+    return FactDraft(
+        subject=old.subject,
+        attribute=old.attribute,
+        value=value,
+        unit=unit if unit is not None else old.unit,
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        artifact_id=old.artifact_id,
+        event_id=old.event_id,
+        episode_id=old.episode_id,
+        supersedes_id=old.id,
+    )
+
+
 async def _photo(session: AsyncSession, context: KeyContext, when: datetime = SEPT_3) -> Artifact:
     return await store_artifact(
         session,
@@ -81,7 +106,6 @@ async def _photo(session: AsyncSession, context: KeyContext, when: datetime = SE
         captured_at=when,
         source_channel=SourceChannel.APP,
         region=Region.SG,
-        now=when,
     )
 
 
@@ -105,7 +129,6 @@ async def _systolic(
         artifact_id=photo.id,
         valid_from=when,
         valid_to=valid_to,
-        now=when,
     )
 
 
@@ -118,6 +141,7 @@ async def test_an_artefact_is_a_reference_to_bytes_kept_in_the_profiles_region(
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
     assert photo.profile_id == owner.profile_id
+    await sg.refresh(photo)
     assert photo.storage_key == "sg/profiles/pa/bp-book.jpg"
     assert photo.region is Region.SG
 
@@ -150,20 +174,20 @@ async def test_an_artefact_is_a_reference_to_bytes_kept_in_the_profiles_region(
 async def test_an_artefact_and_an_event_cannot_be_changed_once_stored(sg: AsyncSession) -> None:
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
-    photo.storage_key = "somewhere/else.jpg"
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        photo.storage_key = "somewhere/else.jpg"
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(photo)
+    assert photo.storage_key == "sg/profiles/pa/bp-book.jpg"
 
-    owner = await _pa(sg)
-    photo = await _photo(sg, owner)
     reading = await record_event(
         sg, context=owner, kind=EventKind.READING, occurred_at=SEPT_3, artifact_id=photo.id
     )
-    reading.occurred_at = SEPT_10
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        reading.occurred_at = SEPT_10
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(reading)
+    assert as_utc(reading.occurred_at) == SEPT_3
 
 
 async def test_an_event_carries_a_short_label_and_never_the_raw_content(
@@ -211,11 +235,13 @@ async def test_an_event_cannot_point_at_another_profiles_artefact(sg: AsyncSessi
 
 async def test_supersession_keeps_the_history_and_current_facts_returns_only_the_live_one(
     sg: AsyncSession,
+    clock: FrozenClock,
 ) -> None:
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
     extracted = await _systolic(sg, owner, photo, 138)
 
+    clock.set(SEPT_10)
     confirmed = await supersede_fact(
         sg,
         context=owner,
@@ -223,7 +249,7 @@ async def test_supersession_keeps_the_history_and_current_facts_returns_only_the
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        now=SEPT_10,
+        confirmation_id=await _yes(sg, owner, _next(extracted, 136)),
     )
 
     # The old row stays and says when it stopped being current; the new one names it.
@@ -234,7 +260,7 @@ async def test_supersession_keeps_the_history_and_current_facts_returns_only_the
     assert confirmed.artifact_id == photo.id
     assert confirmed.unit == "mmHg"
 
-    live = await current_facts(sg, context=owner, subject="blood_pressure", now=SEPT_10)
+    live = await current_facts(sg, context=owner, subject="blood_pressure", at=SEPT_10)
     assert [(fact.id, fact.value) for fact in live] == [(confirmed.id, 136)]
 
     with pytest.raises(AlreadySuperseded):
@@ -245,10 +271,11 @@ async def test_a_fact_cannot_be_edited_only_superseded(sg: AsyncSession) -> None
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
     fact = await _systolic(sg, owner, photo, 138)
-    fact.value = 120
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        fact.value = 120
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(fact)
+    assert fact.value == 138
 
 
 async def test_current_facts_honours_the_validity_window(sg: AsyncSession) -> None:
@@ -258,7 +285,7 @@ async def test_current_facts_honours_the_validity_window(sg: AsyncSession) -> No
     this_week = await _systolic(sg, owner, photo, 138, when=SEPT_10)
 
     now_ish = SEPT_10 + timedelta(hours=1)
-    assert [f.id for f in await current_facts(sg, context=owner, now=now_ish)] == [this_week.id]
+    assert [f.id for f in await current_facts(sg, context=owner, at=now_ish)] == [this_week.id]
     # Looking back, the old one was the fact of the day and the new one did not exist yet.
     back_then = SEPT_3 + timedelta(days=1)
     assert [f.id for f in await current_facts(sg, context=owner, at=back_then)] == [last_week.id]
@@ -280,11 +307,10 @@ async def test_current_facts_narrows_by_subject_and_attribute(sg: AsyncSession) 
         unit="kg",
         confidence=0.9,
         artifact_id=photo.id,
-        now=SEPT_3,
     )
-    weight = await current_facts(sg, context=owner, subject="weight", now=SEPT_10)
+    weight = await current_facts(sg, context=owner, subject="weight", at=SEPT_10)
     assert [fact.value for fact in weight] == [71.5]
-    both = await current_facts(sg, context=owner, now=SEPT_10)
+    both = await current_facts(sg, context=owner, at=SEPT_10)
     assert {fact.subject for fact in both} == {"blood_pressure", "weight"}
 
 
@@ -324,6 +350,7 @@ async def test_events_and_facts_hang_off_the_open_episode(sg: AsyncSession) -> N
         context=owner,
         kind=EventKind.VISIT,
         occurred_at=SEPT_3,
+        source_channel=SourceChannel.APP,
         label="saw Dr Tan",
         episode_id=infection.id,
     )
@@ -347,6 +374,8 @@ async def test_events_and_facts_hang_off_the_open_episode(sg: AsyncSession) -> N
             context=owner,
             kind=EventKind.VISIT,
             occurred_at=SEPT_10,
+            source_channel=SourceChannel.APP,
+            label="saw Dr Tan again",
             episode_id=infection.id,
         )
 
@@ -370,39 +399,67 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     later = await book_appointment(
         sg,
         context=owner,
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(
+                provider_id=dr_tan.id,
+                scheduled_at=SEPT_10 + timedelta(days=14),
+                purpose="blood pressure review",
+            ),
+        ),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=14),
         purpose="blood pressure review",
-        now=SEPT_3,
     )
     sooner = await book_appointment(
         sg,
         context=owner,
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(
+                provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="chest infection"
+            ),
+        ),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection",
-        now=SEPT_3,
     )
     cancelled = await book_appointment(
         sg,
         context=owner,
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(
+                provider_id=dr_tan.id, scheduled_at=SEPT_10 + timedelta(days=1), purpose="x-ray"
+            ),
+        ),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=1),
         purpose="x-ray",
         status=AppointmentStatus.CANCELLED,
-        now=SEPT_3,
     )
     past = await book_appointment(
         sg,
         context=owner,
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(
+                provider_id=dr_tan.id,
+                scheduled_at=SEPT_3 - timedelta(days=30),
+                purpose="last check-up",
+            ),
+        ),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_3 - timedelta(days=30),
         purpose="last check-up",
         status=AppointmentStatus.ATTENDED,
-        now=SEPT_3,
     )
 
-    upcoming = await upcoming_appointments(sg, context=owner, now=SEPT_3)
+    upcoming = await upcoming_appointments(sg, context=owner, at=SEPT_3)
     assert [a.id for a in upcoming] == [sooner.id, later.id]
     assert {cancelled.id, past.id}.isdisjoint({a.id for a in upcoming})
     assert sooner.provider_id == dr_tan.id and sooner.status is AppointmentStatus.PLANNED
@@ -420,6 +477,13 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
         await book_appointment(
             sg,
             context=owner,
+            confirmation_id=await _yes(
+                sg,
+                owner,
+                AppointmentDraft(
+                    provider_id=their_doctor.id, scheduled_at=SEPT_10, purpose="review"
+                ),
+            ),
             provider_id=their_doctor.id,
             scheduled_at=SEPT_10,
             purpose="review",
@@ -434,6 +498,13 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
     review = await book_appointment(
         sg,
         context=owner,
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(
+                provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="chest infection review"
+            ),
+        ),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection review",
@@ -442,7 +513,16 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
     assert review.episode_id == infection.id
     with pytest.raises(NotALabel):
         await book_appointment(
-            sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="x" * 81
+            sg,
+            context=owner,
+            provider_id=dr_tan.id,
+            scheduled_at=SEPT_10,
+            purpose="x" * 81,
+            confirmation_id=await _yes(
+                sg,
+                owner,
+                AppointmentDraft(provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="x" * 81),
+            ),
         )
 
 
@@ -463,7 +543,16 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
     )
     visit = await book_appointment(
-        sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="review",
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"),
+        ),
     )
     await current_facts(sg, context=owner)
 
@@ -499,7 +588,16 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
     )
     await book_appointment(
-        sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="review",
+        confirmation_id=await _yes(
+            sg,
+            owner,
+            AppointmentDraft(provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"),
+        ),
     )
 
     daughter: Person = await register_person(
@@ -518,19 +616,19 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
     )
 
     with pytest.raises(OutOfScope):
-        await current_facts(sg, context=held, now=SEPT_10)
+        await current_facts(sg, context=held, at=SEPT_10)
     with pytest.raises(OutOfScope):
         await _photo(sg, held)
 
     # She holds the visits, so the spine is hers to read.
-    assert len(await upcoming_appointments(sg, context=held, now=SEPT_3)) == 1
+    assert len(await upcoming_appointments(sg, context=held, at=SEPT_3)) == 1
 
-    # Storing a photo first asks whether the record may be kept at all (E00-02), and that
-    # gate runs under the records scope she does not hold, so her reach is refused there.
+    # The door on each service checks the scope first, so her reach for the photo is refused
+    # at the artefact, before the consent gate (E00-02) is even asked.
     refused = [e for e in await read_audit(sg, context=owner) if e.outcome is Outcome.REFUSED]
     assert {(e.actor_person_id, e.action, e.scope, e.target) for e in refused} == {
         (daughter.id, Action.READ, Scope.RECORDS, "fact"),
-        (daughter.id, Action.READ, Scope.RECORDS, "consent"),
+        (daughter.id, Action.WRITE, Scope.RECORDS, "artifact"),
     }
     assert all(e.refused_because == "OutOfScope" for e in refused)
 

@@ -67,6 +67,7 @@ Every role holds PROFILE: a key that opens nothing of whose graph it is opens no
 
 _SUBJECT_SCOPES: dict[str, Scope] = {
     "medicine": Scope.MEDICINES,
+    "medication": Scope.MEDICINES,
     "blood_pressure": Scope.READINGS,
     "blood_sugar": Scope.READINGS,
     "heart_rate": Scope.READINGS,
