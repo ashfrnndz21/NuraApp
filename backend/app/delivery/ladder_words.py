@@ -15,15 +15,15 @@ LANGUAGES = ("en", "ms", "zh")
 # @patient
 ASKED: Mapping[str, tuple[str, str]] = {
     "en": (
-        "Nura asked you to check on {name} on {day}.",
+        "Nura asked you to check on {name} on {day} at {time}.",
         "Once you say you have it, Nura asks nobody else.",
     ),
     "ms": (
-        "Nura minta anda tengok {name} pada {day}.",
+        "Nura minta anda tengok {name} pada {day}, {time}.",
         "Bila anda kata anda uruskan, Nura tidak minta orang lain.",
     ),
     "zh": (
-        "Nura 在{day}请您去看看{name}。",
+        "Nura 在{day}{time}请您去看看{name}。",
         "您说您来处理以后，Nura 就不再问别人。",
     ),
 }
@@ -43,8 +43,10 @@ def language_of(asked: str | None) -> str:
     return code if code in LANGUAGES else "en"
 
 
-def asked_lines(*, name: str, day: str, language: str | None) -> list[str]:
-    return [line.format(name=name, day=day) for line in ASKED[language_of(language)]]
+def asked_lines(*, name: str, day: str, time: str, language: str | None) -> list[str]:
+    """`day` and `time` are his words for when the ladder started ("Monday 14 September",
+    "10 in the morning"): a red flag's moment matters as much as its day."""
+    return [line.format(name=name, day=day, time=time) for line in ASKED[language_of(language)]]
 
 
 def answered_lines(language: str | None) -> list[str]:

@@ -16,15 +16,15 @@ export function canPickContact(): boolean {
   return manager() !== null;
 }
 
-/** A number as a contact keeps it, as the door takes it: "+65 9123 4567" → "+6591234567";
- *  a local Malaysian number (0 first) → "+60…"; any other local number → "+65…". */
+/** A number as a contact keeps it, as the door takes it: "+65 9123 4567" → "+6591234567",
+ *  "0065 …" → "+65…". A number kept without its country code is left as its digits, never
+ *  guessed at: the field then asks for the country code before anything is sent, so an
+ *  invitation with his name in it never goes to a stranger's number. */
 export function phoneFromContact(raw: string): string {
   const kept = raw.replace(/[^\d+]/g, "");
   if (kept.startsWith("+")) return kept;
   if (kept.startsWith("00")) return `+${kept.slice(2)}`;
-  if (kept.startsWith("0")) return `+60${kept.slice(1)}`;
-  if (/^(65|60)\d{8,10}$/.test(kept)) return `+${kept}`;
-  return `+65${kept}`;
+  return kept;
 }
 
 /** One contact, picked on the phone's own sheet: its first number and first name. Null when

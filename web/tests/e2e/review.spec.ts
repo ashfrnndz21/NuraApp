@@ -24,25 +24,40 @@ test("the pharmacist's queue: a patient's token refused, the staff token opens i
   await page.getByTestId("review-open").click();
   await expect(page.getByTestId("review-status")).toBeVisible();
   await expect(page.getByTestId("review-type").first()).toBeVisible();
-  const cards = page.getByTestId("review-item").filter({ hasText: "card" });
+  const cards = page.locator('[data-testid="review-item"][data-kind="card"]');
   await expect(cards.first()).toBeVisible();
   expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label, td, th", controls: "button, input.field" })).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
 
-  await cards.first().getByTestId("review-approve").click();
-  await expect(page.getByTestId("review-status")).toBeVisible();
-  await cards.first().getByLabel("Why").fill("Too long for him to hear.");
-  await cards.first().getByTestId("review-reject").click();
-  await expect(page.getByTestId("review-status")).toBeVisible();
-  await cards.first().getByTestId("review-rewrite").click();
-  await cards.first().getByLabel("Headline").fill("Your tablets this morning");
-  await cards.first().getByTestId("review-save-rewrite").click();
-
+  /** Decide the first card waiting, and wait for it to leave the list of the waiting. */
+  const decide = async (how: (item: import("@playwright/test").Locator) => Promise<void>): Promise<string> => {
+    const item = cards.first();
+    const id = (await item.getAttribute("data-item"))!;
+    await how(page.locator(`[data-item="${id}"]`));
+    await expect(page.locator(`[data-item="${id}"]`)).toHaveCount(0);
+    return id;
+  };
+  const approved = await decide(async (item) => item.getByTestId("review-approve").click());
+  const rejected = await decide(async (item) => {
+    await item.getByLabel("Why").fill("Too long for him to hear.");
+    await item.getByTestId("review-reject").click();
+  });
+  const rewritten = await decide(async (item) => {
+    await item.getByTestId("review-rewrite").click();
+    await item.getByLabel("Headline").fill("Your tablets this morning");
+    await item.getByTestId("review-save-rewrite").click();
+  });
   await page.getByTestId("review-all").click();
-  const decided = page.getByTestId("review-decided");
-  await expect(decided.filter({ hasText: "approved" }).first()).toBeVisible();
-  await expect(decided.filter({ hasText: "Too long for him to hear." }).first()).toContainText("rejected");
-  await expect(decided.filter({ hasText: "rewritten" }).first()).toBeVisible();
+  await expect(page.getByTestId("review-decided").first()).toBeVisible();
+
+  // Each decision is the queue's, signed with the staff handle: read back over the API.
+  const staff = { Authorization: `Bearer ${STAFF}` };
+  const item = async (id: string) => (await (await request.get(`${API}/review/items/${id}`, { headers: staff })).json()) as { verdict: string; reason: string | null; decided_by: string | null; proposed: unknown };
+  expect(await item(approved)).toMatchObject({ verdict: "approved", decided_by: "pharmacist" });
+  expect(await item(rejected)).toMatchObject({ verdict: "rejected", reason: "Too long for him to hear.", decided_by: "pharmacist" });
+  const proposal = await item(rewritten);
+  expect(proposal.verdict).toBe("rewritten");
+  expect(JSON.stringify(proposal.proposed)).toContain("Your tablets this morning");
 
   // Nobody is in the queue: not his profile, not his number, not his name as a person.
   const text = await page.locator("main").innerText();
@@ -53,5 +68,6 @@ test("the pharmacist's queue: a patient's token refused, the staff token opens i
   await page.goto("./");
   await expect(page.locator('a[href*="review"]')).toHaveCount(0);
   const worker = await (await request.get(new URL("sw.js", page.url()).toString())).text();
-  expect(worker).not.toContain("review");
+  expect(worker).not.toContain("review/index.html");
+  expect(worker).not.toMatch(/assets\/review-/);
 });

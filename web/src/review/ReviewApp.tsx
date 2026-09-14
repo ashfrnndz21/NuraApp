@@ -155,7 +155,8 @@ function Item({ item, staff, onDecided }: { item: ReviewItemOut; staff: string; 
   };
   const meta = [item.kind, item.card_type, item.language, item.sample_number === null ? null : `#${item.sample_number}`].filter(Boolean).join(" · ");
   return (
-    <Tile paper testId="review-item">
+    <div class="review-item" data-testid="review-item" data-item={item.item_id} data-kind={item.kind}>
+    <Tile paper>
       <p class="item-meta">{meta}</p>
       {item.lines.headline && <h2 class="title">{item.lines.headline}</h2>}
       <div class="lines" data-testid="review-lines">
@@ -210,5 +211,6 @@ function Item({ item, staff, onDecided }: { item: ReviewItemOut; staff: string; 
       )}
       <Notice error={error} />
     </Tile>
+    </div>
   );
 }

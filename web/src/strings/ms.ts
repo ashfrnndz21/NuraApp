@@ -1180,5 +1180,6 @@ export const ms = {
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
+    NotStoppedInTheApp: ["Nura belum boleh hentikan ini dalam aplikasi.", "Pasukan Nura boleh hentikannya bersama anda."],
   },
 } satisfies Strings;

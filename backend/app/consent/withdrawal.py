@@ -17,13 +17,18 @@ from app.consent.models import ConsentPurpose
 
 LANGUAGES = ("en", "ms", "zh")
 
+APP_STOPS: frozenset[ConsentPurpose] = frozenset(
+    {ConsentPurpose.SHARE_WITH_PERSON, ConsentPurpose.RECORDING, ConsentPurpose.CALENDAR}
+)
+"""What the owner stops in the app with one yes. Keeping his papers and WhatsApp are not:
+the not-feeling-well button and his Taken both rest on the first, and every WhatsApp message
+about him — to his family too, a red flag's among them — rests on the second, so stopping
+either is done with the Nura team, who can say what stops with it
+(`NotStoppedInTheApp`)."""
+
 # @patient
 STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
     "en": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: (
-            "If you stop this, Nura keeps nothing new from today.",
-            "Nura does not take away the papers it already has.",
-        ),
         ConsentPurpose.SHARE_WITH_PERSON: (
             "If you stop this, {name} cannot see your papers.",
             "{name} stops seeing them at once.",
@@ -33,20 +38,12 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
             "If you stop this, Nura stops listening at your visits.",
             "The recordings Nura already kept stay with your papers.",
         ),
-        ConsentPurpose.WHATSAPP: (
-            "If you stop this, Nura sends you nothing on WhatsApp.",
-            "Your Today page stays in the app.",
-        ),
         ConsentPurpose.CALENDAR: (
             "If you stop this, Nura stops looking in your calendar.",
             "The visits you already said yes to stay.",
         ),
     },
     "ms": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: (
-            "Jika anda hentikan ini, Nura tidak simpan apa-apa yang baharu mulai hari ini.",
-            "Nura tidak buang surat-surat yang sudah ada.",
-        ),
         ConsentPurpose.SHARE_WITH_PERSON: (
             "Jika anda hentikan ini, {name} tidak boleh melihat surat-surat anda.",
             "{name} berhenti melihatnya serta-merta.",
@@ -56,20 +53,12 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
             "Jika anda hentikan ini, Nura berhenti mendengar semasa lawatan anda.",
             "Rakaman yang Nura sudah simpan kekal bersama surat-surat anda.",
         ),
-        ConsentPurpose.WHATSAPP: (
-            "Jika anda hentikan ini, Nura tidak hantar apa-apa kepada anda di WhatsApp.",
-            "Halaman Hari Ini anda kekal dalam aplikasi.",
-        ),
         ConsentPurpose.CALENDAR: (
             "Jika anda hentikan ini, Nura berhenti melihat kalendar anda.",
             "Lawatan yang anda sudah setuju kekal.",
         ),
     },
     "zh": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: (
-            "如果您停止这个，从今天起 Nura 不再保存新的东西。",
-            "Nura 不会拿走已经有的文件。",
-        ),
         ConsentPurpose.SHARE_WITH_PERSON: (
             "如果您停止这个，{name} 就不能看您的文件了。",
             "{name} 马上就看不到了。",
@@ -79,10 +68,6 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
             "如果您停止这个，Nura 就不在您看医生的时候听了。",
             "Nura 已经保存的录音会留在您的文件里。",
         ),
-        ConsentPurpose.WHATSAPP: (
-            "如果您停止这个，Nura 不会在 WhatsApp 上给您发任何东西。",
-            "您的“今天”页面还在应用里。",
-        ),
         ConsentPurpose.CALENDAR: (
             "如果您停止这个，Nura 就不再看您的日历了。",
             "您已经同意的看医生预约会留着。",
@@ -90,6 +75,15 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
     },
 }
 """What stopping one agreement will do, said before his yes. `{name}` is the person let in."""
+
+# @patient
+NOT_TOLD: Mapping[str, str] = {
+    "en": "Nura will not tell {name} when you are not well.",
+    "ms": "Nura tidak akan beritahu {name} bila anda tidak sihat.",
+    "zh": "您不舒服的时候，Nura 不会再告诉{name}。",
+}
+"""Said too when the person let in holds the emergency card: they come off the ladder a red
+flag climbs (`app.delivery.triggers.ladder`), so they are not told when he is unwell."""
 
 # @patient
 STOPPED: Mapping[str, str] = {
@@ -102,24 +96,18 @@ STOPPED: Mapping[str, str] = {
 # @patient
 STOPPED_LINES: Mapping[str, Mapping[ConsentPurpose, str]] = {
     "en": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: "Nura keeps nothing new from today.",
         ConsentPurpose.SHARE_WITH_PERSON: "{name} cannot see your papers now.",
         ConsentPurpose.RECORDING: "Nura will not listen at your visits to the doctor.",
-        ConsentPurpose.WHATSAPP: "Nura sends you nothing on WhatsApp.",
         ConsentPurpose.CALENDAR: "Nura will not look in your calendar.",
     },
     "ms": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: "Nura tidak simpan apa-apa yang baharu mulai hari ini.",
         ConsentPurpose.SHARE_WITH_PERSON: "{name} tidak boleh melihat surat-surat anda sekarang.",
         ConsentPurpose.RECORDING: "Nura tidak akan mendengar semasa lawatan anda ke doktor.",
-        ConsentPurpose.WHATSAPP: "Nura tidak hantar apa-apa kepada anda di WhatsApp.",
         ConsentPurpose.CALENDAR: "Nura tidak akan melihat kalendar anda.",
     },
     "zh": {
-        ConsentPurpose.HOLD_HEALTH_RECORD: "从今天起 Nura 不再保存新的东西。",
         ConsentPurpose.SHARE_WITH_PERSON: "{name} 现在不能看您的文件了。",
         ConsentPurpose.RECORDING: "您看医生的时候 Nura 不会再听。",
-        ConsentPurpose.WHATSAPP: "Nura 不会在 WhatsApp 上给您发任何东西。",
         ConsentPurpose.CALENDAR: "Nura 不会再看您的日历。",
     },
 }
@@ -132,13 +120,24 @@ def language_of(asked: str | None) -> str:
     return code if code in LANGUAGES else "en"
 
 
-def stop_lines(purpose: ConsentPurpose, *, name: str, language: str | None) -> list[str]:
+def stop_lines(
+    purpose: ConsentPurpose, *, name: str, language: str | None, told: bool = False
+) -> list[str]:
     """What stopping this agreement will do, in his words. `name` is the person let in (for
-    an agreement that names one); every other agreement has no slot for it."""
-    return [line.format(name=name) for line in STOP_LINES[language_of(language)][purpose]]
+    an agreement that names one); `told` when that person is one a red flag reaches."""
+    words = language_of(language)
+    lines = [line.format(name=name) for line in STOP_LINES[words][purpose]]
+    if told:
+        lines.insert(2, NOT_TOLD[words].format(name=name))
+    return lines
 
 
-def stopped_lines(purpose: ConsentPurpose, *, name: str, language: str | None) -> list[str]:
+def stopped_lines(
+    purpose: ConsentPurpose, *, name: str, language: str | None, told: bool = False
+) -> list[str]:
     """What stopping did, in his words."""
     words = language_of(language)
-    return [STOPPED[words], STOPPED_LINES[words][purpose].format(name=name)]
+    lines = [STOPPED[words], STOPPED_LINES[words][purpose].format(name=name)]
+    if told:
+        lines.append(NOT_TOLD[words].format(name=name))
+    return lines

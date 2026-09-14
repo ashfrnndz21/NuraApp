@@ -66,8 +66,11 @@ function GrantTile({ grant, here, act, reload }: { grant: GrantOut; here: Here; 
   const pid = here.papers.profile_id;
   const narrow = () =>
     act.act(grant.key_id, async () => {
-      const yes = await family.mintKeyChange(here.bearer, pid, grant.key_id, parts, window);
-      await family.narrowKey(here.bearer, pid, grant.key_id, parts, window, yes.confirmation_id);
+      // The window is sent only when it changes: the same window again, from now, would end
+      // later than the one the key has — wider, and refused.
+      const shorter = window !== grant.window ? window : null;
+      const yes = await family.mintKeyChange(here.bearer, pid, grant.key_id, parts, shorter);
+      await family.narrowKey(here.bearer, pid, grant.key_id, parts, shorter, yes.confirmation_id);
       setMode("none");
       await reload();
     });

@@ -63,14 +63,14 @@ async def test_the_person_a_flag_reached_says_im_on_it_and_the_ladder_stops(
     (ladder,) = open_.json()
     assert ladder["subject"] == "flag"
     assert ladder["lines"] == [
-        "Nura asked you to check on Pa on Monday 14 September.",
+        "Nura asked you to check on Pa on Monday 14 September at 10 in the morning.",
         "Once you say you have it, Nura asks nobody else.",
     ]
     # In Malay, for a reader who reads Malay.
     malay = await client.get(
         f"/profiles/{profile_id}/ladders", params={"language": "ms"}, headers=bearer(mei["token"])
     )
-    assert malay.json()[0]["lines"][0] == "Nura minta anda tengok Pa pada Isnin 14 September."
+    assert malay.json()[0]["lines"][0] == "Nura minta anda tengok Pa pada Isnin 14 September, pukul 10 pagi."
 
     # Kit's key does not open the emergency card: the ladder is not his to see.
     kits = await client.get(f"/profiles/{profile_id}/ladders", headers=bearer(kit["token"]))

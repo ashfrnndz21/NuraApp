@@ -23,7 +23,14 @@ from app.clock import FrozenClock
 from app.consent.models import ConsentChannel, ConsentPurpose
 from app.consent.service import withdraw_consent
 from app.consent.texts import current_version
-from app.consent.withdrawal import STOP_LINES, STOPPED, STOPPED_LINES, stop_lines
+from app.consent.withdrawal import (
+    APP_STOPS,
+    NOT_TOLD,
+    STOP_LINES,
+    STOPPED,
+    STOPPED_LINES,
+    stop_lines,
+)
 from app.delivery.triggers.models import DeliveryOutcome, Ladder, TriggerType
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone
@@ -186,6 +193,8 @@ async def test_the_record_is_one_printable_page_his_and_his_chiefs(
     assert page.status_code == 200, page.text
     assert page.headers["content-type"].startswith("text/html")
     assert page.headers["cache-control"] == "private, no-store"
+    assert page.headers["x-content-type-options"] == "nosniff"
+    assert page.headers["content-security-policy"].startswith("default-src 'none'")
     html = page.text
     # Self-contained: nothing fetched, nothing run.
     assert "<script" not in html and "http://" not in html and "https://" not in html
@@ -325,10 +334,10 @@ async def _consents(sg: AsyncSession, h: object) -> list:  # type: ignore[type-a
 
 def test_every_agreement_has_its_words_in_every_language_and_they_are_plain() -> None:
     for language in ("en", "ms", "zh"):
-        assert set(STOP_LINES[language]) == set(ConsentPurpose)
-        assert set(STOPPED_LINES[language]) == set(ConsentPurpose)
-        lines = [STOPPED[language]]
-        for purpose in ConsentPurpose:
+        assert set(STOP_LINES[language]) == set(APP_STOPS)
+        assert set(STOPPED_LINES[language]) == set(APP_STOPS)
+        lines = [STOPPED[language], NOT_TOLD[language].format(name="Ash")]
+        for purpose in APP_STOPS:
             lines += stop_lines(purpose, name="Ash", language=language)
             lines.append(STOPPED_LINES[language][purpose].format(name="Ash"))
         for line in lines:
@@ -338,3 +347,55 @@ def test_every_agreement_has_its_words_in_every_language_and_they_are_plain() ->
     assert stop_lines(ConsentPurpose.CALENDAR, name="", language="ta") == list(
         STOP_LINES["en"][ConsentPurpose.CALENDAR]
     )
+
+
+async def test_keeping_his_papers_and_whatsapp_are_not_stopped_in_the_app(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """Both carry the red-flag paths — the not-feeling-well button and Taken rest on the first,
+    every WhatsApp message about him, a red flag's to his family among them, on the second —
+    so neither is one tap: the route refuses by name, on his trail, and nothing stops."""
+    clock.set(MONDAY)
+    client = deployment.client
+    pa, _mei, _kit, profile_id = await _household(deployment)
+    agreed = await client.post(
+        f"/profiles/{profile_id}/consents/whatsapp",
+        json={"wording_version": current_version(ConsentPurpose.WHATSAPP), "language": "ms", "captured_via": "app"},
+        headers=bearer(pa["token"]),
+    )
+    assert agreed.status_code == 201, agreed.text
+    listed = (await client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))).json()
+    for purpose in ("hold_health_record", "whatsapp"):
+        (row,) = [c for c in listed if c["purpose"] == purpose and c["revoked_at"] is None]
+        for method, path in (("GET", "withdrawal"), ("POST", "withdraw")):
+            refused = await client.request(
+                method,
+                f"/profiles/{profile_id}/consents/{row['consent_id']}/{path}",
+                headers=bearer(pa["token"]),
+                json=None if method == "GET" else {},
+            )
+            assert refused.status_code == 403, refused.text
+            assert refused.json() == {"refusal": "NotStoppedInTheApp"}
+    after = (await client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))).json()
+    assert all(c["revoked_at"] is None for c in after if c["purpose"] in ("hold_health_record", "whatsapp"))
+    assert "NotStoppedInTheApp" in await _refusals(deployment, pa, profile_id)
+
+
+async def test_stopping_someone_a_red_flag_reaches_says_they_will_not_be_told(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """Mei holds the emergency card, so she is on the ladder a red flag climbs: the confirm step
+    says she will not be told when he is unwell. Kit's key does not hold it: his does not."""
+    clock.set(MONDAY)
+    client = deployment.client
+    pa, mei, kit, profile_id = await _household(deployment)
+    hers = await _sharing_with(deployment, pa, profile_id, mei["person_id"])
+    his = await _sharing_with(deployment, pa, profile_id, kit["person_id"])
+    asked = await client.get(
+        f"/profiles/{profile_id}/consents/{hers}/withdrawal", params={"language": "en"}, headers=bearer(pa["token"])
+    )
+    assert "Nura will not tell Mei when you are not well." in asked.json()["lines"]
+    asked = await client.get(
+        f"/profiles/{profile_id}/consents/{his}/withdrawal", params={"language": "en"}, headers=bearer(pa["token"])
+    )
+    assert not any("not well" in line for line in asked.json()["lines"])

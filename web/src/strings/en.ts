@@ -1184,5 +1184,6 @@ export const en = {
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
+    NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "The Nura team can stop it with you."],
   },
 } satisfies Strings;

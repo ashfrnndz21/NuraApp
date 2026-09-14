@@ -21,6 +21,7 @@ from app.channels.whatsapp.provider import NotAWebhook
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
+    NotStoppedInTheApp,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
@@ -136,6 +137,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # Keeping his papers and WhatsApp carry the red-flag paths: not one tap in the app.
+    (NotStoppedInTheApp, 403),
     # The engine's sources and jobs are the owner's and his chief's to see (E21).
     (NotTheirsToManage, 403),
     (NotTheClaimant, 403),

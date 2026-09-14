@@ -1180,5 +1180,6 @@ export const zh = {
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
+    NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 团队可以和您一起停止它。"],
   },
 } satisfies Strings;

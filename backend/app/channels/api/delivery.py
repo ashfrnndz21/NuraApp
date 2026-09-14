@@ -33,6 +33,7 @@ from app.delivery.triggers.ladder import acknowledge_flag, open_flags_for
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, TriggerType
 from app.delivery.triggers.preferences import change, current, log
 from app.delivery.triggers.rules import Config
+from app.delivery.when_words import say_clock
 from app.medicines.strings import say_date
 from app.regions import REGION_TZ
 from app.settings import Settings
@@ -242,19 +243,23 @@ async def open_ladders(
     profile = await audited_profile_read(session, context)
     words = ladder_language(language or profile.language)
     zone = REGION_TZ[context.region]
-    return [
-        OpenLadderOut(
-            ladder_id=ladder.id,
-            subject=ladder.subject.value,
-            started_at=ladder.started_at,
-            lines=asked_lines(
-                name=profile.display_name,
-                day=say_date(as_utc(ladder.started_at).astimezone(zone).date(), words),
-                language=words,
-            ),
+    shown: list[OpenLadderOut] = []
+    for ladder in found:
+        local = as_utc(ladder.started_at).astimezone(zone)
+        shown.append(
+            OpenLadderOut(
+                ladder_id=ladder.id,
+                subject=ladder.subject.value,
+                started_at=as_utc(ladder.started_at),
+                lines=asked_lines(
+                    name=profile.display_name,
+                    day=say_date(local.date(), words),
+                    time=say_clock(local.time(), words),
+                    language=words,
+                ),
+            )
         )
-        for ladder in found
-    ]
+    return shown
 
 
 @router.post("/profiles/{profile_id}/ladders/{ladder_id}/acknowledge")

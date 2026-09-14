@@ -7,6 +7,11 @@ import { inForce, wordingLines } from "../../family/model";
 import { Notice, Pill, Tile } from "../../ui/components";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, whose } from "./common";
 
+/** What the owner stops in the app with one yes (`app.consent.withdrawal.APP_STOPS`). Keeping
+ *  his papers and WhatsApp carry the red-flag paths, and are stopped with the Nura team: the
+ *  app does not offer what it cannot do, and the backend refuses it by name besides. */
+const APP_STOPS: ReadonlySet<string> = new Set(["share_with_family", "recording", "calendar"]);
+
 /** E00-02: every agreement in force, in the words he read; stopping one, after the backend
  *  says what stopping will do; and the whole record, withdrawn ones included, to keep. */
 export function ConsentsPart(): JSX.Element | null {
@@ -56,9 +61,11 @@ export function ConsentsPart(): JSX.Element | null {
           {inForce(list.value ?? []).map((consent) => (
             <Tile paper key={consent.consent_id} testId="consent">
               <Lines lines={wordingLines(consent)} testId="consent-words" />
-              <Pill onClick={() => void ask(consent)} disabled={a.busy} testId="stop">
-                {words.stop}
-              </Pill>
+              {APP_STOPS.has(consent.purpose ?? "") && (
+                <Pill onClick={() => void ask(consent)} disabled={a.busy} testId="stop">
+                  {words.stop}
+                </Pill>
+              )}
               <NoticeAt act={a} where={consent.consent_id} />
             </Tile>
           ))}

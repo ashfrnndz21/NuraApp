@@ -247,9 +247,10 @@ test.describe("the caregiver density at 360 by 640", () => {
     await expect(digest.getByTestId("digest-entry").filter({ hasText: "Pa slept well. I will come by at 6." })).toContainText("Mei wrote on Monday 14 September:");
     await expect(kit.getByTestId("digest-closing")).toContainText("Mei is on duty today.");
     expect(await caregiverScreenOk(kit)).toEqual([]);
-    // Kit's key does not open the family list: the keys refuse him in the backend's words.
-    await openFamilyPart(kit, "keys");
-    await expect(kit.getByTestId("notice")).toContainText("This part of the papers is not open to you.");
+    // What went out, and to whom, is the owner's and his chief's: Kit is told so in the
+    // backend's words, never shown a disabled button.
+    await openFamilyPart(kit, "deliveries");
+    await expect(kit.getByTestId("notice")).toContainText("Only the owner can see this.");
     await kit.context().close();
   });
 
@@ -344,7 +345,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     await signIn(page, family.mei, false);
     await page.getByTestId("tab-family").click();
     const ladder = page.getByTestId("ladder");
-    await expect(ladder.getByTestId("ladder-lines")).toContainText("Nura asked you to check on Pa on Monday 14 September.");
+    await expect(ladder.getByTestId("ladder-lines")).toContainText("Nura asked you to check on Pa on Monday 14 September at 10 in the morning.");
     expect(await caregiverScreenOk(page)).toEqual([]);
     await ladder.getByTestId("on-it").click();
     await expect(page.getByTestId("ladder-answered")).toContainText("Nura asks nobody else now.");
@@ -356,7 +357,7 @@ test("the for-someone door: who you are to them is a choice, and the number can 
   const his = freshPhone("+659885");
   await page.addInitScript((tel: string) => {
     Object.defineProperty(navigator, "contacts", { value: { select: async () => [{ name: ["Pa"], tel: [tel] }] }, configurable: true });
-  }, his.slice(3).replace(/(\d{4})$/, " $1"));
+  }, `+65 ${his.slice(3, 7)} ${his.slice(7)}`);
   await signInThroughTheApp(page, freshPhone("+659884"), "Ash");
   await page.getByTestId("door-for-someone").click();
   await expect(page.locator('input[name="relationship"]')).toHaveCount(0);

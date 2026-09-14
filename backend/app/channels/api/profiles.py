@@ -68,7 +68,7 @@ from app.channels.api.schemas import (
 )
 from app.channels.printable import PrintableConsentRenderer
 from app.consent.export import export_consent_record
-from app.consent.models import Consent, ConsentBasis, ConsentPurpose
+from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
     Sharing,
@@ -482,7 +482,12 @@ async def consent_record_page(request: Request, context: Context, session: Db) -
         session, context=context, renderer=PrintableConsentRenderer(demo=settings_of(request).demo_mode)
     )
     return HTMLResponse(
-        record.rendered.body.decode(), headers={"Cache-Control": "private, no-store"}
+        record.rendered.body.decode(),
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+        },
     )
 
 
@@ -498,7 +503,9 @@ async def withdrawal(
     return WithdrawalOut(
         consent_id=row.id,
         purpose=row.purpose,
-        lines=stop_lines(row.purpose, name=await _named(session, context, row), language=words),
+        lines=stop_lines(
+            row.purpose, name=await _named(session, context, row), language=words, told=_told(row)
+        ),
     )
 
 
@@ -510,15 +517,25 @@ async def withdraw(
     the same transaction, and nothing still waiting to be sent reaches them. The rows stay,
     marked with when and by whom; the printable record says so."""
     row, withdrawn = await withdraw_consent(
-        session, context=context, consent_id=consent_id, captured_via=body.captured_via
+        session, context=context, consent_id=consent_id, captured_via=ConsentChannel.APP
     )
     words = body.language or (await audited_profile_read(session, context)).language
     return WithdrawnOut(
         consent_id=row.id,
         purpose=row.purpose,
         withdrawn=[ConsentOut.of(each) for each in withdrawn],
-        lines=stopped_lines(row.purpose, name=await _named(session, context, row), language=words),
+        lines=stopped_lines(
+            row.purpose, name=await _named(session, context, row), language=words, told=_told(row)
+        ),
     )
+
+
+def _told(row: Consent) -> bool:
+    """Whether the person this agreement lets in is one a red flag reaches: the emergency card
+    is among the parts it names."""
+    if row.purpose is not ConsentPurpose.SHARE_WITH_PERSON:
+        return False
+    return row.scopes is None or Scope.EMERGENCY.value in row.scopes
 
 
 async def _named(session: AsyncSession, context: KeyContext, row: Consent) -> str:

@@ -208,6 +208,11 @@ export function ForSomeoneScreen(): JSX.Element {
         <p>{s.forSomeone.lead}</p>
         <Field name="their-name" label={s.forSomeone.theirName} value={name} onInput={setName} />
         <Field name="their-phone" label={s.forSomeone.theirPhone} value={phone} onInput={setPhone} type="tel" inputMode="tel" />
+        {!phone.trim().startsWith("+") && (
+          <p class="caption" data-testid="country-code">
+            {s.signIn.phoneHint}
+          </p>
+        )}
         {canPickContact() && (
           <Pill
             quiet
@@ -235,7 +240,7 @@ export function ForSomeoneScreen(): JSX.Element {
           <span>{s.forSomeone.asked}</span>
         </label>
         <div class="lines">{words?.lines.map((line, index) => <p key={index} class="caption">{line}</p>)}</div>
-        <Pill plum onClick={create} disabled={busy || !words || !asked || name.trim().length === 0 || phone.replace(/\D/g, "").length < 8}>
+        <Pill plum onClick={create} disabled={busy || !words || !asked || name.trim().length === 0 || !phone.trim().startsWith("+") || phone.replace(/\D/g, "").length < 8}>
           {s.forSomeone.create}
         </Pill>
       </Tile>

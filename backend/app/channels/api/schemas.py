@@ -755,9 +755,9 @@ class WithdrawalOut(BaseModel):
 
 
 class WithdrawIn(BaseModel):
-    """The owner stopping one agreement: how he said it, and the language he reads."""
+    """The owner stopping one agreement in the app, and the language he reads. How it was
+    captured is not the caller's to say: this route is the app's, and the trail says so."""
 
-    captured_via: ConsentChannel = ConsentChannel.APP
     language: str | None = Field(default=None, min_length=2, max_length=16)
 
 
