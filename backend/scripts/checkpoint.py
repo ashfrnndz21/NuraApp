@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+from scripts import checkpoints
+
 BASE_URL = os.environ.get("NURA_BASE_URL", "http://127.0.0.1:8000")
 DEV_LOG = Path(os.environ.get("NURA_DEV_LOG", Path(__file__).resolve().parent.parent / ".dev.log"))
 LOG_NAME = os.environ.get("NURA_DEV_LOG", "backend/.dev.log")
@@ -1802,6 +1804,7 @@ CHECKPOINTS = {
     4: checkpoint_4,
     5: checkpoint_5,
     6: checkpoint_6,
+    10: lambda client: checkpoints.cp10.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }
 
 

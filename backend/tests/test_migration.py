@@ -25,10 +25,12 @@ from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.consent.models import Consent
+from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.models import ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
+from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
@@ -60,6 +62,12 @@ TABLES: tuple[Table, ...] = (
     Supply.__table__,
     DoseTaken.__table__,
     InteractionFlag.__table__,
+    Privacy.__table__,
+    RosterSlot.__table__,
+    Task.__table__,
+    ThreadMessage.__table__,
+    ScheduledPush.__table__,
+    Document.__table__,
 )
 
 
@@ -139,7 +147,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0009_medicines"]
+    assert heads == ["0012_family"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -178,6 +186,9 @@ def test_the_migrations_build_the_tables_the_models_declare(
             Supply,
             DoseTaken,
             InteractionFlag,
+            ThreadMessage,
+            ScheduledPush,
+            Document,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {
