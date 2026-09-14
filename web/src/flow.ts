@@ -32,7 +32,7 @@ export type Screen =
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
   | { name: "notWell" }
-  | { name: "whatToDo"; lines: string[]; offline: boolean; refusal: string | null }
+  | { name: "whatToDo"; lines: string[]; offline: "network" | "server" | null; refusal: string | null }
   | { name: "feeling"; tap: FeelingOut }
   | { name: "symptoms" }
   | { name: "brief"; appointmentId: string }

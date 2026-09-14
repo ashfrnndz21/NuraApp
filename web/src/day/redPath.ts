@@ -7,16 +7,25 @@ import { offlineLines, type OfflineKind } from "./model";
  *  card as the phone kept it, or the catalogue's copy of that card — never nothing. */
 export interface WhatToDo {
   lines: string[];
-  /** The phone could not reach Nura: nothing was written and nobody was told. */
-  offline: boolean;
+  /** Why the backend was not reached: no network (or no answer in time), or a server that could
+   *  not answer. Null when it was reached. Either way nothing was written and nobody was told. */
+  offline: "network" | "server" | null;
   /** The backend said no, by its refusal's name: its sentence is said above the card. */
   refusal: string | null;
 }
 
-/** When a red word, the button or his words could not reach the backend — no network, a server
- *  that could not answer, or a no — the offline card: whatever else happened, he is never left
- *  with nothing, and never told the family knows when nobody was told. */
-export function whenNotReached(kind: OfflineKind, failure: unknown, kept: OfflineCardsOut | null, region: Region | undefined, s: Strings): WhatToDo {
-  const said = failure instanceof Refused && failure.status < 500 ? failure.refusal : null;
-  return { lines: offlineLines(kind, kept, region, s).lines, offline: said === null, refusal: said };
+/** When a red word or the button could not reach the backend — no network, no answer in time, a
+ *  server that could not answer, or a no — the offline card: whatever else happened, he is never
+ *  left with nothing, and never told the family knows when nobody was told. */
+export function whenNotReached(
+  kind: OfflineKind,
+  failure: unknown,
+  kept: OfflineCardsOut | null,
+  region: Region | undefined,
+  s: Strings,
+  language: string,
+): WhatToDo {
+  const refusal = failure instanceof Refused && failure.status < 500 ? failure.refusal : null;
+  const offline = refusal !== null ? null : failure instanceof Refused ? "server" : "network";
+  return { lines: offlineLines(kind, kept, region, s, language).lines, offline, refusal };
 }

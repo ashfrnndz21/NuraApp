@@ -427,6 +427,8 @@ export const en = {
     // @patient phrase
     symptomsKeep: "Keep this",
     // @patient
+    // @patient phrase
+    sendAgain: "Send it again",
     symptomsSaved: "Nura wrote this down.",
     // @patient phrase
     nudgeOk: "OK",

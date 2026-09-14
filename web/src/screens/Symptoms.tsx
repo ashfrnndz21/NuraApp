@@ -1,13 +1,9 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { Refused } from "../api/client";
 import * as nura from "../api/nura";
 import type { Said, SymptomEntryOut, SymptomLogOut } from "../api/types";
-import { keptCards } from "../day/offline";
-import { whenNotReached } from "../day/redPath";
 import { canRecord, saidOf, voiceRecorder } from "../day/voice";
 import { go } from "../flow";
-import { bindingOf } from "../offline/todayCache";
 import { density, profile, token } from "../store/session";
 import { fill, language, t } from "../strings";
 import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
@@ -26,6 +22,8 @@ export function SymptomsScreen(): JSX.Element {
   const [words, setWords] = useState("");
   const [stage, setStage] = useState<"ask" | "listening" | "sending">("ask");
   const [error, setError] = useState<unknown>(null);
+  // What he said that did not reach Nura, kept on the page for one more try.
+  const [unsent, setUnsent] = useState<Said | null>(null);
   const recorder = useMemo(() => voiceRecorder(), []);
   useEffect(() => () => recorder.discard(), [recorder]);
 
@@ -47,19 +45,19 @@ export function SymptomsScreen(): JSX.Element {
     setError(null);
     try {
       const logged = await nura.logSymptom(bearer, papers.profile_id, said, language.value);
+      setUnsent(null);
+      // A red flag in what he said: the backend escalated, and its urgent card is what he sees.
+      if (logged.card && logged.card.length > 0) return go({ name: "whatToDo", lines: logged.card.map((line) => line.text), offline: null, refusal: null });
       if (logged.flag_id) return go({ name: "today" });
       setSaved(logged.entry);
       setWords("");
       setStage("ask");
       await read();
     } catch (failure) {
-      if (failure instanceof Refused && failure.status < 500) {
-        setError(failure);
-        setStage("ask");
-        return;
-      }
-      const kept = await keptCards(papers.profile_id, bindingOf(papers));
-      go({ name: "whatToDo", ...whenNotReached("unknown", failure, kept?.cards ?? null, papers.region, s) });
+      // Not kept: said in one sentence, his words still here, and one tap sends them again.
+      setError(failure);
+      setUnsent(said);
+      setStage("ask");
     }
   };
 
@@ -111,6 +109,11 @@ export function SymptomsScreen(): JSX.Element {
           <Pill plum onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="symptom-keep">
             {s.day.symptomsKeep}
           </Pill>
+          {unsent?.audio && (
+            <Pill onClick={() => void send(unsent)} testId="symptom-again">
+              {s.day.sendAgain}
+            </Pill>
+          )}
           {canRecord() && (
             <Pill onClick={() => void listen()} testId="symptom-say">
               {s.day.sayIt}

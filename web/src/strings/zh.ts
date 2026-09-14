@@ -427,6 +427,8 @@ export const zh = {
     // @patient phrase
     symptomsKeep: "保存",
     // @patient
+    // @patient phrase
+    sendAgain: "再发送一次",
     symptomsSaved: "Nura已经记下了。",
     // @patient phrase
     nudgeOk: "好的",

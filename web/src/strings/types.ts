@@ -229,6 +229,7 @@ export interface Strings {
     symptomsTitleOther: string;
     symptomsLead: string;
     symptomsKeep: string;
+    sendAgain: string;
     symptomsSaved: string;
     nudgeOk: string;
     nudgeWentWell: string;

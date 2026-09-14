@@ -427,6 +427,8 @@ export const ms = {
     // @patient phrase
     symptomsKeep: "Simpan ini",
     // @patient
+    // @patient phrase
+    sendAgain: "Hantar sekali lagi",
     symptomsSaved: "Nura sudah mencatat ini.",
     // @patient phrase
     nudgeOk: "OK",

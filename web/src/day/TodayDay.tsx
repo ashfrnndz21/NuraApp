@@ -80,14 +80,18 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
     setError(null);
     try {
       const felt = await nura.tapFeeling(bearer, papers.profile_id, word.word, language.value);
-      if (felt.red_flag) return go({ name: "whatToDo", lines: felt.card ? whatToDoLines(felt.card) : felt.lines, offline: false, refusal: null });
+      // A word on the cloud is the check-in's answer: the hidden check-in is answered with it.
+      if (nudge?.from === "handed" && nudge.kind === "check_in") {
+        void nura.answerNudge(bearer, papers.profile_id, nudge.nudgeId, "accepted").catch(() => undefined);
+      }
+      if (felt.red_flag) return go({ name: "whatToDo", lines: felt.card ? whatToDoLines(felt.card) : felt.lines, offline: null, refusal: null });
       if (felt.question) return go({ name: "feeling", tap: felt });
       setSaid(felt.lines);
       setCloud(null);
     } catch (failure) {
       if (word.red) {
         const kept = await keptCards(papers.profile_id, bindingOf(papers));
-        return go({ name: "whatToDo", ...whenNotReached("red_flag", failure, kept?.cards ?? null, papers.region, s) });
+        return go({ name: "whatToDo", ...whenNotReached("red_flag", failure, kept?.cards ?? null, papers.region, s, language.value) });
       }
       setError(failure);
     } finally {
@@ -102,7 +106,13 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
     setBusy(true);
     setError(null);
     try {
-      const id = nudge.from === "handed" ? nudge.nudgeId : (await nura.handOverNudge(bearer, papers.profile_id)).nudge.nudge_id;
+      let id: string;
+      if (nudge.from === "handed") id = nudge.nudgeId;
+      else {
+        id = (await nura.handOverNudge(bearer, papers.profile_id)).nudge.nudge_id;
+        // Handed over now: a second try answers this one, and never hands over twice.
+        setNudge({ ...nudge, from: "handed", nudgeId: id });
+      }
       await nura.answerNudge(bearer, papers.profile_id, id, kind);
       setNudge(null);
     } catch (failure) {

@@ -251,3 +251,23 @@ async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(deployme
 
     other = await deployment.client.get(f"/profiles/{profile_id}/nudges?day=2026-01-05", headers=his)
     assert other.json()["nudges"] == []
+
+
+async def test_the_answer_that_makes_a_word_red_says_so(deployment: Deployment) -> None:
+    """W7: the phone shows the red offline card if a red-making answer cannot be sent, so each
+    answer says whether it makes the word red — a yes to the question that tells the red variant
+    apart, and nothing else."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    breathless = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings", json={"word": "breathless"}, headers=his
+    )
+    assert breathless.status_code == 201, breathless.text
+    question = breathless.json()["question"]
+    assert question["follow_up"] == "at_rest"
+    assert {one["answer"]: one["red"] for one in question["answers"]} == {"yes": True, "no": False}
+    low = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings", json={"word": "low"}, headers=his
+    )
+    assert [one["red"] for one in low.json()["question"]["answers"]] == [False] * 4

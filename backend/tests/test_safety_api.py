@@ -273,6 +273,18 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
     await _key(deployment, pa, profile_id, MEI, "chief")
     his = bearer(pa["token"])
 
+    from sqlalchemy import func, select
+
+    from app.memory.models import Event
+    from app.safety.red_flags import Flag
+
+    async def written() -> tuple[int | None, int | None]:
+        async with deployment.sessions() as session:
+            events = await session.scalar(select(func.count()).select_from(Event))
+            flags = await session.scalar(select(func.count()).select_from(Flag))
+        return events, flags
+
+    before = await written()
     kept = await deployment.client.get(f"/profiles/{profile_id}/not-feeling-well/offline", headers=his)
     assert kept.status_code == 200, kept.text
     body = kept.json()
@@ -302,7 +314,8 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
     assert malay.json()["red_flag"][2]["text"] == "Hubungi ambulans sekarang di talian 995."
     assert malay.json()["red_flag"][-1]["text"] == "Nura tidak menentukan apa masalahnya."
 
-    # Reading them wrote nothing: no symptom, no flag.
+    # Reading them wrote nothing: no event, no flag, no symptom.
+    assert await written() == before
     log = await deployment.client.get(f"/profiles/{profile_id}/symptoms", headers=his)
     assert log.json()["entries"] == []
 
@@ -323,3 +336,63 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
         f"/profiles/{profile_id}/not-feeling-well/offline", headers=bearer(kit["token"])
     )
     assert refused.status_code == 403 and refused.json() == {"refusal": "NoKey"}
+
+
+def _web_fallback(language: str) -> dict[str, str]:
+    """The web client's copy of the offline cards (`web/src/strings/<language>.ts`, `day.fallback`)."""
+    from pathlib import Path
+
+    text = (Path(__file__).resolve().parents[2] / "web" / "src" / "strings" / f"{language}.ts").read_text()
+    block = text[text.index("fallback: {") :]
+    block = block[: block.index("}")]
+    return dict(re.findall(r'(\w+): "((?:[^"\\]|\\.)*)"', block))
+
+
+async def test_the_web_keeps_the_offline_cards_word_for_word(deployment: Deployment) -> None:
+    """W7, ADR 0012: a phone that kept no copy shows the catalogue's copy of the backend's offline
+    cards. For a profile with nobody else on his list, that copy is the backend's cards exactly,
+    in every language."""
+    ana = await register_by_phone(deployment, ANA, "Ana")
+    alone = await own_profile(deployment, ana, language="en")
+    for language in ("en", "ms", "zh"):
+        body = (
+            await deployment.client.get(
+                f"/profiles/{alone}/not-feeling-well/offline?language={language}",
+                headers=bearer(ana["token"]),
+            )
+        ).json()
+        web = _web_fallback(language)
+        assert [line["text"] for line in body["red_flag"]] == [
+            web["youDidRight"], web["notSent"], web["call995"], web["closing"]
+        ], language
+        assert [line["text"] for line in body["unknown"]] == [
+            web["youDidRight"], web["notSent"], web["callFamily"], web["bad995"], web["closing"]
+        ], language
+
+
+async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(deployment: Deployment) -> None:
+    """W7: a red flag said in the log escalates exactly as the button does, and the answer carries
+    the button's urgent card — what he is shown next — while an everyday symptom carries none."""
+    pa, profile_id = await _pa_with_the_water_pill(deployment)
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await _key(deployment, pa, profile_id, MEI, "chief")
+    his = bearer(pa["token"])
+    red = await deployment.client.post(
+        f"/profiles/{profile_id}/symptoms", json={"words": "chest pain since this morning"}, headers=his
+    )
+    assert red.status_code == 201, red.text
+    body = red.json()
+    assert body["flag_id"] and body["posture"] == "act" and mei["person_id"] in body["notified_person_ids"]
+    assert [line["text"] for line in body["card"]] == [
+        "Mei knows now.",
+        "Call the ambulance now on 995.",
+        "After that, call Mei.",
+        "Nura does not decide what is wrong.",
+    ]
+    calm = await deployment.client.post(
+        f"/profiles/{profile_id}/symptoms",
+        json={"words": "dizzy, quite a lot, since this morning"},
+        headers=his,
+    )
+    assert calm.status_code == 201, calm.text
+    assert calm.json()["card"] is None and calm.json()["flag_id"] is None

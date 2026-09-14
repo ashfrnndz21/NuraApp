@@ -52,17 +52,24 @@ describe("what to do now", () => {
   });
 
   it("with no network is the card the phone kept, word for word", () => {
-    expect(offlineLines("red_flag", KEPT, "SG", en)).toEqual({ lines: KEPT.red_flag.map((line) => line.text), from: "kept" });
-    expect(offlineLines("unknown", KEPT, "SG", en).lines[2]).toBe("Call Mei now.");
+    expect(offlineLines("red_flag", KEPT, "SG", en, "en")).toEqual({ lines: KEPT.red_flag.map((line) => line.text), from: "kept" });
+    expect(offlineLines("unknown", KEPT, "SG", en, "en").lines[2]).toBe("Call Mei now.");
+  });
+
+  it("kept in another language is not his card: the catalogue's, in the language he reads now", () => {
+    const ms = stringsFor("ms");
+    const shown = offlineLines("red_flag", KEPT, "SG", ms, "ms");
+    expect(shown.from).toBe("catalogue");
+    expect(shown.lines[0]).toBe(ms.day.fallback.youDidRight);
   });
 
   it("with nothing kept is the backend's offline card from the catalogue, for his region: never nothing", () => {
-    expect(offlineLines("red_flag", null, "SG", en)).toEqual({
+    expect(offlineLines("red_flag", null, "SG", en, "en")).toEqual({
       lines: ["You did right to say so.", "Nura could not send this to your family.", "Call the ambulance now on 995.", "Nura does not decide what is wrong."],
       from: "catalogue",
     });
-    expect(offlineLines("red_flag", null, "MY", en).lines[2]).toBe("Call the ambulance now on 999.");
-    expect(offlineLines("unknown", null, "MY", en).lines).toEqual([
+    expect(offlineLines("red_flag", null, "MY", en, "en").lines[2]).toBe("Call the ambulance now on 999.");
+    expect(offlineLines("unknown", null, "MY", en, "en").lines).toEqual([
       "You did right to say so.",
       "Nura could not send this to your family.",
       "Call your family now.",
@@ -72,7 +79,7 @@ describe("what to do now", () => {
     const empty: OfflineCardsOut = { ...KEPT, red_flag: [], unknown: [] };
     for (const code of LANGUAGES) {
       for (const kind of ["red_flag", "unknown"] as const) {
-        const shown = offlineLines(kind, empty, "SG", stringsFor(code));
+        const shown = offlineLines(kind, empty, "SG", stringsFor(code), code);
         expect(shown.lines.length).toBeGreaterThanOrEqual(4);
         expect(shown.lines.every((line) => line.trim().length > 0)).toBe(true);
         // Never "Ask your doctor." after an emergency number: the one closing line is last.
@@ -82,10 +89,10 @@ describe("what to do now", () => {
   });
 
   it("says why it is the offline card: no network, a server that could not answer, or a no", () => {
-    expect(whenNotReached("red_flag", new Unreachable(), KEPT, "SG", en)).toEqual({ lines: KEPT.red_flag.map((l) => l.text), offline: true, refusal: null });
-    expect(whenNotReached("red_flag", new Refused("HttpError", 502), null, "SG", en).offline).toBe(true);
-    const refused = whenNotReached("unknown", new Refused("NoKey", 403), null, "SG", en);
-    expect(refused.offline).toBe(false);
+    expect(whenNotReached("red_flag", new Unreachable(), KEPT, "SG", en, "en")).toEqual({ lines: KEPT.red_flag.map((l) => l.text), offline: "network", refusal: null });
+    expect(whenNotReached("red_flag", new Refused("HttpError", 502), null, "SG", en, "en").offline).toBe("server");
+    const refused = whenNotReached("unknown", new Refused("NoKey", 403), null, "SG", en, "en");
+    expect(refused.offline).toBeNull();
     expect(refused.refusal).toBe("NoKey");
     expect(refused.lines[1]).toBe("Nura could not send this to your family.");
   });

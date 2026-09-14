@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { Said } from "../api/types";
 import { keptCards } from "../day/offline";
-import { whatToDoLines } from "../day/model";
+import { offlineLines, whatToDoLines } from "../day/model";
 import { whenNotReached } from "../day/redPath";
 import { canRecord, saidOf, voiceRecorder } from "../day/voice";
 import { go } from "../flow";
@@ -28,14 +28,17 @@ export function NotWellScreen(): JSX.Element {
   useEffect(() => () => recorder.discard(), [recorder]);
 
   const send = async (said: Said) => {
-    if (!bearer || !papers) return;
+    if (!bearer || !papers) {
+      // No session on this phone: nothing can be sent, and he still gets the calls.
+      return go({ name: "whatToDo", lines: offlineLines("unknown", null, papers?.region, s, language.value).lines, offline: null, refusal: "NoSession" });
+    }
     setStage("sending");
     try {
       const card = await nura.notFeelingWell(bearer, papers.profile_id, said, language.value);
-      go({ name: "whatToDo", lines: whatToDoLines(card), offline: false, refusal: null });
+      go({ name: "whatToDo", lines: whatToDoLines(card), offline: null, refusal: null });
     } catch (failure) {
       const kept = await keptCards(papers.profile_id, bindingOf(papers));
-      go({ name: "whatToDo", ...whenNotReached("unknown", failure, kept?.cards ?? null, papers.region, s) });
+      go({ name: "whatToDo", ...whenNotReached("unknown", failure, kept?.cards ?? null, papers.region, s, language.value) });
     }
   };
 

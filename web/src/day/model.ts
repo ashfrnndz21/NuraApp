@@ -36,9 +36,10 @@ export interface OfflineView {
 }
 
 /** What the phone shows when it cannot reach Nura. Never nothing: the kept card when the phone
- *  has one, else the catalogue's copy of the backend's card for the profile's region. */
-export function offlineLines(kind: OfflineKind, kept: OfflineCardsOut | null, region: Region | undefined, s: Strings): OfflineView {
-  const found = kept?.[kind] ?? [];
+ *  has one in his language, else the catalogue's copy of the backend's card for his region. */
+export function offlineLines(kind: OfflineKind, kept: OfflineCardsOut | null, region: Region | undefined, s: Strings, language: string): OfflineView {
+  // A card kept in another language than he reads now is not his card: the catalogue's is.
+  const found = kept && kept.language === language ? kept[kind] : [];
   if (found.length > 0) return { lines: found.map((line) => line.text), from: "kept" };
   const f = s.day.fallback;
   const malaysia = region === "MY";

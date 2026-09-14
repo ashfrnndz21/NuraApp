@@ -865,6 +865,8 @@ export interface SymptomLoggedOut {
   flag_id: string | null;
   notified_person_ids: string[];
   suppressed: string[];
+  /** A red flag in what he said: the button's urgent card, in its order (null otherwise). */
+  card?: IdLineOut[] | null;
 }
 
 /** The log, oldest first, every entry's lines in order (or the one line for an empty log). */
@@ -896,7 +898,8 @@ export interface CloudOut {
 export interface FeelingQuestionOut {
   follow_up: string;
   words: string;
-  answers: { answer: string; label: string }[];
+  /** `red`: this answer makes the word a red flag, so a failure to send it shows the red card. */
+  answers: { answer: string; label: string; red?: boolean }[];
 }
 
 /** A note kept for the visit (E17-02): the headline, what to tell, who does the next thing,

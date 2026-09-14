@@ -311,7 +311,7 @@ test("no network on a red word: the backend's offline card the phone kept — an
 
   await page.route("**/api/profiles/*/feelings", (route) => route.abort("internetdisconnected"));
   await page.getByTestId("feeling-cloud").locator('[data-word="chest_tightness"]').click();
-  await expect(page.getByTestId("what-to-do-screen")).toHaveAttribute("data-offline", "yes");
+  await expect(page.getByTestId("what-to-do-screen")).toHaveAttribute("data-offline", "network");
   await expect(page.getByTestId("offline-note")).toHaveText("Nura cannot reach the internet right now.");
   await expect(whatToDoLines(page)).toHaveText(texts(offline.red_flag));
   expect(texts(offline.red_flag)).toContain("Nura could not send this to your family.");
@@ -348,7 +348,63 @@ test("no network on a red word: the backend's offline card the phone kept — an
   expect(log.entries).toEqual([]);
 });
 
+test("a red word that hangs rather than fails: at the deadline the offline card the phone kept, never a page that waits", async ({ page, request }) => {
+  const pa = await seedVisitDay(request);
+  await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 30 });
+  const keptRead = page.waitForResponse((response) => response.url().includes("/not-feeling-well/offline") && response.ok());
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await keptRead;
+  const offline = (await (await request.get(`${API}/profiles/${pa.profileId}/not-feeling-well/offline?language=en`, auth(pa.token))).json()) as { red_flag: Line[] };
+  // The connection is up and the server never answers: the request is left hanging.
+  await page.route("**/api/profiles/*/feelings", () => undefined);
+  await page.getByTestId("feeling-cloud").locator('[data-word="chest_tightness"]').click();
+  await expect(page.getByTestId("what-to-do-screen")).toHaveCount(0);
+  await page.clock.fastForward("00:11");
+  await expect(page.getByTestId("what-to-do-screen")).toHaveAttribute("data-offline", "network");
+  await expect(whatToDoLines(page)).toHaveText(texts(offline.red_flag));
+});
+
+test("an answer that makes the word red, not sent: the red card; any other answer not sent keeps the question, said in one sentence", async ({ page, request }) => {
+  const pa = await seedVisitDay(request);
+  await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 30 });
+  const keptRead = page.waitForResponse((response) => response.url().includes("/not-feeling-well/offline") && response.ok());
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await keptRead;
+  const offline = (await (await request.get(`${API}/profiles/${pa.profileId}/not-feeling-well/offline?language=en`, auth(pa.token))).json()) as { red_flag: Line[] };
+  const tapped = page.waitForResponse(posted(/\/feelings$/));
+  await page.getByTestId("feeling-cloud").locator('[data-word="breathless"]').click();
+  const felt = (await (await tapped).json()) as { question: { follow_up: string; answers: { answer: string; red: boolean }[] } };
+  expect(felt.question.follow_up).toBe("at_rest");
+  expect(felt.question.answers.map((one) => [one.answer, one.red])).toEqual([["yes", true], ["no", false]]);
+  await page.route("**/api/profiles/*/feelings/*/answer", (route) => route.abort("internetdisconnected"));
+  // "No" not sent: the question stays, and one sentence says why.
+  await page.getByTestId("answer-no").click();
+  await expect(page.getByTestId("notice")).toContainText("Nura");
+  await expect(page.getByTestId("feeling-question")).toBeVisible();
+  // "Yes" — breathless even sitting still — not sent: the red card, never less.
+  await page.getByTestId("answer-yes").click();
+  await expect(page.getByTestId("what-to-do-screen")).toHaveAttribute("data-offline", "network");
+  await expect(whatToDoLines(page)).toHaveText(texts(offline.red_flag));
+  expect(await nothingCovers(page)).toEqual([]);
+});
+
 // --- E14-01: symptoms -----------------------------------------------------------------------------
+
+test("a red word in the symptom log: the backend's urgent card is what he sees next", async ({ page, request }) => {
+  const pa = await seedVisitDay(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await page.getByTestId("open-symptoms").click();
+  await page.getByTestId("symptom-words").fill("chest pain since this morning");
+  const logged = page.waitForResponse(posted(/\/symptoms$/));
+  await page.getByTestId("symptom-keep").click();
+  const body = (await (await logged).json()) as { flag_id: string; card: Line[] };
+  expect(body.flag_id).toBeTruthy();
+  expect(texts(body.card)).toEqual(["Mei knows now.", "Call the ambulance now on 995.", "After that, call Mei.", "Nura does not decide what is wrong."]);
+  await expect(whatToDoLines(page)).toHaveText(texts(body.card));
+  await expect(page.getByTestId("what-to-do-screen")).toHaveAttribute("data-offline", "no");
+  expect(await nothingCovers(page)).toEqual([]);
+});
+
 
 test("a symptom said out loud, with how much and since when; Mei reads it in plain words on her phone", async ({ page, browser, request }) => {
   await fakeRecorder(page, voice("dizzy-quite-a-lot"));

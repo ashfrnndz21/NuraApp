@@ -260,6 +260,8 @@ class SymptomLoggedOut(BaseModel):
     flag_id: uuid.UUID | None
     notified_person_ids: list[uuid.UUID]
     suppressed: list[str]
+    card: list[LineOut] | None = None
+    """A red flag in what he said: the button's urgent card, in order — what he is shown next."""
 
     @classmethod
     def of(cls, logged: Logged, severity_words: str | None) -> SymptomLoggedOut:
@@ -269,6 +271,9 @@ class SymptomLoggedOut(BaseModel):
             flag_id=logged.flag_id,
             notified_person_ids=logged.notified_person_ids,
             suppressed=[one.value for one in logged.suppressed],
+            card=None
+            if logged.card is None
+            else [LineOut(id=line.id, text=line.text) for line in logged.card],
         )
 
 

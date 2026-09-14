@@ -19,7 +19,7 @@ from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, Response
 from app.reasoning.feelings.cloud import Cloud
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.service import Answered, RedPath, Tapped
-from app.reasoning.feelings.words import Answer, FollowUp
+from app.reasoning.feelings.words import Answer, FollowUp, red_answer
 from app.safety.red_flags import Feeling
 
 LanguageField = Field(default=None, min_length=2, max_length=16)
@@ -78,6 +78,10 @@ class CloudOut(BaseModel):
 class ChoiceOut(BaseModel):
     answer: Answer
     label: str
+    red: bool = False
+    """This answer makes the tapped word a red flag — a yes to the question that tells the red
+    variant apart (`app.reasoning.feelings.words.red_answer`). The phone shows the red offline
+    card if it cannot send it (ADR 0012)."""
 
 
 class QuestionOut(BaseModel):
@@ -134,7 +138,14 @@ class FeelingOut(BaseModel):
             else QuestionOut(
                 follow_up=question.follow_up,
                 words=question.words,
-                answers=[ChoiceOut(answer=a, label=label) for a, label in question.answers],
+                answers=[
+                    ChoiceOut(
+                        answer=a,
+                        label=label,
+                        red=red_answer(tapped.tap.word, question.follow_up, a) is not None,
+                    )
+                    for a, label in question.answers
+                ],
             ),
             lines=list(tapped.lines),
             **_red(tapped.red),

@@ -6,15 +6,15 @@ import { Header, Hear, Pill, RefusalNotice, Tile } from "../ui/components";
 
 /** What to do now (E13-02): the card's lines exactly as the backend sent them, in its order —
  *  the reassurance first, the calls, the boundary last — never re-ordered, never trimmed.
- *  With no network it is the backend's offline card, and the page says the phone is offline. */
-export function WhatToDoScreen({ lines, offline, refusal }: { lines: string[]; offline: boolean; refusal: string | null }): JSX.Element {
+ *  With no network, or no answer, it is the backend's offline card, and the page says which. */
+export function WhatToDoScreen({ lines, offline, refusal }: { lines: string[]; offline: "network" | "server" | null; refusal: string | null }): JSX.Element {
   const s = t();
   return (
-    <main class="screen" data-density={density()} data-testid="what-to-do-screen" data-offline={offline ? "yes" : "no"}>
+    <main class="screen" data-density={density()} data-testid="what-to-do-screen" data-offline={offline ?? "no"}>
       <Header title={s.day.whatToDo} />
       {offline && (
         <Tile paper role="status" testId="offline-note">
-          <p>{s.today.offline}</p>
+          <p>{offline === "network" ? s.today.offline : s.today.cannotReach}</p>
         </Tile>
       )}
       <RefusalNotice refusal={refusal ?? undefined} />

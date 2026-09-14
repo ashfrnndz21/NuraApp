@@ -94,7 +94,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     const counted = await nura.proud(bearer, id);
     const page = await nura.feed(bearer, id);
     try {
-      setTopThree((await nura.feedToday(bearer, id)).items.filter((item) => item.status !== "dismissed"));
+      setTopThree((await nura.feedToday(bearer, id)).items);
     } catch {
       setTopThree([]);
     }
@@ -195,6 +195,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const act = page?.posture === "act";
   const stale = page?.stale === true;
   const useFeed = feed.forYou.length > 0;
+  // Today's top three in the backend's order, less a flag card already shown above.
+  const top = topThree.filter((item) => !feed.flags.some((flag) => flag.item_id === item.item_id));
   // Where the State card goes: first when it says act; in place of the dose card when it is
   // stale; under "For you today" when the feed has nothing for today; else not at all.
   const stateAt = !page || page.stateId === null ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
@@ -325,8 +327,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               )}
 
               <h2 class="section">{s.today.forYou}</h2>
-              {!fromPhone && topThree.length > 0 ? (
-                <TopThree items={topThree} player={clipPlayer} />
+              {!fromPhone && top.length > 0 ? (
+                <TopThree items={top} player={clipPlayer} />
               ) : (
                 useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))
               )}
