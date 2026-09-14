@@ -226,6 +226,56 @@ export const en = {
     // @patient
     fromDays: "Nura counted the days you took your tablets.",
   },
+  feed: {
+    // @patient headline
+    title: "More for you",
+    // @patient phrase
+    open: "See more for you",
+    // @patient headline
+    story: "Your story",
+    // @patient headline
+    learning: "In simple words",
+    // @patient phrase
+    ask: "Ask",
+    // @patient phrase
+    family: "Family",
+    // @patient phrase
+    notForMe: "Not for me",
+    // @patient phrase
+    keepGoing: "Keep going",
+    // @patient phrase
+    toTablets: "See your tablets",
+    // @patient
+    declined: "Nura wrote down that this is not for you.",
+    // @patient
+    declinedToday: "You will not see this kind of card again today.",
+    // @patient
+    shared: "Your family can see this card now.",
+    // @patient
+    cannotShare: "Nura cannot send this card to your family yet.",
+    // @patient
+    quiet: "Nura keeps quiet at night.",
+    // @patient
+    quietSub: "Your cards come back in the morning.",
+    // @patient
+    nothingMore: "There is nothing more for you right now.",
+    // @patient
+    offlineSub: "These are your cards from earlier today.",
+    // @patient headline
+    askTitle: "Ask Nura",
+    // @patient
+    askSoon: "Soon you can ask Nura about this card here.",
+    // @patient phrase
+    back: "Back to your cards",
+    // @patient
+    statusHeld: "Nura kept this back from {name}.",
+    // @patient
+    statusSent: "This was on the page {name} sees.",
+    // @patient
+    statusOpened: "{name} opened this card.",
+    // @patient
+    statusDismissed: "{name} tapped Not for me on this card.",
+  },
   reading: {
     // @patient headline
     title: "Your blood pressure",
@@ -322,5 +372,8 @@ export const en = {
     NotForYourself: "Use the other door to keep your own papers.",
     ConfirmationExpired: ["That yes is too old now.", "Please say yes again."],
     AlreadySpent: "You already said yes to this.",
+    NoSuchItem: "That card is not here any more.",
+    NoCachedPage: "Nura has not kept a page for you yet.",
+    NotACursor: "Nura could not find the next card.",
   },
 } satisfies Strings;

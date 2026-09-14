@@ -226,6 +226,56 @@ export const zh = {
     // @patient
     fromDays: "Nura 数了您吃药的天数。",
   },
+  feed: {
+    // @patient headline
+    title: "更多给您的",
+    // @patient phrase
+    open: "看更多给您的",
+    // @patient headline
+    story: "您的故事",
+    // @patient headline
+    learning: "简单地说",
+    // @patient phrase
+    ask: "问",
+    // @patient phrase
+    family: "家人",
+    // @patient phrase
+    notForMe: "不适合我",
+    // @patient phrase
+    keepGoing: "继续",
+    // @patient phrase
+    toTablets: "看您的药",
+    // @patient
+    declined: "Nura 记下了：这个不适合您。",
+    // @patient
+    declinedToday: "今天不会再给您看这类卡。",
+    // @patient
+    shared: "您的家人现在能看到这张卡。",
+    // @patient
+    cannotShare: "Nura 还不能把这张卡发给您的家人。",
+    // @patient
+    quiet: "晚上 Nura 不打扰您。",
+    // @patient
+    quietSub: "早上您的卡会回来。",
+    // @patient
+    nothingMore: "现在没有更多给您的了。",
+    // @patient
+    offlineSub: "这些是您今天早些时候的卡。",
+    // @patient headline
+    askTitle: "问 Nura",
+    // @patient
+    askSoon: "以后您可以在这里问 Nura 这张卡的事。",
+    // @patient phrase
+    back: "回到您的卡",
+    // @patient
+    statusHeld: "Nura 没有把这张卡给 {name} 看。",
+    // @patient
+    statusSent: "这张卡在 {name} 看的页面上。",
+    // @patient
+    statusOpened: "{name} 打开了这张卡。",
+    // @patient
+    statusDismissed: "{name} 按了“不适合我”。",
+  },
   reading: {
     // @patient headline
     title: "您的血压",
@@ -320,5 +370,8 @@ export const zh = {
     NotForYourself: "请走另一扇门，保存您自己的文件。",
     ConfirmationExpired: ["那个“同意”太旧了。", "请再同意一次。"],
     AlreadySpent: "您已经同意过这件事了。",
+    NoSuchItem: "那张卡已经不在这里了。",
+    NoCachedPage: "Nura 还没有为您保存页面。",
+    NotACursor: "Nura 找不到下一张卡。",
   },
 } satisfies Strings;
