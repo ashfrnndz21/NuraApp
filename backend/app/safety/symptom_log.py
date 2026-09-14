@@ -44,6 +44,7 @@ from app.channels.safety_strings import (
 from app.db import as_utc, utcnow
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
+from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext
 from app.keys.scopes import scope_for_subject
 from app.memory.episodic import fact_cites_only_what_is_held_here
@@ -53,16 +54,16 @@ from app.safety.models import Notice
 from app.safety.not_feeling_well import (
     REPORTED,
     SYMPTOM,
+    Escalated,
+    Heard,
     Line,
     capture,
     escalate,
     family_of,
-    sugar_medicine,
     write_the_moment,
 )
-from app.safety.red_flags import RedFlag, match_red_flags
+from app.safety.red_flags import Feeling, detect
 from app.safety.symptoms import Duration, Symptom, parse_symptoms
-from app.safety.transcribe import Transcriber
 from app.state.models import Posture
 
 SYMPTOM_LABEL = "symptom"
@@ -81,7 +82,7 @@ class Entry:
     artifact_id: uuid.UUID | None
     at: datetime
     symptoms: list[Symptom]
-    red_flags: list[RedFlag]
+    red_flags: list[Feeling]
     severity: int | None
     duration: Duration | None
     by_voice: bool
@@ -109,7 +110,7 @@ class Logged:
     flag_id: uuid.UUID | None
     notified_person_ids: list[uuid.UUID]
     notices: list[Notice]
-    suppressed: list[RedFlag]
+    suppressed: list[Feeling]
 
 
 def _lines(
@@ -119,7 +120,7 @@ def _lines(
     at: datetime,
     region_tz: ZoneInfo,
     symptoms: Sequence[Symptom],
-    red_flags: Sequence[RedFlag],
+    red_flags: Sequence[Feeling],
     severity: int | None,
     duration: Duration | None,
     by_voice: bool,
@@ -158,7 +159,7 @@ def _lines(
 def _entry(fact: Fact, *, name: str, language: str, region_tz: ZoneInfo) -> Entry:
     value = fact.value if isinstance(fact.value, dict) else {}
     symptoms = [Symptom(code) for code in value.get("symptoms", []) if code in Symptom.__members__.values()]
-    flags = [RedFlag(code) for code in value.get("red_flags", []) if code in RedFlag.__members__.values()]
+    flags = [Feeling(code) for code in value.get("red_flags", []) if code in Feeling.__members__.values()]
     severity = value.get("severity")
     duration_code = value.get("duration")
     duration = (
@@ -221,21 +222,23 @@ async def log_symptom(
         audio=audio,
         content_type=content_type,
     )
-    on_sugar, _ = await sugar_medicine(session, context=context)
-    heard = match_red_flags(captured.text, on_sugar_medicine=on_sugar)
+    feeling = detect(captured.text)
     parsed = parse_symptoms(captured.text)
 
     flag_id: uuid.UUID | None = None
     notices: list[Notice] = []
     posture: Posture | None = None
-    if heard.any:
+    escalated: Escalated | None = None
+    if feeling is not None:
         family = await family_of(session, context=context, profile=profile)
         escalated = await escalate(
-            session, context=context, captured=captured, heard=heard, parsed=parsed, family=family
+            session, context=context, captured=captured, feeling=feeling, family=family
         )
-        flag_id = None if escalated.first is None else escalated.first.id
-        notices = escalated.notices
-        posture = Posture.ACT
+        if escalated.first is not None:
+            flag_id = escalated.first.id
+            notices = escalated.notices
+            posture = Posture.ACT
+    heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
 
     _event, written = await write_the_moment(
         session,
@@ -245,6 +248,7 @@ async def log_symptom(
         parsed=parsed,
         label=SYMPTOM_LABEL,
         posture=posture,
+        event=None if escalated is None else escalated.event,
     )
     # The entry said back is read back through the door, under the fact's own scope and with
     # a READ line, like every other read of the record — never a raw `session.get`.

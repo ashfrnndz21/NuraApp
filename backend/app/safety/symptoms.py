@@ -14,11 +14,27 @@ words) live in `app.channels.safety_strings`, under the verifier.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.safety.red_flags import _says, normalise
+
+def normalise(text: str) -> str:
+    """Lower-cased, accents folded, one space between words, no punctuation to trip on."""
+    folded = unicodedata.normalize("NFKC", text).casefold()
+    folded = re.sub(r"[’‘`]", "'", folded)
+    folded = re.sub(r"[^\w\s'一-鿿]+", " ", folded)
+    return re.sub(r"\s+", " ", folded).strip()
+
+
+def _says(words: str, phrase: str) -> bool:
+    """Whether the phrase is in the words, whole. Chinese has no word boundaries, so a
+    phrase in Chinese script is matched as a substring; anything else on word boundaries."""
+    if re.search(r"[一-鿿]", phrase):
+        return phrase in words
+    return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", words) is not None
 
 
 class Symptom(StrEnum):

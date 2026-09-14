@@ -402,7 +402,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     lines = [line["text"] for line in chest["lines"]]
     if (
         chest["kind"] != "red_flag"
-        or chest["red_flags"] != ["chest_pain"]
+        or chest["red_flags"] != ["chest_tightness"]
         or chest["posture"] != "act"
         or not chest["flag_id"]
         or mei.person_id not in chest["notified_person_ids"]

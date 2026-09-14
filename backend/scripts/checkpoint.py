@@ -2246,6 +2246,348 @@ def checkpoint_8(client: httpx.Client) -> None:
     )
 
 
+# --- checkpoint 9: WhatsApp (sandbox) ------------------------------------------------------------
+
+
+def inbound(client: httpx.Client, person: Person, what: str, **message: Any) -> JSON:
+    """A message from this person's number through the dev door, the webhook's own path."""
+    handled: JSON = check(
+        client.post("/dev/whatsapp/inbound", json={"from_e164": person.phone_e164, **message}),
+        200,
+        what,
+    )
+    return handled
+
+
+def print_reply(handled: JSON) -> None:
+    for sent in handled.get("replies", []):
+        for line in sent["text"].splitlines():
+            print(f"    → {line}")
+    if handled.get("stranger_reply"):
+        for line in handled["stranger_reply"].splitlines():
+            print(f"    → {line}")
+
+
+def checkpoint_9(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+    kit = Person("Kit", fresh_phone("+659555"))
+
+    # 1. Pa opens his profile; Mei is his chief; nobody has agreed to WhatsApp yet.
+    profile_id = open_own_profile(client, pa, "en")
+    register(client, mei, "en")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": [
+                    "medicines",
+                    "visits",
+                    "readings",
+                    "records",
+                    "family",
+                    "emergency",
+                    "send",
+                ],
+                "relationship": "daughter",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei in",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_phone_e164": mei.phone_e164, "role": "chief"},
+        ),
+        201,
+        "Pa cuts Mei a chief key",
+    )
+    ok("Pa let Mei, his daughter, in to his record and cut her a chief key")
+    early = inbound(client, mei, "Mei writes before Pa agreed to WhatsApp", text="BP 150/90")
+    if early["outcome"] != "refused" or early["refused"] != "ConsentWithheld":
+        raise fail("Mei writes before Pa agreed to WhatsApp", why=f"got {early}")
+    if client.get(f"/profiles/{profile_id}/facts", headers=bearer(pa.token)).json():
+        raise fail("Mei writes before Pa agreed to WhatsApp", why="something was written")
+    ok(
+        "Mei wrote to the number before Pa agreed to WhatsApp: refused, ConsentWithheld, nothing "
+        "kept — the one line she got says so, and names no health content:"
+    )
+    print_reply(early)
+    outbox = check(client.get("/dev/whatsapp/outbox"), 200, "the outbox")
+    for sent in outbox[-1:]:
+        for line in sent["text"].splitlines():
+            print(f"    → {line}")
+
+    # 2. Pa agrees to WhatsApp, in words he read.
+    agreed = check(
+        client.post(
+            f"/profiles/{profile_id}/consents/whatsapp",
+            headers=bearer(pa.token),
+            json={"language": "en", "captured_via": "app"},
+        ),
+        201,
+        "Pa agrees to WhatsApp",
+    )
+    ok(
+        "Pa agreed to WhatsApp (POST /profiles/{id}/consents/whatsapp, his own basis); the words he read:"
+    )
+    for line in agreed["wording_text"].splitlines():
+        print(f"    {line}")
+
+    # 3. Level 0: a medicine on the list, then the morning card to Pa as a template — Pa has
+    #    not written to the number, so it goes as one of the six, not as free text.
+    label = label_photo(client, pa, profile_id, "Pa keeps the amlodipine label photo")
+    amlodipine = medicine_label("amlodipine", "5 mg", "1 tab OM", 30)
+    check(
+        add_medicine(client, pa, profile_id, amlodipine, label, "Pa adds amlodipine"),
+        201,
+        "Pa adds amlodipine",
+    )
+    morning = check(
+        client.post(f"/dev/whatsapp/morning/{profile_id}"), 200, "the morning card goes to Pa"
+    )
+    if morning["kind"] != "template" or morning["template_name"] != "morning_card":
+        raise fail("the morning card goes to Pa", why=f"got {morning}")
+    if "blood pressure tablet" not in morning["text"]:
+        raise fail("the morning card goes to Pa", why=f"no dose on the card: {morning}")
+    ok(
+        "Pa added amlodipine from a label (checkpoint 6's route); run_morning (POST "
+        "/dev/whatsapp/morning/{id}, what the scheduler will call) sent Pa the morning card — one of "
+        "the six approved templates, because Pa has not written in the last 24 hours, composed from "
+        "the now and today cards of his feed (the tablets card said as today's doses) and the State "
+        "they came from, through his WHATSAPP consent, verified against plain words:"
+    )
+    for line in morning["text"].splitlines():
+        print(f"    → {line}")
+
+    # 4. Mei forwards a photo: filed as a review card, replied to in her thread.
+    photo = inbound(
+        client,
+        mei,
+        "Mei forwards the lipid report",
+        media_id="lipid-panel-photo",
+        content_type="image/png",
+    )
+    if photo["outcome"] != "document" or not photo["review_card_id"]:
+        raise fail("Mei forwards the lipid report", why=f"got {photo}")
+    card = check(
+        client.get(
+            f"/profiles/{profile_id}/review-cards/{photo['review_card_id']}",
+            headers=bearer(pa.token),
+        ),
+        200,
+        "Pa reads the card the photo became",
+    )
+    if card["document_kind"] != "lab_report" or len(card["fields"]) != 7 or card["confirmed_at"]:
+        raise fail("Pa reads the card the photo became", why=f"got {card}")
+    ok(
+        "Mei forwarded the lipid report (POST /dev/whatsapp/inbound, media from the fixtures — the "
+        "webhook's own path, no Meta): the bytes went to the SG store as a WhatsApp photo artefact, "
+        f"the extractor read it as a lab_report, and a review card with {len(card['fields'])} fields "
+        "waits for a yes in the app; nothing is a fact. The reply in her thread:"
+    )
+    print_reply(photo)
+
+    # 5. A health event becomes a proposal. Nothing is written before the yes.
+    heard = inbound(client, mei, "Mei posts a blood pressure", text="BP 150/90 this morning")
+    if heard["outcome"] != "proposal" or not heard["proposal_id"] or heard["fact_id"]:
+        raise fail("Mei posts a blood pressure", why=f"got {heard}")
+    facts = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "blood_pressure"},
+        ),
+        200,
+        "Pa reads his blood pressure facts",
+    )
+    if facts != []:
+        raise fail("Pa reads his blood pressure facts", why=f"a fact before the yes: {facts}")
+    ok(
+        'Mei posted "BP 150/90 this morning": the classifier heard a blood pressure and wrote a '
+        "proposal — what was heard, who said it, good for a day — and nothing else: "
+        "GET /facts?subject=blood_pressure is []. The read-back in her thread:"
+    )
+    print_reply(heard)
+
+    # 6. Kit, a number nobody knows: one fixed line, nothing stored.
+    stranger = inbound(client, kit, "Kit writes to the number", text="BP 160/95, this is Pa's son")
+    if stranger["outcome"] != "unknown_number" or stranger["profile_id"] is not None:
+        raise fail("Kit writes to the number", why=f"got {stranger}")
+    if any(k in stranger["stranger_reply"] for k in ("Pa", "160", "Mei")):
+        raise fail("Kit writes to the number", why="the reply named someone or something")
+    ok(
+        f"Kit ({kit.phone_e164}), a number no profile knows, wrote to the number: one fixed reply, "
+        "no health content, nothing stored, no thread, no line on any trail:"
+    )
+    print_reply(stranger)
+
+    # 7. Someone else's yes finds nothing open; the poster's yes writes the fact.
+    his = inbound(client, pa, "Pa answers yes to Mei's question", text="yes")
+    if his["outcome"] != "nothing_open" or his["fact_id"]:
+        raise fail("Pa answers yes to Mei's question", why=f"got {his}")
+    ok(
+        'Pa answered "yes": nothing of his is waiting, so nothing was written — only the poster confirms:'
+    )
+    print_reply(his)
+    yes = inbound(client, mei, "Mei answers yes", text="yes")
+    if yes["outcome"] != "confirmed" or not yes["fact_id"]:
+        raise fail("Mei answers yes", why=f"got {yes}")
+    facts = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "blood_pressure"},
+        ),
+        200,
+        "Pa reads his blood pressure facts after the yes",
+    )
+    if len(facts) != 1 or facts[0]["fact_id"] != yes["fact_id"]:
+        raise fail("Pa reads his blood pressure facts after the yes", why=f"got {facts}")
+    fact = facts[0]
+    if (
+        fact["value"] != {"systolic": 150, "diastolic": 90}
+        or fact["confirmed_by_person_id"] != mei.person_id
+        or not fact["event_id"]
+        or fact["artifact_id"] != heard["artifact_id"]
+    ):
+        raise fail("Pa reads his blood pressure facts after the yes", why=f"got {fact}")
+    state = read_state(client, pa, profile_id, "Pa reads his State after the yes")
+    if state["trigger"] != {"kind": "new_fact", "fact_id": fact["fact_id"]}:
+        raise fail("Pa reads his State after the yes", why=f"trigger {state['trigger']}")
+    ok(
+        'Mei answered "yes": a confirmation was minted for exactly the draft recomputed from the '
+        "proposal and spent in the same unit of work; the reading is a Fact, 150/90 mmHg, "
+        "confirmed_by_person Mei, resting on the event of the reading and on the message it was "
+        f"heard in (artefact {heard['artifact_id'][:8]}…); State recomputed, snapshot "
+        f"{state['sequence']}, trigger new_fact naming it. The reply:"
+    )
+    print_reply(yes)
+
+    # 8. A red flag: the flag first, the reply in the thread, the ladder written down.
+    fell = inbound(client, mei, "Mei posts a fall", text="he fell in the bathroom")
+    if fell["outcome"] != "red_flag" or not fell["flag_id"] or fell["proposal_id"]:
+        raise fail("Mei posts a fall", why=f"got {fell}")
+    trail = check(
+        client.get(
+            f"/profiles/{profile_id}/audit",
+            headers=bearer(pa.token),
+            params={"scope": "emergency", "limit": 500},
+        ),
+        200,
+        "Pa reads the emergency lines of his trail",
+    )
+    steps = [e["target"] for e in reversed(trail) if e["action"] == "write"]
+    if "red_flag" not in steps or "safety_escalation" not in steps:
+        raise fail("Pa reads the emergency lines of his trail", why=f"got {steps}")
+    if steps.index("red_flag") > steps.index("safety_escalation"):
+        raise fail("Pa reads the emergency lines of his trail", why=f"flag after ladder: {steps}")
+    ok(
+        'Mei posted "he fell in the bathroom": a red flag (the word table in app/safety/red_flags.py) '
+        "— the moment it was said (a SYMPTOM event) and the Flag on it were written first, before the "
+        "message was even kept, then the message, then the "
+        "escalation record naming the ladder from the keys table (owner, chief keys, others; the "
+        "poster left out); nothing was extracted, no proposal. The reply in her thread, at once:"
+    )
+    print_reply(fell)
+    for row in reversed(trail):
+        if row["action"] == "write" and row["target"] in ("red_flag", "safety_escalation"):
+            print(f"    {row['at'][:19]}  Mei  write emergency {row['target']}  {row['channel']}")
+
+    # 9. Pa's own word about himself: written down without a second yes.
+    tired = inbound(client, pa, 'Pa answers "tired"', text="tired")
+    if tired["outcome"] != "check_in_answer" or not tired["fact_id"] or tired["proposal_id"]:
+        raise fail('Pa answers "tired"', why=f"got {tired}")
+    feeling = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "feeling"},
+        ),
+        200,
+        "Pa reads his feeling fact",
+    )
+    if len(feeling) != 1 or feeling[0]["value"] != "tired" or not feeling[0]["event_id"]:
+        raise fail("Pa reads his feeling fact", why=f"got {feeling}")
+    ok(
+        'Pa answered "tired": his own word about himself, one of the three the check-in offers, so no '
+        "read-back — a SYMPTOM event and a feeling fact confirmed by him, the yes minted and spent in "
+        "the same request the way the app's save button does. The reply:"
+    )
+    print_reply(tired)
+
+    # 10. The thread as Pa reads it, by reference; and every line on the trail.
+    thread = check(
+        client.get(f"/profiles/{profile_id}/whatsapp/thread", headers=bearer(pa.token)),
+        200,
+        "Pa reads the thread",
+    )
+    # Every field but the ids and the times: a uuid is hex and a time is digits, so "150" can
+    # turn up in one by chance. The words could only be in one of the other fields.
+    fields = [
+        str(value)
+        for message in thread
+        for key, value in message.items()
+        if not key.endswith("_id") and key != "at"
+    ]
+    if any(word in field for field in fields for word in ("150", "fell", "tired")):
+        raise fail("Pa reads the thread", why="the words are on the thread; it is by reference")
+    kinds = sorted({(m["direction"], m["kind"]) for m in thread})
+    wanted_kinds = {
+        ("inbound", "document"),
+        ("inbound", "health_event"),
+        ("inbound", "answer"),
+        ("inbound", "red_flag"),
+        ("inbound", "check_in_answer"),
+        ("outbound", "reply"),
+        ("outbound", "template"),
+    }
+    if not wanted_kinds <= set(kinds):
+        raise fail("Pa reads the thread", why=f"kinds {kinds}")
+    if any(m["person_id"] == kit.person_id for m in thread):
+        raise fail("Pa reads the thread", why="Kit is on the thread")
+    ok(
+        f"Pa reads the thread (GET /profiles/{{id}}/whatsapp/thread, {len(thread)} messages, owner and "
+        "chief only): every kept message by reference — who, when, what kind, which artefact, template "
+        "or State — never the words; Kit is not on it"
+    )
+    register(client, kit, "en")
+    refused_ = client.get(f"/profiles/{profile_id}/whatsapp/thread", headers=bearer(kit.token))
+    refused(refused_, 403, "NoKey", "Kit reads the thread")
+    ok("Kit, now registered but on no family list, is refused the thread: NoKey (403)")
+    lines = check(
+        client.get(
+            f"/profiles/{profile_id}/audit", headers=bearer(pa.token), params={"limit": 500}
+        ),
+        200,
+        "Pa reads his trail",
+    )
+    on_whatsapp = [e for e in lines if e["channel"] == "whatsapp"]
+    shares = [e for e in on_whatsapp if e["action"] == "share"]
+    if len(shares) < 6 or not any(e["target"] == "refusal_notice" for e in shares):
+        raise fail("Pa reads his trail", why=f"{len(shares)} share lines")
+    if any(e["actor_person_id"] == kit.person_id for e in lines):
+        raise fail("Pa reads his trail", why="Kit's reach was written into the trail")
+    refusals = [e for e in on_whatsapp if e["outcome"] == "refused"]
+    ok(
+        f"Pa reads his trail ({len(lines)} lines, {len(on_whatsapp)} on the WhatsApp channel): every "
+        f"kept message is a write, every send a SHARE naming who it went to ({len(shares)} of them, "
+        "the refusal notice included), and the refusals are on it by name; Kit is on none of it:"
+    )
+    for row in refusals:
+        who = {mei.person_id: "Mei", pa.person_id: "Pa"}.get(row["actor_person_id"], "?")
+        print(
+            f"    {row['at'][:19]}  {who:>3}  {row['action']} {row['scope']} {row['target']}  "
+            f"refused {row['refused_because']}"
+        )
+
+
 CHECKPOINTS = {
     2: checkpoint_2,
     3: checkpoint_3,
@@ -2253,6 +2595,7 @@ CHECKPOINTS = {
     5: checkpoint_5,
     6: checkpoint_6,
     8: checkpoint_8,
+    9: checkpoint_9,
     13: lambda client: checkpoints.cp13.run(BASE_URL, DEV_LOG) and sys.exit(1),
     14: lambda client: checkpoints.cp14.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }

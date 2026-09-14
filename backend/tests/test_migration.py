@@ -24,6 +24,7 @@ from alembic.operations import Operations
 from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
+from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
@@ -36,8 +37,7 @@ from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Sup
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
 from app.safety.models import EmergencyCard, Notice, WhatToDoCard
-from app.safety.models import Flag as HeardFlag
-from app.safety.red_flags import Flag
+from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -72,13 +72,17 @@ TABLES: tuple[Table, ...] = (
     Supply.__table__,
     DoseTaken.__table__,
     InteractionFlag.__table__,
+    WhatsAppThread.__table__,
+    Flag.__table__,
+    WhatsAppMessage.__table__,
+    Proposal.__table__,
+    Escalation.__table__,
     Privacy.__table__,
     RosterSlot.__table__,
     Task.__table__,
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
-    HeardFlag.__table__,
     Notice.__table__,
     WhatToDoCard.__table__,
     EmergencyCard.__table__,
@@ -206,7 +210,6 @@ def test_the_migrations_build_the_tables_the_models_declare(
             ThreadMessage,
             ScheduledPush,
             Document,
-            HeardFlag,
             Notice,
             WhatToDoCard,
             EmergencyCard,

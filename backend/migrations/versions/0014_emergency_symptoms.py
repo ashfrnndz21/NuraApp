@@ -1,21 +1,20 @@
-"""E13/E14: the flag, the notice, the what-to-do-now card, the emergency card.
+"""E13/E14: the notice, the what-to-do-now card, the emergency card.
 
-Four tables of profile data, every row tied to its profile the way the memory tables are
-(0005): `(profile_id, artifact_id)` points at `artifact(profile_id, id)`, a notice's flag at
-`flag(profile_id, id)`, and so on, so the database itself refuses a notice about another
-profile's flag. The two cards carry `state_id`, not nullable: nothing rendered reaches the
-database without the State it was rendered from (0006). No column holds prose: a flag is a
-code from the red-flag table, a notice a template id and codes, a card the ids of its lines.
-
-Follows E16's boundary revision (0014_rendered_boundary, on E12's 0013 and E21's 0010): one
-head. Both cards carry `boundary` like every `RenderedFromState` table (E16): the
+Three tables of profile data, every row tied to its profile the way the memory tables are
+(0005): a notice's flag points at `red_flag(profile_id, id)` — E21's table, the one every
+channel raises a red flag in (0010) — and its event at `event(profile_id, id)`, so the
+database itself refuses a notice about another profile's flag. The two cards carry
+`state_id`, not nullable: nothing rendered reaches the database without the State it was
+rendered from (0006), and `boundary` like every `RenderedFromState` table (E16): the
 what-to-do card is the not-feeling-well surface and carries its line; the emergency card
-restates the record, infers nothing, and carries none (ADR 0002). The
-`flag` table here is the flag heard in his words by the not-feeling-well button and the
-symptom log (E13/E14); E21's `red_flag` (0010) is the flag tapped on the feeling cloud.
+restates the record, infers nothing, and carries none (ADR 0002). No column holds prose: a
+notice is a template id and codes, a card the ids of its lines.
+
+Follows E19's WhatsApp revision (0011_whatsapp, itself on E16's 0014_rendered_boundary):
+one head.
 
 Revision ID: 0014_emergency_symptoms
-Revises: 0014_rendered_boundary
+Revises: 0011_whatsapp
 Create Date: 2026-09-14
 """
 
@@ -25,7 +24,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0014_emergency_symptoms"
-down_revision = "0014_rendered_boundary"
+down_revision = "0011_whatsapp"
 branch_labels = None
 depends_on = None
 
@@ -56,9 +55,6 @@ def _tied(table: str, column: str, referred: str) -> sa.ForeignKeyConstraint:
 
 
 _INDEXES = (
-    ("ix_flag_profile_id", "flag", ["profile_id"]),
-    ("ix_flag_code", "flag", ["code"]),
-    ("ix_flag_raised_at", "flag", ["raised_at"]),
     ("ix_notice_profile_id", "notice", ["profile_id"]),
     ("ix_notice_to_person_id", "notice", ["to_person_id"]),
     ("ix_notice_created_at", "notice", ["created_at"]),
@@ -73,21 +69,6 @@ _INDEXES = (
 
 def upgrade() -> None:
     op.create_table(
-        "flag",
-        sa.Column("id", sa.Uuid(), primary_key=True),
-        _profile_id(),
-        sa.Column("kind", FLAG_KIND, nullable=False),
-        sa.Column("code", sa.String(length=48), nullable=False),
-        sa.Column("posture", POSTURE, nullable=False),
-        sa.Column("artifact_id", sa.Uuid(), sa.ForeignKey("artifact.id"), nullable=True),
-        sa.Column("raised_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("raised_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
-        # The flags held back this time, by code: the suppression the caregiver sees.
-        sa.Column("suppressed", sa.JSON(), nullable=False),
-        sa.UniqueConstraint("profile_id", "id", name="uq_flag_profile_id_id"),
-        _tied("flag", "artifact_id", "artifact"),
-    )
-    op.create_table(
         "notice",
         sa.Column("id", sa.Uuid(), primary_key=True),
         _profile_id(),
@@ -97,13 +78,13 @@ def upgrade() -> None:
         # Codes that fill the template — a red-flag or symptom code — never the words said.
         sa.Column("slots", sa.JSON(), nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
-        sa.Column("flag_id", sa.Uuid(), sa.ForeignKey("flag.id"), nullable=True),
+        sa.Column("flag_id", sa.Uuid(), sa.ForeignKey("red_flag.id"), nullable=True),
         sa.Column("event_id", sa.Uuid(), sa.ForeignKey("event.id"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deliver_after", sa.DateTime(timezone=True), nullable=False),
         sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
         sa.UniqueConstraint("profile_id", "id", name="uq_notice_profile_id_id"),
-        _tied("notice", "flag_id", "flag"),
+        _tied("notice", "flag_id", "red_flag"),
         _tied("notice", "event_id", "event"),
     )
     op.create_table(
@@ -116,13 +97,13 @@ def upgrade() -> None:
         sa.Column("language", sa.String(length=16), nullable=False),
         # The template ids of the lines shown, in order. The words come from the templates.
         sa.Column("line_ids", sa.JSON(), nullable=False),
-        sa.Column("flag_id", sa.Uuid(), sa.ForeignKey("flag.id"), nullable=True),
+        sa.Column("flag_id", sa.Uuid(), sa.ForeignKey("red_flag.id"), nullable=True),
         sa.Column("event_id", sa.Uuid(), sa.ForeignKey("event.id"), nullable=False),
         sa.Column("check_in_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("rendered_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("rendered_for_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         sa.UniqueConstraint("profile_id", "id", name="uq_what_to_do_card_profile_id_id"),
-        _tied("what_to_do_card", "flag_id", "flag"),
+        _tied("what_to_do_card", "flag_id", "red_flag"),
         _tied("what_to_do_card", "event_id", "event"),
     )
     op.create_table(
@@ -146,5 +127,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     for name, table, _ in reversed(_INDEXES):
         op.drop_index(name, table_name=table)
-    for table in ("emergency_card", "what_to_do_card", "notice", "flag"):
+    for table in ("emergency_card", "what_to_do_card", "notice"):
         op.drop_table(table)

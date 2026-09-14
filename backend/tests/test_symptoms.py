@@ -23,8 +23,7 @@ from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.memory.models import Artifact, ArtifactKind, ConfidenceState, Event, EventKind, Fact
 from app.regions import Region
-from app.safety.models import Flag
-from app.safety.red_flags import RedFlag
+from app.safety.red_flags import Feeling, Flag
 from app.safety.symptom_log import log_symptom, nothing_since_line, symptoms_since
 from app.safety.symptoms import Duration, Symptom
 from app.state.models import Posture
@@ -166,12 +165,12 @@ async def test_a_red_flag_word_in_a_symptom_escalates_like_the_button(sg: AsyncS
     mei = await let_in(sg, owner, phone="+6592220054", name="Mei", role=KeyRole.CHIEF)
     await agree_to_recording(sg, owner)
     logged = await _log(sg, owner, audio=placeholder_voice(SAKIT_DADA), content_type=CONTENT_TYPE)
-    assert logged.entry.red_flags == [RedFlag.CHEST_PAIN]
+    assert logged.entry.red_flags == [Feeling.CHEST_TIGHTNESS]
     assert logged.posture is Posture.ACT and logged.flag_id is not None
     assert logged.notified_person_ids == [mei.person_id]
     assert logged.entry.lines[0].text == "Pa felt chest pain on Thursday 3 September."
     flag = await sg.get(Flag, logged.flag_id)
-    assert flag is not None and flag.code == "chest_pain"
+    assert flag is not None and flag.feeling is Feeling.CHEST_TIGHTNESS
     assert (await current_state(sg, context=owner)).posture is Posture.ACT
     flags = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
     assert len(flags) == 1
@@ -226,7 +225,7 @@ async def test_a_caregiver_logging_a_red_flag_escalates_without_the_family_scope
     ana = await let_in(sg, owner, phone="+6595550057", name="Ana", role=KeyRole.CAREGIVER)
     assert Scope.RECORDS in ana.scopes and Scope.FAMILY not in ana.scopes
     logged = await _log(sg, ana, words="Pa has chest pain")
-    assert logged.entry.red_flags == [RedFlag.CHEST_PAIN]
+    assert logged.entry.red_flags == [Feeling.CHEST_TIGHTNESS]
     assert logged.flag_id is not None and logged.posture is Posture.ACT
     assert logged.notified_person_ids == [mei.person_id]
     flag = await sg.get(Flag, logged.flag_id)

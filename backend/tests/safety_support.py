@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import AuditEntry
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
+from app.ingestion.transcribe import FixtureTranscriber
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
@@ -23,7 +24,6 @@ from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider
 from app.regions import Region
 from app.safety.plain_words import verify
-from app.safety.transcribe import FixtureTranscriber
 from tests.medicines_support import add, label
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
 from tests.voice import VOICE

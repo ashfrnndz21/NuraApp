@@ -15,11 +15,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.ingestion.voice import MAX_VOICE_BYTES
 from app.safety.emergency_card import Card
 from app.safety.models import WhatToDoKind
 from app.safety.not_feeling_well import WhatToDoNow
 from app.safety.symptom_log import Entry, Logged
-from app.safety.transcribe import MAX_VOICE_BYTES
 from app.state.models import Posture
 
 

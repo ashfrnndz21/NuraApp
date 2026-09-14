@@ -24,9 +24,9 @@ from app.db import utcnow
 from app.family.roster import add_slot
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import record_dose_taken
-from app.memory.models import Artifact, ArtifactKind, Fact
+from app.memory.models import Artifact, ArtifactKind, Event, EventKind, Fact
 from app.regions import OutOfRegion, Region
-from app.safety.models import Flag, Notice, NoticeKind, WhatToDoCard, WhatToDoKind
+from app.safety.models import Notice, NoticeKind, WhatToDoCard, WhatToDoKind
 from app.safety.not_feeling_well import (
     ANCHOR_HOURS,
     NothingSaid,
@@ -34,17 +34,17 @@ from app.safety.not_feeling_well import (
     not_feeling_well,
     notice_lines,
 )
-from app.safety.red_flags import RedFlag
+from app.safety.red_flags import Escalation, Feeling, Flag
 from app.safety.symptoms import Symptom
 from app.state.models import Posture
 from app.state.service import StaleState, current_state
 from tests.safety_support import (
     REGISTRY,
     assert_plain,
+    fact,
     first_write_of,
     let_in,
     pa,
-    sugar_tablet,
     trail,
     transcriber_for,
     water_pill,
@@ -121,7 +121,7 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     done = await _press(sg, owner, words="I have chest pain since just now")
 
     assert done.kind is WhatToDoKind.RED_FLAG
-    assert done.red_flags == [RedFlag.CHEST_PAIN] and done.posture is Posture.ACT
+    assert done.red_flags == [Feeling.CHEST_TIGHTNESS] and done.posture is Posture.ACT
     assert [line.text for line in done.lines] == [
         "Mei knows now.",
         "Call the ambulance now on 995.",
@@ -130,24 +130,26 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     ]
     _verified(done.lines)
 
-    # The flag is the first thing written after the artefact that holds his words: between
-    # that artefact's line and the flag's there is no other write, and every notice, event,
-    # fact and card of this press comes after it.
+    # The flag comes before anything else about the moment: after the artefact that holds his
+    # words, the only write is the SYMPTOM event the flag rests on (`record_the_moment`), and
+    # every notice, the ladder, every fact and the card come after the flag.
     lines = await trail(sg, owner.profile_id)
-    flag_at = first_write_of(lines, "flag")
+    flag_at = first_write_of(lines, "red_flag")
     assert flag_at > 0
     writes_before = [
         line for line in lines[:flag_at] if line.action.value == "write" and line.outcome.value == "allowed"
     ]
-    assert writes_before[-1].target == "artifact" and writes_before[-1].target_id == done.artifact_id
-    for later in ("notice", "event", "fact", "what_to_do_card"):
+    assert writes_before[-1].target == "event" and writes_before[-1].target_id == done.event_id
+    assert writes_before[-2].target == "artifact" and writes_before[-2].target_id == done.artifact_id
+    for later in ("notice", "safety_escalation", "fact", "what_to_do_card"):
         at = first_write_of(lines, later, after=flag_at)
         assert at > flag_at, (later, at, flag_at)
     flag = await sg.get(Flag, done.flag_id)
-    assert flag is not None and flag.code == "chest_pain" and flag.posture is Posture.ACT
-    artifact = await sg.get(Artifact, flag.artifact_id)
-    assert artifact is not None and artifact.kind is ArtifactKind.MESSAGE
-    assert artifact.id == done.artifact_id
+    assert flag is not None and flag.feeling is Feeling.CHEST_TIGHTNESS
+    assert flag.event_id == done.event_id and flag.suppressed_because is None
+    assert str(mei.person_id) in flag.told
+    ladder = (await sg.scalars(select(Escalation).where(Escalation.flag_id == flag.id))).one()
+    assert set(ladder.told) == {str(mei.person_id), str(lin.person_id), str(siti.person_id)}
 
     # Everyone with EMERGENCY is told, the presser is not, and a key narrowed past it is not.
     assert set(done.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}
@@ -163,14 +165,14 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     malay = notice_lines(notices[siti.person_id], patient="Pa")
     assert malay[1] == "Nura dengar ini: sakit dada."
     _verified(malay, "ms")
-    assert all(n.flag_id == done.flag_id and n.slots == {"words": "chest_pain", "heard": True} for n in notices.values())
+    assert all(n.flag_id == done.flag_id and n.slots == {"words": "chest_tightness", "heard": True} for n in notices.values())
     assert done.check_in_at is None  # a red flag is the call, not a check-in later
 
     # The moment is on the record: a SYMPTOM event, the fact on the artefact, the posture.
     facts = (await sg.scalars(select(Fact).where(Fact.profile_id == owner.profile_id))).all()
     reported = next(f for f in facts if f.subject == "symptom")
     assert reported.artifact_id == done.artifact_id and reported.event_id == done.event_id
-    assert reported.value["red_flags"] == ["chest_pain"] and reported.value["via"] == "typed"
+    assert reported.value["red_flags"] == ["chest_tightness"] and reported.value["via"] == "typed"
     feeling = next(f for f in facts if f.subject == "feeling")
     assert feeling.value == "act" and feeling.event_id == done.event_id
     assert feeling.valid_to is not None
@@ -311,22 +313,24 @@ async def test_with_nobody_to_call_the_first_line_is_the_ambulance(sg: AsyncSess
     ]
 
 
-async def test_shaky_and_sweaty_is_suppressed_and_named_until_the_medicines_are_known(
+async def test_shaky_and_sweaty_is_written_suppressed_until_a_sugar_condition_is_on_record(
     sg: AsyncSession,
 ) -> None:
+    """E21's rule, one rule for every channel: shaky-and-sweaty is a red flag on a sugar
+    condition. Without one on the record the flag is written with why, tells nobody, and the
+    button takes the ordinary path; the caregiver sees it was considered."""
     owner = await pa(sg, phone="+6591110048")
     unknown = await _press(sg, owner, words="shaky and sweaty")
-    assert unknown.red_flags == [] and unknown.suppressed == [RedFlag.SHAKY_SWEATY]
-    assert unknown.kind is WhatToDoKind.REST
-    fact = await sg.get(Fact, unknown.fact_id)
-    assert fact is not None and fact.value["suppressed"] == ["shaky_sweaty"]
-    # Medicines known and none a sugar one: still held back, still named.
-    await water_pill(sg, owner)
-    held = await _press(sg, owner, words="shaky and sweaty")
-    assert held.red_flags == [] and held.suppressed == [RedFlag.SHAKY_SWEATY]
-    await sugar_tablet(sg, owner)
+    assert unknown.red_flags == [] and unknown.suppressed == [Feeling.SHAKY_SWEATY]
+    assert unknown.kind is WhatToDoKind.REST and unknown.flag_id is None
+    reported = await sg.get(Fact, unknown.fact_id)
+    assert reported is not None and reported.value["suppressed"] == ["shaky_sweaty"]
+    held = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
+    assert [one.suppressed_because for one in held] == ["no_sugar_condition_on_record"]
+    assert held[0].told == []
+    await fact(sg, owner, subject="diabetes", attribute="control", value="watch")
     known = await _press(sg, owner, words="shaky and sweaty")
-    assert known.red_flags == [RedFlag.SHAKY_SWEATY] and known.kind is WhatToDoKind.RED_FLAG
+    assert known.red_flags == [Feeling.SHAKY_SWEATY] and known.kind is WhatToDoKind.RED_FLAG
 
 
 async def test_the_button_takes_one_of_voice_or_words(sg: AsyncSession) -> None:
@@ -341,8 +345,9 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
     sg: AsyncSession,
 ) -> None:
     """Spec section 8: the helper's word about him is a red flag that escalates immediately.
-    Her key holds no record, so nothing is written to it — no artefact, no event, no fact,
-    no card — but the flag is raised, the family is told, and she is shown what to do."""
+    Her key holds no record, so nothing of the record is written — no artefact, no fact, no
+    card — but the moment is a SYMPTOM event under the emergency scope (as E19 writes it for
+    her on WhatsApp), the flag is raised on it, the family is told, and she is shown what to do."""
     owner, mei, lin, siti, _kit = await _household(sg)
     done = await _press(sg, siti, words="Pa says chest pain")
     assert done.kind is WhatToDoKind.RED_FLAG and done.posture is Posture.ACT
@@ -354,10 +359,10 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
         *CLOSING,
     ]
     assert set(done.notified_person_ids) == {mei.person_id, lin.person_id}
-    assert done.artifact_id is None and done.event_id is None and done.fact_id is None
+    assert done.artifact_id is None and done.fact_id is None and done.event_id is not None
     assert done.card_id is None and done.state_id is None
     flag = await sg.get(Flag, done.flag_id)
-    assert flag is not None and flag.artifact_id is None
+    assert flag is not None and flag.event_id == done.event_id
     assert flag.raised_by_person_id == siti.person_id
     assert (await sg.scalars(select(Fact).where(Fact.subject == "symptom"))).all() == []
     # Every write is on the trail under the emergency scope, in her name.
@@ -366,7 +371,7 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
         for line in await trail(sg, owner.profile_id)
         if line.actor_person_id == siti.person_id and line.action.value == "write"
     ]
-    assert {line.target for line in hers} == {"flag", "notice"}
+    assert {line.target for line in hers} == {"event", "red_flag", "notice", "safety_escalation"}
     assert all(line.scope is Scope.EMERGENCY for line in hers)
 
 
@@ -392,8 +397,8 @@ async def test_the_flag_and_the_notices_survive_a_refusal_later_in_the_same_requ
     sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A template that fails, a State that is stale, a door that refuses further on: the
-    unit of work is rolled back, and the flag, the artefact it names and the notices are
-    written again by their keepers. Nothing else of the press survives."""
+    unit of work is rolled back, and the flag, the event it rests on, the notices and the
+    ladder are written again by their keepers. Nothing else of the press survives."""
     owner, mei, *_ = await _household(sg)
 
     async def stale(*args: object, **kwargs: object) -> object:
@@ -404,15 +409,17 @@ async def test_the_flag_and_the_notices_survive_a_refusal_later_in_the_same_requ
         await _press(sg, owner, words="chest pain")
 
     flags = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
-    assert len(flags) == 1 and flags[0].code == "chest_pain"
-    artifact = await sg.get(Artifact, flags[0].artifact_id)
-    assert artifact is not None and artifact.kind is ArtifactKind.MESSAGE
+    assert len(flags) == 1 and flags[0].feeling is Feeling.CHEST_TIGHTNESS
+    moment = await sg.get(Event, flags[0].event_id)
+    assert moment is not None and moment.kind is EventKind.SYMPTOM
+    ladders = (await sg.scalars(select(Escalation).where(Escalation.profile_id == owner.profile_id))).all()
+    assert [one.flag_id for one in ladders] == [flags[0].id]
     notices = (await sg.scalars(select(Notice).where(Notice.profile_id == owner.profile_id))).all()
     assert {n.to_person_id for n in notices if n.kind is NoticeKind.FAMILY_ALERT} >= {mei.person_id}
     assert all(n.flag_id == flags[0].id for n in notices)
     assert (await sg.scalars(select(Fact).where(Fact.subject == "symptom"))).all() == []
     lines = await trail(sg, owner.profile_id)
-    assert any(line.target == "flag" and line.action.value == "write" for line in lines)
+    assert any(line.target == "red_flag" and line.action.value == "write" for line in lines)
 
 
 async def test_a_voice_note_of_him_pressed_by_someone_else_needs_the_recording_consent(

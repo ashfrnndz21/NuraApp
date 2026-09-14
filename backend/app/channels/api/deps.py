@@ -18,6 +18,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.whatsapp.provider import WhatsAppProvider
 from app.db import unit_of_work
 from app.delivery.feed.compress import Compressor, Searcher
 from app.drugs.registry import DrugRegistry
@@ -27,9 +28,9 @@ from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
+from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
-from app.safety.transcribe import Transcriber
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.api")
@@ -52,8 +53,11 @@ class Providers:
     """The licensed drug data behind its port (`app.drugs`): identification, interactions and
     monographs come from it and from nowhere else."""
     transcriber: Transcriber
-    """Speech to words behind its port (`app.safety.transcribe`): the fixture one until a
-    provider in the region exists; a voice note it cannot hear is kept and said so."""
+    """What hears a voice note, in this deployment's region; the fixture one until a speech
+    provider in the region exists (E02-06)."""
+    whatsapp: WhatsAppProvider
+    """The business solution provider behind its port (`app.channels.whatsapp.provider`);
+    the fixture on a laptop and in the tests, which sends nothing anywhere."""
 
 
 def settings_of(request: Request) -> Settings:

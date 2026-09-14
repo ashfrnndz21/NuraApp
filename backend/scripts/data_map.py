@@ -25,6 +25,7 @@ from sqlalchemy import Table
 
 # Every module that declares a table, so the metadata is whole.
 import app.audit.models
+import app.channels.whatsapp.models
 import app.consent.models
 import app.delivery.feed.models
 import app.family.models
@@ -36,6 +37,7 @@ import app.keys.privacy
 import app.medicines.models
 import app.memory.models
 import app.notes.models
+import app.safety.models
 import app.safety.red_flags
 import app.state.models  # noqa: F401
 from app.db import Base
@@ -91,6 +93,10 @@ CLASSES: dict[str, str] = {
     "feed_item.id": HEALTH,
     "feed_engagement.id": HEALTH,
     "red_flag.id": HEALTH,
+    "safety_escalation.id": HEALTH,
+    "whatsapp_thread.id": HEALTH,
+    "whatsapp_message.id": HEALTH,
+    "whatsapp_proposal.id": HEALTH,
     "source.id": OPERATIONAL,
     "feed_page.id": OPERATIONAL,
     "thread_message.id": HEALTH,
@@ -416,16 +422,8 @@ CLASSES: dict[str, str] = {
     "scheduled_push.expires_at": OPERATIONAL,
     "scheduled_push.state_id": HEALTH,
     "scheduled_push.boundary": HEALTH,
-    # E13/E14 (ADR 0002). A flag heard in his words, the notice to the family, the
-    # what-to-do card and the emergency card: codes and ids, no prose, all about his health.
-    "flag.id": HEALTH,
-    "flag.kind": HEALTH,
-    "flag.code": HEALTH,
-    "flag.posture": HEALTH,
-    "flag.artifact_id": HEALTH,
-    "flag.raised_at": HEALTH,
-    "flag.raised_by_person_id": IDENTIFIER,
-    "flag.suppressed": HEALTH,
+    # E13/E14 (ADR 0002). The notice to the family, the what-to-do card and the emergency
+    # card: codes and ids, no prose, about his health. The flag is E21's `red_flag`, above.
     "notice.id": HEALTH,
     "notice.kind": HEALTH,
     "notice.to_person_id": IDENTIFIER,
@@ -466,6 +464,49 @@ CLASSES: dict[str, str] = {
     "privacy.marked_at": CONSENT,
     "privacy.lifted_at": CONSENT,
     "privacy.lifted_by_person_id": IDENTIFIER,
+    # --- WhatsApp (E19) -----------------------------------------------------------------------
+    # The rows are references, never the words: the words are a message artefact. What a row
+    # points at — the artefact, the flag, the State, the fact a proposal became — and what kind
+    # of message it was are health; who wrote or is on the ladder is an identifier; the
+    # 24-hour window, the template and the provider's own message id are operational.
+    "whatsapp_thread.person_id": IDENTIFIER,
+    "whatsapp_thread.is_patient": IDENTIFIER,
+    "whatsapp_thread.opened_at": OPERATIONAL,
+    "whatsapp_thread.last_inbound_at": OPERATIONAL,
+    "whatsapp_thread.last_outbound_at": OPERATIONAL,
+    "whatsapp_message.thread_id": HEALTH,
+    "whatsapp_message.direction": OPERATIONAL,
+    "whatsapp_message.kind": HEALTH,
+    "whatsapp_message.person_id": IDENTIFIER,
+    "whatsapp_message.at": OPERATIONAL,
+    "whatsapp_message.provider_message_id": OPERATIONAL,
+    "whatsapp_message.artifact_id": HEALTH,
+    "whatsapp_message.flag_id": HEALTH,
+    "whatsapp_message.template_name": OPERATIONAL,
+    "whatsapp_message.catalogue_key": HEALTH,
+    "whatsapp_message.state_id": HEALTH,
+    # A proposal is what was heard, waiting for the poster's yes: a reading, not yet a fact.
+    "whatsapp_proposal.thread_id": HEALTH,
+    "whatsapp_proposal.message_id": HEALTH,
+    "whatsapp_proposal.poster_person_id": IDENTIFIER,
+    "whatsapp_proposal.subject": HEALTH,
+    "whatsapp_proposal.attribute": HEALTH,
+    "whatsapp_proposal.value": HEALTH,
+    "whatsapp_proposal.unit": HEALTH,
+    "whatsapp_proposal.event_kind": HEALTH,
+    "whatsapp_proposal.occurred_at": HEALTH,
+    "whatsapp_proposal.said": HEALTH,
+    "whatsapp_proposal.created_at": OPERATIONAL,
+    "whatsapp_proposal.expires_at": OPERATIONAL,
+    "whatsapp_proposal.status": OPERATIONAL,
+    "whatsapp_proposal.answered_at": OPERATIONAL,
+    "whatsapp_proposal.fact_id": HEALTH,
+    "whatsapp_proposal.event_id": HEALTH,
+    # The ladder beside a red flag: person ids in calling order, like the flag's `told`.
+    "safety_escalation.flag_id": HEALTH,
+    "safety_escalation.roster": IDENTIFIER,
+    "safety_escalation.told": IDENTIFIER,
+    "safety_escalation.created_at": HEALTH,
 }
 
 

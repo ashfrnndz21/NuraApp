@@ -1,6 +1,6 @@
 # ADR 0002 — What the EMERGENCY scope opens, and how the safety layer sets the day's posture
 
-**Date** 2026-09-14 · **Status** accepted · **Decided by** the E13 builder; decisions 6–12 added
+**Date** 2026-09-14 · **Status** accepted · **Decided by** the E13 builder; decisions 6–13 added
 after the safety review of #111 and the merges of E16 and E19, on the operator's calls
 
 ## Context
@@ -65,43 +65,49 @@ durable when something later in the same request is refused.
 
 6. **The red-flag path runs under EMERGENCY, whoever pressed.** "Red flags escalate
    immediately" (spec §8, `.claude/rules/safety.md`) does not depend on who heard the words.
-   The button's door is `Scope.EMERGENCY`, which every role holds. The flag and the notices
-   are written under EMERGENCY; who is told — every active key holder with EMERGENCY, the
-   chief first — is read under EMERGENCY, not FAMILY, and each account on that list is read
-   through `key_holder` with a READ line, for a name and a language. The medicines are read
-   only when the key holds MEDICINES; otherwise they are unknown and the shaky-and-sweaty
-   row is suppressed, visibly. So:
+   The button's door is `Scope.EMERGENCY`, which every role holds. The moment is a SYMPTOM
+   event written under EMERGENCY (`record_the_moment`, as E19 writes it for the helper on
+   WhatsApp); the flag, the notices and the ladder are written under EMERGENCY; who is told —
+   every active key holder with EMERGENCY, whoever is on duty first (E12's roster, read when
+   the key holds FAMILY), else the chief — is read under EMERGENCY, not FAMILY, and each
+   account on that list is read through `key_holder` with a READ line, for a name and a
+   language. So:
    - a **caregiver** (RECORDS, no FAMILY) raises the flag, tells the family, and writes the
-     moment to the record; she cannot compute State, so no card row is written and she is
-     shown the same lines;
-   - the **helper** (no RECORDS) raises the flag and tells the family; nothing is written to
-     the record — no artefact, no event, no fact, no card row — and the flag names no
-     artefact. Her words are heard in memory only. `tests/test_not_feeling_well.py` holds both.
+     moment's facts to the record; she cannot compute State, so no card row is written and
+     she is shown the same lines;
+   - the **helper** (no RECORDS) raises the flag and tells the family; nothing of the record
+     is written — no artefact, no fact, no card row — only the SYMPTOM event the flag rests
+     on. Her words are heard in memory only. `tests/test_not_feeling_well.py` holds both.
 
-7. **A flag and its notices survive a refusal later in the same request.** Flags are written
-   through `app.safety.red_flags.write_flag_kept(session, context, …)`: the audited door, and
-   a keeper registered with `app.db.keep_on_refusal` — the mechanism REFUSED audit lines use.
-   If anything further on is refused (a template that fails the standard, a stale State, a
-   door), `unit_of_work` rolls the savepoint back and replays the keeper, which writes the
-   same flag again (same id, same moment), the artefact row it names if that went too (its
-   bytes are in the object store), and their WRITE lines. The notices that go with it are
-   kept the same way (`keep_row`). Tested: a red flag, then a refusal → the flag row is there.
+7. **A flag and what goes with it survive a refusal later in the same request.** The flag is
+   written through `app.safety.red_flags.write_flag_kept(session, context, …)`: `raise_flag`,
+   and a keeper registered with `app.db.keep_on_refusal` — the mechanism REFUSED audit lines
+   use. If anything further on is refused (a template that fails the standard, a stale State,
+   a door), `unit_of_work` rolls the savepoint back and replays the keeper, which writes the
+   SYMPTOM event and the flag again (same ids, same moment), their WRITE lines and a share
+   line for each person on `told`. The notices and the ladder (`Escalation`) are kept the same
+   way (`keep_row`). Tested: a red flag, then a refusal → the flag row, its event, the notices
+   and the ladder are there, and nothing else of the press is.
 
-8. **The transcriber is pinned to a region.** The `Transcriber` port carries `region`;
+8. **The transcriber is pinned to a region.** The `Transcriber` port (`app.ingestion.transcribe`,
+   the one E02's voice notes use) carries `region`;
    `capture` calls `guard_region` before a byte of audio is handed over, and the adapter
    checks again in `transcribe`. The fixture adapter declares the region it serves. A
    mismatch is `OutOfRegion`, and nothing is stored.
 
-9. **Every voice note rests on the RECORDING consent.** E16 (#108) made it a rule of the store:
-   `store_artifact` asks for `RECORDING` as well as `HOLD_HEALTH_RECORD` for every VOICE
-   artefact, the patient's own included — which supersedes this ADR's first answer ("his own
-   voice note is his words on his own record"). `capture` asks for it before a byte is kept
-   or heard, whoever pressed, so the helper's voice note (which is heard and not kept) is held
-   to it too. Typed words need no recording consent. The only RECORDING wording today is for a
-   visit ("When you see the doctor, Nura listens."), and there is no route to give it for a
-   voice note, so until the operator and counsel settle the words the button takes typed
-   words over HTTP and a voice note is refused (`ConsentWithheld`, 403) — nothing kept, nothing
-   heard. Checkpoint 14 shows the refusal and then types.
+9. **His own voice note is his record; someone else's recording of him needs RECORDING.** The
+   operator's ruling (ADR 0003, E02 #113): the RECORDING consent gates recordings of other
+   people's voices (a consultation); a person's own voice about himself — the not-feeling-well
+   message, a symptom said aloud — is kept under `HOLD_HEALTH_RECORD`, and E02's
+   `store_artifact` takes `recording=Recording.OWN_NOTE | CONSULT` for a VOICE artefact, these
+   being OWN_NOTE. `capture` asks for RECORDING only when the person sending a voice note is
+   not the patient (review item 6), before a byte is kept or heard — the helper's too, whose
+   key keeps nothing. Until #113 is on main, E16's `store_artifact` still asks RECORDING for
+   every VOICE artefact, so his own voice note needs it for now too; there is no route to give
+   it for a voice note (its only words are a visit's), so over HTTP the button takes typed
+   words, and checkpoint 14 shows the voice note refused (`ConsentWithheld`, 403) and then
+   types. `store_voice` writes the artefact row before the bytes, so that refusal leaves
+   nothing in the object store.
 
 10. **Reads the safety layer makes of its own writes go through the door.** The symptom log
     reads the fact it has just written back through `audited_read`, under the fact's own scope
@@ -130,6 +136,20 @@ durable when something later in the same request is refused.
     its `boundary` column stays empty; adding it to the register would put "Ask your doctor."
     on a card handed to a paramedic.
 
+13. **One red-flag table and one word table.** E21 (#106) and E19 (#107) landed a `red_flag`
+    table and a table of red-flag words for every channel before E13 did. E13's own `flag`
+    table and word table are gone: the button and the symptom log read the words with
+    `detect`, write the moment with `record_the_moment`, raise the flag with `raise_flag`
+    (through `write_flag_kept`), and write the ladder with `roster_for` and `escalate`. The
+    codes are `Feeling` values (`chest_tightness`). The Malay and Chinese phrases E13's table
+    had and E19's did not ("dada saya sakit", "semput", "sebelah kaki bengkak", …) were added
+    to `RED_FLAG_WORDS`. A flag held back because the fact it depends on is not on the
+    record is written with `suppressed_because`, tells nobody, and the button takes the
+    ordinary path. E13's medicine-class rule for shaky-and-sweaty (the widened class list the
+    review asked for) is superseded by E21's condition rule (`SUGAR_CONDITIONS`), one rule for
+    every channel; for a key that cannot read the record the condition is missing to it, so
+    the flag is written suppressed rather than refused (`_missing_fact`).
+
 ## Consequences
 
 - Every role can hand over the card; a viewer or helper still cannot read a reading, a
@@ -139,9 +159,9 @@ durable when something later in the same request is refused.
 - A stale card for an emergency-only key is a 409 until the owner or the chief opens the
   app; the web client's cached last render covers the offline day. The operator may prefer
   a background recompute later; nothing here precludes it.
-- `shaky_sweaty` is suppressed and named whenever it cannot be raised: no medicine on record,
-  a key that does not open the medicines, or medicines none of which is in
-  `SUGAR_MEDICINE_CLASSES` (under pharmacist review; a class the list does not know shows as
-  a suppression rather than dropping what he said).
+- `shaky_sweaty` is written suppressed, and tells nobody, whenever the sugar condition it
+  depends on is not on the record or the key cannot read the record; the caregiver sees the
+  suppression on the flag (`suppressed_because`). Whether a key that cannot see the condition
+  should escalate instead is a clinical call left open for the operator.
 - Anyone with a key can raise a red flag about him. That is the point of decision 6; the
   trail names who pressed, and the flag row carries `raised_by_person_id`.

@@ -1,4 +1,4 @@
-"""The safety tables: the flag, the notice, the what-to-do-now card, the emergency card.
+"""The safety tables: the notice, the what-to-do-now card, the emergency card.
 
 Every row is the profile's (`ProfileScoped`) and is reached through `app.audit.access`. The
 two cards carry `RenderedFromState`: neither can reach the database without the snapshot it
@@ -9,9 +9,10 @@ from the templates in `app.channels.safety_strings` when the row is read back, s
 read tomorrow says exactly what it said today and a template that is corrected corrects
 every card at once.
 
-A flag is written before anything else about the moment it belongs to (`app.safety.not_feeling_well`),
-so it names the artefact — the voice note, the typed words — and not the event, which comes
-after it. The notice names the flag; the card names the flag and the event.
+The flag itself is not here: it is E21's `red_flag` (`app.safety.red_flags.Flag`), the one table
+every channel raises a red flag in, written before anything else about the moment it belongs to
+(`write_flag_kept`) on the SYMPTOM event it was said in. The notice names that flag; the card
+names the flag and the event.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from sqlalchemy import JSON, ForeignKey, ForeignKeyConstraint, String, UniqueCon
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
-from app.state.models import Posture, RenderedFromState
+from app.state.models import RenderedFromState
 
 
 def _row_of_profile(table: str) -> UniqueConstraint:
@@ -38,38 +39,6 @@ def _tied_to_profile(table: str, column: str, referred: str) -> ForeignKeyConstr
         [f"{referred}.profile_id", f"{referred}.id"],
         name=f"fk_{table}_{column.removesuffix('_id')}_profile",
     )
-
-
-class FlagKind(StrEnum):
-    RED_FLAG = "red_flag"
-
-
-class Flag(ProfileScoped, Base):
-    """One red flag heard in a person's words: which one, when, from which artefact.
-
-    "This one we do not wait for." The row is the first thing written when a red flag is
-    heard, before the event, the fact, the notices and the card, and it is written through
-    `app.safety.red_flags.write_flag_kept`, whose keeper writes it again if a refusal later in
-    the same request rolls the unit of work back: whatever else fails, the flag is on the
-    record. `posture` is what the flag asks of the day: always ACT for a
-    red flag. Nothing here is a diagnosis; the code names the words in the table.
-    """
-
-    __tablename__ = "flag"
-    __table_args__ = (
-        _row_of_profile("flag"),
-        _tied_to_profile("flag", "artifact_id", "artifact"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    kind: Mapped[FlagKind] = mapped_column(enum_column(FlagKind, "flag_kind"))
-    code: Mapped[str] = mapped_column(String(48), index=True)
-    posture: Mapped[Posture] = mapped_column(enum_column(Posture, "posture"))
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
-    raised_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
-    raised_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
-    # The flags the table held back this time, by code, so the caregiver sees the suppression.
-    suppressed: Mapped[list[str]] = mapped_column(JSON, default=list)
 
 
 class NoticeKind(StrEnum):
@@ -95,7 +64,7 @@ class Notice(ProfileScoped, Base):
     __tablename__ = "notice"
     __table_args__ = (
         _row_of_profile("notice"),
-        _tied_to_profile("notice", "flag_id", "flag"),
+        _tied_to_profile("notice", "flag_id", "red_flag"),
         _tied_to_profile("notice", "event_id", "event"),
     )
 
@@ -105,7 +74,7 @@ class Notice(ProfileScoped, Base):
     template: Mapped[str] = mapped_column(String(48))
     slots: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     language: Mapped[str] = mapped_column(String(16))
-    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flag.id"), default=None)
+    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
     event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event.id"), default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     deliver_after: Mapped[datetime] = mapped_column(index=True)
@@ -127,7 +96,7 @@ class WhatToDoCard(RenderedFromState, ProfileScoped, Base):
     __tablename__ = "what_to_do_card"
     __table_args__ = (
         _row_of_profile("what_to_do_card"),
-        _tied_to_profile("what_to_do_card", "flag_id", "flag"),
+        _tied_to_profile("what_to_do_card", "flag_id", "red_flag"),
         _tied_to_profile("what_to_do_card", "event_id", "event"),
     )
 
@@ -136,7 +105,7 @@ class WhatToDoCard(RenderedFromState, ProfileScoped, Base):
     language: Mapped[str] = mapped_column(String(16))
     # The template ids of the lines shown, in order. The words come from the templates.
     line_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
-    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flag.id"), default=None)
+    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("event.id"))
     check_in_at: Mapped[datetime | None] = mapped_column(default=None)
     rendered_at: Mapped[datetime] = mapped_column(default=utcnow)
@@ -165,7 +134,6 @@ class EmergencyCard(RenderedFromState, ProfileScoped, Base):
     rendered_for_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
 
 
-frozen(Flag)
 # Delivery is the one change a notice takes: the channel that sent it says when.
 frozen(Notice, except_for=frozenset({"delivered_at"}))
 frozen(WhatToDoCard)

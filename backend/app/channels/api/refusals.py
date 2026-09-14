@@ -14,6 +14,9 @@ from fastapi.responses import JSONResponse
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
+from app.channels.whatsapp.outbound.level0 import NoPatientYet
+from app.channels.whatsapp.outbound.send import OutsideTheWindow
+from app.channels.whatsapp.provider import NotAWebhook
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
@@ -43,12 +46,12 @@ from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
+from app.ingestion.voice import VoiceNoteTooLong
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
-from app.safety.transcribe import VoiceNoteTooLong
 from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -59,6 +62,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
     (NoSuchHolder, 403),
+    # A webhook body not signed by the provider, or a verify token that is not ours.
+    (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
@@ -87,6 +92,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    # A stewarded profile has no patient to send the morning card to yet.
+    (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
     (NoSuchItem, 404),
     (NoSuchSearchJob, 404),
@@ -100,6 +107,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # catalogue's, not the caller's. (E12's `NotPlainWords` — words the caller offered — is a
     # 400 with its findings, below.)
     (CatalogueNotPlainWords, 500),
+    # Free text needs the 24-hour window; outside it only a template goes.
+    (OutsideTheWindow, 409),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
