@@ -1,6 +1,6 @@
 # ADR 0005 — The ladder is the one record of who is told; the trigger engine has no scheduler of its own
 
-**Date** 2026-09-15 · **Status** proposed · **Decided by** the operator, for the owner · **Stories** E00-05, E11-05, E11-06 (and E13/E14, E19-05, E05 as the doors a red flag comes in by)
+**Date** 2026-09-15 · **Status** accepted (review of #121) · **Decided by** the operator, for the owner · **Stories** E00-05, E11-05, E11-06 (and E13/E14, E19-05, E05 as the doors a red flag comes in by)
 
 ## Context
 
@@ -17,5 +17,7 @@ Before E11, a red flag wrote three records of who was told, none of which sent a
 ## Consequences
 
 - E13's tests and checkpoint 14 now read "who the ladder asked first" where they read "who got a notice"; E19's red-flag reply names only people reached.
-- The engine's reads are written to the owner's trail, on the system channel where the doors allow it; at a five-minute cadence the trail needs a way to fold system lines (open question for E12's trail).
-- Twelve WhatsApp templates now, not six: E11's six are to be submitted for approval with E19's.
+- The engine's reach is Nura's own, not the patient's: it runs under `Standing.SYSTEM` (`keys.context.as_the_system`), and every line it writes has no person as the actor and the system channel (`audit_entry.actor_person_id` is empty only there, `ck_audit_entry_actor_or_system`). His trail folds the day's system reads into one line in his words — "On Monday 14 September, Nura checked your papers 288 times to remind you on time." — which the chief can open to see what was checked and how often.
+- Fourteen WhatsApp templates now: E19's six approved, E11's eight pending (`Template.approved=False`). Outside a dev run a deployment's number carries only the approved ones; `send` refuses a pending one on the trail (`TemplateNotApproved`) and a delivery tries its next channel. A red flag never waits on Meta: the notice's two variants — "Pa is not feeling well." when he raised it himself, "It may be about Pa." when the person who raised it is on more than one family's list — go only where approved, and the approved notice goes otherwise.
+- A red-flag word from someone holding the emergency card on more than one profile, with nothing to say which, never waits on "which one?": the flag is raised on each (`ambiguous_profile`), each ladder starts, the sender is asked which, and a reply naming one closes the other ladders, on each profile's trail in the sender's name.
+- The first week's prompt due today (E01-04, `onboarding.plan.due_prompts`) is one line of the morning card and an event trigger of its own (`first_week_prompt_due`), under the card's one a day; with no card that day it waits on Today.

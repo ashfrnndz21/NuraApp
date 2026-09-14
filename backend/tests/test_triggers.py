@@ -9,7 +9,7 @@ count, never a diagnosis; a family message comes due and reaches him.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -35,6 +35,9 @@ from app.family.models import PushChannel, ScheduledPush
 from app.ingestion.models import DocumentKind, ReviewCard
 from app.keys.confirm import confirm
 from app.keys.scopes import Scope
+from app.onboarding.gaps import BY_CODE
+from app.onboarding.plan import make_plan
+from app.onboarding.words import prompt as prompt_words
 from app.routines.service import routine_draft_for, set_routine
 from app.state.service import render_from_state
 from tests.delivery_support import PA, Home, home
@@ -356,3 +359,26 @@ async def test_every_row_names_its_rule(
     assert rows and {row.rule for row in rows} <= {rule.rule for rule in RULES.values()}
     assert all(row.rule == RULES[row.trigger_type].rule for row in rows)
     assert timedelta(0) <= rows[-1].recorded_at - rows[0].recorded_at
+
+
+async def test_the_first_week_prompt_is_one_line_of_the_morning_card(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """E01-04's prompt due today rides the morning card as one line, and is an event trigger
+    of its own, logged with its rule — once a day, under the card's one a day."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await make_plan(
+        sg, context=h.owner, session_id=None, gaps=[BY_CODE["weight"]], breakfast=time(7, 0)
+    )
+    words = prompt_words("weight", "en", None)
+    assert words is not None
+    report = await _run(sg, h, clock, at(7, 1, day=15))
+    [card] = _rows(report, TriggerType.MORNING)
+    [along] = _rows(report, TriggerType.FIRST_WEEK_PROMPT)
+    assert card.outcome is DeliveryOutcome.SENT
+    assert along.outcome is DeliveryOutcome.SENT and along.trigger_kind is TriggerKind.EVENT
+    assert along.rule == "first_week_prompt_due" and along.reason == "in the morning card"
+    assert along.message_id == card.message_id and along.why["gap"] == "weight"
+    assert words.action in h.sent_to(h.pa)[-1].splitlines()
+    assert _rows(await _run(sg, h, clock, at(7, 20, day=15)), TriggerType.FIRST_WEEK_PROMPT) == []
