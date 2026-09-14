@@ -5,26 +5,31 @@ and not the other. This loads every revision in the directory, runs them in depe
 order against an empty database, and checks the tables they build against the tables the
 models declare.
 
-Two stories built side by side each branch from the same revision, so the directory can hold
-more than one head at a time. That is allowed here; the operator joins the heads with a merge
-revision. What is not allowed is a revision that names a parent the directory does not hold.
+Two stories built side by side each branch from the same revision; a merge revision joins
+them, so the directory always has exactly one head and `alembic upgrade head` knows where
+that is. What is not allowed is a revision that names a parent the directory does not hold.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Table, create_engine, inspect
+from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
-from app.identity.models import Person, Profile
+from app.consent.models import Consent
+from app.identity.models import LoginChallenge, LoginSession, Person, Profile
+from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.notes.models import Note
 from app.state.models import StateSnapshot
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -33,13 +38,18 @@ TABLES: tuple[Table, ...] = (
     Person.__table__,
     Profile.__table__,
     Key.__table__,
+    Confirmation.__table__,
     AuditEntry.__table__,
+    Consent.__table__,
     Artifact.__table__,
     Event.__table__,
     Fact.__table__,
     Episode.__table__,
     Provider.__table__,
     Appointment.__table__,
+    LoginChallenge.__table__,
+    LoginSession.__table__,
+    Note.__table__,
     StateSnapshot.__table__,
 )
 
@@ -93,6 +103,36 @@ def test_every_revision_links_to_one_the_directory_holds(
             assert parent in revisions, f"{module.revision} revises {parent}, which is not here"
 
 
+def _tied(built: Inspector, table: Table) -> set[tuple[tuple[str, ...], str, tuple[str, ...]]]:
+    """Every foreign key on the built table, as (columns, referred table, referred columns)."""
+    return {
+        (
+            tuple(key["constrained_columns"]),
+            key["referred_table"],
+            tuple(key["referred_columns"]),
+        )
+        for key in built.get_foreign_keys(table.name)
+    }
+
+
+def _tied_by_model(table: Table) -> set[tuple[tuple[str, ...], str, tuple[str, ...]]]:
+    return {
+        (
+            tuple(element.parent.name for element in key.elements),
+            key.referred_table.name,
+            tuple(element.column.name for element in key.elements),
+        )
+        for key in table.foreign_key_constraints
+    }
+
+
+def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
+    """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
+    parents = {parent for module in revisions.values() for parent in _parents(module)}
+    heads = sorted(rev for rev in revisions if rev not in parents)
+    assert heads == ["0006_state_snapshot"]
+
+
 def test_the_migrations_build_the_tables_the_models_declare(
     revisions: dict[str, ModuleType],
 ) -> None:
@@ -109,9 +149,112 @@ def test_the_migrations_build_the_tables_the_models_declare(
             assert {column["name"] for column in built.get_columns(table.name)} == {
                 column.name for column in table.columns
             }, table.name
+            assert {
+                column["name"] for column in built.get_columns(table.name) if column["nullable"]
+            } == {column.name for column in table.columns if column.nullable}, table.name
+
+        # The ties that keep provenance on the profile survive the batch rewrite (0004), and
+        # so do the checks 0003 put on the fact table.
+        for table in (Artifact, Event, Fact, Episode, Provider, Appointment):
+            assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
+        assert {check["name"] for check in built.get_check_constraints("fact")} >= {
+            "ck_fact_has_provenance",
+            "ck_fact_confidence",
+        }
 
         for migration in reversed(ordered):
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
         assert inspect(connection).get_table_names() == []
+    engine.dispose()
+
+
+def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
+    with Operations.context(MigrationContext.configure(connection)):
+        getattr(migration, step)()
+
+
+def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
+    revisions: dict[str, ModuleType],
+) -> None:
+    """Upgrade, populate, downgrade (refused), clear, downgrade, upgrade again."""
+    ordered = _in_order(revisions)
+    review = revisions["0005_memory_review"]
+    engine = create_engine("sqlite+pysqlite://")
+    with engine.begin() as connection:
+        for migration in ordered:
+            _apply(connection, migration, "upgrade")
+
+        pa, profile, photo = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        when = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
+        connection.execute(
+            Person.__table__.insert().values(
+                id=pa, region="SG", display_name="Pa", language="en", created_at=when
+            )
+        )
+        connection.execute(
+            Profile.__table__.insert().values(
+                id=profile,
+                region="SG",
+                display_name="Pa",
+                language="en",
+                owner_person_id=pa,
+                created_at=when,
+            )
+        )
+        connection.execute(
+            Artifact.__table__.insert().values(
+                id=photo,
+                profile_id=profile,
+                kind="photo",
+                storage_key="sg/x.jpg",
+                content_type="image/jpeg",
+                sha256="a" * 64,
+                captured_at=when,
+                source_channel="app",
+                region="SG",
+                stored_at=when,
+            )
+        )
+        confirmed = uuid.uuid4()
+        connection.execute(
+            Fact.__table__.insert().values(
+                id=confirmed,
+                profile_id=profile,
+                subject="medication",
+                attribute="dose",
+                value=136,
+                confidence=1.0,
+                confidence_state="confirmed_by_person",
+                artifact_id=photo,
+                valid_from=when,
+                asserted_at=when,
+                confirmed_by_person_id=pa,
+            )
+        )
+        told = uuid.uuid4()
+        connection.execute(
+            Event.__table__.insert().values(
+                id=told,
+                profile_id=profile,
+                kind="visit",
+                occurred_at=when,
+                source_channel="app",
+                label="saw Dr Tan",
+                recorded_at=when,
+            )
+        )
+
+        with pytest.raises(RuntimeError, match="person's word"):
+            _apply(connection, review, "downgrade")
+        connection.execute(Fact.__table__.delete().where(Fact.__table__.c.id == confirmed))
+        with pytest.raises(RuntimeError, match="event's source"):
+            _apply(connection, review, "downgrade")
+        connection.execute(Event.__table__.delete().where(Event.__table__.c.id == told))
+
+        # With nothing to drop, the way down and back up is open, and the rows are kept.
+        _apply(connection, review, "downgrade")
+        assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
+        _apply(connection, review, "upgrade")
+        assert connection.execute(Artifact.__table__.select()).one().id == photo
     engine.dispose()

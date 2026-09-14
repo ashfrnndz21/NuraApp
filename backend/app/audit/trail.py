@@ -15,11 +15,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
-from app.db import utcnow
+from app.db import keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_select
@@ -47,35 +48,46 @@ async def record(
     refused_because: str | None = None,
     shared_with_person_id: uuid.UUID | None = None,
     shared_with_label: str | None = None,
-    now: datetime | None = None,
 ) -> AuditEntry:
     """Write one line of the trail.
 
     The entry is pinned to the profile in the context, so a person with no context — nobody
     resolved a key for them — cannot put a line into a graph they hold nothing on.
 
-    It is written in the same transaction as the access it records, so a write that is rolled
-    back leaves behind no claim that it happened.
+    An ALLOWED line is written in the same transaction as the access it records, so a write
+    that is rolled back leaves behind no claim that it happened. A REFUSED line is the
+    opposite case: the refusal is an exception, the unit of work that carried it is rolled
+    back, and the line must land anyway. So it is flushed now, and a keeper is registered
+    (`app.db.keep_on_refusal`) that writes an equivalent line again once the channel has
+    rolled the unit back — the reaching is seen whether or not anything else survived.
     """
-    entry = AuditEntry(
-        profile_id=context.profile_id,
-        at=now or utcnow(),
-        actor_person_id=context.person_id,
-        actor_role=context.role,
-        key_id=context.key_id,
-        action=action,
-        scope=scope,
-        channel=channel,
-        target=target,
-        target_id=target_id,
-        rows=rows,
-        outcome=outcome,
-        refused_because=refused_because,
-        shared_with_person_id=shared_with_person_id,
-        shared_with_label=shared_with_label,
-    )
+    values: dict[str, Any] = {
+        "profile_id": context.profile_id,
+        "at": utcnow(),
+        "actor_person_id": context.person_id,
+        "actor_role": context.role,
+        "key_id": context.key_id,
+        "action": action,
+        "scope": scope,
+        "channel": channel,
+        "target": target,
+        "target_id": target_id,
+        "rows": rows,
+        "outcome": outcome,
+        "refused_because": refused_because,
+        "shared_with_person_id": shared_with_person_id,
+        "shared_with_label": shared_with_label,
+    }
+    entry = AuditEntry(**values)
     session.add(entry)
     await session.flush()
+    if outcome is Outcome.REFUSED:
+
+        async def keep(again: AsyncSession) -> None:
+            again.add(AuditEntry(**values))
+            await again.flush()
+
+        keep_on_refusal(session, keep)
     return entry
 
 
@@ -99,7 +111,6 @@ async def read_audit(
     since: datetime | None = None,
     limit: int = 200,
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
 ) -> Sequence[AuditEntry]:
     """Every access to this profile, newest first, narrowed by who, what, which part and when.
 
@@ -118,7 +129,6 @@ async def read_audit(
             outcome=Outcome.REFUSED,
             refused_because=type(refusal).__name__,
             channel=channel,
-            now=now,
         )
         raise
 
@@ -142,6 +152,5 @@ async def read_audit(
         target=AUDIT_TARGET,
         rows=len(found),
         channel=channel,
-        now=now,
     )
     return found

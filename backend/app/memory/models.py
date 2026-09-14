@@ -1,10 +1,13 @@
 """The tables of the memory stores.
 
 Three disciplines run through every table here. Every one carries `ProfileScoped`, so no row
-exists without the profile it belongs to. The episodic and semantic rows are immutable: what
-came in is what came in, and a fact that turns out to be wrong is superseded, never edited.
-And no free-text column is wide enough to carry what an artefact said: a label names a thing,
-the artefact in the object store is the thing.
+exists without the profile it belongs to, and every reference from one row to another carries
+the profile too — `(profile_id, artifact_id)` points at `artifact(profile_id, id)` — so the
+table itself refuses a fact that cites another profile's artefact, whatever the service did.
+The rows are immutable, or take one change each: what came in is what came in, a fact that
+turns out to be wrong is superseded, an episode closes, an appointment changes status. And no
+free-text column is wide enough to carry what an artefact said: a label names a thing, the
+artefact in the object store is the thing.
 """
 
 from __future__ import annotations
@@ -14,10 +17,18 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, Float, ForeignKey, String, event, inspect
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Float,
+    ForeignKey,
+    ForeignKeyConstraint,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, utcnow
+from app.db import Base, ImmutableRow, ProfileScoped, enum_column, frozen, utcnow
 from app.errors import Refusal
 from app.regions import Region
 
@@ -29,10 +40,6 @@ class NotALabel(Refusal):
     """A label names a thing in a few words. This was empty, or long enough to be the thing."""
 
 
-class ImmutableRow(Refusal):
-    """What came in is what came in. A wrong fact is superseded, never edited."""
-
-
 def short_label(text: str) -> str:
     """Trim a label, and refuse anything that could be carrying content instead of a name."""
     label = text.strip()
@@ -41,18 +48,22 @@ def short_label(text: str) -> str:
     return label
 
 
-def _frozen(model: type[Any], *, except_for: frozenset[str] = frozenset()) -> None:
-    """Refuse any update to a row of this table beyond the columns named."""
+def _row_of_profile(table: str) -> UniqueConstraint:
+    """What lets another table point at `(profile_id, id)` here: the pair is unique."""
+    return UniqueConstraint("profile_id", "id", name=f"uq_{table}_profile_id_id")
 
-    @event.listens_for(model, "before_update")
-    def _refuse(mapper: Any, connection: Any, target: Any) -> None:
-        changed = {
-            attribute.key
-            for attribute in inspect(target).attrs
-            if attribute.history.has_changes()
-        }
-        if changed - except_for:
-            raise ImmutableRow(f"{model.__tablename__} rows are not edited")
+
+def _tied_to_profile(table: str, column: str, referred: str) -> ForeignKeyConstraint:
+    """A reference that carries the profile with it, so it can only land on the same profile.
+
+    The single-column key on the column is the one 0003 shipped and is left standing; this
+    is the one that matters. A NULL in `column` leaves the row untied, as a NULL does.
+    """
+    return ForeignKeyConstraint(
+        ["profile_id", column],
+        [f"{referred}.profile_id", f"{referred}.id"],
+        name=f"fk_{table}_{column.removesuffix('_id')}_profile",
+    )
 
 
 # --- episodic ------------------------------------------------------------------------------
@@ -85,6 +96,7 @@ class Artifact(ProfileScoped, Base):
     """
 
     __tablename__ = "artifact"
+    __table_args__ = (_row_of_profile("artifact"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[ArtifactKind] = mapped_column(enum_column(ArtifactKind, "artifact_kind"))
@@ -112,19 +124,27 @@ class EventKind(StrEnum):
 class Event(ProfileScoped, Base):
     """Something that happened: a reading taken, a visit, a message, a dose taken.
 
-    An event that came from an artefact names it. The label is a name for the moment, never
-    what was said in it; the artefact is where that is.
+    An event comes from somewhere: it names the artefact it was read from, or it says which
+    channel it came in on and, in the label, what it was. An event is provenance for a fact,
+    so one from nowhere would let a fact rest on nothing. The label is a name for the moment,
+    never what was said in it; the artefact is where that is.
     """
 
     __tablename__ = "event"
+    __table_args__ = (
+        _row_of_profile("event"),
+        _tied_to_profile("event", "artifact_id", "artifact"),
+        _tied_to_profile("event", "episode_id", "episode"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[EventKind] = mapped_column(enum_column(EventKind, "event_kind"))
     occurred_at: Mapped[datetime] = mapped_column(index=True)
-    label: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
+    source_channel: Mapped[SourceChannel] = mapped_column(
+        enum_column(SourceChannel, "source_channel")
     )
+    label: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     recorded_at: Mapped[datetime] = mapped_column(default=utcnow)
 
@@ -147,6 +167,16 @@ class Fact(ProfileScoped, Base):
     JSON with `unit` beside it where one applies. A fact names the artefact or the event it
     was read from, and the table refuses one that names neither. It holds for the window
     `valid_from` to `valid_to`, and once superseded it stays, marked with when.
+
+    `confidence_state` is not a label the caller picks: CONFIRMED_BY_PERSON and DISPUTED
+    name the person who said so in `confirmed_by_person_id`, and the service refuses either
+    without one. An EXTRACTED fact is the machine's and names nobody. A DISPUTED fact is an
+    open dispute against the fact it `supersedes`: it closes nothing and is never current.
+
+    A `medication.dose` fact here is storage. The label-photo rule for a high-risk drug
+    (docs/medications-module.md) is a hook, `semantic.before_fact_write`, that the medicines
+    module (E04) registers; until it does, this table accepts a dose whose provenance is a
+    WHATSAPP event.
     """
 
     __tablename__ = "fact"
@@ -155,6 +185,11 @@ class Fact(ProfileScoped, Base):
             "artifact_id IS NOT NULL OR event_id IS NOT NULL", name="ck_fact_has_provenance"
         ),
         CheckConstraint("confidence >= 0 AND confidence <= 1", name="ck_fact_confidence"),
+        _row_of_profile("fact"),
+        _tied_to_profile("fact", "artifact_id", "artifact"),
+        _tied_to_profile("fact", "event_id", "event"),
+        _tied_to_profile("fact", "episode_id", "episode"),
+        _tied_to_profile("fact", "supersedes_id", "fact"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -166,9 +201,7 @@ class Fact(ProfileScoped, Base):
     confidence_state: Mapped[ConfidenceState] = mapped_column(
         enum_column(ConfidenceState, "confidence_state")
     )
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
-    )
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     valid_from: Mapped[datetime] = mapped_column()
@@ -176,6 +209,11 @@ class Fact(ProfileScoped, Base):
     asserted_at: Mapped[datetime] = mapped_column(default=utcnow)
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
     superseded_at: Mapped[datetime | None] = mapped_column(default=None)
+    # Who confirmed or disputed it. Required by the service for those two states, and
+    # refused for an extraction; a nullable column because an extraction names nobody.
+    confirmed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
 
 
 # --- working -------------------------------------------------------------------------------
@@ -195,11 +233,12 @@ class EpisodeKind(StrEnum):
 class Episode(ProfileScoped, Base):
     """The current thing going on: "chest infection, started 3 September".
 
-    Events, facts and appointments name the episode they belong to. It is the one row in
-    memory that changes after it is written, and only to close.
+    Events, facts and appointments name the episode they belong to. The one change it takes
+    after it is written is to close.
     """
 
     __tablename__ = "episode"
+    __table_args__ = (_row_of_profile("episode"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[EpisodeKind] = mapped_column(enum_column(EpisodeKind, "episode_kind"))
@@ -229,6 +268,7 @@ class Provider(ProfileScoped, Base):
     """
 
     __tablename__ = "provider"
+    __table_args__ = (_row_of_profile("provider"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120))
@@ -252,9 +292,19 @@ class Appointment(ProfileScoped, Base):
 
     Appointments are the spine: the last check-up, the last visit, the next visit. The visit
     loop (E05) hangs its brief, its questions and its summary off this row.
+
+    Nothing is booked without a person's explicit confirm. The surface owes that confirm; the
+    row carries who gave it, in `confirmed_by_person_id`. The one change the row takes after
+    it is written is its status, along one path (`spine.STATUS_GOES_TO`), each step confirmed
+    by a person named in `status_changed_by_person_id`.
     """
 
     __tablename__ = "appointment"
+    __table_args__ = (
+        _row_of_profile("appointment"),
+        _tied_to_profile("appointment", "provider_id", "provider"),
+        _tied_to_profile("appointment", "episode_id", "episode"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     provider_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("provider.id"), index=True)
@@ -264,10 +314,37 @@ class Appointment(ProfileScoped, Base):
     )
     purpose: Mapped[str] = mapped_column(String(LABEL_LENGTH))
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
+    confirmed_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    # Who confirmed the last change of status. The booking confirmer above is never
+    # overwritten; a cancellation names its own person here.
+    status_changed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
     booked_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
-_frozen(Artifact)
-_frozen(Event)
+__all__ = ["ImmutableRow"]
+
+STATUS_CHANGE_IN_PROGRESS = "appointment_status_change"
+"""`session.info` key: the id of the one appointment `spine.change_appointment_status` is
+changing right now. The only time an appointment's status may change."""
+
+
+def _status_change_is_in_progress(session: Any, row: Any) -> bool:
+    return session is not None and session.info.get(STATUS_CHANGE_IN_PROGRESS) == row.id
+
+
+frozen(Artifact)
+frozen(Event)
 # Supersession is the one change a fact takes: the moment it stopped being current.
-_frozen(Fact, except_for=frozenset({"superseded_at"}))
+frozen(Fact, except_for=frozenset({"superseded_at"}))
+# Closing is the one change an episode takes, through `working.close_episode`. Status is the
+# one an appointment takes, and only while `spine.change_appointment_status` is making it —
+# a bare `visit.status = CANCELLED` flushed from anywhere else is refused. Providers are a
+# directory and are corrected in place.
+frozen(Episode, except_for=frozenset({"closed_at"}))
+frozen(
+    Appointment,
+    except_for=frozenset({"status", "status_changed_by_person_id"}),
+    only_when=_status_change_is_in_progress,
+)

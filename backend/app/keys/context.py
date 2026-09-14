@@ -8,8 +8,9 @@ by any route that goes through a context.
 from __future__ import annotations
 
 import uuid
+from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,12 +22,34 @@ from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.regions import Region, guard_region
 
+unknown_reaches: Counter[uuid.UUID] = Counter()
+"""How many times each account has reached for a profile it has never known. In memory, per
+process: enough for a test and a first alarm; a channel replaces the hook with its own."""
+
+
+def count_unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+    unknown_reaches[person_id] += 1
+
+
+on_unknown_reach: Callable[[uuid.UUID, uuid.UUID], None] | None = count_unknown_reach
+"""Called with (person_id, profile_id) each time an unknown account is refused in silence.
+
+Accepted residual risk: a person the profile has never known — no key ever cut, not the
+owner — is refused with `NoKey` and no line in the trail, because a line would let anyone
+fill a victim's trail by repeating a known id, and because the same words for a missing
+profile, a real one and one pinned elsewhere are what stop a profile being found or placed
+by asking. The cost is that repeated reaching by an unknown account is invisible to the
+owner from inside the trail. The channel wires a counter here — rate limits and alerts live
+out of band, keyed on the account reaching, never written into the profile it reached for.
+"""
+
 
 class NoKey(Refusal):
     """This person holds nothing on this profile.
 
-    A profile that does not exist refuses in the same words as one the asker has no key to,
-    so that no profile can be found by asking for it.
+    A profile that does not exist, one the asker has never held a key to, and one pinned to
+    another region all refuse in these same words to a person the profile does not know, so
+    that no profile can be found, or placed, by asking for it.
     """
 
     def __init__(self, *, person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
@@ -69,13 +92,37 @@ class KeyContext:
             raise OutOfScope(scope=scope, context=self)
 
 
+async def profile_by_id(
+    session: AsyncSession, *, region: Region, profile_id: uuid.UUID
+) -> Profile | None:
+    """The profile row, if it is here and pinned to this region; otherwise nothing.
+
+    The one way to look at a profile row without a context, for the code that is about to
+    make one — the resolver below, and a channel deciding whether a refused reach has a graph
+    to be written into. Reading the row's contents for anyone goes through
+    `app.audit.access.audited_profile_read`, with a context.
+    """
+    profile = await session.get(Profile, profile_id)
+    if profile is None or profile.region is not region:
+        return None
+    return profile
+
+
+async def owned_profile(
+    session: AsyncSession, *, region: Region, owner_person_id: uuid.UUID
+) -> Profile | None:
+    """The profile this person owns, if he has opened one here. Region-filtered, like the above."""
+    return await session.scalar(
+        select(Profile).where(Profile.owner_person_id == owner_person_id, Profile.region == region)
+    )
+
+
 async def resolve_key_context(
     session: AsyncSession,
     *,
     region: Region,
     person_id: uuid.UUID,
     profile_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> KeyContext:
     """Resolve what this person may see of this profile, in this region, at this moment.
 
@@ -83,10 +130,28 @@ async def resolve_key_context(
     even when its row is present, because a row in the wrong database is the thing we are
     guarding against.
     """
-    moment = now or utcnow()
+    moment = utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
+        _unknown_reach(person_id, profile_id)
         raise NoKey(person_id=person_id, profile_id=profile_id)
+
+    # Every key ever cut for this person on this profile, closed ones included. A person the
+    # profile knows — its owner, or someone who held a key once — is told the real reason
+    # and is written down when refused. A person it has never known gets NoKey and silence,
+    # whether the profile is missing, here, or pinned elsewhere: no profile can be found, or
+    # placed in a region, by asking for it, and no known id is a way to fill a trail.
+    keys = list(
+        await session.scalars(
+            select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
+        )
+    )
+    if profile.owner_person_id != person_id and not keys:
+        _unknown_reach(person_id, profile_id)
+        raise NoKey(person_id=person_id, profile_id=profile_id)
+
+    # A caller the profile knows is told the real reason; but nothing about another region's
+    # profile is written into this region's trail, so the line stays with the channel's log.
     guard_region(held_in=profile.region, asked_from=region)
 
     if profile.owner_person_id == person_id:
@@ -97,9 +162,6 @@ async def resolve_key_context(
             scopes=ALL_SCOPES,
         )
 
-    keys = await session.scalars(
-        select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
-    )
     for key in keys:
         if key.is_active(moment):
             return KeyContext(
@@ -110,4 +172,68 @@ async def resolve_key_context(
                 role=key.role,
                 key_id=key.id,
             )
-    raise NoKey(person_id=person_id, profile_id=profile_id)
+    # The revoked-helper case: she held a key once, it is closed, and she is reaching again.
+    refused = NoKey(person_id=person_id, profile_id=profile_id)
+    await _record_refused(session, profile=profile, person_id=person_id, refusal=refused)
+    raise refused
+
+
+def _unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+    if on_unknown_reach is not None:
+        on_unknown_reach(person_id, profile_id)
+
+
+async def holds_the_profile(
+    session: AsyncSession, *, profile_id: uuid.UUID, person_id: uuid.UUID
+) -> bool:
+    """Whether this person could open this profile now — by the clock, not by any caller's
+    account of the time: its owner, or a key on it that is live at this moment.
+
+    A yes-or-no with no context resolved and no line written — for checking a person who
+    is *named* in a request (the one whose confirm is being used) without ever acting as
+    them. Only the person who reached is ever the actor on a line.
+    """
+    profile = await session.get(Profile, profile_id)
+    if profile is None:
+        return False
+    if profile.owner_person_id == person_id:
+        return True
+    keys = await session.scalars(
+        select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
+    )
+    moment = utcnow()
+    return any(key.is_active(moment) for key in keys)
+
+
+async def _record_refused(
+    session: AsyncSession,
+    *,
+    profile: Profile,
+    person_id: uuid.UUID,
+    refusal: Refusal,
+) -> None:
+    """One refused line for a reach that resolved nothing, in the name of the refusal only.
+
+    The context is the narrowest there is — no scopes, no key — because nothing was resolved.
+    """
+    # Local import: `app.audit.trail` imports this module for `KeyContext`, so importing it at
+    # the top would be a cycle. The trail is the floor of the enforcement beside the keys, and
+    # this is the one place the keys call up into it.
+    from app.audit.models import Action, Outcome
+    from app.audit.trail import record
+
+    await record(
+        session,
+        context=KeyContext(
+            profile_id=profile.id,
+            region=profile.region,
+            person_id=person_id,
+            scopes=frozenset(),
+        ),
+        action=Action.READ,
+        # Resolving a key is a reach at the face of the graph, which every key opens.
+        scope=Scope.PROFILE,
+        target=profile.__tablename__,
+        outcome=Outcome.REFUSED,
+        refused_because=type(refusal).__name__,
+    )

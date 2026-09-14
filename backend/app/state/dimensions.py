@@ -6,11 +6,13 @@ that a number is high or a condition is worsening, and nothing here produces a s
 anyone to read. A condition is "watch" because a clinician's letter said so and the fact
 carries that word; it is never "watch" because this code compared 138 to something. Trends
 belong to reasoning, red flags belong to safety, and the pharmacology belongs to the
-licensed drug data. What State does is put what is known in six places, with a posture for
-how the day should be held, so everything downstream ranks from one thing.
+licensed drug data. What State does is put what is known in six places, each with a posture
+for how the day should be held and the ids it was worked out from, so everything downstream
+ranks from one thing.
 
 Every fact folded in keeps its own provenance — the fact id and the artefact or event it was
-read from — so a card rendered from a snapshot can still cite the page it came from.
+read from — so a card rendered from a snapshot can still cite the page it came from. Nothing
+here is free text: an episode or a visit is named by its id, never by its label.
 """
 
 from __future__ import annotations
@@ -47,11 +49,12 @@ AFTER_DISCHARGE_WINDOW = timedelta(days=30)
 """T+0 to T+30: the month after a discharge, when most of what goes wrong goes wrong."""
 
 CONTROL = "control"
-"""The attribute a clinician's own word about a condition is recorded under.
+"""The attribute a clinician's own word about a subject is recorded under.
 
-`subject` is the condition, `value` is one of the posture words, and the fact names the
-letter or the visit it was read from. This is the only route from a condition to a posture:
-nothing in this module reads a measurement and decides how a condition is doing.
+`subject` is the condition (or the ability, or the arrangement), `value` is one of the
+posture words, and the fact names the letter or the visit it was read from. This is the
+only route from a fact to a posture, in every dimension: nothing in this module reads a
+measurement and decides how anything is doing.
 """
 
 ALLERGY = "allergy"
@@ -114,11 +117,11 @@ WATCHFUL_EPISODES = frozenset({EpisodeKind.ILLNESS, EpisodeKind.RECOVERY})
 
 @dataclass(frozen=True, slots=True)
 class Derived:
-    """The six dimensions, the posture, why the posture is what it is, and when it expires."""
+    """The six dimensions, each with its posture and its fact ids; the worst posture of the
+    six; and when the whole thing stops describing today."""
 
     dimensions: dict[Dimension, dict[str, Any]]
     posture: Posture
-    because: list[dict[str, Any]]
     stale_after: datetime | None
 
 
@@ -141,7 +144,31 @@ def _entry(fact: Fact) -> dict[str, Any]:
     }
 
 
-def _fold(facts: Sequence[Fact]) -> dict[Dimension, dict[str, dict[str, Any]]]:
+class _Dimension:
+    """One dimension being built: its facts by subject and attribute, its posture, and why."""
+
+    def __init__(self) -> None:
+        self.facts: dict[str, dict[str, dict[str, Any]]] = {}
+        self.fact_ids: list[str] = []
+        self.posture = Posture.STABLE
+        self.because: list[dict[str, Any]] = []
+
+    def raise_to(self, posture: Posture, **why: Any) -> None:
+        self.posture = worse_of(self.posture, posture)
+        if posture is not Posture.STABLE:
+            self.because.append({"posture": posture.value, **why})
+
+    def finished(self, **more: Any) -> dict[str, Any]:
+        return {
+            "posture": self.posture.value,
+            "because": self.because,
+            "fact_ids": sorted(self.fact_ids),
+            "facts": self.facts,
+            **more,
+        }
+
+
+def _fold(facts: Sequence[Fact]) -> dict[Dimension, _Dimension]:
     """Every current fact under its dimension, its subject and its attribute.
 
     Supersession should leave one current fact per subject and attribute. Where it has not,
@@ -149,16 +176,14 @@ def _fold(facts: Sequence[Fact]) -> dict[Dimension, dict[str, dict[str, Any]]]:
     row the database happened to return first. The safety-critical readings of the same facts
     (conditions and allergies, below) keep every one of them instead of choosing.
     """
-    folded: dict[Dimension, dict[str, dict[str, Any]]] = {
-        dimension: {} for dimension in Dimension
-    }
+    folded = {dimension: _Dimension() for dimension in Dimension}
     newest_last = sorted(
         facts, key=lambda one: (one.subject, one.attribute, as_utc(one.asserted_at))
     )
     for fact in newest_last:
-        folded[dimension_of(fact.subject)].setdefault(fact.subject, {})[fact.attribute] = _entry(
-            fact
-        )
+        into = folded[dimension_of(fact.subject)]
+        into.facts.setdefault(fact.subject, {})[fact.attribute] = _entry(fact)
+        into.fact_ids.append(str(fact.id))
     return folded
 
 
@@ -222,11 +247,11 @@ def derive(
     conditions: dict[str, list[dict[str, Any]]] = {}
     allergies: dict[str, list[dict[str, Any]]] = {}
     not_read: list[dict[str, Any]] = []
-    because: list[dict[str, Any]] = []
-    posture = Posture.STABLE
     for fact in facts:
         if fact.attribute == CONTROL:
-            conditions.setdefault(fact.subject, []).append(_entry(fact))
+            into = folded[dimension_of(fact.subject)]
+            if into is folded[Dimension.CLINICAL]:
+                conditions.setdefault(fact.subject, []).append(_entry(fact))
             word = fact.value if isinstance(fact.value, str) else None
             if word in CONTROL_POSTURE:
                 raised = CONTROL_POSTURE[str(word)]
@@ -236,23 +261,33 @@ def derive(
                 # from a clinician and reading it is for a person, not for this code.
                 not_read.append({"subject": fact.subject, "fact_id": str(fact.id)})
                 raised = Posture.WATCH
-            posture = worse_of(posture, raised)
-            if raised is not Posture.STABLE:
-                because.append(
-                    {"posture": raised.value, "subject": fact.subject, "fact_id": str(fact.id)}
-                )
+            into.raise_to(raised, subject=fact.subject, fact_id=str(fact.id))
         elif fact.attribute == ALLERGY:
             allergies.setdefault(fact.subject, []).append(_entry(fact))
+
+    clinical = folded[Dimension.CLINICAL]
+    for episode in episodes:
+        raised = (
+            Posture.ACT
+            if episode.kind is EpisodeKind.ADMISSION
+            else Posture.WATCH
+            if episode.kind in WATCHFUL_EPISODES
+            else Posture.STABLE
+        )
+        clinical.raise_to(raised, episode_id=str(episode.id), episode_kind=episode.kind.value)
 
     open_kinds = {episode.kind for episode in episodes}
     windows, next_visit, spine_boundaries = _spine(appointments, now)
     boundaries.extend(spine_boundaries)
 
+    situational = folded[Dimension.SITUATIONAL]
     discharged_at = _discharged_at(events)
     if discharged_at is not None and now < discharged_at + AFTER_DISCHARGE_WINDOW:
         windows.append(Phase.AFTER_DISCHARGE)
         boundaries.append(discharged_at + AFTER_DISCHARGE_WINDOW)
-
+        situational.raise_to(
+            Posture.WATCH, phase=Phase.AFTER_DISCHARGE.value, since=_moment(discharged_at)
+        )
     phase = next((one for one in PHASE_ORDER if one in windows), Phase.STEADY)
 
     holders: list[dict[str, Any]] = []
@@ -270,87 +305,48 @@ def derive(
         if key.expires_at is not None and now < as_utc(key.expires_at):
             boundaries.append(as_utc(key.expires_at))
 
-    for episode in episodes:
-        raised = (
-            Posture.ACT
-            if episode.kind is EpisodeKind.ADMISSION
-            else Posture.WATCH
-            if episode.kind in WATCHFUL_EPISODES
-            else Posture.STABLE
-        )
-        if raised is not Posture.STABLE:
-            posture = worse_of(posture, raised)
-            because.append(
-                {
-                    "posture": raised.value,
-                    "episode_id": str(episode.id),
-                    "episode_kind": episode.kind.value,
-                }
-            )
-    if Phase.AFTER_DISCHARGE in windows:
-        posture = worse_of(posture, Posture.WATCH)
-        because.append(
-            {
-                "posture": Posture.WATCH.value,
-                "phase": Phase.AFTER_DISCHARGE.value,
-                "since": _moment(discharged_at),
-            }
-        )
-
-    cognitive = folded[Dimension.COGNITIVE]
-    languages = cognitive.get("language", {})
+    languages = folded[Dimension.COGNITIVE].facts.get("language", {})
 
     dimensions: dict[Dimension, dict[str, Any]] = {
-        Dimension.CLINICAL: {
-            "facts": folded[Dimension.CLINICAL],
-            "conditions": conditions,
-            "allergies": allergies,
+        Dimension.CLINICAL: clinical.finished(
+            conditions=conditions,
+            allergies=allergies,
             # Control words the record carries that this code has no mapping for. Named
             # here so a person can read what a clinician wrote; never quietly dropped.
-            "control_not_read": not_read,
-            "open_episodes": [
-                {
-                    "id": str(episode.id),
-                    "kind": episode.kind.value,
-                    "label": episode.label,
-                    "since": _moment(episode.opened_at),
-                }
+            control_not_read=not_read,
+            open_episodes=[
+                {"id": str(episode.id), "kind": episode.kind.value, "since": _moment(episode.opened_at)}
                 for episode in sorted(episodes, key=lambda one: as_utc(one.opened_at))
             ],
-            "discharged_at": _moment(discharged_at),
-        },
-        Dimension.FUNCTIONAL: {"facts": folded[Dimension.FUNCTIONAL]},
-        Dimension.COGNITIVE: {
-            "facts": cognitive,
-            "reading_language": languages.get("reading", {}).get("value"),
-            "spoken_language": languages.get("spoken", {}).get("value"),
-        },
-        Dimension.SITUATIONAL: {
-            "facts": folded[Dimension.SITUATIONAL],
-            "phase": phase.value,
-            "windows": sorted(window.value for window in set(windows)),
-            "next_visit": None
+            discharged_at=_moment(discharged_at),
+        ),
+        Dimension.FUNCTIONAL: folded[Dimension.FUNCTIONAL].finished(),
+        Dimension.COGNITIVE: folded[Dimension.COGNITIVE].finished(
+            reading_language=languages.get("reading", {}).get("value"),
+            spoken_language=languages.get("spoken", {}).get("value"),
+        ),
+        Dimension.SITUATIONAL: situational.finished(
+            phase=phase.value,
+            windows=sorted(window.value for window in set(windows)),
+            next_visit=None
             if next_visit is None
             else {
                 "id": str(next_visit.id),
                 "provider_id": str(next_visit.provider_id),
                 "at": _moment(next_visit.scheduled_at),
-                "purpose": next_visit.purpose,
             },
-            "travelling": EpisodeKind.TRAVEL in open_kinds,
-            "fasting": EpisodeKind.FASTING in open_kinds,
-        },
-        Dimension.PREFERENCE: {"facts": folded[Dimension.PREFERENCE]},
-        Dimension.FAMILY: {
-            "holders": holders,
-            "holding_now": sum(1 for holder in holders if holder["holding_now"]),
-        },
+            travelling=EpisodeKind.TRAVEL in open_kinds,
+            fasting=EpisodeKind.FASTING in open_kinds,
+        ),
+        Dimension.PREFERENCE: folded[Dimension.PREFERENCE].finished(),
+        Dimension.FAMILY: folded[Dimension.FAMILY].finished(
+            holders=holders,
+            holding_now=sum(1 for holder in holders if holder["holding_now"]),
+        ),
     }
 
+    posture = Posture.STABLE
+    for built in folded.values():
+        posture = worse_of(posture, built.posture)
     ahead = [moment for moment in boundaries if moment > now]
-    return Derived(
-        dimensions=dimensions,
-        posture=posture,
-        because=because,
-        stale_after=min(ahead, default=None),
-    )
+    return Derived(dimensions=dimensions, posture=posture, stale_after=min(ahead, default=None))
