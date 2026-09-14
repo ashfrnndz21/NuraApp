@@ -9,7 +9,8 @@ the audit line in the same call.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from sqlalchemy import String
@@ -18,12 +19,35 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
-from app.consent.service import RecordConsent, grant_consent
+from app.consent.service import RecordConsent, Sharing, grant_consent
 from app.consent.texts import current_version
-from app.db import Base, ProfileScoped, enum_column
+from app.db import Base, ProfileScoped, enum_column, take_keepers
+from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
+from app.keys.scopes import ALL_SCOPES, Scope
+
+
+@asynccontextmanager
+async def refused_unit(session: AsyncSession, expect: type[Refusal]) -> AsyncIterator[None]:
+    """One unit of work that ends in a refusal, run the way a channel runs a request.
+
+    The body runs inside a savepoint. It must raise `expect`; when it does, the savepoint is
+    rolled back — everything the body wrote is gone — and then the keepers the trail
+    registered (`app.db.keep_on_refusal`) are replayed and flushed, so the refused lines
+    land anyway. Anything else raised, or nothing raised, is a failed test.
+    """
+    savepoint = await session.begin_nested()
+    try:
+        yield
+    except expect:
+        await savepoint.rollback()
+        for keeper in take_keepers(session):
+            await keeper(session)
+        await session.flush()
+        return
+    await savepoint.commit()
+    raise AssertionError(f"expected {expect.__name__}, nothing was refused")
 
 
 class Note(ProfileScoped, Base):
@@ -64,16 +88,23 @@ OPENING_CONSENT = RecordConsent(
 
 
 async def agree_to_family_sharing(
-    session: AsyncSession, owner: KeyContext, holder: Person, *, now: datetime | None = None
+    session: AsyncSession,
+    owner: KeyContext,
+    holder: Person,
+    *,
+    scopes: Iterable[Scope] = ALL_SCOPES,
+    relationship: str | None = None,
+    now: datetime | None = None,
 ) -> Consent:
-    """The owner's consent to sharing with one named person, which that person's key rests on."""
+    """The owner lets one person in, to these parts; that person's key rests on this."""
     return await grant_consent(
         session,
         context=owner,
-        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
         captured_via=ConsentChannel.APP,
         basis=ConsentBasis.OWNER,
         language="en",
-        holder_person_id=holder.id,
+        sharing=Sharing(holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE},
+                        relationship=relationship),
         now=now,
     )

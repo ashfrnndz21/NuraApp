@@ -89,6 +89,10 @@ async def create_own_profile(
     """
     guard_region(held_in=owner.region, asked_from=region)
     check_opening_words(consent, region)
+    # The one read of a profile row without a key context, and the one place it is right:
+    # no context can exist before the profile does, and this asks only whether one does.
+    # Refusals here (the words, or a graph already owned) happen before there is a profile
+    # to pin a trail line to, so the channel logs them at the account, not the trail.
     existing = await session.scalar(select(Profile).where(Profile.owner_person_id == owner.id))
     if existing is not None:
         raise ProfileAlreadyOwned(f"person {owner.id} already owns profile {existing.id}")

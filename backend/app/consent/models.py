@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import JSON, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
@@ -27,14 +27,16 @@ class ConsentPurpose(StrEnum):
     """
 
     HOLD_HEALTH_RECORD = "hold_health_record"
-    SHARE_WITH_FAMILY = "share_with_family"
+    # Stored as "share_with_family" (the value shipped in 0003); named for what it is, one
+    # named person — a daughter, a helper, a clinic, a neighbour — let in to named parts.
+    SHARE_WITH_PERSON = "share_with_family"
     RECORDING = "recording"
     WHATSAPP = "whatsapp"
 
 
-PER_HOLDER = frozenset({ConsentPurpose.SHARE_WITH_FAMILY})
-"""Purposes agreed to one person at a time: the row names who may hold a key. The rest are
-agreed to for the profile as a whole."""
+PER_HOLDER = frozenset({ConsentPurpose.SHARE_WITH_PERSON})
+"""Purposes agreed to one person at a time: the row names who may hold a key and to what.
+The rest are agreed to for the profile as a whole."""
 
 
 class ConsentChannel(StrEnum):
@@ -74,7 +76,8 @@ class Consent(ProfileScoped, Base):
     `person_id` is who gave it — the owner, or the chief acting for him on the recorded
     `basis`. `text_version` and `wording_text` are the words they saw, `language` the
     language they saw them in. `holder_person_id` is set only for a per-holder purpose and
-    names the person the agreement is about. `basis_artifact_id` is the document behind a
+    names the person the agreement is about and `scopes` the parts it lets them see.
+    `basis_artifact_id` is the document behind a
     documented basis, or the recording behind a spoken one; `witness_person_id` is who
     heard a spoken agreement.
     """
@@ -87,6 +90,9 @@ class Consent(ProfileScoped, Base):
     holder_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None, index=True
     )
+    # For a per-holder purpose: the parts of the record the words let that person see, as
+    # scope names. A key cut under this consent is never wider than these.
+    scopes: Mapped[list[str] | None] = mapped_column(JSON, default=None)
     text_version: Mapped[str] = mapped_column(String(32))
     language: Mapped[str] = mapped_column(String(16))
     wording_text: Mapped[str] = mapped_column(Text)

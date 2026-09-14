@@ -15,11 +15,12 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
+from app.consent.models import Consent
 from app.db import ProfileScoped
 from app.errors import Refusal
 from app.identity.models import Person, Profile
@@ -179,7 +180,7 @@ async def audited_profile_read(
 
 
 class NotOnThisProfile(Refusal):
-    """Neither the owner nor anyone who holds or held a key here: no name to give."""
+    """Not the owner, not a key holder, not named by a consent here: no name to give."""
 
 
 async def person_display_name(
@@ -191,11 +192,14 @@ async def person_display_name(
     channel: Channel = Channel.APP,
     now: datetime | None = None,
 ) -> str:
-    """The display name of someone on this profile — its owner, or a holder of a key to it.
+    """The display name of someone on this profile: its owner, a holder of a key to it, or
+    someone a consent on it names — the person let in, the person who agreed, the witness.
 
     A Person row is an account, not profile data, so `scoped_select` cannot reach it; this
     is the one read that does, and only for people the profile already names. Whether the
-    person is on the profile is itself read through the doors, under `Scope.PROFILE`.
+    person is on the profile is itself read through the doors, under `Scope.FAMILY`: the
+    key table and the consent table are the family list, and a helper or a clinic holding
+    a key to the medicines holds no key to who else is on the record.
     """
     profile = await audited_profile_read(session, context, channel=channel, now=now)
     if person_id != profile.owner_person_id:
@@ -203,18 +207,37 @@ async def person_display_name(
             session,
             Key,
             context,
-            Scope.PROFILE,
+            Scope.FAMILY,
             where=(Key.holder_person_id == person_id,),
             channel=channel,
             now=now,
         )
-        if not held:
+        named_by_a_consent = (
+            await audited_read(
+                session,
+                Consent,
+                context,
+                Scope.FAMILY,
+                where=(
+                    or_(
+                        Consent.holder_person_id == person_id,
+                        Consent.person_id == person_id,
+                        Consent.witness_person_id == person_id,
+                    ),
+                ),
+                channel=channel,
+                now=now,
+            )
+            if not held
+            else ()
+        )
+        if not held and not named_by_a_consent:
             refusal = NotOnThisProfile(f"person {person_id} is not on profile {profile.id}")
             await record(
                 session,
                 context=context,
                 action=Action.READ,
-                scope=Scope.PROFILE,
+                scope=Scope.FAMILY,
                 target=Person.__tablename__,
                 outcome=Outcome.REFUSED,
                 refused_because=type(refusal).__name__,

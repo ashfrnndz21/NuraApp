@@ -35,6 +35,7 @@ from app.consent.service import (
     ConsentRevoked,
     ConsentWithheld,
     NoConsent,
+    NoHolderNamed,
     NotTheCurrentWording,
     RecordConsent,
     WordingNotOnFile,
@@ -51,7 +52,7 @@ from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.models import Key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     AppointmentStatus,
@@ -65,7 +66,7 @@ from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider, book_appointment
 from app.memory.working import open_episode
 from app.regions import Region
-from tests.support import OPENING_CONSENT, add_note, agree_to_family_sharing
+from tests.support import OPENING_CONSENT, add_note, agree_to_family_sharing, refused_unit
 
 CLAIMED_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 WATER_PILL = "The water pill is at 8 in the morning."
@@ -148,7 +149,7 @@ async def test_a_record_is_not_opened_on_words_that_are_not_todays_words(
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
     in_words_he_never_saw = RecordConsent(
         text_version=current_version(ConsentPurpose.HOLD_HEALTH_RECORD),
-        language="zh",
+        language="ta",  # Nura speaks Tamil; the Tamil words are not on file yet
         captured_via=ConsentChannel.APP,
     )
     with pytest.raises(WordingNotOnFile):
@@ -257,12 +258,12 @@ async def test_a_consent_is_stored_with_its_moment_its_scope_and_its_version(
     assert given.revoked_at is None
     # Its scope: this profile, this purpose, this one person, and nothing wider.
     assert given.profile_id == profile.id
-    assert given.purpose is ConsentPurpose.SHARE_WITH_FAMILY
+    assert given.purpose is ConsentPurpose.SHARE_WITH_PERSON
     assert given.holder_person_id == daughter.id
     # Its version: the wording he saw, in the language he saw it in, and the words.
-    assert given.text_version == current_version(ConsentPurpose.SHARE_WITH_FAMILY)
+    assert given.text_version == current_version(ConsentPurpose.SHARE_WITH_PERSON)
     assert given.language == "en"
-    assert given.wording_text.startswith("You choose who in your family")
+    assert given.wording_text.startswith("You are letting Daughter see your medicines,")
     assert given.person_id == pa.id
     assert given.captured_via is ConsentChannel.APP
     assert given.basis is ConsentBasis.OWNER
@@ -270,7 +271,7 @@ async def test_a_consent_is_stored_with_its_moment_its_scope_and_its_version(
     held = await require_consent(
         sg,
         context=owner,
-        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
         scope=Scope.FAMILY,
         holder_person_id=daughter.id,
         now=CLAIMED_AT,
@@ -340,7 +341,7 @@ async def test_withdrawing_sharing_from_one_person_closes_their_keys_within_a_mi
     withdrawn = await revoke_consent(
         sg,
         context=owner,
-        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
         captured_via=ConsentChannel.APP,
         holder_person_id=neighbour.id,
         now=a_week_on,
@@ -380,13 +381,13 @@ async def test_a_consent_to_older_wording_does_not_satisfy_the_current_version(
     a_day_on = CLAIMED_AT + timedelta(days=1)
     assert old.is_active(a_day_on)
 
-    new_version = _the_words_move_on(monkeypatch, ConsentPurpose.SHARE_WITH_FAMILY)
+    new_version = _the_words_move_on(monkeypatch, ConsentPurpose.SHARE_WITH_PERSON)
 
     with pytest.raises(ConsentOutOfDate):
         await require_consent(
             sg,
             context=owner,
-            purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
             scope=Scope.FAMILY,
             holder_person_id=daughter.id,
             now=a_day_on,
@@ -402,7 +403,7 @@ async def test_a_consent_to_older_wording_does_not_satisfy_the_current_version(
     held = await require_consent(
         sg,
         context=owner,
-        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
         scope=Scope.FAMILY,
         holder_person_id=daughter.id,
         now=a_day_on,
@@ -411,7 +412,7 @@ async def test_a_consent_to_older_wording_does_not_satisfy_the_current_version(
     sharing = [
         c
         for c in await active_consents(sg, context=owner, now=a_day_on)
-        if c.purpose is ConsentPurpose.SHARE_WITH_FAMILY
+        if c.purpose is ConsentPurpose.SHARE_WITH_PERSON
     ]
     assert [c.id for c in sharing] == [old.id, fresh.id]
 
@@ -498,7 +499,12 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         now=CLAIMED_AT + timedelta(days=40),
     )
     sharing = await agree_to_family_sharing(
-        sg, owner, daughter, now=CLAIMED_AT + timedelta(days=40, hours=1)
+        sg,
+        owner,
+        daughter,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
+        relationship="your daughter",
+        now=CLAIMED_AT + timedelta(days=40, hours=1),
     )
     await grant_key(
         sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER,
@@ -533,23 +539,42 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
     assert entries[2]["captured_via"] == "whatsapp"
     assert entries[3]["holder"] == "Daughter"  # who he has agreed to share with
 
-    # The rendered half is plain words a person can read, with the day and date of every
-    # moment and nothing to decode: no clock time, no zone, no "version".
+    # The rendered half is plain words addressed to the reader — Pa asked for it, so "you" —
+    # with the day and date of every moment and nothing to decode: no clock time, no zone,
+    # no "version", one idea per line.
     text = record.rendered.body.decode()
     assert record.rendered.media_type == "text/markdown"
-    assert text.startswith("# What Pa agreed to\n")
-    assert "Pa said yes to the things on this page.\nPa's papers never leave Singapore." in text
-    assert "Nura made this page for Pa on Sunday 25 October 2026." in text
-    assert "- Pa said yes in the app on Monday 14 September 2026." in text
-    assert "- Pa said yes on WhatsApp on Thursday 15 October 2026." in text
-    assert "  Pa stopped this on Saturday 24 October 2026." in text
-    assert "  These are the words Pa read in English:\n  \"Nura keeps your papers" in text
-    assert "They never leave Singapore." in text
-    assert "  Nura has changed these words since Pa said yes.\n  Nura will ask Pa to say yes again." in text
+    assert record.region is Region.SG
+    assert text.startswith("# What you said yes to\n")
+    assert "You said yes to the things on this page.\nYour papers never leave Singapore." in text
+    assert "Nura made this page for you on Sunday 25 October 2026." in text
+    assert "- You said yes in the app on Monday 14 September 2026." in text
+    assert "- You said yes on WhatsApp on Thursday 15 October 2026." in text
+    assert "  You stopped this one on Saturday 24 October 2026." in text
+    assert (
+        "  These are the words you read in English:\n"
+        "  Nura keeps your papers, your medicines and your blood pressure book.\n"
+        "  They never leave Singapore.\n"
+        "  You can stop this at any time.\n"
+        "  Nura then stops keeping anything new."
+    ) in text
+    assert "  Nura has changed these words since you said yes.\n  Nura will ask you to say yes again." in text
     assert "  This one is still on." in text
-    assert "## Sharing with your family\n\n- Pa said yes in the app on Saturday 24 October 2026.\n  Daughter can see Pa's papers." in text
-    for jargon in ("UTC", "version", "08:00", "in force", "withdrew", "SG", "agreed to this"):
+    assert (
+        "## Who can see your papers\n\n"
+        "- You said yes in the app on Saturday 24 October 2026.\n"
+        "  Daughter can see your medicines, visits to the doctor, blood pressure and sugar "
+        "numbers, papers, emergency card, questions to Nura and messages Nura sends.\n"
+        "  These are the words you read in English:\n"
+        "  You are letting Daughter, your daughter, see your medicines, visits to the doctor, "
+        "blood pressure and sugar numbers, papers, emergency card, questions to Nura and "
+        "messages Nura sends.\n"
+        "  Daughter, your daughter, can see these until you say stop.\n"
+        "  You can stop this at any time."
+    ) in text
+    for jargon in ("UTC", "version", "08:00", "in force", "withdrew", "SG", "agreed", "Pa"):
         assert jargon not in text, jargon
+    assert '"' not in text
 
     # And nothing from the graph itself is in either half: no health content, and no
     # identifier but the consent rows' own.
@@ -575,8 +600,10 @@ async def test_the_words_on_the_page_are_the_words_on_the_row_not_todays_catalog
     monkeypatch.setattr(texts, "TEXTS", edited)
     record = await export_consent_record(sg, context=owner, now=CLAIMED_AT + timedelta(days=1))
     assert record.document["consents"][0]["wording"] == as_read
-    assert as_read in record.rendered.body.decode()
-    assert "Different words." not in record.rendered.body.decode()
+    page = record.rendered.body.decode()
+    for sentence in as_read.split(". "):
+        assert sentence.rstrip(".") in page
+    assert "Different words." not in page
 
 
 async def test_the_page_says_the_day_on_the_patients_own_clock(sg: AsyncSession) -> None:
@@ -587,7 +614,69 @@ async def test_the_page_says_the_day_on_the_patients_own_clock(sg: AsyncSession)
     record = await export_consent_record(sg, context=owner, now=seven_am_monday_sgt)
     assert record.document["consents"][0]["given_at"] == "2026-09-13T23:00:00+00:00"
     assert record.document["consents"][0]["given_at_plain"] == "Monday 14 September 2026"
-    assert "- Pa said yes in the app on Monday 14 September 2026." in record.rendered.body.decode()
+    assert "- You said yes in the app on Monday 14 September 2026." in record.rendered.body.decode()
+
+
+async def test_the_page_names_a_person_he_let_in_before_their_key_is_cut(
+    sg: AsyncSession,
+) -> None:
+    """A consent always comes before its key, so the page must name a holder with no key yet."""
+    _, _, owner = await _pa(sg, opened_at=CLAIMED_AT)
+    daughter = await register_person(
+        sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
+    )
+    await agree_to_family_sharing(sg, owner, daughter, now=CLAIMED_AT + timedelta(days=1))
+
+    record = await export_consent_record(sg, context=owner, now=CLAIMED_AT + timedelta(days=2))
+    entry = record.document["consents"][-1]
+    assert entry["holder"] == "Daughter"
+    assert "  Daughter can see your medicines" in record.rendered.body.decode()
+    # And nobody was written down as refused for being named.
+    assert not [e for e in await read_audit(sg, context=owner) if e.outcome is Outcome.REFUSED]
+
+
+async def test_a_page_made_for_the_chief_names_the_patient(sg: AsyncSession) -> None:
+    _, profile, owner = await _pa(sg, opened_at=CLAIMED_AT)
+    son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
+    await agree_to_family_sharing(sg, owner, son, now=CLAIMED_AT)
+    await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF, now=CLAIMED_AT)
+    chief = await resolve_key_context(
+        sg, region=Region.SG, person_id=son.id, profile_id=profile.id
+    )
+    text = (await export_consent_record(sg, context=chief, now=CLAIMED_AT)).rendered.body.decode()
+    assert text.startswith("# What Pa said yes to\n\nPa said yes to the things on this page.")
+    assert "Nura made this page for Son on Monday 14 September 2026." in text
+    assert "  Son can see Pa's medicines" in text
+
+
+async def test_a_key_is_never_wider_than_the_words_the_patient_read(sg: AsyncSession) -> None:
+    _, _, owner = await _pa(sg)
+    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
+    let_in = await agree_to_family_sharing(sg, owner, siti, scopes={Scope.MEDICINES})
+    assert let_in.wording_text.startswith("You are letting Siti see your medicines.")
+    key = await grant_key(sg, context=owner, holder=siti, role=KeyRole.CAREGIVER)
+    assert key.scopes_held == {Scope.MEDICINES, Scope.PROFILE}
+
+
+async def test_onboarding_in_malay_or_chinese_is_not_refused(sg: AsyncSession) -> None:
+    for language, phone, name in (("ms", "+6591110011", "Pak"), ("zh", "+6591110012", "阿公")):
+        person = await register_person(sg, region=Region.SG, display_name=name, phone_e164=phone)
+        profile = await create_own_profile(
+            sg,
+            region=Region.SG,
+            owner=person,
+            consent=RecordConsent(
+                text_version=current_version(ConsentPurpose.HOLD_HEALTH_RECORD),
+                language=language,
+                captured_via=ConsentChannel.APP,
+            ),
+        )
+        owner = await resolve_key_context(
+            sg, region=Region.SG, person_id=person.id, profile_id=profile.id
+        )
+        [opening] = await all_consents(sg, context=owner)
+        assert opening.language == language
+        assert "Nura" in opening.wording_text
 
 
 # --- region-pinned and profile-scoped ----------------------------------------------------
@@ -664,3 +753,51 @@ async def test_a_refused_consent_check_is_written_into_the_trail(sg: AsyncSessio
         (Consent.__tablename__, Scope.SEND, "ConsentRevoked"),
     ]
     assert all(entry.action is Action.READ for entry in refused)
+
+
+async def test_asking_about_sharing_without_naming_anyone_is_refused_and_written_down(
+    sg: AsyncSession,
+) -> None:
+    _, _, owner = await _pa(sg)
+    with pytest.raises(NoHolderNamed):
+        await require_consent(
+            sg, context=owner, purpose=ConsentPurpose.SHARE_WITH_PERSON, scope=Scope.FAMILY
+        )
+    with pytest.raises(NoHolderNamed):
+        await revoke_consent(
+            sg,
+            context=owner,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
+            captured_via=ConsentChannel.APP,
+        )
+    refused = [
+        entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
+    ]
+    assert [(e.action, e.refused_because) for e in refused] == [
+        (Action.WRITE, "NoHolderNamed"),
+        (Action.READ, "NoHolderNamed"),
+    ]
+
+
+async def test_a_refused_line_survives_the_rollback_the_refusal_causes(sg: AsyncSession) -> None:
+    """A channel rolls a refused unit of work back; the line saying it was refused stays."""
+    _, _, owner = await _pa(sg, opened_at=CLAIMED_AT)
+    async with refused_unit(sg, ConsentWithheld):
+        await require_consent(
+            sg,
+            context=owner,
+            purpose=ConsentPurpose.RECORDING,
+            scope=Scope.VISITS,
+            now=CLAIMED_AT + timedelta(days=1),
+        )
+    refused = [
+        entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
+    ]
+    assert [(e.scope, e.refused_because) for e in refused] == [(Scope.VISITS, "ConsentWithheld")]
+
+
+def test_a_refusal_carries_the_purpose_and_nothing_that_could_leave_the_region() -> None:
+    refusal = ConsentWithheld(purpose=ConsentPurpose.RECORDING)
+    assert refusal.purpose is ConsentPurpose.RECORDING
+    assert not hasattr(refusal, "context")
+    assert "profile" not in str(refusal) and "person" not in str(refusal)

@@ -3,10 +3,9 @@
 `key` was shipped in 0001 with a free-text `basis`. The basis of a key is now the consent
 row it rests on — who agreed, for whom, on what footing, to which words — so `consent_id`
 replaces it. The shipped table is altered here in batch, never by editing 0001. The column
-is nullable for keys cut before consent was recorded; `grant_key` always sets it.
-
-This revision was the merge point of the consent and memory heads until the consent
-revision was moved after the memory stores; neither shipped, so it carries this work now.
+is nullable for keys cut before consent was recorded; `grant_key` always sets it. The
+free-text basis of any key already cut is not carried over: nothing has shipped, so there
+is nothing to backfill, and the downgrade re-adds the column empty.
 
 Revision ID: 0004_key_consent
 Revises: 0003_consent

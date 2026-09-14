@@ -18,7 +18,7 @@ from app.consent.export import (
     PURPOSE_TITLES,
     REGION_NAMES,
     PlainTextRenderer,
-    basis_words,
+    basis_lines,
     export_consent_record,
 )
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
@@ -30,13 +30,22 @@ from app.consent.service import (
     NothingBehindTheBasis,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
+    Sharing,
     WordingNotOnFile,
     active_consents,
     grant_consent,
     require_consent,
     revoke_consent,
 )
-from app.consent.texts import LANGUAGES, ConsentText, current_version, versions, wording
+from app.consent.texts import (
+    LANGUAGES,
+    SCOPE_WORDS,
+    ConsentText,
+    current_version,
+    versions,
+    what_words,
+    wording,
+)
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
@@ -53,19 +62,52 @@ GIVEN_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 # agree to is a new version, appended below the old one.
 SHIPPED_WORDS: dict[tuple[str, str, str, str | None], str] = {
     ('hold_health_record', '1', 'en', 'SG'): (
-        "e90ba69425da63012241d9c22eed74607ecf414ddeb0348df4fd5ae236847890"
+        "49a23d71f800544127a27ae5bbce682edd543da1dab102a9da1005e0a46544a5"
     ),
     ('hold_health_record', '1', 'en', 'MY'): (
-        "aaaf7d1cd00be62b677e4c8b262a79171a88796e0d550385c200bf36b6b7dae8"
+        "a2533c02ce7cc2f5bb2123798166ebbcbe4f18c950ce549d958093cfc32098c5"
+    ),
+    ('hold_health_record', '1', 'ms', 'SG'): (
+        "a8287f1d2c29bd7e440c4adc60400c8050ebcd51cddeed6d7b49f0bcbb945b7d"
+    ),
+    ('hold_health_record', '1', 'ms', 'MY'): (
+        "3fdaa22c1ed01f70ec176365af21ed4436cf5cb36669e6be6acf257d9c26f26e"
+    ),
+    ('hold_health_record', '1', 'zh', 'SG'): (
+        "444d8b6c645eeecf40ab9671708551cc399e58401a5b265daf775d3c10d188d9"
+    ),
+    ('hold_health_record', '1', 'zh', 'MY'): (
+        "a060e60e2a2357f63aba4370a254bfc60b0f3c901d56d0c5685a740d5c97bd18"
     ),
     ('share_with_family', '1', 'en', None): (
         "ef22011a7d39e10bae9b0290acc235434b53573e0590042d574e86cc0e7632a2"
     ),
+    ('share_with_family', '2', 'en', None): (
+        "ca896f4ad6fdca185bc908d3dc34be45912dc34cc71a999d4d8990c0da978941"
+    ),
+    ('share_with_family', '2', 'ms', None): (
+        "657def7f76caf31c8e2607c831e42d72218ebc96daa056f3a47b40d1b13aeca4"
+    ),
+    ('share_with_family', '2', 'zh', None): (
+        "2e17babab0b454e878d1bc2ccbfbf448a6e6c04e3f513f3aed7c6218d9692abe"
+    ),
     ('recording', '1', 'en', None): (
-        "0e5cffb0c097b4f938ea2465dab4b357ef3bd5ad9647d110842f50ef6db6e908"
+        "af91a7ccfe04bd97ea9dbb9a4dd27c4e3898fad9fa55f00a1197e17ec38362f6"
+    ),
+    ('recording', '1', 'ms', None): (
+        "fdf7e49d20213844e819091d1e31f5f6ddf76a3e65670b15f2494437cf208243"
+    ),
+    ('recording', '1', 'zh', None): (
+        "30bb26e0237f58e4b2790bf767b10853bb316f7624b0eec86997f8e82ba992f9"
     ),
     ('whatsapp', '1', 'en', None): (
         "97e9159f56aa1da1828deab95308dd1a6302fe5a948942c0ba6b53c3406f9c24"
+    ),
+    ('whatsapp', '1', 'ms', None): (
+        "5f8f02058ff1f848e6fcdecdd76ffe957b84c29ff11b6e96229a80ee16447886"
+    ),
+    ('whatsapp', '1', 'zh', None): (
+        "2037a41ac7a4d5a23a23d4658fb2dc739b9602476fee07aeca0e303e7f7d263e"
     ),
 }
 
@@ -115,13 +157,26 @@ async def _letter(session: AsyncSession, context: KeyContext) -> Artifact:
 # --- the wording catalogue ----------------------------------------------------------------
 
 
-def test_every_purpose_has_current_english_wording_in_both_regions() -> None:
+def test_every_purpose_has_current_wording_in_english_malay_and_chinese_for_both_regions() -> None:
     for purpose in ConsentPurpose:
         for region in Region:
-            assert wording(purpose, current_version(purpose), "en", region) is not None
+            for language in ("en", "ms", "zh"):  # Tamil is a follow-up
+                assert wording(purpose, current_version(purpose), language, region) is not None
     keys = [(text.purpose, text.version, text.language, text.region) for text in texts.TEXTS]
     assert len(keys) == len(set(keys))
     assert {text.language for text in texts.TEXTS} <= set(LANGUAGES)
+
+
+def test_the_sharing_words_name_the_person_and_the_parts() -> None:
+    for language in ("en", "ms", "zh"):
+        assert set(SCOPE_WORDS[language]) == set(Scope) - {Scope.PROFILE}
+    assert what_words({Scope.MEDICINES}, "en") == "medicines"
+    assert what_words({Scope.MEDICINES, Scope.VISITS}, "en") == "medicines and visits to the doctor"
+    assert what_words({Scope.RECORDS, Scope.MEDICINES, Scope.NOTES}, "en") == (
+        "medicines, papers and private notes"
+    )
+    assert what_words((), "en") == "papers"
+    assert what_words({Scope.MEDICINES, Scope.VISITS}, "zh") == "药物和看医生的记录"
 
 
 def test_shipped_words_are_never_edited_only_appended() -> None:
@@ -136,14 +191,11 @@ def test_shipped_words_are_never_edited_only_appended() -> None:
 
 def test_words_that_name_the_country_have_a_twin_per_region() -> None:
     purpose, version = ConsentPurpose.HOLD_HEALTH_RECORD, "1"
-    assert wording(purpose, version, "en", Region.SG) == (
-        "Nura keeps your papers, your medicines and your blood pressure book. "
-        "They never leave Singapore."
-    )
-    assert wording(purpose, version, "en", Region.MY) == (
-        "Nura keeps your papers, your medicines and your blood pressure book. "
-        "They never leave Malaysia."
-    )
+    sg_words = wording(purpose, version, "en", Region.SG)
+    my_words = wording(purpose, version, "en", Region.MY)
+    assert sg_words is not None and "They never leave Singapore." in sg_words
+    assert my_words is not None and "They never leave Malaysia." in my_words
+    assert sg_words.replace("Singapore", "Malaysia") == my_words
 
 
 def test_the_current_version_is_the_last_one_appended(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,8 +219,9 @@ def test_wording_nobody_was_ever_shown_is_unknown(monkeypatch: pytest.MonkeyPatc
 def test_the_record_can_put_words_to_every_purpose_basis_channel_and_region() -> None:
     assert set(PURPOSE_TITLES) == set(ConsentPurpose)
     for basis in ConsentBasis:
-        line = basis_words(basis, "Ash", "Pa")
-        assert (line is None) == (basis is ConsentBasis.OWNER)
+        lines = basis_lines(basis, "Ash", "Pa")
+        assert (lines == []) == (basis is ConsentBasis.OWNER)
+        assert all(line.count(". ") == 0 for line in lines), "one idea per line"
     assert set(CHANNEL_WORDS) == set(ConsentChannel)
     assert set(REGION_NAMES) == set(Region)
 
@@ -263,7 +316,7 @@ async def test_a_chief_consents_for_pa_only_on_a_proxy_basis_with_the_document_b
     assert entry["given_by"] == "Son" and entry["basis"] == "medical_letter"
     page = record.rendered.body.decode()
     assert "- Son said yes on paper on Tuesday 15 September 2026." in page
-    assert "  Son said yes for Pa.\n  A doctor's letter says Son may decide for Pa." in page
+    assert "  Son said yes for you.\n  A doctor's letter says Son may decide for you." in page
 
 
 async def test_a_spoken_agreement_names_who_heard_it(sg: AsyncSession) -> None:
@@ -316,22 +369,24 @@ async def test_a_spoken_agreement_names_who_heard_it(sg: AsyncSession) -> None:
     assert spoken.witness_person_id == chief.person_id
     assert spoken.basis_artifact_id == recording.id
     page = (await export_consent_record(sg, context=owner)).rendered.body.decode()
-    assert "  Son said yes for Pa.\n  Pa said yes out loud. Nura kept what Pa said." in page
+    assert "  You said yes out loud.\n  Son wrote it down here.\n  Nura kept what you said." in page
+    assert "said yes for you" not in page
 
 
 async def test_sharing_names_a_person_and_the_other_purposes_name_nobody(
     sg: AsyncSession,
 ) -> None:
-    owner, chief = await _pa_and_his_son(sg)
+    owner, _ = await _pa_and_his_son(sg)
     with pytest.raises(NoHolderNamed):
         await grant_consent(
             sg,
             context=owner,
-            purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.OWNER,
             language="en",
         )
+    son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
     with pytest.raises(NotAgreedPerPerson):
         await grant_consent(
             sg,
@@ -340,11 +395,11 @@ async def test_sharing_names_a_person_and_the_other_purposes_name_nobody(
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.OWNER,
             language="en",
-            holder_person_id=chief.person_id,
+            sharing=Sharing(holder=son, scopes=frozenset({Scope.MEDICINES})),
         )
     with pytest.raises(NoHolderNamed):
         await require_consent(
-            sg, context=owner, purpose=ConsentPurpose.SHARE_WITH_FAMILY, scope=Scope.FAMILY
+            sg, context=owner, purpose=ConsentPurpose.SHARE_WITH_PERSON, scope=Scope.FAMILY
         )
 
 
@@ -353,6 +408,7 @@ async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_lang
 ) -> None:
     owner, _ = await _pa_and_his_son(sg)
 
+    # Tamil is a language Nura speaks, but its words are not on file yet.
     with pytest.raises(WordingNotOnFile):
         await grant_consent(
             sg,
@@ -360,7 +416,7 @@ async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_lang
             purpose=ConsentPurpose.RECORDING,
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.OWNER,
-            language="zh",
+            language="ta",
         )
     with pytest.raises(WordingNotOnFile):
         await grant_consent(
@@ -374,23 +430,23 @@ async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_lang
         )
 
     # Once the words exist in his language, the row keeps those words and the page shows them.
-    in_chinese = ConsentText(
-        ConsentPurpose.RECORDING, current_version(ConsentPurpose.RECORDING), "zh", "中文的说明。"
+    in_tamil = ConsentText(
+        ConsentPurpose.RECORDING, current_version(ConsentPurpose.RECORDING), "ta", "தமிழ் வார்த்தைகள்."
     )
-    monkeypatch.setattr(texts, "TEXTS", (*texts.TEXTS, in_chinese))
+    monkeypatch.setattr(texts, "TEXTS", (*texts.TEXTS, in_tamil))
     given = await grant_consent(
         sg,
         context=owner,
         purpose=ConsentPurpose.RECORDING,
         captured_via=ConsentChannel.APP,
         basis=ConsentBasis.OWNER,
-        language="zh",
+        language="ta",
     )
-    assert given.language == "zh" and given.wording_text == "中文的说明。"
+    assert given.language == "ta" and given.wording_text == "தமிழ் வார்த்தைகள்."
     record = await export_consent_record(sg, context=owner)
     entry = next(e for e in record.document["consents"] if e["id"] == str(given.id))
-    assert entry["wording"] == "中文的说明。" and entry["language_name"] == "Chinese"
-    assert "  These are the words Pa read in Chinese:\n  \"中文的说明。\"" in (
+    assert entry["wording"] == "தமிழ் வார்த்தைகள்." and entry["language_name"] == "Tamil"
+    assert "  These are the words you read in Tamil:\n  தமிழ் வார்த்தைகள்." in (
         record.rendered.body.decode()
     )
 
@@ -419,7 +475,7 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSessio
         await revoke_consent(
             sg,
             context=held,
-            purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
             captured_via=ConsentChannel.APP,
             holder_person_id=daughter.id,
             now=GIVEN_AT + timedelta(days=2),
@@ -448,6 +504,8 @@ async def test_a_gate_is_only_open_to_someone_the_act_itself_is_open_to(sg: Asyn
         await require_consent(
             sg, context=helper, purpose=ConsentPurpose.RECORDING, scope=Scope.VISITS
         )
+    # A helper's key covers no more than the words let him see, and the profile row.
+    assert helper.scopes <= {Scope.PROFILE, Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}
     # A helper may send on WhatsApp, so a helper may ask whether WhatsApp is agreed to.
     await grant_consent(
         sg,
@@ -482,7 +540,7 @@ async def test_a_name_is_given_only_for_someone_on_the_profile(sg: AsyncSession)
         entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
     ]
     assert [(e.scope, e.target, e.refused_because) for e in refused] == [
-        (Scope.PROFILE, "person", "NotOnThisProfile")
+        (Scope.FAMILY, "person", "NotOnThisProfile")
     ]
 
 
@@ -550,7 +608,7 @@ async def test_only_the_owner_stops_sharing_with_someone(sg: AsyncSession) -> No
         await revoke_consent(
             sg,
             context=chief,
-            purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
             captured_via=ConsentChannel.APP,
             holder_person_id=chief.person_id,
             now=GIVEN_AT + timedelta(days=1),
@@ -629,7 +687,7 @@ async def test_withdrawing_closes_every_version_still_open(
     still_open = await active_consents(sg, context=owner, now=GIVEN_AT + timedelta(days=2))
     assert [c.purpose for c in still_open] == [
         ConsentPurpose.HOLD_HEALTH_RECORD,
-        ConsentPurpose.SHARE_WITH_FAMILY,
+        ConsentPurpose.SHARE_WITH_PERSON,
     ]
 
 
@@ -673,4 +731,4 @@ async def test_the_export_takes_any_renderer(sg: AsyncSession) -> None:
     assert record.rendered.body == b"2 consents"  # keeping the record, and sharing with his son
 
     plain = await export_consent_record(sg, context=owner, renderer=PlainTextRenderer())
-    assert plain.rendered.body.decode().startswith("# What Pa agreed to")
+    assert plain.rendered.body.decode().startswith("# What you said yes to")

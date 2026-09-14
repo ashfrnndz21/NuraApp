@@ -10,10 +10,11 @@ The one exception is `require_consent`, the gate every consent-dependent act ask
 goes ahead. It runs under the scope of the act it guards, so a person may ask whether the
 consent for an act is in force exactly when they may do the act, and never more widely.
 
-Sharing is agreed to one person at a time: a `SHARE_WITH_FAMILY` consent names the holder,
-a key is cut under that consent and records it, and withdrawing it closes that person's
-keys and nobody else's. Keeping the record, recording and WhatsApp are agreed to for the
-profile as a whole.
+Letting someone in is agreed to one person at a time: a `SHARE_WITH_PERSON` consent names
+the holder and the parts they may see, in words rendered with that name and those parts; a
+key is cut under that consent, records it, and is never wider than it; withdrawing it closes
+that person's keys and nobody else's. Keeping the record, recording and WhatsApp are agreed
+to for the profile as a whole.
 
 Every refusal here is written into the trail with its name, like every other refusal. The
 words in the refusals are for the developer reading a log, never for a person: nothing
@@ -42,9 +43,10 @@ from app.consent.models import (
     ConsentChannel,
     ConsentPurpose,
 )
-from app.consent.texts import current_version, wording
+from app.consent.texts import current_version, render_sharing, wording
 from app.db import as_utc, utcnow
 from app.errors import Refusal
+from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.models import Key
 from app.keys.scopes import Scope
@@ -62,12 +64,15 @@ AUDIT_CHANNEL: Mapping[ConsentChannel, Channel] = {
 
 
 class NoConsent(Refusal):
-    """The consent an act rests on is not in force. One subclass per way it can be missing."""
+    """The consent an act rests on is not in force. One subclass per way it can be missing.
 
-    def __init__(self, *, purpose: ConsentPurpose, context: KeyContext) -> None:
-        super().__init__(f"{self.__class__.__doc__} ({purpose})")
+    Carries the purpose and nothing else: no context, no ids, nothing an error reporter
+    could ship out of region. The message is developer copy; no channel renders it.
+    """
+
+    def __init__(self, *, purpose: ConsentPurpose) -> None:
+        super().__init__(f"{type(self).__name__}: {purpose.value}")
         self.purpose = purpose
-        self.context = context
 
 
 class ConsentWithheld(NoConsent):
@@ -87,7 +92,7 @@ class NotTheirConsentToGive(Refusal):
 
 
 class NotTheirConsentToWithdraw(Refusal):
-    """Only the owner stops sharing with someone: it closes that person's keys."""
+    """Only the owner stops letting someone in: it closes that person's keys."""
 
 
 class NothingBehindTheBasis(Refusal):
@@ -99,7 +104,7 @@ class NoSuchWitness(Refusal):
 
 
 class NoHolderNamed(Refusal):
-    """Sharing is agreed to one person at a time; this named nobody."""
+    """Letting someone in is agreed to one person at a time; this named nobody."""
 
 
 class NotAgreedPerPerson(Refusal):
@@ -129,16 +134,35 @@ class RecordConsent:
 
 
 @dataclass(frozen=True, slots=True)
+class Sharing:
+    """Who is being let in, to which parts, and — only if the granter says — who they are to
+    him ("your daughter", "the clinic"). The words the patient reads are rendered from this."""
+
+    holder: Person
+    scopes: frozenset[Scope]
+    relationship: str | None = None
+
+    @property
+    def name(self) -> str:
+        """The person as the words name them: "Ash", or "Ash, your daughter,"."""
+        if self.relationship is None:
+            return self.holder.display_name
+        return f"{self.holder.display_name}, {self.relationship},"
+
+
+@dataclass(frozen=True, slots=True)
 class ConsentCheck:
     """What the gate hands back: enough to cite the consent an act rested on, and no more.
 
     Who gave it and on what basis stay in the record, which only the owner and his chief read.
+    `scopes` is what a per-holder consent lets the person see, so a key is cut no wider.
     """
 
     consent_id: uuid.UUID
     purpose: ConsentPurpose
     text_version: str
     granted_at: datetime
+    scopes: frozenset[Scope] | None = None
 
 
 def check_opening_words(consent: RecordConsent, region: Region) -> None:
@@ -204,7 +228,7 @@ async def grant_consent(
     captured_via: ConsentChannel,
     basis: ConsentBasis,
     language: str,
-    holder_person_id: uuid.UUID | None = None,
+    sharing: Sharing | None = None,
     basis_artifact_id: uuid.UUID | None = None,
     witness_person_id: uuid.UUID | None = None,
     text_version: str | None = None,
@@ -216,12 +240,13 @@ async def grant_consent(
     a chief, or later a steward — must hold the family scope, name a proxy basis, and have
     something behind it: the document as an artefact on the profile for `LPA` and
     `MEDICAL_LETTER`, the witness (and the recording, if there is one) for
-    `VERBAL_RECORDED`. `SHARE_WITH_FAMILY` names the `holder_person_id` it is about.
+    `VERBAL_RECORDED`. `SHARE_WITH_PERSON` takes `sharing`: who, to which parts, and the
+    words are rendered with that name and those parts before they are kept.
 
     `language` is the language the words were shown in; it is stated, never inferred.
     `text_version` defaults to the current wording; an older one is for capturing an
     agreement made before the words moved on, and it does not stand for the current
-    version. Whichever version, the words are on file and are copied onto the row.
+    version. Whichever version, the words are on file and are copied onto the row as read.
     """
     moment = now or utcnow()
     channel = AUDIT_CHANNEL[captured_via]
@@ -229,14 +254,15 @@ async def grant_consent(
 
     # The door below refuses and records anyone without the family scope; the checks on the
     # shape, the basis and the words are only for those it would let through.
+    words = ""  # never written: the door refuses first
     if context.allows(Scope.FAMILY):
         refusal: Refusal | None = None
-        words = wording(purpose, version, language, context.region)
-        if purpose in PER_HOLDER and holder_person_id is None:
-            refusal = NoHolderNamed(f"{purpose} names who may hold a key")
-        elif purpose not in PER_HOLDER and holder_person_id is not None:
+        template = wording(purpose, version, language, context.region)
+        if purpose in PER_HOLDER and sharing is None:
+            refusal = NoHolderNamed(f"{purpose} names who may hold a key, and to what")
+        elif purpose not in PER_HOLDER and sharing is not None:
             refusal = NotAgreedPerPerson(f"{purpose} is for the whole profile")
-        elif words is None:
+        elif template is None:
             refusal = WordingNotOnFile(f"{purpose} version {version} was never shown in {language}")
         else:
             refusal = await _check_basis(
@@ -245,9 +271,12 @@ async def grant_consent(
         if refusal is not None:
             await _refused_write(session, context, refusal, channel, moment)
             raise refusal
-        assert words is not None
-    else:
-        words = ""  # never written: the door refuses first
+        assert template is not None
+        words = (
+            render_sharing(template, name=sharing.name, scopes=sharing.scopes, language=language)
+            if sharing is not None
+            else template
+        )
 
     return await audited_write(
         session,
@@ -258,7 +287,8 @@ async def grant_consent(
         now=moment,
         person_id=context.person_id,
         purpose=purpose,
-        holder_person_id=holder_person_id,
+        holder_person_id=sharing.holder.id if sharing is not None else None,
+        scopes=sorted(scope.value for scope in sharing.scopes) if sharing is not None else None,
         text_version=version,
         language=language,
         wording_text=words,
@@ -296,12 +326,17 @@ async def all_consents(
 
 
 def _about(purpose: ConsentPurpose, holder_person_id: uuid.UUID | None) -> list[ColumnElement[bool]]:
+    """Rows about this purpose, and for a per-holder purpose about this one person."""
     where: list[ColumnElement[bool]] = [Consent.purpose == purpose]
     if purpose in PER_HOLDER:
-        if holder_person_id is None:
-            raise NoHolderNamed(f"{purpose} is asked about one person at a time")
         where.append(Consent.holder_person_id == holder_person_id)
     return where
+
+
+def _shape(purpose: ConsentPurpose, holder_person_id: uuid.UUID | None) -> Refusal | None:
+    if purpose in PER_HOLDER and holder_person_id is None:
+        return NoHolderNamed(f"{purpose} is asked about one person at a time")
+    return None
 
 
 async def require_consent(
@@ -323,6 +358,10 @@ async def require_consent(
     are written into the trail on it.
     """
     moment = now or utcnow()
+    misshapen = _shape(purpose, holder_person_id)
+    if misshapen is not None:
+        await _refused_read(session, context, misshapen, scope, channel, moment)
+        raise misshapen
     rows = await audited_read(
         session,
         Consent,
@@ -341,27 +380,22 @@ async def require_consent(
                 purpose=row.purpose,
                 text_version=row.text_version,
                 granted_at=as_utc(row.granted_at),
+                scopes=(
+                    frozenset(Scope(name) for name in row.scopes)
+                    if row.scopes is not None
+                    else None
+                ),
             )
 
-    refusal: type[NoConsent]
+    refusal: NoConsent
     if active:
-        refusal = ConsentOutOfDate
+        refusal = ConsentOutOfDate(purpose=purpose)
     elif rows:
-        refusal = ConsentRevoked
+        refusal = ConsentRevoked(purpose=purpose)
     else:
-        refusal = ConsentWithheld
-    await record(
-        session,
-        context=context,
-        action=Action.READ,
-        scope=scope,
-        target=Consent.__tablename__,
-        outcome=Outcome.REFUSED,
-        refused_because=refusal.__name__,
-        channel=channel,
-        now=moment,
-    )
-    raise refusal(purpose=purpose, context=context)
+        refusal = ConsentWithheld(purpose=purpose)
+    await _refused_read(session, context, refusal, scope, channel, moment)
+    raise refusal
 
 
 async def revoke_consent(
@@ -378,7 +412,7 @@ async def revoke_consent(
     The rows stay, marked with when and by whom; `captured_via` is how the withdrawal was
     captured, and the trail is written on the channel it came from.
 
-    Withdrawing `SHARE_WITH_FAMILY` names the person it is withdrawn from and is the
+    Withdrawing `SHARE_WITH_PERSON` names the person it is withdrawn from and is the
     owner's alone: it closes every key that person holds, in the same transaction — a chief
     or an emergency contact alike, because the key rests on that consent and access has to
     be gone within the minute, not at the next review. A chief who wants someone out closes
@@ -390,6 +424,10 @@ async def revoke_consent(
     """
     moment = now or utcnow()
     channel = AUDIT_CHANNEL[captured_via]
+    misshapen = _shape(purpose, holder_person_id)
+    if misshapen is not None:
+        await _refused_write(session, context, misshapen, channel, moment)
+        raise misshapen
     rows = await audited_read(
         session,
         Consent,
@@ -424,8 +462,8 @@ async def revoke_consent(
         now=moment,
     )
 
-    if purpose is ConsentPurpose.SHARE_WITH_FAMILY:
-        assert holder_person_id is not None  # `_about` refused otherwise
+    if purpose in PER_HOLDER:
+        assert holder_person_id is not None  # `_shape` refused otherwise
         await _close_keys_held_by(session, context, holder_person_id, channel, moment)
     return open_rows
 
@@ -464,6 +502,28 @@ async def _close_keys_held_by(
             channel=channel,
             now=moment,
         )
+
+
+async def _refused_read(
+    session: AsyncSession,
+    context: KeyContext,
+    refusal: Refusal,
+    scope: Scope,
+    channel: Channel,
+    moment: datetime,
+) -> None:
+    """One line for a check of consent that did not land: the name of the refusal, no more."""
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=scope,
+        target=Consent.__tablename__,
+        outcome=Outcome.REFUSED,
+        refused_because=type(refusal).__name__,
+        channel=channel,
+        now=moment,
+    )
 
 
 async def _refused_write(

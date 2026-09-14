@@ -65,6 +65,8 @@ def upgrade() -> None:
         sa.Column("purpose", PURPOSE, nullable=False),
         # Set for a per-holder purpose (sharing): the person the agreement is about.
         sa.Column("holder_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True),
+        # For a per-holder purpose: the parts of the record the words let that person see.
+        sa.Column("scopes", sa.JSON(), nullable=True),
         sa.Column("text_version", sa.String(length=32), nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
         # The words as read, copied at the moment of agreement.
