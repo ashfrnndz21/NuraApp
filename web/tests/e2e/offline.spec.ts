@@ -41,6 +41,8 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await signInThroughTheApp(page, phone, "Pa");
   await expect(page.getByTestId("proud")).toBeVisible();
   await expect.poll(async () => (await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
+  // Today reads the emergency card after it has kept its page: wait for both before the network goes.
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {

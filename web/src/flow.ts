@@ -96,8 +96,10 @@ export async function signOutEverywhere(): Promise<void> {
   await clearAllProfileData();
   forgetFeed();
   voice.forget();
-  await setToken(null);
+  // Whose papers were open is forgotten before the token: a sign-out cut short (the app closed
+  // half-way) never leaves the next person to sign in on this phone on the last one's papers.
   await chooseProfile(null);
+  await setToken(null);
   me.value = null;
   go({ name: "signin" });
 }

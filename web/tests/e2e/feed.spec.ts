@@ -7,6 +7,7 @@ import {
   captureSpeech,
   expireEveryKeptPage,
   fixClock,
+  keptKeys,
   freshPhone,
   medicinesInIndexedDb,
   seedFeed,
@@ -462,6 +463,7 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   await openPager(page);
   await expect.poll(() => pages.length).toBeGreaterThan(0);
   const kept = pages[0]!.body.items.map((item) => item.item_id);
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {

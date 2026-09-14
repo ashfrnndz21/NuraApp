@@ -168,6 +168,10 @@ body {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   text-align: center;
+  /* A long word or a big text size wraps inside the pill; the pill grows taller, never wider. */
+  overflow-wrap: anywhere;
+  padding-block: 6px;
+  line-height: 1.25;
 }
 .pill.plum {
   background: var(--plum);
@@ -195,7 +199,8 @@ body {
 }
 .pill:focus-visible,
 .field:focus-visible,
-.choice:focus-visible {
+.choice:focus-visible,
+label.pill:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
 }
@@ -208,12 +213,16 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* A row of choices wraps rather than runs off the side at any text size (E15-04: the writing
+   at 200%); each keeps its content's width until the row is full. */
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 .row .pill {
-  flex: 1;
+  flex: 1 1 auto;
+  width: auto;
 }
 
 /* Fields */
@@ -284,6 +293,8 @@ body {
 }
 .tabbar button {
   font: inherit;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: var(--text-body);
   color: var(--ink-soft);
   background: none;

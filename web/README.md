@@ -7,7 +7,8 @@ for the phone-sized end-to-end flow. No UI framework beyond Preact, no CSS frame
 ```sh
 make web         # dev server on http://127.0.0.1:5173/app/ (proxies /api to make dev); --host for the phone
 make build-web   # web/dist, which make dev then serves at http://127.0.0.1:8000/app/
-make web-test    # Vitest: strings, refusal map, Today model, the feed's store/cards/playback, the kept pages, the voice, contrast
+make web-test    # Vitest: strings, refusal map, Today model, the feed's store/cards/playback, the kept pages, the voice, contrast,
+                 #         the one player, the taps held offline, the emergency card's copy, the paper batch
 make web-e2e     # Playwright against the built app; starts make dev itself, its clock frozen at 10:00 Singapore
 npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 ```
@@ -42,10 +43,21 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
   `MediaRecorder` behind a small seam: opus in webm where it can, Safari's mp4 where not, a
   screen wake lock, nothing sent from here), `clip.ts` ("Hear what Dr Tan said": the recording
   fetched once, played as a `#t=start,end` fragment and paused at the end), `model.ts` (the
-  logistics card and the post-visit card as the backend wrote them, each line with its clip).
+  logistics card and the post-visit card as the backend wrote them, each line with its clip; a
+  clip plays through the one player, `src/player/`).
   The screen is `src/screens/Visit.tsx`, opened from Today's *See your next visit*.
-- `src/sw/sw.ts` — the service worker; `src/offline/` — its registration, the Today cache and
-  the feed's kept first page (`feedCache.ts`).
+- `src/sw/sw.ts` — the service worker; `src/offline/` — its registration, the Today cache, the
+  feed's kept first page (`feedCache.ts`), the taps held while offline (`queue.ts`) and the
+  emergency card kept on the phone (`emergencyCache.ts`).
+- `src/player/` — the one player (E15-07): `player.ts` (a card's spoken twin on the phone's own
+  voice, a card's pre-rendered voice from E11, a visit's clip; Play and Pause, three speeds, the
+  line being said), `voice.ts` (the app's one instance, his speed kept as `device.speed`). The
+  controls are `src/ui/Player.tsx`; `Hear` opens them under itself.
+- `src/capture/` — papers from his photos (E18-01): `batch.ts` (the grid, one yes, a review card
+  each, nothing kept) and `session.ts`. The grid is `src/screens/PaperBatch.tsx`, used by the
+  Papers screen (`src/screens/Papers.tsx`, from Me) and by the sitting's batch step.
+- `src/screens/Emergency.tsx` — the emergency card, one tap from Today and Me (E13-01's web half).
+- `src/ui/focus.ts` — each new screen starts at its heading, for the screen reader and Tab.
 
 ## Design decisions
 
@@ -93,12 +105,76 @@ before the doctor's answer the audio is thrown away, after it one tap, *Keep wha
 sends it. The post-visit card is the backend's, each line with *Hear what Dr Tan said* when
 the recording has that line in it; nothing plays until that tap.
 
-**Voice on tap only.** `feed/playback.ts` is one seam: it warms (fetches, never plays) the
+**Voice on tap only.** `feed/playback.ts` hands the one player (above) what to play: it warms (fetches, never plays) the
 backend's pre-rendered voice for the card on screen and the two after it
 (`GET …/feed/{item}/voice`, E11), and *Hear* plays it inside the tap; when the route is not
 there (a plain 404 — it stops asking) or has no voice for the card, it reads the card's
 spoken twin through `speak()`, which uses only a voice on the phone. Nothing plays when a
 card arrives or when a voice ends, and a card's voice stops when the card leaves the screen.
+
+**The one player (E15-07).** Everything Nura says out loud goes through `player/player.ts`: a
+card's spoken twin on a voice that runs on the phone, a card's pre-rendered voice (E11's
+`GET …/feed/{item}/voice`, played when the backend has it, the twin when it answers 404), and a
+visit's clip. It starts only from a tap — *Hear*, *Hear what Dr Tan said* — and never when a card
+arrives or another voice ends; one thing sounds at a time, and leaving the screen (or the card
+leaving the pager) stops it. Under the button it opens one big *Play / Pause* (half as tall again
+as his target), his speed as three plain choices (*Slower*, *Usual speed*, *Faster*) that the
+phone remembers (`device.speed`, like the language and the look), and the transcript — the line
+being said — in his body size. A clip is the whole recording played from its start and paused at
+its end (the media fragment `#t=start,end`, with the start set by hand when it is ignored),
+fetched once per recording. A recording this key may not hear — `OnlyTheFamilyHears`, 403 — shows
+the refusal's sentence on the line and no player. The transcript is not a live region: a screen
+reader would talk over the voice.
+
+**Taps held offline (E00-08).** *Taken* on a Now card that came from a live read, tapped when the
+network has gone, is held on the phone (`offline/queue.ts`, `queue.<profile_id>`) with the moment
+he tapped. The card says *You tapped this at 10:05 am. / Nura will send it when the internet is
+back.* and the next dose the backend marked due becomes the Now card. When the network is back
+(the `online` event, or the next time Today opens) the taps go once each, oldest first, one at a
+time, before the page is read again; each leaves the phone's list as soon as the backend has
+answered it. `POST …/taken` takes the tap's `taken_at` and writes the dose as taken then, only if
+it is today on the region's clock (`TapNotToday`), and writes the same tap once however often it
+arrives (ADR 0010). A no is said in the catalogue's sentence for the backend's refusal, and nothing
+of the papers stays. Held taps follow the Today page's rules: bound to the key and scope set,
+deleted with the rest, gone at the region's midnight. A red word on the feeling strip is never
+held; the web has no feeling strip yet (E17), so no feeling tap is held today.
+
+**The emergency card on the phone (E00-08, E13-01).** *Your emergency card*, one tap from Today
+(either density) and from Me, reads `GET …/emergency-card` and shows the backend's verified
+lines and nothing else; the chief's number and the ambulance's (995 or 999) are the card's data,
+as buttons that dial. A big *Print this card* opens the backend's own printable page
+(`…/emergency-card.html`) in a new tab for the phone's Print. Both are kept on the phone
+(`offline/emergencyCache.ts`, `emergency.<profile_id>`): bound to the key and scope set, deleted
+on a refusal, a switch of papers and sign-out — and, unlike Today's page, not at midnight: it is
+read again once a day and whenever it is opened with a network, and always says when it was read
+(ADR 0010). Past midnight with no network Today shows only *Nura cannot reach your papers right
+now.* and this card. A key to the card alone (a neighbour's) opens this card and nothing else: no
+Today, no feed, nothing under Me that opens more.
+
+**Papers from photos (E18-01).** A browser cannot scan the photo library, so the web's substitute
+is the phone's own picker, many at once (`<input type=file multiple accept=image/*,application/pdf>`),
+from Me (*Add papers from your photos*) or in the sitting (*Choose many photos*). The picks are a
+grid, every one in to begin with; a tap leaves one out and says so in words. Nothing is sent before
+*Send N papers*; then each goes through E02's capture route (`/photos`, a PDF to `/imports`), one
+at a time, in order, and each paper says what became of it: a review card to check (*Check this
+paper* opens the same review card as the sitting, and only its *Looks right* writes facts), the
+backend's own words that a page is not a health paper, a refusal in its sentence, or that it could
+not be sent (*Send the rest*). A file is only ever in memory; its picture is an object URL let go
+as soon as it is sent, and nothing of a photo is written to the phone.
+
+**Accessibility (E15-04).** VoiceOver and Dynamic Type become, on the web, the page's own
+semantics and the browser's text size. Every screen has one `h1` (Today's is the greeting) and
+each new screen moves focus to it (`ui/focus.ts`); answers that change the screen are said in a
+`role=status` region (the read-back's *Nura will keep that.*, a held tap), refusals in
+`role=alert`; toggles carry `aria-pressed`; icons are `aria-hidden` beside their word. Every size is
+`rem`, so the browser's text size scales all of it: at 200% on a 360 px phone rows of choices wrap,
+pills grow taller and never wider, and nothing runs off the side or is drawn over a line. Contrast
+is 7:1 on every decision (`tests/unit/contrast.test.ts`), and a file picker's label shows the focus
+ring its hidden input would. Reduce Motion leaves nothing moving. His own large-text setting
+(E01's `large_text`, folded into his State's `functional.vision`) makes the writing one step bigger
+(`data-text="large"`, 125%) on his own phone, kept for offline, and never on a family member's. The
+e2e runs axe (`@axe-core/playwright`) over every screen in both densities and fails on any serious
+or critical finding; a demo deployment's banner (ADR 0008) is left to its own checks.
 
 **The feed's kept page.** The first page (`GET …/feed/cached` answers the same page) is kept
 as `feed.<profile_id>` under the Today page's rules: bound to the key and scope set that read
