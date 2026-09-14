@@ -48,6 +48,16 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.onboarding.biography import (
+    AlreadyReadBack,
+    BiographyAlreadyOpen,
+    BiographyClosed,
+    CardsStillOpen,
+    NoBiography,
+    NotAtThisStep,
+)
+from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
+from app.onboarding.settings import NotTheirsToSetUp
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.state.service import NoState
@@ -86,6 +96,18 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NothingToNarrow, 409),
     (AlreadyMarked, 409),
     (AlreadyDone, 409),
+    # Setting a profile up — settings, biography, first week — is the owner's and his
+    # chief's (E01); a sitting walks its steps in order, one sitting at a time.
+    (NotTheirsToSetUp, 403),
+    (NoBiography, 404),
+    (NoPlan, 404),
+    (NoSuchPrompt, 404),
+    (BiographyAlreadyOpen, 409),
+    (BiographyClosed, 409),
+    (NotAtThisStep, 409),
+    (AlreadyReadBack, 409),
+    (CardsStillOpen, 409),
+    (PromptAlreadySettled, 409),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),

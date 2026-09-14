@@ -36,6 +36,14 @@ from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
+from app.onboarding.models import (
+    ActivationPlan,
+    BiographyLine,
+    BiographyPaper,
+    BiographySession,
+    PlanPrompt,
+    ProfileSettings,
+)
 from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
 
@@ -82,6 +90,12 @@ TABLES: tuple[Table, ...] = (
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
+    ProfileSettings.__table__,
+    BiographySession.__table__,
+    BiographyPaper.__table__,
+    BiographyLine.__table__,
+    ActivationPlan.__table__,
+    PlanPrompt.__table__,
 )
 
 
@@ -161,7 +175,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0011_whatsapp"]
+    assert heads == ["0015_biography"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -206,6 +220,12 @@ def test_the_migrations_build_the_tables_the_models_declare(
             ThreadMessage,
             ScheduledPush,
             Document,
+            ProfileSettings,
+            BiographySession,
+            BiographyPaper,
+            BiographyLine,
+            ActivationPlan,
+            PlanPrompt,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

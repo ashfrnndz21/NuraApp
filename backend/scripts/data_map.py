@@ -37,6 +37,7 @@ import app.keys.privacy
 import app.medicines.models
 import app.memory.models
 import app.notes.models
+import app.onboarding.models
 import app.safety.red_flags
 import app.state.models  # noqa: F401
 from app.db import Base
@@ -473,6 +474,72 @@ CLASSES: dict[str, str] = {
     "safety_escalation.roster": IDENTIFIER,
     "safety_escalation.told": IDENTIFIER,
     "safety_escalation.created_at": HEALTH,
+    # --- onboarding (E01) -----------------------------------------------------------------------
+    # The settings screen says what helps him read, hear and remember — his abilities, folded
+    # into State's functional and cognitive dimensions — and his conditions and his doctor:
+    # health, like those dimensions. His breakfast time is folded into the preference
+    # dimension and is health with it. The name he goes by and whoever set, added, answered
+    # or skipped something point at a person. The language is operational, as on the person.
+    # The biography's papers, lines and prompts point at his record, and a prompt's gap says
+    # what is missing from it: health.
+    "profile_settings.id": HEALTH,
+    "profile_settings.conditions": HEALTH,
+    "profile_settings.language": OPERATIONAL,
+    "profile_settings.density": HEALTH,
+    "profile_settings.large_text": HEALTH,
+    "profile_settings.high_contrast": HEALTH,
+    "profile_settings.voice_on": HEALTH,
+    "profile_settings.big_targets": HEALTH,
+    "profile_settings.one_thing_per_screen": HEALTH,
+    "profile_settings.read_back": HEALTH,
+    "profile_settings.repeat_prompts": HEALTH,
+    "profile_settings.preferred_name": IDENTIFIER,
+    "profile_settings.doctor_name": HEALTH,
+    "profile_settings.breakfast_time": HEALTH,
+    "profile_settings.event_id": HEALTH,
+    "profile_settings.set_by_person_id": IDENTIFIER,
+    "profile_settings.set_at": OPERATIONAL,
+    "profile_settings.supersedes_id": HEALTH,
+    "profile_settings.superseded_at": OPERATIONAL,
+    "biography_session.id": HEALTH,
+    "biography_session.opened_by_person_id": IDENTIFIER,
+    "biography_session.opened_at": OPERATIONAL,
+    "biography_session.read_back_at": OPERATIONAL,
+    "biography_session.read_back_by_person_id": IDENTIFIER,
+    "biography_session.closed_at": OPERATIONAL,
+    "biography_session.closed_by_person_id": IDENTIFIER,
+    "biography_paper.id": HEALTH,
+    "biography_paper.session_id": HEALTH,
+    "biography_paper.position": OPERATIONAL,
+    "biography_paper.artifact_id": HEALTH,
+    "biography_paper.card_id": HEALTH,
+    "biography_paper.paper": HEALTH,
+    "biography_paper.added_by_person_id": IDENTIFIER,
+    "biography_paper.added_at": OPERATIONAL,
+    "biography_line.id": HEALTH,
+    "biography_line.session_id": HEALTH,
+    "biography_line.position": OPERATIONAL,
+    "biography_line.fact_id": HEALTH,
+    "biography_line.answer": HEALTH,
+    "biography_line.dispute_fact_id": HEALTH,
+    "biography_line.answered_by_person_id": IDENTIFIER,
+    "biography_line.answered_at": OPERATIONAL,
+    "activation_plan.id": HEALTH,
+    "activation_plan.session_id": HEALTH,
+    "activation_plan.breakfast_time": HEALTH,
+    "activation_plan.first_day": OPERATIONAL,
+    "activation_plan.created_by_person_id": IDENTIFIER,
+    "activation_plan.created_at": OPERATIONAL,
+    "plan_prompt.id": HEALTH,
+    "plan_prompt.plan_id": HEALTH,
+    "plan_prompt.day": OPERATIONAL,
+    "plan_prompt.gap": HEALTH,
+    "plan_prompt.due_at": OPERATIONAL,
+    "plan_prompt.status": OPERATIONAL,
+    "plan_prompt.done_at": OPERATIONAL,
+    "plan_prompt.done_by_fact_id": HEALTH,
+    "plan_prompt.skipped_at": OPERATIONAL,
+    "plan_prompt.skipped_by_person_id": IDENTIFIER,
 }
 
 
