@@ -119,3 +119,22 @@ def phone_code_message(
     his language when the caller knows it (English otherwise)."""
     key = "phone_code_self" if asked_by is None else "phone_code_on_behalf"
     return "\n".join(lines(key, language)).format(code=code, who=asked_by or "")
+
+
+# --- demo mode (ADR 0008) --------------------------------------------------------------------
+# A demo deployment says so on every page it serves, in the person's language. The web client
+# carries the same words in web/src/strings; these are the printable card's.
+
+# @patient headline
+DEMO_HEADLINE: dict[str, str] = {
+    "en": "Demo — not for real health information",
+    "ms": "Demo — bukan untuk maklumat kesihatan sebenar",
+    "zh": "演示版 — 不用于真实的健康信息",
+}
+
+# @patient
+DEMO_LINES: dict[str, tuple[str, ...]] = {
+    "en": ("This is a demo.", "Do not put real health information in it."),
+    "ms": ("Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar."),
+    "zh": ("这是演示版。", "请不要输入真实的健康信息。"),
+}

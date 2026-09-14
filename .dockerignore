@@ -1,0 +1,26 @@
+# Only what the Dockerfile copies is needed: web/ (without its build and modules) and backend/.
+.git
+.github
+.claude
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/.venv
+**/.env
+**/.env.*
+docs
+infra
+ios
+scripts
+web/node_modules
+web/dist
+web/playwright-report
+web/test-results
+backend/*.db
+backend/*.db-journal
+backend/.dev.log
+backend/var
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+**/*.egg-info

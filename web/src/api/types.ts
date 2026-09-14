@@ -738,3 +738,9 @@ export interface ConsentOut {
   text_version: string;
   wording_text: string;
 }
+
+/** `GET /api/deployment`: the region this backend serves, and whether it is a demo (ADR 0008). */
+export interface DeploymentOut {
+  region: "SG" | "MY";
+  demo: boolean;
+}

@@ -1,0 +1,55 @@
+# Nura on Render — one web service from the Dockerfile and one managed Postgres, both in
+# Singapore (docs/deploy.md). A second country is a second Blueprint with its own database.
+# `sync: false` values are secrets: Render asks for them when the Blueprint is created and
+# keeps them in its own store; they are never written here.
+services:
+  - type: web
+    name: nura-sg
+    runtime: docker
+    region: singapore
+    plan: starter            # the pre-deploy command (migrations) needs a paid instance
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/ready
+    preDeployCommand: alembic upgrade heads
+    autoDeploy: false
+    envVars:
+      - key: NURA_REGION
+        value: SG
+      - key: NURA_DATABASE_URL
+        fromDatabase:
+          name: nura-sg-db
+          property: connectionString
+      # A demo (ADR 0008): the fixtures are the only providers built yet.
+      - key: NURA_DEMO_MODE
+        value: "1"
+      - key: NURA_DEMO_LOGIN_CODE
+        sync: false
+      - key: NURA_WHATSAPP_DEV_SECRET
+        generateValue: true
+      - key: NURA_PAPER_FIXTURES
+        value: tests/fixtures/paper
+      - key: NURA_VISIT_FIXTURES
+        value: tests/fixtures/visits
+      - key: NURA_VOICE_FIXTURES
+        value: tests/fixtures/voice
+      - key: NURA_FEED_FIXTURES
+        value: tests/fixtures/feed
+      - key: NURA_WHATSAPP_FIXTURES
+        value: tests/fixtures/whatsapp
+      - key: NURA_SPEAKER_FIXTURES
+        value: tests/fixtures/speakers
+      # Render has no bucket of its own. A demo may keep bytes on the instance's disk, which
+      # the night wipe empties and a restart loses; a deployment with real data sets the
+      # NURA_OBJECT_BUCKET_* values to a bucket in Singapore instead (docs/deploy.md).
+      - key: NURA_OBJECT_STORE
+        value: /tmp/nura-objects
+
+databases:
+  - name: nura-sg-db
+    region: singapore
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    databaseName: nura
+    user: nura
+    ipAllowList: []          # private network only: nothing outside Render reaches it
