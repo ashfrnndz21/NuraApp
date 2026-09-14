@@ -1796,12 +1796,461 @@ def checkpoint_6(client: httpx.Client) -> None:
         )
 
 
+# --- checkpoint 8: the feed (backend) ---------------------------------------------------------
+
+
+def _page(client: httpx.Client, person: Person, profile_id: str, what: str, **params: Any) -> JSON:
+    """One page of the feed. Unless a step says otherwise it pretends it is 10 in the morning
+    (`?at=`, a dev-run-only query), so the checkpoint passes whatever the hour it is run at;
+    the quiet-hours step pretends 22:30 the same way."""
+    params.setdefault("at", _local_today_at(10))
+    page: JSON = check(
+        client.get(f"/profiles/{profile_id}/feed", headers=bearer(person.token), params=params),
+        200,
+        what,
+    )
+    return page
+
+
+def _types(page: JSON) -> list[str]:
+    return [item["type"] for item in page["items"]]
+
+
+def print_cards(page: JSON) -> None:
+    """Every card on a page: its section, its type, its headline, and why it is there."""
+
+    def short_ref(value: Any) -> str:
+        if isinstance(value, list):
+            return "[" + ", ".join(short_ref(one) for one in value) + "]"
+        text = str(value)
+        return text[:8] + "…" if len(text) > 20 else text
+
+    for item in page["items"]:
+        why = item["why"]
+        refs = ", ".join(
+            f"{key} {short_ref(value)}"
+            for key, value in why.items()
+            if key not in ("kind", "plain", "boosts") and value not in (None, [], "")
+        )
+        print(f"    [{item['supply']:<8}] {item['type']:<9} {item['headline']}  ({item['status']})")
+        print(
+            f"               why: {why['plain'] or '(held for the caregiver)'}  ({refs or 'no refs'})"
+        )
+
+
+def _local_today_at(hour: int, minute: int = 0) -> str:
+    """Today on the Singapore wall clock at this hour, as the `?at=` query wants it."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(ZoneInfo("Asia/Singapore"))
+    return now.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat()
+
+
+def checkpoint_8(client: httpx.Client) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+
+    # 1. Pa, in English so every line can be read here; three numbers in his book.
+    profile_id = open_own_profile(client, pa, "en")
+    now = datetime.now(UTC)
+    for days_ago, (top, bottom) in ((7, (146, 90)), (3, (142, 88))):
+        check(
+            client.post(
+                f"/profiles/{profile_id}/readings",
+                headers=bearer(pa.token),
+                json={
+                    "systolic": top,
+                    "diastolic": bottom,
+                    "taken_at": (now - timedelta(days=days_ago)).isoformat(),
+                },
+            ),
+            201,
+            f"Pa adds a blood pressure from {days_ago} days ago",
+        )
+    today = check(
+        client.post(
+            f"/profiles/{profile_id}/readings",
+            headers=bearer(pa.token),
+            json={"systolic": 138, "diastolic": 84},
+        ),
+        201,
+        "Pa adds today's blood pressure",
+    )
+    ok(
+        "Pa added three blood pressures (POST /profiles/{id}/readings): 146/90 a week ago, 142/88 "
+        "three days ago, 138/84 today — each an event and a fact, State recomputing as they land"
+    )
+
+    # 2. The warfarin label from checkpoint 5: medicine facts, so there is a tablet to speak of.
+    label = check(
+        client.post(
+            f"/profiles/{profile_id}/photos", headers=bearer(pa.token), json=_photo(WARFARIN_LABEL)
+        ),
+        201,
+        "Pa uploads the warfarin label",
+    )
+    mint_and_confirm(
+        client, pa, profile_id, label, decide(label, reject={"prescriber"}), "the label"
+    )
+    ok(
+        "Pa uploaded the warfarin label and confirmed the card (the checkpoint-5 steps): five "
+        "medicine facts under the medicines scope, resting on the photo"
+    )
+    # ...and a medicine through E04's route, five tablets at one a day: running low from today.
+    pack = label_photo(client, pa, profile_id, "Pa photographs the amlodipine pack")
+    added = check(
+        add_medicine(
+            client,
+            pa,
+            profile_id,
+            medicine_label("amlodipine", "5 mg", "1 biji sekali sehari pagi", 5),
+            pack,
+            "Pa adds amlodipine",
+        ),
+        201,
+        "Pa adds amlodipine",
+    )
+    ok(
+        "Pa added amlodipine the checkpoint-6 way (POST /profiles/{id}/medicines with his OK): one "
+        f"line ({added['generic']} {added['strength']}), a supply of "
+        f"{added['supply']['quantity']} at one a day — five days left, inside the reorder threshold"
+    )
+
+    # 3. The feed: the supply order, with why on every card.
+    first = _page(client, pa, profile_id, "Pa opens his feed")
+    types = _types(first)
+    if first["audience"] != "patient" or first["quiet"] is not False:
+        raise fail("Pa opens his feed", why=f"expected the patient supply by day: {first}")
+    if types[:4] != ["now", "reorder", "reading", "gate"]:
+        raise fail(
+            "Pa opens his feed", why=f"expected now, reorder, reading, gate first; got {types}"
+        )
+    if not types[4:] or not set(types[4:]) <= {"story", "learning"}:
+        raise fail("Pa opens his feed", why=f"expected story and learning past the gate: {types}")
+    if any(item["autoplay"] is not False for item in first["items"]):
+        raise fail("Pa opens his feed", why="a card says autoplay")
+    if any(not item["rendered_from_state"] for item in first["items"]):
+        raise fail("Pa opens his feed", why="a card names no State")
+    reading = next(item for item in first["items"] if item["type"] == "reading")
+    if reading["why"]["fact_ids"] != [today["fact_id"]]:
+        raise fail(
+            "Pa opens his feed", why=f"the reading card does not cite today's fact: {reading}"
+        )
+    state = read_state(client, pa, profile_id, "Pa reads his State beside the feed")
+    if {item["rendered_from_state"] for item in first["items"]} != {state["state_id"]}:
+        raise fail("Pa opens his feed", why="the cards were not rendered from the current State")
+    ok(
+        f"GET /profiles/{{id}}/feed: the supply order — {', '.join(types)} — every card rendered "
+        f"from State snapshot {state['sequence']} ({state['state_id'][:8]}…), none set to autoplay, "
+        "and each says why it is there:"
+    )
+    print_cards(first)
+    if reading["body"][0] != "Your blood pressure today was 138 over 84.":
+        raise fail("Pa opens his feed", why=f"the reading card does not say the number: {reading}")
+    reorder = next(item for item in first["items"] if item["type"] == "reorder")
+    if reorder["why"]["fact_ids"] != [added["fact_id"]] or "runs out on" not in reorder["body"][0]:
+        raise fail("Pa opens his feed", why=f"the reorder card is not from E04's count: {reorder}")
+    ok(
+        f'the reorder card repeats E04\'s own lines — "{reorder["body"][0]}" — cites the '
+        f'medication fact {added["fact_id"][:8]}… and says why: "{reorder["why"]["plain"]}"'
+    )
+    ok(
+        f'the reading card says his number back — "{reading["body"][0]}" — cites fact '
+        f"{today['fact_id'][:8]}… and event {today['event_id'][:8]}…, and has a spoken twin of "
+        f"{len(reading['voice'])} lines"
+    )
+
+    # 4. Two pages with the cursor: the same cursor is the same page; past the gate it is endless.
+    cursor = first["next_cursor"]
+    if not cursor:
+        raise fail("Pa pages on", why="no cursor on the first page")
+    second = _page(client, pa, profile_id, "Pa pages on (cursor)", cursor=cursor)
+    third = _page(
+        client, pa, profile_id, "Pa pages on again (next cursor)", cursor=second["next_cursor"]
+    )
+    again = _page(client, pa, profile_id, "Pa asks for the second page again", cursor=cursor)
+    for page in (second, third):
+        if not page["items"] or not set(_types(page)) <= {"story", "learning"}:
+            raise fail(
+                "Pa pages on", why=f"expected only story and learning past the gate: {_types(page)}"
+            )
+        if any(item["type"] == "learning" and not item["source_id"] for item in page["items"]):
+            raise fail("Pa pages on", why="a learning card names no source")
+    if [i["item_id"] for i in again["items"]] != [i["item_id"] for i in second["items"]]:
+        raise fail("Pa asks for the second page again", why="the same cursor gave a different page")
+    ok(
+        f"paged twice with the cursor (GET …/feed?cursor=): {len(second['items'])} then "
+        f"{len(third['items'])} cards, all story or learning — the list is endless past the gate — "
+        "and the same cursor answers the same page"
+    )
+
+    # 5. Caps: a burst of numbers, one card.
+    for top, bottom in ((140, 86), (136, 82)):
+        check(
+            client.post(
+                f"/profiles/{profile_id}/readings",
+                headers=bearer(pa.token),
+                json={"systolic": top, "diastolic": bottom},
+            ),
+            201,
+            "Pa adds another blood pressure",
+        )
+    burst = _page(client, pa, profile_id, "Pa opens his feed after a burst of numbers")
+    if _types(burst).count("reading") != 1 or burst["held_by_caps"].get("reading") != 2:
+        raise fail(
+            "Pa opens his feed after a burst of numbers",
+            why=f"expected one reading card and two held: {_types(burst)} {burst['held_by_caps']}",
+        )
+    ok(
+        "caps: three numbers today made three cards, one is shown — one of each kind a day, two "
+        f"new cards a day — and the page says what was held: {burst['held_by_caps']}"
+    )
+
+    # 6. Quiet hours, pretending it is 22:30 (dev run only: `?at=`).
+    night = _page(
+        client, pa, profile_id, "Pa opens his feed at night (?at=22:30)", at=_local_today_at(22, 30)
+    )
+    if night["quiet"] is not True or night["items"]:
+        raise fail("Pa opens his feed at night (?at=22:30)", why=f"expected nothing: {night}")
+    ok(
+        "quiet hours (21:00–07:00 on his wall clock, pretended with ?at=22:30 on this dev run): "
+        f"nothing is delivered; held: {night['held_by_caps']}"
+    )
+
+    # 7. A red flag: raised before any ranking, first in the queue, unaffected by caps or the hour.
+    felt = check(
+        client.post(
+            f"/profiles/{profile_id}/feelings", headers=bearer(pa.token), json={"word": "fall"}
+        ),
+        201,
+        "Pa taps 'a fall' on the feeling cloud",
+    )
+    if felt["red_flag"] is not True or not felt["flag_id"]:
+        raise fail("Pa taps 'a fall' on the feeling cloud", why=f"no flag raised: {felt}")
+    night = _page(
+        client,
+        pa,
+        profile_id,
+        "Pa opens his feed at night after the fall",
+        at=_local_today_at(22, 30),
+    )
+    if _types(night) != ["flag"]:
+        raise fail(
+            "Pa opens his feed at night after the fall",
+            why=f"expected only the flag: {_types(night)}",
+        )
+    flagged = _page(client, pa, profile_id, "Pa opens his feed after the fall")
+    if _types(flagged)[:2] != ["flag", "now"] or flagged["held_by_caps"].get("reading") != 2:
+        raise fail(
+            "Pa opens his feed after the fall",
+            why=f"expected the flag first and the caps untouched: {_types(flagged)} {flagged['held_by_caps']}",
+        )
+    flag = flagged["items"][0]
+    ok(
+        "a red flag jumps the queue: POST /profiles/{id}/feelings {word: fall} raised a flag before "
+        "any ranking; the flag card is first, in quiet hours too, and took no place from the two a day:"
+    )
+    for line in flag["body"]:
+        print(f"    {line}")
+
+    # 8. "Not for me": the kind is held for the rest of the day, and State folded his word in.
+    shown = next(item for item in flagged["items"] if item["type"] == "reading")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/feed/{shown['item_id']}/engagement",
+            headers=bearer(pa.token),
+            json={"event": "dismissed"},
+        ),
+        201,
+        "Pa taps 'Not for me' on the reading card",
+    )
+    after = _page(client, pa, profile_id, "Pa opens his feed after 'Not for me'")
+    if "reading" in _types(after):
+        raise fail(
+            "Pa opens his feed after 'Not for me'",
+            why=f"a reading card is still shown: {_types(after)}",
+        )
+    state = read_state(client, pa, profile_id, "Pa reads his State after 'Not for me'")
+    declined = state["dimensions"]["preference"]["facts"].get("declined", {}).get("reading")
+    if not declined or declined["confidence_state"] != "confirmed_by_person":
+        raise fail(
+            "Pa reads his State after 'Not for me'",
+            why=f"no declined fact folded in: {state['dimensions']['preference']}",
+        )
+    ok(
+        "'Not for me' (POST …/feed/{item}/engagement {event: dismissed}): the reading cards are held "
+        f"for the rest of today ({after['held_by_caps']}); his word is a fact — declined.reading, "
+        f"confirmed by him, resting on the engagement event {declined['event_id'][:8]}… — and State "
+        f"folded it into the preference dimension (snapshot {state['sequence']})"
+    )
+
+    # 9. Mei: the caregiver supply, narrowed; the held notice; no gate; sources are not hers.
+    register(client, mei, "en")
+    scopes = ["medicines", "visits", "readings", "records", "emergency"]
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": scopes,
+                "relationship": "daughter",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei in",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": scopes},
+        ),
+        201,
+        "Pa cuts Mei a caregiver key",
+    )
+    hers = _page(client, mei, profile_id, "Mei opens Pa's feed")
+    if hers["audience"] != "caregiver" or "gate" in _types(hers) or _types(hers)[0] != "flag":
+        raise fail(
+            "Mei opens Pa's feed",
+            why=f"expected the caregiver supply, flag first, no gate: {_types(hers)}",
+        )
+    notice = [item for item in hers["items"] if item["type"] == "notice"]
+    if (
+        not notice
+        or notice[0]["status"] != "held"
+        or notice[0]["why"].get("suppressed") != "batch_does_not_match_the_pack"
+    ):
+        raise fail("Mei opens Pa's feed", why=f"expected the held safety notice: {notice}")
+    if any(item["scope"] == "notes" for item in hers["items"]):
+        raise fail(
+            "Mei opens Pa's feed", why="a card built from his private notes reached a caregiver key"
+        )
+    ok(
+        "Mei (caregiver key: medicines, visits, readings, records, emergency) sees the caregiver "
+        f"supply — {', '.join(_types(hers))} — the flag first, no gate, each with its status; the "
+        "safety notice about a warfarin batch that is not the one on his box is held for her and "
+        "was never on his feed:"
+    )
+    print_cards(hers)
+    refused(
+        client.get(f"/profiles/{profile_id}/sources", headers=bearer(mei.token)),
+        403,
+        "NotTheirsToManage",
+        "Mei asks for the allowlist",
+    )
+    ok(
+        "the allowlist is the owner's and his chief's: Mei's caregiver key is refused, NotTheirsToManage (403)"
+    )
+
+    # 10. Learning from the allowlist: the jobs State started, and the card that came of them.
+    jobs = check(
+        client.get(f"/profiles/{profile_id}/search-jobs", headers=bearer(pa.token)),
+        200,
+        "Pa reads the search jobs the engine started",
+    )
+    kinds = {(job["kind"], tuple(job["terms"]), job["cadence"], job["status"]) for job in jobs}
+    if ("explainer", ("warfarin",), "on_change", "done") not in kinds or (
+        "safety",
+        ("warfarin",),
+        "daily",
+        "done",
+    ) not in kinds:
+        raise fail("Pa reads the search jobs the engine started", why=f"jobs {sorted(kinds)}")
+    explainer = next(
+        job for job in jobs if job["kind"] == "explainer" and job["terms"] == ["warfarin"]
+    )
+    if not explainer["results"]["items"] or not explainer["results"]["questions"]:
+        raise fail(
+            "Pa reads the search jobs the engine started", why=f"results {explainer['results']}"
+        )
+    learning = [
+        item
+        for page in (first, second, third)
+        for item in page["items"]
+        if item["type"] == "learning" and "blood thinner" in item["headline"]
+    ]
+    if not learning or not learning[0]["cite"]["url"].startswith("https://www.hsa.gov.sg/"):
+        raise fail(
+            "Pa reads the search jobs the engine started", why="no learning card from the HSA page"
+        )
+    sources = check(
+        client.get(f"/profiles/{profile_id}/sources", headers=bearer(pa.token)),
+        200,
+        "Pa reads the allowlist",
+    )
+    if learning[0]["source_id"] not in {source["source_id"] for source in sources}:
+        raise fail("Pa reads the allowlist", why="the learning card's source is not on it")
+    # E16-01: a learning card is an inferring surface; it ends on the boundary line and the
+    # line is on the card. A card that shows the record back carries none.
+    boundary = (learning[0].get("boundary") or "").splitlines()
+    if not boundary or learning[0]["body"][-len(boundary) :] != boundary:
+        raise fail("Pa reads the learning card", why="it does not end on the boundary line")
+    shown = [item for page in (first, second, third) for item in page["items"]]
+    if any(item.get("boundary") for item in shown if item["type"] not in {"learning", "notice"}):
+        raise fail("Pa reads the learning card", why="a card that infers nothing carries a line")
+    ok(
+        f"self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, "
+        f"{len(jobs)} jobs, all done against the fixture searcher); the explainer made a learning card "
+        f'"{learning[0]["headline"]}" citing {learning[0]["cite"]["url"]} — a source on the allowlist '
+        f"(GET …/sources, {len(sources)} sources) — and rerouted the page that would change a dose "
+        f"as a question for the memo ({len(explainer['results']['questions'])}), never a card; "
+        "it ends on the boundary line it carries (E16-01), and no other card carries one:"
+    )
+    for line in learning[0]["body"]:
+        print(f"    {line}")
+
+    # 11. The offline page.
+    cached = check(
+        client.get(f"/profiles/{profile_id}/feed/cached", headers=bearer(pa.token)),
+        200,
+        "Pa's app asks for the cached page",
+    )
+    if [i["item_id"] for i in cached["items"]] != [i["item_id"] for i in after["items"]]:
+        raise fail("Pa's app asks for the cached page", why="not the last first page rendered")
+    ok(
+        f"GET …/feed/cached: the last first page rendered for Pa, {len(cached['items'])} cards, as it "
+        "was — what the app keeps for an offline launch"
+    )
+
+    # 12. The trail holds the refusals.
+    trail = check(
+        client.get(
+            f"/profiles/{profile_id}/audit",
+            headers=bearer(pa.token),
+            params={"limit": 500},
+        ),
+        200,
+        "Pa reads his audit trail",
+    )
+    refusals = [e for e in trail if e["outcome"] == "refused"]
+    if not any(
+        e["refused_because"] == "NotTheirsToManage" and e["actor_person_id"] == mei.person_id
+        for e in refusals
+    ):
+        raise fail(
+            "Pa reads his audit trail", why="Mei's refused reach for the allowlist is not on it"
+        )
+    shares = [e for e in trail if e["action"] == "share" and e["target"] == "red_flag"]
+    ok(
+        f"Pa reads his audit trail ({len(trail)} lines): every card, page, job and engagement is on "
+        f"it as a write, Mei's refusal is on it by name, and the flag's escalation is {len(shares)} "
+        "share line(s) — none, here, because the fall came before Mei held a key with the emergency scope"
+    )
+
+
 CHECKPOINTS = {
     2: checkpoint_2,
     3: checkpoint_3,
     4: checkpoint_4,
     5: checkpoint_5,
     6: checkpoint_6,
+    8: checkpoint_8,
 }
 
 

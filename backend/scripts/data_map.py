@@ -26,6 +26,7 @@ from sqlalchemy import Table
 # Every module that declares a table, so the metadata is whole.
 import app.audit.models
 import app.consent.models
+import app.delivery.feed.models
 import app.identity.models
 import app.ingestion.models
 import app.keys.confirm
@@ -33,6 +34,7 @@ import app.keys.models
 import app.medicines.models
 import app.memory.models
 import app.notes.models
+import app.safety.red_flags
 import app.state.models  # noqa: F401
 from app.db import Base
 
@@ -83,6 +85,12 @@ CLASSES: dict[str, str] = {
     "dose_taken.id": HEALTH,
     "interaction_flag.id": HEALTH,
     "note.id": HEALTH,
+    "search_job.id": HEALTH,
+    "feed_item.id": HEALTH,
+    "feed_engagement.id": HEALTH,
+    "red_flag.id": HEALTH,
+    "source.id": OPERATIONAL,
+    "feed_page.id": OPERATIONAL,
     # --- accounts and the graph's ownership -------------------------------------------------
     "person.display_name": IDENTIFIER,
     "person.language": OPERATIONAL,
@@ -293,6 +301,74 @@ CLASSES: dict[str, str] = {
     # --- notes --------------------------------------------------------------------------------
     "note.text": HEALTH,
     "note.written_at": HEALTH,
+    # --- the feed (E21) -----------------------------------------------------------------------
+    # The allowlist is global and says nothing about anyone: operational throughout.
+    "source.name": OPERATIONAL,
+    "source.domain": OPERATIONAL,
+    "source.kind": OPERATIONAL,
+    "source.regions": OPERATIONAL,
+    "source.languages": OPERATIONAL,
+    "source.allowlisted": OPERATIONAL,
+    "source.review_status": OPERATIONAL,
+    "source.added_at": OPERATIONAL,
+    # A self-search is about his medicines: its terms, its reason and what it found are health.
+    "search_job.kind": OPERATIONAL,
+    "search_job.terms": HEALTH,
+    "search_job.source_ids": OPERATIONAL,
+    "search_job.cadence": OPERATIONAL,
+    "search_job.reason": HEALTH,
+    "search_job.status": OPERATIONAL,
+    "search_job.results": HEALTH,
+    "search_job.enabled": OPERATIONAL,
+    "search_job.created_by_person_id": IDENTIFIER,
+    "search_job.created_at": OPERATIONAL,
+    "search_job.last_run_at": OPERATIONAL,
+    # A card is what was shown to him about his record: its words, its reason, the State and
+    # the page it came from, and the boundary line it was shown under (E16-01) are health.
+    "feed_item.state_id": HEALTH,
+    "feed_item.boundary": HEALTH,
+    "feed_item.type": HEALTH,
+    "feed_item.supply": OPERATIONAL,
+    "feed_item.caps_class": OPERATIONAL,
+    "feed_item.deliver_to": OPERATIONAL,
+    "feed_item.scope": OPERATIONAL,
+    "feed_item.language": OPERATIONAL,
+    "feed_item.format": OPERATIONAL,
+    "feed_item.headline": HEALTH,
+    "feed_item.body": HEALTH,
+    "feed_item.voice": HEALTH,
+    "feed_item.why": HEALTH,
+    "feed_item.priority": OPERATIONAL,
+    "feed_item.autoplay": OPERATIONAL,
+    "feed_item.source_id": OPERATIONAL,
+    "feed_item.cite": HEALTH,
+    "feed_item.search_job_id": HEALTH,
+    "feed_item.day": OPERATIONAL,
+    "feed_item.dedupe_key": HEALTH,
+    "feed_item.created_at": OPERATIONAL,
+    "feed_item.expires_at": OPERATIONAL,
+    "feed_engagement.item_id": HEALTH,
+    "feed_engagement.person_id": IDENTIFIER,
+    "feed_engagement.kind": OPERATIONAL,
+    "feed_engagement.channel": OPERATIONAL,
+    "feed_engagement.event_id": HEALTH,
+    "feed_engagement.at": OPERATIONAL,
+    # The offline page is a cache of card ids for one person.
+    "feed_page.person_id": IDENTIFIER,
+    "feed_page.audience": OPERATIONAL,
+    "feed_page.item_ids": HEALTH,
+    "feed_page.cursor": OPERATIONAL,
+    "feed_page.next_cursor": OPERATIONAL,
+    "feed_page.quiet": OPERATIONAL,
+    "feed_page.held_by_caps": OPERATIONAL,
+    "feed_page.rendered_at": OPERATIONAL,
+    # A red flag is a symptom he said and who was told.
+    "red_flag.feeling": HEALTH,
+    "red_flag.event_id": HEALTH,
+    "red_flag.raised_by_person_id": IDENTIFIER,
+    "red_flag.raised_at": HEALTH,
+    "red_flag.told": IDENTIFIER,
+    "red_flag.suppressed_because": HEALTH,
 }
 
 

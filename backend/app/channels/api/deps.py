@@ -19,6 +19,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import unit_of_work
+from app.delivery.feed.compress import Compressor, Searcher
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
@@ -42,6 +43,10 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    searcher: Searcher
+    """What finds pages for a self-search job, from allowlisted sources only (E21)."""
+    compressor: Compressor
+    """What turns a page into the lines a card says, with its cite; the fixture one (E21)."""
     drug_registry: DrugRegistry
     """The licensed drug data behind its port (`app.drugs`): identification, interactions and
     monographs come from it and from nowhere else."""

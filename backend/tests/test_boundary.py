@@ -7,9 +7,9 @@ docs/plain-words.md, no line in any language tells him to start, stop or change 
 names a diagnosis, and the register agrees with the table in
 docs/trust/samd-boundary-review.md. The line is structure: a rendered row of an inferring
 surface cannot be written without it (`render_from_state`), the not-feeling-well card may
-carry the discharge letter's own words with the line still last, and the one inferring
-surface on main today, State's posture at `GET /profiles/{id}/state`, carries the line in the
-profile's language.
+carry the discharge letter's own words with the line still last, and State's posture at
+`GET /profiles/{id}/state` carries the line in the profile's language. The feed's learning
+cards, the other inferring surface on main, are held to it in `tests/test_feed.py`.
 """
 
 from __future__ import annotations

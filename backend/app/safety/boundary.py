@@ -16,8 +16,10 @@ holds it to the standard.
 The line is structure, not convention: a rendered row for an inferring surface cannot be
 written without it (`app.state.service.render_from_state` takes `surface` and refuses a row
 whose `boundary` is not this module's line for it — `is_boundary_line`), the way a card
-cannot be written without its State. `GET /state` carries it today; the surfaces still on
-their own branches (E05 visits, E21 feed) pass their `Surface` when they render.
+cannot be written without its State. `GET /state` carries it, and so does every learning
+card in the feed (`app.delivery.feed.items` names `Surface.LEARNING_CARD` for a learning
+card and a notice, and the card's body and voice end on the line); the surfaces still on
+their own branches (E05 visits) pass their `Surface` when they render.
 
 The not-feeling-well card is the one surface allowed to say more than the register: where a
 Fact holds the discharge letter's own instruction, the card carries those words, names the
@@ -51,7 +53,8 @@ class Surface(StrEnum):
     INTERACTION_FLAG = "interaction_flag"
     """An interaction between two medicines, rendered as a question (E04)."""
     LEARNING_CARD = "learning_card"
-    """A learning card in the feed: an explanation chosen for him (E21)."""
+    """A learning card in the feed: an explanation chosen for him (E21), and a safety
+    notice, the same compression of a regulator's page."""
     FEELING_INFERENCE = "feeling_inference"
     """A pattern noticed from how he said he feels (E17-02)."""
     NOT_FEELING_WELL = "not_feeling_well"
