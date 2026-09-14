@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, fixClock, seedMedicine } from "./helpers";
+import { API, fixClock, seedMedicine, setBackendClock } from "./helpers";
+import { FROZEN_CLOCK } from "../../playwright.config";
 import {
   addProvider,
   auth,
@@ -147,13 +148,21 @@ for (const look of LOOKS) {
     await expect(lines).toContainText("Mei was given a key on Monday 14 September.");
     await readable(page, look);
 
-    const reading = await request.post(`${API}/profiles/${pa.profileId}/readings`, { ...auth(pa.token), data: { systolic: 132, diastolic: 80 } });
-    expect(reading.status()).toBe(201);
-    await page.getByTestId("record-back").click();
-    await page.getByTestId("record-changes").click();
-    await expect(lines).toContainText("A new blood pressure was written down on Monday 14 September.");
-    await expect(lines).not.toContainText("This is your first look at what changed.");
-    await expect(lines).not.toContainText("Mei was given a key");
-    await readable(page, look);
+    // The backend's clock stands still for the run: step it past her first look, write, and
+    // look again; then put it back for the tests after.
+    await setBackendClock(request, "2026-09-14T10:05:00+08:00");
+    try {
+      const reading = await request.post(`${API}/profiles/${pa.profileId}/readings`, { ...auth(pa.token), data: { systolic: 132, diastolic: 80 } });
+      expect(reading.status()).toBe(201);
+      await setBackendClock(request, "2026-09-14T10:10:00+08:00");
+      await page.getByTestId("record-back").click();
+      await page.getByTestId("record-changes").click();
+      await expect(lines).toContainText("A new blood pressure was written down on Monday 14 September.");
+      await expect(lines).not.toContainText("This is your first look at what changed.");
+      await expect(lines).not.toContainText("Mei was given a key");
+      await readable(page, look);
+    } finally {
+      await setBackendClock(request, FROZEN_CLOCK);
+    }
   });
 }

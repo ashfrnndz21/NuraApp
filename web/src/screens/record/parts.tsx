@@ -23,20 +23,42 @@ export function session(): { bearer: string; profileId: string } {
   return { bearer, profileId: papers.profile_id };
 }
 
+/** The reads a Record screen is waiting on: while any is, the screen says it is busy
+ *  (`aria-busy`), so a screen reader waits for the lines and nothing moves under a finger. A
+ *  read counts from the screen's first render — before it starts — so no frame says "ready"
+ *  with the lines still to come. `reading` only makes the frame render again when it changes. */
+const inFlight = new Set<object>();
+const reading = signal(0);
+
+function waiting(read: object, on: boolean): void {
+  if (on) inFlight.add(read);
+  else inFlight.delete(read);
+  reading.value = inFlight.size;
+}
+
 /** One read on the way in (and again when `deps` change); a refusal is kept to be said. */
 export function useRead<T>(read: () => Promise<T>, deps: readonly unknown[]): { data: T | null; error: unknown; reload: () => Promise<void> } {
+  const [id] = useState(() => {
+    const mine = {};
+    inFlight.add(mine);
+    return mine;
+  });
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   const reload = async () => {
     setError(null);
+    waiting(id, true);
     try {
       setData(await read());
     } catch (failure) {
       setError(failure);
+    } finally {
+      waiting(id, false);
     }
   };
   useEffect(() => {
     void reload();
+    return () => waiting(id, false);
   }, deps);
   return { data, error, reload };
 }
@@ -72,7 +94,7 @@ interface FrameProps {
 export function RecordFrame({ title, back, testId, children }: FrameProps): JSX.Element {
   const s = t();
   return (
-    <main class="screen record" data-density={density()} data-testid={testId}>
+    <main class="screen record" data-density={density()} data-testid={testId} aria-busy={reading.value >= 0 && inFlight.size > 0 ? "true" : "false"}>
       <Header title={title} />
       {children}
       {back && (

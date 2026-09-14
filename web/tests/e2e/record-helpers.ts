@@ -160,11 +160,17 @@ export async function setUpOnLpa(request: APIRequestContext, mei: Person): Promi
   return ((await opened.json()) as { profile_id: string }).profile_id;
 }
 
-/** Sign in through the app, through the door to someone else's papers when it is not his own. */
+/** Sign in through the app, through the door to someone else's papers when the app shows
+ *  one (a person with one key and no papers of her own is taken straight to them). */
 export async function signInAs(page: Page, person: Pick<Person, "phone">, name: string, door = false): Promise<void> {
   await signInThroughTheApp(page, person.phone, name);
-  if (door) await page.getByTestId("door-key").click();
-  await expect(page.getByTestId("tab-record")).toBeVisible();
+  const tab = page.getByTestId("tab-record");
+  if (door) {
+    const key = page.getByTestId("door-key");
+    await expect(key.or(tab)).toBeVisible();
+    if (await key.isVisible()) await key.click();
+  }
+  await expect(tab).toBeVisible();
 }
 
 /** The density chosen under Me, then the Record's first screen. */
@@ -179,5 +185,7 @@ export async function lookAs(page: Page, look: Look): Promise<void> {
 /** #118's hit test on the screen as it is: every line readable, every control reachable, and
  *  56px targets in his density. */
 export async function readable(page: Page, look: Look): Promise<void> {
+  // A Record screen says it is busy while its reads are in flight; check it once it is not.
+  await page.waitForFunction(() => document.querySelector("main")?.getAttribute("aria-busy") !== "true");
   expect(await nothingDrawnOverLines(page.locator("main"), { minTarget: look === "patient" ? 56 : 0 })).toEqual([]);
 }

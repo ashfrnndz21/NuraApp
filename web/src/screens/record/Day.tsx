@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { RoutineDayIn } from "../../api/types";
@@ -173,7 +173,7 @@ export function RoutineScreen(): JSX.Element {
  *  when his Today page comes; then the day read back, and her yes for exactly it. */
 export function BuilderScreen(): JSX.Element {
   const s = t();
-  const [day, setDay] = useState<RoutineDayIn | null>(null);
+  const [changed, setDay] = useState<RoutineDayIn | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -181,9 +181,8 @@ export function BuilderScreen(): JSX.Element {
     const { bearer, profileId } = session();
     return nura.routine(bearer, profileId, "caregiver", language.value);
   }, []);
-  useEffect(() => {
-    if (routine && day === null) setDay(dayOf(routine));
-  }, [routine]);
+  // The day as it is set now until she changes it: read, not copied in a frame later.
+  const day = changed ?? (routine ? dayOf(routine) : null);
 
   const save = async () => {
     if (!day) return;

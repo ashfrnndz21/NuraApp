@@ -107,13 +107,18 @@ for (const look of LOOKS) {
     await signInAs(page, mei, "Mei", true);
     await lookAs(page, look);
     await page.getByTestId("record-documents").click();
-    await expect(page.getByTestId("no-documents")).toHaveText("Nura keeps no papers like this yet.");
+    // The paper the papers were set up on is there already, by reference, with what it backs.
+    const kept = page.getByTestId("document");
+    await expect(kept).toHaveCount(1);
+    await expect(kept.locator("h2")).toHaveText("Lasting power of attorney");
+    await expect(kept).toContainText("Looking after these papers rests on it.");
+    await expect(kept).toContainText("An agreement to share rests on it.");
     await readable(page, look);
+    // Its bytes arrive: the same paper, one document, still backing the same two things.
     await page.getByTestId("tag-lpa").click();
     await page.getByTestId("file-input").setInputFiles({ name: "lpa.pdf", mimeType: "application/pdf", buffer: LPA_PDF });
     await expect(page.getByTestId("document-added")).toHaveText("Nura kept the paper.");
-    const kept = page.getByTestId("document");
-    await expect(kept.locator("h2")).toHaveText("Lasting power of attorney");
+    await expect(kept).toHaveCount(1);
     await expect(kept).toContainText("Looking after these papers rests on it.");
     await readable(page, look);
   });
