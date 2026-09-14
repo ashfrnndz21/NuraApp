@@ -117,17 +117,16 @@ export const en = {
     relationshipLabel: "Who you are to them",
     // @patient phrase
     relationships: {
-      daughter: { label: "Their daughter", said: "your daughter" },
-      son: { label: "Their son", said: "your son" },
-      wife: { label: "Their wife", said: "your wife" },
-      husband: { label: "Their husband", said: "your husband" },
-      sister: { label: "Their sister", said: "your sister" },
-      brother: { label: "Their brother", said: "your brother" },
-      granddaughter: { label: "Their granddaughter", said: "your granddaughter" },
-      grandson: { label: "Their grandson", said: "your grandson" },
-      niece: { label: "Their niece", said: "your niece" },
-      nephew: { label: "Their nephew", said: "your nephew" },
-      friend: { label: "Their friend", said: "your friend" },
+      daughter: "Their daughter",
+      son: "Their son",
+      spouse: "Their husband or wife",
+      sibling: "Their brother or sister",
+      grandchild: "Their grandchild",
+      other_family: "Someone else in their family",
+      helper: "Their helper",
+      friend: "Their friend",
+      neighbour: "Their neighbour",
+      other: "Someone else",
     },
     // @patient phrase
     pickContact: "Choose from my contacts",
@@ -760,6 +759,19 @@ export const en = {
       phoneLabel: "Their phone number",
       // @patient phrase
       relationshipLabel: "Who they are to you",
+      // @patient phrase
+      relationships: {
+        daughter: "Your daughter",
+        son: "Your son",
+        spouse: "Your husband or wife",
+        sibling: "Your brother or sister",
+        grandchild: "Your grandchild",
+        other_family: "Someone else in your family",
+        helper: "Your helper",
+        friend: "Your friend",
+        neighbour: "Your neighbour",
+        other: "Someone else",
+      },
       // @patient
       partsLead: "Tap each part they can see.",
       // @patient phrase
@@ -871,6 +883,8 @@ export const en = {
     stop: "Stop this",
     // @patient phrase
     stopYes: "Yes, stop it",
+    // @patient phrase
+    howToStop: "How to stop this",
     // @patient phrase
     keepCopy: "Keep a copy to print",
     // @patient phrase
@@ -1286,7 +1300,8 @@ export const en = {
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
-    NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "The Nura team can stop it with you."],
+    NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "Nura's privacy officer can stop it with you."],
+    NotStoppedInTheAppWriteTo: "To stop it, write to Nura's privacy officer at {contact}.",
     DocumentTooLarge: "That file is too big for Nura.",
     CalendarTooLarge: "That calendar file is too big for Nura.",
   },

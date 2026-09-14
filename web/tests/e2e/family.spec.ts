@@ -87,6 +87,11 @@ test("Pa stops letting Kit in after reading what it will do, Kit is out at once,
   await signIn(page, family.pa, true);
   await page.getByTestId("tab-family").click();
   await page.getByTestId("open-consents").click();
+  // Keeping his papers is not one tap: the button asks how, and the backend says where to write.
+  const keeping = page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" });
+  await keeping.getByTestId("how-to-stop").click();
+  await expect(keeping.getByTestId("notice")).toContainText("Nura cannot stop this in the app yet.");
+  await expect(keeping.getByTestId("notice")).toContainText("To stop it, write to Nura's privacy officer at privacy@nura.test.");
   const kits = page.getByTestId("consent").filter({ hasText: "Kit" });
   await expect(kits.getByTestId("consent-words")).toContainText("Kit can see these parts:");
   expect(await patientScreenOk(page)).toEqual([]);
@@ -371,8 +376,11 @@ test("the for-someone door: who you are to them is a choice, and the number can 
   await expect(page.locator("main.onboarding")).toBeVisible();
 
   const token = await apiToken(request, his);
-  const offers = (await (await request.get(`${API}/profiles/mine/claimable?language=en`, { headers: auth(token) })).json()) as { relationship: string | null }[];
-  expect(offers.map((offer) => offer.relationship)).toEqual(["your daughter"]);
+  // A code on the wire; the words are the backend's, in the reader's language.
+  const offers = (await (await request.get(`${API}/profiles/mine/claimable?language=en`, { headers: auth(token) })).json()) as { relationship: string | null; relationship_words: string | null }[];
+  expect(offers.map((offer) => [offer.relationship, offer.relationship_words])).toEqual([["daughter", "your daughter"]]);
+  const malay = (await (await request.get(`${API}/profiles/mine/claimable?language=ms`, { headers: auth(token) })).json()) as { relationship_words: string | null }[];
+  expect(malay.map((offer) => offer.relationship_words)).toEqual(["anak perempuan anda"]);
 });
 
 export type { Family };

@@ -117,17 +117,16 @@ export const ms = {
     relationshipLabel: "Siapa anda kepada mereka",
     // @patient phrase
     relationships: {
-      daughter: { label: "Anak perempuan mereka", said: "anak perempuan anda" },
-      son: { label: "Anak lelaki mereka", said: "anak lelaki anda" },
-      wife: { label: "Isteri mereka", said: "isteri anda" },
-      husband: { label: "Suami mereka", said: "suami anda" },
-      sister: { label: "Kakak atau adik perempuan mereka", said: "kakak atau adik perempuan anda" },
-      brother: { label: "Abang atau adik lelaki mereka", said: "abang atau adik lelaki anda" },
-      granddaughter: { label: "Cucu perempuan mereka", said: "cucu perempuan anda" },
-      grandson: { label: "Cucu lelaki mereka", said: "cucu lelaki anda" },
-      niece: { label: "Anak saudara perempuan mereka", said: "anak saudara perempuan anda" },
-      nephew: { label: "Anak saudara lelaki mereka", said: "anak saudara lelaki anda" },
-      friend: { label: "Kawan mereka", said: "kawan anda" },
+      daughter: "Anak perempuan mereka",
+      son: "Anak lelaki mereka",
+      spouse: "Suami atau isteri mereka",
+      sibling: "Adik-beradik mereka",
+      grandchild: "Cucu mereka",
+      other_family: "Ahli keluarga mereka yang lain",
+      helper: "Pembantu mereka",
+      friend: "Kawan mereka",
+      neighbour: "Jiran mereka",
+      other: "Orang lain",
     },
     // @patient phrase
     pickContact: "Pilih daripada kenalan saya",
@@ -760,6 +759,19 @@ export const ms = {
       phoneLabel: "Nombor telefon mereka",
       // @patient phrase
       relationshipLabel: "Siapa mereka kepada anda",
+      // @patient phrase
+      relationships: {
+        daughter: "Anak perempuan anda",
+        son: "Anak lelaki anda",
+        spouse: "Suami atau isteri anda",
+        sibling: "Adik-beradik anda",
+        grandchild: "Cucu anda",
+        other_family: "Ahli keluarga anda yang lain",
+        helper: "Pembantu anda",
+        friend: "Kawan anda",
+        neighbour: "Jiran anda",
+        other: "Orang lain",
+      },
       // @patient
       partsLead: "Tekan setiap bahagian yang boleh mereka lihat.",
       // @patient phrase
@@ -869,6 +881,8 @@ export const ms = {
     stop: "Hentikan ini",
     // @patient phrase
     stopYes: "Ya, hentikan",
+    // @patient phrase
+    howToStop: "Cara menghentikan ini",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
     // @patient phrase
@@ -1282,7 +1296,8 @@ export const ms = {
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
-    NotStoppedInTheApp: ["Nura belum boleh hentikan ini dalam aplikasi.", "Pasukan Nura boleh hentikannya bersama anda."],
+    NotStoppedInTheApp: ["Nura belum boleh hentikan ini dalam aplikasi.", "Pegawai privasi Nura boleh hentikannya bersama anda."],
+    NotStoppedInTheAppWriteTo: "Untuk menghentikannya, tulis kepada pegawai privasi Nura di {contact}.",
     DocumentTooLarge: "Dokumen itu terlalu besar untuk Nura.",
     CalendarTooLarge: "Dokumen kalendar itu terlalu besar untuk Nura.",
   },

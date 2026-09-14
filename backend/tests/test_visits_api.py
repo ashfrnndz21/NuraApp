@@ -363,7 +363,7 @@ async def test_a_clinic_key_reads_the_visits_and_cannot_write_them(deployment: D
     await _recording(deployment, his, profile_id)
     appointment_id = await _visit(deployment, his, profile_id)
     clinic = await register_by_phone(deployment, MEI, "Clinic")
-    await let_in(deployment, pa, profile_id, MEI, ["visits", "records", "medicines"], "clinic")
+    await let_in(deployment, pa, profile_id, MEI, ["visits", "records", "medicines"], "other")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={
@@ -533,7 +533,7 @@ async def _key(
     role: str,
     scopes: list[str],
 ) -> None:
-    await let_in(deployment, owner, profile_id, phone, scopes, "family")
+    await let_in(deployment, owner, profile_id, phone, scopes, "other_family")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": role, "scopes": scopes},

@@ -117,17 +117,16 @@ export const zh = {
     relationshipLabel: "您是他们的什么人",
     // @patient phrase
     relationships: {
-      daughter: { label: "他们的女儿", said: "您的女儿" },
-      son: { label: "他们的儿子", said: "您的儿子" },
-      wife: { label: "他们的妻子", said: "您的妻子" },
-      husband: { label: "他们的丈夫", said: "您的丈夫" },
-      sister: { label: "他们的姐妹", said: "您的姐妹" },
-      brother: { label: "他们的兄弟", said: "您的兄弟" },
-      granddaughter: { label: "他们的孙女", said: "您的孙女" },
-      grandson: { label: "他们的孙子", said: "您的孙子" },
-      niece: { label: "他们的侄女", said: "您的侄女" },
-      nephew: { label: "他们的外甥", said: "您的外甥" },
-      friend: { label: "他们的朋友", said: "您的朋友" },
+      daughter: "他们的女儿",
+      son: "他们的儿子",
+      spouse: "他们的丈夫或妻子",
+      sibling: "他们的兄弟姐妹",
+      grandchild: "他们的孙子或孙女",
+      other_family: "他们的其他家人",
+      helper: "他们的帮手",
+      friend: "他们的朋友",
+      neighbour: "他们的邻居",
+      other: "其他人",
     },
     // @patient phrase
     pickContact: "从我的联系人里选",
@@ -760,6 +759,19 @@ export const zh = {
       phoneLabel: "他们的手机号码",
       // @patient phrase
       relationshipLabel: "他们是您的什么人",
+      // @patient phrase
+      relationships: {
+        daughter: "您的女儿",
+        son: "您的儿子",
+        spouse: "您的丈夫或妻子",
+        sibling: "您的兄弟姐妹",
+        grandchild: "您的孙子或孙女",
+        other_family: "您的其他家人",
+        helper: "您的帮手",
+        friend: "您的朋友",
+        neighbour: "您的邻居",
+        other: "其他人",
+      },
       // @patient
       partsLead: "他们可以看的，每一样点一下。",
       // @patient phrase
@@ -869,6 +881,8 @@ export const zh = {
     stop: "停止这个",
     // @patient phrase
     stopYes: "好，停止",
+    // @patient phrase
+    howToStop: "怎样停止这个",
     // @patient phrase
     keepCopy: "留一份可以打印",
     // @patient phrase
@@ -1282,7 +1296,8 @@ export const zh = {
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
-    NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 团队可以和您一起停止它。"],
+    NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 的隐私负责人可以和您一起停止它。"],
+    NotStoppedInTheAppWriteTo: "要停止它，请写信给 Nura 的隐私负责人：{contact}。",
     DocumentTooLarge: "那个文件太大了，Nura 打不开。",
     CalendarTooLarge: "那个日历文件太大了，Nura 打不开。",
   },

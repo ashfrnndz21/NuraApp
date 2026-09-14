@@ -381,13 +381,17 @@ async def claim(body: ClaimIn, context: Context, session: Db) -> ProfileOut:
 
 
 @router.get("/{profile_id}/stewardship")
-async def stewardship(context: Context, session: Db) -> StewardshipOut:
+async def stewardship(
+    person: CurrentPerson, context: Context, session: Db, language: str | None = Language
+) -> StewardshipOut:
     """Who holds this graph for the patient and on what footing, or held it until he claimed
     it. Read under the profile scope, which every key holds: who holds a graph is part of
     whose graph it is. `NoStewardshipHere` (404) if it was never set up for someone."""
     found = await require_stewardship(session, context=context)
     return StewardshipOut.of(
-        found, await person_display_name(session, context, found.steward_person_id)
+        found,
+        await person_display_name(session, context, found.steward_person_id),
+        language or person.language,
     )
 
 

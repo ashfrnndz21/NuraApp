@@ -1,3 +1,4 @@
+import type { Relationship } from "../strings/types";
 /** The API's answers, as the backend's pydantic schemas name them
  *  (`backend/app/channels/api/schemas.py`). Only the fields the client reads are typed. */
 
@@ -40,6 +41,8 @@ export interface ClaimableOut {
   steward_person_id: string;
   set_up_by: string;
   relationship: string | null;
+  /** Who set it up is to him, in the words' language: "your daughter". */
+  relationship_words?: string | null;
   parts: string[];
   words_language: string;
   hold_wording_version: string;
@@ -290,6 +293,7 @@ export interface ReadingOut {
 export interface RefusalBody {
   refusal: string;
   scope?: string;
+  contact?: string;
   drug_class?: string;
 }
 
@@ -691,7 +695,7 @@ export interface SharingIn {
   /** The name the words use for the person, as he calls them (`HolderNeedsAName` without it). */
   holder_display_name: string;
   scopes: Part[];
-  relationship: string | null;
+  relationship: Relationship | null;
   language: string;
 }
 

@@ -353,7 +353,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["medicines", "visits", "readings"],
-                "relationship": "anak perempuan",
+                "relationship": "daughter",
                 "language": "ms",
                 "captured_via": "app",
             },

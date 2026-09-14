@@ -38,6 +38,7 @@ from app.family.models import (
     ThreadMessage,
 )
 from app.family.pushes import Preview, PushState
+from app.family.relationships import Relationship, relationship_words
 from app.family.roster import OnDuty
 from app.family.thread import Digest, DigestEntry
 from app.family.trail import TrailDay, TrailLine
@@ -230,7 +231,7 @@ class SharingConsentIn(BaseModel):
     phone (`HolderNeedsAName` without it). A number that is not an account yet keeps it until
     the person signs in and gives his own."""
     scopes: list[Scope] = Field(min_length=1)
-    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
     captured_via: ConsentChannel
     wording_version: str | None = Field(
@@ -252,7 +253,7 @@ class SharingPreviewIn(BaseModel):
     holder_person_id: uuid.UUID | None = None
     holder_display_name: str | None = Field(default=None, max_length=80)
     scopes: list[Scope] = Field(min_length=1)
-    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
 
     @model_validator(mode="after")
@@ -398,8 +399,8 @@ class ProfileForSomeone(BaseModel):
     `consent` is the agreement to Nura keeping the record as the caller read it; `basis`
     is what entitles him to give it for the patient: the patient asked (his claim is the
     proof to come), or a lasting power of attorney or a doctor's letter, with `evidence`.
-    `relationship` is who the caller is to the patient, in the caller's words, for the
-    claim to name him by.
+    `relationship` is who the caller is to the patient, as a code (`Relationship`), for the
+    claim to name him by in his own language.
     """
 
     patient_phone_e164: str = Field(pattern=PHONE)
@@ -407,7 +408,7 @@ class ProfileForSomeone(BaseModel):
     language: str = Field(min_length=2, max_length=16)
     consent: ConsentIn
     basis: ConsentBasis
-    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    relationship: Relationship | None = None
     evidence: EvidenceIn | None = None
 
     @model_validator(mode="after")
@@ -428,6 +429,8 @@ class StewardshipOut(BaseModel):
     steward_person_id: uuid.UUID
     steward_display_name: str
     relationship: str | None
+    relationship_words: str | None = None
+    """The code in the reader's language: "your daughter"."""
     basis: ConsentBasis
     key_id: uuid.UUID
     consent_id: uuid.UUID
@@ -436,13 +439,16 @@ class StewardshipOut(BaseModel):
     claimed_by_person_id: uuid.UUID | None
 
     @classmethod
-    def of(cls, stewardship: Stewardship, steward_display_name: str) -> StewardshipOut:
+    def of(
+        cls, stewardship: Stewardship, steward_display_name: str, language: str | None = None
+    ) -> StewardshipOut:
         return cls(
             stewardship_id=stewardship.id,
             profile_id=stewardship.profile_id,
             steward_person_id=stewardship.steward_person_id,
             steward_display_name=steward_display_name,
             relationship=stewardship.relationship,
+            relationship_words=relationship_words(stewardship.relationship, language),
             basis=stewardship.basis,
             key_id=stewardship.key_id,
             consent_id=stewardship.consent_id,
@@ -465,6 +471,8 @@ class ClaimableOut(BaseModel):
     steward_person_id: uuid.UUID
     set_up_by: str
     relationship: str | None
+    relationship_words: str | None = None
+    """Who set it up is to him, in `words_language`: "your daughter"."""
     parts: list[Scope]
     words_language: str
     hold_wording_version: str
@@ -482,6 +490,9 @@ class ClaimableOut(BaseModel):
             steward_person_id=claimable.stewardship.steward_person_id,
             set_up_by=claimable.steward.display_name,
             relationship=claimable.stewardship.relationship,
+            relationship_words=relationship_words(
+                claimable.stewardship.relationship, claimable.draft.language
+            ),
             parts=[Scope(name) for name in claimable.draft.scopes],
             words_language=claimable.draft.language,
             hold_wording_version=claimable.draft.hold_wording_version,

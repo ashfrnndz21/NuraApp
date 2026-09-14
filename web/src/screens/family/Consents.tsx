@@ -8,8 +8,8 @@ import { Notice, Pill, Tile } from "../../ui/components";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, whose } from "./common";
 
 /** What the owner stops in the app with one yes (`app.consent.withdrawal.APP_STOPS`). Keeping
- *  his papers and WhatsApp carry the red-flag paths, and are stopped with the Nura team: the
- *  app does not offer what it cannot do, and the backend refuses it by name besides. */
+ *  his papers and WhatsApp carry the red-flag paths, and are stopped with Nura's privacy
+ *  officer: for those the button asks how, and the backend's refusal says where to write. */
 const APP_STOPS: ReadonlySet<string> = new Set(["share_with_family", "recording", "calendar"]);
 
 /** E00-02: every agreement in force, in the words he read; stopping one, after the backend
@@ -61,11 +61,11 @@ export function ConsentsPart(): JSX.Element | null {
           {inForce(list.value ?? []).map((consent) => (
             <Tile paper key={consent.consent_id} testId="consent">
               <Lines lines={wordingLines(consent)} testId="consent-words" />
-              {APP_STOPS.has(consent.purpose ?? "") && (
-                <Pill onClick={() => void ask(consent)} disabled={a.busy} testId="stop">
-                  {words.stop}
-                </Pill>
-              )}
+              {/* What the app does not stop with one tap still says how: the backend's refusal
+                  names who to write to. */}
+              <Pill onClick={() => void ask(consent)} disabled={a.busy} testId={APP_STOPS.has(consent.purpose ?? "") ? "stop" : "how-to-stop"}>
+                {APP_STOPS.has(consent.purpose ?? "") ? words.stop : words.howToStop}
+              </Pill>
               <NoticeAt act={a} where={consent.consent_id} />
             </Tile>
           ))}

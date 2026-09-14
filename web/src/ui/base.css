@@ -604,6 +604,7 @@ a.pill.plum {
 .review .item-meta {
   font-size: var(--text-caption);
   color: var(--ink-soft);
+}
 
 /* The patient's day (W7). A feeling word keeps the patient target both ways, however short the
    word; the top three is one card and its Next; a clip's caption sits under its button, in

@@ -8,6 +8,11 @@
 
 export type Language = "en" | "ms" | "zh";
 
+/** Who someone is to the patient: the backend's closed set of codes (`Relationship`). */
+export type Relationship = "daughter" | "son" | "spouse" | "sibling" | "grandchild" | "other_family" | "helper" | "friend" | "neighbour" | "other";
+
+export const RELATIONSHIPS: readonly Relationship[] = ["daughter", "son", "spouse", "sibling", "grandchild", "other_family", "helper", "friend", "neighbour", "other"];
+
 export const LANGUAGES: readonly Language[] = ["en", "ms", "zh"];
 
 export interface Strings {
@@ -58,9 +63,9 @@ export interface Strings {
     theirName: string;
     theirPhone: string;
     relationshipLabel: string;
-    /** Who the one setting up is to him, as a choice: the label she taps, and the words the
-     *  claim says to him ("Mei, your daughter, made this for you."). */
-    relationships: Record<"daughter" | "son" | "wife" | "husband" | "sister" | "brother" | "granddaughter" | "grandson" | "niece" | "nephew" | "friend", { label: string; said: string }>;
+    /** Who the one setting up is to him, as a choice: the label she taps. The code goes to
+     *  the backend, which says it to him in his language ("Mei, your daughter, …"). */
+    relationships: Record<Relationship, string>;
     pickContact: string;
     asked: string;
     create: string;
@@ -387,6 +392,8 @@ export interface Strings {
       nameLabel: string;
       phoneLabel: string;
       relationshipLabel: string;
+      /** Who the person let in is to him, as a choice; the code goes to the backend. */
+      relationships: Record<Relationship, string>;
       partsLead: string;
       parts: Record<"medicines" | "visits" | "readings" | "records", string>;
       seeWords: string;
@@ -427,6 +434,7 @@ export interface Strings {
     consentsOther: string;
     stop: string;
     stopYes: string;
+    howToStop: string;
     keepCopy: string;
     savePage: string;
     thread: string;

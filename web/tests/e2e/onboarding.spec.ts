@@ -500,7 +500,7 @@ test("the Ready screen's other actions: breakfast from its card, and one person 
   const mei = freshPhone("+659883");
   await page.getByLabel("Their name").fill("Mei");
   await page.getByLabel("Their phone number").fill(mei);
-  await page.getByLabel("Who they are to you").fill("daughter");
+  await page.getByTestId("invite-relationship-daughter").click();
   await page.getByTestId("invite-next").click();
   await page.getByTestId("part-medicines").click();
   await page.getByTestId("part-visits").click();
