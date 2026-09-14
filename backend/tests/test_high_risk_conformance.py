@@ -38,7 +38,7 @@ from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
 from app.memory import semantic
 from app.memory.episodic import record_event, store_artifact
-from app.memory.models import Artifact, ArtifactKind, EventKind, SourceChannel
+from app.memory.models import Artifact, ArtifactKind, EventKind, Recording, SourceChannel
 from app.memory.semantic import assert_fact, current_facts
 from app.regions import Region
 from app.safety.high_risk import (
@@ -49,7 +49,7 @@ from app.safety.high_risk import (
 from tests.api import bearer, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.paper import WARFARIN_LABEL, placeholder_png
-from tests.support import OPENING_CONSENT, agree_to_recording, refused_unit
+from tests.support import OPENING_CONSENT, refused_unit
 
 PA = "+6591110001"
 
@@ -80,9 +80,6 @@ async def _pa(session: AsyncSession) -> KeyContext:
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
-    # A voice note rests on the RECORDING consent (E16-02); this suite is about what a voice
-    # note may then say, so Pa has agreed to be listened to.
-    await agree_to_recording(session, owner)
     return owner
 
 
@@ -97,6 +94,8 @@ async def _artifact(session: AsyncSession, context: KeyContext, kind: ArtifactKi
         sha256=digest,
         captured_at=utcnow(),
         source_channel=SourceChannel.APP,
+        # A voice note is someone's own words, kept on the record consent (ADR 0003).
+        recording=Recording.OWN_NOTE if kind is ArtifactKind.VOICE else None,
         region=Region.SG,
     )
 
@@ -196,8 +195,8 @@ async def test_a_whatsapp_message_or_a_voice_note_is_words_alone(sg: AsyncSessio
 
 
 async def _voice_note(deployment: Deployment, profile_id: str, who: dict[str, str]) -> str:
-    """No route makes a voice artefact yet, so it is written the way the recording surface
-    will write it, under the owner's context."""
+    """His own voice note, written as the notes on an event write it (E02-06): a VOICE
+    artefact declared `Recording.OWN_NOTE`, on the consent to hold the record (ADR 0003)."""
     async with deployment.sessions() as session:
         context = await resolve_key_context(
             session,
@@ -205,7 +204,6 @@ async def _voice_note(deployment: Deployment, profile_id: str, who: dict[str, st
             person_id=uuid.UUID(who["person_id"]),
             profile_id=uuid.UUID(profile_id),
         )
-        await agree_to_recording(session, context)
         artifact = await _artifact(session, context, ArtifactKind.VOICE)
         await session.commit()
         return str(artifact.id)

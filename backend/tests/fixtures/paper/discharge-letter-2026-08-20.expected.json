@@ -1,0 +1,43 @@
+{
+  "placeholder": "discharge-letter-2026-08-20",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "discharge_letter",
+  "fields": [
+    {
+      "subject": "discharge",
+      "attribute": "admitted_on",
+      "value": "2026-08-16",
+      "unit": null
+    },
+    {
+      "subject": "discharge",
+      "attribute": "discharged_on",
+      "value": "2026-08-20",
+      "unit": null
+    },
+    {
+      "subject": "discharge",
+      "attribute": "reason",
+      "value": "heart failure",
+      "unit": null
+    },
+    {
+      "subject": "discharge",
+      "attribute": "weight_at_discharge",
+      "value": 68.5,
+      "unit": "kg"
+    },
+    {
+      "subject": "visit",
+      "attribute": "next_visit",
+      "value": "2026-09-29",
+      "unit": null
+    },
+    {
+      "subject": "visit",
+      "attribute": "doctor",
+      "value": "Dr Tan",
+      "unit": null
+    }
+  ]
+}

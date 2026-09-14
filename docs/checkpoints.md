@@ -23,14 +23,14 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 15 | Biography | Written by its story | — | planned |
 | 16 | Timeline | Written by its story | — | planned |
 | 17 | Trends, routine and calendar | Written by its story | — | planned |
-| 18 | Capture | Written by its story | — | planned |
+| 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 **Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13, 18)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: the operator opens the app on a phone first and attaches screenshots to the checkpoint note; you then open the URL yourself in Safari.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -525,6 +525,69 @@ checkpoint 9 passed: every step did what docs/checkpoints.md says
 2. **The signed webhook.** The dev door walks the webhook's path; the webhook itself checks a signature first. `POST /whatsapp/webhook` with any body and no `X-Hub-Signature-256` header answers `403 {"refusal": "NotAWebhook"}` and nothing happens. `GET /whatsapp/webhook?hub.mode=subscribe&hub.verify_token=nura-dev-webhook-secret&hub.challenge=hello` answers `hello`: the handshake a provider makes once, with the secret `make dev` sets. A wrong token is `403`.
 
 The provider is a port (`backend/app/channels/whatsapp/provider.py`): `send_text`, `send_template`, `fetch_media`, `verify_webhook`, `parse_inbound`. The fixture behind it is the only one built, and the process refuses to start on it outside a declared dev run, the way it refuses the logging code sender. The six templates are in `backend/app/channels/whatsapp/templates.py` as names, slot lists and the words in English, Malay and Chinese; a real number carries them to Meta for approval once, and `app/channels/whatsapp/config.py` says which are approved on this number.
+
+## How to run checkpoint 18
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Two fresh phone numbers every run, Pa and Mei, so it can be run again on the same `dev.db`.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0018 adds the note on an event and two columns on the card), serves on http://127.0.0.1:8000
+make checkpoint N=18    # terminal 2: walks the whole scenario, about three seconds
+```
+
+No photo, PDF or recording is sent. The papers are the redacted samples in `backend/tests/fixtures/paper/` — a small placeholder byte string each (a PNG signature, or a `%PDF-1.4` header, and a label) and a JSON file that says what the extractor reads off it; the voice note is a placeholder too, and `backend/tests/fixtures/voice/` says what the fixture transcriber hears. The bytes go to the local object store under `backend/var/objects/SG/`. The real handwriting, PDF and screen recognisers, and a speech provider in the region, are later adapters behind the same two ports. The last step runs the accuracy harness (`python3 -m tests.paper_accuracy`) from the backend directory, the way you would.
+
+What you will see (the numbers, ids and times change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591816634) registered by phone code and signed in (the code read from the server log)
+✓ Mei (+6592828419) registered by phone code and signed in (the code read from the server log)
+✓ Pa opened his profile and cut Mei a caregiver key to his record and his readings
+✓ Pa photographed Dr Tan's handwritten clinic slip (offered as a clinic_slip): drug, dose and the rest read with their confidence; the frequency, scrawled, came back unreadable — no value, never guessed — with the lines the card shows:
+    visit.doctor                   Dr Tan                   confidence 0.88  clear
+    medicine.name                  Amlodipine               confidence 0.86  clear
+    medicine.strength              5 mg                     confidence 0.84  clear
+    medicine.dose                  1 tablet                 confidence 0.81  clear
+    medicine.frequency             —                        confidence 0.12  unreadable — Nura could not read this. Please type it.
+    visit.next_visit               2026-12-10               confidence 0.66  dotted
+✓ confirming the frequency as read is refused: UnreadableField (400) — it is typed in, or rejected
+✓ Mei, with her key to the record, typed what the slip says — "once a day in the morning"; the field names her, the card is still open
+✓ Pa confirmed the card: 6 facts, each resting on the photo and on the visit the slip records (an event on 10 September); the frequency is Mei's words, confirmed by Pa
+✓ Pa imported his two-page hospital letter from the portal (POST /profiles/{id}/imports): a PDF artefact, read as a discharge_letter dated 2026-08-20, every field with its page:
+    page 1  discharge.admitted_on          2026-08-16               confidence 0.95  clear
+    page 1  discharge.discharged_on        2026-08-20               confidence 0.96  clear
+    page 1  discharge.reason               heart failure            confidence 0.89  clear
+    page 2  discharge.weight_at_discharge  68.5 kg                  confidence 0.91  clear
+    page 2  visit.next_visit               2026-09-29               confidence 0.84  clear
+    page 2  visit.doctor                   Dr Tan                   confidence 0.74  dotted
+✓ one yes: the discharge recorded as an event on 20 August, and 6 facts naming it and the PDF, valid from the date on the letter
+✓ the shop receipt forwarded by email is an open card with no fields and one line: "This does not look like a health paper."
+✓ a photo offered as a PDF is refused before a byte lands: NotAPdf (400)
+✓ Pa typed this morning's blood pressure (142/88) and left a voice note on it: his own words, kept as a voice artefact on the record consent — no recording consent asked or on file (ADR 0003) — and heard at 0.91 as "I took it after my walk. I felt fine, only a little tired."
+✓ Mei recalls the note on the reading and plays it back (audio/m4a, 41 bytes, the same Pa sent): hearable, and not a fact — his facts are the same 13 as before
+✓ Pa photographed his blood pressure machine's screen (POST /profiles/{id}/readings/photo): read with no typing — the numbers, their units, the machine and the time on its screen:
+    device.kind                    blood_pressure_monitor   confidence 0.90  clear
+    blood_pressure.systolic        138 mmHg                 confidence 0.97  clear
+    blood_pressure.diastolic       84 mmHg                  confidence 0.95  clear
+    heart_rate.pulse               72 /min                  confidence 0.93  clear
+    reading.taken_at               2026-09-14T07:42         confidence 0.86  clear
+✓ one yes: a reading event at 7.42 on his clock and its facts — blood_pressure.reading {systolic 138, diastolic 84} mmHg, the shape POST /readings writes, and heart_rate.reading {pulse 72} — State recomputed, snapshot 13 → 15, trigger new_fact naming fact 5390d854…
+✓ a lab report sent as a machine's screen is an open card with no fields: "This does not look like the screen of a machine."
+✓ the accuracy harness over every labelled paper (python3 -m tests.paper_accuracy): harness: 8 papers (8 read as the right kind), 39 labelled fields — 37 read right (94.9%), 2 caught and put to a person, 0 silently wrong, 0 dropped, 0 invented: 100.0% read right or put in front of a person
+✓ Pa reads his trail (365 lines); every refusal of this walk is on it:
+    2026-09-14T15:43:32   Pa  write records artifact  refused NotAPdf
+    2026-09-14T15:43:32   Pa  read records review_card  refused UnreadableField
+checkpoint 18 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 18 passed`. The criteria: a handwritten slip is read with a confidence on every field, and a field Nura could not read carries no value, says "Nura could not read this. Please type it.", and is never confirmed as read — someone holding the record types it, the field names who did, and the facts only land on the patient's yes; a clinic slip and a hospital letter are written as the visit and the discharge they record, on the date on the paper, and their facts name that event and the page; a PDF is read page by page, a PDF that is not a health paper is an open card that says so, and anything that is not a PDF is refused before a byte lands; a voice note on an event is the writer's own words and rests on the consent to hold the record, not the recording consent, which is for consults (ADR 0003); it is kept as a voice artefact in the region, is heard back byte for byte, and its words are kept by reference and never become a fact; a machine's screen is read into the numbers, their units, the machine and the time with no typing, and one yes writes one reading event and its facts in the shape a typed reading takes, and State recomputes; a photo sent as a machine's screen that is not one says so; every labelled paper is either read right or put in front of a person; every refusal is on the trail. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+
+**Three things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token and the profile id from it:
+
+1. **A private scribble.** `POST /profiles/{profile_id}/events/{event_id}/notes` on the reading's event with `"kind": "scribble"`, the base64 of a small PNG of your own, `"content_type": "image/png"`, any `captured_at`, `"private": true` and a `"label"` of a few words. Pa's `GET …/notes` lists it; Mei's (her token) does not, and her `GET …/notes/{note_id}/content` is `404 {"refusal": "NoSuchEventNote"}`. A label over 80 characters is `400 {"refusal": "NotALabel"}`.
+2. **Half a blood pressure.** Upload the machine's screen again (`POST /profiles/{profile_id}/readings/photo`, the same bytes make a new card), mint an OK rejecting only the diastolic, and confirm: `400 {"refusal": "NotAWholeReading"}`, and nothing is written — a reading is both numbers or neither.
+3. **The harness by itself.** `cd backend && python3 -m tests.paper_accuracy` prints the accuracy field by field. `backend/tests/fixtures/paper/README.md` says how to add one of your own papers, redacted, with its labelled answer; the harness then measures it the same way.
 
 ## Rules the operator follows between checkpoints
 
