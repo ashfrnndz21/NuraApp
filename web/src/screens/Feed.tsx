@@ -298,6 +298,13 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
                 {fill(s.feed[status], { name })}
               </p>
             )}
+            {view.source && (
+              <p class="provenance source" data-testid="source">
+                <a href={view.source.url} target="_blank" rel="noopener noreferrer">
+                  {fill(s.feed.fromPublisher, { publisher: view.source.publisher })}
+                </a>
+              </p>
+            )}
             {view.why && (
               <p class="provenance" data-testid="why">
                 {view.why}

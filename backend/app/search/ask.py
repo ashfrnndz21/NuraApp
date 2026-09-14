@@ -34,7 +34,13 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_read, audited_write
+from app.audit.access import (
+    audited,
+    audited_profile_read,
+    audited_read,
+    audited_write,
+    person_display_name,
+)
 from app.audit.models import Action
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
@@ -44,6 +50,7 @@ from app.delivery import timeline_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
 from app.ingestion.models import ReviewCard
+from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -102,6 +109,59 @@ MEDICINE_WORDS = frozenset(
 )
 VISIT_WORDS = frozenset({"visit", "visits", "appointment", "lawatan", "看医生", "预约"})
 PAPER_WORDS = frozenset({"paper", "papers", "letter", "surat", "文件"})
+NOTE_WORDS = frozenset(
+    {"note", "notes", "voice note", "scribble", "nota", "nota suara", "笔记", "语音"}
+)
+"""What a question calls a note on one of his moments (E02-06), in every language."""
+_NOTE_STOP = frozenset(
+    {
+        "what",
+        "when",
+        "where",
+        "which",
+        "that",
+        "this",
+        "these",
+        "those",
+        "with",
+        "have",
+        "from",
+        "they",
+        "them",
+        "then",
+        "there",
+        "their",
+        "were",
+        "been",
+        "just",
+        "very",
+        "some",
+        "into",
+        "also",
+        "said",
+        "will",
+        "would",
+        "could",
+        "should",
+        "does",
+        "yang",
+        "saya",
+        "anda",
+        "untuk",
+        "dengan",
+        "pada",
+        "tidak",
+        "sudah",
+        "akan",
+        "boleh",
+        "bila",
+        "mana",
+        "siapa",
+        "kenapa",
+    }
+)
+"""The words heard in a note that say nothing on their own: a note is not about every
+question that begins "what" or "when"."""
 _GENERIC_WORDS = frozenset(
     {"test", "paper", "number", "filter", "your", "the", "ujian", "surat", "nombor", "blood"}
 )
@@ -184,6 +244,9 @@ class _Corpus:
     paper_kinds: dict[uuid.UUID, str] = field(default_factory=dict)
     hung: dict[uuid.UUID, list[Attachment]] = field(default_factory=dict)
     consults: dict[uuid.UUID, tuple[SummaryItem, VisitSummary]] = field(default_factory=dict)
+    notes: dict[uuid.UUID, NoteView] = field(default_factory=dict)
+    writers: dict[uuid.UUID, str] = field(default_factory=dict)
+    """Who left each note, by name: "Mei left a note on Monday 14 September"."""
     clips_open: bool = False
     """Whether the key may hear the recording to play a clip: the patient and the family he
     let in (`app.memory.episodic.hears_consults`), the rule the artefact door keeps."""
@@ -217,6 +280,15 @@ def _with_words(phrases: set[str]) -> frozenset[str]:
             if len(word) >= 4 and word not in _GENERIC_WORDS:
                 found.add(word)
     return frozenset(found)
+
+
+def _note_words(text: str) -> set[str]:
+    """The words heard in a note that say something on their own ("walk", "tired")."""
+    return {
+        word
+        for word in _LATIN_WORD.findall(text.lower())
+        if len(word) >= 4 and word not in _GENERIC_WORDS and word not in _NOTE_STOP
+    }
 
 
 def _what_names(subject: str) -> set[str]:
@@ -262,7 +334,10 @@ def _is_reading(fact: Fact) -> bool:
 
 
 async def _corpus(
-    session: AsyncSession, context: KeyContext, registry: DrugRegistry | None
+    session: AsyncSession,
+    context: KeyContext,
+    registry: DrugRegistry | None,
+    store: ObjectStore,
 ) -> _Corpus:
     corpus = _Corpus()
     if context.allows(Scope.VISITS):
@@ -359,7 +434,43 @@ async def _corpus(
             corpus.candidates.append(
                 Candidate("paper", artifact.id, artifact.captured_at, _with_words(names))
             )
+        await _notes(session, context, store, corpus)
     return corpus
+
+
+async def _notes(
+    session: AsyncSession, context: KeyContext, store: ObjectStore, corpus: _Corpus
+) -> None:
+    """His notes on his moments, and the family's on them (E02-06): one candidate per note,
+    named by its label, the words heard in it and the words for a note. Only a note this key
+    opens — a private one only under the notes scope — on an event it reads
+    (`app.ingestion.notes.recallable_notes`); the words are read back from the region's store
+    and only name the candidate, they are never said in the answer."""
+    for view in await recallable_notes(session, context=context, store=store):
+        note = view.note
+        names = set(NOTE_WORDS)
+        if note.label:
+            names |= set(_with_words({note.label}))
+        if view.transcript is not None:
+            names |= _note_words(view.transcript.text)
+        corpus.notes[note.id] = view
+        writer = note.written_by_person_id
+        if writer not in corpus.writers:
+            corpus.writers[writer] = await writer_name(session, context, writer)
+        corpus.candidates.append(Candidate("note", note.id, note.written_at, frozenset(names)))
+
+
+async def writer_name(session: AsyncSession, context: KeyContext, person_id: uuid.UUID) -> str:
+    """Who left a note, by name, as far as this key may know who is on the family list: the
+    reader themself needs no name ("You"), the patient is named under the profile's own scope,
+    and anyone else only under the family's (`person_display_name`). Otherwise empty, and the
+    line says "Someone" (`timeline_strings`)."""
+    if person_id == context.person_id:
+        return ""
+    profile = await audited_profile_read(session, context)
+    if person_id == profile.owner_person_id or context.allows(Scope.FAMILY):
+        return await person_display_name(session, context, person_id)
+    return ""
 
 
 async def _consults(
@@ -590,6 +701,25 @@ def _compose(
             groups.append(
                 [AnswerLine(text, (Cite("visit_summary", summary.id), Cite("appointment", visit.id)))]
             )
+        elif hit.kind == "note":
+            note = corpus.notes[hit.ref].note
+            when = _day(note.written_at, context, language)
+            text = (
+                words.recall_line("note_yours", language, date=when)
+                if note.written_by_person_id == context.person_id
+                else words.recall_line(
+                    "note_theirs",
+                    language,
+                    who=corpus.writers.get(note.written_by_person_id, ""),
+                    date=when,
+                )
+            )
+            note_cites = (
+                Cite("event_note", note.id),
+                Cite("event", note.event_id),
+                Cite("artifact", note.artifact_id),
+            )
+            groups.append([AnswerLine(text, note_cites)])
         elif hit.kind == "paper":
             if hit.ref in papers_said:
                 continue
@@ -680,7 +810,7 @@ async def recall(
         raise NotAQuestion(f"a question is one line of one to {QUESTION_LENGTH} characters")
     lang = await language_for(session, context, language)
     kept = await _keep_question(session, context, store, text)
-    corpus = await _corpus(session, context, registry)
+    corpus = await _corpus(session, context, registry, store)
     hits = retriever.retrieve(text, corpus.candidates)
     doctor = _doctor(corpus)
     groups = _compose(hits, corpus, context, lang, registry)
@@ -726,4 +856,5 @@ __all__ = [
     "Mode",
     "NotAQuestion",
     "recall",
+    "writer_name",
 ]

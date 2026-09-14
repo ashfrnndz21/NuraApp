@@ -163,5 +163,6 @@ async def test_every_card_the_feed_makes_carries_its_colour_and_one_action(
         assert item.action in {action.value for action in Action}, item.type
     today = next(item for item in items if item.type is CardType.READING)
     assert today.number == "138/84" and today.direction == "up"
-    count = next(item for item in items if item.dedupe_key.startswith("story:count"))
-    assert count.number == "2" and count.direction == "up"
+    # The number that only goes up is his tablet days (E21-05, `tests/test_story_cards.py`),
+    # not a count of blood pressures written down: no card counts them.
+    assert not [item for item in items if item.dedupe_key.startswith("story:count")]

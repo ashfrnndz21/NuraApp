@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.delivery.strings import (
     CAREGIVER_DUTY_LINES,
     CAREGIVER_DUTY_LINES_ONE,
@@ -12,7 +14,7 @@ from app.delivery.strings import (
     render,
 )
 from app.safety.plain_words import verify
-from tests.api import bearer, own_profile, register_by_phone
+from tests.api import bearer
 from tests.conftest import Deployment
 
 LANGUAGES = ("en", "ms", "zh")
@@ -34,9 +36,10 @@ def _reorder_why(language: str, days: int) -> str:
     ).why
 
 
-def test_the_story_count_says_1_time_and_3_times() -> None:
-    assert _story("en", 1)[0] == "You have written your blood pressure down 1 time."
-    assert _story("en", 3)[0] == "You have written your blood pressure down 3 times."
+def test_the_proud_number_says_1_day_and_3_days() -> None:
+    """The number that only goes up is his tablet days (E21-05, the Me page's number)."""
+    assert _story("en", 1)[0] == "You have taken your tablets on 1 day."
+    assert _story("en", 3)[0] == "You have taken your tablets on 3 days."
 
 
 def test_the_reorder_why_says_1_day_and_5_days() -> None:
@@ -87,16 +90,23 @@ async def _first_pages(deployment: Deployment, profile_id: str, token: str) -> l
     return items
 
 
-async def test_one_blood_pressure_makes_the_story_card_say_1_time(deployment: Deployment) -> None:
-    pa = await register_by_phone(deployment, "+6591230001")
-    profile_id = await own_profile(deployment, pa)
-    written = await deployment.client.post(
-        f"/profiles/{profile_id}/readings",
-        json={"systolic": 138, "diastolic": 84},
-        headers=bearer(pa["token"]),
-    )
-    assert written.status_code == 201, written.text
-    items = await _first_pages(deployment, profile_id, pa["token"])
-    count = next(item for item in items if item["headline"] == "The number that only goes up")
-    assert count["body"][0] == "You have written your blood pressure down 1 time."
-    assert not any("1 times" in line for item in items for line in item["body"] + item["voice"])
+async def test_one_tablet_day_makes_the_story_card_say_1_day(sg: AsyncSession) -> None:
+    """The number that only goes up is his tablet days (E21-05): one day, "1 day"."""
+    from app.delivery.feed.compose import refresh
+    from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+    from app.delivery.feed.models import FeedItem
+    from app.delivery.feed.search import Engine
+    from app.medicines.service import record_dose_taken
+    from tests.conftest import FEED
+    from tests.medicines_support import REGISTRY, add, label
+    from tests.visits import pa
+
+    context = await pa(sg, language="en")
+    line = (await add(sg, context, label("amlodipine", "5 mg"))).line
+    await record_dose_taken(sg, context=context, line_id=line.id)
+    engine = Engine(searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY)
+    _, made = await refresh(sg, context=context, engine=engine)
+    [count] = [item for item in made if item.dedupe_key.startswith("story:proud:")]
+    assert isinstance(count, FeedItem)
+    assert count.body[0] == "You have taken your tablets on 1 day."
+    assert not any("1 days" in line for item in made for line in [*item.body, *item.voice])

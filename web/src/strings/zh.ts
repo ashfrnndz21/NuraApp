@@ -259,6 +259,8 @@ export const zh = {
     declinedToday: "今天不会再给您看这类卡。",
     // @patient
     shared: "您的家人现在能看到这张卡。",
+    // @patient phrase
+    fromPublisher: "来自 {publisher}",
     // @patient
     cannotShare: "Nura 还不能把这张卡发给您的家人。",
     // @patient

@@ -183,6 +183,21 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     story = await client.get(f"/profiles/{profile_id}/medicines/{line_id}/story", headers=his)
     assert story.status_code == 200, story.text
     told = story.json()
+    # And as voice notes (E04-06): each part said once, kept by its script's digest, then read.
+    assert told["voice_parts"][0] == "purpose" and "if_forgotten" in told["voice_parts"]
+    for part in told["voice_parts"]:
+        where = f"/profiles/{profile_id}/medicines/{line_id}/story/voice"
+        first = await client.get(where, params={"part": part}, headers=his)
+        assert first.status_code == 200, (part, first.text)
+        assert first.headers["content-type"] == "audio/wav"
+        assert 0 < float(first.headers["x-duration-seconds"]) <= 30
+        again = await client.get(where, params={"part": part}, headers=his)
+        assert (first.headers["x-voice-cache"], again.headers["x-voice-cache"]) == ("miss", "hit")
+        assert again.content == first.content
+    unknown = await client.get(
+        f"/profiles/{profile_id}/medicines/{line_id}/story/voice", params={"part": "price"}, headers=his
+    )
+    assert unknown.status_code == 422
     assert told["language"] == "ms"
     assert told["purpose"] == [
         "Ini ubat tekanan darah anda.",

@@ -291,9 +291,9 @@ async def test_everything_else_is_not_kept(sg: AsyncSession, tmp_path: Path) -> 
     assert handled.replies[0].text.startswith("I did not understand that.")
     assert list(await sg.scalars(select(Artifact))) == []
     assert [r.kind for r in await sg.scalars(select(WhatsAppMessage))] == [MessageKind.REPLY]
-    # In the family group, silence.
+    # In a group this number does not keep, silence (the family's own group: E11-01).
     quiet = await home.inbound(sg, MEI, "haha", group_id="pas-health")
-    assert quiet.outcome == "other" and quiet.replies == ()
+    assert quiet.outcome == "ignored" and quiet.replies == ()
 
 
 async def test_ignore_is_honoured_absolutely(sg: AsyncSession, tmp_path: Path) -> None:

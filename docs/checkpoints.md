@@ -812,7 +812,8 @@ What you will see (the numbers, ids and times change each run):
 ✓ the shop receipt forwarded by email is an open card with no fields and one line: "This does not look like a health paper."
 ✓ a photo offered as a PDF is refused before a byte lands: NotAPdf (400)
 ✓ Pa typed this morning's blood pressure (142/88) and left a voice note on it: his own words, kept as a voice artefact on the record consent — no recording consent asked or on file (ADR 0003) — and heard at 0.91 as "I took it after my walk. I felt fine, only a little tired."
-✓ Mei recalls the note on the reading and plays it back (audio/m4a, 41 bytes, the same Pa sent): hearable, and not a fact — his facts are the same 13 as before
+✓ recall finds the note, cited with its event: "You left a note on Monday 14 September."
+✓ Mei opens the note on the reading and plays it back (audio/m4a, 41 bytes, the same Pa sent): hearable, and not a fact — his facts are the same 13 as before
 ✓ Pa photographed his blood pressure machine's screen (POST /profiles/{id}/readings/photo): read with no typing — the numbers, their units, the machine and the time on its screen:
     device.kind                    blood_pressure_monitor   confidence 0.90  clear
     blood_pressure.systolic        138 mmHg                 confidence 0.97  clear
@@ -1069,7 +1070,7 @@ What you will see (the numbers and ids change each run):
     [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
     [reminder] Your tablets today — one action: taken, on the stable wash. Why: You have medicines on your list.
     [reminder] Your blood pressure tablet is running low — one action: ask_to_order, on the stable wash. Why: You have about 1 day of your blood pressure tablet left.
-✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache miss — the fixture voice is silence as long as the words take to say
+✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache hit — the fixture voice is silence as long as the words take to say
 ✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
 checkpoint 20 passed: every step did what docs/checkpoints.md says
 ```
@@ -1079,7 +1080,7 @@ checkpoint 20 passed: every step did what docs/checkpoints.md says
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
 
 1. **Change the channel for a type.** As Pa, `PUT /profiles/{profile_id}/delivery-settings` with `{"channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}}`; the next day's reorder goes by WhatsApp only, and twice before the cap holds it. `{"caps": {"flag": 3}}` is refused: an alert is never capped.
-2. **Hear a card.** `GET /profiles/{profile_id}/feed/{item_id}/voice` for any card on his feed: `audio/wav`, `X-Duration-Seconds` under 30, `X-Voice-Cache: hit` the second time; `?language=ta` is a 404 (Tamil comes at T2) and the web client says it with the phone's voice.
+2. **Hear a card.** `GET /profiles/{profile_id}/feed/{item_id}/voice` for any card on his feed: `audio/wav`, `X-Duration-Seconds` under 30, `X-Voice-Cache: hit` the first time already — a card's audio is said and kept when the card is made, under its voice script's digest (E22-03), so the first play is a read; `?language=ta` is a 404 (Tamil comes at T2) and the web client says it with the phone's voice.
 
 ## How to run checkpoint 13
 

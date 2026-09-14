@@ -259,6 +259,8 @@ export const ms = {
     declinedToday: "Anda tidak akan lihat kad seperti ini lagi hari ini.",
     // @patient
     shared: "Keluarga anda boleh lihat kad ini sekarang.",
+    // @patient phrase
+    fromPublisher: "Daripada {publisher}",
     // @patient
     cannotShare: "Nura belum boleh hantar kad ini kepada keluarga anda.",
     // @patient
