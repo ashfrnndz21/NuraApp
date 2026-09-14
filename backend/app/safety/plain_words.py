@@ -300,20 +300,66 @@ MONTHS = (
 )
 _DAY_ABBREVIATIONS = re.compile(r"\b(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)\b\.?")
 _MONTH_ABBREVIATIONS = re.compile(r"\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b\.?")
+_MONTH_ABBREVIATIONS_MS = re.compile(r"\b(?:Jan|Feb|Apr|Jul|Ogo|Sep|Sept|Okt|Nov|Dis)\b\.?")
+"""The shortenings of the Malay months; "Jun" and "Mac" are whole Malay month names."""
 _NUMERIC_DATE = re.compile(
     r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}-\d{1,2}-\d{2,4}\b"
 )
 _CLOCK_TIME = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\b(?:\s*(?:am|pm|AM|PM))?")
 _TIME_ZONE = re.compile(r"\b(?:UTC|GMT)\b(?:[+-]\d{1,2})?")
 _ORDINAL_DAY = re.compile(r"\b(?:on\s+)?the\s+\d{1,2}(?:st|nd|rd|th)\b", re.IGNORECASE)
-_MONTH_DATE = re.compile(
-    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(MONTHS) + r")\b"
-    r"|\b(" + "|".join(MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
-)
 WEEKDAYS_MS = ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad")
-"""The day in Malay, so "Isnin 14 September" is a date with its day (E12: the family lines
-are rendered and verified in his language at run time, not only as English templates)."""
-_WEEKDAY = re.compile(r"\b(?:" + "|".join(WEEKDAYS + WEEKDAYS_MS) + r")\b")
+MONTHS_MS = (
+    "Januari",
+    "Februari",
+    "Mac",
+    "April",
+    "Mei",
+    "Jun",
+    "Julai",
+    "Ogos",
+    "September",
+    "Oktober",
+    "November",
+    "Disember",
+)
+"""Rule 5 in Malay: "Isnin 29 Jun" says the day and the date, and "Jun" and "Mac" are whole
+month names, not shortenings. The tables are keyed by the line's language: an English line
+with a Malay weekday still fails, and a Malay line is held to all twelve Malay months."""
+
+_WEEKDAYS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {"en": WEEKDAYS, "ms": WEEKDAYS_MS}
+_MONTHS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {"en": MONTHS, "ms": MONTHS_MS}
+
+
+def _month_date_pattern(months: tuple[str, ...]) -> re.Pattern[str]:
+    joined = "|".join(months)
+    return re.compile(
+        r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + joined + r")\b"
+        r"|\b(" + joined + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
+    )
+
+
+_MONTH_DATE_BY_LANGUAGE: dict[str, re.Pattern[str]] = {
+    code: _month_date_pattern(months) for code, months in _MONTHS_BY_LANGUAGE.items()
+}
+_WEEKDAY_BY_LANGUAGE: dict[str, re.Pattern[str]] = {
+    code: re.compile(r"\b(?:" + "|".join(days) + r")\b")
+    for code, days in _WEEKDAYS_BY_LANGUAGE.items()
+}
+_MONTH_DATE = _MONTH_DATE_BY_LANGUAGE["en"]
+_WEEKDAY = _WEEKDAY_BY_LANGUAGE["en"]
+_ZH_DATE = re.compile(r"\d{1,2}月\d{1,2}日")
+_ZH_WEEKDAY = re.compile(r"(?:星期|周|禮拜|礼拜)[一二三四五六日天]")
+"""Chinese says the date and then the day: "9月29日星期一". The weekday stands right beside
+the date, before or after it."""
+
+
+def _tables_for(language: str) -> tuple[re.Pattern[str], re.Pattern[str], tuple[str, ...]]:
+    """The month-date and weekday patterns, and the whole month names, for a language. A
+    language with no table of its own is read as English."""
+    code = language if language in _MONTHS_BY_LANGUAGE else "en"
+    return _MONTH_DATE_BY_LANGUAGE[code], _WEEKDAY_BY_LANGUAGE[code], _MONTHS_BY_LANGUAGE[code]
+
 
 _UUID = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
@@ -711,6 +757,7 @@ _ACTOR_WORDS = re.compile(r"\b(?:Nura|you|your|yourself|Dr\s+[A-Z]\w*|the doctor
 
 # Fillers for `{slots}`: by exact slot name, then by a word the name contains.
 FILLERS: dict[str, str] = {
+    "doctor": "Dr Tan",
     "me": "you",
     "you": "you",
     "mine": "your",
@@ -755,22 +802,38 @@ DEFAULT_FILLER = "Ash"
 _SLOT = re.compile(r"(?<!\{)\{([^{}]*)\}(?!\})")
 
 
-def filler_for(slot: str) -> str:
-    """The representative value a `{slot}` is checked with, from its name."""
+_DAY_FILLER: dict[str, str] = {
+    "en": "Monday 14 September",
+    "ms": "Isnin 14 September",
+    "zh": "9月14日星期一",
+}
+_TIME_FILLER: dict[str, str] = {"en": "10 in the morning", "ms": "10 pagi", "zh": "上午10点"}
+"""A day and a time as the line's own language says them, so rule 5 reads a Malay or Chinese
+template against its own weekday and month tables (E05 review, P3)."""
+
+
+def filler_for(slot: str, language: str = "en") -> str:
+    """The representative value a `{slot}` is checked with, from its name and the language."""
     name = slot.strip().split("!")[0].split(":")[0].strip().lower()
     if name in FILLERS:
         return FILLERS[name]
     parts = re.split(r"[^a-z0-9]+", name)
+    if "time" in parts:
+        return _TIME_FILLER.get(language, _TIME_FILLER["en"])
     for word, value in _FILLER_BY_WORD:
         if word in parts:
+            if value == _DAY_FILLER["en"]:
+                return _DAY_FILLER.get(language, value)
             return value
     return DEFAULT_FILLER
 
 
-def fill(template: str) -> str:
+def fill(template: str, language: str = "en") -> str:
     """The template with every `{slot}` replaced by its filler; `{{` and `}}` become braces."""
     return (
-        _SLOT.sub(lambda m: filler_for(m.group(1)), template).replace("{{", "{").replace("}}", "}")
+        _SLOT.sub(lambda m: filler_for(m.group(1), language), template)
+        .replace("{{", "{")
+        .replace("}}", "}")
     )
 
 
@@ -846,7 +909,7 @@ class _Line:
             stripped = stripped[heading.end() :]
         self.template = stripped.strip()
         self.slot_initial = self.template.startswith("{")
-        self.text = fill(self.template)
+        self.text = fill(self.template, language)
         self.findings: list[Finding] = []
         self.covered: list[tuple[int, int]] = []
 
@@ -918,20 +981,35 @@ def _check_dates(line: _Line) -> None:
                 f'the date without the day: "{match.group()}"',
                 'say the day and the date: "Monday 29 September"',
             )
-    for match in _MONTH_DATE.finditer(line.text):
+    if line.language == "zh":
+        for match in _ZH_DATE.finditer(line.text):
+            around = line.text[max(0, match.start() - 4) : match.end() + 4]
+            if not _ZH_WEEKDAY.search(around) and line.cover(match):
+                line.add(
+                    5,
+                    f'the date without the day: "{match.group()}"',
+                    f'say the day too: "{match.group()}星期一"',
+                )
+        return
+    month_date, weekday, whole_months = _tables_for(line.language)
+    for match in month_date.finditer(line.text):
         before = line.text[: match.start()]
         preceding = " ".join(before.split()[-3:])
-        if not _WEEKDAY.search(preceding) and line.cover(match):
+        if not weekday.search(preceding) and line.cover(match):
             line.add(
                 5,
                 f'the date without the day: "{match.group()}"',
-                f'say the day too: "Monday {match.group()}"',
+                f'say the day too: "{_WEEKDAYS_BY_LANGUAGE.get(line.language, WEEKDAYS)[0]} {match.group()}"',
             )
+    month_shortenings = _MONTH_ABBREVIATIONS_MS if line.language == "ms" else _MONTH_ABBREVIATIONS
     for pattern, what, example in (
-        (_MONTH_ABBREVIATIONS, "month", "September"),
+        (month_shortenings, "month", "September"),
         (_DAY_ABBREVIATIONS, "day", "Monday"),
     ):
         for match in pattern.finditer(line.text):
+            # A whole month name in the line's language ("Jun", "Mac" in Malay) is no shortening.
+            if match.group().rstrip(".") in whole_months:
+                continue
             if line.cover(match):
                 line.add(
                     5,
@@ -1022,7 +1100,8 @@ def _check_numbers(line: _Line) -> None:
                     f'a number in words: "{match.group()}"',
                     _substitute(line.text, match, digits),
                 )
-    if len(_NUMBER.findall(line.text)) > 3:
+    # A Chinese date is one number, the way "14 September" is: "9月14日" says one day.
+    if len(_NUMBER.findall(_ZH_DATE.sub("1", line.text))) > 3:
         line.add(
             10,
             "more than three numbers on one line",
@@ -1128,6 +1207,59 @@ def _check_length(line: _Line) -> None:
         )
 
 
+_TREATMENT_VERBS: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"\b(?:start|starts|started|starting|stop|stops|stopped|stopping|double|doubles|"
+        r"doubled|halve|halves|halved|increase|increases|increased|reduce|reduces|reduced|"
+        r"take (?:more|less))\b",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(
+        r"\b(?:mula (?:makan|ambil)|berhenti (?:makan|ambil)|tambah|kurangkan|gandakan)\b",
+        re.IGNORECASE,
+    ),
+    "zh": re.compile(r"开始吃|停吃|停药|停止吃|多吃|少吃|加量|减量|加倍"),
+}
+_MEDICINE_NOUNS: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"\b(?:tablets?|pills?|capsules?|medicines?|insulin|injections?|aspirin|"
+        r"water pill|sugar tablet|cholesterol tablet|blood pressure tablet)\b",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(r"\b(?:ubat|pil|tablet|kapsul|insulin|suntikan|aspirin)\b", re.IGNORECASE),
+    "zh": re.compile(r"药|片|胰岛素|阿司匹林"),
+}
+_CLINICIAN = r"(?:dr\.?\s|doctor|doktor|pharmacist|ahli farmasi)"
+_ASKING = re.compile(
+    r"^\W*(?:ask|tell)\b.{0,16}?" + _CLINICIAN
+    + r"|^\W*(?:tanya|beritahu)\b.{0,16}?" + _CLINICIAN
+    + r"|^\W*(?:问一问|问|告诉).{0,10}?(?:医生|大夫|药剂师|dr\.?\s)",
+    re.IGNORECASE,
+)
+"""The boundary (CLAUDE.md): no line the patient reads starts, stops or changes a medicine.
+A treatment-changing verb beside a medicine noun fails unless the line is a question put to
+the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask Dr Tan about…",
+"Tell Dr Tan about…", "Tanya doktor anda…", "问一问陈医生…". A line that tells someone else
+("Tell Ash to stop the water pill.") or merely ends in a question mark is not one. Kept
+tight the other way too: a verb alone ("You can tell Nura to stop at any time.") or a noun
+alone passes."""
+
+
+def _check_boundary(line: _Line) -> None:
+    language = line.language if line.language in _TREATMENT_VERBS else "en"
+    verbs, nouns = _TREATMENT_VERBS[language], _MEDICINE_NOUNS[language]
+    verb = verbs.search(line.text)
+    if verb is None or nouns.search(line.text) is None:
+        return
+    if _ASKING.search(line.text):
+        return
+    line.add(
+        14,
+        f'a medicine started, stopped or changed: "{verb.group()}"',
+        'a question for the doctor: "Ask Dr Tan about the new amount of the water pill."',
+    )
+
+
 def _check_action(line: _Line) -> None:
     if line.language != "en":
         return
@@ -1220,6 +1352,8 @@ def verify(text: str, language: str = "en", kind: Kind = "line") -> list[Finding
             _check_length_of_words_only(line)
         if line.kind == "action":
             _check_action(line)
+        if line.kind != "phrase":
+            _check_boundary(line)
         findings.extend(line.findings)
     return findings
 
@@ -1779,6 +1913,8 @@ plain-words checks every patient string against docs/plain-words.md. By the doc'
   12 Nothing to decode: dose, recheck, follow-up, flag, log; abbreviations in capitals (OK and
      IC are his); units he does not use (mg, mmHg, mmol/L); any id, phone number, IC number.
   13 The same words every time: "the log", "the readings", "discharge summary", "the clinic".
+  14 The boundary: no line starts, stops or changes a medicine — a treatment verb beside a
+     medicine noun fails unless the line asks the doctor (en, ms and zh alike).
 Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action.
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.
@@ -1786,7 +1922,7 @@ Tags: `# @patient [kind]` before a statement or at the end of its line; `\"\"\"@
 after an assignment. In an .xcstrings catalogue, a comment beginning `patient [kind]`. In a
 web strings file (.ts), `// @patient [kind]` above a property or at the end of its line.
 `# plain-words: <reason>` on the line a literal starts exempts it: history that is shown no more.
-Fillers: {name} → Ash, {date} → Monday 14 September, {count} → 2.
+Fillers: {name} → Ash, {doctor} → Dr Tan, {date} → Monday 14 September, {count} → 2.
 """
 
 

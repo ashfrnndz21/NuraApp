@@ -30,6 +30,7 @@ from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
 from app.search.retrieve import KeywordRetriever, Retriever
 from app.settings import Settings
@@ -46,6 +47,9 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    summariser: Summariser
+    """What reads a visit transcript into actions, changes, follow-ups and facts heard; the
+    fixture one until a model in the region exists (E05-05)."""
     transcriber: Transcriber
     """What hears a voice note, in this deployment's region; the fixture one until a speech
     provider in the region exists (E02-06)."""

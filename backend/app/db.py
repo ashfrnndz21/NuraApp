@@ -177,6 +177,37 @@ async def unit_of_work(session: AsyncSession) -> AsyncIterator[None]:
         take_keepers(session)
 
 
+@asynccontextmanager
+async def nested_unit_of_work(session: AsyncSession) -> AsyncIterator[None]:
+    """A unit of work inside a request, for a caller that means to catch a refusal and go on.
+
+    The promise of `unit_of_work`, one level down: on a `Refusal` its own savepoint is rolled
+    back — nothing written inside it survives — the keepers registered inside it are replayed
+    and flushed, so the refused lines land, and the refusal goes on up to the caller. Keepers
+    registered before it are left to the request's boundary. On success the savepoint is
+    released and its keepers stay registered: the request around it may still be refused.
+    """
+    kept: list[Keeper] = session.info.setdefault(_KEPT, [])
+    mark = len(kept)
+    savepoint = await session.begin_nested()
+    try:
+        yield
+    except Refusal:
+        await savepoint.rollback()
+        inside = kept[mark:]
+        del kept[mark:]
+        for keeper in inside:
+            await keeper(session)
+        await session.flush()
+        raise
+    except BaseException:
+        await savepoint.rollback()
+        del kept[mark:]
+        raise
+    else:
+        await savepoint.commit()
+
+
 class KeptSession(AsyncSession):
     """A session that will not close quietly over refused lines nobody replayed.
 

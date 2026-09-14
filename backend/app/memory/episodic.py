@@ -108,11 +108,11 @@ def fact_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> Colu
     )
 
 
-RECORDED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.VOICE})
+RECORDED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.VOICE, ArtifactKind.TRANSCRIPT})
 """The artefact kinds that are a recording of people talking: every writer of one declares
 whose voices it carries (`Recording`), and a consult rests on the RECORDING consent as well as
-the consent to hold the record (ADR 0003). A transcript kind joins this set the day it exists:
-E05's consult transcripts, which pass `Recording.CONSULT` when that story merges."""
+the consent to hold the record (ADR 0003). A visit's transcript (E05) is one: the words of a
+consult, stored with `Recording.CONSULT`."""
 
 
 class RecordingNotDeclared(Refusal):
