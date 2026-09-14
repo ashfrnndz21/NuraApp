@@ -810,7 +810,8 @@ What you will see (the numbers, ids and times change each run):
 ✓ the shop receipt forwarded by email is an open card with no fields and one line: "This does not look like a health paper."
 ✓ a photo offered as a PDF is refused before a byte lands: NotAPdf (400)
 ✓ Pa typed this morning's blood pressure (142/88) and left a voice note on it: his own words, kept as a voice artefact on the record consent — no recording consent asked or on file (ADR 0003) — and heard at 0.91 as "I took it after my walk. I felt fine, only a little tired."
-✓ Mei recalls the note on the reading and plays it back (audio/m4a, 41 bytes, the same Pa sent): hearable, and not a fact — his facts are the same 13 as before
+✓ recall finds the note, cited with its event: "Pa left a note on Monday 14 September."
+✓ Mei opens the note on the reading and plays it back (audio/m4a, 41 bytes, the same Pa sent): hearable, and not a fact — his facts are the same 13 as before
 ✓ Pa photographed his blood pressure machine's screen (POST /profiles/{id}/readings/photo): read with no typing — the numbers, their units, the machine and the time on its screen:
     device.kind                    blood_pressure_monitor   confidence 0.90  clear
     blood_pressure.systolic        138 mmHg                 confidence 0.97  clear

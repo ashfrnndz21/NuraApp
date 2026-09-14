@@ -50,11 +50,19 @@ from app.keys.scopes import Scope
 from app.memory.episodic import (
     held_here,
     readable_event_ids,
+    record_event,
     require_artifact,
     require_event,
     store_artifact,
 )
-from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel, short_label
+from app.memory.models import (
+    Artifact,
+    ArtifactKind,
+    EventKind,
+    Recording,
+    SourceChannel,
+    short_label,
+)
 from app.regions import guard_region
 
 NOTE = EventNote.__tablename__
@@ -153,6 +161,7 @@ async def _keep(
     content_type: str,
     captured_at: datetime,
     recording: Recording | None,
+    source_channel: SourceChannel = SourceChannel.APP,
 ) -> Artifact:
     """Bytes into the region's store and the artefact naming them, after the agreement to hold
     the record: a refusal leaves nothing behind."""
@@ -171,7 +180,7 @@ async def _keep(
         content_type=content_type,
         sha256=sha256_of(data),
         captured_at=captured_at,
-        source_channel=SourceChannel.APP,
+        source_channel=source_channel,
         region=store.region,
         recording=recording,
     )
@@ -261,6 +270,72 @@ async def add_voice_note(
         kind=NoteKind.VOICE,
         private=private,
         label=named,
+        heard=heard,
+        words_key=words_key,
+        words_digest=words_digest,
+    )
+    return NoteView(note=note, artifact=artifact, transcript=heard)
+
+
+@audited(Action.WRITE, lambda call: note_scope(call["private"]), NOTE)
+async def keep_voice_message(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    store: ObjectStore,
+    data: bytes,
+    content_type: str,
+    captured_at: datetime,
+    heard: Transcript | None,
+    source_channel: SourceChannel,
+    private: bool,
+) -> NoteView:
+    """His own voice note that came another way than on one of his moments — on WhatsApp
+    (E11-01) — kept as his own note: the recording a VOICE artefact declared
+    `Recording.OWN_NOTE` (ADR 0003: his own words, so it rests on the agreement to hold the
+    record, never the recording consent), on a moment of its own that names it, since it
+    was not left on one. It was heard already, by the region's transcriber, because its words
+    are read for a red flag before anything else (`app.channels.whatsapp.inbound`); what was
+    heard is kept by reference, never as a fact. The caller says whether it is private, as
+    every writer of a note does; WhatsApp keeps it private (he was not asked), so only he and
+    a chief preset to his notes open it."""
+    guard_region(held_in=store.region, asked_from=context.region)
+    kind = check_voice(data, content_type)
+    artifact = await _keep(
+        session,
+        context=context,
+        store=store,
+        kind=ArtifactKind.VOICE,
+        key=voice_key(context.profile_id, sha256_of(data)),
+        data=data,
+        content_type=kind,
+        captured_at=captured_at,
+        recording=Recording.OWN_NOTE,
+        source_channel=source_channel,
+    )
+    moment = await record_event(
+        session,
+        context=context,
+        kind=EventKind.MESSAGE,
+        occurred_at=captured_at,
+        artifact_id=artifact.id,
+    )
+    words_key = words_digest = None
+    if heard is not None and heard.heard:
+        words = heard.text.strip().encode("utf-8")
+        words_digest = sha256_of(words)
+        words_key = transcript_key(context.profile_id, words_digest)
+        await store.put(words_key, words)
+    else:
+        heard = None
+    note = await _write_note(
+        session,
+        context=context,
+        event_id=moment.id,
+        artifact=artifact,
+        kind=NoteKind.VOICE,
+        private=private,
+        label=None,
         heard=heard,
         words_key=words_key,
         words_digest=words_digest,
@@ -440,6 +515,7 @@ __all__: Sequence[Any] = (
     "NoteView",
     "add_scribble",
     "add_voice_note",
+    "keep_voice_message",
     "note_content",
     "notes_for",
     "notes_written_since",

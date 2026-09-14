@@ -775,6 +775,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/medicines/{{line_id}}/story"),
     Walk("GET", f"{P}/medicines/{{line_id}}/story/voice"),
     Walk("GET", f"{P}/whatsapp/thread"),
+    Walk("GET", f"{P}/whatsapp/group"),
     Walk("GET", f"{P}/timeline"),
     Walk("GET", f"{P}/episodes/{{episode_id}}"),
     Walk("GET", f"{P}/providers"),
@@ -907,6 +908,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
     ("POST", f"{P}/nudges/{{nudge_id}}/response"): "writes what he did with a nudge",
     ("POST", f"{P}/thread/photos"): "shares a photo with the family; returns the entry",
+    ("POST", f"{P}/whatsapp/group"): "opens the family's WhatsApp group; returns who is in it",
     ("POST", f"{P}/thread/photos/{{photo_id}}/take-back"): "takes a photo back; returns it",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and

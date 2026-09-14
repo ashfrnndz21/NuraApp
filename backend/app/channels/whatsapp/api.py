@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -26,11 +27,18 @@ from pydantic import BaseModel, Field
 from app.audit.models import Channel
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.deps import Context, Db, providers_of, settings_of
-from app.channels.api.schemas import PHONE
+from app.channels.api.schemas import PHONE, utc
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.config import BusinessNumber, business_number_for
+from app.channels.whatsapp.group import (
+    Member,
+    NoFamilyGroup,
+    group_of,
+    members_of,
+    open_group,
+)
 from app.channels.whatsapp.inbound import Handled, handle_inbound
-from app.channels.whatsapp.models import WhatsAppMessage
+from app.channels.whatsapp.models import WhatsAppGroup, WhatsAppMessage
 from app.channels.whatsapp.outbound.level0 import run_feeling_check_in, run_morning
 from app.channels.whatsapp.outbound.send import Delivered, thread_messages
 from app.channels.whatsapp.provider import DevInbound, FixtureProvider, NotAWebhook
@@ -84,6 +92,8 @@ class HandledOut(BaseModel):
     review_card_id: uuid.UUID | None
     stranger_reply: str | None
     refused: str | None
+    note_id: uuid.UUID | None = None
+    thread_message_id: uuid.UUID | None = None
 
     @classmethod
     def of(cls, handled: Handled) -> HandledOut:
@@ -99,6 +109,8 @@ class HandledOut(BaseModel):
             review_card_id=handled.review_card_id,
             stranger_reply=handled.stranger_reply,
             refused=handled.refused,
+            note_id=handled.note_id,
+            thread_message_id=handled.thread_message_id,
         )
 
 
@@ -207,6 +219,55 @@ async def thread(context: Context, session: Db) -> list[ThreadMessageOut]:
         cited=[(row.id, Scope.FAMILY, row.artifact_id, None) for row in rows],
     )
     return [ThreadMessageOut.of(row, withheld.get(row.id, ())) for row in rows]
+
+
+# --- the family's group (E11-01) ---------------------------------------------------------------
+
+
+class GroupMemberOut(BaseModel):
+    """One person in the family's group, by name. Never a number: who is in it is worked out
+    from the keys, and the numbers stay with the provider."""
+
+    person_id: uuid.UUID
+    name: str
+    is_patient: bool
+
+
+class GroupOut(BaseModel):
+    group_id: uuid.UUID
+    opened_at: datetime
+    members: list[GroupMemberOut]
+
+    @classmethod
+    def of(cls, group: WhatsAppGroup, members: list[Member]) -> GroupOut:
+        return cls(
+            group_id=group.id,
+            opened_at=utc(group.opened_at),
+            members=[
+                GroupMemberOut(person_id=m.person_id, name=m.name, is_patient=m.is_patient)
+                for m in members
+            ],
+        )
+
+
+@router.post("/profiles/{profile_id}/whatsapp/group", status_code=status.HTTP_201_CREATED)
+async def open_family_group(request: Request, context: Context, session: Db) -> GroupOut:
+    """Open the family's group on WhatsApp, once — the family thread, mirrored — with the
+    people who read the thread in it: the patient and every key holding the family's part.
+    The patient's or his chief's to open, on his agreement to WhatsApp."""
+    group, members = await open_group(
+        session, context=context, provider=providers_of(request).whatsapp
+    )
+    return GroupOut.of(group, members)
+
+
+@router.get("/profiles/{profile_id}/whatsapp/group")
+async def family_group(context: Context, session: Db) -> GroupOut:
+    """The family's group and who is in it now, as the keys say. Under the family scope."""
+    group = await group_of(session, context=context)
+    if group is None:
+        raise NoFamilyGroup("this family has no group on WhatsApp yet")
+    return GroupOut.of(group, await members_of(session, context=context))
 
 
 # --- dev only ---------------------------------------------------------------------------------

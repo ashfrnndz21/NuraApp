@@ -462,9 +462,26 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "voice artefact on the record consent — no recording consent asked or on file (ADR 0003) — and heard "
         f'at {note["transcript"]["confidence"]:.2f} as "{note["transcript"]["text"]}"'
     )
-    recalled = check(client.get(notes, headers=bearer(mei.token)), 200, "Mei recalls the reading's notes")
-    if [n["note_id"] for n in recalled] != [note["note_id"]]:
-        raise fail("Mei recalls the reading's notes", why=f"got {recalled}")
+    listed = check(client.get(notes, headers=bearer(mei.token)), 200, "Mei opens the notes on the reading")
+    if [n["note_id"] for n in listed] != [note["note_id"]]:
+        raise fail("Mei opens the notes on the reading", why=f"got {listed}")
+    # Recall (E02-06 over E03-05): asked about in words, the note is found, cited with its event.
+    asked = check(
+        client.post(
+            f"/profiles/{profile_id}/ask",
+            headers=bearer(mei.token),
+            json={"question": "what did Pa say after his walk", "mode": "text"},
+        ),
+        200,
+        "Mei asks what Pa said after his walk",
+    )
+    found = [
+        line for line in asked["lines"] if any(c["kind"] == "event_note" for c in line["cites"])
+    ]
+    cited = {(c["kind"], c["id"]) for line in found for c in line["cites"]}
+    if not found or ("event_note", note["note_id"]) not in cited or ("event", event_id) not in cited:
+        raise fail("Mei asks what Pa said after his walk", why=f"got {asked['lines']}")
+    ok(f'recall finds the note, cited with its event: "{found[0]["text"]}"')
     audio = client.get(f"{notes}/{note['note_id']}/content", headers=bearer(mei.token))
     if audio.status_code != 200 or audio.content != placeholder_voice(AFTER_THE_WALK):
         raise fail("Mei plays the voice note", audio, "not the bytes Pa sent")

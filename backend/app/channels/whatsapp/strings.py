@@ -80,6 +80,21 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Saya simpan ini untuk keluarga.",),
         "zh": ("这个我为家人留着。",),
     },
+    "voice_note_kept": {
+        "en": ("Nura kept your voice note.",),
+        "ms": ("Nura sudah simpan nota suara anda.",),
+        "zh": ("Nura 保存了您的语音留言。",),
+    },
+    "voice_note_unheard": {
+        "en": ("Nura kept your voice note.", "Nura could not hear this note."),
+        "ms": ("Nura sudah simpan nota suara anda.", "Nura tidak dapat mendengar nota ini."),
+        "zh": ("Nura 保存了您的语音留言。", "Nura 听不清这段录音。"),
+    },
+    "family_said": {
+        "en": ("{who} wrote in the family thread:",),
+        "ms": ("{who} menulis dalam perbualan keluarga:",),
+        "zh": ("{who}在家人群里写道：",),
+    },
     "propose_blood_pressure": {
         "en": (
             "Did I get this right?",
@@ -247,6 +262,10 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ok": "好", "tired": "累", "pain": "痛"},
 }
 """The three feeling words as the read-back says them."""
+
+# @patient phrase
+GROUP_NAME: Mapping[str, str] = {"en": "{name} and family", "ms": "{name} dan keluarga", "zh": "{name}和家人"}
+"""The name of the family's group on WhatsApp (E11-01), as everyone in it reads it."""
 
 # @patient phrase
 YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh": "您的医生"}

@@ -41,6 +41,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
+from app.channels.whatsapp.group import mirror_to_group
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     DigestOut,
@@ -170,12 +171,17 @@ async def thread(
 
 
 @router.post("/profiles/{profile_id}/thread", status_code=status.HTTP_201_CREATED)
-async def post(body: ThreadPostIn, context: Context, session: Db) -> ThreadEntryOut:
+async def post(body: ThreadPostIn, request: Request, context: Context, session: Db) -> ThreadEntryOut:
     if isinstance(body, ThreadCardIn):
         return ThreadEntryOut.of(
             await post_card(session, context=context, kind=body.card_kind, task_id=body.task_id)
         )
-    return ThreadEntryOut.of(await post_message(session, context=context, text=body.text))
+    entry = await post_message(session, context=context, text=body.text)
+    # The family's WhatsApp group mirrors the thread (E11-01): said there too, in her name.
+    await mirror_to_group(
+        session, context=context, provider=providers_of(request).whatsapp, message=entry
+    )
+    return ThreadEntryOut.of(entry)
 
 
 @router.post("/profiles/{profile_id}/thread/photos", status_code=status.HTTP_201_CREATED)

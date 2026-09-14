@@ -21,7 +21,7 @@ import logging
 import re
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from sqlalchemy import select
@@ -47,7 +47,8 @@ from app.channels.whatsapp.proposals import (
     answer,
     propose,
 )
-from app.channels.whatsapp.provider import InboundMessage, NoSuchMedia
+from app.channels.whatsapp.group import group_for, is_member
+from app.channels.whatsapp.provider import InboundMessage, Media, NoSuchMedia
 from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_names, reply
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
@@ -68,9 +69,12 @@ from app.drafts import FactDraft
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
+from app.family.thread import post_message
+from app.ingestion.notes import NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
 from app.ingestion.photos import store_photo
 from app.ingestion.review import review_photo
+from app.ingestion.transcribe import NOTHING_HEARD, Transcript
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, OutOfScope, owned_profile, resolve_key_context
 from app.keys.models import Key
@@ -121,6 +125,10 @@ class Handled:
     stranger_reply: str | None = None
     """The one fixed reply to a number no profile knows: sent, and kept on no trail."""
     refused: str | None = None
+    note_id: uuid.UUID | None = None
+    """His own voice note, kept as his note (E11-01)."""
+    thread_message_id: uuid.UUID | None = None
+    """A message from the family's group, landed in the family thread (E11-01)."""
 
 
 @dataclass(slots=True)
@@ -136,6 +144,9 @@ class _Work:
     thread: WhatsAppThread
     language: str
     replies: list[Delivered] = field(default_factory=list)
+    voice: Media | None = None
+    """A voice note's audio, fetched from the provider and heard in the region (E11-01)."""
+    heard: Transcript | None = None
 
 
 def _handle(person_id: uuid.UUID | None, phone: str) -> str:
@@ -970,12 +981,107 @@ async def _other(session: AsyncSession, work: _Work) -> Handled:
     return Handled(outcome="other", replies=tuple(work.replies), profile_id=work.profile.id)
 
 
+# --- voice notes and the family's group (E11-01) -------------------------------------------------
+
+
+def _is_voice(message: InboundMessage) -> bool:
+    return message.media_id is not None and (message.content_type or "").strip().lower().startswith(
+        "audio/"
+    )
+
+
+async def _hear(
+    providers: Providers, region: Region, person: Person, message: InboundMessage
+) -> tuple[Media | None, Transcript]:
+    """A voice note's audio, fetched from the provider within its time limit and heard by the
+    region's transcriber — pinned to this deployment's region, so a voice is never heard
+    across the causeway. Nothing is kept here: its words are read for a red flag first, like
+    any message's, and only then kept as his own note, or not at all."""
+    assert message.media_id is not None
+    try:
+        media = await providers.whatsapp.fetch_media(message.media_id)
+    except NoSuchMedia:
+        return None, NOTHING_HEARD
+    kind = media.content_type.split(";", 1)[0].strip().lower()
+    guard_region(held_in=providers.transcriber.region, asked_from=region)
+    heard = await providers.transcriber.transcribe(
+        media.data, kind, language_of(person.language), region
+    )
+    return media, heard
+
+
+async def _keep_voice(session: AsyncSession, work: _Work) -> NoteView:
+    assert work.voice is not None
+    return await keep_voice_message(
+        session,
+        context=work.context,
+        store=work.providers.object_store,
+        data=work.voice.data,
+        content_type=work.voice.content_type,
+        captured_at=work.message.at,
+        heard=work.heard,
+        source_channel=SourceChannel.WHATSAPP,
+        # He was not asked on WhatsApp who may hear it: his and his notes' chief's only.
+        private=True,
+    )
+
+
+async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
+    """His own voice note on WhatsApp (E11-01): kept as his own note — `Recording.OWN_NOTE`,
+    his own words, so on the agreement to hold the record and never the recording consent
+    (ADR 0003) — with the words heard in it by reference, private to him and a chief preset
+    to his notes, and findable by recall. Anyone else's voice note is not kept: it may carry
+    other people's voices, which only a consult keeps, on the consent to record."""
+    if not work.context.is_owner:
+        return await _other(session, work)
+    view = await _keep_voice(session, work)
+    row = await _keep_row(session, work=work, kind=MessageKind.VOICE_NOTE, artifact=view.artifact)
+    await _say(
+        session, work, "voice_note_kept" if view.transcript is not None else "voice_note_unheard"
+    )
+    return Handled(
+        outcome="voice_note",
+        replies=tuple(work.replies),
+        profile_id=work.profile.id,
+        message_id=row.id,
+        artifact_id=view.artifact.id,
+        note_id=view.note.id,
+    )
+
+
+async def _group_message(session: AsyncSession, work: _Work) -> Handled:
+    """A message in the family's group (E11-01): it lands in the family thread (E12-02) in its
+    poster's name, for a member — someone who reads the thread (`is_member`). Anyone else in
+    the group is not a member: nothing is kept and nothing is said. Nobody is answered in the
+    group, and nothing is read out of what the family says to each other."""
+    if not is_member(work.context):
+        log.info("whatsapp: a group message from someone who does not read the family thread")
+        return Handled(outcome="ignored", profile_id=work.profile.id)
+    entry = await post_message(session, context=work.context, text=work.message.text or "")
+    row = await _keep_row(session, work=work, kind=MessageKind.COORDINATION, artifact=None)
+    return Handled(
+        outcome="family_thread",
+        profile_id=work.profile.id,
+        message_id=row.id,
+        thread_message_id=entry.id,
+    )
+
+
 # --- the walk ------------------------------------------------------------------------------------
 
 
 async def _dispatch(session: AsyncSession, work: _Work, what: Classification) -> Handled:
     if detect(work.message.text) is not None:
-        return await _red_flag(session, work)
+        flagged = await _red_flag(session, work)
+        if work.voice is not None and work.context.is_owner:
+            # The flag first; then his voice note is his own note, like any other.
+            kept = await _keep_voice(session, work)
+            return replace(flagged, note_id=kept.note.id)
+        return flagged
+    if work.voice is not None:
+        return await _voice_note(session, work)
+    if work.message.group_id is not None and work.message.media_id is None and work.message.text:
+        return await _group_message(session, work)
     if what.kind is Kind.DOCUMENT:
         return await _document(session, work)
     if what.kind is Kind.HEALTH_EVENT:
@@ -1033,15 +1139,32 @@ async def handle_inbound(
 ) -> Handled:
     """One message, all the way. See the module doc for the order and why."""
     region = settings.region
+    # The family's group names its family (E11-01). A group this number does not keep is
+    # not read, and nothing is said into any group from here.
+    group = None if message.group_id is None else await group_for(session, message.group_id)
+    if message.group_id is not None and group is None:
+        log.info("whatsapp: a message in a group this number does not keep")
+        return Handled(outcome="ignored")
     person = await find_person_by_phone(session, message.from_e164)
     if person is None:
+        if group is not None:
+            return Handled(outcome="ignored")
         return await _stranger(providers, message)
     try:
         guard_region(held_in=person.region, asked_from=region)
     except OutOfRegion:
         # A number pinned elsewhere is, to this deployment, a stranger: same words, nothing
         # about where it is known written anywhere here.
+        if group is not None:
+            return Handled(outcome="ignored")
         return await _stranger(providers, message)
+    # A voice note is heard first, in the region, so its words are read like a message's: a
+    # red word in it is found before anything else, "ignore" and the consent included.
+    voice: Media | None = None
+    heard: Transcript | None = None
+    if _is_voice(message):
+        voice, heard = await _hear(providers, region, person, message)
+        message = replace(message, text=heard.text if heard.heard else None)
     # A red-flag word is looked for first: "ignore" never cancels one in the same message.
     flagged = detect(message.text) is not None
     if (
@@ -1052,7 +1175,11 @@ async def handle_inbound(
         log.info("whatsapp: ignored by request %s", _handle(person.id, message.from_e164))
         return Handled(outcome="ignored")
 
-    reachable = await _profiles_reachable(session, region=region, person=person)
+    reachable = (
+        [group.profile_id]
+        if group is not None
+        else await _profiles_reachable(session, region=region, person=person)
+    )
     if not reachable:
         return await _stranger(providers, message)
     profile_id = reachable[0]
@@ -1083,9 +1210,15 @@ async def handle_inbound(
                 providers, message, key="more_than_one", language=person.language
             )
         profile_id = recent
-    context = await resolve_key_context(
-        session, region=region, person_id=person.id, profile_id=profile_id
-    )
+    try:
+        context = await resolve_key_context(
+            session, region=region, person_id=person.id, profile_id=profile_id
+        )
+    except Refusal:
+        if group is None:
+            raise
+        # In the group, but no longer on this family's list: nothing kept, nothing said.
+        return Handled(outcome="ignored")
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
     if flagged and not await _whatsapp_agreed(session, context=context):
         return await _red_flag_unagreed(
@@ -1114,6 +1247,8 @@ async def handle_inbound(
             profile=profile,
             thread=thread,
             language=language_of(person.language),
+            voice=voice,
+            heard=heard,
         )
 
     try:
@@ -1126,7 +1261,9 @@ async def handle_inbound(
                 channel=Channel.WHATSAPP,
             )
             work = await work_for()
-            what = classifier.classify(text=message.text, content_type=message.content_type)
+            what = classifier.classify(
+                text=message.text, content_type=None if voice is not None else message.content_type
+            )
             return await _dispatch(session, work, what)
     except NoSuchMedia as refusal:
         await record(

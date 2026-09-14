@@ -40,6 +40,7 @@ from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
+from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
 from app.family.roster import (
@@ -224,6 +225,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A visit's recording is heard by him and the family he let in, and nobody else.
     (OnlyTheFamilyHears, 403),
     (NoSuchPhoto, 404),
+    (NoFamilyGroup, 404),
+    (NotTheirsToOpen, 403),
     (NotTheirsToTakeBack, 403),
     (NoSuchRecording, 404),
     (TranscriptTooLarge, 413),
