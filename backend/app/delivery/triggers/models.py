@@ -210,3 +210,27 @@ frozen(
     ),
     only_when=_ladder_is_moving,
 )
+
+
+class PushSubscription(ProfileScoped, Base):
+    """One browser a person asked to get reminders on, for this profile (Web Push, ADR 0001):
+    the push service's endpoint and the browser's two keys, from one login session. Revoked
+    when he stops reminders on it; `gone_at` when the push service said the endpoint no longer
+    exists (404, 410). A push goes only to one whose login session still stands, so a phone
+    signed out gets nothing. Nothing else about the row changes."""
+
+    __tablename__ = "push_subscription"
+    __table_args__ = (_row_of_profile("push_subscription"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("session.id"))
+    endpoint: Mapped[str] = mapped_column(String(1024))
+    p256dh: Mapped[str] = mapped_column(String(128))
+    auth: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(default=None)
+    gone_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
+frozen(PushSubscription, except_for=frozenset({"revoked_at", "gone_at"}))

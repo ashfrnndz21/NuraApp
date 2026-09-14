@@ -339,6 +339,16 @@ export const zh = {
     setUp: "设置 Nura",
     // @patient phrase
     signOut: "退出登录",
+    // @patient phrase
+    remindersGet: "在这部手机上接收提醒",
+    // @patient
+    remindersOn: "这部手机的提醒已经打开了。",
+    // @patient phrase
+    remindersStop: "停止这部手机的提醒",
+    // @patient
+    remindersDenied1: "这部手机不允许提醒。",
+    // @patient
+    remindersDenied2: "您可以在手机设置里更改。",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
