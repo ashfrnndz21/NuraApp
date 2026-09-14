@@ -4,7 +4,9 @@ A person picks an event — this morning's blood pressure, Tuesday's visit — a
 on it: something said, or something drawn or written by hand. The recording or the image is
 stored like a photo (`app.ingestion.photos`): bytes in the region's object store under a
 content-addressed key, one Artifact naming them, after the agreement to hold the record is
-checked. A voice note is then heard by the region's transcriber (`app.ingestion.transcribe`),
+checked. A voice note is the writer's own words — the patient's about himself, or a
+caregiver's on his event — so it is stored as `Recording.OWN_NOTE` and rests on that
+agreement alone; the RECORDING consent is for consults, which capture other people (ADR 0003). A voice note is then heard by the region's transcriber (`app.ingestion.transcribe`),
 and the words it heard are kept the way everything an artefact says is kept — as bytes in the
 store, named by key and digest on the note's row. They are text by reference, and never a
 fact: nothing here writes one, and nothing is inferred from a note. A note that was not heard
@@ -43,7 +45,7 @@ from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
 from app.memory.episodic import held_here, require_artifact, require_event, store_artifact
-from app.memory.models import Artifact, ArtifactKind, SourceChannel, short_label
+from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel, short_label
 from app.regions import guard_region
 
 NOTE = EventNote.__tablename__
@@ -141,6 +143,7 @@ async def _keep(
     data: bytes,
     content_type: str,
     captured_at: datetime,
+    recording: Recording | None,
 ) -> Artifact:
     """Bytes into the region's store and the artefact naming them, after the agreement to hold
     the record: a refusal leaves nothing behind."""
@@ -161,6 +164,7 @@ async def _keep(
         captured_at=captured_at,
         source_channel=SourceChannel.APP,
         region=store.region,
+        recording=recording,
     )
 
 
@@ -228,6 +232,9 @@ async def add_voice_note(
         data=data,
         content_type=kind,
         captured_at=captured_at,
+        # His own words about himself, or a caregiver's own on his event: kept on the record
+        # consent, like typed text; the recording consent is for consults (ADR 0003).
+        recording=Recording.OWN_NOTE,
     )
     transcript = await transcriber.transcribe(data, kind, language, context.region)
     heard = transcript if transcript.heard else None
@@ -280,6 +287,7 @@ async def add_scribble(
         data=data,
         content_type=kind,
         captured_at=captured_at,
+        recording=None,
     )
     note = await _write_note(
         session,

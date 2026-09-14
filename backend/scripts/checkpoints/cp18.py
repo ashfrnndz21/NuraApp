@@ -10,8 +10,8 @@ read is refused; Mei types what the slip says and Pa confirms the card. Pa impor
 hospital letter from the portal: every field says its page, and confirming it records the
 discharge on the letter's date. A receipt forwarded by mistake is an open card that says it is
 not a health paper; a photo offered as a PDF is refused. Pa types this morning's blood
-pressure and leaves a voice note on it — refused until he agrees to recording (E16-02), then
-kept, heard, played back, and never a fact. Pa photographs his blood pressure machine: 138/84,
+pressure and leaves a voice note on it — his own words, so kept on the record consent with
+no recording consent asked (ADR 0003) — heard, played back, and never a fact. Pa photographs his blood pressure machine: 138/84,
 pulse 72, the time on the screen, no typing; one yes, one reading, State recomputed. A photo
 of a lab report sent as a machine's screen says it is not one. Last, the accuracy harness over
 the labelled papers, quoted, and the refusals on Pa's trail.
@@ -38,8 +38,6 @@ import httpx
 CODE_LINE = re.compile(r"login code for (\+[0-9]+): ([0-9]{6})")
 CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
-RECORDING_WORDING = "1"
-"""Today's words for `recording`, from `app/consent/texts.py`. Move this when they move."""
 BACKEND = Path(__file__).resolve().parents[2]
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -443,28 +441,17 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "captured_at": reading["taken_at"],
         "label": "after my walk",
     }
-    refused(client.post(notes, headers=his, json=note_body), 403, "ConsentWithheld", "Pa leaves a voice note")
-    ok(
-        "Pa typed this morning's blood pressure (142/88) and left a voice note on it: refused, ConsentWithheld "
-        "(403) — a voice is kept only on the recording consent (E16-02)"
-    )
-    check(
-        client.post(
-            f"/profiles/{profile_id}/consents/recording",
-            headers=his,
-            json={"wording_version": RECORDING_WORDING, "language": "en", "captured_via": "app"},
-        ),
-        201,
-        "Pa agrees to recording",
-    )
     facts_before = check(client.get(f"/profiles/{profile_id}/facts", headers=his), 200, "Pa reads his facts")
-    note = check(client.post(notes, headers=his, json=note_body), 201, "Pa leaves the voice note again")
+    note = check(client.post(notes, headers=his, json=note_body), 201, "Pa leaves a voice note")
     if note["transcript"] is None or note["event_id"] != event_id:
-        raise fail("Pa leaves the voice note again", why=f"got {note}")
+        raise fail("Pa leaves a voice note", why=f"got {note}")
+    agreed = check(client.get(f"/profiles/{profile_id}/consents", headers=his), 200, "Pa reads his consents")
+    if "recording" in {c["purpose"] for c in agreed}:
+        raise fail("Pa reads his consents", why="a recording consent was given, and none should be needed")
     ok(
-        "Pa agreed to recording (POST /profiles/{id}/consents/recording) and left the note again: kept as a "
-        f'voice artefact on the reading, heard at {note["transcript"]["confidence"]:.2f} as '
-        f'"{note["transcript"]["text"]}"'
+        "Pa typed this morning's blood pressure (142/88) and left a voice note on it: his own words, kept as a "
+        "voice artefact on the record consent — no recording consent asked or on file (ADR 0003) — and heard "
+        f'at {note["transcript"]["confidence"]:.2f} as "{note["transcript"]["text"]}"'
     )
     recalled = check(client.get(notes, headers=bearer(mei.token)), 200, "Mei recalls the reading's notes")
     if [n["note_id"] for n in recalled] != [note["note_id"]]:
@@ -567,7 +554,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "Pa reads his trail",
     )
     names = {e["refused_because"] for e in trail if e["outcome"] == "refused"}
-    if not {"UnreadableField", "NotAPdf", "ConsentWithheld"} <= names:
+    if not {"UnreadableField", "NotAPdf"} <= names or "ConsentWithheld" in names:
         raise fail("Pa reads his trail", why=f"refusals on it: {names}")
     ok(f"Pa reads his trail ({len(trail)} lines); every refusal of this walk is on it:")
     for row in (e for e in trail if e["outcome"] == "refused"):

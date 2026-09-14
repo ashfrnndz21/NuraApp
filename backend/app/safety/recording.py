@@ -12,10 +12,13 @@ is where the bytes go; `CHECKLIST` is the order of the steps the surface owes, n
 document and the code can be checked against each other.
 
 The gate is not the only mechanism. Where the bytes enter, `app.memory.episodic.store_artifact`
-requires the same consent for every VOICE artefact, whichever surface wrote it, so a recording
-with no consent in force cannot be kept even by a writer that never asked here. Both refusals
-are on the trail like every other. The doctor's spoken yes, when it is given, is the first
-seconds of the artefact.
+makes every writer of a voice declare whose voices it carries (`Recording`) and requires the
+same consent, under the same visits scope, for every `Recording.CONSULT`, whichever surface
+wrote it, so a recording of a visit with no consent in force cannot be kept even by a writer
+that never asked here. A person's own voice note — his about himself, or a caregiver's on his
+event — is `Recording.OWN_NOTE`: his words, or hers, kept like typed text on the consent to
+hold the record, and not gated here (ADR 0003). Both refusals are on the trail like every
+other. The doctor's spoken yes, when it is given, is the first seconds of the artefact.
 
 The notice speaks to the doctor by name; when the record has not named one, the last line is
 addressed plainly — "Is that OK, doctor?" — never "your doctor", which is not a form of
