@@ -28,6 +28,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
+    Text,
     UniqueConstraint,
     event,
 )
@@ -159,6 +160,10 @@ class RenderedFromState:
     """
 
     state_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("state_snapshot.id"), index=True)
+    # The boundary line the row was shown under (E16-01), for a row of an inferring surface;
+    # empty for a row that shows the record back without inferring. `render_from_state` fills
+    # it from `app.safety.boundary` and refuses a row of an inferring surface without it.
+    boundary: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 @event.listens_for(Mapper, "before_insert")

@@ -47,13 +47,42 @@ AUDIT = "audit"
 OPERATIONAL = "operational"
 CLASSIFICATIONS = (IDENTIFIER, HEALTH, CONSENT, AUDIT, OPERATIONAL)
 
-# The classification of every column, by "table.column". A row-level default is given as
-# "table.*" and a column overrides it. `profile_id` on every profile-scoped table is the
-# link from a row to the person it is about: an identifier wherever it appears.
+# The classification of every column, by "table.column"; "*.column" is a default for a column
+# name found on many tables. The rule is the document's (docs/trust/pdpa-data-map.md §2):
+# anything that points at a person is an identifier; anything that says something about
+# his health, or is a reference to a row that does — a fact id, a supersession, a card's
+# subject, what triggered State, the kind of source a line came from — is health.
+# `profile_id` on every profile-scoped table is the link from a row to the person it is
+# about: an identifier wherever it appears.
 CLASSES: dict[str, str] = {
-    "*.id": OPERATIONAL,
     "*.profile_id": IDENTIFIER,
     "*.region": OPERATIONAL,
+    # A row's own id is classified as the row: the id of a fact is a reference to health
+    # data, the id of a person is an identifier, the id of a consent is the consent record.
+    # Only a sign-in row's id points at nothing about a person.
+    "person.id": IDENTIFIER,
+    "profile.id": IDENTIFIER,
+    "stewardship.id": CONSENT,
+    "login_challenge.id": OPERATIONAL,
+    "session.id": OPERATIONAL,
+    "key.id": CONSENT,
+    "consent.id": CONSENT,
+    "confirmation.id": CONSENT,
+    "audit_entry.id": AUDIT,
+    "artifact.id": HEALTH,
+    "event.id": HEALTH,
+    "fact.id": HEALTH,
+    "episode.id": HEALTH,
+    "provider.id": HEALTH,
+    "appointment.id": HEALTH,
+    "state_snapshot.id": HEALTH,
+    "review_card.id": HEALTH,
+    "review_field.id": HEALTH,
+    "medication_line.id": HEALTH,
+    "medication_supply.id": HEALTH,
+    "dose_taken.id": HEALTH,
+    "interaction_flag.id": HEALTH,
+    "note.id": HEALTH,
     # --- accounts and the graph's ownership -------------------------------------------------
     "person.display_name": IDENTIFIER,
     "person.language": OPERATIONAL,
@@ -114,8 +143,8 @@ CLASSES: dict[str, str] = {
     "consent.revoked_at": CONSENT,
     "consent.revoked_by_person_id": IDENTIFIER,
     "confirmation.person_id": IDENTIFIER,
-    "confirmation.subject": OPERATIONAL,
-    "confirmation.subject_id": OPERATIONAL,
+    "confirmation.subject": HEALTH,
+    "confirmation.subject_id": HEALTH,
     "confirmation.content_digest": OPERATIONAL,
     "confirmation.created_at": OPERATIONAL,
     "confirmation.expires_at": OPERATIONAL,
@@ -138,7 +167,7 @@ CLASSES: dict[str, str] = {
     # --- the health graph: memory ---------------------------------------------------------------
     "artifact.kind": HEALTH,
     "artifact.storage_key": HEALTH,
-    "artifact.content_type": OPERATIONAL,
+    "artifact.content_type": HEALTH,
     "artifact.sha256": OPERATIONAL,
     "artifact.captured_at": HEALTH,
     "artifact.source_channel": OPERATIONAL,
@@ -162,7 +191,7 @@ CLASSES: dict[str, str] = {
     "fact.valid_from": HEALTH,
     "fact.valid_to": HEALTH,
     "fact.asserted_at": OPERATIONAL,
-    "fact.supersedes_id": OPERATIONAL,
+    "fact.supersedes_id": HEALTH,
     "fact.superseded_at": OPERATIONAL,
     "fact.confirmed_by_person_id": IDENTIFIER,
     "episode.kind": HEALTH,
@@ -186,9 +215,9 @@ CLASSES: dict[str, str] = {
     "state_snapshot.sequence": OPERATIONAL,
     "state_snapshot.computed_at": OPERATIONAL,
     "state_snapshot.posture": HEALTH,
-    "state_snapshot.trigger": OPERATIONAL,
+    "state_snapshot.trigger": HEALTH,
     "state_snapshot.trigger_fact_id": HEALTH,
-    "state_snapshot.supersedes_id": OPERATIONAL,
+    "state_snapshot.supersedes_id": HEALTH,
     "state_snapshot.clinical": HEALTH,
     "state_snapshot.functional": HEALTH,
     "state_snapshot.cognitive": HEALTH,
@@ -213,7 +242,7 @@ CLASSES: dict[str, str] = {
     "review_field.unit": HEALTH,
     "review_field.confidence": OPERATIONAL,
     "review_field.span": OPERATIONAL,
-    "review_field.state": OPERATIONAL,
+    "review_field.state": HEALTH,
     "review_field.corrected_value": HEALTH,
     "review_field.fact_id": HEALTH,
     "review_field.decided_at": OPERATIONAL,
@@ -228,7 +257,7 @@ CLASSES: dict[str, str] = {
     "medication_line.high_risk": HEALTH,
     "medication_line.dose": HEALTH,
     "medication_line.prescriber": HEALTH,
-    "medication_line.source_kind": OPERATIONAL,
+    "medication_line.source_kind": HEALTH,
     "medication_line.lead_time_days": OPERATIONAL,
     "medication_line.reorder_threshold_days": OPERATIONAL,
     "medication_line.source_artifact_id": HEALTH,
@@ -239,7 +268,7 @@ CLASSES: dict[str, str] = {
     "medication_line.change_kind": HEALTH,
     "medication_line.started_at": HEALTH,
     "medication_line.stopped_at": HEALTH,
-    "medication_line.supersedes_id": OPERATIONAL,
+    "medication_line.supersedes_id": HEALTH,
     "medication_line.superseded_at": OPERATIONAL,
     "medication_line.confirmed_by_person_id": IDENTIFIER,
     "medication_line.asserted_at": OPERATIONAL,

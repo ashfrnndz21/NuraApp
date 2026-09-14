@@ -29,6 +29,7 @@ from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.scopes import ALL_SCOPES, Scope
+from app.safety.boundary import Surface
 from app.state.models import RenderedFromState
 from app.state.service import StateView, render_from_state
 
@@ -94,9 +95,19 @@ async def render_card(
     state: StateView | None = None,
     scope: Scope = Scope.READINGS,
     kind: str = "reading",
+    surface: Surface | None = None,
+    boundary: str | None = None,
 ) -> RenderedCard:
     return await render_from_state(
-        session, RenderedCard, context, scope, state=state, scope=scope, kind=kind
+        session,
+        RenderedCard,
+        context,
+        scope,
+        state=state,
+        surface=surface,
+        boundary=boundary,
+        scope=scope,
+        kind=kind,
     )
 
 
@@ -127,4 +138,16 @@ async def agree_to_family_sharing(
         sharing=Sharing(
             holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE}, relationship=relationship
         ),
+    )
+
+
+async def agree_to_recording(session: AsyncSession, owner: KeyContext) -> Consent:
+    """The owner agrees to Nura listening to his visits (E16-02): what a VOICE artefact rests on."""
+    return await grant_consent(
+        session,
+        context=owner,
+        purpose=ConsentPurpose.RECORDING,
+        captured_via=ConsentChannel.APP,
+        basis=ConsentBasis.OWNER,
+        language="en",
     )
