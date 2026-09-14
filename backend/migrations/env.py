@@ -12,9 +12,11 @@ from alembic import context
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.audit import models as audit_models  # noqa: F401
 from app.db import Base
 from app.identity import models as identity_models  # noqa: F401
 from app.keys import models as key_models  # noqa: F401
+from app.memory import models as memory_models  # noqa: F401
 from app.settings import load_settings
 
 target_metadata = Base.metadata
