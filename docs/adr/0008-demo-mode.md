@@ -97,7 +97,7 @@ the fixtures only with it. A demo holds six promises, each enforced in code and 
   operator's code instead of reading a log. Checkpoints that step on a dev-only route cannot:
   7 and 8 (a feed step pretends the hour with `?at=`), 9 (the WhatsApp dev routes), 13
   (`?at=`) and 15 (it moves the frozen clock with `/dev/clock`). They stay laptop checkpoints.
-  Walked against a local demo-mode server, checkpoints 2–6, 14 and 16–18 pass; 7 stops, as it
+  Walked against a local demo-mode server, checkpoints 2–6, 14, 16–18 and 21 pass; 7 stops, as it
   should, at `?at=` (`NotOnADevRun`).
 - **Free text can still carry real information.** A person can type real words into a note or
   a question, and the banner and the test-number rule do not stop that. The nightly wipe

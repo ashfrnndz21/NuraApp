@@ -192,7 +192,7 @@ the test range.
 
 `make checkpoint N=2` works the same with the two variables set.
 
-- **Can run against the demo:** 2, 3, 4, 5, 6, 14, 16, 17 and 18. Each was walked against a
+- **Can run against the demo:** 2, 3, 4, 5, 6, 14, 16, 17, 18 and 21. Each was walked against a
   local demo-mode server before this runbook was written.
 - **Cannot:** 7, 8, 9, 13 and 15. Each takes a step through a route only a laptop's dev run
   has:
