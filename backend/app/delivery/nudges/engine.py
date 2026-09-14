@@ -21,8 +21,10 @@ the plan's `held` rather than applied in silence:
 2. **Never at night.** A nudge goes no earlier than his check-in time and never inside the
    quiet hours (21:00 to 07:00 on his wall, `app.delivery.feed.rank`); a plan made for today
    after the quiet hours begin has nothing left to send.
-3. **One a day.** The best-ranked draft goes; the rest are held, "one a day". A day that
-   already had one handed over has none left.
+3. **One a day, by delivery's cap.** As many go as E11's cap on nudges allows that day
+   (`caps.nudge` in the delivery settings, one unless the family sets it: `daily_cap`),
+   less those already handed over; the rest are held, "one_a_day". The engine sends by the
+   same cap (`app.delivery.triggers`), so one number says how many nudges reach him a day.
 4. **A kind he ignored twice rests for a week.** Two of a kind handed over and never touched
    before they expired, and that kind is held for seven days from the second.
 5. **Dismissals feed ranking.** Every "Not today" on a kind in the last week moves that kind
@@ -72,6 +74,8 @@ from app.delivery.nudges.handoff import (
 )
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import FEELINGS
+from app.delivery.triggers.models import TriggerType
+from app.delivery.triggers.preferences import daily_cap
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.family.models import ThreadMessage
@@ -82,7 +86,7 @@ from app.medicines.service import proud_days
 from app.medicines.strings import say_date
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
-from app.onboarding.settings import current_settings, values_of
+from app.onboarding.settings import reach_of
 from app.reasoning.feelings.cloud import lead_for, weigh
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.record import Situation, read_situation
@@ -97,9 +101,6 @@ from app.state.service import RECOMPUTE_SCOPES, render_from_state
 
 NUDGE = Nudge.__tablename__
 
-DAILY_NUDGES = 1
-"""One smart nudge a day for the patient (E17-03; docs/smart-nudges.md allows two — see the
-PR's open questions)."""
 CHECK_IN_AT = time(10, 0)
 """His check-in time when he has not said one: after breakfast, well inside his day."""
 MORNING_ANCHOR = "breakfast"
@@ -480,8 +481,7 @@ async def check_in_time(session: AsyncSession, *, context: KeyContext) -> time:
     written as the fact `setting.checkin_time`, "HH:MM" on his region's clock), or
     `CHECK_IN_AT`. A time inside the quiet hours is not one a nudge may go at: the default
     stands."""
-    row = await current_settings(session, context=context)
-    at = None if row is None else values_of(row).checkin_time
+    at = (await reach_of(session, context=context)).checkin
     if at is None or not QUIET_UNTIL <= at < QUIET_FROM:
         return CHECK_IN_AT
     return at
@@ -638,9 +638,13 @@ async def plan_nudges(
             held.append(Held(draft.kind, "not_plain_words", priority, dict(draft.reason)))
         else:
             ranked.append(draft)
+    # A draft already handed over is not offered again: under a cap above one, the next goes.
+    handed = {n.dedupe_key for n in nudges}
+    ranked = [d for d in ranked if d.dedupe_key not in handed]
     ranked.sort(key=lambda d: (-d.priority, d.kind.value))
     already = [n for n in nudges if n.day == day.isoformat()]
-    room = 0 if already else DAILY_NUDGES
+    cap = await daily_cap(session, context=context, type=TriggerType.NUDGE)
+    room = len(ranked) if cap is None else max(0, cap - len(already))
     going = tuple(ranked[:room])
     for draft in ranked[room:]:
         held.append(Held(draft.kind, "one_a_day", draft.priority, dict(draft.reason)))

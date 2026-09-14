@@ -28,6 +28,7 @@ from app.safety.symptom_log import log_symptom, nothing_since_line, symptoms_sin
 from app.safety.symptoms import Duration, Symptom
 from app.state.models import Posture
 from app.state.service import current_state
+from tests.delivery_support import via_for
 from tests.safety_support import REGISTRY, TRANSCRIBER, assert_plain, let_in, pa, trail
 from tests.voice import CONTENT_TYPE, DIZZY, SAKIT_DADA, placeholder_voice
 
@@ -47,7 +48,13 @@ class _Store:
 
 async def _log(session: AsyncSession, context, **said):
     return await log_symptom(
-        session, context=context, store=_Store(), transcriber=TRANSCRIBER, registry=REGISTRY, **said
+        session,
+        context=context,
+        store=_Store(),
+        transcriber=TRANSCRIBER,
+        registry=REGISTRY,
+        via=via_for(context.region),
+        **said,
     )
 
 

@@ -1,7 +1,7 @@
 """The WhatsApp provider port, and the fixture that stands behind it until a real one does.
 
 `WhatsAppProvider` is the whole of what the channel knows about the business solution
-provider: send a text, send an approved template, fetch a piece of media by its id, check a
+provider: send a text, send an approved template, send a voice note, fetch a piece of media by its id, check a
 webhook's signature, and parse the provider's inbound payload into `InboundMessage`s. The
 real adapter — Twilio, 360dialog, Gupshup, or Meta's Cloud API directly — is a later
 implementation of the same protocol. `FixtureProvider` is what runs in the tests and on a
@@ -59,7 +59,7 @@ class Sent:
 
     to_e164: str
     kind: str
-    """`text` inside the 24-hour window, `template` outside it."""
+    """`text` inside the 24-hour window, `template` outside it, `audio` for a voice note."""
     text: str
     template_name: str | None
     language: str
@@ -81,6 +81,10 @@ class WhatsAppProvider(Protocol):
         self, to_e164: str, template_name: str, language: str, params: Mapping[str, str]
     ) -> str:
         """One of the approved templates, with its slots filled. The provider's message id."""
+        ...
+
+    async def send_audio(self, to_e164: str, audio: bytes, content_type: str) -> str:
+        """A voice note, inside the 24-hour window only. The provider's message id."""
         ...
 
     async def fetch_media(self, media_id: str) -> Media: ...
@@ -162,6 +166,12 @@ class FixtureProvider:
         self.sent.append(
             Sent(to_e164, "template", rendered, template_name, language, shown, message_id)
         )
+        return message_id
+
+    async def send_audio(self, to_e164: str, audio: bytes, content_type: str) -> str:
+        message_id = f"wamid.fixture.{uuid.uuid4().hex[:12]}"
+        shown = f"(a voice note, {len(audio)} bytes of {content_type})"
+        self.sent.append(Sent(to_e164, "audio", shown, None, "", {}, message_id))
         return message_id
 
     async def fetch_media(self, media_id: str) -> Media:

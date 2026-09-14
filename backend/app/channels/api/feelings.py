@@ -22,6 +22,7 @@ from datetime import date
 from fastapi import APIRouter, Query, Request, status
 
 from app.audit.access import audited_profile_read
+from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.feelings_schemas import (
     AnsweredOut,
@@ -76,6 +77,7 @@ async def feeling(body: FeelingIn, request: Request, context: Context, session: 
         registry=providers_of(request).drug_registry,
         store=providers_of(request).object_store,
         transcriber=providers_of(request).transcriber,
+        via=via_of(request),
         language=body.language,
     )
     return FeelingOut.of(tapped)
@@ -95,6 +97,7 @@ async def answer(
         registry=providers_of(request).drug_registry,
         store=providers_of(request).object_store,
         transcriber=providers_of(request).transcriber,
+        via=via_of(request),
         language=body.language,
     )
     return AnsweredOut.of(answered)

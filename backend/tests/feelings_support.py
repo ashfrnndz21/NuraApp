@@ -29,6 +29,7 @@ from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider, book_appointment
 from app.onboarding.settings import SettingsValues, parse_clock_time, save_settings
 from app.regions import Region
+from tests.delivery_support import via_for
 from tests.medicines_support import add, label
 from tests.safety_support import TRANSCRIBER
 
@@ -141,7 +142,9 @@ class Store:
 
 
 STORE = Store()
-__all__ = ["REGISTRY", "STORE", "TRANSCRIBER"]
+VIA = via_for()
+"""The channels a red word's ladder sends through: the fixture WhatsApp (E11)."""
+__all__ = ["REGISTRY", "STORE", "TRANSCRIBER", "VIA"]
 
 
 async def check_in_setting(session: AsyncSession, owner: KeyContext, value: str) -> None:

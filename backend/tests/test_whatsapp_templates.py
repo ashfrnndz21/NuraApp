@@ -1,4 +1,4 @@
-"""E19-01: the six approved templates, their slots, and the business number that approves them."""
+"""E19-01, E11: the fifteen templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 
@@ -18,14 +18,29 @@ from app.regions import Region
 from app.safety.plain_words import verify
 from app.settings import Settings
 
-SIX = (
+FIFTEEN = (
     "morning_card",
     "visit_reminder",
     "reorder",
     "family_digest",
     "feeling_check_in",
     "red_flag_notice",
+    "dose_reminder",
+    "dose_check",
+    "reorder_family",
+    "doses_count",
+    "papers_waiting",
+    "family_note",
+    "red_flag_notice_self",
+    "red_flag_notice_ambiguous",
+    "nudge",
 )
+"""E19's six, then E11's nine (the ladder's two asks, the reorder to the family, the count,
+the papers waiting, a family message, the red-flag notice's two variants, and the day's smart
+nudge), in the order they are submitted for approval."""
+
+E19_SIX = FIFTEEN[:6]
+"""Approved: the only templates a deployment's number carries until Meta approves E11's."""
 
 DOSES = {
     "en": "Take 1 tablet of your blood pressure tablet with breakfast.",
@@ -33,6 +48,16 @@ DOSES = {
     "zh": "早餐时吃 1 片您的血压药。",
 }
 """The doses slot is what the medicines module renders in the profile's language."""
+
+MESSAGES = {
+    "en": "Mei will pick you up at 9.",
+    "ms": "Mei akan ambil anda pada pukul 9.",
+    "zh": "Mei 九点来接您。",
+}
+"""A chief's previewed lines, in the language she wrote them in (E12-06)."""
+
+AT_THE_START = {"reorder_family"}
+"""Templates whose `{medicine}` starts a line: the engine fills it with a capital (`engine`)."""
 
 DAYS = {"en": "Monday 14 September", "ms": "Isnin 14 September", "zh": "9月14日星期一"}
 """The day slot as `app.delivery.feed.compose.plain_day` renders it in each language: rule 5
@@ -52,11 +77,16 @@ FILL = {
     "weight": "62",
     "word": "tired",
     "names": "Mei and Kit",
+    "anchor": "with breakfast",
+    "message": "Mei will pick you up at 9.",
+    "emergency_number": "995",
+    "both": "Pa and Ma",
+    "either": "Pa or Ma",
 }
 
 
-def test_there_are_six_and_each_has_every_language() -> None:
-    assert TEMPLATE_NAMES == SIX
+def test_there_are_fifteen_and_each_has_every_language() -> None:
+    assert TEMPLATE_NAMES == FIFTEEN
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)
         for language, body in template.text.items():
@@ -64,10 +94,17 @@ def test_there_are_six_and_each_has_every_language() -> None:
                 assert f"{{{slot}}}" in body, (template.name, language, slot)
 
 
-@pytest.mark.parametrize("name", SIX)
+@pytest.mark.parametrize("name", FIFTEEN)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
-    fill = {**FILL, "doses": DOSES[language], "day": DAYS[language]}
+    fill = {
+        **FILL,
+        "doses": DOSES[language],
+        "day": DAYS[language],
+        "message": MESSAGES[language],
+    }
+    if name in AT_THE_START:
+        fill["medicine"] = fill["medicine"][:1].upper() + fill["medicine"][1:]
     params = {slot: fill[slot] for slot in TEMPLATES[name].slots}
     text = render(name, language, params)
     assert "{" not in text and "}" not in text
@@ -98,7 +135,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     assert sandbox.region is Region.MY
     assert sandbox.provider_name == "fixture"
     assert sandbox.verification is VerificationState.SANDBOX
-    assert sandbox.templates == SIX
+    assert sandbox.templates == FIFTEEN
     assert sandbox.approves("morning_card") and not sandbox.approves("marketing_blast")
     named = business_number_for(
         Settings(
@@ -110,3 +147,13 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     )
     assert named.phone_e164 == "+6581234567"
     assert named.verification is VerificationState.PENDING
+
+
+def test_e11s_templates_wait_for_meta_and_a_deployment_carries_only_the_approved() -> None:
+    pending = [template.name for template in TEMPLATES.values() if not template.approved]
+    assert pending == list(FIFTEEN[6:])
+    live = business_number_for(
+        Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False)
+    )
+    assert live.templates == E19_SIX
+    assert live.approves("morning_card") and not live.approves("dose_reminder")
