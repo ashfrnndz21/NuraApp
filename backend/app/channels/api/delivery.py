@@ -5,6 +5,8 @@
     GET  /profiles/{id}/deliveries?day=               every attempt and its rule (owner, chief)
     GET  /profiles/{id}/ladders?language=             the open flag ladders that reached the caller
     POST /profiles/{id}/ladders/{ladder}/acknowledge  "I have it": a flag's ladder stops
+    POST /profiles/{id}/push-subscriptions            this phone gets reminders (Web Push)
+    DELETE /profiles/{id}/push-subscriptions          this phone stops getting them
     POST /dev/run-triggers                            `run_due` for one profile at one moment
 
 `/dev/run-triggers` exists only on a declared dev run (NURA_DEV_CODE_SENDER=1), like the other
@@ -17,16 +19,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, time
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.audit.access import audited_profile_read
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, SignedIn, current_login, providers_of, settings_of
 from app.db import as_utc
 from app.delivery.ladder_words import answered_lines, asked_lines
 from app.delivery.ladder_words import language_of as ladder_language
+from app.delivery.subscriptions import subscribe, unsubscribe
 from app.delivery.triggers.deliver import Sent, Via
 from app.delivery.triggers.engine import run_due
 from app.delivery.triggers.ladder import acknowledge_flag, open_flags_for
@@ -273,6 +276,57 @@ async def acknowledge(
     ladder = await acknowledge_flag(session, context=context, ladder_id=ladder_id)
     assert ladder is not None  # a named ladder that is not theirs is refused, not None
     return LadderOut.of(ladder, answered_lines(language))
+
+
+class PushKeysIn(BaseModel):
+    p256dh: str = Field(min_length=1, max_length=128)
+    """The browser's P-256 key, base64url."""
+    auth: str = Field(min_length=1, max_length=64)
+    """The browser's auth secret, base64url."""
+
+
+class PushSubscriptionIn(BaseModel):
+    """What the browser's `PushSubscription.toJSON()` says: the push service's endpoint and
+    the browser's two keys."""
+
+    endpoint: str = Field(min_length=1, max_length=1024)
+    keys: PushKeysIn
+
+
+class PushEndpointIn(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=1024)
+
+
+class PushSubscribedOut(BaseModel):
+    subscription_id: uuid.UUID
+
+
+@router.post("/profiles/{profile_id}/push-subscriptions", status_code=status.HTTP_201_CREATED)
+async def push_subscribe(
+    body: PushSubscriptionIn,
+    context: Context,
+    signed_in: Annotated[SignedIn, Depends(current_login)],
+    session: Db,
+) -> PushSubscribedOut:
+    """This phone gets reminders about this profile: the browser's subscription, kept for
+    this login session, under the face of the graph every key opens. The same browser again
+    replaces the one before. Not an https endpoint and the two keys: `NotAPushSubscription`."""
+    row = await subscribe(
+        session,
+        context=context,
+        login_id=signed_in.login.id,
+        endpoint=body.endpoint,
+        p256dh=body.keys.p256dh,
+        auth=body.keys.auth,
+    )
+    return PushSubscribedOut(subscription_id=row.id)
+
+
+@router.delete("/profiles/{profile_id}/push-subscriptions", status_code=status.HTTP_204_NO_CONTENT)
+async def push_forget(body: PushEndpointIn, context: Context, session: Db) -> Response:
+    """This phone stops getting reminders about this profile: its subscription is revoked."""
+    await unsubscribe(session, context=context, endpoint=body.endpoint)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _dev_only(request: Request) -> Settings:

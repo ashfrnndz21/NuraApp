@@ -6,8 +6,8 @@ in each reader's language wherever it appears. This names every row written befo
 phrases the doors ever offered or tests wrote, in English, Malay and Chinese, map to their
 code; anything else is `other`. Data only: the column is the same `varchar(80)`.
 
-Revision ID: 0024_relationship_codes
-Revises: 0023_delivery
+Revision ID: 0025_relationship_codes
+Revises: 0024_push_subscription
 Create Date: 2026-09-15
 """
 
@@ -18,8 +18,8 @@ import re
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0024_relationship_codes"
-down_revision = "0023_delivery"
+revision = "0025_relationship_codes"
+down_revision = "0024_push_subscription"
 branch_labels = None
 depends_on = None
 

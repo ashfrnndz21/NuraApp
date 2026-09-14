@@ -1042,4 +1042,6 @@ export interface DeploymentOut {
   demo: boolean;
   /** A declared dev run: the only place a laptop's `nura-dev-` staff token is taken. */
   dev?: boolean;
+  /** The Web Push key the home-screen app subscribes with; null when there is no Web Push. */
+  push_key?: string | null;
 }
