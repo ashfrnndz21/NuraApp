@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
+from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
 from app.channels.whatsapp.provider import NotAWebhook
@@ -48,6 +49,7 @@ from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
+from app.ingestion.voice import VoiceNoteTooLong
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
@@ -72,7 +74,7 @@ from app.onboarding.settings import NotTheirsToSetUp
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.search.ask import NotAQuestion
-from app.state.service import NoState
+from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
@@ -145,6 +147,13 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (EpisodeAlreadyClosed, 409),
     (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
+    (VoiceNoteTooLong, 413),
+    # The record moved past the State a card was composed from: read it again, compose again.
+    (StaleState, 409),
+    # A safety template failed the plain-words standard at run time: the fault is the
+    # catalogue's, not the caller's. (E12's `NotPlainWords` — words the caller offered — is a
+    # 400 with its findings, below.)
+    (CatalogueNotPlainWords, 500),
     # Free text needs the 24-hour window; outside it only a template goes.
     (OutsideTheWindow, 409),
     # A PDF or a note on an event is not this big (E02-03, E02-06).
