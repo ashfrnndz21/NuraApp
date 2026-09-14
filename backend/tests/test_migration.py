@@ -18,18 +18,20 @@ from alembic.operations import Operations
 from sqlalchemy import Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
+from app.consent.models import Consent
 from app.identity.models import Person, Profile
 from app.keys.models import Key
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
 # In order. A revision is appended here when it is written and never taken out again.
-CHAIN = ("0001_accounts_profiles_and_keys", "0002_audit_entry")
+CHAIN = ("0001_accounts_profiles_and_keys", "0002_audit_entry", "0003_consent_record")
 TABLES: tuple[Table, ...] = (
     Person.__table__,
     Profile.__table__,
     Key.__table__,
     AuditEntry.__table__,
+    Consent.__table__,
 )
 
 

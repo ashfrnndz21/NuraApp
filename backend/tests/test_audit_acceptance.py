@@ -24,7 +24,7 @@ from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
 from app.regions import Region
-from tests.support import Note, add_note, read_notes
+from tests.support import Note, add_note, agree_to_family_sharing, read_notes
 
 PRIVATE = "Pa keeps this one to himself."
 WATER_PILL = "The water pill is at 8 in the morning."
@@ -41,6 +41,7 @@ async def _pa_and_his_daughter(
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
+    await agree_to_family_sharing(session, owner)
     daughter = await register_person(
         session, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )

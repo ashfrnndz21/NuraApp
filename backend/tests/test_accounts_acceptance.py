@@ -20,7 +20,7 @@ from app.keys.context import NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key, list_keys, revoke_key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.regions import OutOfRegion, Region
-from tests.support import Note, add_note, read_notes
+from tests.support import Note, add_note, agree_to_family_sharing, read_notes
 
 # --- the patient node owns all data ------------------------------------------------------
 
@@ -75,6 +75,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
+
+    # Pa agrees to sharing with his family (E00-02); every key cut below rests on that.
+    await agree_to_family_sharing(sg, owner)
 
     # No grant, no reach.
     with pytest.raises(NoKey):

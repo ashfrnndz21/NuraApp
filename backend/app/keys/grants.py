@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write, record_share
 from app.audit.models import Action, Channel
 from app.audit.trail import record
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person
@@ -53,12 +55,24 @@ async def grant_key(
 
     `scopes` narrows the role's preset; it can never widen past what the granter holds.
     `basis` is what the grant rests on — the owner's recorded consent, an LPA, a letter.
-    Consent itself is recorded by the consent service (E00-02); this only names the basis.
+    Consent itself is recorded by the consent service (E00-02): no key is cut, whatever
+    its role, unless a consent to `SHARE_WITH_FAMILY` is in force on the profile, given by
+    the owner or by someone acting for him on a recorded proxy basis, to the current
+    wording. New wording therefore stops the cutting of keys until the patient agrees
+    again; that is what versioned consent means, and shipping new words is paired with
+    asking. The emergency role is not exempt: the emergency card is health data too.
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     _may_cut_keys(context)
     moment = now or utcnow()
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        scope=Scope.FAMILY,
+        now=moment,
+    )
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     granted = asked & context.scopes
 

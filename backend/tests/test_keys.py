@@ -13,6 +13,7 @@ from app.keys.grants import NoKeyToClose, grant_key, list_keys, revoke_key
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, DEFAULT_WINDOW, ROLE_SCOPES, KeyRole, KeyWindow, Scope
 from app.regions import Region
+from tests.support import agree_to_family_sharing
 
 GRANTED_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 
@@ -22,9 +23,11 @@ async def _owner(session: AsyncSession) -> KeyContext:
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
     profile = await create_own_profile(session, region=Region.SG, owner=pa)
-    return await resolve_key_context(
+    owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
+    await agree_to_family_sharing(session, owner, now=GRANTED_AT)
+    return owner
 
 
 def test_private_notes_and_money_are_preset_to_nobody_but_a_chief() -> None:

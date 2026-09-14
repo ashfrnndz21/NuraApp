@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
+from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.service import grant_consent
 from app.db import Base, ProfileScoped, enum_column
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -49,3 +51,17 @@ async def read_notes(
     now: datetime | None = None,
 ) -> Sequence[Note]:
     return await audited_read(session, Note, context, scope, where=(Note.scope == scope,), now=now)
+
+
+async def agree_to_family_sharing(
+    session: AsyncSession, owner: KeyContext, *, now: datetime | None = None
+) -> Consent:
+    """The owner's consent to sharing with family, which every key cut on his graph rests on."""
+    return await grant_consent(
+        session,
+        context=owner,
+        purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+        captured_via=ConsentChannel.APP,
+        basis=ConsentBasis.OWNER,
+        now=now,
+    )
