@@ -30,7 +30,7 @@ export const en = {
     // @patient phrase
     usePhone: "Sign in with a phone number instead",
     // @patient
-    codeLead: "We sent a code to your phone.",
+    codeLead: "Nura sent a code to your phone.",
     // @patient
     codeHint: "Type the 6 digits from the message.",
     // @patient
@@ -46,15 +46,13 @@ export const en = {
     // @patient phrase
     sendLink: "Send me a link",
     // @patient
-    linkLead: "We sent a link to your email.",
+    linkLead: "Nura sent a link to your email.",
     // @patient
     linkHint: "Type the code from the email here.",
     // @patient phrase
     linkLabel: "The code from the email",
     // @patient
     never: "Nura will never call you to ask for it.",
-    // @patient
-    wait: "Nura is checking.",
     // @patient phrase
     back: "Go back",
   },
@@ -68,7 +66,7 @@ export const en = {
     // @patient phrase
     forSomeone: "This is for someone else",
     // @patient
-    forSomeoneLine: "You will look after their record for them.",
+    forSomeoneLine: "You will look after their papers for them.",
     // @patient phrase
     invited: "Someone let me in",
     // @patient
@@ -94,7 +92,7 @@ export const en = {
     // @patient
     setUpBy: "{name}, {relationship}, made this for you.",
     // @patient
-    keepsSeeing: "{name} will keep seeing these parts:",
+    keepsSeeing: "{name} will keep seeing these parts of your papers:",
     // @patient phrase
     mine: "Yes, this is mine",
   },
@@ -126,7 +124,7 @@ export const en = {
     // @patient
     roleCaregiver: "You can see some of these papers.",
     // @patient
-    roleSteward: "You made this for them.",
+    roleSteward: "You made these papers for them.",
     // @patient
     roleOther: "You can see these papers.",
   },
@@ -156,6 +154,8 @@ export const en = {
     // @patient
     allTakenSub: "There is nothing more to take today.",
     // @patient
+    nothingNow: "There is nothing to take right now.",
+    // @patient
     noMedicines: "Nura has no medicines for you yet.",
     // @patient
     noMedicinesSub: "Your family can add them from a pill label.",
@@ -165,38 +165,66 @@ export const en = {
     readingTitle: "Your blood pressure",
     // @patient
     readingLead: "Write down this morning's number.",
+    // @patient
+    readingLeadEvening: "Write down tonight's number.",
+    // @patient phrase
+    aTablet: "Your tablet",
+    // @patient headline
+    earlierTitle: "From earlier today",
     // @patient phrase
     readingButton: "Write it down",
     // @patient
     stateStable: "Your day is steady.",
     // @patient
-    stateWatch: "There is something to keep an eye on.",
+    stateWatch: "Nura is keeping an eye on one thing for you.",
     // @patient
-    stateAct: "There is something to do today.",
+    stateWatchSub: "It is not a worry today.",
     // @patient
-    boundary1: "This is not a doctor's advice.",
+    stateAct: "There is one thing to do today.",
     // @patient
-    boundary2: "Ask your doctor.",
+    stateActSub: "It is the first card on this page.",
+    // @patient
+    staleState: "This is from earlier today.",
+    // @patient action
+    callChief: "Call {name} now.",
+    // @patient action
+    callFamily: "Call your family now.",
     // @patient
     proud: "You have taken your tablets on {count} days.",
     // @patient
     proudOne: "You have taken your tablets on 1 day.",
     // @patient
-    proudNone: "Your first Taken goes here.",
+    proudNone: "When you tap Taken, this number becomes 1.",
     // @patient
     proudSub: "This number only goes up.",
     // @patient headline
     supplyTitle: "Your tablets",
+    // @patient headline
+    todayList: "Your tablets for today",
     // @patient
-    offline: "You are not connected right now.",
+    offline: "Nura cannot reach the internet right now.",
     // @patient
     offlineSub: "This is your Today page from earlier.",
     // @patient
+    asOf: "Nura last read your papers on {date} at {time}.",
+    // @patient
+    cannotReach: "Nura cannot reach your papers right now.",
+    // @patient headline
+    emergencyTitle: "Emergency card",
+    // @patient
+    emergencySoon: "Nura will keep your emergency card here.",
+    // @patient
     homeScreen1: "You can add Nura to your home screen.",
     // @patient
-    homeScreen2: "Tap Share, then Add to Home Screen.",
+    homeScreen2: "Tap the Share button at the bottom.",
+    // @patient
+    homeScreen3: "Then tap Add to Home Screen.",
     // @patient
     fromToday: "This comes from your Today page.",
+    // @patient
+    fromState: "Nura worked this out on {date}.",
+    // @patient
+    fromTaps: "Nura counted the days you tapped Taken.",
   },
   reading: {
     // @patient headline
@@ -232,7 +260,9 @@ export const en = {
     // @patient phrase
     patient: "Big and simple",
     // @patient phrase
-    caregiver: "Small and full",
+    caregiver: "Smaller, with more on the page",
+    // @patient phrase
+    lookAuto: "Let Nura choose",
     // @patient phrase
     switchProfile: "Look at someone else's papers",
     // @patient phrase
@@ -253,7 +283,7 @@ export const en = {
     NoOpenChallenge: "Ask for a new code first.",
     WrongCode: "That code is not right.",
     ChallengeExpired: "That code is too old now.",
-    ChallengeLocked: "Too many tries for that code.",
+    ChallengeLocked: "Ask for a new code and start again.",
     NoKey: "You cannot see these papers any more.",
     OutOfScope: "This part of the papers is not open to you.",
     OutOfRegion: "These papers are kept in another country.",
@@ -268,8 +298,8 @@ export const en = {
     NotTheirsToChange: "You can see the medicines but not change them.",
     NoConsentToWithdraw: "There is nothing to stop.",
     NoKeyToClose: "That sharing is already stopped.",
-    NoStewardshipHere: "Nobody made these papers for someone else.",
-    NoState: "Nura has nothing to show for this yet.",
+    NoStewardshipHere: "These papers were not set up for anyone else.",
+    NoState: "Nura has nothing to show you here yet.",
     NoSuchReviewCard: "That card is not here any more.",
     NoSuchLine: "That medicine is not on your list.",
     PhotoTooLarge: "That photo is too big for Nura.",
@@ -278,16 +308,19 @@ export const en = {
     AlreadyRecorded: "Nura already has this.",
     AlreadyRegistered: "This number is already signed up.",
     AlreadySetUp: "Papers for this number are already set up.",
-    WaitingToBeClaimed: "Papers are waiting for you to claim.",
+    WaitingToBeClaimed: "Papers are waiting for you to say yes.",
     NotTheCurrentWording: "The words have changed since you read them.",
     WordingNotOnFile: "Nura does not have those words.",
     NotWhatWasConfirmed: "That is not what you said yes to.",
     NotAConfirmerHere: "Only you can say yes to this.",
-    HighRiskNeedsLabelPhoto: "This medicine needs a photo of its label first.",
+    HighRiskNeedsLabelPhoto: "Please take a photo of the label first.",
     NoProvenance: "Nura needs to know where this came from.",
     NoWordsInThatLanguage: "Nura does not have these words in that language yet.",
-    NotAPhoto: "Nura can only take a photo here.",
-    NothingBehindTheBasis: "Nura needs to know why you do this for them.",
+    NotAPhoto: "Nura can only read a photo here.",
+    NothingBehindTheBasis: "Nura needs to know why you look after them.",
     NotAgreedPerPerson: "The owner has not agreed to let this person in.",
+    NotForYourself: "Use the other door to keep your own papers.",
+    ConfirmationExpired: ["That yes is too old now.", "Please say yes again."],
+    AlreadySpent: "You already said yes to this.",
   },
 } satisfies Strings;

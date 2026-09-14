@@ -42,10 +42,17 @@ export function fill(template: string, slots: Record<string, string | number>): 
   });
 }
 
-/** The one plain sentence for a refusal, by its class name; never the name, never an id. */
-export function refusalSentence(refusal: string | undefined, code: Language = language.value): string {
+/** The plain lines for a refusal, by its class name — one, or two when the second says what
+ *  to do next; never the name, never an id. */
+export function refusalLines(refusal: string | undefined, code: Language = language.value): string[] {
   const map = CATALOGUE[code].refusals;
-  return (refusal && map[refusal]) || map.default;
+  const found = (refusal && map[refusal]) || map.default;
+  return typeof found === "string" ? [found] : [...found];
+}
+
+/** The same, as one string: the lines one after the other. */
+export function refusalSentence(refusal: string | undefined, code: Language = language.value): string {
+  return refusalLines(refusal, code).join(" ");
 }
 
 /** BCP 47 tags for speech and dates, per language, for the two countries Nura serves. */

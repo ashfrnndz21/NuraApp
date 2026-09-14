@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, tzinfo
 from enum import StrEnum
 from typing import Any
 
@@ -35,6 +35,7 @@ from app.drafts import FactDraft
 from app.drugs.registry import DrugMatch, DrugRegistry, Interaction, LabelFields, NotIdentified
 from app.errors import Refusal
 from app.keys.context import KeyContext
+from app.keys.repository import scoped_select
 from app.keys.scopes import KeyRole, Scope
 from app.medicines import dose as arithmetic
 from app.medicines.dose import Dose
@@ -57,7 +58,15 @@ from app.medicines.story import (
     medication_story,
     reorder_lines,
 )
-from app.medicines.strings import PLAIN_NAME, REORDER_ACTIONS, TAKEN, language_of
+from app.medicines.strings import (
+    PLAIN_NAME,
+    REORDER_ACTIONS,
+    SOURCE,
+    TAKEN,
+    language_of,
+    say_date,
+)
+from app.medicines.windows import window_status
 from app.memory.episodic import require_artifact
 from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
@@ -664,10 +673,54 @@ class LineView:
     duplicate_of: list[uuid.UUID]
     doctor_question: list[str]
     taken_label: str
+    due_now: bool = False
+    """One of today's doses of this line is in its window and not yet tapped."""
+    missed: bool = False
+    """One of today's doses of this line has passed its window untapped."""
+    source: str = ""
+    """Where the line came from and on which day, in his words: the card's source line."""
 
 
 def today_in(context: KeyContext) -> date:
     return utcnow().astimezone(REGION_TZ[context.region]).date()
+
+
+def now_in(context: KeyContext) -> datetime:
+    return utcnow().astimezone(REGION_TZ[context.region])
+
+
+def source_line(line: MedicationLine, zone: tzinfo, language: str) -> str:
+    """The source line under a card that shows this medicine: the label he kept (a photo is
+    behind the line) or what was typed in, and the day it started, in his language."""
+    kind = "label" if line.source_artifact_id is not None else "typed"
+    day = as_utc(line.started_at).astimezone(zone).date()
+    return SOURCE[language][kind].format(date=say_date(day, language))
+
+
+async def _taps_by_generic(
+    session: AsyncSession, *, context: KeyContext
+) -> tuple[dict[uuid.UUID, str], list[DoseTaken]]:
+    """Every tap on every line of the profile, superseded lines included, with the generic
+    each line is: a tap belongs to the medicine, not to the version of the line."""
+    every = await audited_read(session, MedicationLine, context, Scope.MEDICINES)
+    generic_of = {each.id: each.generic for each in every}
+    taken = await audited_read(
+        session,
+        DoseTaken,
+        context,
+        Scope.MEDICINES,
+        where=(DoseTaken.line_id.in_(list(generic_of)),),
+    )
+    return generic_of, list(taken)
+
+
+def _tapped(
+    anchor: str, generic: str, today_taps: Sequence[DoseTaken], generic_of: dict[uuid.UUID, str]
+) -> bool:
+    return any(
+        generic_of.get(t.line_id) == generic and (t.anchor == anchor or t.anchor is None)
+        for t in today_taps
+    )
 
 
 def count_for(
@@ -757,6 +810,10 @@ async def active_lines(
     by_id = {line.id: line for line in lines}
     names = _names(registry, sorted({line.generic for line in lines}), lang)
     today = today_in(context)
+    now = now_in(context)
+    generic_of, every_tap = await _taps_by_generic(session, context=context)
+    zone = REGION_TZ[context.region]
+    today_taps = [t for t in every_tap if as_utc(t.taken_at).astimezone(zone).date() == today]
     views: list[LineView] = []
     for line in lines:
         name = names[line.generic]
@@ -804,6 +861,15 @@ async def active_lines(
                     ).doctor_question
                 ),
                 taken_label=TAKEN[lang],
+                source=source_line(line, zone, lang),
+                due_now=any(
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[0]
+                    for a in Dose.from_json(line.dose).scheduled_anchors
+                ),
+                missed=any(
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[1]
+                    for a in Dose.from_json(line.dose).scheduled_anchors
+                ),
             )
         )
     return views
@@ -858,13 +924,19 @@ async def story(
 
 @dataclass(frozen=True, slots=True)
 class Slot:
-    """One dose card at one anchor of his day: the line, the moment, whether it was taken."""
+    """One dose card at one anchor of his day: the line, the moment, whether it was taken,
+    whether its window is open now, whether it has passed untapped — and, for that case,
+    the story's own missed-dose lines (E04-07), so no client composes what to do."""
 
     line: MedicationLine
     anchor: str
     card: str
     taken: bool
     taken_label: str
+    due_now: bool = False
+    missed: bool = False
+    if_forgotten: list[str] = field(default_factory=list)
+    source: str = ""
 
 
 @audited(Action.READ, Scope.MEDICINES, LINE)
@@ -881,19 +953,12 @@ async def today(
     if not lines:
         return []
     day = today_in(context)
+    now = now_in(context)
     zone = REGION_TZ[context.region]
     # A tap belongs to the medicine, not to the version of the line: a dose change this
     # afternoon does not undo the tablet he took this morning. So taps are gathered over
     # every line of each generic, superseded ones included, and matched by generic.
-    every = await audited_read(session, MedicationLine, context, Scope.MEDICINES)
-    generic_of = {each.id: each.generic for each in every}
-    taken = await audited_read(
-        session,
-        DoseTaken,
-        context,
-        Scope.MEDICINES,
-        where=(DoseTaken.line_id.in_(list(generic_of)),),
-    )
+    generic_of, taken = await _taps_by_generic(session, context=context)
     today_taps = [t for t in taken if as_utc(t.taken_at).astimezone(zone).date() == day]
     names = _names(registry, sorted({line.generic for line in lines}), lang)
     order = [a.value for a in arithmetic.Anchor]
@@ -906,7 +971,18 @@ async def today(
             if generic_of.get(t.line_id) == line.generic
         ):
             continue
+        forgotten = medication_story(
+            generic=line.generic,
+            strength=line.strength,
+            dose=dose,
+            prescriber=line.prescriber,
+            change_kind=line.change_kind,
+            monograph=registry.monograph(line.generic),
+            language=lang,
+        ).if_forgotten
         for anchor in dose.scheduled_anchors:
+            tapped = _tapped(anchor.value, line.generic, today_taps, generic_of)
+            due_now, missed = window_status(anchor, now, tapped)
             slots.append(
                 Slot(
                     line=line,
@@ -914,15 +990,55 @@ async def today(
                     card=dose_card_line(
                         name=names[line.generic], dose=dose, anchor=anchor.value, language=lang
                     ),
-                    taken=any(
-                        generic_of.get(t.line_id) == line.generic
-                        and (t.anchor == anchor.value or t.anchor is None)
-                        for t in today_taps
-                    ),
+                    taken=tapped,
                     taken_label=TAKEN[lang],
+                    due_now=due_now,
+                    missed=missed,
+                    if_forgotten=list(forgotten) if missed else [],
+                    source=source_line(line, zone, lang),
                 )
             )
     return sorted(slots, key=lambda s: (order.index(s.anchor), s.line.generic))
+
+
+@dataclass(frozen=True, slots=True)
+class Proud:
+    """The proud number: how many days of his have a tablet taken on them."""
+
+    days: int
+    as_of: datetime
+
+
+@audited(Action.READ, Scope.MEDICINES, Event.__tablename__)
+async def proud_days(session: AsyncSession, *, context: KeyContext) -> Proud:
+    """Distinct local days with a DOSE_TAKEN event tapped by the owner himself, from the
+    memory events under the medicines scope — never the audit trail. The owner's own read is
+    one audited read; anyone else's key first reads whose papers these are (the profile row,
+    audited). A helper's tap is her help, not his day. It is a count of days, not a streak: a
+    quiet day takes nothing away, and it never goes down on the same record. Papers nobody
+    has claimed yet have no one to be proud of, so the number is 0."""
+    zone = REGION_TZ[context.region]
+    owner = (
+        context.person_id
+        if context.is_owner
+        else (await audited_profile_read(session, context)).owner_person_id
+    )
+    if owner is None:
+        return Proud(days=0, as_of=utcnow())
+    his_taps = (
+        scoped_select(DoseTaken, context, Scope.MEDICINES)
+        .with_only_columns(DoseTaken.event_id)
+        .where(DoseTaken.by_person_id == owner)
+    )
+    events = await audited_read(
+        session,
+        Event,
+        context,
+        Scope.MEDICINES,
+        where=(Event.kind == EventKind.DOSE_TAKEN, Event.id.in_(his_taps)),
+    )
+    days = {as_utc(event.occurred_at).astimezone(zone).date() for event in events}
+    return Proud(days=len(days), as_of=utcnow())
 
 
 __all__ = [
@@ -935,6 +1051,7 @@ __all__ = [
     "NotTheirsToChange",
     "Outcome",
     "Plan",
+    "Proud",
     "Reconciled",
     "Slot",
     "active_lines",

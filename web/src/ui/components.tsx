@@ -1,6 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 import { speak, type SpokenCard } from "../speech/speak";
-import { language, refusalSentence, t } from "../strings";
+import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
@@ -88,13 +88,17 @@ interface CardProps {
   paper?: boolean;
   action?: ComponentChildren;
   hear?: boolean;
+  /** The backend's boundary lines, shown under the card's own lines (E16-01). */
+  boundary?: readonly string[];
+  /** The spoken twin when the backend wrote one (a feed card's `voice`); else every line shown. */
+  spoken?: readonly string[];
   settled?: boolean;
   testId?: string;
 }
 
-/** Card grammar: one title, a few whole lines, one action, and its spoken twin. */
-export function Card({ title, lines, provenance, paper = true, action, hear = true, settled, testId }: CardProps): JSX.Element {
-  const spoken = [title, ...lines].filter((line): line is string => Boolean(line));
+/** Card grammar: one title, a few whole lines, its source, one action, and its spoken twin. */
+export function Card({ title, lines, provenance, paper = true, action, hear = true, boundary = [], spoken: voice, settled, testId }: CardProps): JSX.Element {
+  const spoken = voice ?? [title, ...lines, ...boundary].filter((line): line is string => Boolean(line));
   return (
     <Tile paper={paper} glass={!paper} settled={settled} testId={testId}>
       {title && <h2 class="title">{title}</h2>}
@@ -103,6 +107,13 @@ export function Card({ title, lines, provenance, paper = true, action, hear = tr
           <p key={index}>{line}</p>
         ))}
       </div>
+      {boundary.length > 0 && (
+        <div class="lines boundary" data-testid="boundary">
+          {boundary.map((line, index) => (
+            <p key={index}>{line}</p>
+          ))}
+        </div>
+      )}
       {provenance && <p class="provenance">{provenance}</p>}
       {action}
       {hear && <Hear lines={spoken} />}
@@ -110,18 +121,32 @@ export function Card({ title, lines, provenance, paper = true, action, hear = tr
   );
 }
 
+/** A refusal said on a screen other than the one that met it, by its class name. */
+export function RefusalNotice({ refusal }: { refusal: string | undefined }): JSX.Element | null {
+  if (!refusal) return null;
+  return (
+    <Tile paper role="alert" testId="notice">
+      {refusalLines(refusal).map((line, index) => (
+        <p key={index}>{line}</p>
+      ))}
+    </Tile>
+  );
+}
+
 /** What happened and what to do, in one plain sentence — never the class, never an id. */
 export function Notice({ error }: { error: unknown }): JSX.Element | null {
   if (!error) return null;
-  const sentence =
+  const lines =
     error instanceof Unreachable
-      ? t().errors.network
+      ? [t().errors.network]
       : error instanceof Refused
-        ? refusalSentence(error.refusal)
-        : refusalSentence(undefined);
+        ? refusalLines(error.refusal)
+        : refusalLines(undefined);
   return (
     <Tile paper role="alert" testId="notice">
-      <p>{sentence}</p>
+      {lines.map((line, index) => (
+        <p key={index}>{line}</p>
+      ))}
     </Tile>
   );
 }

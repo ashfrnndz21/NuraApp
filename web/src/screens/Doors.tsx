@@ -5,7 +5,7 @@ import type { ClaimableOut, DoorsOut, ProfileOut, WordingOut } from "../api/type
 import { afterSignIn, go, openProfile, reloadDoors } from "../flow";
 import { me, token } from "../store/session";
 import { fill, language, t } from "../strings";
-import { Field, Header, Notice, Pill, Tile } from "../ui/components";
+import { Field, Header, Notice, Pill, RefusalNotice, Tile } from "../ui/components";
 
 function roleLine(each: ProfileOut): string {
   const s = t();
@@ -18,13 +18,14 @@ function roleLine(each: ProfileOut): string {
 
 /** The doors, one choice per tile: my own papers, papers waiting for me, papers I was let in
  *  to, and the two ways to begin. A chief with several keys sees every one here and picks. */
-export function DoorsScreen({ doors }: { doors: DoorsOut }): JSX.Element {
+export function DoorsScreen({ doors, refusal }: { doors: DoorsOut; refusal?: string }): JSX.Element {
   const s = t();
   const keys = [...doors.invited, ...doors.stewarding];
   const hasAny = doors.own || keys.length > 0 || doors.claimable.length > 0;
   return (
     <main class="screen">
       <Header title={hasAny ? s.switcher.title : s.doors.title} />
+      <RefusalNotice refusal={refusal} />
       {doors.own && (
         <Tile paper>
           <button type="button" class="choice" onClick={() => openProfile(doors.own!)} data-testid="door-own">

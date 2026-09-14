@@ -547,6 +547,24 @@ DOSE_CARD: Mapping[str, str] = {
 }
 """One dose card at one anchor of his day."""
 
+# @patient
+SOURCE: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "label": "This comes from the label you kept on {date}.",
+        "typed": "This comes from what was typed in on {date}.",
+    },
+    "ms": {
+        "label": "Ini daripada label yang anda simpan pada {date}.",
+        "typed": "Ini daripada apa yang ditaip pada {date}.",
+    },
+    "zh": {
+        "label": "这来自您在{date}保存的标签。",
+        "typed": "这来自{date}输入的内容。",
+    },
+}
+"""Where a medicine line came from, and on which day: the source line under every card that
+shows it — the label he kept (a photo is behind the line) or what was typed in."""
+
 # @patient phrase
 YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh": "您的医生"}
 """When the label named no doctor."""
@@ -645,4 +663,6 @@ def catalogue() -> list[str]:
         found.extend(words.values())
     for actions in REORDER_ACTIONS.values():
         found.extend(actions.values())
+    for sources in SOURCE.values():
+        found.extend(sources.values())
     return found

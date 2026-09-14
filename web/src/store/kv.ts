@@ -66,6 +66,19 @@ export async function kvSet(key: string, value: unknown): Promise<void> {
   }
 }
 
+/** Every key that starts with `prefix`: how sign-out finds each profile's cached page. */
+export async function kvKeys(prefix: string): Promise<string[]> {
+  const local = [...memory.keys()].filter((key) => key.startsWith(prefix));
+  if (!hasIndexedDb()) return local;
+  try {
+    const all = await run<IDBValidKey[]>("readonly", (store) => store.getAllKeys());
+    const stored = all.filter((key): key is string => typeof key === "string" && key.startsWith(prefix));
+    return [...new Set([...stored, ...local])];
+  } catch {
+    return local;
+  }
+}
+
 export async function kvDel(key: string): Promise<void> {
   memory.delete(key);
   if (!hasIndexedDb()) return;

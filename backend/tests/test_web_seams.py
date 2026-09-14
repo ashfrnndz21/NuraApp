@@ -15,9 +15,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.channels.api import Providers, create_app
+from app.channels.whatsapp.provider import FixtureProvider
 from app.consent.models import ConsentPurpose
 from app.consent.texts import current_version
 from app.db import make_session_factory
+from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
@@ -31,7 +33,7 @@ from app.safety.plain_words import (
     strings_in_typescript,
 )
 from app.settings import Settings
-from tests.conftest import Deployment
+from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
 from tests.paper import PAPER
 
 
@@ -100,7 +102,10 @@ def _app(web_dist: str | None) -> AsyncClient:
         code_sender=LoggingCodeSender(reveal=True),
         object_store=LocalObjectStore(root, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        searcher=FixtureSearcher(FEED),
+        compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
+        whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
     )
     engine = create_async_engine(settings.database_url)
     app = create_app(settings, make_session_factory(engine), providers)

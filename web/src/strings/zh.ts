@@ -30,7 +30,7 @@ export const zh = {
     // @patient phrase
     usePhone: "改用手机号码登录",
     // @patient
-    codeLead: "我们已把验证码发到您的手机。",
+    codeLead: "Nura 已把验证码发到您的手机。",
     // @patient
     codeHint: "请输入短信里的 6 个数字。",
     // @patient
@@ -46,15 +46,13 @@ export const zh = {
     // @patient phrase
     sendLink: "发链接给我",
     // @patient
-    linkLead: "我们已把链接发到您的电邮。",
+    linkLead: "Nura 已把链接发到您的电邮。",
     // @patient
-    linkHint: "请把电邮里的验证码贴在这里。",
+    linkHint: "请输入电邮里的验证码。",
     // @patient phrase
     linkLabel: "电邮里的验证码",
     // @patient
     never: "Nura 绝不会打电话向您要验证码。",
-    // @patient
-    wait: "请稍等。",
     // @patient phrase
     back: "返回",
   },
@@ -64,19 +62,19 @@ export const zh = {
     // @patient phrase
     forMe: "给我自己",
     // @patient
-    forMeLine: "Nura 会保存您自己的记录。",
+    forMeLine: "Nura 会保存您自己的文件。",
     // @patient phrase
     forSomeone: "给别人",
     // @patient
-    forSomeoneLine: "您会替他们照看他们的记录。",
+    forSomeoneLine: "您会替他们照看他们的文件。",
     // @patient phrase
     invited: "有人让我进来",
     // @patient
-    invitedLine: "{name} 和您分享了一份记录。",
+    invitedLine: "{name} 和您分享了一份文件。",
     // @patient phrase
-    waiting: "有一份记录在等您",
+    waiting: "有一份文件在等您",
     // @patient
-    waitingLine: "{name} 为您设好了它。",
+    waitingLine: "{name} 为您准备好了这些文件。",
   },
   consent: {
     // @patient headline
@@ -90,11 +88,11 @@ export const zh = {
   },
   claim: {
     // @patient headline
-    title: "这份记录是您的",
+    title: "这些文件是您的",
     // @patient
-    setUpBy: "{name}（{relationship}）为您设好了它。",
+    setUpBy: "{name}（{relationship}）为您准备好了这些文件。",
     // @patient
-    keepsSeeing: "{name} 会继续看到这些部分：",
+    keepsSeeing: "{name} 会继续看到您文件的这些部分：",
     // @patient phrase
     mine: "是，这是我的",
   },
@@ -112,23 +110,23 @@ export const zh = {
     // @patient
     asked: "是他们请您这么做的。",
     // @patient phrase
-    create: "设好它",
+    create: "设好文件",
   },
   switcher: {
     // @patient headline
-    title: "谁的记录？",
+    title: "谁的文件？",
     // @patient phrase
-    own: "您自己的记录",
+    own: "您自己的文件",
     // @patient
-    roleOwner: "这是您自己的记录。",
+    roleOwner: "这是您自己的文件。",
     // @patient
-    roleChief: "您照看这份记录。",
+    roleChief: "您照看这份文件。",
     // @patient
-    roleCaregiver: "您可以看这份记录的一部分。",
+    roleCaregiver: "您可以看这份文件的一部分。",
     // @patient
-    roleSteward: "这是您替他们设好的。",
+    roleSteward: "这是您替他们设好的文件。",
     // @patient
-    roleOther: "您可以看这份记录。",
+    roleOther: "您可以看这份文件。",
   },
   today: {
     // @patient headline
@@ -144,17 +142,19 @@ export const zh = {
     // @patient phrase
     taken: "吃了",
     // @patient
-    tookMorning: "您今天早上吃了。",
+    tookMorning: "您今天早上的药吃了。",
     // @patient
-    tookAfternoon: "您今天下午吃了。",
+    tookAfternoon: "您今天下午的药吃了。",
     // @patient
-    tookEvening: "您今天傍晚吃了。",
+    tookEvening: "您今天傍晚的药吃了。",
     // @patient
-    tookNight: "您今晚吃了。",
+    tookNight: "您今晚的药吃了。",
     // @patient
     allTaken: "今天的药您都吃了。",
     // @patient
     allTakenSub: "今天没有别的要吃了。",
+    // @patient
+    nothingNow: "现在没有要吃的药。",
     // @patient
     noMedicines: "Nura 还没有您的药。",
     // @patient
@@ -165,38 +165,66 @@ export const zh = {
     readingTitle: "您的血压",
     // @patient
     readingLead: "把今天早上的数字记下来。",
+    // @patient
+    readingLeadEvening: "把今晚的数字记下来。",
+    // @patient phrase
+    aTablet: "您的药",
+    // @patient headline
+    earlierTitle: "今天早些时候的",
     // @patient phrase
     readingButton: "记下来",
     // @patient
     stateStable: "您今天很平稳。",
     // @patient
-    stateWatch: "有一件事要留意。",
+    stateWatch: "Nura 在替您留意一件事。",
+    // @patient
+    stateWatchSub: "今天不用担心。",
     // @patient
     stateAct: "今天有一件事要做。",
     // @patient
-    boundary1: "这不是医生的意见。",
+    stateActSub: "就是这页最上面的那张卡。",
     // @patient
-    boundary2: "请问您的医生。",
+    staleState: "这是今天早些时候的。",
+    // @patient action
+    callChief: "现在就打电话给 {name}。",
+    // @patient action
+    callFamily: "现在就打电话给您的家人。",
     // @patient
     proud: "您已经有 {count} 天吃了药。",
     // @patient
     proudOne: "您已经有 1 天吃了药。",
     // @patient
-    proudNone: "您第一次按“吃了”会记在这里。",
+    proudNone: "您按一次“吃了”，这个数字就变成 1。",
     // @patient
     proudSub: "这个数字只会往上走。",
     // @patient headline
     supplyTitle: "您的药",
+    // @patient headline
+    todayList: "您今天的药",
     // @patient
-    offline: "您现在没有网络。",
+    offline: "Nura 现在连不上网络。",
     // @patient
-    offlineSub: "这是您早些时候的今日页面。",
+    offlineSub: "这是您早些时候的“今天”页面。",
+    // @patient
+    asOf: "Nura 最后一次读您的文件是在 {date} {time}。",
+    // @patient
+    cannotReach: "Nura 现在联系不上您的文件。",
+    // @patient headline
+    emergencyTitle: "紧急卡",
+    // @patient
+    emergencySoon: "Nura 会把您的紧急卡放在这里。",
     // @patient
     homeScreen1: "您可以把 Nura 加到主屏幕。",
     // @patient
-    homeScreen2: "点“分享”，再点“添加到主屏幕”。",
+    homeScreen2: "点屏幕下面的“分享”。",
     // @patient
-    fromToday: "来自您的今日页面。",
+    homeScreen3: "再点“添加到主屏幕”。",
+    // @patient
+    fromToday: "来自您的“今天”页面。",
+    // @patient
+    fromState: "Nura 在 {date} 算出了这个。",
+    // @patient
+    fromTaps: "Nura 数了您按“吃了”的天数。",
   },
   reading: {
     // @patient headline
@@ -230,11 +258,13 @@ export const zh = {
     // @patient phrase
     look: "Nura 的样子",
     // @patient phrase
-    patient: "大而简单",
+    patient: "字大，简单",
     // @patient phrase
-    caregiver: "小而完整",
+    caregiver: "字小，一页看得多",
     // @patient phrase
-    switchProfile: "看另一份记录",
+    lookAuto: "让 Nura 来选",
+    // @patient phrase
+    switchProfile: "看别人的文件",
     // @patient phrase
     signOut: "退出登录",
   },
@@ -251,41 +281,44 @@ export const zh = {
     NoOpenChallenge: "请先要一个新的验证码。",
     WrongCode: "这个验证码不对。",
     ChallengeExpired: "这个验证码太旧了。",
-    ChallengeLocked: "这个验证码试了太多次。",
-    NoKey: "您不能再看这份记录了。",
-    OutOfScope: "记录的这部分没有对您开放。",
-    OutOfRegion: "这份记录保存在另一个国家。",
-    NotTheirsToRead: "只有记录的主人可以看这个。",
-    NotTheirKeyToCut: "只有记录的主人可以分享这份记录。",
+    ChallengeLocked: "请要一个新的验证码，重新开始。",
+    NoKey: "您不能再看这份文件了。",
+    OutOfScope: "文件的这部分没有对您开放。",
+    OutOfRegion: "这份文件保存在另一个国家。",
+    NotTheirsToRead: "只有文件的主人可以看这个。",
+    NotTheirKeyToCut: "只有文件的主人可以分享这份文件。",
     NoSuchHolder: "Nura 不认识那个人。",
-    NoConsent: "记录的主人还没有同意这件事。",
-    ConsentWithheld: "记录的主人还没有同意这件事。",
-    NotTheirConsentToGive: "只有记录的主人可以同意这件事。",
-    NotTheirConsentToWithdraw: "只有记录的主人可以停止这件事。",
-    NotTheClaimant: "这份记录是为别人设的。",
+    NoConsent: "文件的主人还没有同意这件事。",
+    ConsentWithheld: "文件的主人暂时还没有同意。",
+    NotTheirConsentToGive: "只有文件的主人可以同意这件事。",
+    NotTheirConsentToWithdraw: "只有文件的主人可以停止这件事。",
+    NotTheClaimant: "这份文件是为别人设的。",
     NotTheirsToChange: "您可以看这些药，但不能改。",
     NoConsentToWithdraw: "没有什么可以停止的。",
     NoKeyToClose: "这个分享已经停了。",
-    NoStewardshipHere: "没有人替别人设过这份记录。",
+    NoStewardshipHere: "这些文件不是替别人设的。",
     NoState: "Nura 还没有东西可以给您看。",
     NoSuchReviewCard: "那张卡已经不在这里了。",
     NoSuchLine: "那个药不在您的单子上。",
     PhotoTooLarge: "这张照片对 Nura 来说太大了。",
-    ProfileAlreadyOwned: "您已经有自己的记录了。",
+    ProfileAlreadyOwned: "您已经有自己的文件了。",
     AlreadyConfirmed: "您已经同意过这件事了。",
     AlreadyRecorded: "Nura 已经有这个了。",
     AlreadyRegistered: "这个号码已经注册过了。",
-    AlreadySetUp: "这个号码的记录已经设好了。",
-    WaitingToBeClaimed: "有一份记录在等您领取。",
+    AlreadySetUp: "这个号码的文件已经设好了。",
+    WaitingToBeClaimed: "有一份文件在等您说它是您的。",
     NotTheCurrentWording: "这些话在您读过之后改过了。",
     WordingNotOnFile: "Nura 没有这些话。",
     NotWhatWasConfirmed: "这不是您同意的那件事。",
     NotAConfirmerHere: "只有您可以同意这件事。",
-    HighRiskNeedsLabelPhoto: "这个药需要先拍一张标签的照片。",
+    HighRiskNeedsLabelPhoto: "请先拍一张药盒标签的照片。",
     NoProvenance: "Nura 需要知道这是从哪里来的。",
-    NoWordsInThatLanguage: "Nura 还没有这些话的那种语言版本。",
+    NoWordsInThatLanguage: "Nura 还不会用那种语言说这些话。",
     NotAPhoto: "Nura 在这里只能收照片。",
     NothingBehindTheBasis: "Nura 需要知道您为什么替他们做这件事。",
-    NotAgreedPerPerson: "记录的主人还没有同意让这个人进来。",
+    NotAgreedPerPerson: "文件的主人还没有同意让这个人进来。",
+    NotForYourself: "请走另一扇门，保存您自己的文件。",
+    ConfirmationExpired: ["那个“同意”太旧了。", "请再同意一次。"],
+    AlreadySpent: "您已经同意过这件事了。",
   },
 } satisfies Strings;

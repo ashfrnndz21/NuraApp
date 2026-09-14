@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import * as nura from "./api/nura";
 import type { ClaimableOut, DoorsOut, ProfileOut } from "./api/types";
+import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
 
@@ -12,7 +13,8 @@ export type Screen =
   | { name: "code"; phone: string }
   | { name: "email" }
   | { name: "emailToken"; email: string }
-  | { name: "doors"; doors: DoorsOut }
+  /** `refusal`: why the remembered papers are not open any more, said on the doors. */
+  | { name: "doors"; doors: DoorsOut; refusal?: string }
   | { name: "consent" }
   | { name: "claim"; offer: ClaimableOut }
   | { name: "forSomeone" }
@@ -39,6 +41,13 @@ export async function afterSignIn(): Promise<void> {
     await chooseProfile(still);
     return go({ name: "today" });
   }
+  if (remembered && !still) {
+    // The key to the remembered papers was closed since: nothing of them stays on the phone,
+    // and he is told why he is back at the doors.
+    await clearProfileData(remembered.profile_id);
+    await chooseProfile(null);
+    return go({ name: "doors", doors, refusal: "NoKey" });
+  }
   if (doors.own && known.length === 1 && doors.claimable.length === 0) {
     await chooseProfile(doors.own);
     return go({ name: "today" });
@@ -46,7 +55,11 @@ export async function afterSignIn(): Promise<void> {
   go({ name: "doors", doors });
 }
 
+/** Open one profile's papers. Whatever the phone kept of another profile's page is dropped:
+ *  a page read under one key is never shown under another. */
 export async function openProfile(chosen: ProfileOut): Promise<void> {
+  const before = profile.value;
+  if (before && before.profile_id !== chosen.profile_id) await clearProfileData(before.profile_id);
   await chooseProfile(chosen);
   go({ name: "today" });
 }
@@ -60,6 +73,9 @@ export async function signOutEverywhere(): Promise<void> {
       /* the token is forgotten here whatever the server said */
     }
   }
+  // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
+  // profile and every cached Today page go.
+  await clearAllProfileData();
   await setToken(null);
   await chooseProfile(null);
   me.value = null;

@@ -103,7 +103,9 @@ export async function captureSpeech(page: Page): Promise<void> {
       speaking: false,
       pending: false,
       paused: false,
-      getVoices: () => [],
+      // One voice that runs on the device, so the app speaks; a network-only voice would
+      // keep it silent (see speak.ts).
+      getVoices: () => [{ lang: "en-SG", localService: true, name: "Local", default: true, voiceURI: "local" }],
       pause: () => undefined,
       resume: () => undefined,
       addEventListener: () => undefined,
@@ -112,5 +114,67 @@ export async function captureSpeech(page: Page): Promise<void> {
       onvoiceschanged: null,
     };
     Object.defineProperty(window, "speechSynthesis", { value: synth, configurable: true });
+    // Chromium will not take a made-up voice on a real utterance, so the utterance is a
+    // stand-in too: it keeps the text, the voice and the language the app chose.
+    class Utterance {
+      text: string;
+      voice: unknown = null;
+      lang = "";
+      rate = 1;
+      onend: (() => void) | null = null;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { value: Utterance, configurable: true });
   });
+}
+
+/** The phone's copy of anyone's papers in IndexedDB: every stored value that names a medicine. */
+export async function medicinesInIndexedDb(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const all = opened.result.transaction("kv", "readonly").objectStore("kv").getAll();
+          all.onsuccess = () =>
+            resolve(all.result.map((value: unknown) => JSON.stringify(value)).filter((value: string) => /amlodipine|blood pressure/.test(value)));
+        };
+        opened.onerror = () => resolve(["error"]);
+      }),
+  );
+}
+
+/** Move every kept Today page past its midnight, the way the next morning finds it. */
+export async function expireKeptPages(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const tx = opened.result.transaction("kv", "readwrite");
+          let moved = 0;
+          const cursor = tx.objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return;
+            if (typeof at.key === "string" && at.key.startsWith("today.")) {
+              at.update({ ...(at.value as object), expiresAt: "2000-01-01T00:00:00.000Z" });
+              moved += 1;
+            }
+            at.continue();
+          };
+          tx.oncomplete = () => resolve(moved);
+        };
+        opened.onerror = () => resolve(-1);
+      }),
+  );
+}
+
+/** A full-page screenshot into NURA_SHOTS, when it is set: the operator's checkpoint pictures. */
+export async function shot(page: Page, name: string): Promise<void> {
+  const dir = process.env.NURA_SHOTS;
+  if (!dir) return;
+  await page.screenshot({ path: `${dir}/w1-review-${name}.png`, fullPage: true });
 }

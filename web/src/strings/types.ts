@@ -35,7 +35,6 @@ export interface Strings {
     linkHint: string;
     linkLabel: string;
     never: string;
-    wait: string;
     back: string;
   };
   doors: {
@@ -82,27 +81,42 @@ export interface Strings {
     tookNight: string;
     allTaken: string;
     allTakenSub: string;
+    nothingNow: string;
     noMedicines: string;
     noMedicinesSub: string;
     hear: string;
     readingTitle: string;
     readingLead: string;
     readingButton: string;
+    readingLeadEvening: string;
+    aTablet: string;
+    earlierTitle: string;
     stateStable: string;
     stateWatch: string;
+    stateWatchSub: string;
     stateAct: string;
-    boundary1: string;
-    boundary2: string;
+    stateActSub: string;
+    staleState: string;
+    callChief: string;
+    callFamily: string;
     proud: string;
     proudOne: string;
     proudNone: string;
     proudSub: string;
     supplyTitle: string;
+    todayList: string;
     offline: string;
     offlineSub: string;
+    asOf: string;
+    cannotReach: string;
+    emergencyTitle: string;
+    emergencySoon: string;
     homeScreen1: string;
     homeScreen2: string;
+    homeScreen3: string;
     fromToday: string;
+    fromState: string;
+    fromTaps: string;
   };
   reading: {
     title: string;
@@ -123,9 +137,11 @@ export interface Strings {
     look: string;
     patient: string;
     caregiver: string;
+    lookAuto: string;
     switchProfile: string;
     signOut: string;
   };
   errors: { network: string; tryAgain: string };
-  refusals: Record<string, string> & { default: string };
+  /** One line per refusal, or two when the second says what to do next; each line one idea. */
+  refusals: Record<string, string | readonly string[]> & { default: string };
 }

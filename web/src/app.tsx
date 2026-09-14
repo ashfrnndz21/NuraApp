@@ -34,7 +34,7 @@ export function App(): JSX.Element | null {
     case "emailToken":
       return <EmailTokenScreen email={current.email} />;
     case "doors":
-      return <DoorsScreen doors={current.doors} />;
+      return <DoorsScreen doors={current.doors} refusal={current.refusal} />;
     case "consent":
       return <ConsentScreen />;
     case "claim":

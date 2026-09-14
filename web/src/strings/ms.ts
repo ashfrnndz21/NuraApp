@@ -26,11 +26,11 @@ export const ms = {
     // @patient phrase
     sendCode: "Hantar kod kepada saya",
     // @patient phrase
-    useEmail: "Daftar masuk dengan emel",
+    useEmail: "Daftar masuk dengan emel pula",
     // @patient phrase
-    usePhone: "Daftar masuk dengan nombor telefon",
+    usePhone: "Daftar masuk dengan nombor telefon pula",
     // @patient
-    codeLead: "Kami sudah hantar kod ke telefon anda.",
+    codeLead: "Nura sudah hantar kod ke telefon anda.",
     // @patient
     codeHint: "Taip 6 angka daripada mesej itu.",
     // @patient
@@ -46,15 +46,13 @@ export const ms = {
     // @patient phrase
     sendLink: "Hantar pautan kepada saya",
     // @patient
-    linkLead: "Kami sudah hantar pautan ke emel anda.",
+    linkLead: "Nura sudah hantar pautan ke emel anda.",
     // @patient
-    linkHint: "Tampal kod daripada emel itu di sini.",
+    linkHint: "Taip kod daripada emel itu di sini.",
     // @patient phrase
     linkLabel: "Kod daripada emel",
     // @patient
     never: "Nura tidak akan menelefon anda untuk meminta kod ini.",
-    // @patient
-    wait: "Sekejap.",
     // @patient phrase
     back: "Kembali",
   },
@@ -64,17 +62,17 @@ export const ms = {
     // @patient phrase
     forMe: "Ini untuk saya",
     // @patient
-    forMeLine: "Nura akan menyimpan rekod anda sendiri.",
+    forMeLine: "Nura akan menyimpan surat-surat anda sendiri.",
     // @patient phrase
     forSomeone: "Ini untuk orang lain",
     // @patient
-    forSomeoneLine: "Anda akan menjaga rekod mereka untuk mereka.",
+    forSomeoneLine: "Anda akan menjaga surat-surat mereka untuk mereka.",
     // @patient phrase
     invited: "Seseorang membenarkan saya masuk",
     // @patient
-    invitedLine: "{name} berkongsi rekod dengan anda.",
+    invitedLine: "{name} berkongsi surat-surat dengan anda.",
     // @patient phrase
-    waiting: "Ada rekod menunggu anda",
+    waiting: "Ada surat-surat menunggu anda",
     // @patient
     waitingLine: "{name} menyediakannya untuk anda.",
   },
@@ -90,11 +88,11 @@ export const ms = {
   },
   claim: {
     // @patient headline
-    title: "Rekod ini milik anda",
+    title: "Surat-surat ini milik anda",
     // @patient
     setUpBy: "{name}, {relationship}, menyediakan ini untuk anda.",
     // @patient
-    keepsSeeing: "{name} akan terus melihat bahagian ini:",
+    keepsSeeing: "{name} akan terus melihat bahagian surat-surat anda ini:",
     // @patient phrase
     mine: "Ya, ini milik saya",
   },
@@ -116,19 +114,19 @@ export const ms = {
   },
   switcher: {
     // @patient headline
-    title: "Rekod siapa?",
+    title: "Surat-surat siapa?",
     // @patient phrase
-    own: "Rekod anda sendiri",
+    own: "Surat-surat anda sendiri",
     // @patient
-    roleOwner: "Ini rekod anda sendiri.",
+    roleOwner: "Ini surat-surat anda sendiri.",
     // @patient
-    roleChief: "Anda menjaga rekod ini.",
+    roleChief: "Anda menjaga surat-surat ini.",
     // @patient
-    roleCaregiver: "Anda boleh melihat sebahagian rekod ini.",
+    roleCaregiver: "Anda boleh melihat sebahagian surat-surat ini.",
     // @patient
-    roleSteward: "Anda menyediakan ini untuk mereka.",
+    roleSteward: "Anda menyediakan surat-surat ini untuk mereka.",
     // @patient
-    roleOther: "Anda boleh melihat rekod ini.",
+    roleOther: "Anda boleh melihat surat-surat ini.",
   },
   today: {
     // @patient headline
@@ -144,17 +142,19 @@ export const ms = {
     // @patient phrase
     taken: "Sudah ambil",
     // @patient
-    tookMorning: "Anda sudah ambil pagi ini.",
+    tookMorning: "Anda sudah ambil ubat pagi ini.",
     // @patient
-    tookAfternoon: "Anda sudah ambil tengah hari ini.",
+    tookAfternoon: "Anda sudah ambil ubat tengah hari tadi.",
     // @patient
-    tookEvening: "Anda sudah ambil petang ini.",
+    tookEvening: "Anda sudah ambil ubat petang ini.",
     // @patient
-    tookNight: "Anda sudah ambil malam ini.",
+    tookNight: "Anda sudah ambil ubat malam ini.",
     // @patient
     allTaken: "Anda sudah ambil semua ubat untuk hari ini.",
     // @patient
     allTakenSub: "Tidak ada lagi yang perlu diambil hari ini.",
+    // @patient
+    nothingNow: "Tiada apa-apa untuk diambil sekarang.",
     // @patient
     noMedicines: "Nura belum ada ubat untuk anda.",
     // @patient
@@ -164,45 +164,73 @@ export const ms = {
     // @patient headline
     readingTitle: "Tekanan darah anda",
     // @patient
-    readingLead: "Tulis bacaan pagi ini.",
+    readingLead: "Tulis nombor pagi ini.",
+    // @patient
+    readingLeadEvening: "Tulis nombor malam ini.",
+    // @patient phrase
+    aTablet: "Ubat anda",
+    // @patient headline
+    earlierTitle: "Dari awal hari ini",
     // @patient phrase
     readingButton: "Tulis",
     // @patient
     stateStable: "Hari anda tenang.",
     // @patient
-    stateWatch: "Ada sesuatu yang perlu diperhatikan.",
+    stateWatch: "Nura sedang memerhatikan satu perkara untuk anda.",
     // @patient
-    stateAct: "Ada sesuatu yang perlu dibuat hari ini.",
+    stateWatchSub: "Ia bukan sesuatu yang perlu dirisaukan hari ini.",
     // @patient
-    boundary1: "Ini bukan nasihat doktor.",
+    stateAct: "Ada satu perkara untuk dibuat hari ini.",
     // @patient
-    boundary2: "Tanya doktor anda.",
+    stateActSub: "Ia kad pertama di halaman ini.",
+    // @patient
+    staleState: "Ini daripada awal hari ini.",
+    // @patient action
+    callChief: "Telefon {name} sekarang.",
+    // @patient action
+    callFamily: "Telefon keluarga anda sekarang.",
     // @patient
     proud: "Anda sudah ambil ubat anda pada {count} hari.",
     // @patient
     proudOne: "Anda sudah ambil ubat anda pada 1 hari.",
     // @patient
-    proudNone: "Kali pertama anda tekan Sudah ambil akan tercatat di sini.",
+    proudNone: "Bila anda tekan Sudah ambil, nombor ini jadi 1.",
     // @patient
     proudSub: "Nombor ini hanya naik.",
     // @patient headline
     supplyTitle: "Ubat anda",
+    // @patient headline
+    todayList: "Ubat anda untuk hari ini",
     // @patient
-    offline: "Anda tidak ada talian sekarang.",
+    offline: "Nura tidak dapat sambungan internet sekarang.",
     // @patient
     offlineSub: "Ini halaman Hari Ini anda daripada sebelum ini.",
     // @patient
+    asOf: "Nura terakhir membaca surat-surat anda pada {date}, pukul {time}.",
+    // @patient
+    cannotReach: "Nura tidak dapat capai surat-surat anda sekarang.",
+    // @patient headline
+    emergencyTitle: "Kad kecemasan",
+    // @patient
+    emergencySoon: "Nura akan menyimpan kad kecemasan anda di sini.",
+    // @patient
     homeScreen1: "Anda boleh tambah Nura ke skrin utama anda.",
     // @patient
-    homeScreen2: "Tekan Kongsi, kemudian Tambah ke Skrin Utama.",
+    homeScreen2: "Tekan Kongsi di bawah skrin.",
     // @patient
-    fromToday: "Daripada halaman Hari Ini anda.",
+    homeScreen3: "Kemudian tekan Tambah ke Skrin Utama.",
+    // @patient
+    fromToday: "Ini daripada halaman Hari Ini anda.",
+    // @patient
+    fromState: "Nura mengira ini pada {date}.",
+    // @patient
+    fromTaps: "Nura mengira hari yang anda tekan Sudah ambil.",
   },
   reading: {
     // @patient headline
     title: "Tekanan darah anda",
     // @patient
-    lead: "Taip dua nombor daripada mesin itu.",
+    lead: "Taip 2 nombor daripada mesin itu.",
     // @patient phrase
     top: "Nombor atas",
     // @patient phrase
@@ -210,7 +238,7 @@ export const ms = {
     // @patient phrase
     save: "Simpan",
     // @patient
-    saved: "Nura sudah tulis.",
+    saved: "Nura sudah tulis nombor itu.",
     // @patient phrase
     cancel: "Bukan sekarang",
   },
@@ -232,9 +260,11 @@ export const ms = {
     // @patient phrase
     patient: "Besar dan ringkas",
     // @patient phrase
-    caregiver: "Kecil dan penuh",
+    caregiver: "Kecil, lebih banyak dalam satu halaman",
     // @patient phrase
-    switchProfile: "Lihat rekod lain",
+    lookAuto: "Biar Nura pilih",
+    // @patient phrase
+    switchProfile: "Lihat surat-surat orang lain",
     // @patient phrase
     signOut: "Daftar keluar",
   },
@@ -251,41 +281,44 @@ export const ms = {
     NoOpenChallenge: "Minta kod baharu dahulu.",
     WrongCode: "Kod itu tidak betul.",
     ChallengeExpired: "Kod itu sudah terlalu lama.",
-    ChallengeLocked: "Terlalu banyak cubaan untuk kod itu.",
-    NoKey: "Anda tidak boleh melihat rekod ini lagi.",
-    OutOfScope: "Bahagian rekod ini tidak dibuka untuk anda.",
-    OutOfRegion: "Rekod ini disimpan di negara lain.",
+    ChallengeLocked: "Minta kod baharu dan mula semula.",
+    NoKey: "Anda tidak boleh melihat surat-surat ini lagi.",
+    OutOfScope: "Bahagian surat-surat ini tidak dibuka untuk anda.",
+    OutOfRegion: "Surat-surat ini disimpan di negara lain.",
     NotTheirsToRead: "Hanya pemilik boleh melihat ini.",
-    NotTheirKeyToCut: "Hanya pemilik boleh berkongsi rekod ini.",
+    NotTheirKeyToCut: "Hanya pemilik boleh berkongsi surat-surat ini.",
     NoSuchHolder: "Nura tidak kenal orang itu.",
     NoConsent: "Pemilik belum setuju dengan ini.",
-    ConsentWithheld: "Pemilik belum setuju dengan ini.",
+    ConsentWithheld: "Pemilik masih belum setuju dengan ini.",
     NotTheirConsentToGive: "Hanya pemilik boleh setuju dengan ini.",
     NotTheirConsentToWithdraw: "Hanya pemilik boleh hentikan ini.",
-    NotTheClaimant: "Rekod ini disediakan untuk orang lain.",
+    NotTheClaimant: "Surat-surat ini disediakan untuk orang lain.",
     NotTheirsToChange: "Anda boleh melihat ubat tetapi tidak boleh mengubahnya.",
     NoConsentToWithdraw: "Tidak ada apa-apa untuk dihentikan.",
     NoKeyToClose: "Perkongsian itu sudah dihentikan.",
-    NoStewardshipHere: "Tiada siapa menyediakan rekod ini untuk orang lain.",
+    NoStewardshipHere: "Surat-surat ini tidak disediakan untuk orang lain.",
     NoState: "Nura belum ada apa-apa untuk ditunjukkan.",
     NoSuchReviewCard: "Kad itu sudah tiada di sini.",
     NoSuchLine: "Ubat itu tiada dalam senarai anda.",
     PhotoTooLarge: "Foto itu terlalu besar untuk Nura.",
-    ProfileAlreadyOwned: "Anda sudah ada rekod anda sendiri.",
+    ProfileAlreadyOwned: "Anda sudah ada surat-surat anda sendiri.",
     AlreadyConfirmed: "Anda sudah setuju dengan ini.",
     AlreadyRecorded: "Nura sudah ada ini.",
     AlreadyRegistered: "Nombor ini sudah didaftarkan.",
-    AlreadySetUp: "Rekod untuk nombor ini sudah disediakan.",
-    WaitingToBeClaimed: "Ada rekod menunggu untuk anda tuntut.",
+    AlreadySetUp: "Surat-surat untuk nombor ini sudah disediakan.",
+    WaitingToBeClaimed: "Ada surat-surat menunggu anda kata ya.",
     NotTheCurrentWording: "Kata-kata itu sudah berubah sejak anda membacanya.",
     WordingNotOnFile: "Nura tidak ada kata-kata itu.",
     NotWhatWasConfirmed: "Itu bukan apa yang anda setujui.",
     NotAConfirmerHere: "Hanya anda boleh setuju dengan ini.",
-    HighRiskNeedsLabelPhoto: "Ubat ini perlukan foto labelnya dahulu.",
+    HighRiskNeedsLabelPhoto: "Sila ambil foto label ubat ini dahulu.",
     NoProvenance: "Nura perlu tahu dari mana ini datang.",
     NoWordsInThatLanguage: "Nura belum ada kata-kata ini dalam bahasa itu.",
     NotAPhoto: "Nura hanya boleh terima foto di sini.",
-    NothingBehindTheBasis: "Nura perlu tahu mengapa anda buat ini untuk mereka.",
+    NothingBehindTheBasis: "Nura perlu tahu mengapa anda menjaga mereka.",
     NotAgreedPerPerson: "Pemilik belum setuju membenarkan orang ini masuk.",
+    NotForYourself: "Guna pintu yang satu lagi untuk menyimpan surat-surat anda sendiri.",
+    ConfirmationExpired: ["Ya itu sudah terlalu lama.", "Sila setuju sekali lagi."],
+    AlreadySpent: "Anda sudah setuju dengan ini.",
   },
 } satisfies Strings;

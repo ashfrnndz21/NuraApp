@@ -37,7 +37,7 @@ export function MeScreen(): JSX.Element {
         </div>
         {densityChosen.value && (
           <Pill quiet onClick={() => void setDensity(null)}>
-            {s.errors.tryAgain}
+            {s.me.lookAuto}
           </Pill>
         )}
       </Tile>

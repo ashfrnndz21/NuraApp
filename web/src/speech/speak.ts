@@ -3,10 +3,12 @@ import { LOCALE, type Language } from "../strings";
 
 /** The spoken twin of a card: its lines, read one after another with a pause between.
  *
- *  One function, `speak(card)`, is the whole seam. Today it is the Web Speech API; the
- *  backend's pre-rendered voice is a later adapter set with `setSpeaker`, and nothing
- *  else changes. Audio starts only from a tap — nothing here is called on load, on a new
- *  card, or after another card finishes. */
+ *  One function, `speak(card)`, is the whole seam. Today it is the Web Speech API with a
+ *  voice that runs on the phone (`localService`) and no other: a network voice would send
+ *  the words — medicine names, dose sentences — to a vendor's servers, outside the region
+ *  and outside the consent. With no local voice for the language, nothing is spoken. The
+ *  backend's pre-rendered voice is a later adapter set with `setSpeaker`. Audio starts
+ *  only from a tap — nothing here is called on load, on a new card, or after another. */
 
 export interface SpokenCard {
   lines: readonly string[];
@@ -17,16 +19,34 @@ export type Speaker = (card: SpokenCard) => void;
 
 export const speaking = signal(false);
 
+type VoiceLike = Pick<SpeechSynthesisVoice, "lang" | "localService">;
+
+/** A voice that runs on the device, for this language: exact locale first, then the
+ *  language, then none. */
+export function pickLocalVoice<V extends VoiceLike>(voices: readonly V[], language: Language): V | null {
+  const local = voices.filter((voice) => voice.localService);
+  const wanted = LOCALE[language].toLowerCase();
+  const code = language.toLowerCase();
+  return (
+    local.find((voice) => voice.lang.toLowerCase().replace("_", "-") === wanted) ??
+    local.find((voice) => voice.lang.toLowerCase().slice(0, 2) === code) ??
+    null
+  );
+}
+
 function webSpeech(card: SpokenCard): void {
   const synth = typeof speechSynthesis === "undefined" ? null : speechSynthesis;
   if (!synth) return;
+  const voice = pickLocalVoice(synth.getVoices(), card.language);
+  if (!voice) return; // no local voice: stay silent rather than leave the region
   synth.cancel();
   const lines = card.lines.filter((line) => line.trim().length > 0);
   if (lines.length === 0) return;
   speaking.value = true;
   lines.forEach((line, index) => {
     const utterance = new SpeechSynthesisUtterance(line);
-    utterance.lang = LOCALE[card.language];
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
     utterance.rate = 0.9;
     if (index === lines.length - 1) {
       utterance.onend = () => (speaking.value = false);

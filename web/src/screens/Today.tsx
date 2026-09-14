@@ -1,72 +1,116 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { Refused, Unreachable } from "../api/client";
+import { Unreachable } from "../api/client";
 import * as nura from "../api/nura";
+import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
-import { loadProudFloor, loadTakenDays, loadToday, rememberTakenDay, saveProudFloor, saveToday } from "../offline/todayCache";
+import { bindingOf, clearProfileData, isFresh, loadToday, sameBinding, saveToday, type TodayEntry } from "../offline/todayCache";
 import { wantsHomeScreenHint } from "../offline/register";
-import { density, me, posture, profile, token } from "../store/session";
+import { chooseProfile, density, me, posture, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
-import { dateLine, dayKey, greeting, nextDose, stateLines, supplyLines, tookLine, type TodayModel } from "../today/model";
-import { daysFromAudit, proudNumber } from "../today/proud";
+import {
+  dateLine,
+  boundaryOf,
+  feedCards,
+  feedLines,
+  greeting,
+  medicinesCard,
+  nowCard,
+  readingLead,
+  stateLines,
+  timeLine,
+  todayList,
+  tookLine,
+  whyLine,
+  type TodayModel,
+} from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 
-/** Today: the Now card, a reading prompt, two cards from State and the medicines, and the
- *  proud number. Vertical, one action per card, every card with its spoken twin. It opens
- *  on the last page kept on the phone and then, if the network is there, the fresh one. */
+/** Today: the Now card, a reading prompt, today's cards and the proud number — every line the
+ *  backend's or the catalogue's, every card with its source line and its spoken twin.
+ *
+ *  It opens on the page the phone kept (bound to the key that read it, good until the local
+ *  midnight) and then, when the network is there, on the fresh one. A kept page shows today's
+ *  list and no Now card: only the backend can say what is due. Past midnight, with no network,
+ *  only the emergency card and one line show. A refused read — or a key that has narrowed —
+ *  deletes what the phone kept of these papers and says so; nothing is swallowed. */
 export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const s = t();
   const bearer = token.value;
   const papers = profile.value;
   const [model, setModel] = useState<TodayModel | null>(null);
+  const [kept, setKept] = useState<TodayEntry | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const [proud, setProud] = useState<number | null>(null);
   const [justTook, setJustTook] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
+  const forget = async (profileId: string, failure: unknown) => {
+    await clearProfileData(profileId);
+    setModel(null);
+    setKept(null);
+    setError(failure);
+  };
+
+  const refresh = async (): Promise<void> => {
+    if (!bearer || !papers) return;
+    const id = papers.profile_id;
+    // Whose papers, under which key and which parts, as of now. A key narrowed or changed
+    // since the page was kept finds its copy deleted before anything else is read.
+    const current = await nura.profile(bearer, id);
+    const binding = bindingOf(current);
+    if (!sameBinding(binding, bindingOf(papers))) {
+      await clearProfileData(id);
+      setModel(null);
+      setKept(null);
+      await chooseProfile(current);
+    }
+    // One call at a time; any refusal stops here and the caller deletes the phone's copy.
+    const state = await nura.state(bearer, id);
+    const lines = await nura.medicines(bearer, id, language.value);
+    const slots = await nura.dosesToday(bearer, id, language.value);
+    const counted = await nura.proud(bearer, id);
+    const page = await nura.feed(bearer, id);
+    let chief: string | null = null;
+    if (state.posture === "act" && current.standing === "owner") {
+      const held = await nura.keys(bearer, id);
+      chief = held.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
+    }
+    const fresh: TodayModel = {
+      stateId: state.state_id,
+      posture: state.posture,
+      stale: state.stale,
+      computedAt: state.computed_at,
+      slots,
+      lines,
+      feed: page.items,
+      proud: counted.days,
+      chief,
+      boundary: boundaryOf(state.boundary),
+      fetchedAt: new Date().toISOString(),
+    };
+    setModel(fresh);
+    setKept(null);
+    setOffline(false);
+    posture.value = fresh.posture;
+    await saveToday(id, fresh, binding, new Date());
+  };
+
   const load = async () => {
     if (!bearer || !papers) return;
-    const cached = await loadToday(papers.profile_id);
-    if (cached) {
-      setModel(cached);
-      posture.value = cached.posture;
+    setError(null);
+    const entry = await loadToday(papers.profile_id, bindingOf(papers), new Date());
+    if (entry) {
+      setKept(entry);
+      setModel(entry.model);
+      posture.value = entry.model.posture;
     }
-    const floor = await loadProudFloor(papers.profile_id);
-    const local = await loadTakenDays(papers.profile_id);
-    setProud(proudNumber(local, floor));
     try {
-      const [state, lines, slots] = await Promise.all([
-        nura.state(bearer, papers.profile_id).catch((failure: unknown) => {
-          // A key without the record cannot read State; the wash stays where it was.
-          if (failure instanceof Refused) return null;
-          throw failure;
-        }),
-        nura.medicines(bearer, papers.profile_id, language.value),
-        nura.dosesToday(bearer, papers.profile_id, language.value),
-      ]);
-      const fresh: TodayModel = {
-        posture: state?.posture ?? cached?.posture ?? "stable",
-        lines,
-        slots,
-        fetchedAt: new Date().toISOString(),
-      };
-      setModel(fresh);
-      posture.value = fresh.posture;
-      setOffline(false);
-      await saveToday(papers.profile_id, fresh);
-      try {
-        const trail = await nura.medicinesAudit(bearer, papers.profile_id);
-        const days = [...daysFromAudit(trail, (iso) => dayKey(new Date(iso))), ...local];
-        const number = proudNumber(days, floor);
-        setProud(number);
-        await saveProudFloor(papers.profile_id, number);
-      } catch {
-        /* a key that cannot read the trail keeps the phone's own count */
-      }
+      await refresh();
     } catch (failure) {
       if (failure instanceof Unreachable) setOffline(true);
-      else setError(failure);
+      else await forget(papers.profile_id, failure);
     }
   };
 
@@ -80,108 +124,178 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     setError(null);
     try {
       await nura.taken(bearer, papers.profile_id, lineId, anchor);
-      const today = dayKey(new Date());
-      const days = await rememberTakenDay(papers.profile_id, today);
-      const floor = await loadProudFloor(papers.profile_id);
-      const number = proudNumber(days, Math.max(floor, proud ?? 0));
-      setProud(number);
-      await saveProudFloor(papers.profile_id, number);
       setJustTook(tookLine(new Date().getHours(), s));
-      // The next card, and the count that came down by one.
-      const lines = await nura.medicines(bearer, papers.profile_id, language.value);
-      const slots = await nura.dosesToday(bearer, papers.profile_id, language.value);
-      if (model) {
-        const fresh = { ...model, lines, slots, fetchedAt: new Date().toISOString() };
-        setModel(fresh);
-        await saveToday(papers.profile_id, fresh);
-      }
+      await refresh();
     } catch (failure) {
       if (failure instanceof Unreachable) setOffline(true);
-      else setError(failure);
+      else await forget(papers.profile_id, failure);
     } finally {
       setBusy(false);
     }
   };
 
   const now = new Date();
+  const locale = LOCALE[language.value];
   const name = papers?.display_name || me.value?.display_name || "";
-  const hello = greeting(now.getHours(), name, s);
-  const today = dateLine(now, LOCALE[language.value]);
-  const nowCard = model ? nextDose(model.slots, model.lines) : null;
-  const supply = model ? supplyLines(model.lines) : null;
+  // What is on screen came from the phone's copy, not the network, while `kept` is set; a
+  // copy that has passed its midnight is never shown, even if the app stayed open.
+  const fromPhone = kept !== null;
+  const page = kept && !isFresh(kept, now) ? null : model;
+  const blank = offline && page === null;
+
+  const feed = page ? feedCards(page.feed) : { flags: [], forYou: [] };
+  const act = page?.posture === "act";
+  const stale = page?.stale === true;
+  const useFeed = feed.forYou.length > 0;
+  // Where the State card goes: first when it says act; in place of the dose card when it is
+  // stale; under "For you today" when the feed has nothing for today; else not at all.
+  const stateAt = !page ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
+  const dose = page && !fromPhone && !stale ? nowCard(page.slots, page.lines, s) : null;
+  const medicines = page ? medicinesCard(page.lines, !useFeed) : null;
+  const proud = page?.proud ?? null;
   const proudLine =
     proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
+
+  const feedCard = (item: FeedItemOut, testId: string) => (
+    <Card
+      key={item.item_id}
+      title={item.headline}
+      lines={feedLines(item).lines}
+      boundary={feedLines(item).boundary}
+      spoken={item.voice.length > 0 ? item.voice : undefined}
+      provenance={whyLine(item)}
+      paper={density() === "patient" || item.supply === "flag"}
+      testId={testId}
+    />
+  );
+  const stateCard = page && (
+    <Card
+      lines={stateLines(page, s, { flagAbove: feed.flags.length > 0, kept: fromPhone })}
+      boundary={page.boundary ?? []}
+      provenance={fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
+      paper={density() === "patient" || act}
+      testId="state-card"
+    />
+  );
 
   return (
     <main class="screen" data-density={density()}>
       <header class="hero">
-        <div class="greeting">{hello}</div>
-        <div class="date">{today}</div>
+        <div class="greeting">{greeting(now.getHours(), name, s)}</div>
+        <div class="date">{dateLine(now, locale)}</div>
       </header>
 
-      {offline && (
-        <Tile glass testId="offline">
-          <p>{s.today.offline}</p>
-          <p class="caption">{s.today.offlineSub}</p>
-        </Tile>
-      )}
-      {saved && (
-        <Tile paper>
-          <p>{s.reading.saved}</p>
-        </Tile>
-      )}
-      <Notice error={error} />
+      {blank ? (
+        <>
+          <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
+          <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
+        </>
+      ) : (
+        <>
+          {offline && kept && page && (
+            <Tile glass testId="offline">
+              <p>{s.today.offline}</p>
+              <p>{s.today.offlineSub}</p>
+              <p class="caption">
+                {fill(s.today.asOf, { date: dateLine(new Date(kept.fetchedAt), locale), time: timeLine(new Date(kept.fetchedAt), locale) })}
+              </p>
+            </Tile>
+          )}
+          {saved && (
+            <Tile paper>
+              <p>{s.reading.saved}</p>
+            </Tile>
+          )}
+          <Notice error={error} />
 
-      <h2 class="section">{s.today.now}</h2>
-      {nowCard?.kind === "dose" && (
-        <Card
-          title={nowCard.title}
-          lines={[nowCard.sentence]}
-          testId="now-card"
-          action={
-            <Pill plum onClick={() => take(nowCard.lineId, nowCard.anchor)} disabled={busy} testId="taken">
-              {s.today.taken}
-            </Pill>
-          }
-        />
-      )}
-      {nowCard?.kind === "allTaken" && (
-        <Card title={s.today.allTaken} lines={[justTook ?? s.today.allTakenSub]} settled testId="all-taken" />
-      )}
-      {nowCard?.kind === "none" && <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />}
-      {nowCard?.kind === "dose" && justTook && (
-        <Tile paper settled>
-          <p>{justTook}</p>
-        </Tile>
-      )}
+          {page && (
+            <>
+              {feed.flags.map((item) => feedCard(item, "flag-card"))}
+              {stateAt === "top" && stateCard}
 
-      <Card
-        title={s.today.readingTitle}
-        lines={[s.today.readingLead]}
-        testId="reading-prompt"
-        action={
-          <Pill onClick={() => go({ name: "reading" })} testId="write-reading">
-            {s.today.readingButton}
-          </Pill>
-        }
-      />
+              <h2 class="section">{s.today.now}</h2>
+              {fromPhone &&
+                (page.slots.length > 0 ? (
+                  <Card title={s.today.todayList} lines={todayList(page.slots)} provenance={s.today.fromToday} testId="today-list" />
+                ) : (
+                  <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />
+                ))}
+              {stateAt === "now" && stateCard}
+              {dose?.kind === "due" && (
+                <Card
+                  title={dose.title}
+                  lines={[dose.sentence]}
+                  provenance={dose.provenance}
+                  testId="now-card"
+                  action={
+                    <Pill plum onClick={() => take(dose.lineId, dose.anchor)} disabled={busy} testId="taken">
+                      {s.today.taken}
+                    </Pill>
+                  }
+                />
+              )}
+              {dose?.kind === "missed" && (
+                <>
+                  <h3 class="section">{s.today.earlierTitle}</h3>
+                  <Card title={dose.title} lines={dose.lines} provenance={dose.provenance} testId="missed-card" />
+                </>
+              )}
+              {dose?.kind === "allTaken" && (
+                <Card title={s.today.allTaken} lines={[justTook ?? s.today.allTakenSub]} provenance={s.today.fromTaps} settled testId="all-taken" />
+              )}
+              {dose?.kind === "nothingNow" && <Card lines={[justTook ?? s.today.nothingNow]} provenance={s.today.fromTaps} testId="nothing-now" />}
+              {dose?.kind === "none" && <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />}
+              {justTook && (dose?.kind === "due" || dose?.kind === "missed") && (
+                <Tile paper settled>
+                  <p>{justTook}</p>
+                </Tile>
+              )}
 
-      <h2 class="section">{s.today.forYou}</h2>
-      {model && <Card lines={stateLines(model.posture, s)} paper={density() === "patient"} testId="state-card" />}
-      {supply && <Card title={s.today.supplyTitle} lines={supply} paper={density() === "patient"} testId="supply-card" />}
+              {!fromPhone && (
+                <Card
+                  title={s.today.readingTitle}
+                  lines={[readingLead(now.getHours(), s)]}
+                  testId="reading-prompt"
+                  action={
+                    <Pill onClick={() => go({ name: "reading" })} testId="write-reading">
+                      {s.today.readingButton}
+                    </Pill>
+                  }
+                />
+              )}
 
-      <Tile paper testId="proud">
-        <div class="number" data-testid="proud-number">{proud ?? 0}</div>
-        <p>{proudLine}</p>
-        <p class="caption">{s.today.proudSub}</p>
-        <Hear lines={[proudLine, s.today.proudSub]} />
-      </Tile>
+              <h2 class="section">{s.today.forYou}</h2>
+              {useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))}
+              {stateAt === "forYou" && stateCard}
+              {medicines && (
+                <Card
+                  title={s.today.supplyTitle}
+                  lines={medicines.lines}
+                  provenance={medicines.provenance}
+                  paper={density() === "patient"}
+                  testId="medicines-card"
+                />
+              )}
+              <Tile paper testId="proud">
+                <div class="number" data-testid="proud-number">
+                  {proud ?? 0}
+                </div>
+                <p>{proudLine}</p>
+                <p class="caption">{s.today.proudSub}</p>
+                <p class="provenance">{s.today.fromTaps}</p>
+                <Hear lines={[proudLine, s.today.proudSub]} />
+              </Tile>
+            </>
+          )}
 
-      {wantsHomeScreenHint() && (
-        <Tile glass>
-          <p>{s.today.homeScreen1}</p>
-          <p>{s.today.homeScreen2}</p>
-        </Tile>
+          {wantsHomeScreenHint() && (
+            <Tile glass>
+              <p>{s.today.homeScreen1}</p>
+              <p>{s.today.homeScreen2}</p>
+              <p>{s.today.homeScreen3}</p>
+            </Tile>
+          )}
+        </>
       )}
 
       <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />

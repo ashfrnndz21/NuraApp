@@ -335,7 +335,12 @@ async def grant(body: KeyGrant, request: Request, context: Context, session: Db)
 
 @router.get("/{profile_id}/keys")
 async def keys(context: Context, session: Db) -> list[KeyOut]:
-    return [KeyOut.of(key) for key in await list_keys(session, context=context)]
+    """Every key on the profile, each with its holder's name: the owner reads who holds what,
+    and the app can say whom to call."""
+    return [
+        KeyOut.of(key, await person_display_name(session, context, key.holder_person_id))
+        for key in await list_keys(session, context=context)
+    ]
 
 
 @router.delete("/{profile_id}/keys/{key_id}")

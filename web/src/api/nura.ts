@@ -1,12 +1,14 @@
 import { api } from "./client";
 import type {
-  AuditOut,
   ClaimableOut,
   ConfirmationOut,
   DoorsOut,
+  FeedPageOut,
+  KeyOut,
   LineOut,
   MeOut,
   ProfileOut,
+  ProudOut,
   ReadingOut,
   SessionOut,
   SlotOut,
@@ -118,11 +120,17 @@ export const taken = (token: string, profileId: string, lineId: string, anchor: 
 export const state = (token: string, profileId: string) =>
   api<StateOut>(`/profiles/${profileId}/state`, { token });
 
-export const medicinesAudit = (token: string, profileId: string) =>
-  api<AuditOut[]>(`/profiles/${profileId}/audit`, {
-    token,
-    query: { scope: "medicines", action: "write", limit: "500" },
-  });
+/** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
+export const proud = (token: string, profileId: string) =>
+  api<ProudOut>(`/profiles/${profileId}/proud`, { token });
+
+/** The first page of the feed: today's cards, rendered by the backend from a State. */
+export const feed = (token: string, profileId: string) =>
+  api<FeedPageOut>(`/profiles/${profileId}/feed`, { token });
+
+/** The keys on the profile with their holders' names: the owner reads whom to call. */
+export const keys = (token: string, profileId: string) =>
+  api<KeyOut[]>(`/profiles/${profileId}/keys`, { token });
 
 export const addReading = (token: string, profileId: string, systolic: number, diastolic: number) =>
   api<ReadingOut>(`/profiles/${profileId}/readings`, {
