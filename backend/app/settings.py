@@ -7,6 +7,7 @@ at startup, and passed down as parameters; nothing reaches for them from inside 
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -78,6 +79,27 @@ class MissingSetting(RuntimeError):
     """A deployment that cannot name its region must not start."""
 
 
+_POSTGRES_SCHEMES = ("postgres://", "postgresql://")
+
+
+def database_url_for(url: str) -> str:
+    """NURA_DATABASE_URL as SQLAlchemy's async engine wants it.
+
+    A hosting platform hands out `postgres://…` or `postgresql://…` (Render's
+    `connectionString`, Fly's `DATABASE_URL`); the engine needs the asyncpg driver named, as
+    `postgresql+asyncpg://…`. The platform's `sslmode=` is libpq's word, which asyncpg takes
+    as `ssl=` with the same values. Anything else — SQLite, a URL that already names its
+    driver — is returned as it was given.
+    """
+    for scheme in _POSTGRES_SCHEMES:
+        if url.startswith(scheme):
+            url = "postgresql+asyncpg://" + url.removeprefix(scheme)
+            break
+    if url.startswith("postgresql+asyncpg://"):
+        url = re.sub(r"([?&])sslmode=", r"\1ssl=", url)
+    return url
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Read NURA_REGION and NURA_DATABASE_URL. Both are required: neither has a safe default.
 
@@ -88,7 +110,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = os.environ if env is None else env
     try:
         region = Region(source["NURA_REGION"])
-        database_url = source["NURA_DATABASE_URL"]
+        database_url = database_url_for(source["NURA_DATABASE_URL"])
     except KeyError as missing:
         raise MissingSetting(f"{missing.args[0]} is not set") from missing
     dev_code_sender = source.get("NURA_DEV_CODE_SENDER", "") == "1"

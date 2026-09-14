@@ -8,6 +8,10 @@ models declare.
 Two stories built side by side each branch from the same revision; a merge revision joins
 them, so the directory always has exactly one head and `alembic upgrade head` knows where
 that is. What is not allowed is a revision that names a parent the directory does not hold.
+
+The walks run on the suite's database: SQLite in memory by default, and each on a schema of
+its own on Postgres when NURA_TEST_DATABASE_URL names one (`tests/conftest.py`), so the batch
+rewrites SQLite needs and the plain ALTERs Postgres gets are both held to the models.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ from types import ModuleType
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Connection, Inspector, Table, create_engine, inspect, text
+from sqlalchemy import Connection, Inspector, Table, inspect, text
 
 from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
@@ -59,6 +63,7 @@ from app.routines.models import Routine
 from app.safety.models import EmergencyCard, Notice, WhatToDoCard
 from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
+from tests.conftest import on_an_empty_database
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
@@ -201,12 +206,12 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     assert heads == ["0017_trends_routines_calendar"]
 
 
-def test_the_migrations_build_the_tables_the_models_declare(
+async def test_the_migrations_build_the_tables_the_models_declare(
     revisions: dict[str, ModuleType],
 ) -> None:
     ordered = _in_order(revisions)
-    engine = create_engine("sqlite+pysqlite://")
-    with engine.begin() as connection:
+
+    def walk(connection: Connection) -> None:
         for migration in ordered:
             with Operations.context(MigrationContext.configure(connection)):
                 migration.upgrade()
@@ -266,7 +271,8 @@ def test_the_migrations_build_the_tables_the_models_declare(
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
         assert inspect(connection).get_table_names() == []
-    engine.dispose()
+
+    await on_an_empty_database(walk)
 
 
 def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
@@ -274,14 +280,14 @@ def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
         getattr(migration, step)()
 
 
-def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
+async def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
     revisions: dict[str, ModuleType],
 ) -> None:
     """Upgrade, populate, downgrade (refused), clear, downgrade, upgrade again."""
     ordered = _in_order(revisions)
     review = revisions["0005_memory_review"]
-    engine = create_engine("sqlite+pysqlite://")
-    with engine.begin() as connection:
+
+    def walk(connection: Connection) -> None:
         for migration in ordered:
             _apply(connection, migration, "upgrade")
 
@@ -357,10 +363,11 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
         _apply(connection, review, "upgrade")
         assert connection.execute(Artifact.__table__.select()).one().id == photo
-    engine.dispose()
+
+    await on_an_empty_database(walk)
 
 
-def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_down(
+async def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_down(
     revisions: dict[str, ModuleType],
 ) -> None:
     """A flag raised from the feeling cloud before the visit loop existed is kept whole: 0012
@@ -368,8 +375,8 @@ def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_down(
     lists, and the way down leaves it as it was."""
     ordered = _in_order(revisions)
     visits = revisions["0012_visits"]
-    engine = create_engine("sqlite+pysqlite://")
-    with engine.begin() as connection:
+
+    def walk(connection: Connection) -> None:
         for migration in ordered:
             if migration is not visits:
                 _apply(connection, migration, "upgrade")
@@ -404,4 +411,5 @@ def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_down(
             == "chest_tightness"
         )
         assert "kind" not in {c["name"] for c in inspect(connection).get_columns("red_flag")}
-    engine.dispose()
+
+    await on_an_empty_database(walk)

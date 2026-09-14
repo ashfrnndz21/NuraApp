@@ -14,6 +14,46 @@ jobs:
       - run: make test
       - run: make lint
       - run: make plain-words
+  backend-postgres:
+    # The whole suite and the migrations on Postgres, the database every deployment runs on
+    # (docs/deploy.md). A candidate for a required check. The laptop never needs a Postgres:
+    # this job is the only place one runs. tests/conftest.py gives each test its own schema
+    # on this server through NURA_TEST_DATABASE_URL, and drops it after.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # An ephemeral container that lives for this job; nothing real is behind it.
+          POSTGRES_USER: nura
+          POSTGRES_PASSWORD: nura-ci-only
+          POSTGRES_DB: nura
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nura -d nura"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      NURA_REGION: SG
+      NURA_DATABASE_URL: postgresql+asyncpg://nura:nura-ci-only@localhost:5432/nura
+      NURA_TEST_DATABASE_URL: postgresql+asyncpg://nura:nura-ci-only@localhost:5432/nura
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "backend[dev]"
+      - name: Migrations up, down to nothing, and up again (alembic, on an empty Postgres)
+        working-directory: backend
+        run: |
+          python -m alembic upgrade heads
+          python -m alembic downgrade base
+          python -m alembic upgrade heads
+          python -m alembic current
+      - name: The whole suite on Postgres
+        working-directory: backend
+        run: python -m pytest -q -rfE
   web:
     runs-on: ubuntu-latest
     steps:
@@ -52,7 +92,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: ios-screenshot, path: ios/build/screenshot.png, if-no-files-found: ignore }
   automerge:
-    needs: [backend, web]
+    needs: [backend, backend-postgres, web]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'risk:low')
     runs-on: ubuntu-latest
     # Auto-merge is not available on this private repository's plan; the operator merges
