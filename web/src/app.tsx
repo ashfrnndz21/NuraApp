@@ -2,6 +2,7 @@ import type { JSX } from "preact";
 import { afterSignIn, go, screen } from "./flow";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { MeScreen } from "./screens/Me";
+import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
 import { TodayScreen } from "./screens/Today";
@@ -47,5 +48,7 @@ export function App(): JSX.Element | null {
       return <ReadingScreen />;
     case "me":
       return <MeScreen />;
+    case "onboarding":
+      return <OnboardingScreen />;
   }
 }

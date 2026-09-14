@@ -225,3 +225,179 @@ export interface RefusalBody {
   scope?: string;
   drug_class?: string;
 }
+
+// --- E02: a photo in, a review card out ------------------------------------------------
+
+export type FieldState = "proposed" | "confirmed" | "corrected" | "rejected";
+
+export interface ReviewFieldOut {
+  field_id: string;
+  position: number;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+  confidence: number;
+  /** Below the backend's threshold: the dotted underline, "please check this one". */
+  needs_confirm: boolean;
+  state: FieldState;
+  corrected_value: unknown | null;
+  fact_id: string | null;
+}
+
+export interface ReviewCardOut {
+  card_id: string;
+  profile_id: string;
+  artifact_id: string;
+  document_kind: "lab_report" | "medicine_label" | "discharge_letter" | "clinic_slip" | "unknown";
+  document_date: string | null;
+  high_risk_class: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  fields: ReviewFieldOut[];
+}
+
+export interface DecisionIn {
+  field_id: string;
+  decision: "confirmed" | "corrected" | "rejected";
+  corrected_value?: unknown;
+}
+
+export interface FactOut {
+  fact_id: string;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+}
+
+export interface ReviewConfirmedOut {
+  card: ReviewCardOut;
+  facts: FactOut[];
+}
+
+// --- E01: onboarding — the shapes the web client codes against ---------------------------
+//
+// The backend half (branch E01-biography-profile) is being built beside this client. Until
+// it lands these routes are answered by `src/api/mock/` when `VITE_API_MOCK=1`; the shapes
+// here are the contract the mock keeps and the real client must match at merge.
+
+/** One word of the cloud (`GET /onboarding/conditions?language=`). The plain word is what he
+ *  reads; the medical term is in brackets on tap; the weight is how common it is. A word
+ *  with a `parent` appears only once the parent is picked; `related` are the words that
+ *  gain weight when this one is picked. */
+export interface ConditionWordOut {
+  id: string;
+  word: string;
+  term: string | null;
+  weight: 1 | 2 | 3;
+  parent: string | null;
+  related: string[];
+  ask: { question: string; options: { id: string; text: string }[] } | null;
+}
+
+export interface ConditionsOut {
+  language: string;
+  version: string;
+  words: ConditionWordOut[];
+}
+
+/** `GET/PUT /profiles/{id}/settings` — E01-03. Every yes/no is a plain fact about how he
+ *  reads, hears and holds the phone; the density and the voice follow at once. */
+export interface SettingsOut {
+  profile_id: string;
+  preferred_name: string | null;
+  language: string;
+  birth_decade: number | null;
+  doctor: string | null;
+  /** "07:30", the anchor every morning reminder ties to. */
+  breakfast_time: string | null;
+  sight: boolean;
+  hearing: boolean;
+  hands: boolean;
+  cognitive: boolean;
+  updated_at: string | null;
+}
+
+export type SettingsIn = Omit<SettingsOut, "profile_id" | "updated_at">;
+
+/** One line of the read-back: the backend's whole sentence, with the State it was rendered
+ *  under and where it came from. The client never composes one. */
+export interface ReadBackLineOut {
+  line_id: string;
+  text: string;
+  answer: "yes" | "no" | null;
+  state_id: string;
+  source: string;
+}
+
+/** The assistant's next prompt in the records step: whole lines to show and speak, and
+ *  what it is asking for. `kind: "done"` is the closing line. */
+export interface PromptOut {
+  prompt_id: string;
+  kind: "paper" | "done";
+  lines: string[];
+  state_id: string;
+  source: string;
+}
+
+/** A paper the biography has taken in, and the whole lines the backend learned from it. */
+export interface PaperOut {
+  paper_id: string;
+  card_id: string;
+  artifact_id: string;
+  document_kind: ReviewCardOut["document_kind"];
+  learned: string[];
+  source: string;
+}
+
+/** A question the papers raised: whole lines, spoken as written, one Keep / Not this one. */
+export interface QuestionOut {
+  question_id: string;
+  lines: string[];
+  kept: boolean | null;
+  state_id: string;
+  source: string;
+}
+
+export interface BiographyOut {
+  biography_id: string;
+  profile_id: string;
+  language: string;
+  opened_at: string;
+  closed_at: string | null;
+  words: string[];
+  answers: Record<string, string>;
+  read_back: ReadBackLineOut[];
+  next_prompt: PromptOut | null;
+  papers: PaperOut[];
+  questions: QuestionOut[];
+}
+
+export interface BiographyIn {
+  language: string;
+  words: string[];
+  answers: Record<string, string>;
+}
+
+/** One gap card (`GET /profiles/{id}/plan`, docs/gaps-and-unlocks.md §1): three whole lines
+ *  from the backend, the one action, the day it is for, and its State and source. */
+export interface PlanCardOut {
+  gap_id: string;
+  day: string;
+  tier: 1 | 2 | 3;
+  missing: string;
+  unlock: string;
+  action: string;
+  /** What "do it now" opens: the camera, a tap on the cloud, or nothing yet. */
+  capture: "photo" | "tap" | "none";
+  state_id: string;
+  source: string;
+  deferred: number;
+}
+
+export interface PlanOut {
+  profile_id: string;
+  state_id: string;
+  cards: PlanCardOut[];
+}

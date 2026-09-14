@@ -16,7 +16,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs; a medicine running low makes a reorder card from E04's count | E21 backend (Session 8) | **ready** |
 | 9 | WhatsApp (sandbox) | Mei forwards a photo to the number and it files itself as a review card and replies; she posts "BP 150/90" and gets a read-back that only her own "yes" turns into a Fact; a stranger's number gets one fixed line and nothing is stored; "he fell" writes a Flag first and escalates in-thread; the morning card goes to Pa as an approved template and his "tired" is written down; the thread is by reference and every line is on the trail | E19-01…E19-03, E19-05 | **ready** |
 | 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | **ready** |
-| 11 | Onboarding on your phone (web) | Run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
+| 11 | Onboarding on your phone (web) | About you one question at a time, the word cloud that deepens as you tap, the read-back with Yes and No, a paper photographed into a review card you correct and confirm, the questions it raises, the gaps and what each unlocks; the same in the caregiver density for someone you look after | W3 (ADR 0001), E01-02, E01-03, E01-04 | planned — **ready when E01's backend merges**; runs today on the mock (`make web-mock`) |
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2–W3 (ADR 0001) | planned |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
 | 14 | Emergency card and not feeling well | Written by its story (E13/E14) | E13, E14 | planned |
@@ -565,6 +565,46 @@ What you will see (the operator's walk, `make web-e2e` with `make dev` serving t
 - Stories merge when CI is green, the safety and plain-words reviewers pass, and the operator has read the diff. `risk:high` stories get a written note in the PR saying what was checked.
 - A checkpoint is not declared ready until `make checkpoint` passes end to end on a clean database.
 - Anything that needs a real credential (SMS provider, licensed drug data, WhatsApp BSP, Apple) is a fixture until you say otherwise; the checkpoint says so where it applies.
+
+## How to run checkpoint 11
+
+Onboarding is the web client's (W3) over E01's backend. Until E01 (branch `E01-biography-profile`) merges, its routes — the condition graph, the settings, the biography, the plan — are answered inside the app by `web/src/api/mock/`, switched on by `VITE_API_MOCK=1`; the photo, the review card, the yes and the facts are the real E02 API either way. When E01 merges, run `make web` instead of `make web-mock` and nothing else changes.
+
+```sh
+make dev                # terminal 1: the API on http://127.0.0.1:8000, log to backend/.dev.log
+make web-mock           # terminal 2: the app on http://127.0.0.1:5173/app/, E01 answered by the mock
+                        #   (after E01 merges: make web)
+printf '\x89PNG\r\n\x1a\nnura-paper-placeholder:lipid-panel-2023-09-07\n' > ~/Desktop/lipids.png
+printf '\x89PNG\r\n\x1a\nnura-paper-placeholder:warfarin-label-2024-03-12\n' > ~/Desktop/label.png
+                        # the two redacted papers the fixture extractor knows, as the bytes it knows them by
+```
+
+**For yourself.** Open http://127.0.0.1:5173, sign in with a fresh number and the code from the `make dev` terminal, tap *This is for me*, read the words, *I agree*. Onboarding starts (there is a *Set up later* on the first screen, and *Set up Nura* under Me to come back).
+
+1. **About you** — one question per screen in big type: the name Nura uses, your language (the app switches the moment you tap it), the decade you were born in, your doctor, breakfast, then four yes/no questions about small print, hearing, small buttons and memory. A yes to small print, small buttons or memory keeps the big-and-simple look.
+2. **The word cloud** — *What is part of your health?* The common words are biggest and on the first screen. Tap *High blood pressure*: it turns plum, *(hypertension)* appears in brackets, the phone says the words, and what often goes with it appears right after it. Tap *Cholesterol* too and watch *I see a heart doctor* grow. *Show more words* brings the rarer ones. *That is everything*.
+3. **Follow-ups** — one question each for the words that carry one (*How long have you taken them?*); a tap answers.
+4. **Read-back** — *Here is what Nura understood*, one line per screen with *This is 1 of N.*, its source (*From what you told Nura on …*), *Hear*, and *Yes, that is right* / *No, that is not right*. A no is kept as disputed.
+5. **Your papers** — Nura's prompt, with *Hear*. *Choose a file instead* and pick `lipids.png`: the review card says *This is a blood test.* and the date on the paper, each line in your words with its number; the two Nura is unsure of have a dotted underline and *Please check this one.* Change *The blood fats* from 64 to 54 (the paper's number), *Leave this one out* on another line, *Looks right*. Nura says what it learned and asks for another paper. A PDF is refused in one sentence (there is no documents route yet). *That is all for today*.
+6. **Questions** — one at a time, whole lines naming your doctor, *Keep this one* / *Not this one*.
+7. **Nura is ready** — the one gap card Nura will ask for first, the day it will, and how many follow. *Later* sends it to the back; the gap's photo button opens the camera (pick `label.png` on the Mac) and comes back with that gap closed. *Open Nura* goes to Today.
+
+At http://127.0.0.1:8000/docs, `GET /profiles/{id}/facts?subject=lipid_panel` shows the facts you confirmed: the blood fats at 54, the line you left out absent, each with the photo as its provenance.
+
+**For someone else.** Sign in with another number, *This is for someone else*, set up Pa. The same steps come in the caregiver density and in his name (*A few things about Pa*): every About question on one page, the read-back and the questions as lists, and the whole gap list. Choosing Malay for him does not change your own phone's language.
+
+**On the phone.** Same as checkpoint 10 (`http://<Mac's address>:5173/app/`). *Take a photo* opens the back camera. A real photo is not one of the fixture papers, so until the real extractor exists (E02) Nura answers *Nura could not read this page.* — that is the fixture, not the screen.
+
+What you will see (the operator's walk: `make web-mock` against `make dev`, `WEB_BASE_URL=http://127.0.0.1:5173/app/ make web-e2e`):
+
+```
+✓ onboarding.spec.ts › the patient's own onboarding: about you, the cloud, read-back, a paper, questions, gaps
+✓ onboarding.spec.ts › the caregiver density, for a chief setting up her father
+✓ onboarding.spec.ts › his language takes effect the moment he picks it
+✓ today.spec.ts      › (checkpoint 10's walk, with one "Set up later" step)
+```
+
+**What "passed" means.** Every question was one thing on one screen with 56px buttons and nothing sideways; the word cloud showed the common words without scrolling, grew what your taps pointed at, showed the clinic's word only in brackets after yours, and spoke only when you tapped; every read-back line, prompt, question and gap card was the backend's whole sentence with where it came from; your no was kept; the review card said how sure Nura was in words, took your correction exactly as typed and saved facts only on your one *Looks right*; a refusal was one plain sentence; and nothing from onboarding was left on the phone. **Ready** means the same walk with `make web` once E01 has merged.
 
 ## How to run checkpoint 13
 
