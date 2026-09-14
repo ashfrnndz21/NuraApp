@@ -18,6 +18,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.clock import FrozenClock
+from app.consent.models import ConsentPurpose
+from app.consent.texts import current_version
 from app.safety.boundary import Surface, boundary_lines
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone
@@ -42,7 +44,11 @@ def _transcript(label: str) -> dict[str, str]:
 async def _recording(deployment: Deployment, his: dict[str, str], profile_id: str) -> None:
     agreed = await deployment.client.post(
         f"/profiles/{profile_id}/consents/recording",
-        json={"language": "en", "captured_via": "app"},
+        json={
+            "wording_version": current_version(ConsentPurpose.RECORDING),
+            "language": "en",
+            "captured_via": "app",
+        },
         headers=his,
     )
     assert agreed.status_code == 201, agreed.text

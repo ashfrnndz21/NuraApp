@@ -81,6 +81,24 @@ class ArtifactKind(StrEnum):
     artefact; the post-visit summary (E05-05) is read from it and cites it."""
 
 
+class Recording(StrEnum):
+    """Whose voice a VOICE artefact carries, which decides the consent it rests on (ADR 0003).
+
+    Every writer of a voice says which one it is (`app.memory.episodic.store_artifact`); there
+    is no default, so no caller can leave the decision out.
+    """
+
+    CONSULT = "consult"
+    """A recording that captures people other than the account holder: a visit with the
+    doctor (E02-05, E05's consult transcripts). It rests on the RECORDING consent — "When you
+    see the doctor, Nura listens" — under the visits scope, as well as on holding the record."""
+    OWN_NOTE = "own_note"
+    """A person's own words about the patient, said instead of typed: his voice note on an
+    event, a not-feeling-well message, a symptom said aloud, or a caregiver's note on his
+    event, which is hers. Kept on the consent to hold the record, like typed text, under the
+    writer's key."""
+
+
 class SourceChannel(StrEnum):
     """Where an artefact came in from."""
 

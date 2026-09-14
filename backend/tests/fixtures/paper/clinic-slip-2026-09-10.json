@@ -1,0 +1,95 @@
+{
+  "placeholder": "clinic-slip-2026-09-10",
+  "sha256": "c9cfff76c7f20ca531f337222e8a0708e4f3adda65bb8f67b42f4385454e604b",
+  "format": "png",
+  "note": "Redacted sample. A clinic slip in Dr Tan's hand from the first family's papers: the patient's name, IC number, the clinic's address and phone and the doctor's registration number were removed, and the image is not committed; the bytes the extractor is shown are the placeholder named above (tests/paper.py). Handwriting (E02-02): the frequency is scrawled ('OM', once a day in the morning) and the recogniser could not read it, so it is unreadable, with no value, and the card asks a person to type it. The next-visit date ('review 3/12') is read at low confidence and dotted.",
+  "document_kind": "clinic_slip",
+  "document_date": "2026-09-10",
+  "fields": [
+    {
+      "subject": "visit",
+      "attribute": "doctor",
+      "value": "Dr Tan",
+      "unit": null,
+      "confidence": 0.88,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.08,
+        "x1": 0.6,
+        "y1": 0.13
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Amlodipine",
+      "unit": null,
+      "confidence": 0.86,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.2,
+        "x1": 0.6,
+        "y1": 0.25
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 5,
+      "unit": "mg",
+      "confidence": 0.84,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.2,
+        "x1": 0.6,
+        "y1": 0.25
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Amlodipine",
+        "instruction": "1 tablet",
+        "as_written": "1 tab"
+      },
+      "unit": "tablet",
+      "confidence": 0.81,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.28,
+        "x1": 0.6,
+        "y1": 0.33
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "frequency",
+      "value": null,
+      "unit": null,
+      "confidence": 0.12,
+      "unreadable": true,
+      "paper_says": "once a day in the morning (written 'OM')",
+      "span": {
+        "x0": 0.1,
+        "y0": 0.36,
+        "x1": 0.6,
+        "y1": 0.41
+      }
+    },
+    {
+      "subject": "visit",
+      "attribute": "next_visit",
+      "value": "2026-12-10",
+      "unit": null,
+      "confidence": 0.66,
+      "paper_says": "review 3/12",
+      "span": {
+        "x0": 0.1,
+        "y0": 0.6,
+        "x1": 0.6,
+        "y1": 0.65
+      }
+    }
+  ]
+}

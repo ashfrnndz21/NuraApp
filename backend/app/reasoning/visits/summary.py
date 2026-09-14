@@ -33,8 +33,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited, audited_read, audited_write, person_display_name
 from app.audit.models import Action
 from app.audit.trail import record
-from app.consent.models import ConsentPurpose
-from app.consent.service import require_consent
 from app.db import as_utc, keep_on_refusal, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
 from app.drugs.registry import DrugRegistry, LabelFields
@@ -55,6 +53,7 @@ from app.memory.models import (
     ConfidenceState,
     Fact,
     Provider,
+    Recording,
     SourceChannel,
     short_label,
 )
@@ -86,6 +85,7 @@ from app.reasoning.visits.strings import (
 from app.regions import REGION_TZ, Region, guard_region
 from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import DOSE_ATTRIBUTES, as_words, names_high_risk
+from app.safety.recording import may_record
 from app.safety.red_flags import Flag, FlagKind, red_flags_heard, write_red_flag
 from app.state.service import StateView, current_state, render_from_state
 
@@ -386,15 +386,11 @@ async def store_transcript(
         raise NotATranscript("the transcript was empty")
     if len(data) > MAX_TRANSCRIPT_BYTES:
         raise TranscriptTooLarge(f"a transcript is at most {MAX_TRANSCRIPT_BYTES} bytes")
-    # Keeping what was said in the room rests on two agreements: to Nura holding his record,
-    # and to Nura listening at the visit (`ConsentPurpose.RECORDING`, docs/build-plan.md).
-    # A profile that never agreed to the second, or withdrew it, keeps no transcript (B3).
-    await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS
-    )
-    await require_consent(
-        session, context=context, purpose=ConsentPurpose.RECORDING, scope=Scope.VISITS
-    )
+    # Keeping what was said in the room rests on Nura listening at the visit (E16-02, ADR
+    # 0003): the recording surface's gate, asked before a byte reaches the store. A profile
+    # that never agreed, or withdrew, keeps no transcript (B3); `store_artifact` asks again
+    # where the bytes land, for a consult (`Recording.CONSULT`), with the record's consent.
+    await may_record(session, context)
     digest = sha256_of(data)
     key = transcript_key(context.profile_id, digest)
     await store.put(key, data)
@@ -408,6 +404,7 @@ async def store_transcript(
         captured_at=captured_at,
         source_channel=source_channel,
         region=store.region,
+        recording=Recording.CONSULT,
     )
 
     # The bytes are in the store whatever happens next in this request. If the summary that

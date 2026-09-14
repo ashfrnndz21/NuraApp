@@ -553,6 +553,25 @@ CLASSES: dict[str, str] = {
     "safety_escalation.roster": IDENTIFIER,
     "safety_escalation.told": IDENTIFIER,
     "safety_escalation.created_at": HEALTH,
+    # Capture extras (E02-02, E02-03, E02-06, E02-08): the kind a page was offered as and
+    # where an imported PDF came from; who typed a field Nura could not read; and a note on
+    # an event, whose recording or image is an artefact and whose heard words are in the
+    # object store under `transcript_key` — the row holds a reference, never the words.
+    "review_card.asked_as": HEALTH,
+    "review_card.source": OPERATIONAL,
+    "review_field.corrected_by_person_id": IDENTIFIER,
+    "event_note.id": HEALTH,
+    "event_note.event_id": HEALTH,
+    "event_note.artifact_id": HEALTH,
+    "event_note.kind": HEALTH,
+    "event_note.private": CONSENT,
+    "event_note.label": HEALTH,
+    "event_note.transcript_key": HEALTH,
+    "event_note.transcript_sha256": HEALTH,
+    "event_note.transcript_confidence": OPERATIONAL,
+    "event_note.transcript_language": OPERATIONAL,
+    "event_note.written_by_person_id": IDENTIFIER,
+    "event_note.written_at": HEALTH,
 }
 
 

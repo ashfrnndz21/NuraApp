@@ -26,11 +26,10 @@ from app.clock import FrozenClock
 from app.db import utcnow
 from app.keys.context import resolve_key_context
 from app.memory.episodic import store_artifact
-from app.memory.models import ArtifactKind, SourceChannel
+from app.memory.models import ArtifactKind, Recording, SourceChannel
 from app.regions import Region
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
-from tests.support import agree_to_recording
 
 PA = "+6591110001"
 MEI = "+6591110002"
@@ -72,8 +71,6 @@ async def _not_a_photo(
             person_id=uuid.UUID(who["person_id"]),
             profile_id=uuid.UUID(profile_id),
         )
-        if kind is ArtifactKind.VOICE:
-            await agree_to_recording(session, context)  # a voice note rests on RECORDING (E16-02)
         digest = uuid.uuid4().hex + uuid.uuid4().hex
         artifact = await store_artifact(
             session,
@@ -85,6 +82,8 @@ async def _not_a_photo(
             captured_at=utcnow(),
             source_channel=SourceChannel.APP,
             region=Region.SG,
+            # A voice note is someone's own words, kept on the record consent (ADR 0003).
+            recording=Recording.OWN_NOTE if kind is ArtifactKind.VOICE else None,
         )
         await session.commit()
         return str(artifact.id)

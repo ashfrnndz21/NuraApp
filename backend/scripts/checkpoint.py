@@ -40,6 +40,8 @@ CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
 """Today's words for `hold_health_record`, from `app/consent/texts.py`. Move this when they move."""
 STALE_WORDING = "0"
+RECORDING_WORDING = "1"
+"""Today's words for the agreement to Nura listening at the visit (E16-02)."""
 """A version that was never on file: opening a profile on it must refuse."""
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -1869,7 +1871,7 @@ def checkpoint_7(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/consents/recording",
             headers=bearer(pa.token),
-            json={"language": language, "captured_via": "app"},
+            json={"wording_version": RECORDING_WORDING, "language": language, "captured_via": "app"},
         ),
         201,
         "Pa agrees to Nura listening at the visit",
@@ -3124,6 +3126,7 @@ CHECKPOINTS = {
     8: checkpoint_8,
     9: checkpoint_9,
     13: lambda client: checkpoints.cp13.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }
 
 

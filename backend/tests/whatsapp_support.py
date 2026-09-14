@@ -27,6 +27,7 @@ from app.identity.providers import LoggingCodeSender
 from app.identity.service import create_own_profile, register_person
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.transcribe import FixtureTranscriber
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
@@ -36,6 +37,7 @@ from app.settings import Settings
 from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
+from tests.voice_notes import VOICE
 
 PA = "+6591110001"
 MEI = "+6591110002"
@@ -97,6 +99,7 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         code_sender=LoggingCodeSender(),
         object_store=LocalObjectStore(tmp_path, region),
         extractor=FixtureExtractor(PAPER),
+        transcriber=FixtureTranscriber(VOICE, region),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),

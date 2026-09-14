@@ -29,7 +29,7 @@ from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
-from app.ingestion.models import ReviewCard, ReviewField
+from app.ingestion.models import EventNote, ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.keys.privacy import Privacy
@@ -68,6 +68,7 @@ TABLES: tuple[Table, ...] = (
     StateSnapshot.__table__,
     ReviewCard.__table__,
     ReviewField.__table__,
+    EventNote.__table__,
     Source.__table__,
     SearchJob.__table__,
     FeedItem.__table__,
@@ -208,6 +209,7 @@ def test_the_migrations_build_the_tables_the_models_declare(
             Appointment,
             ReviewCard,
             ReviewField,
+            EventNote,
             FeedItem,
             Engagement,
             Flag,

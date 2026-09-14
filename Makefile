@@ -13,6 +13,8 @@ dev: export NURA_OBJECT_STORE ?= var/objects
 dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
 # The visit transcripts the fixture summariser answers from (E05); no live model call exists.
 dev: export NURA_VISIT_FIXTURES ?= tests/fixtures/visits
+# The transcripts the fixture transcriber answers from, keyed by the digest of the bytes (E02-06).
+dev: export NURA_VOICE_FIXTURES ?= tests/fixtures/voice
 # The feed's fixture searcher and compressor (E21) answer from here until the real fetcher
 # and the grounded model call exist behind the same two ports.
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed

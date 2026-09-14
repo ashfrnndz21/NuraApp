@@ -28,6 +28,7 @@ from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
+from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
@@ -48,6 +49,9 @@ class Providers:
     summariser: Summariser
     """What reads a visit transcript into actions, changes, follow-ups and facts heard; the
     fixture one until a model in the region exists (E05-05)."""
+    transcriber: Transcriber
+    """What hears a voice note, in this deployment's region; the fixture one until a speech
+    provider in the region exists (E02-06)."""
     searcher: Searcher
     """What finds pages for a self-search job, from allowlisted sources only (E21)."""
     compressor: Compressor
