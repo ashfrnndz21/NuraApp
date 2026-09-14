@@ -469,18 +469,18 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     asked = check(
         client.post(
             f"/profiles/{profile_id}/ask",
-            headers=bearer(mei.token),
-            json={"question": "what did Pa say after his walk", "mode": "text"},
+            headers=his,
+            json={"question": "what did I say after my walk", "mode": "text"},
         ),
         200,
-        "Mei asks what Pa said after his walk",
+        "Pa asks what he said after his walk",
     )
     found = [
         line for line in asked["lines"] if any(c["kind"] == "event_note" for c in line["cites"])
     ]
     cited = {(c["kind"], c["id"]) for line in found for c in line["cites"]}
     if not found or ("event_note", note["note_id"]) not in cited or ("event", event_id) not in cited:
-        raise fail("Mei asks what Pa said after his walk", why=f"got {asked['lines']}")
+        raise fail("Pa asks what he said after his walk", why=f"got {asked['lines']}")
     ok(f'recall finds the note, cited with its event: "{found[0]["text"]}"')
     audio = client.get(f"{notes}/{note['note_id']}/content", headers=bearer(mei.token))
     if audio.status_code != 200 or audio.content != placeholder_voice(AFTER_THE_WALK):
