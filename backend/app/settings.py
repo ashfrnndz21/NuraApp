@@ -50,6 +50,9 @@ class Settings:
     whatsapp_fixtures: str | None = None
     """NURA_WHATSAPP_FIXTURES: the directory the fixture provider serves media from
     (`backend/tests/fixtures/whatsapp/`), until a real provider fetches it."""
+    reference_ranges: str = "fixture"
+    """NURA_REFERENCE_RANGES: which reference-range table the lab trend reads (E09-01,
+    `app.reasoning.ranges`). Only the fixture is built; any other name refuses to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -82,4 +85,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
         whatsapp_dev_secret=source.get("NURA_WHATSAPP_DEV_SECRET") or None,
         whatsapp_fixtures=source.get("NURA_WHATSAPP_FIXTURES") or None,
+        reference_ranges=source.get("NURA_REFERENCE_RANGES", "fixture"),
     )

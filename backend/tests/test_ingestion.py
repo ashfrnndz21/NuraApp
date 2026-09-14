@@ -65,7 +65,14 @@ from app.memory.semantic import current_facts
 from app.regions import OutOfRegion, Region
 from app.state.models import Dimension, StateTrigger
 from app.state.service import current_state
-from tests.paper import LIPID_PANEL, PAPER, WARFARIN_LABEL, fixture, placeholder_png
+from tests.paper import (
+    LIPID_PANEL,
+    LIPID_PANEL_2025,
+    PAPER,
+    WARFARIN_LABEL,
+    fixture,
+    placeholder_png,
+)
 from tests.support import OPENING_CONSENT, agree_to_family_sharing, refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
@@ -171,9 +178,10 @@ def _refusals(trail: Any) -> set[tuple[Action, str, str]]:
 
 def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     """The extractor answers by digest, so a fixture whose digest drifted is a page it would
-    never recognise. Two fixtures are here: the lipid panel and the warfarin label."""
+    never recognise. Three fixtures are here: the lipid panel, the warfarin label, and the
+    second lipid panel the lab trend reads (E09-01)."""
     files = sorted(PAPER.glob("*.json"))
-    assert {path.stem for path in files} == {LIPID_PANEL, WARFARIN_LABEL}
+    assert {path.stem for path in files} == {LIPID_PANEL, WARFARIN_LABEL, LIPID_PANEL_2025}
     for path in files:
         paper = json.loads(path.read_text())
         assert paper["placeholder"] == path.stem

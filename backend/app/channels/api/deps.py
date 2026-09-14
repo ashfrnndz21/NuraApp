@@ -29,6 +29,7 @@ from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.reasoning.ranges import ReferenceRanges
 from app.regions import OutOfRegion
 from app.settings import Settings
 
@@ -54,6 +55,9 @@ class Providers:
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""
+    reference_ranges: ReferenceRanges
+    """The reference ranges the lab trend reads (E09-01, `app.reasoning.ranges`): the fixture
+    table until a licensed one is signed off."""
 
 
 def settings_of(request: Request) -> Settings:

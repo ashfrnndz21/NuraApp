@@ -22,7 +22,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 14 | Emergency card and not feeling well | Written by its story (E13/E14) | E13, E14 | planned |
 | 15 | Biography | Written by its story | — | planned |
 | 16 | Timeline | Written by its story | — | planned |
-| 17 | Trends, routine and calendar | Written by its story | — | planned |
+| 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Capture | Written by its story | — | planned |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
@@ -525,6 +525,91 @@ checkpoint 9 passed: every step did what docs/checkpoints.md says
 2. **The signed webhook.** The dev door walks the webhook's path; the webhook itself checks a signature first. `POST /whatsapp/webhook` with any body and no `X-Hub-Signature-256` header answers `403 {"refusal": "NotAWebhook"}` and nothing happens. `GET /whatsapp/webhook?hub.mode=subscribe&hub.verify_token=nura-dev-webhook-secret&hub.challenge=hello` answers `hello`: the handshake a provider makes once, with the secret `make dev` sets. A wrong token is `403`.
 
 The provider is a port (`backend/app/channels/whatsapp/provider.py`): `send_text`, `send_template`, `fetch_media`, `verify_webhook`, `parse_inbound`. The fixture behind it is the only one built, and the process refuses to start on it outside a declared dev run, the way it refuses the logging code sender. The six templates are in `backend/app/channels/whatsapp/templates.py` as names, slot lists and the words in English, Malay and Chinese; a real number carries them to Meta for approval once, and `app/channels/whatsapp/config.py` says which are approved on this number.
+
+## How to run checkpoint 17
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Two fresh phone numbers every run — Pa and Mei, his daughter — so it can be run again on the same `dev.db`. The two lipid reports are the placeholder bytes of `backend/tests/fixtures/paper/`: the 2023 one from checkpoint 5 and a synthetic 2025 one from Bukit Lab (a fictional lab) whose header names the lab, his year of birth and his sex. The reference ranges are the fixture table `backend/tests/fixtures/labs/ranges.json`, each row named by its published source; no licensed table and no model is called. Mei's calendar is a small .ics the script writes in memory, with three events in the coming fortnight.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0017 adds the trend card, routine, connector and proposal tables), serves on http://127.0.0.1:8000
+make checkpoint N=17    # terminal 2: walks the whole scenario, about three seconds
+```
+
+What you will see (the numbers, ids and days change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591718072) registered by phone code and signed in (the code read from the server log)
+✓ Pa opened his own profile, in Malay
+✓ Pa confirmed two lipid reports through the review card, one yes each: 7 September 2023 (7 facts, triglycerides corrected to 54) and 29 August 2025 from Bukit Lab (7 facts, including the lab, his year of birth 1951 and his sex from the report's header) — every fact names its photo and Pa as confirmer
+✓ Pa's cholesterol trend (GET /trends/total_cholesterol), rendered from State 66f4e9a8… as card 5a75b875… with the boundary line: each result against the range that fits him on the day — his age band read from the 1950s, never the year — the 2025 one against Bukit Lab's own printed range, the 2023 one against the guideline table (ncep-atp3-2001); the direction over the last three, by arithmetic:
+    2023-09-07  230 mg/dL  above  against under 200 mg/dL (ncep-atp3-2001)  ← artefact 6107e3ac…
+    2025-08-29  212 mg/dL  above  against under 200 mg/dL (lab:bukit_lab)  ← artefact 830911c3…
+    In his words, in Malay:
+    Kolesterol anda ialah 212 pada Jumaat 29 Ogos 2025.
+    Julat pada ujian darah anda ialah bawah 200.
+    Ia di atas julat pada ujian darah anda.
+    Ia telah turun sejak Khamis 7 September 2023.
+    Nura menyusun ujian darah anda mengikut tarikh.
+    Ini bukan nasihat doktor.
+    Tanya doktor anda.
+✓ Mei (+6591727578) registered by phone code and signed in (the code read from the server log)
+✓ Pa let Mei in to his medicines, visits and readings, and cut her a caregiver key
+✓ Pa added amlodipine 5 mg from its label, once a day in the morning, on his own yes
+✓ Mei set the day once (PUT /routine) on her own yes for exactly it — the same yes offered for another hour was refused, NotWhatWasConfirmed (400): his anchors, the blood pressure when he wakes, a walk after dinner, the Today page at 7
+✓ Pa reads his day (GET /routine): one line per moment, in Malay, every line verified
+    Nura hantar halaman Hari Ini anda pukul 7 pagi.
+    Apabila anda bangun, periksa tekanan darah anda.
+    Semasa sarapan, ambil 1 biji ubat tekanan darah anda.
+    Semasa makan malam, pergi berjalan kaki.
+✓ Mei reads the same day as a table (the caregiver's persona): times, dose codes, prompts
+    wake      06:30  —                                blood_pressure
+    breakfast 07:30  amlodipine 5 mg ×1 od            
+    lunch     12:30  —                                
+    dinner    18:30  —                                walk
+    bed       22:00  —                                
+✓ connecting before agreeing was refused, ConsentWithheld (403); Pa then agreed to the calendar in Malay and connected it (POST /connectors/calendar). The words he read:
+    Nura membaca kalendar anda untuk mencari lawatan ke doktor.
+    Nura menyimpan lawatan yang dijumpai sahaja.
+    Yang lain dalam kalendar anda tidak disentuh.
+    Tiada apa-apa ditambah sehingga anda kata ya.
+    Nura tidak pernah menulis dalam kalendar anda.
+    Anda boleh berhenti pada bila-bila masa.
+✓ Mei uploaded a .ics with three events (POST /connectors/{c}/scan): 3 read, 2 proposed, 1 dropped — the lunch with Ah Kow matched no provider and no health word, and nothing of it, nor anyone's name in any event, was written anywhere. Candidates, never visits:
+    Dr Tan follow-up   Thu 24 Sep 10:00  matched keyword 'doctor'  → Dr Tan (doctor)  proposed
+    Dialysis SGH       Fri 18 Sep 09:00  matched keyword 'hospital'  → Singapore General Hospital (hospital)  proposed
+✓ Mei dismissed 'Dialysis SGH' (not Pa's): nothing booked
+    What Pa reads, in Malay:
+    Nura jumpa lawatan ke Dr Tan dalam kalendar.
+    Ia pada Khamis 24 September, pukul 10 pagi.
+    Tekan Ya untuk tambah ke lawatan anda.
+✓ Pa said yes (POST /confirmations, subject appointment_proposal) and accepted: Dr Tan added to his directory and the visit booked as PLANNED on his yes, appointment 467c23e5…; accepting again is refused, AlreadyDecided (409)
+    Nura jumpa lawatan ke Dr Tan dalam kalendar.
+    Ia pada Khamis 24 September, pukul 10 pagi.
+    Ia sudah ada dalam lawatan anda.
+✓ with a visit to Dr Tan on the spine, the trend's last line names him:
+    Nura put your blood tests side by side.
+    This is not a doctor's advice.
+    Ask Dr Tan.
+✓ Pa's trail (200 lines) shows every step and every refusal by name:
+    2026-09-14T15:42:55   Pa  write records   trend_card             written
+    2026-09-14T15:42:56  Mei  write medicines routine                NotWhatWasConfirmed
+    2026-09-14T15:42:56  Mei  write medicines routine                written
+    2026-09-14T15:42:56   Pa  read visits    consent                ConsentWithheld
+    2026-09-14T15:42:56   Pa  write visits    connector              ConsentWithheld
+    2026-09-14T15:42:56   Pa  write visits    connector              written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56   Pa  write visits    provider               written
+    2026-09-14T15:42:56   Pa  write visits    appointment            written
+    2026-09-14T15:42:56   Pa  write visits    appointment_proposal   written
+    2026-09-14T15:42:56   Pa  write visits    appointment_proposal   AlreadyDecided
+    2026-09-14T15:42:56   Pa  write records   trend_card             written
+checkpoint 17 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 17 passed`. The criteria: a trend is his confirmed results for one analyte, each with its provenance, each placed against the range that fits him on the day — his age band from the decade he was born in (never the year), his sex when the record holds it, and the lab's own printed range when the paper names the lab, else the published guideline row — with the direction over the last three results in words, by arithmetic; it is rendered from a State checked against the record and written as a card carrying the boundary line, which is last; a word that places his number (above, below, inside) is only ever said beside the lab's own range ("the range on your blood test", his words for it), and no line names a cause or a treatment. The day is set once, on the yes of the person setting it, for exactly those times (another hour is refused, `NotWhatWasConfirmed`); his medicines sit at the anchors their dose codes name; it renders to him as one verified line per moment and to Mei as a table. The calendar is connected only on its own consent, in his language; a scan proposes only events that name a provider or carry a health word, never books one, and keeps nothing of any other event or of anyone's name; a proposal becomes a planned visit only on a person's yes for exactly it, and a second yes is refused (`AlreadyDecided`). Every step and every refusal is on his trail by name. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
 
 ## Rules the operator follows between checkpoints
 

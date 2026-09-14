@@ -25,6 +25,7 @@ from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.reasoning.ranges import reference_ranges_for
 from app.settings import MissingSetting, Settings, load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
@@ -48,6 +49,7 @@ def providers_for(settings: Settings) -> Providers:
         compressor=FixtureCompressor(Path(settings.feed_fixtures)),
         drug_registry=drug_registry_for(settings),
         whatsapp=whatsapp_provider_for(settings),
+        reference_ranges=reference_ranges_for(settings),
     )
 
 

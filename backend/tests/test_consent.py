@@ -113,6 +113,15 @@ SHIPPED_WORDS: dict[tuple[str, str, str, str | None], str] = {
     ("whatsapp", "1", "zh", None): (
         "a957b200988658c0da126071b6131cd5fb76a8bee528e24de7ba09f81fcf37e7"
     ),
+    ("calendar", "1", "en", None): (
+        "98914d5acd8bebbb0d5247644ff80343193ed8d74ebf514a28db6e5dba2384f3"
+    ),
+    ("calendar", "1", "ms", None): (
+        "633cd7218f0fd2523a2117f8909a829bb672e481fb304e3854cd89778b551146"
+    ),
+    ("calendar", "1", "zh", None): (
+        "d4fa59aa40cdd26345edf3ad60a260c49329938faa73cdae71c01fd4a1b5d97d"
+    ),
 }
 
 

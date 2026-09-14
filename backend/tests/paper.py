@@ -20,6 +20,10 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 LIPID_PANEL = "lipid-panel-2023-09-07"
 """A Thyrocare-style lipid profile, collected 7 September 2023."""
 
+LIPID_PANEL_2025 = "lipid-panel-2025-08-29"
+"""A second lipid profile, from Bukit Lab (fictional), collected 29 August 2025: the lab, his
+year of birth and his sex on the header, for the lab trend (E09-01)."""
+
 WARFARIN_LABEL = "warfarin-label-2024-03-12"
 """A dispensing label for warfarin 5 mg, dispensed 12 March 2024, instructions in Malay."""
 

@@ -22,6 +22,7 @@ from fastapi import APIRouter, Query, Request, status
 from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
 from app.audit.trail import read_audit
+from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
 from app.channels.api.schemas import (
     AuditOut,
@@ -67,6 +68,7 @@ from app.identity.doors import (
 )
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
+from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
@@ -77,6 +79,7 @@ from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
+from app.routines.service import routine_draft_for
 from app.safety.boundary import Surface, boundary_line
 from app.state.service import current_state
 
@@ -243,6 +246,22 @@ async def mint_confirmation(
             preview, send_at=body.send_at, channel=body.channel, expires_at=body.expires_at
         )
         return ConfirmationOut.of(await confirm(session, context, push))
+    if isinstance(body, RoutineConfirmIn):
+        # The day (E10-01): the draft is recomputed — times checked, the routine it replaces
+        # named — so the yes binds to exactly what `PUT /routine` writes.
+        day = await routine_draft_for(
+            session,
+            context=context,
+            anchors=body.anchors,
+            reading_prompts=body.reading_prompts,
+            walks=body.walks,
+            morning_card_at=body.morning_card_at,
+        )
+        return ConfirmationOut.of(await confirm(session, context, day))
+    if isinstance(body, ProposalConfirmIn):
+        # A visit a calendar proposed (E18-02): the draft is recomputed from the proposal.
+        visit = await proposal_draft_for(session, context=context, proposal_id=body.proposal_id)
+        return ConfirmationOut.of(await confirm(session, context, visit))
     review = await review_draft_for(
         session,
         context=context,

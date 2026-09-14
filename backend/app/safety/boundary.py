@@ -6,7 +6,7 @@
 `INFERRING_SURFACES` is the register of every surface that works something out from the
 record rather than showing it back — State's posture, the visit brief, the questions, the
 summary, an interaction question, a learning card, a feeling inference, the not-feeling-well
-card. `boundary_line(surface, language)` is the words each of them carries, in English,
+card, a lab trend. `boundary_line(surface, language)` is the words each of them carries, in English,
 Malay and Chinese: what Nura did on that surface, then the two lines that never change —
 "This is not a doctor's advice." and "Ask Dr Tan." — the glossary's own phrase in
 docs/plain-words.md. The closing words are the same on every surface on purpose (rule 13:
@@ -59,6 +59,8 @@ class Surface(StrEnum):
     """A pattern noticed from how he said he feels (E17-02)."""
     NOT_FEELING_WELL = "not_feeling_well"
     """The not-feeling-well card: the escalation surface — who knows, what the letter said."""
+    TREND = "trend"
+    """A lab trend: his results side by side, each against a range, and how they moved (E09-01)."""
 
 
 INFERRING_SURFACES: tuple[Surface, ...] = tuple(Surface)
@@ -86,6 +88,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.LEARNING_CARD: "Nura explains one thing in simple words.",
         Surface.FEELING_INFERENCE: "Nura noticed this in how you said you feel.",
         Surface.NOT_FEELING_WELL: "Nura wrote down how you feel.",
+        Surface.TREND: "Nura put your blood tests side by side.",
     },
     "ms": {
         Surface.STATE_POSTURE: "Nura menyusun hari anda.",
@@ -96,6 +99,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.LEARNING_CARD: "Nura menerangkan satu perkara dengan kata-kata mudah.",
         Surface.FEELING_INFERENCE: "Nura perasan ini daripada apa yang anda rasa.",
         Surface.NOT_FEELING_WELL: "Nura menulis apa yang anda rasa.",
+        Surface.TREND: "Nura menyusun ujian darah anda mengikut tarikh.",
     },
     "zh": {
         Surface.STATE_POSTURE: "Nura 帮您把今天的事整理好了。",
@@ -106,6 +110,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.LEARNING_CARD: "Nura 用简单的话解释一件事。",
         Surface.FEELING_INFERENCE: "Nura 从您说的感觉里注意到这一点。",
         Surface.NOT_FEELING_WELL: "Nura 只是记下您现在的感觉。",
+        Surface.TREND: "Nura 把您的验血结果按日期排好了。",
     },
 }
 """The first line: what Nura did on this surface, and no more than that. The Malay and

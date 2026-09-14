@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
+from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.consent.models import (
     DOCUMENTED_BASES,
     Consent,
@@ -524,13 +525,16 @@ ConfirmIn = Annotated[
     | KeyChangeConfirmIn
     | OnlyMeConfirmIn
     | TaskDoneConfirmIn
-    | PushConfirmIn,
+    | PushConfirmIn
+    | RoutineConfirmIn
+    | ProposalConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
-with its decisions (E02), a medicine label against the list (E04), and the family's yeses
-(E12): narrowing a key, marking a part only me, a task done, a message to him. Visits are
-minted by the surface that shows them once it exists."""
+with its decisions (E02), a medicine label against the list (E04), the family's yeses
+(E12): narrowing a key, marking a part only me, a task done, a message to him; the day's
+routine (E10) and a visit a calendar proposed (E18). Other visits are minted by the surface
+that shows them once it exists."""
 
 
 class ConfirmationOut(BaseModel):

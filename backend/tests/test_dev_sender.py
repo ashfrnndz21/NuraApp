@@ -27,6 +27,7 @@ from app.identity.providers import (
 )
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.reasoning.ranges import FixtureRanges
 from app.regions import Region
 from app.settings import Settings, load_settings
 from tests.conftest import FEED
@@ -44,6 +45,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret="test"),
+        reference_ranges=FixtureRanges.load(),
     )
 
 

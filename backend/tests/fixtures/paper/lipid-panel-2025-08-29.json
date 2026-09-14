@@ -1,0 +1,100 @@
+{
+  "placeholder": "lipid-panel-2025-08-29",
+  "sha256": "e26119da41f45bb9df258022ae7f86d4ce78c198cf33ab786e6338f6414b4eea",
+  "note": "Synthetic sample, redacted the way the real ones are: a second lipid profile two years after the first, from Bukit Lab, a fictional lab whose printed ranges are in backend/tests/fixtures/labs/ranges.json. Of the header a report prints, only the lab, the year of birth and the sex are kept, read as fields so the lab trend (E09-01) can find his age band, his sex and the lab's own range; no name, identifier, address or barcode is on it. Every field is read clearly, so the review card has nothing dotted.",
+  "document_kind": "lab_report",
+  "document_date": "2025-08-29",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "lab",
+      "value": "bukit_lab",
+      "unit": null,
+      "confidence": 0.96,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.3,
+        "x1": 0.74,
+        "y1": 0.325
+      }
+    },
+    {
+      "subject": "person",
+      "attribute": "birth_year",
+      "value": 1951,
+      "unit": null,
+      "confidence": 0.94,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.345,
+        "x1": 0.74,
+        "y1": 0.37
+      }
+    },
+    {
+      "subject": "person",
+      "attribute": "sex",
+      "value": "male",
+      "unit": null,
+      "confidence": 0.95,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.39,
+        "x1": 0.74,
+        "y1": 0.415
+      }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 212,
+      "unit": "mg/dL",
+      "confidence": 0.97,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.435,
+        "x1": 0.74,
+        "y1": 0.46
+      }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "hdl",
+      "value": 58,
+      "unit": "mg/dL",
+      "confidence": 0.95,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.48,
+        "x1": 0.74,
+        "y1": 0.505
+      }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 128,
+      "unit": "mg/dL",
+      "confidence": 0.93,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.525,
+        "x1": 0.74,
+        "y1": 0.55
+      }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "triglycerides",
+      "value": 130,
+      "unit": "mg/dL",
+      "confidence": 0.92,
+      "span": {
+        "x0": 0.62,
+        "y0": 0.57,
+        "x1": 0.74,
+        "y1": 0.595
+      }
+    }
+  ]
+}
