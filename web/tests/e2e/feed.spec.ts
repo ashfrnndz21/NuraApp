@@ -219,11 +219,11 @@ test("a learning card: its lines, its boundary, its why, four side actions; Hear
     const played: string[] = [];
     (window as unknown as { __played: string[] }).__played = played;
     class Heard extends window.Audio {
-      play(): Promise<void> {
+      override play(): Promise<void> {
         played.push(this.src);
         return Promise.resolve();
       }
-      pause(): void {}
+      override pause(): void {}
     }
     Object.defineProperty(window, "Audio", { value: Heard, configurable: true });
   });
