@@ -53,3 +53,22 @@ COULD_NOT_HEAR = (
     "Nura kept the note.",
 )
 """@patient The lines under a voice note Nura could not hear; the recording is kept (E02-06)."""
+
+
+# --- demo mode (ADR 0008) --------------------------------------------------------------------
+# A demo deployment says so on every page it serves, in the person's language. The web client
+# carries the same words in web/src/strings; these are the printable card's.
+
+# @patient headline
+DEMO_HEADLINE: dict[str, str] = {
+    "en": "Demo — not for real health information",
+    "ms": "Demo — bukan untuk maklumat kesihatan sebenar",
+    "zh": "演示版 — 不用于真实的健康信息",
+}
+
+# @patient
+DEMO_LINES: dict[str, tuple[str, ...]] = {
+    "en": ("This is a demo.", "Do not put real health information in it."),
+    "ms": ("Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar."),
+    "zh": ("这是演示版。", "请不要输入真实的健康信息。"),
+}

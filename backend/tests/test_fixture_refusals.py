@@ -1,6 +1,6 @@
 """Every fixture provider refuses to start outside a declared dev run or demo.
 
-A fixture stands in for a provider Nura does not have yet. Each carries `FIXTURE = True`, and
+A fixture stands in for a provider Nura does not have yet. Each is marked `@fixture`, and
 `create_app` refuses a process that is neither a dev run (NURA_DEV_CODE_SENDER=1) nor a demo
 (NURA_DEMO_MODE=1, ADR 0008) when any of them is among its providers (`app.fixtures`). This
 file finds every class named `Fixture…` under `app/` by walking the package, so a fixture
@@ -21,7 +21,13 @@ import app
 from app.channels.api import create_app
 from app.db import make_session_factory
 from app.drugs.client import drug_registry_for
-from app.fixtures import FixtureOutsideDevOrDemo, check_fixtures, fixtures_in, is_fixture
+from app.fixtures import (
+    FixtureOutsideDevOrDemo,
+    check_fixtures,
+    fixtures_in,
+    is_fixture,
+    is_fixture_class,
+)
 from app.identity.providers import DemoCodeSender, LoggingCodeSender
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.s3 import S3ObjectStore
@@ -64,13 +70,13 @@ def test_every_fixture_under_app_carries_the_mark() -> None:
         "FixtureRetriever",
     }
     for cls in named | ALSO_FIXTURES:
-        assert getattr(cls, "FIXTURE", False) is True, f"{cls.__module__}.{cls.__name__}"
+        assert is_fixture_class(cls), f"{cls.__module__}.{cls.__name__} is not marked @fixture"
 
 
 def test_the_real_ones_are_not_marked() -> None:
-    assert not getattr(KeywordRetriever, "FIXTURE", False)
-    assert not getattr(S3ObjectStore, "FIXTURE", False)
-    assert not getattr(DemoCodeSender, "FIXTURE", False)
+    assert not is_fixture_class(KeywordRetriever)
+    assert not is_fixture_class(S3ObjectStore)
+    assert not is_fixture_class(DemoCodeSender)
 
 
 PRODUCTION = Settings(region=Region.SG, database_url="sqlite+aiosqlite://")

@@ -147,6 +147,13 @@ def code_from_log(phone_e164: str, since: float) -> str:
     )
 
 
+def _code_source() -> str:
+    """Where this walk's login code came from, for the ✓ line."""
+    if DEMO_LOGIN_CODE is not None:
+        return "the demo's code (NURA_DEMO_LOGIN_CODE)"
+    return f"the six digits from {LOG_NAME}"
+
+
 def fresh_phone(prefix: str) -> str:
     """A Singapore-shaped number nobody has used on this dev.db: random last four digits."""
     if DEMO_LOGIN_CODE is not None:
@@ -185,7 +192,7 @@ def register(client: httpx.Client, person: Person, language: str) -> None:
     person.person_id = session["person_id"]
     ok(
         f"{who} registered by phone code: asked (202, no code in the answer), "
-        f"read the six digits from {LOG_NAME} — no SMS — and signed in (200, token issued)"
+        f"used {_code_source()} — no SMS — and signed in (200, token issued)"
     )
 
 

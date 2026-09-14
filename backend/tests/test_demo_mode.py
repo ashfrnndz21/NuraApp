@@ -275,3 +275,28 @@ async def test_the_lifespan_checks_for_the_wipe_before_serving(clock: FrozenCloc
         async with app.router.lifespan_context(app), sessions() as session:
             assert await session.scalar(select(func.count()).select_from(Person)) == 0
     assert any(m.cls is DemoNumbersOnly for m in app.user_middleware)
+
+
+async def test_the_printable_card_says_demo_first(demo: Demo) -> None:
+    headers = await _sign_in(demo.client, PA)
+    words = (await demo.client.get("/consent/wording", params={"language": "en"})).json()
+    opened = await demo.client.post(
+        "/profiles/mine",
+        headers=headers,
+        json={
+            "consent": {
+                "wording_version": words["version"],
+                "language": "en",
+                "captured_via": "app",
+            },
+            "display_name": "Pa",
+            "language": "en",
+        },
+    )
+    assert opened.status_code == 201, opened.text
+    page = await demo.client.get(
+        f"/profiles/{opened.json()['profile_id']}/emergency-card.html", headers=headers
+    )
+    assert page.status_code == 200, page.text
+    body = page.text
+    assert body.index("Demo — not for real health information") < body.index("<h1>")

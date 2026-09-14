@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,7 @@ from app.db import as_utc, keep_on_refusal, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.confirm import confirm, consume_confirmation
@@ -327,15 +328,13 @@ def draft_from_fixture(fixture: Mapping[str, Any]) -> SummaryDraft:
     return SummaryDraft(actions, changes, follow_ups, facts)
 
 
+@fixture
 class FixtureSummariser:
     """Answers from `tests/fixtures/visits/*.json`, by the sha256 of the transcript text.
 
     Each fixture carries the transcript, its digest, and the structure a summariser would
     hear in it. A transcript no fixture names is `SummaryDraft.nothing()`.
     """
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, directory: Path) -> None:
         self._directory = Path(directory)

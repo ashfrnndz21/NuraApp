@@ -10,9 +10,10 @@ how someone takes over an account.
 from __future__ import annotations
 
 import logging
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from app.demo import NotInTheDemo, refuse_unless_demo_number
+from app.fixtures import fixture
 from app.settings import Settings
 
 log = logging.getLogger("nura.identity.sender")
@@ -54,6 +55,7 @@ class NoCodeSender(RuntimeError):
     """No provider can carry a login code, so nobody could sign in. The process must not start."""
 
 
+@fixture
 class LoggingCodeSender:
     """The fixture sender: keeps the secret so a test can read it back, and logs it if told to.
 
@@ -62,9 +64,6 @@ class LoggingCodeSender:
     never the code beside the number. `create_app` refuses this sender altogether unless the
     deployment's settings name it as a dev run.
     """
-
-    FIXTURE: ClassVar[bool] = True
-    """Never on a deployment: `create_app` refuses it outside a declared dev run."""
 
     def __init__(self, *, reveal: bool = False) -> None:
         self.reveal = reveal

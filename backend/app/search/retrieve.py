@@ -25,10 +25,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 from app.db import as_utc
 from app.errors import Refusal
+from app.fixtures import fixture
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +94,7 @@ class NotAFixture(Refusal):
     """A recall fixture names its question, the sha256 of it, and the phrases picked out."""
 
 
+@fixture
 class FixtureRetriever:
     """Answers from fixtures keyed by the sha256 of the question.
 
@@ -100,9 +102,6 @@ class FixtureRetriever:
     would have picked out of that question. A candidate is picked when it carries one of
     them, newest first. A question with no fixture picks nothing, and recall says so.
     """
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, fixtures: Mapping[str, Sequence[str]]) -> None:
         self._names = {

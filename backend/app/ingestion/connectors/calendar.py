@@ -18,10 +18,11 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
-from typing import ClassVar, Protocol
+from typing import Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.errors import Refusal
+from app.fixtures import fixture
 
 MAX_ICS_BYTES = 256 * 1024
 """A family's calendar export for a year is well under this; anything larger is refused."""
@@ -52,11 +53,9 @@ class NotACalendar(Refusal):
     """The file is not an iCalendar file this reader can read, or it is too large."""
 
 
+@fixture
 class FixtureCalendar:
     """A calendar that answers from the events it was given. For tests."""
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, events: Sequence[CalendarEvent]) -> None:
         self._events = tuple(events)

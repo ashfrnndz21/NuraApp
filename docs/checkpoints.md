@@ -24,15 +24,17 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
-| 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 19 | Nura on your phone over https (demo) | Open the Singapore demo's https address in Safari, add it to the home screen, sign in with a test number (`+65 0…`) and the demo code, and see "Demo — not for real health information" at the top of every screen; walk checkpoints 2–6, 14 and 16–18 against the same address. How-to: `docs/deploy.md` | ADR 0001, ADR 0008 | planned — needs a hosting account (Fly.io or Render, Singapore) |
+| — | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | later — needs an Apple developer account |
 
-**Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
+**Trust documents.** Not checkpoints, but read before CP7 and before the first family on real health information (the TestFlight row): `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before real health information; the CP19 demo holds none, ADR 0008). E16.
 
 ## How a checkpoint is tested
 
 - **Backend checkpoints (1–9, 13, 14, 18)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
-- **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
+- **Over https (19)**: needs a hosting account in Singapore, Fly.io or Render, which you create; `docs/deploy.md` is the whole runbook, from the account to the phone. It is a demo (ADR 0008): the fixtures, test numbers only, a banner on every screen, wiped each night. The backend checkpoints walk against it with `NURA_BASE_URL` and `NURA_DEMO_LOGIN_CODE`, except 7, 8, 9, 13 and 15, which step through dev-only routes.
+- **TestFlight (last, unnumbered)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
 
@@ -1171,3 +1173,23 @@ checkpoint 16 passed: every step did what docs/checkpoints.md says
 1. **A part kept "only me".** Mark the readings only me (`POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "readings"}`, then the only-me route from checkpoint 13), then as Mei `GET /profiles/{profile_id}/timeline`: `withheld` names `readings`, the illness loses the blood pressure and the moment it was taken, and `POST /profiles/{profile_id}/ask` with "what was my blood pressure" answers "Nura does not have that written down." with `readings` withheld. Pa himself still sees it all.
 2. **A question that would change treatment.** As Pa, `POST /profiles/{profile_id}/ask` with `{"question": "should I stop my blood pressure tablet"}`: the answer says what is written down ("Dr Tan gave you your blood pressure tablet.") and then "Ask Dr Tan before you change any medicine." — never an instruction — with the boundary last.
 
+## How to run checkpoint 19
+
+Checkpoint 19 is Nura on your phone over https, from a demo deployment in Singapore
+(ADR 0008). The whole runbook is `docs/deploy.md`; in short:
+
+1. Create the hosting account yourself (Fly.io or Render) — `docs/deploy.md` §4 or §5 creates
+   the app, the Postgres and the secrets in Singapore and deploys. Choose the demo's six-digit
+   login code (`NURA_DEMO_LOGIN_CODE`) and keep it.
+2. `https://<the address>/health/ready` answers `{"status":"ok"}` and `/api/deployment`
+   answers `{"region":"SG","demo":true}`.
+3. On the phone: open `https://<the address>/app/` in Safari, **Share → Add to Home Screen**,
+   open it from the home screen, and sign in with `+65 0000 0001` and the demo code. The banner
+   "Demo — not for real health information" is at the top of every screen, in the language
+   the phone speaks.
+4. A real number (`+65 9…`) is refused with "This demo only takes test phone numbers."
+5. From the laptop, the backend checkpoints walk against the same address:
+   `cd backend && NURA_BASE_URL=https://<the address> NURA_DEMO_LOGIN_CODE=<the code> python3 -m scripts.checkpoint 2`
+   — and 3–6, 14, 16, 17, 18 the same way (7, 8, 9, 13 and 15 need a laptop's dev run).
+6. The next morning, after 03:00 Singapore time, the demo is empty again: your test account is
+   gone, and signing in makes a new one.

@@ -41,6 +41,17 @@ def test_every_runtime_dependency_is_pinned() -> None:
         assert _name(requirement) in pinned, f"{requirement} is not pinned in requirements.lock"
 
 
+def test_an_exact_pin_in_pyproject_is_the_version_the_image_installs() -> None:
+    # FastAPI, Starlette and SQLAlchemy are pinned exactly in pyproject.toml (PR #120): the
+    # image must run the version the suite ran, not whatever the lock drifted to.
+    project = tomllib.loads((BACKEND / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    pinned = _pins()
+    for requirement in project["dependencies"]:
+        exact = re.search(r"==\s*([0-9][0-9a-z.+!-]*)", requirement)
+        if exact:
+            assert pinned[_name(requirement)] == exact.group(1), requirement
+
+
 def test_the_test_only_driver_is_not_shipped() -> None:
     # aiosqlite is how the tests run SQLite; a deployment runs Postgres through asyncpg.
     assert "aiosqlite" not in _pins() and "asyncpg" in _pins()

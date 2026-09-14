@@ -20,9 +20,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.settings import Settings
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -120,6 +121,7 @@ def _moment(seconds: str | None) -> datetime:
     return datetime.fromtimestamp(int(seconds), UTC)
 
 
+@fixture
 class FixtureProvider:
     """Sends into a list, serves media from `fixtures/whatsapp/media.json`, signs with a secret.
 
@@ -127,9 +129,6 @@ class FixtureProvider:
     the same placeholder the paper fixtures use (`tests/paper.py`), so a forwarded photo of
     the lipid report reads as the lipid report. No image is committed.
     """
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     name = "fixture"
 

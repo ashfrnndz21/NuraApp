@@ -32,8 +32,9 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
+from app.fixtures import fixture
 from app.settings import Settings
 
 FIXTURE_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "labs" / "ranges.json"
@@ -170,11 +171,9 @@ def _pick(
     return missing or NoRangeBecause.NONE_ON_FILE
 
 
+@fixture
 class FixtureRanges:
     """The fixture table, read from one JSON file. Pure lookups; nothing is written."""
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, data: Mapping[str, Any]) -> None:
         self._data = data

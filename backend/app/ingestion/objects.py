@@ -16,9 +16,10 @@ import hashlib
 import re
 import uuid
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.regions import Region
 
 _KEY = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,510}$")
@@ -58,6 +59,7 @@ class ObjectStore(Protocol):
     async def get(self, key: str) -> bytes: ...
 
 
+@fixture
 class LocalObjectStore:
     """Files under `root/<region>/`, for a laptop and the tests.
 
@@ -65,9 +67,6 @@ class LocalObjectStore:
     objects. Writes land on a temporary name and are renamed into place, so a reader never
     sees half a file.
     """
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, root: Path, region: Region) -> None:
         self._root = Path(root) / region.value

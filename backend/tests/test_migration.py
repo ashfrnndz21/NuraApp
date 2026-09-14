@@ -25,7 +25,7 @@ from types import ModuleType
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Connection, Inspector, Table, inspect, text
+from sqlalchemy import Connection, Inspector, Table, inspect, select, text
 
 from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
@@ -306,7 +306,7 @@ def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
 async def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
     revisions: dict[str, ModuleType],
 ) -> None:
-    """Upgrade, populate, downgrade (refused), clear, downgrade, upgrade again."""
+    """Upgrade, populate, down to 0005, downgrade (refused), clear, downgrade, upgrade again."""
     ordered = _in_order(revisions)
     review = revisions["0005_memory_review"]
 
@@ -376,6 +376,12 @@ async def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_
             )
         )
 
+        # Down to 0005 first, the way `alembic downgrade 0005_memory_review` goes: a later
+        # revision ties new tables to the constraints 0005 made, and Postgres will not drop a
+        # constraint something still depends on (SQLite's batch rewrite never asked).
+        for later in reversed(ordered[ordered.index(review) + 1 :]):
+            _apply(connection, later, "downgrade")
+
         with pytest.raises(RuntimeError, match="person's word"):
             _apply(connection, review, "downgrade")
         connection.execute(Fact.__table__.delete().where(Fact.__table__.c.id == confirmed))
@@ -387,7 +393,7 @@ async def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_
         _apply(connection, review, "downgrade")
         assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
         _apply(connection, review, "upgrade")
-        assert connection.execute(Artifact.__table__.select()).one().id == photo
+        assert connection.execute(select(Artifact.__table__.c.id)).scalar_one() == photo
 
     await on_an_empty_database(walk)
 
@@ -402,10 +408,29 @@ async def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_dow
     visits = revisions["0012_visits"]
 
     def walk(connection: Connection) -> None:
-        for migration in ordered:
-            if migration is not visits:
-                _apply(connection, migration, "upgrade")
+        # Only the revisions before 0012: a later one may name a table 0012 makes, which
+        # Postgres, unlike SQLite's batch rewrite, will not create a tie to before it exists.
+        for migration in ordered[: ordered.index(visits)]:
+            _apply(connection, migration, "upgrade")
         ids = {name: uuid.uuid4().hex for name in ("flag", "profile", "event", "person")}
+        # The flag's person, profile and event, so its ties hold on a database that keeps
+        # them (Postgres always does; the SQLite migration walks do not).
+        for statement in (
+            (
+                "INSERT INTO person (id, region, display_name, language, created_at) "
+                "VALUES (:person, 'SG', 'Pa', 'en', '2026-09-03 08:00:00')"
+            ),
+            (
+                "INSERT INTO profile (id, region, display_name, language, owner_person_id, "
+                "created_at) VALUES (:profile, 'SG', 'Pa', 'en', :person, '2026-09-03 08:00:00')"
+            ),
+            (
+                "INSERT INTO event (id, profile_id, kind, occurred_at, recorded_at, "
+                "source_channel) VALUES (:event, :profile, 'feeling', '2026-09-03 08:00:00', "
+                "'2026-09-03 08:00:00', 'app')"
+            ),
+        ):
+            connection.execute(text(statement), ids)
         connection.execute(
             text(
                 "INSERT INTO red_flag (id, profile_id, feeling, event_id, raised_by_person_id, "

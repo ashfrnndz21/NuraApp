@@ -19,8 +19,9 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import Protocol
 
+from app.fixtures import fixture
 from app.regions import Region, guard_region
 
 
@@ -52,14 +53,12 @@ class Transcriber(Protocol):
     ) -> Transcript: ...
 
 
+@fixture
 class FixtureTranscriber:
     """Answers from `root/<sha256>.json` — `{"text": ..., "confidence": ..., "language": ...}`
     — and with `NOTHING_HEARD` for bytes it has no file for. No audio is committed: the
     placeholders in the tests and at the checkpoint are a few bytes whose digest names a
     file (`backend/tests/voice_notes.py`)."""
-
-    FIXTURE: ClassVar[bool] = True
-    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, root: Path, region: Region) -> None:
         self._root = Path(root)
