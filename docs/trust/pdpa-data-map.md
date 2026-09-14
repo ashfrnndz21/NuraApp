@@ -960,7 +960,7 @@ A breach is any unauthorised access to, disclosure of, loss of, or alteration of
 
 **Notification content.** Both regulators expect: what happened and when; the categories and approximate number of individuals and records; the likely consequences; what has been done and what will be done; the DPO's contact. Templates for the PDPC form and the Malaysian Commissioner's notice are counsel's to supply and are kept with the incident file.
 
-**Testing the runbook.** The acceptance line asks for the runbook to be tested. The code paths it relies on have tests today: a revoked or expired key closes its reach (`tests/test_keys.py:43`, `:55`; `tests/test_accounts_acceptance.py`), the audit trail records every read and every refusal (`tests/test_audit_acceptance.py`), out-of-region reads are refused (`tests/test_memory_review.py:217`). The human part is a tabletop: two people, one hour, one scenario from the list above (a lost phone with an open session is the first), walked against this table with the clock running, and the gaps written down. The first tabletop is owed before checkpoint 19 (the first family on TestFlight) and recorded here:
+**Testing the runbook.** The acceptance line asks for the runbook to be tested. The code paths it relies on have tests today: a revoked or expired key closes its reach (`tests/test_keys.py:43`, `:55`; `tests/test_accounts_acceptance.py`), the audit trail records every read and every refusal (`tests/test_audit_acceptance.py`), out-of-region reads are refused (`tests/test_memory_review.py:217`). The human part is a tabletop: two people, one hour, one scenario from the list above (a lost phone with an open session is the first), walked against this table with the clock running, and the gaps written down. The first tabletop is owed before the first family uses Nura with real health information (the TestFlight row in `docs/checkpoints.md`; checkpoint 19's demo holds none, ADR 0008) and recorded here:
 
 | Date | Scenario | Who | Gaps found | Fixed by |
 |---|---|---|---|---|
@@ -973,7 +973,7 @@ Both Acts want a named person. Singapore's PDPA requires an organisation to desi
 | | |
 |---|---|
 | Role | Data protection officer for Nura, both regions, until the two deployments need one each |
-| Named | *to be named by the owner before checkpoint 19* |
+| Named | *to be named by the owner before the first family on real health information (the TestFlight row)* |
 | Contact | *dpo@ (domain to be set) — published in the app's Settings → Privacy, on the listing, and in the printed emergency card's footer* |
 | Duties | Owns this document and `recording-consent.md`; runs the assessment and notification steps in §6; answers data subject requests in §8 within the windows; keeps the consent texts' versions and translations reviewed; reviews every PR that touches `app/consent/`, `app/audit/`, `app/keys/` or `app/safety/` (the protected paths in `.github/CODEOWNERS`) |
 | Reports to | The owner |

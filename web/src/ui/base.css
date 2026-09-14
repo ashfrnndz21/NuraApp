@@ -453,6 +453,26 @@ label.pill input {
   }
 }
 
+/* The demo banner (ADR 0008): first on every screen of a demo deployment, never scrolled away.
+   Paper-white on Ink is above 12:1. */
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: var(--text-caption);
+  line-height: var(--line-height);
+}
+.demo-banner strong {
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
 /* The visit day (E05-04): the one big button, the red dot and its timer, the chief's note,
    the notes by hand, and a card line with the clip under it. Everything in normal flow:
    nothing is drawn over a line. The dot does not pulse: nothing moves that was not asked. */

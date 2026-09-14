@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.models import Speaker
 from app.ingestion.transcribe import Transcript
 from app.regions import Region, guard_region
@@ -98,6 +99,7 @@ def align(text: str, segments: Sequence[Segment]) -> list[Aligned]:
     return aligned
 
 
+@fixture
 class FixtureSeparator:
     """Answers from `root/<sha256 of the audio>.json` — `{"segments": [{"speaker", "start_s",
     "end_s", "text"}]}` — and with no segments for audio it has no file for."""
