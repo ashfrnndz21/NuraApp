@@ -30,11 +30,31 @@ describe("ask", () => {
 
   it("shows the backend's words only, in its order: cited lines, the honest lines, the boundary last", () => {
     const view = answerView(answer({ honest: ["Nura does not have that written down."] }));
-    expect(view.lines).toEqual([{ text: "Your blood pressure on Monday 14 September was 138 over 84.", source: "sourcePapers" }]);
+    expect(view.lines).toEqual([{ text: "Your blood pressure on Monday 14 September was 138 over 84.", source: "sourcePapers", clip: null }]);
     expect(view.honest).toEqual(["Nura does not have that written down."]);
     expect(view.boundary.at(-1)).toBe("Ask your doctor.");
     expect(view.spoken.at(-1)).toBe("Ask your doctor.");
     expect(view.withheld).toBe(false);
     expect(answerView(answer({ withheld: ["notes"] })).withheld).toBe(true);
+  });
+
+  it("a line about a recorded visit carries its clip, and is from his visits", () => {
+    const clip = { artifact_id: "rec-1", start_s: 19.8, end_s: 28.9, doctor: "Dr Tan" };
+    const view = answerView(
+      answer({
+        lines: [
+          {
+            text: "Dr Tan talked about this on Monday 14 September.",
+            cites: [
+              { kind: "summary_item", id: "i1" },
+              { kind: "appointment", id: "a1" },
+              { kind: "artifact", id: "rec-1", start_s: 19.8, end_s: 28.9 },
+            ],
+            clip,
+          },
+        ],
+      }),
+    );
+    expect(view.lines[0]).toEqual({ text: "Dr Tan talked about this on Monday 14 September.", source: "sourceVisits", clip });
   });
 });

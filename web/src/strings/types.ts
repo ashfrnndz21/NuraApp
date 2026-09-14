@@ -175,6 +175,36 @@ export interface Strings {
     switchProfile: string;
     signOut: string;
   };
+  /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
+   *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
+  visit: {
+    title: string;
+    open: string;
+    none: string;
+    fromVisit: string;
+    onDuty: string;
+    driveYes: string;
+    start: string;
+    keepOpen: string;
+    consentLead: string;
+    saidYes: string;
+    saidNo: string;
+    listening: string;
+    stop: string;
+    saving: string;
+    saved: string;
+    notHeard: string;
+    notHeardSub: string;
+    cardLater: string;
+    stoppedAway: string;
+    keepHeard: string;
+    hearClip: string;
+    byHandTitle: string;
+    byHandLabel: string;
+    byHandSave: string;
+    noMic: string;
+    noMicSub: string;
+  };
   errors: { network: string; tryAgain: string };
   /** One line per refusal, or two when the second says what to do next; each line one idea. */
   refusals: Record<string, string | readonly string[]> & { default: string };

@@ -88,6 +88,36 @@ async function sendBlob(path: string, call: Call): Promise<Blob> {
   return response.blob();
 }
 
+/** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
+export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
+  const next = queue.then(() => sendBytes<T>(path, body, contentType, call));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+async function sendBytes<T>(path: string, body: Blob, contentType: string, call: Call): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", "Content-Type": contentType };
+  if (call.token) headers.Authorization = `Bearer ${call.token}`;
+  let response: Response;
+  try {
+    response = await fetch(urlFor(path, call), { method: "POST", headers, body, cache: "no-store", credentials: "omit" });
+  } catch {
+    throw new Unreachable();
+  }
+  return answer<T>(response);
+}
+
+async function answer<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  const parsed: unknown = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    throw new Refused(response.status === 422 ? "NotWellFormed" : "HttpError", response.status);
+  }
+  return parsed as T;
+}
+
 async function send<T>(path: string, call: Call): Promise<T> {
   const url = urlFor(path, call);
   const headers: Record<string, string> = { Accept: "application/json" };

@@ -1,4 +1,4 @@
-import type { AnswerLineOut, AnswerOut, AskMode } from "../api/types";
+import type { AnswerLineOut, AnswerOut, AskMode, ClipOut } from "../api/types";
 import type { Density } from "../store/session";
 
 /** Ask about a card (E21-04 → E03-05). His question goes to the backend word for word; the
@@ -19,12 +19,13 @@ export function sourceOf(cites: AnswerLineOut["cites"]): SourceLine | null {
   if (cites.length === 0) return null;
   const kinds = new Set(cites.map((cite) => cite.kind));
   if (kinds.has("medication_line")) return "sourceMedicines";
-  if (kinds.has("appointment") || kinds.has("provider")) return "sourceVisits";
+  if (kinds.has("appointment") || kinds.has("provider") || kinds.has("summary_item")) return "sourceVisits";
   return "sourcePapers";
 }
 
 export interface AnswerView {
-  lines: { text: string; source: SourceLine | null }[];
+  /** `clip`: a line about a recorded visit, which plays what the doctor said on a tap (E03-05). */
+  lines: { text: string; source: SourceLine | null; clip: ClipOut | null }[];
   honest: string[];
   boundary: string[];
   spoken: string[];
@@ -34,7 +35,7 @@ export interface AnswerView {
 /** The answer in the order it is shown and heard: cited lines, honest lines, boundary last. */
 export function answerView(answer: AnswerOut): AnswerView {
   return {
-    lines: answer.lines.map((line) => ({ text: line.text, source: sourceOf(line.cites) })),
+    lines: answer.lines.map((line) => ({ text: line.text, source: sourceOf(line.cites), clip: line.clip ?? null })),
     honest: [...answer.honest],
     boundary: [...answer.boundary],
     spoken: [...answer.spoken],

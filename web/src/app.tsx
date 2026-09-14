@@ -7,6 +7,7 @@ import { MeScreen } from "./screens/Me";
 import { ReadingScreen } from "./screens/Reading";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
 import { TodayScreen } from "./screens/Today";
+import { VisitScreen } from "./screens/Visit";
 import { profile, restored, token } from "./store/session";
 import { afterRestoreFailure } from "./restore";
 
@@ -51,6 +52,8 @@ export function App(): JSX.Element | null {
       return <AskScreen item={current.item} />;
     case "reading":
       return <ReadingScreen />;
+    case "visit":
+      return <VisitScreen appointmentId={current.appointmentId} />;
     case "me":
       return <MeScreen />;
   }

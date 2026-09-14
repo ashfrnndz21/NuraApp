@@ -1,0 +1,421 @@
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { JSX } from "preact";
+import { Refused } from "../api/client";
+import * as nura from "../api/nura";
+import type { ConsultOut, LogisticsOut, NoticeOut, SummaryOut, WordingOut } from "../api/types";
+import { go } from "../flow";
+import { speak } from "../speech/speak";
+import { density, profile, token } from "../store/session";
+import { fill, isLanguage, language, t } from "../strings";
+import { Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { browserClipDeps, ClipPlayer } from "../visit/clip";
+import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../visit/model";
+import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../visit/recorder";
+
+/** The Visit screen (E05-03, E05-04, E02-05): the logistics card, then one big button.
+ *
+ *  **Start recording** first asks the backend for the notice. The backend refuses a key that
+ *  does not change the visits, then asks the gate (the RECORDING consent in force). With no
+ *  consent in force the owner reads today's words and says yes; anyone else is told the owner
+ *  has not agreed. Only then is the notice shown and spoken, and the microphone opened. The
+ *  recording begins with the notice itself, so the doctor's answer is its first seconds.
+ *  **Dr Tan said yes** keeps listening; **Dr Tan said no** throws the audio away on the phone,
+ *  and the notes can be written by hand. **Stop** is the one thing that uploads. The page must
+ *  stay in front: hidden, it stops listening at once, and says so
+ *  (docs/adr/0006-consult-recording-on-the-web.md). The post-visit card is the backend's, each
+ *  line with "Hear what Dr Tan said" when the recording has that line in it. */
+
+type Stage =
+  | { kind: "card" }
+  | { kind: "gating" }
+  | { kind: "consent"; words: WordingOut }
+  | { kind: "asking"; notice: NoticeOut }
+  | { kind: "recording"; notice: NoticeOut }
+  | { kind: "held"; notice: NoticeOut; kept: Kept; away: boolean }
+  | { kind: "saving"; notice: NoticeOut }
+  | { kind: "done"; notice: NoticeOut; outcome: ConsultOut }
+  | { kind: "no"; notice: NoticeOut }
+  | { kind: "notes"; notice: NoticeOut; summary: SummaryOut };
+
+export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.Element {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [card, setCard] = useState<LogisticsOut | null>(null);
+  const [none, setNone] = useState(false);
+  const [stage, setStage] = useState<Stage>({ kind: "card" });
+  const [error, setError] = useState<unknown>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const recorder = useMemo(() => new ConsultRecorder(browserRecorderDeps()), []);
+  const clips = useMemo(
+    () =>
+      new ClipPlayer(
+        browserClipDeps((artifactId, start, end) => nura.clip(bearer ?? "", papers?.profile_id ?? "", artifactId, start, end)),
+      ),
+    [bearer, papers?.profile_id],
+  );
+  const now = useRef<Stage>(stage);
+  now.current = stage;
+
+  const loadCard = async () => {
+    if (!bearer || !papers) return;
+    try {
+      setCard(await nura.logistics(bearer, papers.profile_id, appointmentId));
+    } catch (failure) {
+      if (failure instanceof Refused && failure.status === 404) setNone(true);
+      else setError(failure);
+    }
+  };
+
+  useEffect(() => {
+    void loadCard();
+  }, [bearer, papers?.profile_id, appointmentId]);
+
+  // Leaving the screen: anything not sent is let go, and a clip stops.
+  useEffect(
+    () => () => {
+      recorder.discard();
+      clips.forget();
+    },
+    [recorder, clips],
+  );
+
+  // A hidden page stops listening at once (a phone suspends it). Before the doctor's answer
+  // the audio is thrown away, as on a no; after it, it is kept on the phone for one tap.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "hidden") return;
+      const current = now.current;
+      if (current.kind === "asking") {
+        recorder.discard();
+        setSaid(s.visit.stoppedAway);
+        setStage({ kind: "card" });
+      } else if (current.kind === "recording") {
+        void recorder.stop().then((kept) => {
+          if (kept) setStage({ kind: "held", notice: current.notice, kept, away: true });
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [recorder, s]);
+
+  const listen = async (notice: NoticeOut) => {
+    const spoken = isLanguage(notice.language) ? notice.language : language.value;
+    // The notice is shown and said first, in his language, to the doctor by name; the
+    // microphone opens as it is said, so the recording holds the notice and the answer.
+    speak({ lines: notice.spoken, language: spoken });
+    if (!canRecord()) {
+      setSaid(s.visit.noMic);
+      setStage({ kind: "no", notice });
+      return;
+    }
+    try {
+      await recorder.start();
+    } catch {
+      setSaid(s.visit.noMic);
+      setStage({ kind: "no", notice });
+      return;
+    }
+    setStage({ kind: "asking", notice });
+  };
+
+  const begin = async () => {
+    if (!bearer || !papers || busy) return;
+    setBusy(true);
+    setError(null);
+    setSaid(null);
+    setStage({ kind: "gating" });
+    try {
+      const notice = await nura.recordingNotice(bearer, papers.profile_id, appointmentId);
+      await listen(notice);
+    } catch (failure) {
+      if (failure instanceof Refused && CONSENT_REFUSALS.has(failure.refusal) && papers.standing === "owner") {
+        try {
+          setStage({ kind: "consent", words: await nura.recordingWording(language.value) });
+        } catch (words) {
+          setError(words);
+          setStage({ kind: "card" });
+        }
+      } else {
+        setError(failure);
+        setStage({ kind: "card" });
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const agree = async (words: WordingOut) => {
+    if (!bearer || !papers || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await nura.agreeToRecording(bearer, papers.profile_id, words.version, words.language);
+    } catch (failure) {
+      setError(failure);
+      setBusy(false);
+      return;
+    }
+    setBusy(false);
+    await begin();
+  };
+
+  const upload = async (notice: NoticeOut, kept: Kept) => {
+    if (!bearer || !papers) return;
+    setStage({ kind: "saving", notice });
+    setError(null);
+    try {
+      const outcome = await nura.uploadRecording(bearer, papers.profile_id, appointmentId, kept.blob, kept.durationS, kept.startedAt);
+      const first = outcome.summary ? summaryView(outcome.summary).lines.find((line) => line.clip)?.clip : undefined;
+      if (first) clips.warm(first);
+      setStage({ kind: "done", notice, outcome });
+    } catch (failure) {
+      // Not sent: the audio stays on the phone, and one tap sends it again.
+      setError(failure);
+      setStage({ kind: "held", notice, kept, away: false });
+    }
+  };
+
+  const stop = async (notice: NoticeOut) => {
+    const kept = await recorder.stop();
+    if (kept) await upload(notice, kept);
+  };
+
+  const no = (notice: NoticeOut) => {
+    recorder.discard();
+    setStage({ kind: "no", notice });
+  };
+
+  const saveNotes = async (notice: NoticeOut) => {
+    if (!bearer || !papers || busy || !notes.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const summary = await nura.writeNotes(bearer, papers.profile_id, appointmentId, notes.trim());
+      setStage({ kind: "notes", notice, summary });
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const driveYes = async (personId: string) => {
+    if (!bearer || !papers || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const yes = await nura.mintDrive(bearer, papers.profile_id, appointmentId, personId);
+      await nura.assignDriver(bearer, papers.profile_id, appointmentId, personId, yes.confirmation_id);
+      setCard(await nura.logistics(bearer, papers.profile_id, appointmentId));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const listening = stage.kind === "asking" || stage.kind === "recording";
+  const doctor = card?.doctor ?? (stage.kind !== "card" && stage.kind !== "gating" && stage.kind !== "consent" ? stage.notice.doctor : "");
+  const view = card ? logisticsView(card) : null;
+  const elapsed = timer(recorder.elapsed.value);
+
+  const summaryCard = (summary: SummaryOut, testId: string) => {
+    const shown = summaryView(summary);
+    return (
+      <Tile paper testId={testId}>
+        <div class="lines" data-testid="summary-lines">
+          {shown.lines.map((line, at) => (
+            <div key={at} class="clip-line" data-testid="summary-line">
+              <p>{line.text}</p>
+              {line.clip && (
+                <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
+                  {fill(s.visit.hearClip, { doctor })}
+                </Pill>
+              )}
+            </div>
+          ))}
+        </div>
+        {shown.boundary.length > 0 && (
+          <div class="lines boundary" data-testid="boundary">
+            {shown.boundary.map((line, at) => (
+              <p key={at}>{line}</p>
+            ))}
+          </div>
+        )}
+        <Hear lines={shown.spoken} />
+      </Tile>
+    );
+  };
+
+  return (
+    <main class="screen" data-density={density()} data-testid="visit-screen" data-stage={stage.kind}>
+      <Header title={s.visit.title} onBack={listening ? undefined : () => go({ name: "today" })} />
+      <Notice error={error} />
+      {said && (
+        <Tile paper role="status" testId="said">
+          <p>{said}</p>
+        </Tile>
+      )}
+      {none && <Tile paper testId="no-visit"><p>{s.visit.none}</p></Tile>}
+
+      {(stage.kind === "card" || stage.kind === "gating") && view && (
+        <>
+          <Tile paper testId="logistics">
+            <div class="lines" data-testid="logistics-lines">
+              {view.lines.map((line, at) => (
+                <p key={at} data-section={line.section}>
+                  {line.text}
+                </p>
+              ))}
+            </div>
+            {view.note && (
+              <figure class="note" data-testid="place-note">
+                <figcaption class="caption">{view.note.label}</figcaption>
+                <blockquote>{view.note.text}</blockquote>
+              </figure>
+            )}
+            <p class="provenance">{s.visit.fromVisit}</p>
+            <Hear lines={view.spoken} />
+          </Tile>
+          {view.suggestion && (
+            <Tile paper testId="drive-suggestion">
+              <p>{fill(s.visit.onDuty, { name: view.suggestion.name })}</p>
+              <Pill onClick={() => void driveYes(view.suggestion!.personId)} disabled={busy} testId="drive-yes">
+                {fill(s.visit.driveYes, { name: view.suggestion.name })}
+              </Pill>
+            </Tile>
+          )}
+          <Pill onClick={() => void begin()} disabled={busy || stage.kind === "gating"} testId="start-recording">
+            <span class="start-label">{s.visit.start}</span>
+          </Pill>
+          <p class="caption" data-testid="keep-open">
+            {s.visit.keepOpen}
+          </p>
+        </>
+      )}
+
+      {stage.kind === "consent" && (
+        <Tile paper sheet testId="recording-consent">
+          <p>{s.visit.consentLead}</p>
+          <div class="lines">
+            {stage.words.lines.map((line, at) => (
+              <p key={at}>{line}</p>
+            ))}
+          </div>
+          <Pill plum onClick={() => void agree(stage.words)} disabled={busy} testId="agree-recording">
+            {s.consent.agree}
+          </Pill>
+        </Tile>
+      )}
+
+      {listening && (
+        <>
+          {stage.kind === "asking" && (
+            <Tile paper testId="notice">
+              <div class="lines">
+                {stage.notice.spoken.map((line, at) => (
+                  <p key={at}>{line}</p>
+                ))}
+              </div>
+            </Tile>
+          )}
+          <Tile paper role="status" testId="listening">
+            <p class="recording">
+              <span class="dot" aria-hidden="true" data-testid="red-dot" />
+              <span class="timer" data-testid="timer">
+                {elapsed}
+              </span>
+              <span>{s.visit.listening}</span>
+            </p>
+            <p class="caption">{s.visit.keepOpen}</p>
+          </Tile>
+          {stage.kind === "asking" ? (
+            <>
+              <Pill plum onClick={() => setStage({ kind: "recording", notice: stage.notice })} testId="doctor-yes">
+                {fill(s.visit.saidYes, { doctor: stage.notice.doctor })}
+              </Pill>
+              <Pill onClick={() => no(stage.notice)} testId="doctor-no">
+                {fill(s.visit.saidNo, { doctor: stage.notice.doctor })}
+              </Pill>
+            </>
+          ) : (
+            <Pill plum onClick={() => void stop(stage.notice)} testId="stop-recording">
+              <span class="start-label">{s.visit.stop}</span>
+            </Pill>
+          )}
+        </>
+      )}
+
+      {stage.kind === "held" && (
+        <Tile paper testId="held">
+          {stage.away && <p>{s.visit.stoppedAway}</p>}
+          <Pill plum onClick={() => void upload(stage.notice, stage.kept)} testId="keep-heard">
+            {s.visit.keepHeard}
+          </Pill>
+        </Tile>
+      )}
+
+      {stage.kind === "saving" && (
+        <Tile paper role="status" testId="saving">
+          <p>{s.visit.saving}</p>
+        </Tile>
+      )}
+
+      {stage.kind === "done" && (
+        <>
+          <Tile paper role="status" testId="saved">
+            <p>{s.visit.saved}</p>
+            {!stage.outcome.recording.heard && (
+              <>
+                <p>{s.visit.notHeard}</p>
+                <p>{s.visit.notHeardSub}</p>
+              </>
+            )}
+            {stage.outcome.recording.heard && !stage.outcome.summary && <p>{s.visit.cardLater}</p>}
+          </Tile>
+          {stage.outcome.summary && summaryCard(stage.outcome.summary, "summary")}
+        </>
+      )}
+
+      {stage.kind === "no" && (
+        <>
+          <Tile paper testId="when-no">
+            <div class="lines">
+              {stage.notice.when_no.map((line, at) => (
+                <p key={at}>{line}</p>
+              ))}
+            </div>
+            <Hear lines={stage.notice.when_no} />
+          </Tile>
+          <Tile paper testId="by-hand">
+            <h2 class="title">{fill(s.visit.byHandTitle, { doctor: stage.notice.doctor })}</h2>
+            <label class="by-hand-label">
+              <span class="label">{fill(s.visit.byHandLabel, { doctor: stage.notice.doctor })}</span>
+              <textarea
+                class="field"
+                name="notes"
+                maxLength={4000}
+                value={notes}
+                onInput={(event) => setNotes((event.target as HTMLTextAreaElement).value)}
+                data-testid="notes"
+              />
+            </label>
+            <Pill plum onClick={() => void saveNotes(stage.notice)} disabled={busy || !notes.trim()} testId="save-notes">
+              {s.visit.byHandSave}
+            </Pill>
+          </Tile>
+        </>
+      )}
+
+      {stage.kind === "notes" && summaryCard(stage.summary, "summary")}
+
+      {!listening && stage.kind !== "saving" && stage.kind !== "held" && (
+        <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      )}
+    </main>
+  );
+}

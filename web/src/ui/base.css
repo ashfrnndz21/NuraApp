@@ -336,3 +336,58 @@ body {
     transition-duration: 0ms !important;
   }
 }
+
+/* The visit day (E05-04): the one big button, the red dot and its timer, the chief's note,
+   the notes by hand, and a card line with the clip under it. Everything in normal flow:
+   nothing is drawn over a line. The dot does not pulse: nothing moves that was not asked. */
+.pill .start-label {
+  font-size: var(--text-title);
+}
+[data-testid="start-recording"],
+[data-testid="stop-recording"] {
+  min-height: calc(var(--target) * 1.75);
+}
+.recording {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.recording .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c62828;
+  flex: none;
+}
+.recording .timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 3.5ch;
+}
+figure.note {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) var(--space-2);
+  border-left: 3px solid rgba(78, 58, 120, 0.35);
+}
+figure.note blockquote {
+  margin: 4px 0 0;
+  font-size: var(--text-body);
+}
+textarea.field {
+  min-height: calc(var(--target) * 2.5);
+  padding: var(--space-1) var(--space-2);
+  resize: vertical;
+}
+.by-hand-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.clip-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.clip-line + .clip-line {
+  margin-top: var(--space-1);
+}
