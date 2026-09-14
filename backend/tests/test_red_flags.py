@@ -1,11 +1,12 @@
-"""Red flags, one module (`app/safety/red_flags.py`): the feeling cloud's words (E21) and the
-same flags heard in free text on WhatsApp (E19-05) — one `Flag`, one table of words, one
-ladder — and the words the not-feeling-well button and the symptom log hear (E13/E14). Then the
-symptom tables, the transcriber port and the strings catalogue: pure tables and a fixture."""
+"""Red flags, one module (`app/safety/red_flags.py`): the feeling cloud's words (E21), the same
+flags heard in free text on WhatsApp (E19-05), the words the not-feeling-well button and the
+symptom log hear (E13/E14), and the words heard at a visit with their spans (E05) — one `Flag`
+table, one vocabulary of codes, one ladder, one way a flag is kept. Then the symptom tables,
+the transcriber port and the strings catalogue: pure tables and a fixture."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -29,17 +30,23 @@ from app.memory.models import Artifact, Event, EventKind, Fact, SourceChannel
 from app.regions import OutOfRegion, Region
 from app.safety.plain_words import verify
 from app.safety.red_flags import (
+    FEELING_CODE,
     FLAG_TARGET,
+    RED_FLAG_TERMS,
     RED_FLAG_WORDS,
     RED_FLAGS,
     Escalation,
     Feeling,
     Flag,
+    FlagKind,
     NotAFeeling,
     detect,
+    find_red_flags,
     is_red,
     open_flags,
     raise_flag,
+    red_flags_in,
+    write_red_flag,
 )
 from app.safety.symptoms import (
     Duration,
@@ -49,6 +56,7 @@ from app.safety.symptoms import (
     severity_word,
 )
 from tests.support import agree_to_family_sharing, refused_unit
+from tests.visits import pa
 from tests.voice import CHEST_PAIN, UNHEARD, VOICE, digest_of, fixture, placeholder_voice
 from tests.whatsapp_support import KIT, MEI, family
 
@@ -295,6 +303,112 @@ async def test_a_red_flag_from_a_key_without_the_emergency_scope_is_refused_and_
         for e in trail
     )
 
+
+# --- the words heard (E05) -------------------------------------------------------------------
+
+
+def test_the_words_the_rules_name_are_in_the_table() -> None:
+    assert {
+        "chest_pain",
+        "breathless",
+        "black_stool",
+        "fall",
+        "confusion",
+        "one_sided_swelling",
+        "worst_headache",
+        "sudden_blurring",
+        "shaky_and_sweaty",
+        "fever_on_medicine",
+    } <= set(RED_FLAG_TERMS)
+
+
+def test_a_red_flag_word_is_found_with_its_span_in_three_languages() -> None:
+    hits = find_red_flags("He had chest pain twice this week.")
+    assert [(h.code, h.word) for h in hits] == [("chest_pain", "chest pain")]
+    assert "He had chest pain twice this week."[hits[0].start : hits[0].end] == "chest pain"
+    assert [h.code for h in find_red_flags("Dia sesak nafas malam tadi.")] == ["breathless"]
+    assert [h.code for h in find_red_flags("他昨晚跌倒了。")] == ["fall"]
+
+
+def test_a_fever_counts_only_beside_a_medicine() -> None:
+    assert find_red_flags("He has a fever.") == []
+    assert [h.code for h in find_red_flags("He has a fever since the new tablet.")] == [
+        "fever_on_medicine"
+    ]
+    assert [h.code for h in find_red_flags("Fever today.", medicine_names=("warfarin",))] == []
+    assert [h.code for h in find_red_flags("Fever on warfarin.", medicine_names=("warfarin",))] == [
+        "fever_on_medicine"
+    ]
+
+
+def test_words_inside_a_fact_value_are_found_and_ordinary_words_are_not() -> None:
+    assert [h.code for h in red_flags_in({"reported": "black stool this morning"})] == [
+        "black_stool"
+    ]
+    assert red_flags_in({"systolic": 142, "diastolic": 88}, "blood pressure was fine") == []
+    # "fall" as a season, or "confused" about a date, is a whole-word match on the phrase.
+    assert find_red_flags("It will be autumn, not fall.") == []
+    assert [h.code for h in find_red_flags("She said he was confused at breakfast.")] == [
+        "confusion"
+    ]
+
+
+# --- the feeling cloud (E21) and the one table -----------------------------------------------
+
+
+def test_every_red_feeling_has_a_code_the_words_heard_share() -> None:
+    assert set(FEELING_CODE) == RED_FLAGS
+    assert not any(is_red(feeling) for feeling in Feeling if feeling not in RED_FLAGS)
+    # Every code but the number rule (a kilo in two days) is one a transcript can carry too.
+    assert set(FEELING_CODE.values()) - {"weight_gain"} <= set(RED_FLAG_TERMS)
+
+
+async def test_a_feeling_tapped_and_a_word_heard_raise_the_same_row_and_only_the_tap_leads_the_feed(
+    sg: AsyncSession,
+) -> None:
+    context = await pa(sg, language="en")
+    said = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.SYMPTOM,
+        occurred_at=utcnow(),
+        label=Feeling.CHEST_TIGHTNESS.value,
+        source_channel=SourceChannel.APP,
+    )
+    tapped = await raise_flag(
+        sg, context=context, feeling=Feeling.CHEST_TIGHTNESS, event_id=said.id
+    )
+    heard = await write_red_flag(
+        sg,
+        context=context,
+        kind=FlagKind.RED_FLAG,
+        code="chest_pain",
+        subject="symptom",
+        payload={"word": "chest pain", "span": {"start": 7, "end": 17}, "found_in": "transcript"},
+        raised_at=utcnow(),
+    )
+    change = await write_red_flag(
+        sg,
+        context=context,
+        kind=FlagKind.MEDICINE_CHANGE_HEARD,
+        code="dose",
+        subject="frusemide",
+        payload={"generic": "frusemide", "change": "dose", "ask_the_doctor": True},
+        raised_at=utcnow(),
+    )
+
+    rows = (await sg.scalars(select(Flag))).all()
+    assert {row.id for row in rows} == {tapped.id, heard.id, change.id}
+    # One vocabulary: the tight chest tapped and the chest pain heard are the same code.
+    assert tapped.code == heard.code == "chest_pain"
+    assert tapped.feeling is Feeling.CHEST_TIGHTNESS and tapped.event_id == said.id
+    assert heard.feeling is None and heard.event_id is None
+    assert {row.raised_by_person_id for row in rows} == {context.person_id}
+    # The feed's emergency card is for what he said he feels; the visit's flags are the
+    # summary card's and the doctor's questions.
+    assert [flag.id for flag in await open_flags(sg, context=context)] == [tapped.id]
+
+
 # --- the words the button hears (E13/E14) ------------------------------------------------------
 
 
@@ -405,7 +519,7 @@ FILLERS = {
     "doctor": "Dr Tan",
     "clinic": "Bedok Clinic",
     "number": "995",
-    "date": "Monday 14 September",
+    "date": date(2026, 9, 14),  # a Monday; `render` says it in the line's own language
     "words": "chest pain",
     "symptom": "dizzy",
     "severity": "quite bad",

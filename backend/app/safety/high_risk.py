@@ -74,8 +74,11 @@ saved from words alone (`tests/test_high_risk_conformance.py` walks every one)."
 MEDICINE_SUBJECTS = frozenset({"medicine", "medication"})
 """The subjects a medicine fact is written under (`app.keys.scopes.scope_for_subject`)."""
 
-DOSE_ATTRIBUTES = frozenset({"dose"})
-"""The attribute the rule guards: what to take and how often, which is what a label says."""
+DOSE_ATTRIBUTES = frozenset({"dose", "amount", "start", "stop", "frequency", "strength"})
+"""The attributes the rule guards, whatever the subject: what to take, how much, how often,
+starting and stopping — what a label says, and what a voice might say. Keyed on the attribute
+and not on the subject, because subjects are free codes: a fact `warfarin.dose` from a
+transcript is a dose as much as `medicine.dose` from a card is (E05 review, B4)."""
 
 LINE_ATTRIBUTES = ("line:", "supply:")
 """The attributes the medicines module (E04) writes — `line:<generic>`, `supply:<generic>` —
@@ -118,13 +121,25 @@ def class_of(value: Any) -> str | None:
     return None
 
 
+_CODE_JOINS = re.compile(r"[_.\-]+|(?<=[a-z0-9])(?=[A-Z])")
+
+
+def as_words(text: str) -> str:
+    """A code read as words: `warfarin_level`, `warfarin-level`, `warfarin.level` and
+    `warfarinLevel` all become "warfarin level", so a whole-word match sees the drug. An
+    underscore is a word character to a regex, and a code is exactly where one hides."""
+    return _CODE_JOINS.sub(" ", text)
+
+
 def high_risk_class(name: str | None) -> str | None:
     """Which class a drug name falls in, or None. Matches whole words, so "Insulin Glargine
-    (Lantus)" is insulin and "warfarin 5 mg" is an anticoagulant."""
+    (Lantus)" is insulin and "warfarin 5 mg" is an anticoagulant — and a code is read as
+    words first, so "warfarin_level" is too."""
     if not name:
         return None
+    text = as_words(name)
     for danger, pattern in _NAMES:
-        if pattern.search(name):
+        if pattern.search(text):
             return danger
     return None
 
@@ -152,10 +167,12 @@ def names_high_risk(*values: Any) -> str | None:
 
 
 def is_a_dose(draft: FactDraft) -> bool:
-    """A medicine fact that says what to take: the review card's `dose`, or a medicine line
-    or supply of the medicines module, whose value carries the dose."""
-    return draft.subject in MEDICINE_SUBJECTS and (
-        draft.attribute in DOSE_ATTRIBUTES or draft.attribute.startswith(LINE_ATTRIBUTES)
+    """A fact that says what to take: any subject with a dose attribute (`DOSE_ATTRIBUTES`),
+    or a medicine line or supply of the medicines module, whose value carries the dose. The
+    subject is not consulted: whether the drug is high-risk is read from the subject and the
+    value together, after this."""
+    return draft.attribute in DOSE_ATTRIBUTES or (
+        draft.subject in MEDICINE_SUBJECTS and draft.attribute.startswith(LINE_ATTRIBUTES)
     )
 
 

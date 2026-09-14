@@ -31,9 +31,10 @@ from app.ingestion.transcribe import FixtureTranscriber
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
-from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET
+from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
 from tests.voice_notes import VOICE
@@ -103,6 +104,7 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
+        summariser=FixtureSummariser(VISITS),
     )
     return settings, providers
 

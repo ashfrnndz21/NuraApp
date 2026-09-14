@@ -16,11 +16,10 @@ Four tables of profile data, each tied to its profile the way the memory tables 
 database constraint (0010), so the words the cloud gained (pain, short of breath, low, worried,
 poor sleep, swollen ankles, upset stomach) need no change to an existing table.
 
-Follows E13/E14's revision (0014_emergency_symptoms), main's head when this story merged main
-back; the operator repoints `down_revision` if another story lands first.
+Follows E05's visit-loop revision (0012_visits), main's head when this story merged main back; the operator repoints `down_revision` if another story lands first.
 
 Revision ID: 0020_feelings
-Revises: 0014_emergency_symptoms
+Revises: 0012_visits
 Create Date: 2026-09-15
 """
 
@@ -30,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0020_feelings"
-down_revision = "0014_emergency_symptoms"
+down_revision = "0012_visits"
 branch_labels = None
 depends_on = None
 
