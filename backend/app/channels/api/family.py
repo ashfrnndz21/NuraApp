@@ -6,6 +6,9 @@
     GET  /profiles/{id}/helpers                 who holds a helper key and what she may do
     GET  /profiles/{id}/thread?cursor=          the thread, newest first, a page at a time
     POST /profiles/{id}/thread                  a message (text) or a card (card_kind)
+    POST /profiles/{id}/thread/photos           a photo with its words, and the sharer's yes to his story
+    GET  /profiles/{id}/thread/photos/{photo}/content   the photo itself, while it is shared
+    POST /profiles/{id}/thread/photos/{photo}/take-back the sharer takes it back
     GET  /profiles/{id}/thread/digest?since=    the digest for the caller, verified
     GET  /profiles/{id}/roster                  the open slots
     POST /profiles/{id}/roster                  put someone on duty
@@ -31,9 +34,11 @@ Every profile route takes the key context like every other. The yeses are minted
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
@@ -63,11 +68,20 @@ from app.channels.api.schemas import (
     ThreadCardIn,
     ThreadEntryOut,
     ThreadPageOut,
+    ThreadPhotoIn,
+    ThreadPhotoOut,
     ThreadPostIn,
     TrailDayOut,
 )
 from app.family.documents import add_document, documents
 from app.family.grants import grants, helper_list, role_presets
+from app.family.photos import (
+    NotAPhoto,
+    photo_content,
+    photos_on,
+    share_photo,
+    take_back_photo,
+)
 from app.family.privacy import lift_only_me, mark_only_me, marked
 from app.family.pushes import preview_push, pushes, schedule_push
 from app.family.roster import (
@@ -148,8 +162,10 @@ async def thread(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> ThreadPageOut:
     entries, next_cursor = await read_thread(session, context=context, cursor=cursor, limit=limit)
+    photos = await photos_on(session, context=context, message_ids=[entry.id for entry in entries])
     return ThreadPageOut(
-        entries=[ThreadEntryOut.of(entry) for entry in entries], next_cursor=next_cursor
+        entries=[ThreadEntryOut.of(entry, photos.get(entry.id)) for entry in entries],
+        next_cursor=next_cursor,
     )
 
 
@@ -160,6 +176,45 @@ async def post(body: ThreadPostIn, context: Context, session: Db) -> ThreadEntry
             await post_card(session, context=context, kind=body.card_kind, task_id=body.task_id)
         )
     return ThreadEntryOut.of(await post_message(session, context=context, text=body.text))
+
+
+@router.post("/profiles/{profile_id}/thread/photos", status_code=status.HTTP_201_CREATED)
+async def share(
+    body: ThreadPhotoIn, request: Request, context: Context, session: Db
+) -> ThreadEntryOut:
+    """A photo shared with the family, with the words it comes with (E12-02), and the sharer's
+    own yes or no to its being one of his story cards (E21-05). The family's, under the family
+    scope; never one of his papers."""
+    try:
+        data = base64.b64decode(body.data, validate=True)
+    except (binascii.Error, ValueError) as bad:
+        raise NotAPhoto("the photo is not base64") from bad
+    message, photo = await share_photo(
+        session,
+        context=context,
+        store=providers_of(request).object_store,
+        data=data,
+        content_type=body.content_type,
+        caption=body.caption,
+        on_his_feed=body.on_his_feed,
+    )
+    return ThreadEntryOut.of(message, photo)
+
+
+@router.get("/profiles/{profile_id}/thread/photos/{photo_id}/content")
+async def photo(photo_id: uuid.UUID, request: Request, context: Context, session: Db) -> Response:
+    """The photo itself, while its sharer has not taken it back, under the family scope."""
+    data, kind = await photo_content(
+        session, context=context, store=providers_of(request).object_store, photo_id=photo_id
+    )
+    return Response(content=data, media_type=kind, headers={"Cache-Control": "private, no-store"})
+
+
+@router.post("/profiles/{profile_id}/thread/photos/{photo_id}/take-back")
+async def take_back(photo_id: uuid.UUID, context: Context, session: Db) -> ThreadPhotoOut:
+    """The sharer takes the photo back: from now it is shown to nobody, in the thread or on
+    his feed. Only the one who shared it may (`NotTheirsToTakeBack`, 403)."""
+    return ThreadPhotoOut.of(await take_back_photo(session, context=context, photo_id=photo_id))
 
 
 @router.get("/profiles/{profile_id}/thread/digest")

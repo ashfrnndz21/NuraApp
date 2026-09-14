@@ -208,6 +208,7 @@ async def _morning_lines(
         searcher=providers.searcher,
         compressor=providers.compressor,
         registry=providers.drug_registry,
+        ranges=providers.reference_ranges,
     )
     state, items = await morning_supply(session, context=context, engine=engine)
     slots = await today(

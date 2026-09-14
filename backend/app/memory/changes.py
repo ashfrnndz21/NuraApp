@@ -449,6 +449,8 @@ async def _papers(
             held_here(context),
             # A question asked of Nura is kept as a message; it is the asker's, not a paper.
             Artifact.kind != ArtifactKind.MESSAGE,
+            # A photo the family shared is the family's, told with the thread, not a paper.
+            Artifact.written_scope != Scope.FAMILY,
             *newer(Artifact.stored_at),
         ),
     )

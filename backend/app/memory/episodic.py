@@ -223,6 +223,53 @@ async def store_artifact(
     )
 
 
+@audited(Action.WRITE, Scope.FAMILY, Artifact.__tablename__)
+async def store_family_photo(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    storage_key: str,
+    content_type: str,
+    sha256: str,
+    captured_at: datetime,
+    region: Region,
+    source_channel: SourceChannel = SourceChannel.APP,
+) -> Artifact:
+    """Write down a photo one of the family shares in the thread (E12-02, E21-05).
+
+    It is the family's, like the words of the thread: written under the family scope, so a
+    key that does not hold the family's part never reads it (row scope), and never one of his
+    papers — nothing is read off it and no fact rests on it. The same checks as any artefact:
+    the region is the profile's own, the agreement to hold the record stands (asked under the
+    family's part, as the family's messages are), and the digest is a digest."""
+    guard_region(held_in=region, asked_from=context.region)
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.FAMILY,
+    )
+    digest = sha256.strip().lower()
+    if not _DIGEST.match(digest):
+        raise NotADigest("sha256 is sixty-four hex characters")
+    if not storage_key.strip():
+        raise NoSuchArtifact("an artefact needs a storage key")
+    return await audited_write(
+        session,
+        Artifact,
+        context,
+        Scope.FAMILY,
+        kind=ArtifactKind.PHOTO,
+        storage_key=storage_key.strip(),
+        content_type=content_type,
+        sha256=digest,
+        captured_at=captured_at,
+        source_channel=source_channel,
+        region=region,
+        stored_at=utcnow(),
+    )
+
+
 CONSULT_HEARERS: frozenset[KeyRole] = frozenset({KeyRole.CHIEF, KeyRole.CAREGIVER})
 """Who hears a visit's recording besides the patient himself: the family he let in, his chief
 and his caregivers. It is what the room was told ("Only you and the family you let in can

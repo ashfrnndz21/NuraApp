@@ -42,8 +42,8 @@ from app.memory.models import (
 from app.memory.providers import Paper, ProviderHistory, ProviderSummary
 from app.memory.timeline import Anchor, EpisodeView, TimelineItem, TimelinePage
 from app.regions import Region
-from app.search.transcripts import Search
 from app.search.ask import Answer, Mode
+from app.search.transcripts import Search
 
 PHONE = r"^\+[1-9][0-9]{7,14}$"
 

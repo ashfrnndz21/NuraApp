@@ -43,6 +43,7 @@ from app.delivery.feed.sources import (
 from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.reasoning.ranges import ReferenceRanges
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.state.models import Dimension
@@ -65,12 +66,15 @@ class NoTerms(Refusal):
 @dataclass(frozen=True, slots=True)
 class Engine:
     """The ports the feed composes from, as one deployment has them: the searcher and the
-    compressor (fixtures here; real adapters later), and the licensed drug registry
-    (`app.drugs`) the medicines module reads a line's plain name and count through."""
+    compressor (fixtures here; real adapters later), the licensed drug registry
+    (`app.drugs`) the medicines module reads a line's plain name and count through, and the
+    reference ranges a lab result is placed against for a story card (E09-01, E21-05) — None
+    where a deployment has not named them, and then no lab story is told."""
 
     searcher: Searcher
     compressor: Compressor
     registry: DrugRegistry
+    ranges: ReferenceRanges | None = None
 
 
 @audited(Action.WRITE, Scope.RECORDS, JOB_TARGET)

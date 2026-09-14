@@ -38,6 +38,7 @@ from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
+from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
 from app.family.roster import (
@@ -110,6 +111,7 @@ from app.regions import OutOfRegion
 from app.routines.service import NotTheirsToSet
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.search.ask import NotAQuestion
+from app.search.transcripts import NotASearch
 from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -216,6 +218,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (ConsultTooLong, 413),
     # A visit's recording is heard by him and the family he let in, and nobody else.
     (OnlyTheFamilyHears, 403),
+    (NoSuchPhoto, 404),
+    (NotTheirsToTakeBack, 403),
     (NoSuchRecording, 404),
     (TranscriptTooLarge, 413),
     (VoiceNoteTooLong, 413),
@@ -275,6 +279,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NoteNamesHealth,
     NotACursor,
     NotAQuestion,
+    NotASearch,
+    # A photo shared with the family that is not an image (E12-02, E21-05).
+    NotAPhoto,
     # The visit day's (E05-03, E02-05): bytes that are not a recorder's audio, a clip outside
     # its recording, a driver who holds nothing here or a visit that has been.
     NotAConsultRecording,

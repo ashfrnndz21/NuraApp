@@ -56,6 +56,7 @@ from app.channels.api.schemas import (
     TaskOut,
     TranscriptIn,
 )
+from app.channels.api.timeline_schemas import TranscriptSearchIn, TranscriptSearchOut
 from app.db import utcnow
 from app.ingestion.consult import (
     CONSULT,
@@ -66,10 +67,8 @@ from app.ingestion.consult import (
     record_consult,
     recordings_for,
 )
-from app.channels.api.timeline_schemas import TranscriptSearchIn, TranscriptSearchOut
 from app.keys.scopes import Scope
 from app.memory.spine import upcoming_appointments
-from app.search.transcripts import search_transcripts
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.guard import can_change_visits
 from app.reasoning.visits.logistics import assign_driver, logistics_for
@@ -89,6 +88,7 @@ from app.reasoning.visits.summary import (
     store_transcript,
     summary_items,
 )
+from app.search.transcripts import search_transcripts
 
 router = APIRouter(prefix="/profiles", tags=["visits"])
 

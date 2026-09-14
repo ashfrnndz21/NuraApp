@@ -53,6 +53,7 @@ def _engine(request: Request) -> Engine:
         searcher=providers.searcher,
         compressor=providers.compressor,
         registry=providers.drug_registry,
+        ranges=providers.reference_ranges,
     )
 
 

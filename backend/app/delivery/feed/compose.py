@@ -61,13 +61,14 @@ from app.delivery.strings import (
     test_name,
 )
 from app.errors import Refusal
+from app.family.photos import photos_for_his_feed
 from app.family.roster import who_is_on_duty
 from app.identity.models import Profile
 from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope, scope_for_subject
-from app.medicines.service import LineView, active_lines
+from app.medicines.service import LineView, active_lines, proud_days
 from app.memory.episodic import record_event
 from app.memory.models import (
     Appointment,
@@ -82,6 +83,7 @@ from app.memory.models import (
 from app.memory.semantic import assert_fact, current_facts
 from app.notes.models import Note
 from app.notes.service import list_notes
+from app.reasoning.trends import trend
 from app.reasoning.visits.brief import brief_for, latest_brief
 from app.reasoning.visits.guard import (
     NotTheirsToChangeVisits,
@@ -314,7 +316,8 @@ async def refresh(
     await _logistics(
         make, session, context=context, engine=engine, state=state, day=day, house=house
     )
-    await _memos(make, session, context=context, day=day, house=house)
+    memo_visits = await _visit_memos(session, context=context, house=house)
+    on_memo_card = await _memos(make, day=day, house=house, visits=memo_visits)
     await make(
         type=CardType.GATE,
         lines=render("gate", house.language, body=("gate",)),
@@ -356,7 +359,18 @@ async def refresh(
         dedupe_key=f"duty:{day.key}",
         expires_at=day.ends_at,
     )
-    await _story(make, session, context=context, day=day, house=house, readings=readings)
+    await _story(
+        make,
+        session,
+        context=context,
+        engine=engine,
+        day=day,
+        house=house,
+        readings=readings,
+        keys=keys,
+        visits=memo_visits,
+        on_memo_card=on_memo_card,
+    )
     made.extend(
         await _learning(
             session,
@@ -899,19 +913,32 @@ async def _logistics(
     )
 
 
-async def _memos(
-    make: Any, session: AsyncSession, *, context: KeyContext, day: Day, house: Household
-) -> None:
-    """What was agreed at the last visit, in his words (E05-06).
+STORY_VISITS = 2
+"""How many visits before the one on the memo card tell again what the doctor said, a week."""
+STORY_PHOTOS = 3
+"""How many of the photos the family shared with a yes to his story become cards, newest."""
 
-    The memos heard at the most recent visit that has any — the current ones, after
-    consolidation, so two that say the same thing are one — on one card, until the
-    appointment they are filed against has passed (two weeks, when nothing was booked after
-    it). The card ends on the summary's boundary line: these are the doctor's words as Nura
-    wrote them down (E16-01).
-    """
+
+@dataclass(frozen=True, slots=True)
+class VisitMemos:
+    """What was agreed at one visit: the visit, the doctor, its current memos in his language,
+    and until when the memo card carries them."""
+
+    visit: Appointment
+    doctor: str | None
+    memos: tuple[Memo, ...]
+    until: datetime
+
+
+async def _visit_memos(
+    session: AsyncSession, *, context: KeyContext, house: Household
+) -> list[VisitMemos]:
+    """The memos heard at each visit that has any (E05-06) — the current ones, after
+    consolidation, so two that say the same thing are one — newest visit first. A memo from a
+    visit is written only on his yes to its card (`confirm_summary`), so every one here is from
+    a card he confirmed. The memo card shows the newest; the story tells the ones before."""
     if not context.allows(Scope.VISITS):
-        return
+        return []
     memos = [
         memo
         for memo in (
@@ -924,7 +951,7 @@ async def _memos(
         and memo.language == house.language
     ]
     if not memos:
-        return
+        return []
     items = await audited_read(
         session,
         SummaryItem,
@@ -960,38 +987,63 @@ async def _memos(
         if visit_id is not None and visit_id in booked:
             by_visit.setdefault(visit_id, []).append(memo)
     if not by_visit:
-        return
-    visit = max((booked[one] for one in by_visit), key=lambda one: as_utc(one.scheduled_at))
-    kept = by_visit[visit.id]
-    until = max(
-        [
-            as_utc(visit.scheduled_at) + MEMO_CARD_DAYS,
-            *(
-                as_utc(booked[memo.appointment_id].scheduled_at)
-                for memo in kept
-                if memo.appointment_id is not None and memo.appointment_id in booked
-            ),
-        ]
-    )
-    if day.now > until:
-        return
-    providers = await audited_read(
-        session, Provider, context, Scope.VISITS, where=(Provider.id == visit.provider_id,)
-    )
-    doctor = providers[0].name if providers else None
+        return []
+    doctors = {
+        provider.id: provider.name
+        for provider in await audited_read(
+            session,
+            Provider,
+            context,
+            Scope.VISITS,
+            where=(Provider.id.in_(sorted({booked[one].provider_id for one in by_visit})),),
+        )
+    }
+    found: list[VisitMemos] = []
+    for visit_id, kept in by_visit.items():
+        visit = booked[visit_id]
+        until = max(
+            [
+                as_utc(visit.scheduled_at) + MEMO_CARD_DAYS,
+                *(
+                    as_utc(booked[memo.appointment_id].scheduled_at)
+                    for memo in kept
+                    if memo.appointment_id is not None and memo.appointment_id in booked
+                ),
+            ]
+        )
+        found.append(VisitMemos(visit, doctors.get(visit.provider_id), tuple(kept), until))
+    return sorted(found, key=lambda one: as_utc(one.visit.scheduled_at), reverse=True)
+
+
+async def _memos(
+    make: Any, *, day: Day, house: Household, visits: Sequence[VisitMemos]
+) -> uuid.UUID | None:
+    """What was agreed at the last visit, in his words (E05-06).
+
+    The memos of the most recent visit that has any, on one card, until the appointment they
+    are filed against has passed (two weeks, when nothing was booked after it). The card ends
+    on the summary's boundary line: these are the doctor's words as Nura wrote them down
+    (E16-01). Returns the visit the card is about while it is on his feed, so the story does
+    not tell the same visit twice.
+    """
+    if not visits:
+        return None
+    latest = visits[0]
+    if day.now > latest.until:
+        return None
     lines = render(
         "memo",
         house.language,
         body=("memo",),
-        doctor=doctor or YOUR_DOCTOR[house.language],
-        day=day.plain(visit.scheduled_at, house.language),
+        doctor=latest.doctor or YOUR_DOCTOR[house.language],
+        day=day.plain(latest.visit.scheduled_at, house.language),
     )
     lines = _ending_on(
         lines,
-        [*lines.body, *(memo.text for memo in kept)],
-        boundary_line(Surface.SUMMARY, house.language, doctor=doctor),
+        [*lines.body, *(memo.text for memo in latest.memos)],
+        boundary_line(Surface.SUMMARY, house.language, doctor=latest.doctor),
     )
-    ids = tuple(str(memo.id) for memo in kept)
+    ids = tuple(str(memo.id) for memo in latest.memos)
     digest = hashlib.sha256(" ".join(sorted(ids)).encode()).hexdigest()[:12]
     await make(
         type=CardType.MEMO,
@@ -1000,16 +1052,17 @@ async def _memos(
         why=Why(
             kind="memo",
             plain=lines.why,
-            visit_id=str(visit.id),
+            visit_id=str(latest.visit.id),
             memo_id=ids[0],
             memo_ids=ids,
         ),
         scope=Scope.VISITS,
         deliver_to=DeliverTo.PATIENT,
         day=day.key,
-        dedupe_key=f"memo:{visit.id}:{digest}:{day.key}",
+        dedupe_key=f"memo:{latest.visit.id}:{digest}:{day.key}",
         expires_at=day.ends_at,
     )
+    return latest.visit.id
 
 
 async def _story(
@@ -1017,11 +1070,20 @@ async def _story(
     session: AsyncSession,
     *,
     context: KeyContext,
+    engine: Engine,
     day: Day,
     house: Household,
     readings: Sequence[Fact],
+    keys: set[str],
+    visits: Sequence[VisitMemos],
+    on_memo_card: uuid.UUID | None,
 ) -> None:
-    """Recall cards from his own record, a week at a time."""
+    """Story cards from his own record, a week at a time (E21-05): past numbers from his
+    book and how the last one moved, a lab result that moved against its range, what the
+    doctor said at a visit whose card he confirmed, his papers, his own notes, the photos
+    the family shared with a yes to his story, and the number that only goes up. Each is
+    made again the next week from what memory holds then (`STORY_LIFETIME`, the ISO week in
+    every dedupe key); the number that only goes up is made each day, so it is that day's."""
     until = day.now + STORY_LIFETIME
     past = sorted(
         (fact for fact in readings if _numbers(fact) and not day.same_day(fact.valid_from)),
@@ -1050,27 +1112,19 @@ async def _story(
             expires_at=until,
             number=f"{numbers[0]}/{numbers[1]}",
         )
-    if readings:
-        lines = render(
-            "story_count",
-            house.language,
-            body=(counted("story_count", len(readings)),),
-            count=len(readings),
-        )
-        await make(
-            type=CardType.STORY,
-            lines=lines,
-            why=Why(
-                kind="story", plain=lines.why, fact_ids=tuple(sorted(str(f.id) for f in readings))
-            ),
-            scope=Scope.READINGS,
-            deliver_to=DeliverTo.PATIENT,
-            day=day.key,
-            dedupe_key=f"story:count:{day.week}",
-            expires_at=until,
-            number=str(len(readings)),
-            direction=Direction.UP,
-        )
+    await _story_change(make, day=day, house=house, past=past, until=until)
+    await _story_trends(
+        make, session, context=context, engine=engine, day=day, house=house, keys=keys, until=until
+    )
+    await _story_doctor(
+        make,
+        context=context,
+        day=day,
+        house=house,
+        visits=visits,
+        on_memo_card=on_memo_card,
+        until=until,
+    )
     if context.allows(Scope.RECORDS):
         # A story about a paper is the record's card (`scope=RECORDS`), so it names only what
         # a key to the record reads: a paper kept under the record's scope — the family's
@@ -1145,6 +1199,248 @@ async def _story(
                 dedupe_key=f"story:note:{note.id}:{day.week}",
                 expires_at=until,
             )
+    await _story_photos(make, session, context=context, day=day, house=house, until=until)
+    await _story_proud(make, session, context=context, day=day, house=house)
+
+
+async def _story_change(
+    make: Any, *, day: Day, house: Household, past: Sequence[Fact], until: datetime
+) -> None:
+    """How his blood pressure moved (E21-05): the last number from his book, the one before
+    it, and which way the top number went — arithmetic, a direction and never a judgement.
+    Nothing is said about a range: his book prints none, and a number is placed against a
+    range only beside the lab's own (`app.delivery.trend_strings`)."""
+    if len(past) < 2:
+        return
+    latest, before = past[0], past[1]
+    now, was = _numbers(latest), _numbers(before)
+    assert now is not None and was is not None
+    direction = _direction(now, was)
+    assert direction is not None
+    moved = {Direction.UP: "story_up", Direction.DOWN: "story_down", Direction.SAME: "story_same"}
+    earlier = render(
+        "story_reading",
+        house.language,
+        body=("story_change_before", moved[direction]),
+        day=day.plain(before.valid_from, house.language),
+        top_number=was[0],
+        bottom_number=was[1],
+    ).body
+    lines = render(
+        "story_change",
+        house.language,
+        body=("story_change",),
+        why="story_reading",
+        extra=earlier,
+        day=day.plain(latest.valid_from, house.language),
+        top_number=now[0],
+        bottom_number=now[1],
+    )
+    await make(
+        type=CardType.STORY,
+        lines=lines,
+        why=Why(kind="story", plain=lines.why, fact_ids=(str(latest.id), str(before.id))),
+        scope=Scope.READINGS,
+        deliver_to=DeliverTo.PATIENT,
+        day=day.key,
+        dedupe_key=f"story:change:{latest.id}:{day.week}",
+        expires_at=until,
+        number=f"{now[0]}/{now[1]}",
+        direction=direction,
+    )
+
+
+async def _story_trends(
+    make: Any,
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    engine: Engine,
+    day: Day,
+    house: Household,
+    keys: set[str],
+    until: datetime,
+) -> None:
+    """A lab result that moved, against its range (E09-01, E21-05): for each result he has
+    confirmed twice or more, the trend's own lines — the latest number and its day, the range,
+    where it sits only against the lab's own range, how it moved — ending on the trend's
+    boundary line. Made once a week per result: a trend is rendered (and kept) only when this
+    week's card for it is not there yet."""
+    ranges = engine.ranges
+    if ranges is None or not await can_compose(context):
+        return
+    confirmed = [
+        fact
+        for fact in await current_facts(session, context=context)
+        if fact.confidence_state is ConfidenceState.CONFIRMED_BY_PERSON
+    ]
+    for analyte in ranges.analytes():
+        key = f"story:trend:{analyte.id}:{day.week}"
+        if key in keys:
+            continue
+        results = [
+            fact
+            for fact in confirmed
+            if (fact.subject, fact.attribute) == (analyte.subject, analyte.attribute)
+        ]
+        if len(results) < 2:
+            continue
+        try:
+            async with nested_unit_of_work(session):
+                told = await trend(
+                    session,
+                    context=context,
+                    ranges=ranges,
+                    analyte=analyte.id,
+                    language=house.language,
+                )
+        except Refusal:
+            continue
+        if told.direction_since is None:
+            continue
+        head = render("story_trend", house.language)
+        lines = Lines(
+            language=told.language,
+            headline=head.headline,
+            body=tuple(told.lines),
+            voice=tuple(told.lines),
+            why=head.why,
+            boundary=told.boundary,
+        )
+        await make(
+            type=CardType.STORY,
+            lines=lines,
+            surface=Surface.TREND,
+            why=Why(
+                kind="story",
+                plain=lines.why,
+                fact_ids=tuple(str(point.fact_id) for point in told.points),
+            ),
+            scope=scope_for_subject(analyte.subject),
+            deliver_to=DeliverTo.PATIENT,
+            day=day.key,
+            dedupe_key=key,
+            expires_at=until,
+        )
+
+
+async def _story_doctor(
+    make: Any,
+    *,
+    context: KeyContext,
+    day: Day,
+    house: Household,
+    visits: Sequence[VisitMemos],
+    on_memo_card: uuid.UUID | None,
+    until: datetime,
+) -> None:
+    """What the doctor said (E21-05): the memos of a visit whose card he confirmed, told
+    again as his story — each visit but the one the memo card is showing, so no visit is told
+    twice at once. The words are the memos', ending on the summary's boundary line, as on the
+    memo card: they are the doctor's words as Nura wrote them down (E16-01)."""
+    if not context.allows(Scope.VISITS):
+        return
+    for one in [each for each in visits if each.visit.id != on_memo_card][:STORY_VISITS]:
+        lines = render(
+            "memo",
+            house.language,
+            body=("story_doctor",),
+            doctor=one.doctor or YOUR_DOCTOR[house.language],
+            day=day.plain(one.visit.scheduled_at, house.language),
+        )
+        lines = _ending_on(
+            lines,
+            [*lines.body, *(memo.text for memo in one.memos)],
+            boundary_line(Surface.SUMMARY, house.language, doctor=one.doctor),
+        )
+        ids = tuple(str(memo.id) for memo in one.memos)
+        await make(
+            type=CardType.STORY,
+            lines=lines,
+            surface=Surface.SUMMARY,
+            why=Why(
+                kind="story",
+                plain=lines.why,
+                visit_id=str(one.visit.id),
+                memo_id=ids[0],
+                memo_ids=ids,
+            ),
+            scope=Scope.VISITS,
+            deliver_to=DeliverTo.PATIENT,
+            day=day.key,
+            dedupe_key=f"story:doctor:{one.visit.id}:{day.week}",
+            expires_at=until,
+        )
+
+
+async def _story_photos(
+    make: Any,
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    day: Day,
+    house: Household,
+    until: datetime,
+) -> None:
+    """The photos the family shared with a yes to his story (E21-05), the newest few. The
+    photo is the family's, so the card is the family scope's and a key without it never sees
+    one; the card names the photo, which is read through the thread; a photo its sharer takes
+    back is not shown again (`rank`), and none is made of it."""
+    if not context.allows(Scope.FAMILY):
+        return
+    shared = await photos_for_his_feed(session, context=context)
+    for photo in reversed(shared[-STORY_PHOTOS:]):
+        who = await person_display_name(session, context, photo.author_person_id)
+        if not who:
+            continue
+        lines = render(
+            "story_photo",
+            house.language,
+            body=("story_photo",),
+            who=who,
+            day=day.plain(photo.posted_at, house.language),
+        )
+        await make(
+            type=CardType.STORY,
+            lines=lines,
+            why=Why(
+                kind="story",
+                plain=lines.why,
+                photo_id=str(photo.id),
+                artifact_id=str(photo.artifact_id),
+            ),
+            scope=Scope.FAMILY,
+            deliver_to=DeliverTo.PATIENT,
+            day=day.key,
+            dedupe_key=f"story:photo:{photo.id}:{day.week}",
+            expires_at=until,
+        )
+
+
+async def _story_proud(
+    make: Any, session: AsyncSession, *, context: KeyContext, day: Day, house: Household
+) -> None:
+    """The number that only goes up (E21-05): the days he has taken his tablets — the same
+    count the Me page shows (`GET /profiles/{id}/me-summary`, `proud_days`), never a count
+    of things written down. Made each day, so the card says that day's number."""
+    if not context.allows(Scope.MEDICINES):
+        return
+    days = (await proud_days(session, context=context)).days
+    if not days:
+        return
+    lines = render("story_count", house.language, body=(counted("story_count", days),), count=days)
+    await make(
+        type=CardType.STORY,
+        lines=lines,
+        why=Why(kind="story", plain=lines.why),
+        scope=Scope.MEDICINES,
+        deliver_to=DeliverTo.PATIENT,
+        day=day.key,
+        dedupe_key=f"story:proud:{day.key}",
+        expires_at=day.ends_at,
+        number=str(days),
+        direction=Direction.UP,
+    )
 
 
 def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[str, str, list[str]]]:
