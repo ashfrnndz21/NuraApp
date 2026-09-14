@@ -19,7 +19,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 11 | Onboarding on your phone (web) | Run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2–W3 (ADR 0001) | planned |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
-| 14 | Emergency card and not feeling well | Written by its story (E13/E14) | E13, E14 | planned |
+| 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice (his own note, ADR 0003) and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
 | 15 | Biography | Written by its story | — | planned |
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Trends, routine and calendar | Written by its story | — | planned |
@@ -30,7 +30,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13, 18)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13, 14, 18)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -697,6 +697,84 @@ checkpoint 13 passed: every step did what docs/checkpoints.md says
 
 1. **Lift the mark.** As Pa, `POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "notes", "only_me": false}`, then `POST /profiles/{profile_id}/privacy/notes/lift` with that `confirmation_id`. Then, as Mei, `GET /profiles/{profile_id}/notes` works again — her key was never changed, only what it opens — and Pa's `GET /profiles/{profile_id}/trail?language=en` shows both the mark and the lift as "You wrote in what only you can see on …".
 2. **Read the trail in another language.** `GET /profiles/{profile_id}/trail?language=zh` as Pa: the same days and lines, in Chinese, with the day as `9月14日星期一`; nothing on any line is a class name or an id, whichever language.
+
+## How to run checkpoint 14
+
+Two terminals, as before. Checkpoint 14 is a module of its own (`backend/scripts/checkpoints/cp14.py`); `make checkpoint N=14` dispatches to it.
+
+```sh
+make reset-db           # optional: a clean local database (stop `make dev` first)
+make dev                # terminal 1
+make checkpoint N=14    # terminal 2, about three seconds
+```
+
+It registers Pa, Mei (chief), Lin (a neighbour with an emergency-only key) and Kit (no key) on fresh numbers, adds the water pill from a label photo and a blood pressure, then walks the three stories: the emergency card as JSON and as the printable page (open the URL it prints in a browser with Pa's token, or print it); the not-feeling-well button with "tired today" typed and "chest pain" said by voice (a placeholder voice note the fixture transcriber knows by digest, `backend/tests/fixtures/voice/`; his own note, kept like typed text, ADR 0003); the symptom log by voice; and Kit refused. Every what-to-do card opens with the boundary's reassurance and ends with its closing lines (E16, `app/safety/boundary.py`). The voice notes and the typed words are kept as artefacts in `backend/var/objects/SG/voice/` and `words/`; no row holds his words.
+
+What you will see (the phone numbers, ids and dates change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591116946) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Pa opened his own profile (wording 1, in the app)
+✓ Mei (+6592221831) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Lin (+6594448471) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Kit (+6593339060) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Pa let Mei, his daughter, in to everything and cut her the chief key
+✓ Pa let Lin, a neighbour, in to the emergency card only and cut her an emergency key (scopes: emergency, profile)
+✓ Pa added the water pill (frusemide 40 mg, 1 tablet every morning) from a label photo, with his OK, and tapped Taken
+✓ Pa typed in a blood pressure (138 over 84): a reading event and a fact resting on it
+✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, the last blood pressure's date, 995 for Singapore, rendered from State 96032bf8… and written down as render ed18fadb…; the lines, every one verified:
+    This is Pa's emergency card.
+    Show this card to the doctor or the ambulance crew.
+    Pa speaks English.
+    Nura has no note of a condition for Pa.
+    Pa takes the water pill (frusemide).
+    Pa takes 1 tablet every morning.
+    Pa has no allergy that Nura knows of.
+    Mei looks after Pa.
+    Call Mei first.
+    The ambulance number is 995.
+    Pa's blood pressure was last written down on Tuesday 15 September.
+    This card is not a doctor's advice.
+✓ Pa opened the printable page (GET /profiles/{id}/emergency-card.html): one self-contained page — no script, no stylesheet, no image fetched — paper surface, Ink #2B2733 on white, 20px body, the strength and the phone number as data beside the sentences; its first lines:
+    http://127.0.0.1:8000/profiles/4d929951-3433-4bca-84cb-7dc67525d77b/emergency-card.html
+    This is Pa's emergency card.
+    Show this card to the doctor or the ambulance crew.
+    Pa speaks English.
+    Nura has no note of a condition for Pa.
+    Pa takes the water pill (frusemide).
+    Pa takes 1 tablet every morning.
+✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
+✓ Pa pressed the button and typed "tired today" (POST /profiles/{id}/not-feeling-well): his words kept as an artefact, a SYMPTOM event and a symptom fact resting on it, no red flag, the water pill already taken — so the card says rest, Mei is told (notice to 2 people), and a check-in is written for 2026-09-14T18:10:36.748662Z:
+    Mei knows now.
+    Sit down and rest now.
+    Mei will call you today.
+    Nura will ask you again in 2 hours.
+    Nura wrote down how you feel.
+    This is not a doctor's advice.
+    Ask your doctor.
+✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (85280904…), the posture is ACT, Mei and Lin were told (notices to 2 people, "Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, and one closing line, never "Ask your doctor." after 995:
+    Mei knows now.
+    Call the ambulance now on 995.
+    After that, call Mei.
+    Nura does not decide what is wrong.
+✓ State's posture is act (GET /profiles/{id}/state): the wash on his screen shifts to coral
+✓ Pa logged a symptom by voice (POST /profiles/{id}/symptoms): "dizzy, quite a lot, since this morning" heard as dizzy, severity 2 (quite bad), since this morning; a SYMPTOM event and a fact with a seven-day window, his words kept in the voice note
+✓ Mei read the symptom log (GET /profiles/{id}/symptoms) in plain words, with the day's name:
+    Pa felt tired on Tuesday 15 September.
+    It started this morning.
+    Pa wrote this down.
+    Pa felt chest pain on Tuesday 15 September.
+    Pa said this out loud.
+    Pa felt dizzy on Tuesday 15 September.
+    It was quite bad.
+    It started this morning.
+    Pa said this out loud.
+✓ Kit, with no key, was refused the card and the button: NoKey (403), in words that name nobody
+checkpoint 14 passed: every step did what docs/checkpoints.md says
+```
+
+What to look at by hand: `GET /profiles/{id}/emergency-card.html` in a browser (Pa's or Lin's token as a bearer header, or from the web client once W1 lands) — one page, paper on mist, 20px, no request leaves for anything; `GET /profiles/{id}/state` after "chest pain" — `posture: act`, the situational dimension carrying `feeling.control = act` for 24 hours; `GET /profiles/{id}/audit` as Pa — the SYMPTOM `event` write, then the `red_flag` write, before the `notice`, `safety_escalation`, `fact` and `what_to_do_card` writes of that press, and Lin's `emergency_card` reads under scope `emergency`.
 
 ## How to run checkpoint 16
 
