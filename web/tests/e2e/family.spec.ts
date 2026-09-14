@@ -154,6 +154,8 @@ test.describe("the caregiver density at 360 by 640", () => {
     await signIn(page, family.mei, false);
     await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
     await page.getByTestId("tab-family").click();
+    // The circle is read after the page opens: check the layout once its lines are in.
+    await expect(page.getByTestId("grant-lines")).toHaveCount(2);
     expect(await caregiverScreenOk(page)).toEqual([]);
     await page.getByTestId("open-keys").click();
     await expect(page.getByTestId("grant")).toHaveCount(2);
