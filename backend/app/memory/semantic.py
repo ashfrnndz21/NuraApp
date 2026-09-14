@@ -19,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
@@ -108,6 +110,11 @@ async def assert_fact(
     starts = valid_from or moment
     _check_window(starts, valid_to)
     sure = _check_confidence(confidence)
+    # Keeping a fact rests on the consent to hold the record (E00-02).
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        now=now,
+    )
     await _check_provenance(
         session, context=context, artifact_id=artifact_id, event_id=event_id, now=now
     )

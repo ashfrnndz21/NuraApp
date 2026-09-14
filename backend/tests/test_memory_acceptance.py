@@ -29,6 +29,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import NoProvenance, NoSuchProvenance, NotAConfidence, assert_fact
 from app.regions import Region
+from tests.support import OPENING_CONSENT
 
 MORNING = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SHA = "a" * 64
@@ -38,7 +39,7 @@ async def _pa(session: AsyncSession) -> KeyContext:
     pa = await register_person(
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )

@@ -5,9 +5,9 @@ and not the other. This loads every revision in the directory, runs them in depe
 order against an empty database, and checks the tables they build against the tables the
 models declare.
 
-Two stories built side by side each branch from the same revision, so the directory can hold
-more than one head at a time. That is allowed here; the operator joins the heads with a merge
-revision. What is not allowed is a revision that names a parent the directory does not hold.
+Two stories built side by side each branch from the same revision; a merge revision joins
+them, so the directory always has exactly one head and `alembic upgrade head` knows where
+that is. What is not allowed is a revision that names a parent the directory does not hold.
 """
 
 from __future__ import annotations
@@ -91,6 +91,13 @@ def test_every_revision_links_to_one_the_directory_holds(
     for module in revisions.values():
         for parent in _parents(module):
             assert parent in revisions, f"{module.revision} revises {parent}, which is not here"
+
+
+def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
+    """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
+    parents = {parent for module in revisions.values() for parent in _parents(module)}
+    heads = sorted(rev for rev in revisions if rev not in parents)
+    assert heads == ["0004_merge"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(

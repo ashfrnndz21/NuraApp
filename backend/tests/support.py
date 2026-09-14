@@ -18,7 +18,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
-from app.consent.service import grant_consent
+from app.consent.service import RecordConsent, grant_consent
+from app.consent.texts import current_version
 from app.db import Base, ProfileScoped, enum_column
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -51,6 +52,14 @@ async def read_notes(
     now: datetime | None = None,
 ) -> Sequence[Note]:
     return await audited_read(session, Note, context, scope, where=(Note.scope == scope,), now=now)
+
+
+OPENING_CONSENT = RecordConsent(
+    text_version=current_version(ConsentPurpose.HOLD_HEALTH_RECORD),
+    language="en",
+    captured_via=ConsentChannel.APP,
+)
+"""What every test's Pa agrees to when he opens his record: today's English words, in the app."""
 
 
 async def agree_to_family_sharing(

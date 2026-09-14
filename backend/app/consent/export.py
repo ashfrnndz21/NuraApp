@@ -7,9 +7,13 @@ names people and the profile by display name, never by id; the only identifiers 
 the consent rows' own ids, so a line in it can be pointed at if it is ever disputed.
 
 Rendering sits behind `ConsentRenderer`. `PlainTextRenderer` is the one implementation
-here, producing Markdown a person can read as it is. A PDF renderer is a later adapter
-with the same one method; nothing above it changes when it arrives. Whatever renders it
-receives the whole document, names included.
+here: Markdown a person can read as it is, in plain words, because the patient is who
+holds this page. A PDF renderer is a later adapter with the same one method; nothing above
+it changes when it arrives. Whatever renders it receives the whole document, names included.
+
+The `status` codes and raw enum values in the document are for the caregiver's app and the
+PDF adapter to put words to; the plain words for the patient are the `*_words` fields and
+the rendered page.
 """
 
 from __future__ import annotations
@@ -36,26 +40,39 @@ from app.regions import Region
 EXPORT_TARGET = "consent_record"
 """What the trail calls the document that leaves."""
 
+# @patient
 PURPOSE_TITLES: Mapping[ConsentPurpose, str] = {
     ConsentPurpose.HOLD_HEALTH_RECORD: "Keeping your papers",
     ConsentPurpose.SHARE_WITH_FAMILY: "Sharing with your family",
     ConsentPurpose.RECORDING: "Recording your visits",
-    ConsentPurpose.WHATSAPP: "WhatsApp",
+    ConsentPurpose.WHATSAPP: "Sending your Today page on WhatsApp",
 }
+# @patient
 CHANNEL_WORDS: Mapping[ConsentChannel, str] = {
     ConsentChannel.APP: "in the app",
     ConsentChannel.WHATSAPP: "on WhatsApp",
     ConsentChannel.PAPER: "on paper",
-    ConsentChannel.VERBAL_WITNESSED: "out loud, with a witness",
-}
-BASIS_WORDS: Mapping[ConsentBasis, str] = {
-    ConsentBasis.OWNER: "on their own behalf",
-    ConsentBasis.LPA: "with a lasting power of attorney",
-    ConsentBasis.MEDICAL_LETTER: "with a doctor's letter",
-    ConsentBasis.VERBAL_RECORDED: "on a recorded spoken agreement",
+    ConsentChannel.VERBAL_WITNESSED: "out loud",
 }
 REGION_NAMES: Mapping[Region, str] = {Region.SG: "Singapore", Region.MY: "Malaysia"}
 LANGUAGE_NAMES: Mapping[str, str] = {"en": "English", "zh": "Chinese", "ms": "Malay", "ta": "Tamil"}
+
+
+# @patient
+def basis_words(basis: ConsentBasis, giver: str, patient: str) -> str | None:
+    """The line that says why `giver` could agree for `patient`. None when he agreed himself."""
+    match basis:
+        case ConsentBasis.OWNER:
+            return None
+        case ConsentBasis.LPA:
+            return (
+                f"{giver} holds the paper that says {giver} may decide for {patient}. "
+                "Lawyers call it a lasting power of attorney."
+            )
+        case ConsentBasis.MEDICAL_LETTER:
+            return f"A doctor's letter says {giver} may decide for {patient}."
+        case ConsentBasis.VERBAL_RECORDED:
+            return f"{patient} said yes out loud, and Nura kept the recording."
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,13 +97,14 @@ class ConsentRecord:
 
 
 def _stamp(moment: datetime) -> str:
+    """The exact instant, for the structured half. The page says the day and the date."""
     return as_utc(moment).isoformat()
 
 
 def _plain(moment: datetime) -> str:
-    """The day and the date, as `docs/plain-words.md` asks; the clock time kept for the record."""
+    """The day and the date, as `docs/plain-words.md` asks: "Monday 14 September 2026"."""
     utc = as_utc(moment)
-    return f"{utc:%A} {utc.day} {utc:%B %Y} at {utc:%H:%M} UTC"
+    return f"{utc:%A} {utc.day} {utc:%B %Y}"
 
 
 def _status(consent: Consent, now: datetime) -> str:
@@ -102,44 +120,53 @@ class PlainTextRenderer:
 
     media_type = "text/markdown"
 
+    # @patient
     def render(self, document: dict[str, Any]) -> bytes:
-        profile = document["profile"]
+        patient = document["profile"]["name"]
         lines = [
-            "# Consent record",
+            "# What you agreed to",
             "",
-            f"This record is for {profile['name']}. It is kept in {profile['region_name']}.",
+            f"This page shows what {patient} agreed to.",
+            f"{patient}'s papers are kept in {document['profile']['region_name']}.",
             (
-                f"Nura prepared it on {document['prepared_at_plain']} "
-                f"for {document['prepared_for']}."
+                f"Nura made this page for {document['prepared_for']} "
+                f"on {document['prepared_at_plain']}."
             ),
             "",
         ]
-        by_purpose: dict[str, list[dict[str, Any]]] = {}
+        by_title: dict[str, list[dict[str, Any]]] = {}
         for entry in document["consents"]:
-            by_purpose.setdefault(entry["title"], []).append(entry)
-        if not by_purpose:
-            lines.append("Nothing has been agreed to on this record yet.")
-        for title, entries in by_purpose.items():
+            by_title.setdefault(entry["title"], []).append(entry)
+        if not by_title:
+            lines.append(f"{patient} has not agreed to anything yet.")
+        for title, entries in by_title.items():
             lines.append(f"## {title}")
             lines.append("")
             for entry in entries:
+                giver = entry["given_by"]
+                for_whom = "" if giver == patient else f" for {patient}"
                 lines.append(
-                    f"- {entry['given_by']} agreed {entry['basis_words']}, "
-                    f"{entry['captured_via_words']}, on {entry['given_at_plain']}."
+                    f"- {giver} agreed to this{for_whom} {entry['captured_via_words']} "
+                    f"on {entry['given_at_plain']}."
                 )
-                words = entry["wording"] or "not on file"
-                lines.append(
-                    f"  The words (version {entry['version']}, in {entry['language_name']}): "
-                    f"\"{words}\""
-                )
-                if entry["status"] == "withdrawn":
-                    who = entry["withdrawn_by"] or "someone"
-                    lines.append(f"  {who} withdrew this on {entry['withdrawn_at_plain']}.")
-                elif entry["status"] == "out_of_date":
-                    lines.append("  These words have since changed.")
-                    lines.append(f"  Nura will ask {profile['name']} to agree again.")
+                if entry["basis_words"]:
+                    lines.append(f"  {entry['basis_words']}")
+                if entry["wording"]:
+                    lines.append(
+                        f"  These are the words {giver} read, in {entry['language_name']}:"
+                    )
+                    lines.append(f"  \"{entry['wording']}\"")
                 else:
-                    lines.append("  This is still in force.")
+                    lines.append(f"  We do not have the exact words {giver} read that day.")
+                if entry["status"] == "withdrawn":
+                    who = entry["withdrawn_by"]
+                    stopped = f"{who} stopped this" if who else "This was stopped"
+                    lines.append(f"  {stopped} on {entry['withdrawn_at_plain']}.")
+                elif entry["status"] == "out_of_date":
+                    lines.append(f"  Nura has changed these words since {giver} agreed.")
+                    lines.append(f"  Nura will ask {patient} to agree again.")
+                else:
+                    lines.append("  This is still on today.")
             lines.append("")
         return "\n".join(lines).encode()
 
@@ -158,6 +185,9 @@ async def export_consent_record(
     """
     moment = now or utcnow()
     consents = await all_consents(session, context=context, now=moment)
+    # The profile and person rows below are identity, not profile data: a name and a
+    # region, read after the family door above has let this context through. The names
+    # are the only thing in the document that is not on the consent rows themselves.
     profile = await session.get(Profile, context.profile_id)
     if profile is None:  # the context was resolved against it, so this is not reachable
         raise NoKey(person_id=context.person_id, profile_id=context.profile_id)
@@ -170,21 +200,25 @@ async def export_consent_record(
             names[person_id] = person.display_name if person is not None else "someone"
         return names[person_id]
 
+    patient = profile.display_name
     entries: list[dict[str, Any]] = []
     for consent in consents:
+        giver = await name_of(consent.person_id)
         entry: dict[str, Any] = {
             "id": str(consent.id),
             "purpose": consent.purpose.value,
             "title": PURPOSE_TITLES[consent.purpose],
             "version": consent.text_version,
-            "wording": wording(consent.purpose, consent.text_version, consent.language),
+            "wording": wording(
+                consent.purpose, consent.text_version, consent.language, profile.region
+            ),
             "language": consent.language,
             "language_name": LANGUAGE_NAMES.get(consent.language, consent.language),
             "captured_via": consent.captured_via.value,
             "captured_via_words": CHANNEL_WORDS[consent.captured_via],
             "basis": consent.basis.value,
-            "basis_words": BASIS_WORDS[consent.basis],
-            "given_by": await name_of(consent.person_id),
+            "basis_words": basis_words(consent.basis, giver, patient),
+            "given_by": giver,
             "given_at": _stamp(consent.granted_at),
             "given_at_plain": _plain(consent.granted_at),
             "status": _status(consent, moment),
@@ -202,7 +236,7 @@ async def export_consent_record(
     document: dict[str, Any] = {
         "kind": EXPORT_TARGET,
         "profile": {
-            "name": profile.display_name,
+            "name": patient,
             "region": profile.region.value,
             "region_name": REGION_NAMES[profile.region],
         },

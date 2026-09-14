@@ -14,6 +14,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read, audited_write
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
@@ -52,6 +54,11 @@ async def store_artifact(
     bytes held elsewhere would be exactly that.
     """
     guard_region(held_in=region, asked_from=context.region)
+    # Keeping anything at all rests on the consent to hold the record (E00-02).
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        now=now,
+    )
     digest = sha256.strip().lower()
     if not _DIGEST.match(digest):
         raise NotADigest("sha256 is sixty-four hex characters")
@@ -111,6 +118,10 @@ async def record_event(
     `label` is a name for the moment, one short line. What was said or shown is in the
     artefact, and only there.
     """
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        now=now,
+    )
     named = short_label(label) if label is not None else None
     if artifact_id is not None:
         await require_artifact(session, context=context, artifact_id=artifact_id, now=now)

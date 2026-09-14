@@ -1,4 +1,4 @@
-"""The words a person agreed to, by purpose, version and language.
+"""The words a person agreed to, by purpose, version, language and region.
 
 Every wording ever shown stays here, because the record of a consent has to be able to say
 what was agreed to even after the words have moved on. A new version is appended, never
@@ -9,7 +9,8 @@ do not exist.
 
 The summaries are what the patient reads, so they follow `docs/plain-words.md`: whole
 sentences, one idea per line, his words for things ("your papers", "your blood pressure
-book", "today's list"), nothing to decode.
+book", "your Today page"), the name of his country, nothing to decode. Where the words
+name the country, there is one text per region.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.consent.models import ConsentPurpose
+from app.regions import Region
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,41 +28,54 @@ class ConsentText:
     language: str
     summary: str
     """The plain-words statement of what the person is agreeing to."""
+    region: Region | None = None
+    """The region these words are for, or None for words that serve every region."""
 
 
+# @patient
 TEXTS: tuple[ConsentText, ...] = (
     ConsentText(
         ConsentPurpose.HOLD_HEALTH_RECORD,
         "1",
         "en",
         "Nura keeps your papers, your medicines and your blood pressure book. "
-        "They stay in your country.",
+        "They never leave Singapore.",
+        region=Region.SG,
+    ),
+    ConsentText(
+        ConsentPurpose.HOLD_HEALTH_RECORD,
+        "1",
+        "en",
+        "Nura keeps your papers, your medicines and your blood pressure book. "
+        "They never leave Malaysia.",
+        region=Region.MY,
     ),
     ConsentText(
         ConsentPurpose.SHARE_WITH_FAMILY,
         "1",
         "en",
-        "The family you name can see the parts you choose. "
-        "You can see who looked. "
-        "You can stop it at any time.",
+        "You choose which of your family can see your papers. "
+        "You can see who looked at them. "
+        "You can stop this at any time.",
     ),
     ConsentText(
         ConsentPurpose.RECORDING,
         "1",
         "en",
-        "Nura records your visit when you press the button. "
-        "It keeps the words so you can hear them again.",
+        "When you see the doctor, you can press the round button to record. "
+        "Nura keeps what the doctor said, so you can hear it again.",
     ),
     ConsentText(
         ConsentPurpose.WHATSAPP,
         "1",
         "en",
-        "Nura sends today's list to you on WhatsApp.",
+        "Every morning, Nura sends your Today page to you on WhatsApp.",
     ),
 )
 """Append only. Within a purpose, versions are in the order they were introduced, and the
-last one is current. Every version needs its English wording; other languages are added as
-they are translated, and a consent in a language that is not here yet cannot be recorded."""
+last one is current. Every version needs its English wording for every region; other
+languages are added as they are translated, and a consent in a language that is not here
+yet cannot be recorded."""
 
 
 def versions(purpose: ConsentPurpose) -> list[str]:
@@ -77,9 +92,16 @@ def current_version(purpose: ConsentPurpose) -> str:
     return versions(purpose)[-1]
 
 
-def wording(purpose: ConsentPurpose, version: str, language: str) -> str | None:
-    """The words shown for this purpose at this version in this language, or None."""
+def wording(purpose: ConsentPurpose, version: str, language: str, region: Region) -> str | None:
+    """The words shown for this purpose, version and language in this region, or None.
+
+    Words written for the region win over words written for every region.
+    """
+    anywhere: str | None = None
     for text in TEXTS:
         if text.purpose is purpose and text.version == version and text.language == language:
-            return text.summary
-    return None
+            if text.region is region:
+                return text.summary
+            if text.region is None:
+                anywhere = text.summary
+    return anywhere

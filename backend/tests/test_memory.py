@@ -55,7 +55,7 @@ from app.memory.working import (
     open_episodes,
 )
 from app.regions import OutOfRegion, Region
-from tests.support import agree_to_family_sharing
+from tests.support import OPENING_CONSENT, agree_to_family_sharing
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -64,7 +64,7 @@ SHA = "b" * 64
 
 async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
     pa = await register_person(session, region=Region.SG, display_name="Pa", phone_e164=phone)
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
@@ -518,10 +518,12 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
     # She holds the visits, so the spine is hers to read.
     assert len(await upcoming_appointments(sg, context=held, now=SEPT_3)) == 1
 
+    # Storing a photo first asks whether the record may be kept at all (E00-02), and that
+    # gate runs under the records scope she does not hold, so her reach is refused there.
     refused = [e for e in await read_audit(sg, context=owner) if e.outcome is Outcome.REFUSED]
     assert {(e.actor_person_id, e.action, e.scope, e.target) for e in refused} == {
         (daughter.id, Action.READ, Scope.RECORDS, "fact"),
-        (daughter.id, Action.WRITE, Scope.RECORDS, "artifact"),
+        (daughter.id, Action.READ, Scope.RECORDS, "consent"),
     }
     assert all(e.refused_because == "OutOfScope" for e in refused)
 

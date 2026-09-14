@@ -12,17 +12,18 @@ from app.audit.models import Action, Channel, Outcome
 from app.audit.trail import read_audit
 from app.consent import texts
 from app.consent.export import (
-    BASIS_WORDS,
     CHANNEL_WORDS,
     PURPOSE_TITLES,
     REGION_NAMES,
     PlainTextRenderer,
+    basis_words,
     export_consent_record,
 )
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import (
     NoConsentToWithdraw,
     NotTheirConsentToGive,
+    NotTheirConsentToWithdraw,
     WordingNotOnFile,
     active_consents,
     grant_consent,
@@ -35,6 +36,7 @@ from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
 from app.regions import Region
+from tests.support import OPENING_CONSENT
 
 GIVEN_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 
@@ -44,7 +46,7 @@ async def _pa_and_his_son(session: AsyncSession) -> tuple[KeyContext, KeyContext
     pa = await register_person(
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
@@ -72,11 +74,24 @@ async def _pa_and_his_son(session: AsyncSession) -> tuple[KeyContext, KeyContext
 # --- the wording catalogue ----------------------------------------------------------------
 
 
-def test_every_purpose_has_current_english_wording_and_no_version_is_shown_twice() -> None:
+def test_every_purpose_has_current_english_wording_in_both_regions() -> None:
     for purpose in ConsentPurpose:
-        assert wording(purpose, current_version(purpose), "en") is not None
-    keys = [(text.purpose, text.version, text.language) for text in texts.TEXTS]
+        for region in Region:
+            assert wording(purpose, current_version(purpose), "en", region) is not None
+    keys = [(text.purpose, text.version, text.language, text.region) for text in texts.TEXTS]
     assert len(keys) == len(set(keys))
+
+
+def test_words_that_name_the_country_have_a_twin_per_region() -> None:
+    purpose, version = ConsentPurpose.HOLD_HEALTH_RECORD, "1"
+    assert wording(purpose, version, "en", Region.SG) == (
+        "Nura keeps your papers, your medicines and your blood pressure book. "
+        "They never leave Singapore."
+    )
+    assert wording(purpose, version, "en", Region.MY) == (
+        "Nura keeps your papers, your medicines and your blood pressure book. "
+        "They never leave Malaysia."
+    )
 
 
 def test_the_current_version_is_the_last_one_appended(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -89,13 +104,16 @@ def test_the_current_version_is_the_last_one_appended(monkeypatch: pytest.Monkey
 
 
 def test_wording_nobody_was_ever_shown_is_unknown() -> None:
-    assert wording(ConsentPurpose.WHATSAPP, "not-a-version", "en") is None
-    assert wording(ConsentPurpose.WHATSAPP, current_version(ConsentPurpose.WHATSAPP), "xx") is None
+    current = current_version(ConsentPurpose.WHATSAPP)
+    assert wording(ConsentPurpose.WHATSAPP, "not-a-version", "en", Region.SG) is None
+    assert wording(ConsentPurpose.WHATSAPP, current, "xx", Region.SG) is None
 
 
 def test_the_record_can_put_words_to_every_purpose_basis_channel_and_region() -> None:
     assert set(PURPOSE_TITLES) == set(ConsentPurpose)
-    assert set(BASIS_WORDS) == set(ConsentBasis)
+    for basis in ConsentBasis:
+        line = basis_words(basis, "Ash", "Pa")
+        assert (line is None) == (basis is ConsentBasis.OWNER)
     assert set(CHANNEL_WORDS) == set(ConsentChannel)
     assert set(REGION_NAMES) == set(Region)
 
@@ -153,13 +171,15 @@ async def test_a_chief_consents_for_pa_only_on_a_recorded_proxy_basis(sg: AsyncS
         scope=Scope.VISITS,
         now=GIVEN_AT + timedelta(days=2),
     )
-    assert held.id == by_proxy.id
+    assert held.consent_id == by_proxy.id
 
     # And the record says who gave it and on what basis.
     record = await export_consent_record(sg, context=owner)
     entry = next(e for e in record.document["consents"] if e["id"] == str(by_proxy.id))
     assert entry["given_by"] == "Son" and entry["basis"] == "medical_letter"
-    assert "Son agreed with a doctor's letter, on paper, on" in record.rendered.body.decode()
+    page = record.rendered.body.decode()
+    assert "- Son agreed to this for Pa on paper on Tuesday 15 September 2026." in page
+    assert "  A doctor's letter says Son may decide for Pa." in page
 
 
 async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_language(
@@ -203,7 +223,7 @@ async def test_a_consent_is_recorded_only_in_words_that_are_on_file_in_that_lang
     record = await export_consent_record(sg, context=owner)
     entry = next(e for e in record.document["consents"] if e["id"] == str(given.id))
     assert entry["wording"] == "中文的说明。" and entry["language_name"] == "Chinese"
-    assert "in Chinese): \"中文的说明。\"" in record.rendered.body.decode()
+    assert "  These are the words Pa read, in Chinese:\n  \"中文的说明。\"" in record.rendered.body.decode()
 
 
 async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSession) -> None:
@@ -231,6 +251,7 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSessio
             sg,
             context=held,
             purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            captured_via=ConsentChannel.APP,
             now=GIVEN_AT + timedelta(days=2),
         )
 
@@ -296,8 +317,14 @@ async def test_the_trail_records_where_each_consent_was_captured(sg: AsyncSessio
         for entry in await read_audit(sg, context=owner, action=Action.WRITE)
         if entry.target == Consent.__tablename__
     ]
-    # Newest first: the paper form was entered in the app; the WhatsApp one came from there.
-    assert [entry.channel for entry in writes] == [Channel.APP, Channel.WHATSAPP, Channel.APP]
+    # Newest first: the paper form was entered in the app; the WhatsApp one came from there;
+    # then family sharing and the opening consent, both in the app.
+    assert [entry.channel for entry in writes] == [
+        Channel.APP,
+        Channel.WHATSAPP,
+        Channel.APP,
+        Channel.APP,
+    ]
 
 
 # --- withdrawing ------------------------------------------------------------------------
@@ -308,13 +335,62 @@ async def test_withdrawing_what_was_never_given_is_refused_and_written_down(
 ) -> None:
     owner, _ = await _pa_and_his_son(sg)
     with pytest.raises(NoConsentToWithdraw):
-        await revoke_consent(sg, context=owner, purpose=ConsentPurpose.WHATSAPP)
+        await revoke_consent(sg, context=owner, purpose=ConsentPurpose.WHATSAPP, captured_via=ConsentChannel.APP)
     refused = [
         entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
     ]
     assert [(e.action, e.refused_because) for e in refused] == [
         (Action.WRITE, "NoConsentToWithdraw")
     ]
+
+
+async def test_only_the_owner_stops_sharing_with_his_family(sg: AsyncSession) -> None:
+    """A chief closes one key with revoke_key; stopping it all, his own key included, is Pa's."""
+    owner, chief = await _pa_and_his_son(sg)
+    with pytest.raises(NotTheirConsentToWithdraw):
+        await revoke_consent(
+            sg,
+            context=chief,
+            purpose=ConsentPurpose.SHARE_WITH_FAMILY,
+            captured_via=ConsentChannel.APP,
+            now=GIVEN_AT + timedelta(days=1),
+        )
+    # The chief still holds his key, and Pa sees the attempt.
+    still = await resolve_key_context(
+        sg, region=Region.SG, person_id=chief.person_id, profile_id=owner.profile_id
+    )
+    assert still.key_id == chief.key_id
+    refused = [
+        entry for entry in await read_audit(sg, context=owner) if entry.outcome is Outcome.REFUSED
+    ]
+    assert [(e.actor_person_id, e.refused_because) for e in refused] == [
+        (chief.person_id, "NotTheirConsentToWithdraw")
+    ]
+
+
+async def test_a_withdrawal_is_written_on_the_channel_it_came_from(sg: AsyncSession) -> None:
+    owner, _ = await _pa_and_his_son(sg)
+    await grant_consent(
+        sg,
+        context=owner,
+        purpose=ConsentPurpose.WHATSAPP,
+        captured_via=ConsentChannel.WHATSAPP,
+        basis=ConsentBasis.OWNER,
+        now=GIVEN_AT + timedelta(days=1),
+    )
+    await revoke_consent(
+        sg,
+        context=owner,
+        purpose=ConsentPurpose.WHATSAPP,
+        captured_via=ConsentChannel.WHATSAPP,
+        now=GIVEN_AT + timedelta(days=2),
+    )
+    withdrawal = next(
+        entry
+        for entry in await read_audit(sg, context=owner, action=Action.WRITE)
+        if entry.target == Consent.__tablename__
+    )
+    assert withdrawal.channel is Channel.WHATSAPP and withdrawal.rows == 1
 
 
 async def test_withdrawing_closes_every_version_still_open(
@@ -339,12 +415,14 @@ async def test_withdrawing_closes_every_version_still_open(
         basis=ConsentBasis.OWNER,
         now=GIVEN_AT + timedelta(hours=1),
     )
-    closed = await revoke_consent(
-        sg, context=owner, purpose=ConsentPurpose.WHATSAPP, now=GIVEN_AT + timedelta(days=1)
+    closed = await revoke_consent(sg, context=owner, purpose=ConsentPurpose.WHATSAPP, captured_via=ConsentChannel.APP, now=GIVEN_AT + timedelta(days=1)
     )
     assert sorted(c.text_version for c in closed) == ["1", "2"]
     still_open = await active_consents(sg, context=owner, now=GIVEN_AT + timedelta(days=2))
-    assert [c.purpose for c in still_open] == [ConsentPurpose.SHARE_WITH_FAMILY]
+    assert [c.purpose for c in still_open] == [
+        ConsentPurpose.HOLD_HEALTH_RECORD,
+        ConsentPurpose.SHARE_WITH_FAMILY,
+    ]
 
 
 async def test_withdrawing_something_other_than_family_sharing_leaves_the_keys(
@@ -358,7 +436,7 @@ async def test_withdrawing_something_other_than_family_sharing_leaves_the_keys(
         captured_via=ConsentChannel.WHATSAPP,
         basis=ConsentBasis.OWNER,
     )
-    await revoke_consent(sg, context=owner, purpose=ConsentPurpose.WHATSAPP)
+    await revoke_consent(sg, context=owner, purpose=ConsentPurpose.WHATSAPP, captured_via=ConsentChannel.APP)
     still = await resolve_key_context(
         sg, region=Region.SG, person_id=chief.person_id, profile_id=owner.profile_id
     )
@@ -381,7 +459,7 @@ async def test_the_export_takes_any_renderer(sg: AsyncSession) -> None:
 
     record = await export_consent_record(sg, context=owner, renderer=Counting())
     assert record.rendered.media_type == "text/plain"
-    assert record.rendered.body == b"1 consents"
+    assert record.rendered.body == b"2 consents"  # keeping the record, and sharing it
 
     plain = await export_consent_record(sg, context=owner, renderer=PlainTextRenderer())
-    assert plain.rendered.body.decode().startswith("# Consent record")
+    assert plain.rendered.body.decode().startswith("# What you agreed to")
