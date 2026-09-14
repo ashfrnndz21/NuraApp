@@ -131,6 +131,15 @@ RULES: Mapping[TriggerType, Rule] = {
             quiet=True,
         ),
         Rule(
+            TriggerType.FIRST_WEEK_PROMPT,
+            TriggerKind.EVENT,
+            Category.REMINDER,
+            Scope.RECORDS,
+            "first_week_prompt_due",
+            cap=1,
+            quiet=True,
+        ),
+        Rule(
             TriggerType.FAMILY_MESSAGE,
             TriggerKind.EVENT,
             Category.CONTEXT,

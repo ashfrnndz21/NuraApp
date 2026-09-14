@@ -9,7 +9,7 @@ reach (the delivery engine), on the system channel only; and a red flag carries 
 person who raised it is on more than one profile.
 
 Revision ID: 0019_delivery
-Revises: 0017_trends_routines_calendar
+Revises: 0015_biography
 Create Date: 2026-09-15
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_delivery"
-down_revision = "0017_trends_routines_calendar"
+down_revision = "0015_biography"
 branch_labels = None
 depends_on = None
 
@@ -53,6 +53,7 @@ TRIGGER_TYPE = _enum(
     "visit_tomorrow",
     "papers",
     "family_message",
+    "first_week_prompt",
 )
 CATEGORY = _enum("delivery_category", "alert", "reminder", "context")
 CHANNEL = _enum("delivery_channel", "app_push", "whatsapp", "caregiver")

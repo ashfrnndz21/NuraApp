@@ -69,7 +69,15 @@ from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event
-from app.memory.models import Appointment, Event, EventKind, Fact, Provider, SourceChannel
+from app.memory.models import (
+    Appointment,
+    ConfidenceState,
+    Event,
+    EventKind,
+    Fact,
+    Provider,
+    SourceChannel,
+)
 from app.memory.semantic import assert_fact, current_facts
 from app.notes.models import Note
 from app.notes.service import list_notes
@@ -397,7 +405,12 @@ async def _switch_format_if_ignored(
     already = await current_facts(
         session, context=context, subject=FORMAT_SUBJECT, attribute=FORMAT_ATTRIBUTE
     )
-    if any(fact.value == VOICE for fact in already):
+    if any(
+        fact.value == VOICE or fact.confidence_state is not ConfidenceState.EXTRACTED
+        for fact in already
+    ):
+        # Voice already, or a format he chose himself on his settings screen (E01-03): two
+        # unopened cards do not overturn his word, and `ConfirmedFactStands` would refuse it.
         return
     noticed = await record_event(
         session,

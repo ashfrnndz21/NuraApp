@@ -44,6 +44,8 @@ class TriggerType(StrEnum):
     VISIT_TOMORROW = "visit_tomorrow"
     PAPERS = "papers"
     FAMILY_MESSAGE = "family_message"
+    FIRST_WEEK_PROMPT = "first_week_prompt"
+    """The first week's prompt due today (E01-04), carried as one line of the morning card."""
 
 
 class Category(StrEnum):

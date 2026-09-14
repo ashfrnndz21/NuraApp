@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,6 +66,8 @@ from app.medicines.dose import Dose, Frequency
 from app.medicines.service import LineView, active_lines
 from app.medicines.strings import say_date
 from app.memory.spine import upcoming_appointments
+from app.onboarding.plan import PLAN_SCOPE, due_prompts
+from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ
 from app.safety.red_flags import open_flags
 
@@ -204,6 +206,11 @@ async def _morning(run: Run) -> None:
         why={**firing.why, "state_id": str(morning.state.id), "quiet_day": morning.quiet},
     )
     him = Recipient(run.patient, PATIENT)
+    # The first week's prompt due today (E01-04), when there is one, is one line of the card:
+    # an event trigger of its own, logged with its rule, under the card's one a day.
+    prompt = await _first_week_prompt(run)
+    if prompt is not None:
+        morning = replace(morning, lines=[*morning.lines, prompt[1]], quiet=False)
     if morning.quiet and run.config.skip_quiet_days:
         await write(run, firing, him, DeliveryOutcome.SKIPPED, reason="a quiet day, as asked")
         return
@@ -213,7 +220,41 @@ async def _morning(run: Run) -> None:
             run.session, morning, providers=run.via.providers, number=run.via.number
         )
 
-    await deliver(run, firing, him, Message(whatsapp=say))
+    card = await deliver(run, firing, him, Message(whatsapp=say))
+    if prompt is None:
+        return
+    gap, _ = prompt
+    along = Firing(
+        type=TriggerType.FIRST_WEEK_PROMPT,
+        dedupe_key=f"first_week:{gap}:{run.day}",
+        why={"gap": gap, "in": "morning_card"},
+    )
+    if _about(run, along, run.patient.id, await run.deliveries()):
+        return
+    if card is not None and card.outcome is DeliveryOutcome.SENT:
+        await write(
+            run,
+            along,
+            him,
+            DeliveryOutcome.SENT,
+            via=card.via,
+            template_name=card.template_name,
+            message_id=card.message_id,
+            reason="in the morning card",
+        )
+    else:
+        await write(run, along, him, DeliveryOutcome.SKIPPED, reason="no morning card went")
+
+
+async def _first_week_prompt(run: Run) -> tuple[str, str] | None:
+    """The first week's prompt due at this moment, and its line for today, or None."""
+    if not run.acting.allows(PLAN_SCOPE):
+        return None
+    due = await due_prompts(run.session, context=run.acting, at=run.at)
+    if not due:
+        return None
+    words = prompt_words(due[0].gap, run.language, None)
+    return None if words is None else (due[0].gap, words.action)
 
 
 async def _reorder(run: Run, lines: Sequence[LineView]) -> None:
