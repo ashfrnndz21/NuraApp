@@ -48,6 +48,18 @@ import type {
 /** Which region this is, and whether it is a demo (ADR 0008). No token: it is not anyone's data. */
 export const deployment = () => api<DeploymentOut>("/deployment");
 
+/** This phone gets reminders about this profile (Web Push, ADR 0001). */
+export const subscribePush = (token: string, profileId: string, subscription: PushSubscriptionJSON) =>
+  api<{ subscription_id: string }>(`/profiles/${profileId}/push-subscriptions`, {
+    method: "POST",
+    token,
+    body: { endpoint: subscription.endpoint, keys: { p256dh: subscription.keys?.p256dh, auth: subscription.keys?.auth } },
+  });
+
+/** This phone stops getting them. */
+export const forgetPush = (token: string, profileId: string, endpoint: string) =>
+  api<void>(`/profiles/${profileId}/push-subscriptions`, { method: "DELETE", token, body: { endpoint } });
+
 export const startPhone = (phone_e164: string, display_name: string | null, language: string) =>
   api<{ expires_in_seconds: number }>("/auth/phone/start", {
     method: "POST",

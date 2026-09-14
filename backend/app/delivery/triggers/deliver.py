@@ -38,6 +38,7 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import active_consents
 from app.consent.texts import current_version
 from app.db import as_utc
+from app.delivery.push import NoDevice
 from app.delivery.strings import PUSH_LINE
 from app.delivery.triggers.models import (
     Delivery,
@@ -387,6 +388,7 @@ async def write(
     ladder: Ladder | None = None,
     for_person: Person | None = None,
     text: str | None = None,
+    row_id: uuid.UUID | None = None,
 ) -> Delivery:
     """The row for one attempt, and the SHARE when it reached a person."""
     rule = RULES[firing.type]
@@ -396,6 +398,7 @@ async def write(
         run.acting,
         rule.scope,
         channel=Channel.SYSTEM,
+        id=row_id or uuid.uuid4(),
         trigger_kind=rule.kind,
         trigger_type=firing.type,
         category=rule.category,
@@ -476,14 +479,23 @@ async def deliver(
     for channel in message.channels or run.config.channels_for(firing.type):
         if channel is DeliveryChannel.APP_PUSH:
             push = run.via.providers.push
-            if not push.reachable(to.person.id):
+            if not await push.reachable(run.session, run.acting, to.person.id):
                 passed.append("app_push: no device")
                 continue
             line = PUSH_LINE[run.language_for(to.person)]
-            await push.push(to.person.id, line)
+            # The push says only the line and an id the app opens: the card on his feed when
+            # the trigger names one, else this delivery's own row. No health word rides it.
+            row_id = uuid.uuid4()
+            ref = str(firing.why.get("feed_item_id") or row_id)
+            try:
+                await push.push(run.session, run.acting, to.person.id, line, ref=ref)
+            except NoDevice:
+                # Every device the push service knew of has gone (404, 410): the next channel.
+                passed.append("app_push: gone")
+                continue
             return await write(
                 run, firing, to, DeliveryOutcome.SENT, via=channel, passed_over=passed,
-                rung=rung, ladder=ladder, text=line,
+                rung=rung, ladder=ladder, text=line, row_id=row_id,
             )
         if channel is DeliveryChannel.WHATSAPP:
             why_not = await _no_whatsapp(run, to.person)

@@ -151,6 +151,38 @@ jobs:
               raise SystemExit("production accepted the demo's code sender")
           print("refused by name:", ", ".join(fixtures_in(providers)), "+ the demo code sender")
           PY
+      - name: With VAPID keys, a deployment pushes by Web Push, a real sender production accepts
+        # Throwaway keys made inside the job and never kept: with the three NURA_VAPID_*
+        # settings the demo's push is WebPush, not a fixture, and production's check no longer
+        # names push among the fixtures it refuses. Without them (the steps above) it does.
+        run: |
+          docker run --rm -i --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" \
+            -e NURA_DEMO_MODE=1 -e NURA_DEMO_LOGIN_CODE=246810 -e NURA_WHATSAPP_DEV_SECRET=ci-only \
+            $FIXTURES nura:ci python - <<'PY'
+          import base64, os
+          from cryptography.hazmat.primitives.asymmetric import ec
+          from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+          from app.delivery.push import WebPush, push_sender_for
+          from app.fixtures import fixtures_in, is_fixture
+          from app.main import providers_for
+          from app.settings import load_settings
+
+          def b64(data: bytes) -> str:
+              return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+          key = ec.generate_private_key(ec.SECP256R1())
+          vapid = {
+              "NURA_VAPID_PUBLIC_KEY": b64(key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)),
+              "NURA_VAPID_PRIVATE_KEY": b64(key.private_numbers().private_value.to_bytes(32, "big")),
+              "NURA_VAPID_SUBJECT": "mailto:ci@nura.invalid",
+          }
+          providers = providers_for(load_settings({**os.environ, **vapid}))
+          assert isinstance(providers.push, WebPush) and not is_fixture(providers.push), type(providers.push)
+          assert "push" not in fixtures_in(providers), fixtures_in(providers)
+          production = load_settings({"NURA_REGION": "SG", "NURA_DATABASE_URL": "postgresql+asyncpg://u:p@h/db", **vapid})
+          assert isinstance(push_sender_for(production), WebPush)
+          print("with VAPID keys: push is", providers.push.name, "- not a fixture; still refused:", ", ".join(fixtures_in(providers)))
+          PY
       - if: failure()
         run: docker logs nura || true
   web:

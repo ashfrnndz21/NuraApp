@@ -110,6 +110,16 @@ class Settings:
     object_secret_access_key: str | None = None
     """NURA_OBJECT_SECRET_ACCESS_KEY: the bucket's secret key. From the platform's secrets,
     never the repo, never a log."""
+    vapid_public_key: str | None = None
+    """NURA_VAPID_PUBLIC_KEY: this deployment's Web Push key, the uncompressed P-256 point in
+    base64url. The home-screen app subscribes with it (`GET /deployment`)."""
+    vapid_private_key: str | None = None
+    """NURA_VAPID_PRIVATE_KEY: the private half, 32 bytes in base64url. It signs every push
+    (RFC 8292). From the platform's secrets, never the repo, never a log."""
+    vapid_subject: str | None = None
+    """NURA_VAPID_SUBJECT: who a push service may contact about these pushes, `mailto:` or
+    `https:`. The three VAPID settings go together; with them the deployment pushes by Web
+    Push (`app.delivery.push.WebPush`), without them it has no real push sender."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -126,6 +136,8 @@ class DemoAndDevTogether(RuntimeError):
 
 
 _DEMO_CODE = re.compile(r"^[0-9]{6}$")
+VAPID = ("PUBLIC_KEY", "PRIVATE_KEY", "SUBJECT")
+"""The three NURA_VAPID_* settings: all of them, or none."""
 
 
 _POSTGRES_SCHEMES = ("postgres://", "postgresql://")
@@ -179,6 +191,14 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise MissingSetting("NURA_DEMO_MODE=1 needs NURA_DEMO_LOGIN_CODE: six digits, a secret")
     if not demo_mode and demo_login_code is not None:
         raise MissingSetting("NURA_DEMO_LOGIN_CODE is for a demo only (NURA_DEMO_MODE=1)")
+    vapid = {name: source.get(f"NURA_VAPID_{name}") or None for name in VAPID}
+    if any(vapid.values()) and not all(vapid.values()):
+        raise MissingSetting(
+            "NURA_VAPID_PUBLIC_KEY, NURA_VAPID_PRIVATE_KEY and NURA_VAPID_SUBJECT go together"
+        )
+    subject = vapid["SUBJECT"]
+    if subject is not None and not subject.startswith(("mailto:", "https://")):
+        raise MissingSetting("NURA_VAPID_SUBJECT is a mailto: address or an https: page")
     return Settings(
         region=region,
         database_url=database_url,
@@ -203,6 +223,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_bucket_region=source.get("NURA_OBJECT_BUCKET_REGION") or None,
         object_access_key_id=source.get("NURA_OBJECT_ACCESS_KEY_ID") or None,
         object_secret_access_key=source.get("NURA_OBJECT_SECRET_ACCESS_KEY") or None,
+        vapid_public_key=vapid["PUBLIC_KEY"],
+        vapid_private_key=vapid["PRIVATE_KEY"],
+        vapid_subject=subject,
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),

@@ -1,8 +1,11 @@
 import type { JSX } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import { go, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
-import { density, densityChosen, me, profile, setDensity, setLanguage } from "../store/session";
+import { backendFor, browserEnv, remindersState, turnOff, turnOn, type RemindersState } from "../push/reminders";
+import { pushKey } from "../store/deployment";
+import { density, densityChosen, me, profile, setDensity, setLanguage, token } from "../store/session";
 import { fill, LANGUAGES, language, t, type Language } from "../strings";
 import { Header, Pill, TabBar, Tile } from "../ui/components";
 
@@ -52,6 +55,7 @@ export function MeScreen(): JSX.Element {
           </Pill>
         )}
       </Tile>
+      <Reminders />
       {wantsHomeScreenHint() && (
         <Tile glass>
           <p>{s.today.homeScreen1}</p>
@@ -65,5 +69,54 @@ export function MeScreen(): JSX.Element {
       </Tile>
       <TabBar current="me" onSelect={(tab) => go(tab === "today" ? { name: "today" } : { name: "me" })} />
     </main>
+  );
+}
+
+/** "Get reminders on this phone" (Web Push, ADR 0001): only where this deployment has Web Push
+ *  and this browser can take it. Nothing is asked of the phone until the button is tapped. */
+function Reminders(): JSX.Element | null {
+  const s = t();
+  const env = browserEnv();
+  const [state, setState] = useState<RemindersState>("unsupported");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void remindersState(env).then(setState);
+  }, []);
+  const key = pushKey.value;
+  const bearer = token.value;
+  const profileId = profile.value?.profile_id;
+  if (!key || !env || !bearer || !profileId || state === "unsupported") return null;
+  const tap = async (on: boolean) => {
+    setBusy(true);
+    try {
+      const backend = backendFor(bearer, profileId);
+      setState(on ? await turnOn(env, key, backend) : await turnOff(env, backend));
+    } catch {
+      setState(await remindersState(env));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Tile paper>
+      {state === "on" && <p data-testid="reminders-on">{s.me.remindersOn}</p>}
+      {state === "denied" && (
+        <div data-testid="reminders-denied">
+          <p>{s.me.remindersDenied1}</p>
+          <p>{s.me.remindersDenied2}</p>
+        </div>
+      )}
+      {state === "on" ? (
+        <Pill onClick={() => void tap(false)} disabled={busy} testId="reminders-stop">
+          {s.me.remindersStop}
+        </Pill>
+      ) : (
+        state === "off" && (
+          <Pill plum onClick={() => void tap(true)} disabled={busy} testId="reminders-get">
+            {s.me.remindersGet}
+          </Pill>
+        )
+      )}
+    </Tile>
   );
 }
