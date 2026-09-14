@@ -9,3 +9,4 @@ infra/cdk.out/
 backend/*.db
 backend/*.db-journal
 *.egg-info/
+backend/.dev.log

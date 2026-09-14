@@ -24,7 +24,7 @@ A family health app for Malaysia and Singapore: an elderly patient, the adult ch
 - Never delete data migrations. Never store identity-card numbers outside the insurance module, and only when a guarantee letter needs one.
 
 ## Commands
-- Backend: `make dev` (run), `make test`, `make lint`, `make plain-words`.
+- Backend: `make setup` (once), `make dev` (run), `make test`, `make lint`, `make plain-words`; `make checkpoint N=<n>` walks a checkpoint from `docs/checkpoints.md` against the running server, `make reset-db` starts the local database over.
 - iOS: `cd ios && xcodegen generate`, then open `Nura.xcodeproj`; `make ios-test` runs `xcodebuild test` on the simulator. Builds require Xcode on macOS.
 - Infra: `cd infra && cdk synth`.
 
