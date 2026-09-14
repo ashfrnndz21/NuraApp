@@ -1,0 +1,107 @@
+/* Nura design tokens — docs/design-system.md §2, verbatim. Two densities share every token;
+   `data-density` on <html> only moves the type scale, the touch target and the surface a
+   decision sits on. The wash is the State posture, set as `data-posture` on <html>. */
+
+:root {
+  /* Colour */
+  --mist: #f5f1f4;
+  --blush: #f1dce6;
+  --lavender: #dcd5ee;
+  --sage: #dce8df;
+  --coral-wash: #f0d6d2;
+  --ink: #2b2733;
+  --ink-soft: #6a6377;
+  --plum: #4e3a78;
+  --good: #3b7a57;
+  --watch: #b8741a;
+  --act: #c24a3a;
+  --cream: #f3e6e0; /* the warm middle stop of the watch wash */
+  --coral-mid: #f2e0de; /* the middle stop of the act wash */
+  --white: #ffffff;
+
+  /* Surfaces: glass carries chrome and context, paper carries any decision */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-blur: blur(18px) saturate(1.2);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.7);
+  --glass-highlight: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  --tile-shadow: 0 8px 24px rgba(60, 40, 80, 0.06);
+  --paper-bg: rgba(255, 255, 255, 0.92);
+
+  /* Shape */
+  --radius-sheet: 28px;
+  --radius-tile: 20px;
+  --radius-chip: 12px;
+  --radius-pill: 999px;
+
+  /* Spacing: an 8px grid */
+  --space-1: 8px;
+  --space-2: 12px; /* gap between tiles */
+  --space-3: 20px; /* tile padding, screen gutter */
+  --space-4: 32px;
+
+  /* Type: one family, weight is the persona dial. `rem` so the system text size scales it. */
+  --font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --line-height: 1.5;
+
+  /* Washes: 160° linear, plus one soft white radial light at top-left */
+  --wash-light: radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.65), transparent 55%);
+  --wash-stable: linear-gradient(160deg, var(--lavender), var(--blush) 45%, var(--sage));
+  --wash-watch: linear-gradient(160deg, var(--blush), var(--cream) 50%, var(--lavender));
+  --wash-act: linear-gradient(160deg, var(--coral-wash), var(--coral-mid) 50%, var(--lavender));
+
+  /* Motion: only ever an answer to an action */
+  --settle: 220ms ease-out;
+  --wash-fade: 1200ms ease-in-out;
+
+  /* Icons */
+  --icon-stroke: 1.5px;
+}
+
+/* --- Caregiver density (Chief): glass-first, 16px body, 48px targets --------------------- */
+:root,
+:root[data-density="caregiver"] {
+  --text-display: 3.5rem; /* 56px */
+  --weight-display: 300;
+  --text-tile-number: 2.25rem; /* 36px */
+  --weight-number: 400;
+  --text-title: 1.25rem; /* 20px */
+  --weight-title: 500;
+  --text-body: 1rem; /* 16px */
+  --text-caption: 0.8125rem; /* 13px */
+  --text-button: 1rem; /* 16px */
+  --weight-button: 500;
+  --target: 48px;
+  --icon-size: 24px;
+  --card-bg: var(--glass-bg);
+  --card-blur: var(--glass-blur);
+}
+
+/* --- Patient density (Dad): paper for every decision, 20px body, 56px targets ------------ */
+:root[data-density="patient"] {
+  --text-display: 3.5rem; /* 56px */
+  --weight-display: 500;
+  --text-tile-number: 2.5rem; /* 40px */
+  --weight-number: 500;
+  --text-title: 1.5rem; /* 24px */
+  --weight-title: 500;
+  --text-body: 1.25rem; /* 20px */
+  --text-caption: 1rem; /* 16px */
+  --text-button: 1.25rem; /* 20px */
+  --weight-button: 500;
+  --target: 56px;
+  --icon-size: 28px;
+  --card-bg: var(--paper-bg);
+  --card-blur: none;
+}
+
+/* --- The wash is the status ------------------------------------------------------------- */
+:root[data-posture="stable"] { --wash: var(--wash-stable); }
+:root[data-posture="watch"] { --wash: var(--wash-watch); }
+:root[data-posture="act"] { --wash: var(--wash-act); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --settle: 0ms;
+    --wash-fade: 0ms;
+  }
+}
