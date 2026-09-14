@@ -9,7 +9,7 @@ holds — and writes it into the scopes of every key cut before it existed, so t
 loses the face of the graph he already opens.
 
 Revision ID: 0004_login_and_sessions
-Revises: 0003_memory
+Revises: 0004_key_consent
 Create Date: 2026-09-14
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0004_login_and_sessions"
-down_revision = "0003_memory"
+down_revision = "0004_key_consent"
 branch_labels = None
 depends_on = None
 

@@ -7,7 +7,9 @@ write or read anything pinned somewhere else, even if the row is sitting in its 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 from app.errors import Refusal
 
@@ -17,6 +19,13 @@ class Region(StrEnum):
 
     SG = "SG"
     MY = "MY"
+
+
+REGION_TZ: Mapping[Region, ZoneInfo] = {
+    Region.SG: ZoneInfo("Asia/Singapore"),
+    Region.MY: ZoneInfo("Asia/Kuala_Lumpur"),
+}
+"""The clock on the patient's wall. Storage is UTC; anything he reads says his own day."""
 
 
 class OutOfRegion(Refusal):
