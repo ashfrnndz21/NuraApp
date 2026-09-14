@@ -73,6 +73,7 @@ from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.models import LineStatus, MedicationLine
+from app.memory.episodic import row_is_there
 from app.memory.models import (
     ConfidenceState,
     Event,
@@ -954,7 +955,7 @@ def _keep_flag(
     flag_values = _columns(flag)
 
     async def keep(again: AsyncSession) -> None:
-        if event_values is not None and await again.get(Event, event_values["id"]) is None:
+        if event_values is not None and not await row_is_there(again, Event, event_values["id"]):
             again.add(Event(**event_values))
             await again.flush()
             await record(

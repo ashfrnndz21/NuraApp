@@ -212,6 +212,10 @@ CLASSES: dict[str, str] = {
     "event.artifact_id": HEALTH,
     "event.episode_id": HEALTH,
     "event.recorded_at": OPERATIONAL,
+    # The scope a row was written under decides who may read it, the way a note's `private`
+    # does: a permission on the row, classified with the consent record it enforces.
+    "artifact.written_scope": CONSENT,
+    "event.written_scope": CONSENT,
     "fact.subject": HEALTH,
     "fact.attribute": HEALTH,
     "fact.value": HEALTH,
