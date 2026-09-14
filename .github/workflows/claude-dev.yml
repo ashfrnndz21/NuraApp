@@ -68,7 +68,7 @@ jobs:
             Do not touch .github/, .claude/ or CLAUDE.md. Files under backend/app/keys, consent, audit, safety and alembic/versions are owned by CODEOWNERS: only change them when the story requires it, and say so in the PR.
             Commit, push the branch, and open a pull request with `gh pr create` whose title starts with the story ID and whose body includes "Closes #${{ steps.pick.outputs.number }}", the acceptance line, and the plain-words output.
             If you run out of turns, push what you have, open a draft PR, and comment on the issue saying what is left.
-          claude_args: "--max-turns 80 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"
+          claude_args: "--max-turns 150 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"
       - name: Record the outcome
         if: always() && steps.pick.outputs.number != ''
         env:
@@ -81,5 +81,11 @@ jobs:
             gh issue edit "$N" --remove-label agent:ready
           else
             gh issue edit "$N" --remove-label agent:working --remove-label agent:ready --add-label agent:failed
+            # If the agent pushed a branch before it died, open a draft PR so the work is visible and CI runs on it.
+            ID=$(gh issue view "$N" --json title -q '.title | split(" ")[0]')
+            BR=$(git ls-remote --heads origin "$ID-*" | head -1 | sed 's#.*refs/heads/##')
+            if [ -n "$BR" ] && ! gh pr list --head "$BR" --json number -q '.[0].number' | grep -q .; then
+              gh pr create --draft --base main --head "$BR" --title "$ID (draft: agent ran out of turns)" --body "Closes #$N. The dev agent pushed this branch and then hit its turn limit; see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Needs the operator to finish." || true
+            fi
             gh issue comment "$N" --body "Dev agent run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. The orchestrator will not retry twice without a human comment."
           fi
