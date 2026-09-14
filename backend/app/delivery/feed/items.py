@@ -47,6 +47,7 @@ FEED_TARGET = FeedItem.__tablename__
 PRIORITY: dict[CardType, int] = {
     CardType.FLAG: 100,
     CardType.NOW: 90,
+    CardType.VISIT_LOGISTICS: 80,
     CardType.VISIT: 70,
     CardType.MEMO: 65,
     CardType.REORDER: 60,

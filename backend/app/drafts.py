@@ -39,6 +39,7 @@ class ConfirmSubject(StrEnum):
     ROUTINE = "routine"
     PROPOSAL = "appointment_proposal"
     ATTACH = "attach"
+    DRIVE = "drive"
 
 
 @dataclass(frozen=True, slots=True)
@@ -342,6 +343,27 @@ class TaskDoneDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class DriveDraft:
+    """One person asked to drive him to one visit (E05-03): the chief's yes to a suggestion
+    from the roster, or to anyone else on the profile. It becomes a family task naming the
+    visit ("drive Pa to Dr Tan") given to that person."""
+
+    appointment_id: uuid.UUID
+    person_id: uuid.UUID
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.DRIVE
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.appointment_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"appointment_id": self.appointment_id, "person_id": self.person_id}
+
+
+@dataclass(frozen=True, slots=True)
 class PushDraft:
     """A message to the patient about to be put on the calendar (E12-06): the lines exactly
     as he will read them, in his language, when, on which channel, and until when. The yes
@@ -473,6 +495,7 @@ Draft = (
     | RoutineDraft
     | ProposalDraft
     | AttachDraft
+    | DriveDraft
 )
 
 

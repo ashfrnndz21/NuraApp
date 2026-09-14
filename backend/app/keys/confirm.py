@@ -35,6 +35,7 @@ from app.drafts import (
     ClaimDraft,
     ConfirmSubject,
     Draft,
+    DriveDraft,
     FactDraft,
     KeyChangeDraft,
     OnlyMeDraft,
@@ -71,7 +72,8 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, ReviewDraft | AttachDraft):
         return Scope.RECORDS
-    if isinstance(draft, KeyChangeDraft | OnlyMeDraft):
+    if isinstance(draft, KeyChangeDraft | OnlyMeDraft | DriveDraft):
+        # Who drives him is a task on the family list (E05-03, E12-03).
         return Scope.FAMILY
     if isinstance(draft, TaskDoneDraft):
         return Scope.PROFILE

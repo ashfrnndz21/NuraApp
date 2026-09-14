@@ -1,0 +1,108 @@
+{
+  "placeholder": "consult-bp-review",
+  "sha256": "fd0d37ba1373c9983a6cac4f3d67c04f220e2e8bbb96272bcb8c1a99877e49bf",
+  "note": "The routine blood pressure review as a recording would be heard (E02-05): the in-room notice first, then Dr Tan's spoken yes as the first seconds after it, then the visit, Pa's question and Mei's word. The words Dr Tan says are routine-bp-review's, so the summary is the same card; the spans are offsets into this transcript. No real person.",
+  "transcript": "Nura will listen now. Nura keeps what you and Dr Tan say. Only you and those you let in can hear it. Is that OK, Dr Tan? Yes, that is fine. Good morning. Your blood pressure book shows the morning numbers drifting up. Last week 138 over 84, this week 142 over 88. From Friday I want you to take the full water pill in the morning instead of half. Keep the blood pressure tablet as it is. Every morning, before breakfast, stand on the scale and write the number in the book. Eat lighter dinners, less salt. We will do a blood test on Monday 28 September. Nothing to eat after midnight the night before, water is fine. I will see you again on Thursday 15 October at ten in the morning. Bring the book. Thank you, doctor. Is the water pill bad for my kidneys? No. We will check your kidneys with the blood test. I will bring the book on the day.",
+  "summary": {
+    "actions": [
+      {
+        "kind": "weigh_every_morning",
+        "slots": {},
+        "confidence": 0.93,
+        "span": {
+          "start": 388,
+          "end": 473
+        }
+      },
+      {
+        "kind": "lighter_dinners",
+        "slots": {},
+        "confidence": 0.9,
+        "span": {
+          "start": 474,
+          "end": 505
+        }
+      },
+      {
+        "kind": "blood_test_on",
+        "slots": {
+          "day": "2026-09-28"
+        },
+        "confidence": 0.91,
+        "span": {
+          "start": 506,
+          "end": 553
+        }
+      },
+      {
+        "kind": "no_food_after_midnight",
+        "slots": {
+          "day": "2026-09-27"
+        },
+        "confidence": 0.84,
+        "span": {
+          "start": 554,
+          "end": 616
+        }
+      },
+      {
+        "kind": "water_is_ok",
+        "slots": {},
+        "confidence": 0.84,
+        "span": {
+          "start": 602,
+          "end": 615
+        }
+      },
+      {
+        "kind": "bring_bp_book_next_time",
+        "slots": {},
+        "confidence": 0.88,
+        "span": {
+          "start": 684,
+          "end": 699
+        }
+      }
+    ],
+    "medication_changes": [
+      {
+        "drug": "frusemide",
+        "change": "dose",
+        "confidence": 0.86,
+        "span": {
+          "start": 264,
+          "end": 346
+        }
+      }
+    ],
+    "follow_ups": [
+      {
+        "on": "2026-10-15",
+        "at": "10:00",
+        "provider": "Dr Tan",
+        "purpose": "blood pressure check",
+        "confidence": 0.9,
+        "span": {
+          "start": 617,
+          "end": 683
+        }
+      }
+    ],
+    "facts_heard": [
+      {
+        "subject": "blood_pressure",
+        "attribute": "reading",
+        "value": {
+          "systolic": 142,
+          "diastolic": 88
+        },
+        "unit": "mmHg",
+        "confidence": 0.8,
+        "span": {
+          "start": 241,
+          "end": 262
+        }
+      }
+    ]
+  }
+}

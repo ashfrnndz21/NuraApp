@@ -489,6 +489,35 @@ CLASSES: dict[str, str] = {
     "summary_item.appointment_id": HEALTH,
     "summary_item.fact_id": HEALTH,
     "summary_item.flag_id": HEALTH,
+    # Where in a consult recording an item was said, and the recording a card was heard from.
+    "summary_item.clip_start_s": HEALTH,
+    "summary_item.clip_end_s": HEALTH,
+    "visit_summary.recording_artifact_id": HEALTH,
+    # --- the consult recording (E02-05, E05-04) -------------------------------------------------
+    # A recording of a visit and who spoke when in it: health. The consent it rested on is the
+    # consent record; whether the doctor was named is part of the notice the pattern owes
+    # (docs/trust/recording-consent.md), so it is classified with the consent too. The person
+    # who pressed Start is an identifier. No row holds a word of what was said.
+    "consult_recording.id": HEALTH,
+    "consult_recording.appointment_id": HEALTH,
+    "consult_recording.artifact_id": HEALTH,
+    "consult_recording.transcript_artifact_id": HEALTH,
+    "consult_recording.consent_id": CONSENT,
+    "consult_recording.duration_s": HEALTH,
+    "consult_recording.started_at": HEALTH,
+    "consult_recording.notice_language": OPERATIONAL,
+    "consult_recording.doctor_named": CONSENT,
+    "consult_recording.heard_confidence": OPERATIONAL,
+    "consult_recording.recorded_by_person_id": IDENTIFIER,
+    "consult_recording.stored_at": OPERATIONAL,
+    "consult_segment.id": HEALTH,
+    "consult_segment.recording_id": HEALTH,
+    "consult_segment.position": OPERATIONAL,
+    "consult_segment.speaker": HEALTH,
+    "consult_segment.start_s": HEALTH,
+    "consult_segment.end_s": HEALTH,
+    "consult_segment.char_start": HEALTH,
+    "consult_segment.char_end": HEALTH,
     # --- the family (E12) ---------------------------------------------------------------------
     # The thread and the tasks are about his care: their words and what they point at are
     # health. The roster says who looks after him and when: an identifier, like the family
@@ -506,6 +535,9 @@ CLASSES: dict[str, str] = {
     "task.created_at": OPERATIONAL,
     "task.done_at": OPERATIONAL,
     "task.done_by_person_id": IDENTIFIER,
+    # A drive to a visit (E05-03): which visit, and that it is the drive.
+    "task.appointment_id": HEALTH,
+    "task.errand": HEALTH,
     "roster_slot.person_id": IDENTIFIER,
     "roster_slot.role": IDENTIFIER,
     "roster_slot.weekdays": OPERATIONAL,

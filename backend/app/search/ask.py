@@ -64,6 +64,7 @@ from app.memory.models import (
 from app.memory.semantic import fact_is_under
 from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
+from app.reasoning.visits.models import ItemState, SummaryItem, SummaryItemKind, VisitSummary
 from app.regions import guard_region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.retrieve import Candidate, Retriever
@@ -118,16 +119,31 @@ class NotAQuestion(Refusal):
 
 @dataclass(frozen=True, slots=True)
 class Cite:
-    """One thing a line rests on, by kind and id."""
+    """One thing a line rests on, by kind and id. A cite of a consult recording carries the
+    stretch of it the line is about, in seconds (E03-05)."""
 
     kind: str
     id: uuid.UUID
+    start_s: float | None = None
+    end_s: float | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ClipRef:
+    """The stretch of a consult recording a line can play on a tap: which artefact, from when
+    to when, and the doctor who said it, for the button's words."""
+
+    artifact_id: uuid.UUID
+    start_s: float
+    end_s: float
+    doctor: str
 
 
 @dataclass(frozen=True, slots=True)
 class AnswerLine:
     text: str
     cites: tuple[Cite, ...]
+    clip: ClipRef | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,11 +183,29 @@ class _Corpus:
     papers: dict[uuid.UUID, Artifact] = field(default_factory=dict)
     paper_kinds: dict[uuid.UUID, str] = field(default_factory=dict)
     hung: dict[uuid.UUID, list[Attachment]] = field(default_factory=dict)
+    consults: dict[uuid.UUID, tuple[SummaryItem, VisitSummary]] = field(default_factory=dict)
+    clips_open: bool = False
+    """Whether the key reaches the recording's bytes (the record's scope) to play a clip."""
     withheld: list[Scope] = field(default_factory=list)
 
     def withhold(self, scope: Scope) -> None:
         if scope not in self.withheld:
             self.withheld.append(scope)
+
+
+ACTION_WORDS: dict[str, frozenset[str]] = {
+    "weigh_every_morning": frozenset({"scale", "weigh", "weight", "timbang", "体重"}),
+    "bp_every_morning": frozenset({"blood pressure", "tekanan darah", "血压"}),
+    "bring_bp_book_next_time": frozenset({"blood pressure book", "book", "buku", "血压本"}),
+    "no_food_after_midnight": frozenset({"eat", "food", "midnight", "makan", "吃"}),
+    "water_is_ok": frozenset({"water", "air", "喝水"}),
+    "lighter_dinners": frozenset({"dinner", "salt", "makan malam", "晚餐"}),
+    "walk_every_day": frozenset({"walk", "berjalan", "走"}),
+    "blood_test_on": frozenset({"blood test", "ujian darah", "验血"}),
+    "medicines_unchanged_said": frozenset(MEDICINE_WORDS),
+}
+"""What a heard action is about, in the words a question would use for it, for recall."""
+FOLLOW_UP_WORDS = frozenset({"see again", "next visit", "come back", "jumpa lagi", "再见"})
 
 
 def _with_words(phrases: set[str]) -> frozenset[str]:
@@ -287,6 +321,9 @@ async def _corpus(
             )
     else:
         corpus.withhold(Scope.MEDICINES)
+    corpus.clips_open = context.allows(Scope.RECORDS)
+    if context.allows(Scope.VISITS):
+        await _consults(session, context, registry, corpus)
     if context.allows(Scope.RECORDS):
         hung = await audited_read(session, Attachment, context, Scope.RECORDS)
         for each in hung:
@@ -322,6 +359,56 @@ async def _corpus(
                 Candidate("paper", artifact.id, artifact.captured_at, _with_words(names))
             )
     return corpus
+
+
+async def _consults(
+    session: AsyncSession, context: KeyContext, registry: DrugRegistry | None, corpus: _Corpus
+) -> None:
+    """What was said at a recorded visit, one candidate per thing heard that has a place in
+    the recording (E03-05): named by what it was about — his name for the medicine, the words
+    for the action — so "what did Dr Tan say about the water pill" finds where he said it."""
+    summaries = await audited_read(
+        session,
+        VisitSummary,
+        context,
+        Scope.VISITS,
+        where=(VisitSummary.recording_artifact_id.is_not(None),),
+    )
+    if not summaries:
+        return
+    by_id = {summary.id: summary for summary in summaries}
+    items = await audited_read(
+        session,
+        SummaryItem,
+        context,
+        Scope.VISITS,
+        where=(
+            SummaryItem.summary_id.in_(list(by_id)),
+            SummaryItem.clip_start_s.is_not(None),
+            SummaryItem.state != ItemState.REJECTED,
+        ),
+    )
+    for item in items:
+        summary = by_id[item.summary_id]
+        visit = corpus.visits.get(summary.appointment_id)
+        if visit is None:
+            continue
+        names: set[str] = set()
+        payload = item.payload or {}
+        if item.kind is SummaryItemKind.MEDICATION_CHANGE and payload.get("generic"):
+            names |= _plain_names(registry, str(payload["generic"]))
+        elif item.kind is SummaryItemKind.ACTION:
+            names |= ACTION_WORDS.get(str(payload.get("kind")), frozenset())
+        elif item.kind is SummaryItemKind.FACT_HEARD and payload.get("subject"):
+            names |= _what_names(str(payload["subject"]))
+        elif item.kind is SummaryItemKind.FOLLOW_UP:
+            names |= FOLLOW_UP_WORDS
+        if not names:
+            continue
+        corpus.consults[item.id] = (item, summary)
+        corpus.candidates.append(
+            Candidate("consult", item.id, visit.scheduled_at, _with_words(names))
+        )
 
 
 def _providers_of(corpus: _Corpus, artifact_id: uuid.UUID) -> set[str]:
@@ -385,6 +472,7 @@ def _compose(
     now = utcnow()
     groups: list[list[AnswerLine]] = []
     papers_said: set[uuid.UUID] = set()
+    visits_heard: set[uuid.UUID] = set()
     for hit in hits:
         if hit.kind == "reading":
             fact = corpus.facts[hit.ref]
@@ -445,6 +533,37 @@ def _compose(
             if line.source_event_id is not None:
                 line_cites.append(Cite("event", line.source_event_id))
             groups.append([AnswerLine(text, tuple(line_cites))])
+        elif hit.kind == "consult":
+            item, summary = corpus.consults[hit.ref]
+            # One line per recorded visit: the best thing heard there that the question is
+            # about, and the stretch of the recording where it was said.
+            if summary.id in visits_heard:
+                continue
+            visits_heard.add(summary.id)
+            visit = corpus.visits[summary.appointment_id]
+            provider = corpus.providers.get(visit.provider_id)
+            doctor = "" if provider is None else provider.name
+            text = words.recall_line(
+                "consult_said",
+                language,
+                doctor=doctor,
+                date=_day(visit.scheduled_at, context, language),
+            )
+            consult_cites = [Cite("summary_item", item.id), Cite("appointment", visit.id)]
+            clip: ClipRef | None = None
+            if (
+                corpus.clips_open
+                and summary.recording_artifact_id is not None
+                and item.clip_start_s is not None
+                and item.clip_end_s is not None
+            ):
+                consult_cites.append(
+                    Cite("artifact", summary.recording_artifact_id, item.clip_start_s, item.clip_end_s)
+                )
+                clip = ClipRef(
+                    summary.recording_artifact_id, item.clip_start_s, item.clip_end_s, doctor
+                )
+            groups.append([AnswerLine(text, tuple(consult_cites), clip)])
         elif hit.kind == "paper":
             if hit.ref in papers_said:
                 continue
@@ -577,6 +696,7 @@ __all__ = [
     "Answer",
     "AnswerLine",
     "Cite",
+    "ClipRef",
     "Mode",
     "NotAQuestion",
     "recall",

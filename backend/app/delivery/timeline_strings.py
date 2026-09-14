@@ -265,6 +265,7 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor} gave you {name}.",
         "medicine_listed": "{name} is on your list of medicines.",
         "paper": "Your {what} from {date} is in your papers.",
+        "consult_said": "{doctor} talked about this on {date}.",
     },
     "ms": {
         "visit_past": "Anda berjumpa {doctor} pada {date}.",
@@ -272,6 +273,7 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor} memberi anda {name}.",
         "medicine_listed": "{name} ada dalam senarai ubat anda.",
         "paper": "{what} anda dari {date} ada dalam surat-surat anda.",
+        "consult_said": "{doctor} bercakap tentang perkara ini pada {date}.",
     },
     "zh": {
         "visit_past": "您{date}看了{doctor}。",
@@ -279,10 +281,13 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor}给了您{name}。",
         "medicine_listed": "{name}在您的药单上。",
         "paper": "您{date}的{what}在您的文件里。",
+        "consult_said": "{doctor}在{date}讲过这件事。",
     },
 }
 """The lines an answer is made of. Each says what is written down and when, filled only with
-the values of the facts it cites; none says what a number means."""
+the values of the facts it cites; none says what a number means. `consult_said` is a line of
+a recorded visit (E03-05): it cites the summary item and the stretch of the recording where
+the doctor said it, which the phone plays on a tap."""
 
 # @patient
 READING: Mapping[str, Lines] = {

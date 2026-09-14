@@ -38,6 +38,11 @@ class Settings:
     """NURA_VOICE_FIXTURES: the directory of transcripts the fixture transcriber answers from
     (`app.ingestion.transcribe.FixtureTranscriber`). Set on a laptop; a speech provider in the
     region is a later adapter, and without either the process refuses to start."""
+    speaker_fixtures: str | None = None
+    """NURA_SPEAKER_FIXTURES: the directory the fixture speaker separator answers from
+    (`app.ingestion.speakers.FixtureSeparator`), keyed by the digest of a consult recording.
+    Optional: without it a recording is kept as one stretch by an unknown speaker
+    (`Unseparated`), which claims nothing it did not hear (E02-05)."""
     feed_fixtures: str | None = None
     """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
     (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
@@ -102,6 +107,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
+        speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         web_dist=source.get("NURA_WEB_DIST") or None,
         whatsapp_provider=source.get("NURA_WHATSAPP_PROVIDER", "fixture"),

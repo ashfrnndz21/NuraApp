@@ -1,0 +1,72 @@
+{
+  "label": "consult-bp-review",
+  "duration_s": 66.0,
+  "segments": [
+    {
+      "speaker": "unknown",
+      "start_s": 0.0,
+      "end_s": 8.6,
+      "text": "Nura will listen now. Nura keeps what you and Dr Tan say. Only you and those you let in can hear it. Is that OK, Dr Tan?"
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 8.6,
+      "end_s": 10.4,
+      "text": "Yes, that is fine."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 10.4,
+      "end_s": 19.8,
+      "text": "Good morning. Your blood pressure book shows the morning numbers drifting up. Last week 138 over 84, this week 142 over 88."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 19.8,
+      "end_s": 28.9,
+      "text": "From Friday I want you to take the full water pill in the morning instead of half. Keep the blood pressure tablet as it is."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 28.9,
+      "end_s": 36.2,
+      "text": "Every morning, before breakfast, stand on the scale and write the number in the book."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 36.2,
+      "end_s": 39.0,
+      "text": "Eat lighter dinners, less salt."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 39.0,
+      "end_s": 47.5,
+      "text": "We will do a blood test on Monday 28 September. Nothing to eat after midnight the night before, water is fine."
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 47.5,
+      "end_s": 55.1,
+      "text": "I will see you again on Thursday 15 October at ten in the morning. Bring the book."
+    },
+    {
+      "speaker": "patient",
+      "start_s": 55.1,
+      "end_s": 59.3,
+      "text": "Thank you, doctor. Is the water pill bad for my kidneys?"
+    },
+    {
+      "speaker": "doctor",
+      "start_s": 59.3,
+      "end_s": 63.0,
+      "text": "No. We will check your kidneys with the blood test."
+    },
+    {
+      "speaker": "family",
+      "start_s": 63.0,
+      "end_s": 65.8,
+      "text": "I will bring the book on the day."
+    }
+  ]
+}

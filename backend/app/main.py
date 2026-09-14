@@ -30,6 +30,7 @@ from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.transcribe import FixtureTranscriber
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
@@ -63,6 +64,11 @@ def providers_for(settings: Settings) -> Providers:
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
         reference_ranges=reference_ranges_for(settings),
+        # Who spoke when in a consult (E02-05): the fixture separator over NURA_SPEAKER_FIXTURES
+        # on a laptop; unset, a recording is one stretch by an unknown speaker.
+        speaker_separator=None
+        if settings.speaker_fixtures is None
+        else FixtureSeparator(Path(settings.speaker_fixtures), settings.region),
     )
 
 

@@ -78,6 +78,7 @@ from app.reasoning.visits.guard import (
     can_change_visits,
     may_change_visits,
 )
+from app.reasoning.visits.logistics import logistics_for
 from app.reasoning.visits.memos import consolidate_memos, current_memos
 from app.reasoning.visits.models import Brief, Memo, MemoSource, SummaryItem, VisitSummary
 from app.reasoning.visits.strings import spoken
@@ -300,6 +301,9 @@ async def refresh(
     await _reorder(make, day=day, house=house, medicines=medicines)
     await _readings(make, day=day, house=house, readings=readings)
     await _visit(make, session, context=context, engine=engine, state=state, day=day, house=house)
+    await _logistics(
+        make, session, context=context, engine=engine, state=state, day=day, house=house
+    )
     await _memos(make, session, context=context, day=day, house=house)
     await make(
         type=CardType.GATE,
@@ -782,6 +786,65 @@ async def _visit(
         deliver_to=DeliverTo.PATIENT,
         day=day.key,
         dedupe_key=f"visit:{visit['id']}:{day.key}",
+        expires_at=day.ends_at,
+    )
+
+
+async def _logistics(
+    make: Any,
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    engine: Engine,
+    state: StateView,
+    day: Day,
+    house: Household,
+) -> None:
+    """The logistics card, the day before the next visit and on the day (E05-03): the time,
+    the place, who drives him, what to bring — the logistics card's own lines, each through
+    the verifier there and again here. The chief's note about the place is on the visit
+    screen under her name; it goes on this card only as the line saying she wrote one.
+    A card that shows the booking back infers nothing, so it carries no boundary line."""
+    if not context.allows(Scope.VISITS):
+        return
+    visit, _ = await _next_visit(session, context=context, state=state)
+    if visit is None:
+        return
+    at = datetime.fromisoformat(visit["at"])
+    on = as_utc(at).astimezone(day.tz).date()
+    if on == day.local.date():
+        headline = "logistics_today"
+    elif on == day.local.date() + timedelta(days=1):
+        headline = "logistics_tomorrow"
+    else:
+        return
+    try:
+        async with nested_unit_of_work(session):
+            card = await logistics_for(
+                session,
+                context=context,
+                appointment_id=uuid.UUID(visit["id"]),
+                registry=engine.registry,
+            )
+    except Refusal:
+        return
+    lines = render(
+        "visit_logistics",
+        house.language,
+        headline=headline,
+        extra=tuple(line.text for line in card.lines),
+        doctor=card.doctor,
+        day=day.plain(at, house.language),
+    )
+    lines = replace(lines, voice=tuple(card.spoken))
+    await make(
+        type=CardType.VISIT_LOGISTICS,
+        lines=lines,
+        why=Why(kind="visit_logistics", plain=lines.why, visit_id=visit["id"]),
+        scope=Scope.VISITS,
+        deliver_to=DeliverTo.PATIENT,
+        day=day.key,
+        dedupe_key=f"logistics:{visit['id']}:{day.key}",
         expires_at=day.ends_at,
     )
 

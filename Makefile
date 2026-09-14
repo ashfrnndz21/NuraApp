@@ -15,6 +15,8 @@ dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
 dev: export NURA_VISIT_FIXTURES ?= tests/fixtures/visits
 # The transcripts the fixture transcriber answers from, keyed by the digest of the bytes (E02-06).
 dev: export NURA_VOICE_FIXTURES ?= tests/fixtures/voice
+# Who spoke when in a consult recording, keyed by the digest of the audio (E02-05).
+dev: export NURA_SPEAKER_FIXTURES ?= tests/fixtures/speakers
 # The feed's fixture searcher and compressor (E21) answer from here until the real fetcher
 # and the grounded model call exist behind the same two ports.
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed

@@ -206,6 +206,7 @@ class VisitSummary(RenderedFromState, ProfileScoped, Base):
         _row_of_profile("visit_summary"),
         _tied_to_profile("visit_summary", "appointment_id", "appointment"),
         _tied_to_profile("visit_summary", "artifact_id", "artifact"),
+        _tied_to_profile("visit_summary", "recording_artifact_id", "artifact"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -219,6 +220,9 @@ class VisitSummary(RenderedFromState, ProfileScoped, Base):
     confirmed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None
     )
+    recording_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifact.id"), default=None
+    )
 
     @property
     def is_open(self) -> bool:
@@ -228,7 +232,8 @@ class VisitSummary(RenderedFromState, ProfileScoped, Base):
 class SummaryItem(ProfileScoped, Base):
     """One thing heard: an action, a medicine change, a follow-up, a fact. `payload` is the
     summariser's structured answer, `span` where in the transcript it was heard, `text` the
-    line rendered for him. On the person's yes each kept item names what it became: a memo,
+    line rendered for him. `clip_start_s`/`clip_end_s` are the same place in the recording,
+    in seconds, when the transcript was heard from one. On the person's yes each kept item names what it became: a memo,
     an appointment, a fact, or — for a medicine change — a flag and a memo asking the doctor,
     never a change to a medicine."""
 
@@ -261,6 +266,10 @@ class SummaryItem(ProfileScoped, Base):
     )
     fact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
     flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
+    clip_start_s: Mapped[float | None] = mapped_column(Float, default=None)
+    clip_end_s: Mapped[float | None] = mapped_column(Float, default=None)
+    """Where in the consult recording this item was said, in seconds, from the speaker
+    segments its transcript span falls in (E02-05); None when the transcript was typed."""
 
 
 # A brief takes no change. A question and a memo take one, being superseded. A summary takes its close, an item its decision, and only while the

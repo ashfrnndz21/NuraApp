@@ -52,6 +52,12 @@ from app.ingestion.connectors.service import (
     NotTheirsToConnect,
     NotTheirsToDecide,
 )
+from app.ingestion.consult import (
+    ConsultTooLong,
+    NoSuchRecording,
+    NotAClip,
+    NotAConsultRecording,
+)
 from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
@@ -68,6 +74,7 @@ from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchE
 from app.reasoning.trends import NoSuchAnalyte
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
+from app.reasoning.visits.logistics import NotOnThisVisit
 from app.reasoning.visits.questions import NoSuchQuestion
 from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
 from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
@@ -147,6 +154,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (EpisodeAlreadyClosed, 409),
     (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
+    # A visit's recording (E02-05): too big or too long to be one visit; no recording of that
+    # artefact on this profile.
+    (ConsultTooLong, 413),
+    (NoSuchRecording, 404),
     (TranscriptTooLarge, 413),
     (VoiceNoteTooLong, 413),
     # The record moved past the State a card was composed from: read it again, compose again.
@@ -196,6 +207,11 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NoteNamesHealth,
     NotACursor,
     NotAQuestion,
+    # The visit day's (E05-03, E02-05): bytes that are not a recorder's audio, a clip outside
+    # its recording, a driver who holds nothing here or a visit that has been.
+    NotAConsultRecording,
+    NotAClip,
+    NotOnThisVisit,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""

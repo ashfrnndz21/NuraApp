@@ -113,6 +113,13 @@ class RosterSlot(ProfileScoped, Base):
         return self.ended_at is None or as_utc(self.ended_at) > now
 
 
+class Errand(StrEnum):
+    """A task that is part of a visit's logistics (E05-03). Only one kind for now: driving
+    him there. Any other task names no errand."""
+
+    DRIVE = "drive"
+
+
 TASK_DONE_IN_PROGRESS = "task_done"
 """`session.info` key: the id of the one task `roster.mark_task_done` is closing right now."""
 
@@ -126,11 +133,16 @@ class Task(ProfileScoped, Base):
     person it names taps it, and only then.
 
     `what` is a label — "buy the water pill" — never instructions and never a fact. The
-    one change the row takes is its close, by the doer, through the service.
+    one change the row takes is its close, by the doer, through the service. A task that is
+    part of a visit's logistics names the visit and the errand (`Errand.DRIVE`: "drive Pa to
+    Dr Tan"), so the visit's logistics card can say who is driving (E05-03).
     """
 
     __tablename__ = "task"
-    __table_args__ = (_row_of_profile("task"),)
+    __table_args__ = (
+        _row_of_profile("task"),
+        _tied_to_profile("task", "appointment_id", "appointment"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     what: Mapped[str] = mapped_column(String(LABEL_LENGTH))
@@ -142,6 +154,10 @@ class Task(ProfileScoped, Base):
     done_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None
     )
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("appointment.id"), default=None
+    )
+    errand: Mapped[Errand | None] = mapped_column(enum_column(Errand, "task_errand"), default=None)
 
     @property
     def is_done(self) -> bool:

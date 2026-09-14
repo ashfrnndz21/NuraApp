@@ -538,6 +538,22 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Anda ada ujian darah pada {day}.",
         "zh": "您在{day}有一次验血。",
     },
+    # The visit's logistics (E05-03): where it is, and whose note about the place there is.
+    "logistics_place": {
+        "en": "{doctor} is at {place}.",
+        "ms": "{doctor} berada di {place}.",
+        "zh": "{doctor}在{place}。",
+    },
+    "logistics_no_place": {
+        "en": "Nura does not have the address of {doctor} yet.",
+        "ms": "Nura belum ada alamat {doctor}.",
+        "zh": "Nura还没有{doctor}的地址。",
+    },
+    "logistics_note_by": {
+        "en": "{who} wrote a note about the place.",
+        "ms": "{who} menulis nota tentang tempat itu.",
+        "zh": "{who}写了一条关于这个地方的备注。",
+    },
 }
 """Every line the visit loop can say that is not a thing for him to do, by key and language."""
 
@@ -601,11 +617,40 @@ ACTION_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Setiap hari, berjalan selama {minutes} minit.",
         "zh": "每天走{minutes}分钟。",
     },
+    # The visit's logistics (E05-03): who drives him, and the last paper to bring.
+    "logistics_driver": {
+        "en": "{who} will drive you to {doctor} on {day}.",
+        "ms": "{who} akan menghantar anda ke {doctor} pada {day}.",
+        "zh": "{who}会在{day}开车送您去见{doctor}。",
+    },
+    "logistics_driver_ask": {
+        "en": "{who} will tell you who drives you on {day}.",
+        "ms": "{who} akan beritahu anda siapa yang menghantar anda pada {day}.",
+        "zh": "{who}会告诉您{day}谁开车送您。",
+    },
+    "bring_last_letter": {
+        "en": "Bring your hospital letter on {day}.",
+        "ms": "Bawa surat hospital anda pada {day}.",
+        "zh": "{day}，带上您的医院来信。",
+    },
 }
 """Every line that tells him to do something: it says when, and who does the next thing,
 and the verifier holds it to that (`kind="action"`)."""
 
 TEMPLATES: Mapping[str, Mapping[str, str]] = {**LINE_TEMPLATES, **ACTION_TEMPLATES}
+
+# @patient phrase
+NOTE_LABEL: Mapping[str, str] = {"en": "{who}'s note", "ms": "Nota {who}", "zh": "{who}的备注"}
+"""The label over the chief's own note about a place, shown as she wrote it (E05-03)."""
+
+# @patient phrase
+DRIVE_TASK: Mapping[str, str] = {
+    "en": "drive {name} to {doctor}",
+    "ms": "hantar {name} ke {doctor}",
+    "zh": "开车送{name}去见{doctor}",
+}
+"""What a drive task says on the family's list: one label, filled with his name and the
+doctor's (E05-03, E12-03)."""
 ACTION_KEYS = frozenset(ACTION_TEMPLATES)
 
 # --- what a slot may hold ------------------------------------------------------------------
@@ -618,6 +663,9 @@ _WORDS = re.compile(r"^[^\W\d_](?:[^\W\d_]|[ ()'’\-])*$")
 _WHEN = re.compile(r"^[\w .:一-鿿]{1,40}$")
 """A day-and-date or a time as `day_and_date`/`time_of_day` render them."""
 _NUMBER = re.compile(r"^\d{1,3}$")
+_PLACE = re.compile(r"^[^\W_](?:[\w .,'’()#/&\-])*$")
+"""An address as the directory holds it: letters and digits in any script, and the marks an
+address uses. One line; the verifier still reads the whole sentence it goes into."""
 
 SLOT_RULES: Mapping[str, tuple[re.Pattern[str], int]] = {
     "doctor": (_NAME, 60),
@@ -630,6 +678,7 @@ SLOT_RULES: Mapping[str, tuple[re.Pattern[str], int]] = {
     "subject": (_WORDS, 60),
     "day": (_WHEN, 40),
     "time": (_WHEN, 40),
+    "place": (_PLACE, 120),
     "count": (_NUMBER, 3),
     "minutes": (_NUMBER, 3),
 }
