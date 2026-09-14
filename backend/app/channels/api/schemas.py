@@ -84,7 +84,14 @@ from app.medicines.service import (
 )
 from app.medicines.service import Outcome as MedicineOutcome
 from app.medicines.story import Story
-from app.memory.models import LABEL_LENGTH, ArtifactKind, ConfidenceState, Event, Fact
+from app.memory.models import (
+    LABEL_LENGTH,
+    AppointmentStatus,
+    ArtifactKind,
+    ConfidenceState,
+    Event,
+    Fact,
+)
 from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
@@ -267,6 +274,17 @@ class ConsentOut(BaseModel):
         )
 
 
+class WordingOut(BaseModel):
+    """Today's words for one consent purpose, one line per idea, as `GET /consent/wording`
+    answers them; `version` is what `ConsentIn.wording_version` must carry."""
+
+    purpose: ConsentPurpose
+    version: str
+    language: str
+    region: Region
+    lines: list[str]
+
+
 class ProfileCreate(BaseModel):
     consent: ConsentIn
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
@@ -285,10 +303,14 @@ class ProfileOut(BaseModel):
     role: KeyRole | None
     scopes: list[Scope]
     standing: Standing
+    key_id: uuid.UUID | None = None
+    """The key the caller reaches it with, or none for its owner: what a client binds any
+    copy it keeps to, so a closed or narrowed key never shows what it once opened."""
 
     @classmethod
     def of(cls, profile: Profile, context: KeyContext) -> ProfileOut:
         return cls(
+            key_id=context.key_id,
             profile_id=profile.id,
             display_name=profile.display_name,
             language=profile.language,
@@ -461,6 +483,9 @@ class ReviewCardConfirmIn(BaseModel):
     subject: Literal[ConfirmSubject.REVIEW_CARD]
     card_id: uuid.UUID
     decisions: list[DecisionIn]
+    episode_id: uuid.UUID | None = None
+    """The open episode the card goes into once confirmed (E03-02), part of what is said yes
+    to: its facts name the episode and its photo hangs off it."""
 
 
 class MedicineConfirmIn(BaseModel):
@@ -525,9 +550,15 @@ class PushScheduleIn(PushComposeIn):
     expires_at: datetime
 
 
+class PushConfirmIn(PushScheduleIn):
+    """A yes to exactly the previewed lines, then, there, until (E12-06)."""
+
+    subject: Literal[ConfirmSubject.PUSH]
+
+
 class AppointmentConfirmIn(BaseModel):
-    """A yes to booking a visit: with whom, when, why — exactly what `POST /appointments`
-    will write (E05, the spine's `book_appointment`)."""
+    """A yes to writing down a visit: with whom, when and why, exactly as it will be written
+    (`POST /appointments`). Nothing is booked with a clinic by it."""
 
     subject: Literal[ConfirmSubject.APPOINTMENT]
     provider_id: uuid.UUID
@@ -535,10 +566,27 @@ class AppointmentConfirmIn(BaseModel):
     purpose: str = Field(min_length=1, max_length=80)
 
 
-class PushConfirmIn(PushScheduleIn):
-    """A yes to exactly the previewed lines, then, there, until (E12-06)."""
+class StatusConfirmIn(BaseModel):
+    """A yes to one step of a visit's status: this visit, to this status."""
 
-    subject: Literal[ConfirmSubject.PUSH]
+    subject: Literal[ConfirmSubject.APPOINTMENT_STATUS]
+    appointment_id: uuid.UUID
+    status: AppointmentStatus
+
+
+class AttachConfirmIn(BaseModel):
+    """A yes to hanging this artefact off exactly one thing: an episode or a visit."""
+
+    subject: Literal[ConfirmSubject.ATTACH]
+    artifact_id: uuid.UUID
+    episode_id: uuid.UUID | None = None
+    appointment_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_thing(self) -> AttachConfirmIn:
+        if (self.episode_id is None) == (self.appointment_id is None):
+            raise ValueError("a paper hangs off an episode or a visit, one of the two")
+        return self
 
 
 ConfirmIn = Annotated[
@@ -549,7 +597,9 @@ ConfirmIn = Annotated[
     | OnlyMeConfirmIn
     | TaskDoneConfirmIn
     | PushConfirmIn
-    | AppointmentConfirmIn,
+    | AppointmentConfirmIn
+    | StatusConfirmIn
+    | AttachConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -635,10 +685,13 @@ class KeyOut(BaseModel):
     granted_at: datetime
     expires_at: datetime | None
     revoked_at: datetime | None
+    holder_display_name: str | None = None
+    """Who holds it, by name, for the owner reading his own keys: the person to call."""
 
     @classmethod
-    def of(cls, key: Key) -> KeyOut:
+    def of(cls, key: Key, holder_display_name: str | None = None) -> KeyOut:
         return cls(
+            holder_display_name=holder_display_name,
             key_id=key.id,
             profile_id=key.profile_id,
             holder_person_id=key.holder_person_id,
@@ -914,6 +967,10 @@ class LineOut(BaseModel):
     duplicate_of: list[uuid.UUID]
     doctor_question: list[str]
     taken_label: str | None
+    due_now: bool = False
+    missed: bool = False
+    source: str = ""
+    """Where the line came from and on which day, in his words: the card's source line."""
 
     @classmethod
     def of(cls, view: LineView) -> LineOut:
@@ -925,6 +982,9 @@ class LineOut(BaseModel):
             duplicate_of=view.duplicate_of,
             doctor_question=view.doctor_question,
             taken_label=view.taken_label,
+            due_now=view.due_now,
+            missed=view.missed,
+            source=view.source,
         )
 
     @classmethod
@@ -1114,6 +1174,13 @@ class SlotOut(BaseModel):
     card: str
     taken: bool
     taken_label: str
+    due_now: bool
+    """Its window is open now and it is not yet tapped: the one thing to do."""
+    missed: bool
+    """Its window has closed untapped; `if_forgotten` says what the story says to do."""
+    if_forgotten: list[str]
+    source: str
+    """Where the medicine came from and on which day: the card's source line."""
 
     @classmethod
     def of(cls, slot: Slot) -> SlotOut:
@@ -1124,6 +1191,10 @@ class SlotOut(BaseModel):
             card=slot.card,
             taken=slot.taken,
             taken_label=slot.taken_label,
+            due_now=slot.due_now,
+            missed=slot.missed,
+            if_forgotten=slot.if_forgotten,
+            source=slot.source,
         )
 
 
@@ -1149,6 +1220,8 @@ class ReadingIn(BaseModel):
     systolic: int = Field(ge=40, le=300)
     diastolic: int = Field(ge=20, le=200)
     taken_at: datetime | None = None
+    episode_id: uuid.UUID | None = None
+    """The open episode this reading was taken during, if any (E03-02)."""
 
 
 class ReadingOut(BaseModel):
@@ -1411,6 +1484,8 @@ class ReviewConfirmIn(BaseModel):
 
     decisions: list[DecisionIn]
     confirmation_id: uuid.UUID
+    episode_id: uuid.UUID | None = None
+    """The open episode the yes named, if it named one (E03-02)."""
 
 
 class FactOut(BaseModel):

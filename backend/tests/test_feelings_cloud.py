@@ -142,7 +142,9 @@ async def test_the_first_week_home_from_hospital_comes_forward_every_day(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
     owner = await _owner(sg)
-    await happened(sg, owner, EventKind.DISCHARGE, utcnow() - timedelta(days=2), "home from hospital")
+    await happened(
+        sg, owner, EventKind.DISCHARGE, utcnow() - timedelta(days=2), "home from hospital"
+    )
     cloud = await _cloud(sg, owner)
     assert _words(cloud)[:4] == [
         Feeling.BREATHLESS,
@@ -189,7 +191,10 @@ async def test_the_words_are_in_his_language(sg: AsyncSession) -> None:
     await new_medicine(sg, his)
     cloud = await _cloud(sg, his)
     assert cloud.language == "ms" and cloud.words[0].label == "Pening"
-    assert cloud.prompt == ("Ubat tekanan darah anda baru sejak Khamis 3 September.", "Apa rasa anda hari ini?")
+    assert cloud.prompt == (
+        "Ubat tekanan darah anda baru sejak Khamis 3 September.",
+        "Apa rasa anda hari ini?",
+    )
     chinese = await _cloud(sg, his, "zh")
     assert chinese.words[0].label == "头晕" and chinese.words[-1].label == "今天还好"
 

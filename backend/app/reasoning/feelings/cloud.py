@@ -82,8 +82,8 @@ class Weighed:
 def weigh(situation: Situation) -> list[Weighed]:
     """Every word for the cloud, biggest first, each with every reason it is there.
 
-    Words of the same weight keep the order they were brought in by; "Fine today" is always
-    last and always there.
+    Words of the same weight come newest change first, then in the order they were brought
+    in by; "Fine today" is always last and always there.
     """
     now = situation.now
     weights: dict[Feeling, Weight] = {}
@@ -146,9 +146,17 @@ def weigh(situation: Situation) -> list[Weighed]:
             Reason(ReasonCode.SAID_BEFORE, said.at, {"tap_id": str(said.tap_id)}),
         )
 
+    def newest_change(word: Feeling) -> float:
+        moments = [
+            as_utc(r.since).timestamp() for r in reasons[word] if r.code in CHANGES and r.since
+        ]
+        return max(moments, default=0.0)
+
+    # Biggest first; among the same size, the newest change first (a medicine started today
+    # before one started last week); then the order the words were brought in by.
     ranked: list[Feeling] = sorted(
         (word for word in order if word is not Feeling.FINE),
-        key=lambda word: (-weights[word], order.index(word)),
+        key=lambda word: (-weights[word], -newest_change(word), order.index(word)),
     )
     ranked.append(Feeling.FINE)
     return [Weighed(word, weights[word], tuple(reasons[word])) for word in ranked]

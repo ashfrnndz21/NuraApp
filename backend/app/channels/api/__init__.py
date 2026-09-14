@@ -1,15 +1,29 @@
-"""The app API: the channel the iOS app talks to.
+"""The app API: the channel the web client (and, later, the iOS app) talks to.
 
 `create_app` builds the same FastAPI app for `main` and for the tests, from the three things
 a deployment is made of: its settings (which region, which database), a session factory on
 that database, and the providers that reach the outside world. Nothing here reads the
 environment; `main` does that once and passes the result in. The one thing it checks is that
 the logging code sender is not being started anywhere but a declared dev run.
+
+Every route is served twice: at the root (`/profiles/…`, what the checkpoints and `/docs`
+use) and under `/api` (`/api/profiles/…`, what the web client calls). The `/api` copy is
+the same router with a prefix, so there is one set of handlers and one place a route is
+declared; it is left out of the OpenAPI page so each operation appears there once. The
+prefix is what lets the web client's dev server proxy the API by one rule and lets the
+service worker tell the app's shell (cached) from its data (never cached by path).
+
+When the deployment names a built web client (`NURA_WEB_DIST`, see `app.settings`) and the
+directory exists, it is served at `/app` from the same origin as the API. That is how a
+phone reaches the app: one address, no cross-origin cookies or CORS.
 """
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import APIRouter, FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 import app.ingestion  # wires the label-photo rule onto the memory store
@@ -18,13 +32,15 @@ import app.state  # noqa: F401  — wires State's recompute onto the memory stor
 from app.channels.api import (
     auth,
     capture,
+    consent_words,
     doors,
     family,
     feed,
     feelings,
     medicines,
     profiles,
-    spine,
+    safety,
+    timeline,
 )
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused
@@ -35,7 +51,35 @@ from app.errors import Refusal
 from app.identity.providers import check_sender
 from app.settings import Settings
 
-__all__ = ["Providers", "create_app"]
+__all__ = ["API_PREFIX", "Providers", "create_app"]
+
+API_PREFIX = "/api"
+"""Where the web client finds the API: every root route, again, under this prefix."""
+
+WEB_MOUNT = "/app"
+"""Where the built web client is served when the deployment has one."""
+
+
+def _api() -> APIRouter:
+    api = APIRouter()
+    api.include_router(auth.router)
+    api.include_router(doors.router)
+    api.include_router(profiles.router)
+    api.include_router(capture.router)
+    api.include_router(feed.router)
+    api.include_router(medicines.router)
+    api.include_router(safety.router)
+    api.include_router(whatsapp.router)
+    api.include_router(timeline.router)
+    api.include_router(family.router)
+    api.include_router(feelings.router)
+    api.include_router(consent_words.router)
+
+    @api.get("/health")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return api
 
 
 def create_app(
@@ -50,19 +94,9 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.providers = providers
     app.add_exception_handler(Refusal, refused)
-    app.include_router(auth.router)
-    app.include_router(doors.router)
-    app.include_router(profiles.router)
-    app.include_router(capture.router)
-    app.include_router(feed.router)
-    app.include_router(medicines.router)
-    app.include_router(whatsapp.router)
-    app.include_router(family.router)
-    app.include_router(feelings.router)
-    app.include_router(spine.router)
-
-    @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
-
+    api = _api()
+    app.include_router(api)
+    app.include_router(api, prefix=API_PREFIX, include_in_schema=False)
+    if settings.web_dist is not None and Path(settings.web_dist).is_dir():
+        app.mount(WEB_MOUNT, StaticFiles(directory=settings.web_dist, html=True), name="web")
     return app

@@ -114,5 +114,10 @@ async def happened(
 ) -> Event:
     """A moment on his timeline: a visit, a discharge."""
     return await record_event(
-        session, context=owner, kind=kind, occurred_at=at, label=what, source_channel=SourceChannel.APP
+        session,
+        context=owner,
+        kind=kind,
+        occurred_at=at,
+        label=what,
+        source_channel=SourceChannel.APP,
     )

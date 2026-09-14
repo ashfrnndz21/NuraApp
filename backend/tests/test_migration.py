@@ -35,9 +35,20 @@ from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
-from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.memory.models import (
+    Appointment,
+    Artifact,
+    Attachment,
+    Episode,
+    Event,
+    Fact,
+    LastLooked,
+    Provider,
+    ProviderNote,
+)
 from app.notes.models import Note
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
+from app.safety.models import EmergencyCard, Notice, WhatToDoCard
 from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
 
@@ -89,6 +100,12 @@ TABLES: tuple[Table, ...] = (
     FeelingNote.__table__,
     Nudge.__table__,
     NudgeResponse.__table__,
+    Notice.__table__,
+    WhatToDoCard.__table__,
+    EmergencyCard.__table__,
+    Attachment.__table__,
+    ProviderNote.__table__,
+    LastLooked.__table__,
 )
 
 
@@ -218,6 +235,9 @@ def test_the_migrations_build_the_tables_the_models_declare(
             FeelingNote,
             Nudge,
             NudgeResponse,
+            Notice,
+            WhatToDoCard,
+            EmergencyCard,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

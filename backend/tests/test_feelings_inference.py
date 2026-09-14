@@ -41,7 +41,9 @@ async def _home(session: AsyncSession) -> tuple[Household, KeyContext]:
     return home, await home.ctx(session, home.pa)
 
 
-async def _said(session: AsyncSession, context: KeyContext, word: Feeling, answer: Answer) -> Answered:
+async def _said(
+    session: AsyncSession, context: KeyContext, word: Feeling, answer: Answer
+) -> Answered:
     tapped = await record_tap(session, context=context, word=word, registry=REGISTRY)
     return await answer_tap(
         session, context=context, tap_id=tapped.tap.id, answer=answer, registry=REGISTRY
@@ -52,7 +54,9 @@ async def _notes(session: AsyncSession) -> list[FeelingNote]:
     return list((await session.scalars(select(FeelingNote))).all())
 
 
-async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(sg: AsyncSession) -> None:
+async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
+    sg: AsyncSession,
+) -> None:
     _, owner = await _home(sg)
     await visit_with(sg, owner, at=utcnow() + timedelta(days=5))
     added = await new_medicine(sg, owner)
@@ -65,7 +69,10 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(sg: A
         Answer.FEW_DAYS,
         Answer.WEEK_OR_MORE,
     ]
-    assert tapped.tap.emphasised and {r["code"] for r in tapped.tap.reasons} == {"base", "new_medicine"}
+    assert tapped.tap.emphasised and {r["code"] for r in tapped.tap.reasons} == {
+        "base",
+        "new_medicine",
+    }
 
     answered = await answer_tap(
         sg, context=owner, tap_id=tapped.tap.id, answer=Answer.YESTERDAY, registry=REGISTRY
@@ -117,9 +124,13 @@ async def test_the_same_word_as_yesterday_asks_whether_it_is_more(
     assert tapped.question is not None
     assert tapped.question.follow_up is FollowUp.MORE_THAN_YESTERDAY
     assert tapped.question.words == "Is it more than yesterday?"
-    answered = await answer_tap(sg, context=owner, tap_id=tapped.tap.id, answer=Answer.MORE, registry=REGISTRY)
+    answered = await answer_tap(
+        sg, context=owner, tap_id=tapped.tap.id, answer=Answer.MORE, registry=REGISTRY
+    )
     assert answered.note is not None
-    assert answered.note.lines == ["Tell your doctor you feel dizzy and that it is worse than yesterday."]
+    assert answered.note.lines == [
+        "Tell your doctor you feel dizzy and that it is worse than yesterday."
+    ]
 
 
 async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: AsyncSession) -> None:
@@ -131,7 +142,9 @@ async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: Async
     tapped = await record_tap(sg, context=owner, word=Feeling.HEADACHE, registry=REGISTRY)
     assert tapped.question is not None and tapped.question.follow_up is FollowUp.WORST_EVER
     assert tapped.question.words == "Is it the worst headache of your life?"
-    answered = await answer_tap(sg, context=owner, tap_id=tapped.tap.id, answer=Answer.NO, registry=REGISTRY)
+    answered = await answer_tap(
+        sg, context=owner, tap_id=tapped.tap.id, answer=Answer.NO, registry=REGISTRY
+    )
     note = answered.note
     assert note is not None
     assert note.lines == [
@@ -178,31 +191,38 @@ async def test_at_most_two_things_to_tell_and_every_reason_kept(sg: AsyncSession
     ]
 
 
-async def test_a_red_word_goes_to_the_red_flag_path_first_and_makes_no_note(sg: AsyncSession) -> None:
+async def test_a_red_word_goes_to_the_red_flag_path_first_and_makes_no_note(
+    sg: AsyncSession,
+) -> None:
     home, owner = await _home(sg)
     tapped = await record_tap(sg, context=owner, word=Feeling.CHEST_TIGHTNESS, registry=REGISTRY)
     assert tapped.question is None and tapped.red is not None
     flag = tapped.red.flag
     assert flag.feeling is Feeling.CHEST_TIGHTNESS and flag.suppressed_because is None
     assert set(flag.told) == {str(home.mei.id), str(home.kit.id), str(home.siti.id)}
-    escalation = tapped.red.escalation
-    assert escalation is not None
-    assert escalation.roster[0] == {"person_id": str(home.mei.id), "standing": "chief"}
-    assert escalation.told == [str(home.pa.id)]
+    # E13's own path: a notice to everyone on his emergency list, and the ladder, kept.
+    assert tapped.red.notices == 3
+    ladder = tapped.red.escalation
+    assert ladder is not None
+    assert ladder.roster[0] == {"person_id": str(home.mei.id), "standing": "chief"}
     assert tapped.red.opens == "not_feeling_well"
-    assert tapped.lines == boundary_lines(Surface.NOT_FEELING_WELL, "en", told="Mei")
-    assert tapped.lines[0] == "Mei knows now."
+    assert tapped.lines == boundary_lines(Surface.NOT_FEELING_WELL, "en", told="Mei", urgent=True)
+    assert tapped.lines == ("Mei knows now.", "Nura does not decide what is wrong.")
     assert tapped.tap.red and tapped.tap.follow_up is None and tapped.tap.flag_id == flag.id
     assert await _notes(sg) == []
     assert len((await sg.scalars(select(Escalation))).all()) == 1
 
 
-async def test_a_yes_that_tells_the_red_variant_apart_takes_the_red_flag_path(sg: AsyncSession) -> None:
+async def test_a_yes_that_tells_the_red_variant_apart_takes_the_red_flag_path(
+    sg: AsyncSession,
+) -> None:
     _, owner = await _home(sg)
     tapped = await record_tap(sg, context=owner, word=Feeling.BREATHLESS, registry=REGISTRY)
     assert tapped.red is None and tapped.question is not None
     assert tapped.question.follow_up is FollowUp.AT_REST
-    answered = await answer_tap(sg, context=owner, tap_id=tapped.tap.id, answer=Answer.YES, registry=REGISTRY)
+    answered = await answer_tap(
+        sg, context=owner, tap_id=tapped.tap.id, answer=Answer.YES, registry=REGISTRY
+    )
     assert answered.note is None and answered.red is not None
     assert answered.red.flag.feeling is Feeling.BREATHLESS_AT_REST
     assert answered.tap.flag_id == answered.red.flag.id
@@ -223,15 +243,21 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
     _, owner = await _home(sg)
     first = await _said(sg, owner, Feeling.TIRED, Answer.TODAY)
     async with refused_unit(sg, AlreadyAnswered):
-        await answer_tap(sg, context=owner, tap_id=first.tap.id, answer=Answer.YESTERDAY, registry=REGISTRY)
+        await answer_tap(
+            sg, context=owner, tap_id=first.tap.id, answer=Answer.YESTERDAY, registry=REGISTRY
+        )
     pain = await record_tap(sg, context=owner, word=Feeling.PAIN, registry=REGISTRY)
     async with refused_unit(sg, NotAnAnswer):
-        await answer_tap(sg, context=owner, tap_id=pain.tap.id, answer=Answer.YES, registry=REGISTRY)
+        await answer_tap(
+            sg, context=owner, tap_id=pain.tap.id, answer=Answer.YES, registry=REGISTRY
+        )
     fine = await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
     assert fine.question is None
     assert fine.lines == ("That is good to hear.", "Nura will ask again when something changes.")
     async with refused_unit(sg, NotAnAnswer):
-        await answer_tap(sg, context=owner, tap_id=fine.tap.id, answer=Answer.TODAY, registry=REGISTRY)
+        await answer_tap(
+            sg, context=owner, tap_id=fine.tap.id, answer=Answer.TODAY, registry=REGISTRY
+        )
 
 
 @pytest.mark.parametrize("language", ["en", "ms", "zh"])

@@ -1,0 +1,8 @@
+{
+  "question": "what did Dr Tan say",
+  "sha256": "31ea17524681cc90c151654403a43d7fc9f0a2599affa70a5f82a2b3dc53eb6c",
+  "names": [
+    "dr tan"
+  ],
+  "note": "The phrases a model would pick out of this question; keyed by the sha256 of the question, normalised (app.search.retrieve.normalise)."
+}

@@ -10,6 +10,7 @@ paths:
   - "backend/app/safety/boundary.py"
   - "backend/app/safety/recording.py"
   - "ios/Nura/**"
+  - "web/src/strings/**"
 ---
 # Patient-facing strings
 
@@ -38,6 +39,10 @@ Run `make plain-words` and fix every failure before committing.
      a card that must say who does the next thing and when. Bare `# @patient` means whole lines.
    - In the iOS strings catalogue (`ios/Nura/**/*.xcstrings`), a comment beginning `patient`
      (optionally with the kind) tags the entry in every language it is localised in.
+   - In the web strings (`web/src/strings/{en,ms,zh}.ts`), `// @patient` (optionally with the
+     kind) on the line above a property or statement tags every string literal in it, and at
+     the end of a line tags that line; the file's name is the language. `npm run plain-words`
+     in `web/` checks only those files; `make plain-words` checks them with everything else.
 2. Write each line whole, never assembled from pieces at run time: the verifier reads one
    literal at a time, and so does the reviewer. Put `{slots}` in for names, dates and numbers;
    the verifier fills them with "Ash", "Monday 14 September" and "2".

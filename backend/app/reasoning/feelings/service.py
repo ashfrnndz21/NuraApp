@@ -1,13 +1,16 @@
 """The door for the feelings: a tap on the cloud, its one answer, and the notes (E17-02).
 
 **A red word goes first.** A tap on a red word — or a yes to the question that tells a red
-variant apart — is written as the moment it was said (`record_the_moment`, under the
-emergency scope, so the key of anyone who holds that scope can start it), the flag is raised
-on it (`raise_flag`: everyone holding the emergency scope is told, with a share line each),
-and the ladder is written for delivery to walk (`roster_for`, `escalate`) — before the cloud
-is read, before anything is ranked, before any note. There is no note for a red word; what
-comes back is the not-feeling-well card's own words (`Surface.NOT_FEELING_WELL`) and the flow
-to open.
+variant apart — takes the not-feeling-well button's own red-flag path (E13/E14,
+`app.safety.not_feeling_well.escalate`), unchanged: the moment it was said
+(`record_the_moment`, under the emergency scope, so any key holding that scope can start it),
+the flag on it, kept so a later refusal cannot take it back (`write_flag_kept`), a notice to
+everyone on his emergency list, and the ladder for delivery to walk (`roster_for`,
+`Escalation`, kept) — before the cloud is read, before anything is ranked, before any note.
+What the tap said is his word, so what the path is given to have "heard" is that word, sure,
+and no artefact. There is no note for a red word: what comes back is the reassurance and
+closing line of the urgent not-feeling-well card (`Surface.NOT_FEELING_WELL`, urgent) and the
+flow to open, where the card with the calls is.
 
 **Every other word asks one thing back.** The tap is a SYMPTOM event in his word and a
 `FeelingTap` naming why the word was on the cloud; "Fine today" says thank you and asks
@@ -28,14 +31,14 @@ from app.audit.access import (
     audited_profile_read,
     audited_read,
     audited_write,
-    person_display_name,
 )
-from app.audit.models import Action, Channel
+from app.audit.models import Action
 from app.audit.trail import record
 from app.db import utcnow
 from app.delivery.feed.items import NotPlainWords
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.ingestion.transcribe import Transcript
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import record_event
@@ -43,8 +46,8 @@ from app.memory.models import EventKind, SourceChannel
 from app.reasoning.feelings.cloud import weigh
 from app.reasoning.feelings.inference import compose_note
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
-from app.reasoning.feelings.record import local_date, next_visit, read_situation
-from app.reasoning.feelings.strings import ANSWER_WORDS, FINE_LINES, QUESTIONS, language_of
+from app.reasoning.feelings.record import local_date, read_situation
+from app.reasoning.feelings.strings import ANSWER_WORDS, FINE_LINES, QUESTIONS, WORDS, language_of
 from app.reasoning.feelings.words import (
     ANSWERS,
     Answer,
@@ -53,22 +56,16 @@ from app.reasoning.feelings.words import (
     red_answer,
 )
 from app.safety.boundary import Surface, boundary_lines
-from app.safety.red_flags import (
-    Escalation,
-    Feeling,
-    Flag,
-    escalate,
-    is_red,
-    raise_flag,
-    record_the_moment,
-    roster_for,
-)
+from app.safety.not_feeling_well import Captured, family_of
+from app.safety.not_feeling_well import escalate as escalate_red_flag
+from app.safety.red_flags import Escalation, Feeling, Flag, is_red
 from app.state.service import RECOMPUTE_SCOPES, render_from_state
 
 TAP = FeelingTap.__tablename__
 NOTE = FeelingNote.__tablename__
 NOT_FEELING_WELL = "not_feeling_well"
 """The flow a red word opens (E13/E14): the client's, named here so it opens the same one."""
+
 
 class NoSuchTap(Refusal):
     """No tap by that id on this profile."""
@@ -91,10 +88,12 @@ class Question:
 
 @dataclass(frozen=True, slots=True)
 class RedPath:
-    """What a red word did: the flag, the ladder, and the not-feeling-well card's words."""
+    """What a red word did: the flag, the ladder, how many on his list had a notice, and the
+    not-feeling-well card's own reassurance and closing line."""
 
     flag: Flag
     escalation: Escalation | None
+    notices: int
     lines: tuple[str, ...]
     opens: str = NOT_FEELING_WELL
 
@@ -125,43 +124,29 @@ async def _language(session: AsyncSession, context: KeyContext, asked: str | Non
 async def _red_path(
     session: AsyncSession, *, context: KeyContext, feeling: Feeling, code: str
 ) -> tuple[uuid.UUID, RedPath]:
-    """The moment, the flag, the ladder: nothing is read or ranked before these are written."""
-    moment = await record_the_moment(
-        session,
-        context=context,
-        feeling=feeling,
-        occurred_at=utcnow(),
-        source_channel=SourceChannel.APP,
-        channel=Channel.APP,
+    """E13's red-flag path, as the button takes it: nothing is read or ranked before it."""
+    profile = await audited_profile_read(session, context)
+    family = await family_of(session, context=context, profile=profile)
+    said = Captured(
+        artifact=None,
+        transcript=Transcript(text=WORDS[code][feeling], confidence=1.0, language=code),
+        by_voice=False,
     )
-    flag = await raise_flag(session, context=context, feeling=feeling, event_id=moment.id)
-    escalation: Escalation | None = None
-    if flag.suppressed_because is None:
-        roster = await roster_for(session, context=context, channel=Channel.APP)
-        escalation = await escalate(
-            session,
-            context=context,
-            flag=flag,
-            roster=roster,
-            told=[context.person_id],
-            channel=Channel.APP,
-        )
-    # Who knows now, in one name: the first on the ladder who was told — the chief, when
-    # there is one — so the card's line stays one whole sentence ("Mei knows now.").
-    told_name: str | None = None
-    for step in [] if escalation is None else escalation.roster:
-        if step["person_id"] in flag.told:
-            told_name = await person_display_name(session, context, uuid.UUID(step["person_id"]))
-            if told_name:
-                break
-    visit = await next_visit(session, context=context) if context.allows(Scope.VISITS) else None
+    escalated = await escalate_red_flag(
+        session, context=context, captured=said, feeling=feeling, family=family
+    )
+    told = None
+    if not escalated.suppressed and family.chief is not None:
+        told = family.chief.display_name or None
     lines = boundary_lines(
-        Surface.NOT_FEELING_WELL,
-        code,
-        doctor=None if visit is None else visit.doctor,
-        told=told_name or None,
+        Surface.NOT_FEELING_WELL, code, told=told, urgent=not escalated.suppressed
     )
-    return moment.id, RedPath(flag=flag, escalation=escalation, lines=lines)
+    return escalated.event.id, RedPath(
+        flag=escalated.flag,
+        escalation=escalated.ladder,
+        notices=len(escalated.notices),
+        lines=lines,
+    )
 
 
 async def record_tap(

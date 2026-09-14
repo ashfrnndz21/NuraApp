@@ -43,7 +43,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -162,7 +162,9 @@ def _local(moment: datetime, context: KeyContext) -> datetime:
 
 
 def _at(day: date, clock: time, context: KeyContext) -> datetime:
-    return datetime.combine(day, clock, REGION_TZ[context.region])
+    """That moment of that day on his wall, as UTC: every stored moment and every bound a
+    query compares is UTC, as everywhere else in Nura (`app.db.utcnow`)."""
+    return datetime.combine(day, clock, REGION_TZ[context.region]).astimezone(UTC)
 
 
 def _ignored(nudge: Nudge, responses: Sequence[NudgeResponse], now: datetime) -> bool:
@@ -202,9 +204,20 @@ def ignored_streak(
     return count
 
 
-def _verified(lines: Sequence[str], why: str, code: str) -> bool:
+QUOTED_LINE = 1
+"""In a commitment, the line that is his own words from the memo: verified where the memo was
+written (E05) and quoted as it is here, never re-worded to pass again."""
+
+
+def _verified(draft: NudgeDraft, code: str) -> bool:
+    """Every line the templates wrote passes plain words; his quoted words are his."""
+    ours = [
+        line
+        for index, line in enumerate(draft.lines)
+        if not (draft.kind is NudgeKind.COMMITMENT and index == QUOTED_LINE)
+    ]
     found = [
-        f for line in (*lines, why) for f in verify(line, code, "line") if f.severity == "fail"
+        f for line in (*ours, draft.why) for f in verify(line, code, "line") if f.severity == "fail"
     ]
     return not found
 
@@ -462,7 +475,7 @@ def _send_after(day: date, today: date, now: datetime, context: KeyContext) -> d
         if local.time() >= QUIET_FROM:
             return None
         earliest = _at(day, QUIET_UNTIL, context)
-    return earliest
+    return earliest.astimezone(UTC)
 
 
 @audited(Action.READ, Scope.RECORDS, NUDGE)
@@ -559,7 +572,7 @@ async def plan_nudges(
                     {"until": resting[draft.kind].isoformat()},
                 )
             )
-        elif not _verified(draft.lines, draft.why, code):
+        elif not _verified(draft, code):
             held.append(Held(draft.kind, "not_plain_words", priority, dict(draft.reason)))
         else:
             ranked.append(draft)

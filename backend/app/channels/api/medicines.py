@@ -5,7 +5,7 @@
     POST /profiles/{id}/medicines                  write it, with the yes minted for exactly that
     GET  /profiles/{id}/medicines/history          every line ever written, the change log
     GET  /profiles/{id}/medicines/interactions     every flag on the list, as questions
-    GET  /profiles/{id}/medicines/today            today's dose cards at his anchors
+    GET  /profiles/{id}/medicines/today            today's dose cards at his anchors, due or missed
     GET  /profiles/{id}/proud                      the proud number: days with a tablet taken
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language

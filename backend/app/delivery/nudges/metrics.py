@@ -16,12 +16,13 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read
 from app.audit.models import Action
+from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.delivery.nudges.engine import ignored_streak, resting_kinds
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
@@ -108,7 +109,7 @@ async def nudge_metrics(session: AsyncSession, *, context: KeyContext, weeks: in
     now = utcnow()
     this_monday = _monday(now.astimezone(zone).date())
     mondays = [this_monday - timedelta(weeks=back) for back in range(weeks)]
-    start = datetime.combine(mondays[-1], time(0), zone)
+    start = datetime.combine(mondays[-1], time(0), zone).astimezone(UTC)
 
     taps = await audited_read(
         session, FeelingTap, context, Scope.RECORDS, where=(FeelingTap.tapped_at >= start,)
@@ -136,6 +137,15 @@ async def nudge_metrics(session: AsyncSession, *, context: KeyContext, weeks: in
         inside = [n for n in nudges if _monday(date.fromisoformat(n.day)) == monday]
         week.nudges = _counts(inside, responses, now)
 
+    # The metrics read itself: one more line on his trail, beside the reads it was made from.
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.PROFILE,
+        target=METRICS_TARGET,
+        rows=len(mondays),
+    )
     return Metrics(
         weeks=tuple(table[monday] for monday in mondays),
         ignored_streaks={kind: ignored_streak(kind, nudges, responses, now) for kind in NudgeKind},

@@ -192,5 +192,6 @@ def cloud_words() -> tuple[Feeling, ...]:
 
 
 def inferable_words() -> tuple[Feeling, ...]:
-    """The words a tap can lead to a note on: every cloud word that is not red and not fine."""
-    return tuple(w for w in cloud_words() if not is_red(w) and w is not Feeling.FINE)
+    """The words a tap can lead to a note on: every word that is not red and not "Fine today".
+    A tap may name any word of the set, on the cloud today or not."""
+    return tuple(w for w in Feeling if not is_red(w) and w is not Feeling.FINE)
