@@ -1863,6 +1863,22 @@ def checkpoint_7(client: httpx.Client) -> None:
 
     # 1. Pa opens his profile in Malay, with a blood pressure reading and a medicine line.
     profile_id = open_own_profile(client, pa, language)
+    agreed = check(
+        client.post(
+            f"/profiles/{profile_id}/consents/recording",
+            headers=bearer(pa.token),
+            json={"language": language, "captured_via": "app"},
+        ),
+        201,
+        "Pa agrees to Nura listening at the visit",
+    )
+    if agreed["purpose"] != "recording":
+        raise fail("Pa agrees to Nura listening at the visit", why=f"got {agreed}")
+    ok(
+        "Pa agreed to Nura listening at the visit and keeping what is said "
+        "(POST /profiles/{id}/consents/recording, the words in Malay): no transcript is kept on a "
+        "profile without this; without it POST …/transcript is refused, ConsentWithheld (403)"
+    )
     taken = (datetime.now(UTC) - timedelta(days=20)).replace(microsecond=0)
     check(
         client.post(
@@ -2167,7 +2183,10 @@ def checkpoint_7(client: httpx.Client) -> None:
         201,
         "Pa uploads the red-flag transcript",
     )
-    if not red["red_flag"] or red["lines"][0] != "Telefon Dr Tan hari ini.":
+    if not red["red_flag"] or red["lines"][:2] != [
+        "Telefon Dr Tan hari ini.",
+        "Dr Tan patut tahu tentang sakit dada hari ini.",
+    ]:
         raise fail("Pa uploads the red-flag transcript", why=f"got {red}")
     verifier_clean(red["lines"], language, "Pa uploads the red-flag transcript")
     trail = check(
@@ -2186,8 +2205,9 @@ def checkpoint_7(client: httpx.Client) -> None:
     ok(
         'the red-flag transcript ("chest pain", app/safety/red_flags.py): a Flag row was written before '
         "the card was composed (on the trail as a write of flag), the card carries red_flag=true and its "
-        f'first line is "{red["lines"][0]}" (the English template: "Call Dr Tan today.") — a person and a '
-        "day, never a diagnosis:"
+        f'first line is "{red["lines"][0]}" (the English template: "Call Dr Tan today."), the next says '
+        f'what happened, "{red["lines"][1]}" — a person, a day and what was heard, never a diagnosis; the '
+        "word is found in the raw transcript itself, not only in what the summariser chose to report:"
     )
     for line in red["lines"]:
         print(f"    {line}")

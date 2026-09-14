@@ -2,16 +2,21 @@
 post-visit summary or a memo, as a template, in English, Malay and Chinese.
 
 Nothing rendered for him is assembled at run time from pieces: each line is one whole
-template with `{slots}` for a name, a date or a number, tagged `@patient` so that
-`make plain-words` reads it, and the rendered line is checked again by
-`app.safety.plain_words.verify` before it is stored (`verified`). A line that fails is
-refused (`NotPlainEnough`) and never shown. The sentence for a medicine change is a question
-for the doctor, never the change: the model that read the transcript classifies, and the
-template speaks.
+template with `{slots}` for a name, a date, a time or a number, tagged `@patient` (or
+`@patient action` for a line that tells him to do something, which must also say when and
+who) so that `make plain-words` reads it with the right rules, and the rendered line is
+checked again by `app.safety.plain_words.verify` before it is stored (`verified`). A line
+that fails is refused (`NotPlainEnough`) and never shown. Every slot value is checked
+against a rule for that slot before it is rendered (`SLOT_RULES`): a name is a name, a
+number is a number, and nothing free ever reaches a line. The sentence for a medicine change
+is a question for the doctor, never the change: the model that read the transcript
+classifies, and the template speaks. Every printed line has a spoken twin (`spoken`): the
+chemical name in brackets is a print device and is not read aloud.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
@@ -43,12 +48,17 @@ class NoSuchTemplate(Refusal):
     """The visit loop renders only from its own templates. This key is not one."""
 
 
+class NotASlotValue(Refusal):
+    """A value offered for a slot was not the kind of thing the slot takes: a name with
+    digits in it, a number that is not a number, a line where a word should be."""
+
+
 def language_for(code: str | None) -> str:
     """The language the loop speaks to this profile in."""
     return code if code in LANGUAGES else FALLBACK_LANGUAGE
 
 
-# --- the day and the date ------------------------------------------------------------------
+# --- the day, the date and the time --------------------------------------------------------
 
 WEEKDAYS: Mapping[str, tuple[str, ...]] = {
     "en": ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
@@ -88,13 +98,51 @@ MONTHS: Mapping[str, tuple[str, ...]] = {
 
 
 def day_and_date(moment: datetime, language: str, region: Region) -> str:
-    """Rule 5: "Monday 29 September", on the patient's own clock, in his language."""
+    """Rule 5: "Monday 29 September" — in Chinese the date and then the day, "9月29日星期一" —
+    on the patient's own clock, in his language."""
     local = as_utc(moment).astimezone(REGION_TZ[region])
     lang = language_for(language)
     weekday = WEEKDAYS[lang][local.weekday()]
     if lang == "zh":
-        return f"{weekday} {local.month}月{local.day}日"
+        return f"{local.month}月{local.day}日{weekday}"
     return f"{weekday} {local.day} {MONTHS[lang][local.month - 1]}"
+
+
+# @patient phrase
+_PERIODS: Mapping[str, tuple[tuple[int, str], ...]] = {
+    "en": ((5, "in the morning"), (12, "at noon"), (13, "in the afternoon"), (18, "at night")),
+    "ms": ((5, "pagi"), (12, "tengah hari"), (14, "petang"), (19, "malam")),
+    "zh": ((5, "上午"), (12, "中午"), (13, "下午"), (18, "晚上")),
+}
+"""How he says which part of the day an hour is in, by the hour it starts."""
+
+
+def _period(hour: int, language: str) -> str:
+    table = _PERIODS[language]
+    chosen = table[-1][1]  # before the first boundary is still the night
+    for starts, words in table:
+        if hour >= starts:
+            chosen = words
+    return chosen
+
+
+def time_of_day(moment: datetime, language: str, region: Region) -> str:
+    """Rule 5: "10 in the morning", never "10:00" — on his clock, in his language."""
+    local = as_utc(moment).astimezone(REGION_TZ[region])
+    lang = language_for(language)
+    hour12 = local.hour % 12 or 12
+    period = _period(local.hour, lang)
+    if lang == "zh":
+        if local.minute == 0:
+            return f"{period}{hour12}点"
+        if local.minute == 30:
+            return f"{period}{hour12}点半"
+        return f"{period}{hour12}点{local.minute}分"
+    if local.minute == 0:
+        return f"{hour12} {period}"
+    if lang == "en" and local.minute == 30:
+        return f"half past {hour12} {period}"
+    return f"{hour12}.{local.minute:02d} {period}"
 
 
 # --- his words for things ------------------------------------------------------------------
@@ -123,7 +171,7 @@ SUBJECT_WORDS: Mapping[str, Mapping[str, str]] = {
         "kidney": "ujian buah pinggang anda",
         "medicine": "ubat anda",
         "medication": "ubat anda",
-        "symptom": "keadaan anda",
+        "symptom": "apa yang anda rasa",
         "hypertension": "tekanan darah anda",
         "diabetes": "gula anda",
     },
@@ -145,6 +193,77 @@ SUBJECT_WORDS: Mapping[str, Mapping[str, str]] = {
 taken out, and the verifier decides whether that is plain enough."""
 
 # @patient phrase
+VISIT_SUBJECTS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "blood_pressure": "your blood pressure",
+        "sugar": "your sugar",
+        "kidneys": "your kidneys",
+        "heart": "your heart",
+        "eyes": "your eyes",
+        "cholesterol": "your cholesterol",
+        "medicines": "your medicines",
+        "blood_test": "your blood test",
+        "general_check": "your health check",
+    },
+    "ms": {
+        "blood_pressure": "tekanan darah anda",
+        "sugar": "gula anda",
+        "kidneys": "buah pinggang anda",
+        "heart": "jantung anda",
+        "eyes": "mata anda",
+        "cholesterol": "kolesterol anda",
+        "medicines": "ubat anda",
+        "blood_test": "ujian darah anda",
+        "general_check": "pemeriksaan kesihatan anda",
+    },
+    "zh": {
+        "blood_pressure": "您的血压",
+        "sugar": "您的血糖",
+        "kidneys": "您的肾",
+        "heart": "您的心脏",
+        "eyes": "您的眼睛",
+        "cholesterol": "您的胆固醇",
+        "medicines": "您的药",
+        "blood_test": "您的验血",
+        "general_check": "您的健康检查",
+    },
+}
+"""What a visit can be about, as a fixed code with his words in each language. A booking's
+purpose label is a caregiver's free text and never reaches him: `purpose_code` maps it
+here, and a label that maps to nothing is "your health"."""
+
+_PURPOSE_KEYWORDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "blood_pressure",
+        re.compile(r"blood pressure|tekanan darah|\bbp\b|hypertens|darah tinggi|血压"),
+    ),
+    ("sugar", re.compile(r"sugar|diabet|\bgula\b|kencing manis|glucose|hba1c|血糖|糖尿")),
+    ("kidneys", re.compile(r"kidney|renal|buah pinggang|\bginjal\b|肾")),
+    ("heart", re.compile(r"\bheart\b|cardio|cardiac|jantung|心脏|心臟")),
+    ("eyes", re.compile(r"\beyes?\b|\bmata\b|retina|眼")),
+    ("cholesterol", re.compile(r"cholesterol|kolesterol|lipid|胆固醇")),
+    ("blood_test", re.compile(r"blood test|ujian darah|\blabs?\b|验血|抽血")),
+    ("medicines", re.compile(r"medicin|medication|\bubat\b|prescription|药")),
+    ("general_check", re.compile(r"check|review|follow|pemeriksaan|susulan|检查|复诊")),
+)
+
+
+def purpose_code(label: str | None) -> str | None:
+    """The fixed visit subject a booking's purpose label names, or None when it names none."""
+    if not label:
+        return None
+    lowered = label.strip().lower()
+    for code, pattern in _PURPOSE_KEYWORDS:
+        if pattern.search(lowered):
+            return code
+    return None
+
+
+def visit_subject_words(code: str, language: str) -> str:
+    return VISIT_SUBJECTS[language_for(language)][code]
+
+
+# @patient phrase
 MEDICINE_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "furosemide": "the water pill",
@@ -156,29 +275,31 @@ MEDICINE_WORDS: Mapping[str, Mapping[str, str]] = {
     "ms": {
         "furosemide": "pil air",
         "frusemide": "pil air",
-        "amlodipine": "pil tekanan darah anda",
-        "atorvastatin": "pil kolesterol",
-        "metformin": "pil gula",
+        "amlodipine": "ubat tekanan darah anda",
+        "atorvastatin": "ubat kolesterol",
+        "metformin": "ubat gula",
     },
     "zh": {
-        "furosemide": "利水药",
-        "frusemide": "利水药",
+        "furosemide": "去水药",
+        "frusemide": "去水药",
         "amlodipine": "您的血压药",
-        "atorvastatin": "胆固醇药",
+        "atorvastatin": "降胆固醇药",
         "metformin": "降糖药",
     },
 }
-"""The glossary of docs/plain-words.md as a table: his name for a medicine first, the
-chemical name second and small. A medicine not in the glossary is named as it is."""
+"""The glossary of docs/plain-words.md as a table, in the same words the medicines module
+uses (`app.medicines.strings.PLAIN_NAME`), so one medicine has one name on every card: his
+name first, the chemical name second and small. Used when the licensed register has no
+monograph for a generic; the monograph's plain name comes first."""
 
 # @patient phrase
 RED_FLAG_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "chest_pain": "the chest pain",
-        "breathless": "the breathlessness",
+        "breathless": "the trouble breathing",
         "black_stool": "the black stool",
         "fall": "the fall",
-        "confusion": "the confusion",
+        "confusion": "the muddled feeling",
         "one_sided_swelling": "the swollen leg",
         "worst_headache": "the bad headache",
         "sudden_blurring": "the blurry eyes",
@@ -199,12 +320,12 @@ RED_FLAG_WORDS: Mapping[str, Mapping[str, str]] = {
     },
     "zh": {
         "chest_pain": "胸痛",
-        "breathless": "气促",
-        "black_stool": "黑便",
+        "breathless": "喘不过气",
+        "black_stool": "大便发黑",
         "fall": "跌倒",
-        "confusion": "神志不清",
+        "confusion": "糊涂",
         "one_sided_swelling": "腿肿",
-        "worst_headache": "剧烈头痛",
+        "worst_headache": "很厉害的头痛",
         "sudden_blurring": "眼睛模糊",
         "shaky_and_sweaty": "发抖出汗",
         "fever_on_medicine": "发烧",
@@ -222,7 +343,9 @@ def medicine_words(name: str, language: str, registry: DrugRegistry | None = Non
     `app.medicines.strings.PLAIN_NAME`) when the registry knows the generic, the glossary's
     otherwise — with the generic second in brackets in English; in Malay and Chinese his name
     alone, because the verifier's glossary knows the chemical name and only the English word
-    beside it. A medicine neither knows is named as it is, and the verifier decides."""
+    beside it. A medicine neither knows is not named here at all: the caller has already
+    checked the generic against the register (`summary.known_generic`) and says "your
+    medicines" for one it does not know, so nothing unregistered reaches a line."""
     lang = language_for(language)
     generic = name.strip().lower()
     plain: str | None = None
@@ -234,7 +357,7 @@ def medicine_words(name: str, language: str, registry: DrugRegistry | None = Non
     if plain is None:
         plain = MEDICINE_WORDS[lang].get(generic)
     if plain is None:
-        return name.strip()
+        raise NotASlotValue(f"no plain name for {generic!r}: the register does not know it")
     if lang != "en" or generic in plain.lower():
         return plain
     return f"{plain} ({generic})"
@@ -245,20 +368,33 @@ def red_flag_words(code: str, language: str) -> str:
     return RED_FLAG_WORDS[lang].get(code, code.replace("_", " "))
 
 
+_BRACKETED = re.compile(r"\s*\([^()]*\)")
+
+
+def spoken(text: str) -> str:
+    """The spoken twin of a printed line: the chemical name in brackets is not read aloud."""
+    return _BRACKETED.sub("", text)
+
+
 # --- the templates -------------------------------------------------------------------------
 
 # @patient
-TEMPLATES: Mapping[str, Mapping[str, str]] = {
+LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     # The brief.
     "visit_with": {
-        "en": "You see {doctor} on {day}.",
-        "ms": "Anda berjumpa {doctor} pada {day}.",
-        "zh": "您在{day}见{doctor}。",
+        "en": "You see {doctor} on {day} at {time}.",
+        "ms": "Anda berjumpa {doctor} pada {day} pukul {time}.",
+        "zh": "您在{day}{time}见{doctor}。",
     },
     "visit_about": {
-        "en": "This visit is about {purpose}.",
-        "ms": "Lawatan ini tentang {purpose}.",
-        "zh": "这次看诊是关于{purpose}。",
+        "en": "This visit is about {subject}.",
+        "ms": "Lawatan ini untuk memeriksa {subject}.",
+        "zh": "这次看医生是为了{subject}。",
+    },
+    "visit_about_health": {
+        "en": "This visit is about your health.",
+        "ms": "Lawatan ini untuk kesihatan anda.",
+        "zh": "这次看医生是为了您的健康。",
     },
     "changed_readings": {
         "en": "Since {day}, {count} new numbers are in your blood pressure book.",
@@ -285,21 +421,11 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Tiada apa yang berubah sejak {day}.",
         "zh": "自{day}以来没有变化。",
     },
-    "bring_bp_book": {
-        "en": "Bring your blood pressure book.",
-        "ms": "Bawa buku tekanan darah anda.",
-        "zh": "带上您的血压本。",
-    },
-    "bring_medicines": {
-        "en": "Bring your medicines in their boxes.",
-        "ms": "Bawa ubat anda dalam kotaknya.",
-        "zh": "带上您的药和药盒。",
-    },
     # Questions, from gaps.
     "ask_fact_expired": {
         "en": "Ask {doctor} about {thing} again.",
         "ms": "Tanya {doctor} tentang {thing} sekali lagi.",
-        "zh": "再问一问{doctor}关于{thing}。",
+        "zh": "再问一问{doctor}，{thing}怎么样。",
     },
     "ask_reading_stale": {
         "en": "Ask {doctor} how often to take your blood pressure.",
@@ -317,9 +443,9 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "问{doctor}{medicine}和{other}一起吃行不行。",
     },
     "tell_dispute": {
-        "en": "Tell {doctor} that the papers disagree about {thing}.",
-        "ms": "Beritahu {doctor} bahawa surat-surat tidak sepakat tentang {thing}.",
-        "zh": "告诉{doctor}，文件上关于{thing}的记录不一致。",
+        "en": "Tell {doctor} that your papers do not agree about {thing}.",
+        "ms": "Beritahu {doctor} yang surat-surat anda tidak sama tentang {thing}.",
+        "zh": "告诉{doctor}，您的病历文件上{thing}写得不一样。",
     },
     "ask_visit_purpose": {
         "en": "Ask {doctor} what this visit is for.",
@@ -327,48 +453,37 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "问{doctor}这次看诊是为了什么。",
     },
     # Questions and memos, from a medicine change heard. A question for the doctor, never
-    # the change itself.
+    # the change itself, and never an amount.
     "ask_new_amount": {
         "en": "Ask {doctor} about the new amount of {medicine}.",
         "ms": "Tanya {doctor} tentang jumlah baru {medicine}.",
-        "zh": "问{doctor}{medicine}的新用量。",
+        "zh": "问{doctor}，{medicine}现在要吃多少。",
     },
     "ask_starting": {
         "en": "Ask {doctor} about starting {medicine}.",
-        "ms": "Tanya {doctor} tentang mula makan {medicine}.",
-        "zh": "问{doctor}关于开始吃{medicine}。",
+        "ms": "Tanya {doctor} kenapa anda perlu mula makan {medicine}.",
+        "zh": "问一问{doctor}，为什么要开始吃{medicine}。",
     },
     "ask_stopping": {
         "en": "Ask {doctor} about stopping {medicine}.",
-        "ms": "Tanya {doctor} tentang berhenti makan {medicine}.",
-        "zh": "问{doctor}关于停吃{medicine}。",
+        "ms": "Tanya {doctor} kenapa anda perlu berhenti makan {medicine}.",
+        "zh": "问一问{doctor}，为什么要停吃{medicine}。",
     },
     "ask_medicine_change": {
         "en": "Ask {doctor} about the change to {medicine}.",
         "ms": "Tanya {doctor} tentang perubahan pada {medicine}.",
-        "zh": "问{doctor}关于{medicine}的变化。",
+        "zh": "问一问{doctor}，{medicine}有什么变化。",
     },
-    # The red flag. Same-day, a person, never a diagnosis.
-    "call_doctor_today": {
-        "en": "Call {doctor} today.",
-        "ms": "Telefon {doctor} hari ini.",
-        "zh": "今天就给{doctor}打电话。",
-    },
-    "tell_carer_today": {
-        "en": "Tell {carer} today.",
-        "ms": "Beritahu {carer} hari ini.",
-        "zh": "今天就告诉{carer}。",
-    },
-    "tell_doctor_about": {
-        "en": "Tell {doctor} about {what}.",
-        "ms": "Beritahu {doctor} tentang {what}.",
-        "zh": "告诉{doctor}关于{what}。",
+    "ask_medicines_change": {
+        "en": "Ask {doctor} about the change to your medicines.",
+        "ms": "Tanya {doctor} tentang perubahan pada ubat anda.",
+        "zh": "问一问{doctor}，您的药有什么变化。",
     },
     # The questions card for him.
     "no_need_to_remember": {
-        "en": "You do not need to remember these.",
-        "ms": "Anda tidak perlu ingat semua ini.",
-        "zh": "您不需要记住这些。",
+        "en": "Nura keeps these questions for you.",
+        "ms": "Nura simpan soalan-soalan ini untuk anda.",
+        "zh": "这些问题Nura帮您记着。",
     },
     # The summary.
     "doctor_said_on": {
@@ -377,14 +492,71 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "{doctor}在{day}说了这些。",
     },
     "see_again_on": {
-        "en": "See {doctor} again on {day}.",
-        "ms": "Jumpa {doctor} lagi pada {day}.",
-        "zh": "在{day}再去见{doctor}。",
+        "en": "See {doctor} again on {day} at {time}.",
+        "ms": "Jumpa {doctor} lagi pada {day} pukul {time}.",
+        "zh": "{day}{time}再去见{doctor}。",
     },
     "doctor_wrote_down": {
         "en": "{doctor} wrote down {thing}.",
         "ms": "{doctor} mencatat {thing}.",
         "zh": "{doctor}记下了{thing}。",
+    },
+    "medicines_unchanged_said": {
+        "en": "{doctor} said your medicines stay the same.",
+        "ms": "{doctor} kata ubat anda kekal sama.",
+        "zh": "{doctor}说您的药不变。",
+    },
+    "water_is_ok": {
+        "en": "Water is OK.",
+        "ms": "Air kosong boleh.",
+        "zh": "喝水没问题。",
+    },
+    "blood_test_on": {
+        "en": "You have a blood test on {day}.",
+        "ms": "Anda ada ujian darah pada {day}.",
+        "zh": "您在{day}有一次验血。",
+    },
+}
+"""Every line the visit loop can say that is not a thing for him to do, by key and language."""
+
+# @patient action
+ACTION_TEMPLATES: Mapping[str, Mapping[str, str]] = {
+    # What to bring: on the day of the visit.
+    "bring_bp_book": {
+        "en": "Bring your blood pressure book on {day}.",
+        "ms": "Bawa buku tekanan darah anda pada {day}.",
+        "zh": "{day}，带上您的血压本。",
+    },
+    "bring_medicines": {
+        "en": "Bring your medicines in their boxes on {day}.",
+        "ms": "Bawa ubat anda dalam kotaknya pada {day}.",
+        "zh": "{day}，带上您的药和药盒。",
+    },
+    "bring_bp_book_next_time": {
+        "en": "Bring your blood pressure book on {day}.",
+        "ms": "Bawa buku tekanan darah anda pada {day}.",
+        "zh": "{day}，带上您的血压本。",
+    },
+    # The red flag. Same-day, a person, what happened, never a diagnosis.
+    "call_doctor_today": {
+        "en": "Call {doctor} today.",
+        "ms": "Telefon {doctor} hari ini.",
+        "zh": "今天就给{doctor}打电话。",
+    },
+    "doctor_should_hear": {
+        "en": "{doctor} should hear about {what} today.",
+        "ms": "{doctor} patut tahu tentang {what} hari ini.",
+        "zh": "今天就要让{doctor}知道{what}的事。",
+    },
+    "tell_carer_today": {
+        "en": "Tell {carer} about {what} today.",
+        "ms": "Beritahu {carer} tentang {what} hari ini.",
+        "zh": "今天就把{what}的事告诉{carer}。",
+    },
+    "tell_doctor_about": {
+        "en": "Tell {doctor} about {what} today.",
+        "ms": "Beritahu {doctor} tentang {what} hari ini.",
+        "zh": "今天就把{what}的事告诉{doctor}。",
     },
     # Actions heard at the visit, as memos. `ActionKind` in `summary.py` names these.
     "weigh_every_morning": {
@@ -397,44 +569,65 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Setiap pagi, ambil tekanan darah sebelum sarapan.",
         "zh": "每天早上，早餐前量血压。",
     },
-    "bring_bp_book_next_time": {
-        "en": "Bring your blood pressure book next time.",
-        "ms": "Bawa buku tekanan darah anda lain kali.",
-        "zh": "下次带上您的血压本。",
-    },
     "no_food_after_midnight": {
-        "en": "Do not eat after 12 midnight on {day}.",
+        "en": "Eat nothing after 12 midnight on {day}.",
         "ms": "Jangan makan selepas 12 tengah malam pada {day}.",
         "zh": "{day}半夜12点后不要吃东西。",
     },
-    "water_is_ok": {
-        "en": "Water is OK.",
-        "ms": "Air kosong boleh.",
-        "zh": "喝水没问题。",
-    },
     "lighter_dinners": {
-        "en": "Eat lighter dinners.",
-        "ms": "Makan malam lebih ringan.",
-        "zh": "晚餐吃得清淡一些。",
-    },
-    "take_medicines_as_before": {
-        "en": "Take your medicines the same way until you see {doctor}.",
-        "ms": "Makan ubat anda seperti biasa sehingga jumpa {doctor}.",
-        "zh": "见{doctor}之前，照原来的方式吃药。",
+        "en": "Every evening, eat a lighter dinner.",
+        "ms": "Setiap malam, makan lebih ringan.",
+        "zh": "每天晚上，晚餐吃得清淡一些。",
     },
     "walk_every_day": {
         "en": "Every day, walk for {minutes} minutes.",
         "ms": "Setiap hari, berjalan selama {minutes} minit.",
         "zh": "每天走{minutes}分钟。",
     },
-    "blood_test_on": {
-        "en": "You have a blood test on {day}.",
-        "ms": "Anda ada ujian darah pada {day}.",
-        "zh": "您在{day}有一次验血。",
-    },
 }
-"""Every line the visit loop can say, by key and language. A key not here is not a line
-Nura can say to him (`NoSuchTemplate`)."""
+"""Every line that tells him to do something: it says when, and who does the next thing,
+and the verifier holds it to that (`kind="action"`)."""
+
+TEMPLATES: Mapping[str, Mapping[str, str]] = {**LINE_TEMPLATES, **ACTION_TEMPLATES}
+ACTION_KEYS = frozenset(ACTION_TEMPLATES)
+
+# --- what a slot may hold ------------------------------------------------------------------
+
+_NAME = re.compile(r"^[^\W\d_](?:[^\W\d_]|[ .'’\-])*$")
+"""A person's or a doctor's name: letters in any script, spaces, dots, apostrophes, hyphens.
+No digits, no newline, nothing that could be an id or a sentence."""
+_WORDS = re.compile(r"^[^\W\d_](?:[^\W\d_]|[ ()'’\-])*$")
+"""His words for a thing, from one of the tables above: letters, spaces, brackets, hyphens."""
+_WHEN = re.compile(r"^[\w .:一-鿿]{1,40}$")
+"""A day-and-date or a time as `day_and_date`/`time_of_day` render them."""
+_NUMBER = re.compile(r"^\d{1,3}$")
+
+SLOT_RULES: Mapping[str, tuple[re.Pattern[str], int]] = {
+    "doctor": (_NAME, 60),
+    "carer": (_NAME, 60),
+    "medicine": (_WORDS, 60),
+    "other": (_WORDS, 60),
+    "thing": (_WORDS, 60),
+    "what": (_WORDS, 60),
+    "subject": (_WORDS, 60),
+    "day": (_WHEN, 40),
+    "time": (_WHEN, 40),
+    "count": (_NUMBER, 3),
+    "minutes": (_NUMBER, 3),
+}
+"""Every slot a template has, and what it takes. A slot not here takes nothing."""
+
+
+def check_slot(name: str, value: Any) -> str:
+    """The slot value as text, or `NotASlotValue`."""
+    rule = SLOT_RULES.get(name)
+    if rule is None:
+        raise NotASlotValue(f"no template takes a slot named {name!r}")
+    pattern, longest = rule
+    text = str(value).strip()
+    if not text or len(text) > longest or not pattern.match(text):
+        raise NotASlotValue(f"{name!r} does not take {text!r}")
+    return text
 
 
 def template(key: str, language: str) -> str:
@@ -445,9 +638,15 @@ def template(key: str, language: str) -> str:
     return found[lang]
 
 
+def kind_of(key: str) -> Kind:
+    """How the verifier reads a line from this template: an action says when and who."""
+    return "action" if key in ACTION_KEYS else "line"
+
+
 def render(key: str, language: str, **slots: Any) -> str:
-    """The template filled in. Slots are names, dates and numbers; nothing else."""
-    return template(key, language).format(**{k: str(v) for k, v in slots.items()})
+    """The template filled in. Every slot value is checked against its rule first."""
+    checked = {name: check_slot(name, value) for name, value in slots.items()}
+    return template(key, language).format(**checked)
 
 
 def verified(text: str, language: str, kind: Kind = "line") -> str:
@@ -458,6 +657,7 @@ def verified(text: str, language: str, kind: Kind = "line") -> str:
     return text
 
 
-def say(key: str, language: str, kind: Kind = "line", **slots: Any) -> str:
-    """Render and verify in one step: the only way a template reaches a row."""
-    return verified(render(key, language, **slots), language, kind)
+def say(key: str, language: str, kind: Kind | None = None, **slots: Any) -> str:
+    """Render and verify in one step: the only way a template reaches a row. The kind is the
+    template's own unless the caller narrows it."""
+    return verified(render(key, language, **slots), language, kind or kind_of(key))

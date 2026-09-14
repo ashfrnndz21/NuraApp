@@ -38,7 +38,14 @@ from app.reasoning.visits.questions import (
     render_proposed,
     require_visit,
 )
-from app.reasoning.visits.strings import day_and_date, say
+from app.reasoning.visits.strings import (
+    day_and_date,
+    purpose_code,
+    say,
+    spoken,
+    time_of_day,
+    visit_subject_words,
+)
 from app.safety.high_risk import MEDICINE_SUBJECTS
 from app.state.dimensions import VISIT_LENGTH
 from app.state.models import Dimension, StateSnapshot
@@ -62,6 +69,7 @@ class Line:
             "section": self.section,
             "key": self.key,
             "text": self.text,
+            "spoken": spoken(self.text),
             "sources": list(self.sources),
         }
 
@@ -171,12 +179,21 @@ def compose(
     lang = visit.language
     doctor = visit.doctor
     when = day_and_date(visit.appointment.scheduled_at, lang, context.region)
+    at = time_of_day(visit.appointment.scheduled_at, lang, context.region)
+    # The booking's purpose is a caregiver's label and never reaches him as written: it is
+    # mapped to a fixed subject with his words for it, or the visit is "about your health".
+    code = purpose_code(visit.appointment.purpose)
+    about = (
+        say("visit_about", lang, subject=visit_subject_words(code, lang))
+        if code is not None
+        else say("visit_about_health", lang)
+    )
     lines = [
-        Line("purpose", "visit_with", say("visit_with", lang, doctor=doctor, day=when)),
+        Line("purpose", "visit_with", say("visit_with", lang, doctor=doctor, day=when, time=at)),
         Line(
             "purpose",
-            "visit_about",
-            say("visit_about", lang, purpose=visit.appointment.purpose),
+            "visit_about" if code is not None else "visit_about_health",
+            about,
             (str(visit.appointment.id),),
         ),
     ]
@@ -202,9 +219,9 @@ def compose(
             )
     for key, text, source_ids in proposed_lines:
         lines.append(Line("questions", key, text, source_ids))
-    lines.append(Line("bring", "bring_bp_book", say("bring_bp_book", lang)))
+    lines.append(Line("bring", "bring_bp_book", say("bring_bp_book", lang, day=when)))
     if has_medicines:
-        lines.append(Line("bring", "bring_medicines", say("bring_medicines", lang)))
+        lines.append(Line("bring", "bring_medicines", say("bring_medicines", lang, day=when)))
     for key, text in bring_memos:
         lines.append(Line("bring", key, text))
     return lines

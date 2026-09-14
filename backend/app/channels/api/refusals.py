@@ -33,7 +33,7 @@ from app.memory.spine import NoSuchProvider
 from app.reasoning.visits.gaps import NoSuchAppointment
 from app.reasoning.visits.questions import NoSuchQuestion
 from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
-from app.reasoning.visits.summary import NoSuchSummary, TranscriptTooLarge
+from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.state.service import NoState
@@ -63,6 +63,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchProvider, 404),
     (NoSuchQuestion, 404),
     (NoSuchSummary, 404),
+    # A fact heard at a visit that names a drug is never written; the answer names the rule.
+    (DrugNamedInAFact, 400),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
     (TranscriptTooLarge, 413),

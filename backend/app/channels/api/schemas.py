@@ -205,6 +205,19 @@ class SharingConsentIn(BaseModel):
         return self
 
 
+class RecordingConsentIn(BaseModel):
+    """The owner agrees to Nura listening at the visit and keeping what was said (E05):
+    which words, in which language, captured how. Profile-wide, his own basis, and what
+    every transcript stored on this profile rests on. The same shape as E19's WhatsApp
+    agreement."""
+
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: ConsentChannel
+    wording_version: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._-]+$"
+    )
+
+
 class ConsentOut(BaseModel):
     """One agreement on the profile, as the owner or his chief reads it back."""
 
@@ -1359,11 +1372,13 @@ class AppointmentOut(BaseModel):
 
 
 class BriefLineOut(BaseModel):
-    """One line of the brief: which section, which template, the words, what it rests on."""
+    """One line of the brief: which section, which template, the words as printed and as
+    spoken (the bracketed chemical name is not read aloud), what it rests on."""
 
     section: str
     key: str
     text: str
+    spoken: str
     sources: list[str]
 
 
@@ -1388,7 +1403,7 @@ class BriefOut(BaseModel):
             state_id=brief.state_id,
             since_state_id=brief.since_state_id,
             built_at=utc(brief.built_at),
-            lines=[BriefLineOut(**line) for line in brief.lines],
+            lines=[BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines],
         )
 
 
@@ -1429,10 +1444,12 @@ class QuestionOut(BaseModel):
 
 
 class QuestionsOut(BaseModel):
-    """The current questions for the caregiver, and the one card for him."""
+    """The current questions for the caregiver, and the one card for him — as printed, and
+    as spoken."""
 
     questions: list[QuestionOut]
     card: list[str]
+    spoken_card: list[str]
 
 
 class QuestionChangeIn(BaseModel):
@@ -1511,6 +1528,7 @@ class SummaryOut(BaseModel):
     red_flag: bool
     state_id: uuid.UUID
     lines: list[str]
+    spoken: list[str]
     items: list[SummaryItemOut]
     created_at: datetime
     confirmed_at: datetime | None
@@ -1526,6 +1544,7 @@ class SummaryOut(BaseModel):
             red_flag=summary.red_flag,
             state_id=summary.state_id,
             lines=[str(line["text"]) for line in summary.lines],
+            spoken=[str(line.get("spoken", line["text"])) for line in summary.lines],
             items=[SummaryItemOut.of(item) for item in items],
             created_at=utc(summary.created_at),
             confirmed_at=None if summary.confirmed_at is None else utc(summary.confirmed_at),
@@ -1576,7 +1595,8 @@ class SummaryConfirmedOut(BaseModel):
 
 
 class MemoCardOut(BaseModel):
-    """The memo card: the current memos and the lines as he hears them."""
+    """The memo card: the current memos, the lines as printed, and as he hears them."""
 
     memos: list[MemoOut]
     card: list[str]
+    spoken_card: list[str]

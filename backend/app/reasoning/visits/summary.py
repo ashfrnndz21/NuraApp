@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -36,7 +37,7 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
-from app.drugs.registry import DrugRegistry
+from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
@@ -54,12 +55,11 @@ from app.memory.models import (
     ConfidenceState,
     Fact,
     Provider,
-    ProviderKind,
     SourceChannel,
     short_label,
 )
 from app.memory.semantic import assert_fact
-from app.memory.spine import add_provider, book_appointment, list_providers
+from app.memory.spine import book_appointment, list_providers
 from app.reasoning.visits.memos import write_memo
 from app.reasoning.visits.models import (
     SUMMARY_IN_PROGRESS,
@@ -75,13 +75,17 @@ from app.reasoning.visits.models import (
 )
 from app.reasoning.visits.questions import CHANGE_TEMPLATE, Visit, require_visit
 from app.reasoning.visits.strings import (
+    NotASlotValue,
     day_and_date,
+    red_flag_words,
     say,
+    spoken,
     subject_words,
+    time_of_day,
 )
 from app.regions import REGION_TZ, Region, guard_region
-from app.safety.high_risk import MEDICINE_SUBJECTS
-from app.safety.red_flags import red_flags_in
+from app.safety.high_risk import DOSE_ATTRIBUTES, names_high_risk
+from app.safety.red_flags import RedFlagHit, find_red_flags, red_flags_in
 from app.state.service import StateView, current_state, render_from_state
 
 SUMMARY = VisitSummary.__tablename__
@@ -93,8 +97,9 @@ MAX_TRANSCRIPT_BYTES = 1024 * 1024
 
 TRANSCRIPT_KINDS = frozenset({ArtifactKind.TRANSCRIPT, ArtifactKind.VOICE})
 
-DOSE_ATTRIBUTES = frozenset({"dose", "start", "stop", "strength", "frequency"})
-"""A fact heard about one of these is a medicine change, and is rerouted as a question."""
+UNKNOWN_DRUG = "unknown_drug"
+"""The `Flag.subject` for a medicine change whose drug the licensed register does not know:
+the name the summariser gave is never written and never shown (E05 review, B1)."""
 
 FOLLOW_UP_HOUR = time(9, 0)
 """When a follow-up with no time is written down: the morning, on the patient's clock."""
@@ -132,6 +137,12 @@ class NotAFixture(Refusal):
     """A visit fixture is a JSON file of one shape. This one was not."""
 
 
+class DrugNamedInAFact(Refusal):
+    """A fact heard at a visit that names a drug, or says how much of one to take, is never
+    written as a fact: it is a question for the doctor (E05 review, B4). This is the floor
+    under `reroute_medicine_facts`, checked again at the moment of writing."""
+
+
 # --- what the summariser answers with --------------------------------------------------------
 
 
@@ -146,9 +157,22 @@ class ActionKind(StrEnum):
     NO_FOOD_AFTER_MIDNIGHT = "no_food_after_midnight"
     WATER_IS_OK = "water_is_ok"
     LIGHTER_DINNERS = "lighter_dinners"
-    TAKE_MEDICINES_AS_BEFORE = "take_medicines_as_before"
     WALK_EVERY_DAY = "walk_every_day"
     BLOOD_TEST_ON = "blood_test_on"
+    MEDICINES_UNCHANGED_SAID = "medicines_unchanged_said"
+
+
+ACTION_SLOTS: Mapping[ActionKind, frozenset[str]] = {
+    ActionKind.NO_FOOD_AFTER_MIDNIGHT: frozenset({"day"}),
+    ActionKind.BLOOD_TEST_ON: frozenset({"day"}),
+    ActionKind.WALK_EVERY_DAY: frozenset({"minutes"}),
+}
+"""The slots an action may carry from the summariser, per kind: a date as ISO, a count of
+minutes. Anything else the summariser sends is dropped before it can reach a line; the
+value itself is checked by `strings.check_slot` when rendered. `bring_bp_book_next_time`
+takes its day from the follow-up heard, never from the summariser."""
+
+MINUTES_AT_MOST = 300
 
 
 class ChangeHeard(StrEnum):
@@ -356,8 +380,14 @@ async def store_transcript(
         raise NotATranscript("the transcript was empty")
     if len(data) > MAX_TRANSCRIPT_BYTES:
         raise TranscriptTooLarge(f"a transcript is at most {MAX_TRANSCRIPT_BYTES} bytes")
+    # Keeping what was said in the room rests on two agreements: to Nura holding his record,
+    # and to Nura listening at the visit (`ConsentPurpose.RECORDING`, docs/build-plan.md).
+    # A profile that never agreed to the second, or withdrew it, keeps no transcript (B3).
     await require_consent(
         session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS
+    )
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.RECORDING, scope=Scope.VISITS
     )
     digest = sha256_of(data)
     key = transcript_key(context.profile_id, digest)
@@ -390,38 +420,98 @@ class Item:
     text: str
 
 
-def reroute_medicine_facts(draft: SummaryDraft) -> SummaryDraft:
-    """A fact heard about a medicine's dose, start or stop is a medicine change: it is never
-    written as a fact from a transcript, it becomes a question for the doctor."""
+def known_generic(drug: str, registry: DrugRegistry) -> str | None:
+    """The generic the licensed register knows this name as — by generic or by brand — or
+    None. Nothing the register has never heard of is printed or written (B1)."""
+    name = drug.strip()
+    if not name:
+        return None
+    for fields in (LabelFields(generic=name), LabelFields(brand=name)):
+        matches = registry.identify(fields)
+        if matches:
+            return matches[0].generic.lower()
+    return None
+
+
+def _strings_in(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Mapping):
+        return [t for inner in value.values() for t in _strings_in(inner)]
+    if isinstance(value, list | tuple):
+        return [t for inner in value for t in _strings_in(inner)]
+    return []
+
+
+def names_a_drug(registry: DrugRegistry, *values: Any) -> bool:
+    """Whether any of these — a subject code, a value, the strings inside a JSON value — is a
+    drug name the register knows or a high-risk drug name (`high_risk.names_high_risk`)."""
+    if names_high_risk(*values) is not None:
+        return True
+    for value in values:
+        for text in _strings_in(value):
+            for word in {text, *re.split(r"[\s,;:/()]+", text)}:
+                if word and known_generic(word, registry) is not None:
+                    return True
+    return False
+
+
+def reroute_medicine_facts(draft: SummaryDraft, registry: DrugRegistry) -> SummaryDraft:
+    """A fact heard that says how much of anything to take — a dose attribute, whatever the
+    subject — or that names a drug in its subject or its value, is a medicine change: it is
+    never written as a fact from a transcript, it becomes a question for the doctor (B4)."""
     kept: list[FactHeard] = []
     changes = list(draft.medication_changes)
     for fact in draft.facts_heard:
-        if fact.subject in MEDICINE_SUBJECTS and fact.attribute in DOSE_ATTRIBUTES:
-            drug = (
-                fact.value.get("drug")
-                if isinstance(fact.value, Mapping) and isinstance(fact.value.get("drug"), str)
-                else fact.value
-                if isinstance(fact.value, str)
-                else fact.subject
-            )
-            change = (
-                ChangeHeard(fact.attribute)
-                if fact.attribute in {"start", "stop"}
-                else ChangeHeard.DOSE
-            )
-            changes.append(MedicationChangeHeard(str(drug), change, fact.span, fact.confidence))
-        else:
+        is_dose = fact.attribute in DOSE_ATTRIBUTES
+        if not is_dose and not names_a_drug(registry, fact.subject, fact.value):
             kept.append(fact)
+            continue
+        drug = (
+            fact.value.get("drug")
+            if isinstance(fact.value, Mapping) and isinstance(fact.value.get("drug"), str)
+            else fact.value
+            if isinstance(fact.value, str)
+            else fact.subject
+        )
+        change = (
+            ChangeHeard(fact.attribute)
+            if fact.attribute in {"start", "stop"}
+            else ChangeHeard.DOSE
+            if is_dose
+            else ChangeHeard.UNCLEAR
+        )
+        changes.append(MedicationChangeHeard(str(drug), change, fact.span, fact.confidence))
     return SummaryDraft(draft.actions, tuple(changes), draft.follow_ups, tuple(kept))
 
 
-def _action_slots(action: ActionHeard, visit: Visit, region: Region) -> dict[str, Any]:
-    slots = dict(action.slots)
+def _action_slots(
+    action: ActionHeard, visit: Visit, region: Region, *, follow_up_day: str | None = None
+) -> dict[str, Any]:
+    """The slots an action renders with: only the ones its kind allows, each checked. A day
+    comes as ISO from the summariser and is said his way; minutes are a small number."""
+    allowed = ACTION_SLOTS.get(action.kind, frozenset())
+    slots: dict[str, Any] = {name: action.slots[name] for name in allowed if name in action.slots}
     if "day" in slots:
-        slots["day"] = day_and_date(
-            _at(date.fromisoformat(str(slots["day"])), None, region), visit.language, region
-        )
-    slots.setdefault("doctor", visit.doctor)
+        try:
+            on = date.fromisoformat(str(slots["day"]))
+        except ValueError as not_a_day:
+            raise NotASlotValue(f"{slots['day']!r} is not a day") from not_a_day
+        slots["day"] = day_and_date(_at(on, None, region), visit.language, region)
+    if "minutes" in slots:
+        minutes = slots["minutes"]
+        if (
+            not isinstance(minutes, int)
+            or isinstance(minutes, bool)
+            or not 1 <= minutes <= MINUTES_AT_MOST
+        ):
+            raise NotASlotValue(f"{minutes!r} is not a number of minutes")
+    if action.kind is ActionKind.BRING_BP_BOOK_NEXT_TIME:
+        if follow_up_day is None:
+            raise NotASlotValue("nothing to bring the book to: no follow-up was heard")
+        slots["day"] = follow_up_day
+    if action.kind is ActionKind.MEDICINES_UNCHANGED_SAID:
+        slots["doctor"] = visit.doctor
     return slots
 
 
@@ -456,31 +546,65 @@ async def _carer(session: AsyncSession, context: KeyContext) -> str | None:
     return None
 
 
-def compose_items(draft: SummaryDraft, visit: Visit, region: Region) -> list[Item]:
+def _line(key: str, language: str, **slots: Any) -> dict[str, Any]:
+    text = say(key, language, **slots)
+    return {"key": key, "text": text, "spoken": spoken(text)}
+
+
+def _follow_up_day(draft: SummaryDraft, visit: Visit, region: Region) -> str | None:
+    if not draft.follow_ups:
+        return None
+    first = min(draft.follow_ups, key=lambda one: one.on)
+    return day_and_date(_at(first.on, first.at, region), visit.language, region)
+
+
+def compose_items(
+    draft: SummaryDraft, visit: Visit, region: Region, registry: DrugRegistry
+) -> list[Item]:
     """Every item rendered through its template — the change as a question, never as the
-    change — and the verifier. A line that fails refuses the card."""
+    change — and the verifier. A drug the register does not know is never named: the line
+    is "Ask {doctor} about the change to your medicines." and the item carries no name. A
+    line that fails refuses the card."""
     lang = visit.language
     doctor = visit.doctor
     items: list[Item] = []
+    follow_up_day = _follow_up_day(draft, visit, region)
     for change in draft.medication_changes:
+        generic = known_generic(change.drug, registry)
+        if generic is None:
+            items.append(
+                Item(
+                    SummaryItemKind.MEDICATION_CHANGE,
+                    {"generic": None, "change": change.change.value},
+                    change.span,
+                    change.confidence,
+                    "ask_medicines_change",
+                    say("ask_medicines_change", lang, doctor=doctor),
+                )
+            )
+            continue
         key = CHANGE_TEMPLATE.get(change.change.value, "ask_medicine_change")
-        medicine = visit.medicine(change.drug)
         items.append(
             Item(
                 SummaryItemKind.MEDICATION_CHANGE,
-                {"generic": change.drug.strip().lower(), "change": change.change.value},
+                {"generic": generic, "change": change.change.value},
                 change.span,
                 change.confidence,
                 key,
-                say(key, lang, doctor=doctor, medicine=medicine),
+                say(key, lang, doctor=doctor, medicine=visit.medicine(generic)),
             )
         )
     for action in draft.actions:
-        slots = _action_slots(action, visit, region)
+        if action.kind is ActionKind.BRING_BP_BOOK_NEXT_TIME and follow_up_day is None:
+            continue  # nothing to bring it to
+        slots = _action_slots(action, visit, region, follow_up_day=follow_up_day)
+        kept_slots = {
+            k: action.slots[k] for k in ACTION_SLOTS.get(action.kind, ()) if k in action.slots
+        }
         items.append(
             Item(
                 SummaryItemKind.ACTION,
-                {"kind": action.kind.value, "slots": dict(action.slots)},
+                {"kind": action.kind.value, "slots": kept_slots},
                 action.span,
                 action.confidence,
                 action.kind.value,
@@ -497,7 +621,10 @@ def compose_items(draft: SummaryDraft, visit: Visit, region: Region) -> list[Ite
                     "at": None
                     if follow_up.at is None
                     else follow_up.at.isoformat(timespec="minutes"),
-                    "provider": follow_up.provider or doctor,
+                    # The name heard is kept for the record; the visit is booked with the
+                    # doctor of this visit, or a provider already on the profile with that
+                    # name. Nobody new is added to his directory from a transcript.
+                    "provider_heard": follow_up.provider,
                     "purpose": short_label(follow_up.purpose),
                 },
                 follow_up.span,
@@ -506,12 +633,15 @@ def compose_items(draft: SummaryDraft, visit: Visit, region: Region) -> list[Ite
                 say(
                     "see_again_on",
                     lang,
-                    doctor=follow_up.provider or doctor,
+                    doctor=doctor,
                     day=day_and_date(when, lang, region),
+                    time=time_of_day(when, lang, region),
                 ),
             )
         )
     for fact in draft.facts_heard:
+        if fact.attribute in DOSE_ATTRIBUTES or names_a_drug(registry, fact.subject, fact.value):
+            raise DrugNamedInAFact(f"{fact.subject}.{fact.attribute} names a drug or a dose")
         items.append(
             Item(
                 SummaryItemKind.FACT_HEARD,
@@ -535,6 +665,31 @@ def compose_items(draft: SummaryDraft, visit: Visit, region: Region) -> list[Ite
     return items
 
 
+def red_flags_heard(
+    text: str, draft: SummaryDraft, *, medicine_names: tuple[str, ...]
+) -> dict[str, tuple[str, Span, str]]:
+    """Every red-flag word, wherever it was heard: the raw transcript first (with the word's
+    own span in it), then every fact's subject, attribute and value, then every action's
+    slots. One entry per code, the transcript's span winning (B2)."""
+    found: dict[str, tuple[str, Span, str]] = {}
+    hit: RedFlagHit
+    for hit in find_red_flags(text, medicine_names=medicine_names):
+        found.setdefault(hit.code, (hit.word, Span(hit.start, hit.end), "transcript"))
+    for fact in draft.facts_heard:
+        # A subject or attribute is an underscore-joined code ("black_stool"); read as words.
+        for hit in red_flags_in(
+            fact.subject.replace("_", " "),
+            fact.attribute.replace("_", " "),
+            fact.value,
+            medicine_names=medicine_names,
+        ):
+            found.setdefault(hit.code, (hit.word, fact.span, "fact"))
+    for action in draft.actions:
+        for hit in red_flags_in(action.slots, medicine_names=medicine_names):
+            found.setdefault(hit.code, (hit.word, action.span, "action"))
+    return found
+
+
 @audited(Action.WRITE, Scope.VISITS, SUMMARY)
 async def post_visit_summary(
     session: AsyncSession,
@@ -544,14 +699,17 @@ async def post_visit_summary(
     artifact_id: uuid.UUID,
     store: ObjectStore,
     summariser: Summariser,
-    registry: DrugRegistry | None = None,
+    registry: DrugRegistry,
 ) -> VisitSummary:
     """Read the transcript into a card for the person to confirm.
 
-    The red-flag rule runs first: a red-flag word among the facts heard writes a `Flag` and
-    puts the same-day lines at the top of the card before anything else is composed. Then
-    every item is rendered through its template and the verifier; a medicine change is a
-    question for the doctor. The card names the transcript, the visit and the State.
+    The red-flag rule runs first, over the raw transcript and everything the summariser
+    heard: a red-flag word anywhere writes a `Flag` and puts the same-day lines — call the
+    doctor, what he should hear about, tell the carer — at the top of the card before
+    anything else is composed. Then every item is rendered through its template and the
+    verifier; a medicine change is a question for the doctor, and a drug the licensed
+    register does not know is never named. The card names the transcript, the visit and
+    the State.
     """
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
@@ -563,6 +721,7 @@ async def post_visit_summary(
     if not text.strip():
         raise NotATranscript("the transcript was empty")
     lines_now = await _active_lines(session, context=context)
+    generics = tuple(sorted({line.generic for line in lines_now}))
     heard = reroute_medicine_facts(
         await summariser.summarise(
             text,
@@ -571,23 +730,22 @@ async def post_visit_summary(
                 language=visit.language,
                 region=context.region,
                 doctor=visit.doctor,
-                medicines=tuple(sorted({line.generic for line in lines_now})),
+                medicines=generics,
             ),
-        )
+        ),
+        registry,
     )
     state = await current_state(session, context=context)
     lang = visit.language
     lines: list[dict[str, Any]] = []
 
-    # The red-flag rule, before anything is ranked: a flag row per word heard, naming where
-    # in the transcript the fact that carries it was heard, then the same-day lines.
-    found: dict[str, tuple[str, Span]] = {}
-    for fact in heard.facts_heard:
-        for hit in red_flags_in(fact.value):
-            found.setdefault(hit.code, (hit.word, fact.span))
+    # The red-flag rule, before anything is ranked: the raw transcript, then everything the
+    # summariser heard. A flag row per word, with the narrowest span there is, then the
+    # same-day lines: call the doctor, what he should hear about, tell the carer.
+    found = red_flags_heard(text, heard, medicine_names=generics)
     red_flag = bool(found)
     flags: list[Flag] = []
-    for code, (word, span) in found.items():
+    for code, (word, span, found_in) in found.items():
         flags.append(
             await audited_write(
                 session,
@@ -598,34 +756,27 @@ async def post_visit_summary(
                 code=code,
                 subject="symptom",
                 fact_ids=[],
-                payload={"word": word, "span": span.as_json()},
+                payload={"word": word, "span": span.as_json(), "found_in": found_in},
                 artifact_id=artifact.id,
                 appointment_id=appointment_id,
                 raised_at=utcnow(),
             )
         )
     if red_flag:
-        lines.append(
-            {
-                "key": "call_doctor_today",
-                "text": say("call_doctor_today", lang, doctor=visit.doctor),
-            }
-        )
+        lines.append(_line("call_doctor_today", lang, doctor=visit.doctor))
         carer = await _carer(session, context)
-        if carer:
-            lines.append(
-                {"key": "tell_carer_today", "text": say("tell_carer_today", lang, carer=carer)}
-            )
+        for code in found:
+            what = red_flag_words(code, lang)
+            lines.append(_line("doctor_should_hear", lang, doctor=visit.doctor, what=what))
+            if carer:
+                lines.append(_line("tell_carer_today", lang, carer=carer, what=what))
 
-    items = compose_items(heard, visit, context.region)
+    items = compose_items(heard, visit, context.region, registry)
     when = day_and_date(visit.appointment.scheduled_at, lang, context.region)
-    lines.append(
-        {
-            "key": "doctor_said_on",
-            "text": say("doctor_said_on", lang, doctor=visit.doctor, day=when),
-        }
+    lines.append(_line("doctor_said_on", lang, doctor=visit.doctor, day=when))
+    lines.extend(
+        {"key": item.key, "text": item.text, "spoken": spoken(item.text)} for item in items
     )
-    lines.extend({"key": item.key, "text": item.text} for item in items)
 
     summary = await render_from_state(
         session,
@@ -758,15 +909,15 @@ class Outcome:
 async def _provider_named(
     session: AsyncSession, *, context: KeyContext, name: str, fallback: Provider
 ) -> Provider:
+    """A provider already on the profile with the name heard, else the doctor of this visit.
+    A name heard on a transcript never adds anyone to his directory: that is a booking with a
+    new doctor, and a person confirms those."""
     wanted = name.strip().lower()
-    for provider in await list_providers(session, context=context):
-        if provider.name.strip().lower() == wanted:
-            return provider
-    if wanted == fallback.name.strip().lower() or not wanted:
-        return fallback
-    return await add_provider(
-        session, context=context, name=name, kind=ProviderKind.DOCTOR, region=context.region
-    )
+    if wanted:
+        for provider in await list_providers(session, context=context):
+            if provider.name.strip().lower() == wanted:
+                return provider
+    return fallback
 
 
 async def _book_follow_up(
@@ -779,7 +930,10 @@ async def _book_follow_up(
     at = None if payload.get("at") is None else time.fromisoformat(str(payload["at"]))
     when = _at(date.fromisoformat(str(payload["on"])), at, context.region)
     provider = await _provider_named(
-        session, context=context, name=str(payload.get("provider") or ""), fallback=visit.provider
+        session,
+        context=context,
+        name=str(payload.get("provider_heard") or ""),
+        fallback=visit.provider,
     )
     purpose = short_label(str(payload["purpose"]))
     yes = await confirm(
@@ -805,8 +959,15 @@ async def _write_fact_heard(
     item: SummaryItem,
     summary: VisitSummary,
     visit: Visit,
+    registry: DrugRegistry,
 ) -> Fact:
     payload = item.payload
+    # The floor under the reroute: a dose attribute or a drug name never becomes a fact here,
+    # whatever the card says (B4). `high_risk.refuse_dose_without_label_photo` stands below.
+    if str(payload["attribute"]) in DOSE_ATTRIBUTES or names_a_drug(
+        registry, payload["subject"], payload["value"]
+    ):
+        raise DrugNamedInAFact(f"{payload['subject']}.{payload['attribute']} names a drug")
     draft = FactDraft(
         subject=str(payload["subject"]),
         attribute=str(payload["attribute"]),
@@ -843,7 +1004,7 @@ async def confirm_summary(
     summary_id: uuid.UUID,
     decisions: Sequence[Decision],
     confirmation_id: uuid.UUID,
-    registry: DrugRegistry | None = None,
+    registry: DrugRegistry,
 ) -> Outcome:
     """Close the card on the person's yes and write what it decided.
 
@@ -880,6 +1041,11 @@ async def confirm_summary(
         filed_against = (
             outcome.appointments[0].id if outcome.appointments else summary.appointment_id
         )
+        follow_up_day = (
+            day_and_date(outcome.appointments[0].scheduled_at, summary.language, context.region)
+            if outcome.appointments
+            else None
+        )
         for item in kept:
             if item.kind is SummaryItemKind.ACTION:
                 memo = await write_memo(
@@ -896,6 +1062,7 @@ async def confirm_summary(
                         ),
                         visit,
                         context.region,
+                        follow_up_day=follow_up_day,
                     ),
                     source=MemoSource.VISIT,
                     source_id=item.id,
@@ -908,8 +1075,12 @@ async def confirm_summary(
             elif item.kind is SummaryItemKind.MEDICATION_CHANGE:
                 # The change as E04's reconcile picks it up, with the person's OK on a plan:
                 # the generic, the kind of change, the active line it is about — no amount.
-                generic = str(item.payload["generic"])
-                lines = await _active_lines(session, context=context, generic=generic)
+                generic = item.payload.get("generic")
+                lines = (
+                    await _active_lines(session, context=context, generic=str(generic))
+                    if generic
+                    else ()
+                )
                 flag = await audited_write(
                     session,
                     Flag,
@@ -917,15 +1088,21 @@ async def confirm_summary(
                     Scope.RECORDS,
                     kind=FlagKind.MEDICINE_CHANGE_HEARD,
                     code=str(item.payload["change"]),
-                    subject=generic,
+                    # A drug the register does not know is never a subject: the flag says
+                    # only that a change was heard, and where (B1).
+                    subject=str(generic) if generic else UNKNOWN_DRUG,
                     fact_ids=[str(line.fact_id) for line in lines],
-                    payload={
-                        "generic": generic,
-                        "change": str(item.payload["change"]),
-                        "line_id": str(lines[0].id) if lines else None,
-                        "span": item.span,
-                        "ask_the_doctor": True,
-                    },
+                    payload=(
+                        {
+                            "generic": generic,
+                            "change": str(item.payload["change"]),
+                            "line_id": str(lines[0].id) if lines else None,
+                            "span": item.span,
+                            "ask_the_doctor": True,
+                        }
+                        if generic
+                        else {"span": item.span, "change": str(item.payload["change"])}
+                    ),
                     artifact_id=summary.artifact_id,
                     appointment_id=summary.appointment_id,
                     raised_at=moment,
@@ -935,7 +1112,11 @@ async def confirm_summary(
                     context=context,
                     kind=MemoKind.ASK,
                     key=item.key,
-                    slots={"doctor": visit.doctor, "medicine": visit.medicine(generic)},
+                    slots=(
+                        {"doctor": visit.doctor, "medicine": visit.medicine(str(generic))}
+                        if generic
+                        else {"doctor": visit.doctor}
+                    ),
                     source=MemoSource.VISIT,
                     source_id=item.id,
                     appointment_id=filed_against,
@@ -948,7 +1129,12 @@ async def confirm_summary(
                 outcome.memos.append(memo)
             elif item.kind is SummaryItemKind.FACT_HEARD:
                 fact = await _write_fact_heard(
-                    session, context=context, item=item, summary=summary, visit=visit
+                    session,
+                    context=context,
+                    item=item,
+                    summary=summary,
+                    visit=visit,
+                    registry=registry,
                 )
                 item.fact_id = fact.id
                 outcome.facts.append(fact)

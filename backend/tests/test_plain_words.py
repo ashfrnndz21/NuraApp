@@ -587,10 +587,37 @@ def test_the_command_over_the_repository_exits_zero(capsys: pytest.CaptureFixtur
     assert "0 failures" in capsys.readouterr().out
 
 
-def test_rule_5_accepts_the_day_in_malay_before_a_shared_month_name() -> None:
-    """Malay shares "September" with English; "Isnin 14 September" says the day, and the
-    verifier must not ask for an English weekday in a Malay line (E05)."""
+def test_rule_5_is_keyed_by_the_lines_language() -> None:
+    """E05 review P3: Malay is held to all twelve Malay months and its own weekdays, "Jun" and
+    "Mac" are whole month names there, an English line with a Malay weekday still fails, and
+    Chinese says the date then the day."""
     from app.safety.plain_words import verify
 
-    assert [f.rule for f in verify("Anda berjumpa Dr Tan pada Isnin 14 September.", "ms")] == []
-    assert [f.rule for f in verify("Anda berjumpa Dr Tan pada 14 September.", "ms")] == [5]
+    def rules(text: str, language: str) -> list[int]:
+        return sorted(f.rule for f in verify(text, language) if f.severity != "note")
+
+    assert rules("Anda berjumpa Dr Tan pada Isnin 14 September.", "ms") == []
+    assert rules("Anda berjumpa Dr Tan pada 14 September.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada Isnin 29 Jun.", "ms") == []
+    assert rules("Jumpa Dr Tan lagi pada Selasa 3 Mac.", "ms") == []
+    assert rules("Jumpa Dr Tan lagi pada 29 Oktober.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada 3 Disember.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada Isnin 29 Okt.", "ms") == [5]
+    assert 5 in rules("You see Dr Tan on Ahad 29 September.", "en")
+    assert rules("You see Dr Tan on Sunday 29 September.", "en") == []
+    assert rules("You see Dr Tan on Monday 29 Jun.", "en") == [5]
+    assert rules("您在9月29日星期一见陈医生。", "zh") == []
+    assert rules("您在星期一9月29日见陈医生。", "zh") == []
+    assert rules("您在9月29日见陈医生。", "zh") == [5]
+
+
+def test_the_fillers_speak_the_lines_language() -> None:
+    from app.safety.plain_words import fill
+
+    assert fill("Sejak {day}, {count} perkara berubah.", "ms") == (
+        "Sejak Isnin 14 September, 2 perkara berubah."
+    )
+    assert fill("您在{day}{time}见{doctor}。", "zh") == "您在9月14日星期一上午10点见Ash。"
+    assert fill("You see {doctor} on {day} at {time}.") == (
+        "You see Ash on Monday 14 September at 10 in the morning."
+    )

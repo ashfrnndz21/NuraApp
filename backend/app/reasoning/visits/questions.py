@@ -49,6 +49,7 @@ from app.reasoning.visits.strings import (
     red_flag_words,
     render,
     say,
+    spoken,
     subject_words,
     verified,
 )
@@ -89,6 +90,11 @@ class NoSuchQuestion(Refusal):
 
 class NotAQuestion(Refusal):
     """A question is one line of at most 120 characters. This was empty, or longer."""
+
+
+class GapWithoutItsOther(Refusal):
+    """An interaction is between two medicines. This gap named only one, so no line is
+    rendered with an empty slot in it."""
 
 
 class NoRegistry(Refusal):
@@ -172,12 +178,14 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
             },
         )
     elif gap.kind is GapKind.INTERACTION_FLAGGED:
+        if not gap.other:
+            raise GapWithoutItsOther(f"interaction gap on {gap.subject} names no other medicine")
         key, slots = (
             "ask_interaction",
             {
                 **doctor,
                 "medicine": visit.medicine(gap.medicine or gap.subject),
-                "other": visit.medicine(gap.other or ""),
+                "other": visit.medicine(gap.other),
             },
         )
     elif gap.kind is GapKind.OPEN_DISPUTE:
@@ -202,6 +210,16 @@ def question_from_flag(flag: Flag, visit: Visit) -> Proposed | None:
             PRIORITY_RED_FLAG,
         )
     if flag.kind is FlagKind.MEDICINE_CHANGE_HEARD:
+        if flag.subject == "unknown_drug" or not flag.payload.get("generic"):
+            # A change to a drug the register did not know: the question names no drug.
+            return Proposed(
+                "ask_medicines_change",
+                {"doctor": doctor},
+                QuestionSource.FLAG,
+                flag.kind.value,
+                (str(flag.id),),
+                PRIORITY_MEDICINE_CHANGE,
+            )
         return Proposed(
             CHANGE_TEMPLATE.get(flag.code, "ask_medicine_change"),
             {"doctor": doctor, "medicine": visit.medicine(flag.subject)},
@@ -487,8 +505,14 @@ async def patient_card(
     return lines
 
 
+def spoken_card(lines: Sequence[str]) -> list[str]:
+    """The card as it is read aloud: the same lines, the bracketed chemical names dropped."""
+    return [spoken(line) for line in lines]
+
+
 __all__ = [
     "CARD_SIZE",
+    "GapWithoutItsOther",
     "NoRegistry",
     "NoSuchQuestion",
     "NotAQuestion",

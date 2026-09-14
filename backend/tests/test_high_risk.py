@@ -199,3 +199,38 @@ async def test_the_drug_may_be_named_in_the_subject(sg: AsyncSession) -> None:
             confidence=0.7,
             event_id=told.id,
         )
+
+
+async def test_a_dose_is_a_dose_whatever_its_subject_code(sg: AsyncSession) -> None:
+    """E05 review B4: `subject="warfarin", attribute="dose"` is guarded like `medicine.dose`.
+    The rule keys on the attribute; the drug is read from the subject and the value."""
+    context = await _pa(sg)
+    told = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.MESSAGE,
+        occurred_at=SEPT_3,
+        label="voice note",
+        source_channel=SourceChannel.WHATSAPP,
+    )
+    async with refused_unit(sg, HighRiskNeedsLabelPhoto):
+        await assert_fact(
+            sg,
+            context=context,
+            subject="warfarin",
+            attribute="dose",
+            value={"amount": "5 mg"},
+            confidence=0.9,
+            event_id=told.id,
+        )
+    async with refused_unit(sg, HighRiskNeedsLabelPhoto):
+        await assert_fact(
+            sg,
+            context=context,
+            subject="heart",
+            attribute="amount",
+            value="digoxin, one tablet",
+            confidence=0.9,
+            event_id=told.id,
+        )
+    assert await current_facts(sg, context=context) == []

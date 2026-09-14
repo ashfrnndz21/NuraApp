@@ -11,6 +11,8 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.service import grant_consent
 from app.drafts import AppointmentDraft
 from app.drugs.registry import DrugMatch, Interaction, LabelFields, Monograph, UnknownDrug
 from app.identity.service import create_own_profile, register_person
@@ -49,14 +51,34 @@ def transcript(label: str) -> str:
 
 
 async def pa(
-    session: AsyncSession, *, language: str = "ms", phone: str = "+6591110001"
+    session: AsyncSession,
+    *,
+    language: str = "ms",
+    phone: str = "+6591110001",
+    recording: bool = True,
 ) -> KeyContext:
+    """Pa, with his own profile and — unless a test says otherwise — his agreement to Nura
+    listening at the visit, which every transcript rests on (`ConsentPurpose.RECORDING`)."""
     person = await register_person(session, region=Region.SG, display_name="Pa", phone_e164=phone)
     profile = await create_own_profile(
         session, region=Region.SG, owner=person, consent=OPENING_CONSENT, language=language
     )
-    return await resolve_key_context(
+    context = await resolve_key_context(
         session, region=Region.SG, person_id=person.id, profile_id=profile.id
+    )
+    if recording:
+        await agree_to_recording(session, context, language=language)
+    return context
+
+
+async def agree_to_recording(session: AsyncSession, context: KeyContext, *, language: str) -> None:
+    await grant_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.RECORDING,
+        captured_via=ConsentChannel.APP,
+        basis=ConsentBasis.OWNER,
+        language=language if language in ("en", "ms", "zh") else "en",
     )
 
 

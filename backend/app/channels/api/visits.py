@@ -46,7 +46,12 @@ from app.db import utcnow
 from app.memory.spine import add_provider, book_appointment, list_providers, upcoming_appointments
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.memos import consolidate_memos, memo_card
-from app.reasoning.visits.questions import change_questions, patient_card, questions_for
+from app.reasoning.visits.questions import (
+    change_questions,
+    patient_card,
+    questions_for,
+    spoken_card,
+)
 from app.reasoning.visits.summary import (
     confirm_summary,
     list_summaries,
@@ -130,7 +135,9 @@ async def questions(
         registry=providers_of(request).drug_registry,
     )
     card = await patient_card(session, context=context, appointment_id=appointment_id)
-    return QuestionsOut(questions=[QuestionOut.of(one) for one in found], card=card)
+    return QuestionsOut(
+        questions=[QuestionOut.of(one) for one in found], card=card, spoken_card=spoken_card(card)
+    )
 
 
 @router.post("/{profile_id}/appointments/{appointment_id}/questions", status_code=201)
@@ -226,6 +233,7 @@ async def memos(context: Context, session: Db) -> MemoCardOut:
     """The memo card at the end of every conversation: the current memos, duplicates
     collapsed, every line verified on the way out."""
     current = await consolidate_memos(session, context=context)
+    card = await memo_card(session, context=context)
     return MemoCardOut(
-        memos=[MemoOut.of(one) for one in current], card=await memo_card(session, context=context)
+        memos=[MemoOut.of(one) for one in current], card=card, spoken_card=spoken_card(card)
     )

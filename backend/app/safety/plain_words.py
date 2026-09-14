@@ -295,21 +295,66 @@ MONTHS = (
 )
 _DAY_ABBREVIATIONS = re.compile(r"\b(?:Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)\b\.?")
 _MONTH_ABBREVIATIONS = re.compile(r"\b(?:Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b\.?")
+_MONTH_ABBREVIATIONS_MS = re.compile(r"\b(?:Jan|Feb|Apr|Jul|Ogo|Sep|Sept|Okt|Nov|Dis)\b\.?")
+"""The shortenings of the Malay months; "Jun" and "Mac" are whole Malay month names."""
 _NUMERIC_DATE = re.compile(
     r"\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}-\d{1,2}-\d{2,4}\b"
 )
 _CLOCK_TIME = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\b(?:\s*(?:am|pm|AM|PM))?")
 _TIME_ZONE = re.compile(r"\b(?:UTC|GMT)\b(?:[+-]\d{1,2})?")
 _ORDINAL_DAY = re.compile(r"\b(?:on\s+)?the\s+\d{1,2}(?:st|nd|rd|th)\b", re.IGNORECASE)
-_MONTH_DATE = re.compile(
-    r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(MONTHS) + r")\b"
-    r"|\b(" + "|".join(MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
-)
-_WEEKDAY = re.compile(r"\b(?:" + "|".join(WEEKDAYS) + r")\b")
 WEEKDAYS_MS = ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad")
-"""Rule 5 in Malay: "Isnin 14 September" says the day too. The month names Malay shares with
-English are what `_MONTH_DATE` finds, so the day before them may be in either language."""
-_WEEKDAY_ANY = re.compile(r"\b(?:" + "|".join((*WEEKDAYS, *WEEKDAYS_MS)) + r")\b")
+MONTHS_MS = (
+    "Januari",
+    "Februari",
+    "Mac",
+    "April",
+    "Mei",
+    "Jun",
+    "Julai",
+    "Ogos",
+    "September",
+    "Oktober",
+    "November",
+    "Disember",
+)
+"""Rule 5 in Malay: "Isnin 29 Jun" says the day and the date, and "Jun" and "Mac" are whole
+month names, not shortenings. The tables are keyed by the line's language: an English line
+with a Malay weekday still fails, and a Malay line is held to all twelve Malay months."""
+
+_WEEKDAYS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {"en": WEEKDAYS, "ms": WEEKDAYS_MS}
+_MONTHS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {"en": MONTHS, "ms": MONTHS_MS}
+
+
+def _month_date_pattern(months: tuple[str, ...]) -> re.Pattern[str]:
+    joined = "|".join(months)
+    return re.compile(
+        r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + joined + r")\b"
+        r"|\b(" + joined + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
+    )
+
+
+_MONTH_DATE_BY_LANGUAGE: dict[str, re.Pattern[str]] = {
+    code: _month_date_pattern(months) for code, months in _MONTHS_BY_LANGUAGE.items()
+}
+_WEEKDAY_BY_LANGUAGE: dict[str, re.Pattern[str]] = {
+    code: re.compile(r"\b(?:" + "|".join(days) + r")\b")
+    for code, days in _WEEKDAYS_BY_LANGUAGE.items()
+}
+_MONTH_DATE = _MONTH_DATE_BY_LANGUAGE["en"]
+_WEEKDAY = _WEEKDAY_BY_LANGUAGE["en"]
+_ZH_DATE = re.compile(r"\d{1,2}月\d{1,2}日")
+_ZH_WEEKDAY = re.compile(r"(?:星期|周|禮拜|礼拜)[一二三四五六日天]")
+"""Chinese says the date and then the day: "9月29日星期一". The weekday stands right beside
+the date, before or after it."""
+
+
+def _tables_for(language: str) -> tuple[re.Pattern[str], re.Pattern[str], tuple[str, ...]]:
+    """The month-date and weekday patterns, and the whole month names, for a language. A
+    language with no table of its own is read as English."""
+    code = language if language in _MONTHS_BY_LANGUAGE else "en"
+    return _MONTH_DATE_BY_LANGUAGE[code], _WEEKDAY_BY_LANGUAGE[code], _MONTHS_BY_LANGUAGE[code]
+
 
 _UUID = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
@@ -751,22 +796,38 @@ DEFAULT_FILLER = "Ash"
 _SLOT = re.compile(r"(?<!\{)\{([^{}]*)\}(?!\})")
 
 
-def filler_for(slot: str) -> str:
-    """The representative value a `{slot}` is checked with, from its name."""
+_DAY_FILLER: dict[str, str] = {
+    "en": "Monday 14 September",
+    "ms": "Isnin 14 September",
+    "zh": "9月14日星期一",
+}
+_TIME_FILLER: dict[str, str] = {"en": "10 in the morning", "ms": "10 pagi", "zh": "上午10点"}
+"""A day and a time as the line's own language says them, so rule 5 reads a Malay or Chinese
+template against its own weekday and month tables (E05 review, P3)."""
+
+
+def filler_for(slot: str, language: str = "en") -> str:
+    """The representative value a `{slot}` is checked with, from its name and the language."""
     name = slot.strip().split("!")[0].split(":")[0].strip().lower()
     if name in FILLERS:
         return FILLERS[name]
     parts = re.split(r"[^a-z0-9]+", name)
+    if "time" in parts:
+        return _TIME_FILLER.get(language, _TIME_FILLER["en"])
     for word, value in _FILLER_BY_WORD:
         if word in parts:
+            if value == _DAY_FILLER["en"]:
+                return _DAY_FILLER.get(language, value)
             return value
     return DEFAULT_FILLER
 
 
-def fill(template: str) -> str:
+def fill(template: str, language: str = "en") -> str:
     """The template with every `{slot}` replaced by its filler; `{{` and `}}` become braces."""
     return (
-        _SLOT.sub(lambda m: filler_for(m.group(1)), template).replace("{{", "{").replace("}}", "}")
+        _SLOT.sub(lambda m: filler_for(m.group(1), language), template)
+        .replace("{{", "{")
+        .replace("}}", "}")
     )
 
 
@@ -842,7 +903,7 @@ class _Line:
             stripped = stripped[heading.end() :]
         self.template = stripped.strip()
         self.slot_initial = self.template.startswith("{")
-        self.text = fill(self.template)
+        self.text = fill(self.template, language)
         self.findings: list[Finding] = []
         self.covered: list[tuple[int, int]] = []
 
@@ -914,20 +975,35 @@ def _check_dates(line: _Line) -> None:
                 f'the date without the day: "{match.group()}"',
                 'say the day and the date: "Monday 29 September"',
             )
-    for match in _MONTH_DATE.finditer(line.text):
+    if line.language == "zh":
+        for match in _ZH_DATE.finditer(line.text):
+            around = line.text[max(0, match.start() - 4) : match.end() + 4]
+            if not _ZH_WEEKDAY.search(around) and line.cover(match):
+                line.add(
+                    5,
+                    f'the date without the day: "{match.group()}"',
+                    f'say the day too: "{match.group()}星期一"',
+                )
+        return
+    month_date, weekday, whole_months = _tables_for(line.language)
+    for match in month_date.finditer(line.text):
         before = line.text[: match.start()]
         preceding = " ".join(before.split()[-3:])
-        if not _WEEKDAY_ANY.search(preceding) and line.cover(match):
+        if not weekday.search(preceding) and line.cover(match):
             line.add(
                 5,
                 f'the date without the day: "{match.group()}"',
-                f'say the day too: "Monday {match.group()}"',
+                f'say the day too: "{_WEEKDAYS_BY_LANGUAGE.get(line.language, WEEKDAYS)[0]} {match.group()}"',
             )
+    month_shortenings = _MONTH_ABBREVIATIONS_MS if line.language == "ms" else _MONTH_ABBREVIATIONS
     for pattern, what, example in (
-        (_MONTH_ABBREVIATIONS, "month", "September"),
+        (month_shortenings, "month", "September"),
         (_DAY_ABBREVIATIONS, "day", "Monday"),
     ):
         for match in pattern.finditer(line.text):
+            # A whole month name in the line's language ("Jun", "Mac" in Malay) is no shortening.
+            if match.group().rstrip(".") in whole_months:
+                continue
             if line.cover(match):
                 line.add(
                     5,

@@ -60,17 +60,28 @@ from app.reasoning.visits.questions import (
     question_draft_for,
     questions_for,
 )
-from app.reasoning.visits.strings import NotPlainEnough, day_and_date
+from app.reasoning.visits.strings import (
+    NotASlotValue,
+    NotPlainEnough,
+    day_and_date,
+    purpose_code,
+    spoken,
+    time_of_day,
+)
 from app.reasoning.visits.summary import (
+    UNKNOWN_DRUG,
     AlreadyConfirmed,
     ChangeHeard,
     Decision,
     FactHeard,
     FixtureSummariser,
+    MedicationChangeHeard,
     NotATranscript,
     Span,
     SummaryDraft,
+    SummaryHints,
     confirm_summary,
+    names_a_drug,
     post_visit_summary,
     reroute_medicine_facts,
     store_transcript,
@@ -89,6 +100,7 @@ from tests.visits import (
     VISIT_AT,
     VISITS,
     Unknown,
+    agree_to_recording,
     medicine,
     pa,
     reading,
@@ -241,8 +253,9 @@ async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSessi
     texts = [line["text"] for line in brief.lines]
     _clean(texts, "ms")
     assert brief.language == "ms"
-    assert texts[0] == "Anda berjumpa Dr Tan pada Khamis 10 September."
-    assert texts[1] == "Lawatan ini tentang blood pressure check."
+    assert texts[0] == "Anda berjumpa Dr Tan pada Khamis 10 September pukul 10 pagi."
+    # The purpose label ("blood pressure check") never reaches him; its subject does (P5).
+    assert texts[1] == "Lawatan ini untuk memeriksa tekanan darah anda."
     sections = [line["section"] for line in brief.lines]
     assert sections[:2] == ["purpose", "purpose"]
     assert "changed" in sections and "questions" in sections and "bring" in sections
@@ -257,7 +270,9 @@ async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSessi
     ]
     assert brief.state_id == (await current_state(sg, context=context)).id
     assert brief.since_state_id is None  # no earlier visit: measured from nothing
-    assert "Bawa buku tekanan darah anda." in texts and "Bawa ubat anda dalam kotaknya." in texts
+    assert "Bawa buku tekanan darah anda pada Khamis 10 September." in texts
+    assert "Bawa ubat anda dalam kotaknya pada Khamis 10 September." in texts
+    assert all(line["spoken"] for line in brief.lines)
 
     async with refused_unit(sg, ImmutableRow):
         brief.language = "en"
@@ -297,13 +312,21 @@ async def test_a_brief_with_one_line_that_fails_the_verifier_is_refused_whole(
     assert {(e.refused_because, e.target) for e in refused} == {("NotPlainEnough", "brief")}
 
 
-async def test_a_purpose_that_is_not_plain_refuses_the_brief(sg: AsyncSession) -> None:
-    """The purpose label is rendered into a patient line, so a caregiver's jargon fails it."""
+async def test_a_purpose_label_never_reaches_him_as_written(sg: AsyncSession) -> None:
+    """A caregiver's label is mapped to a fixed subject in his words; one that maps to nothing
+    is "your health". Free text never goes into a patient slot (P5)."""
     context = await pa(sg, language="en")
-    _provider, appointment = await visit(sg, context, purpose="BP review")
-    with pytest.raises(NotPlainEnough) as refused:
-        await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
-    assert "review" in refused.value.text
+    _provider, appointment = await visit(sg, context, purpose="hypertension follow-up")
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    assert brief.lines[1]["text"] == "This visit is about your blood pressure."
+    _p, other = await visit(
+        sg, context, purpose="Dr Lim's second opinion", when=VISIT_AT + timedelta(days=1)
+    )
+    brief = await build_brief(sg, context=context, appointment_id=other.id, registry=REGISTRY)
+    assert brief.lines[1]["key"] == "visit_about_health"
+    assert brief.lines[1]["text"] == "This visit is about your health."
+    assert purpose_code("ujian gula") == "sugar" and purpose_code("眼科复诊") == "eyes"
+    assert purpose_code("") is None and purpose_code("visit") is None
 
 
 async def test_a_key_without_the_visits_cannot_read_the_brief(sg: AsyncSession) -> None:
@@ -483,7 +506,7 @@ async def test_his_card_is_the_first_three_by_priority_and_one_screen(sg: AsyncS
     assert len(found) >= 3
     card = await patient_card(sg, context=context, appointment_id=appointment.id)
     assert card[:CARD_SIZE] == [q.text for q in found[:CARD_SIZE]]
-    assert card[-1] == "Anda tidak perlu ingat semua ini."
+    assert card[-1] == "Nura simpan soalan-soalan ini untuk anda."
     assert len(card) == CARD_SIZE + 1
     _clean(card, "ms")
 
@@ -524,13 +547,14 @@ async def test_memos_are_verified_consolidated_and_read_back_as_the_card(
         source=MemoSource.CONVERSATION,
         appointment_id=appointment.id,
     )
-    assert first.text == "Eat lighter dinners." and first.state_id and len(first.text) <= 80
+    assert first.text == "Every evening, eat a lighter dinner." and first.state_id
+    assert len(first.text) <= 80
     kept = await consolidate_memos(sg, context=context)
     assert [m.id for m in kept] == [second.id, asked.id]
     assert first.superseded_at is not None and second.superseded_at is None
     card = await memo_card(sg, context=context)
     assert card == [
-        "Eat lighter dinners.",
+        "Every evening, eat a lighter dinner.",
         "Ask Dr Tan about the new amount of the water pill (frusemide).",
     ]
     _clean(card, "en")
@@ -581,7 +605,8 @@ def test_the_fixtures_are_keyed_by_the_digest_of_their_transcript() -> None:
                 assert 0 <= span["start"] < span["end"] <= len(fixture["transcript"]), (path, item)
 
 
-def test_a_fact_heard_about_a_dose_is_rerouted_as_a_question_never_a_fact() -> None:
+def test_a_fact_heard_about_a_dose_is_rerouted_whatever_its_subject() -> None:
+    """B4: the reroute keys on the attribute, not the subject, and on any drug name."""
     draft = SummaryDraft(
         facts_heard=(
             FactHeard(
@@ -593,22 +618,33 @@ def test_a_fact_heard_about_a_dose_is_rerouted_as_a_question_never_a_fact() -> N
                 0.9,
             ),
             FactHeard("medicine", "stop", "aspirin", None, Span(6, 10), 0.8),
+            # A free subject code with a dose attribute: still a dose.
+            FactHeard("warfarin", "dose", {"amount": "5 mg"}, "mg", Span(11, 15), 0.9),
+            # A fact whose value names a drug the register knows: never a fact.
+            FactHeard("symptom", "reported", "dizzy since the amlodipine", None, Span(16, 20), 0.8),
+            # A fact whose subject names a high-risk drug: never a fact.
+            FactHeard("insulin", "note", "keeps it in the fridge", None, Span(21, 25), 0.8),
             FactHeard(
                 "blood_pressure",
                 "reading",
                 {"systolic": 142, "diastolic": 88},
                 "mmHg",
-                Span(11, 20),
+                Span(26, 30),
                 0.8,
             ),
         )
     )
-    rerouted = reroute_medicine_facts(draft)
+    rerouted = reroute_medicine_facts(draft, REGISTRY)
     assert [(c.drug, c.change) for c in rerouted.medication_changes] == [
         ("warfarin", ChangeHeard.DOSE),
         ("aspirin", ChangeHeard.STOP),
+        ("warfarin", ChangeHeard.DOSE),
+        ("dizzy since the amlodipine", ChangeHeard.UNCLEAR),
+        ("keeps it in the fridge", ChangeHeard.UNCLEAR),
     ]
     assert [f.subject for f in rerouted.facts_heard] == ["blood_pressure"]
+    assert names_a_drug(REGISTRY, "symptom", {"note": "took Lasix"}) is True
+    assert names_a_drug(REGISTRY, "blood_pressure", {"systolic": 142}) is False
 
 
 async def test_transcript_in_summary_card_out_memos_on_the_yes(
@@ -636,6 +672,7 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
         artifact_id=artifact.id,
         store=store,
         summariser=FixtureSummariser(VISITS),
+        registry=REGISTRY,
     )
     items = await summary_items(sg, context=context, summary_id=summary.id)
     lines = [str(line["text"]) for line in summary.lines]
@@ -643,11 +680,16 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     assert summary.red_flag is False and summary.is_open and summary.state_id
     assert lines[0] == "Dr Tan said this on Thursday 10 September."
     assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in lines
-    assert "See Dr Tan again on Thursday 15 October." in lines
+    assert "See Dr Tan again on Thursday 15 October at 10 in the morning." in lines
     assert "Every morning, stand on the scale before breakfast." in lines
-    assert "Do not eat after 12 midnight on Sunday 27 September." in lines
+    assert "Eat nothing after 12 midnight on Sunday 27 September." in lines
+    assert "Bring your blood pressure book on Thursday 15 October." in lines
+    # The spoken twin drops the bracketed chemical name (P7).
+    assert "Ask Dr Tan about the new amount of the water pill." in [
+        str(line["spoken"]) for line in summary.lines
+    ]
     assert "Dr Tan wrote down your blood pressure." in lines
-    assert not any("full" in line or "half" in line for line in lines)
+    assert not any("full" in line or "half a" in line for line in lines)
     kinds = {item.kind for item in items}
     assert kinds == set(SummaryItemKind)
     change = next(item for item in items if item.kind is SummaryItemKind.MEDICATION_CHANGE)
@@ -668,7 +710,12 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     other = [Decision(item.id, ItemState.REJECTED) for item in items]
     async with refused_unit(sg, NotWhatWasConfirmed):
         await confirm_summary(
-            sg, context=context, summary_id=summary.id, decisions=other, confirmation_id=yes.id
+            sg,
+            context=context,
+            summary_id=summary.id,
+            decisions=other,
+            confirmation_id=yes.id,
+            registry=REGISTRY,
         )
     outcome = await confirm_summary(
         sg,
@@ -746,6 +793,7 @@ async def test_a_rejected_item_writes_nothing(
         artifact_id=artifact.id,
         store=store,
         summariser=FixtureSummariser(VISITS),
+        registry=REGISTRY,
     )
     items = await summary_items(sg, context=context, summary_id=summary.id)
     decisions = [Decision(item.id, ItemState.REJECTED) for item in items]
@@ -755,7 +803,12 @@ async def test_a_rejected_item_writes_nothing(
         await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions),
     )
     outcome = await confirm_summary(
-        sg, context=context, summary_id=summary.id, decisions=decisions, confirmation_id=yes.id
+        sg,
+        context=context,
+        summary_id=summary.id,
+        decisions=decisions,
+        confirmation_id=yes.id,
+        registry=REGISTRY,
     )
     assert (
         not outcome.memos and not outcome.appointments and not outcome.facts and not outcome.flags
@@ -794,19 +847,24 @@ async def test_a_red_flag_word_writes_a_flag_first_and_the_card_says_call_today(
         artifact_id=artifact.id,
         store=store,
         summariser=FixtureSummariser(VISITS),
+        registry=REGISTRY,
     )
     lines = [str(line["text"]) for line in summary.lines]
     _clean(lines, "en")
     assert summary.red_flag is True
     assert lines[0] == "Call Dr Tan today."
+    # P1: the card says what happened, on the line after the call.
+    assert lines[1] == "Dr Tan should hear about the chest pain today."
+    assert "Dr Tan said your medicines stay the same." in lines
     assert not any(
         word in " ".join(lines).lower() for word in ("angina", "heart attack", "cardiac")
     )
     [flag] = (await sg.scalars(select(Flag))).all()
     assert flag.kind is FlagKind.RED_FLAG and flag.code == "chest_pain"
     assert flag.artifact_id == artifact.id and flag.appointment_id == appointment.id
+    # The narrowest span: the word itself, in the raw transcript (B2, note).
     heard_at = transcript(RED_FLAG)[flag.payload["span"]["start"] : flag.payload["span"]["end"]]
-    assert heard_at.startswith("chest pain") and flag.payload["word"] == "chest pain"
+    assert heard_at == "chest pain" and flag.payload["found_in"] == "transcript"
     assert flags_when_card_written == [1]
     # And the flag's write is on the trail beside the card's.
     trail = [e for e in await read_audit(sg, context=context) if e.action is Action.WRITE]
@@ -816,7 +874,7 @@ async def test_a_red_flag_word_writes_a_flag_first_and_the_card_says_call_today(
     found = await questions_for(
         sg, context=context, appointment_id=next_visit.id, registry=REGISTRY
     )
-    assert found[0].text == "Tell Dr Tan about the chest pain." and found[0].priority == 0
+    assert found[0].text == "Tell Dr Tan about the chest pain today." and found[0].priority == 0
 
 
 async def test_a_photo_is_not_a_transcript_and_an_unknown_transcript_hears_nothing(
@@ -834,6 +892,7 @@ async def test_a_photo_is_not_a_transcript_and_an_unknown_transcript_hears_nothi
             artifact_id=photo.id,
             store=store,
             summariser=FixtureSummariser(VISITS),
+            registry=REGISTRY,
         )
     artifact = await store_transcript(
         sg,
@@ -849,6 +908,7 @@ async def test_a_photo_is_not_a_transcript_and_an_unknown_transcript_hears_nothi
         artifact_id=artifact.id,
         store=store,
         summariser=FixtureSummariser(VISITS),
+        registry=REGISTRY,
     )
     assert await summary_items(sg, context=context, summary_id=summary.id) == []
     assert [str(line["text"]) for line in summary.lines] == [
@@ -867,14 +927,22 @@ def test_his_name_for_a_medicine_comes_from_the_licensed_monograph_first() -> No
     assert medicine_words("warfarin", "zh", REGISTRY) == "薄血药"
     # Unknown to the register: the docs' glossary, then the name as it is.
     assert medicine_words("furosemide", "en", REGISTRY) == "the water pill (furosemide)"
-    assert medicine_words("Xylocaine", "en", REGISTRY) == "Xylocaine"
+    with pytest.raises(NotASlotValue):
+        medicine_words("Xylocaine", "en", REGISTRY)  # B1: never printed as it is
 
 
 def test_day_and_date_says_the_day_in_each_language() -> None:
     when = datetime(2026, 9, 14, 2, 0, tzinfo=UTC)
     assert day_and_date(when, "en", Region.SG) == "Monday 14 September"
     assert day_and_date(when, "ms", Region.MY) == "Isnin 14 September"
-    assert day_and_date(when, "zh", Region.SG) == "星期一 9月14日"
+    assert day_and_date(when, "zh", Region.SG) == "9月14日星期一"
+    assert time_of_day(when, "en", Region.SG) == "10 in the morning"
+    assert time_of_day(when, "ms", Region.MY) == "10 pagi"
+    assert time_of_day(when, "zh", Region.SG) == "上午10点"
+    late = datetime(2026, 9, 14, 11, 30, tzinfo=UTC)
+    assert time_of_day(late, "en", Region.SG) == "half past 7 at night"
+    assert time_of_day(late, "ms", Region.MY) == "7.30 malam"
+    assert time_of_day(late, "zh", Region.SG) == "晚上7点半"
     # Late at night UTC is the next morning on his clock.
     assert (
         day_and_date(datetime(2026, 9, 14, 23, 0, tzinfo=UTC), "en", Region.SG)
@@ -882,15 +950,300 @@ def test_day_and_date_says_the_day_in_each_language() -> None:
     )
 
 
-def test_every_template_passes_the_verifier_in_every_language() -> None:
+def test_every_template_passes_the_verifier_in_every_language_with_its_kind() -> None:
+    """Action-shaped lines are checked as actions (rules 6 and 7), the rest as lines (P-A)."""
     from app.safety.plain_words import fill
 
+    assert strings.kind_of("bring_bp_book") == "action" and strings.kind_of("visit_with") == "line"
     for key, by_language in strings.TEMPLATES.items():
         for language in strings.LANGUAGES:
             failures = [
-                f for f in verify(fill(by_language[language]), language) if f.severity != "note"
+                f
+                for f in verify(
+                    fill(by_language[language], language), language, strings.kind_of(key)
+                )
+                if f.severity != "note"
             ]
             assert failures == [], (key, language, failures)
+
+
+def test_a_slot_takes_only_the_kind_of_thing_it_is_for() -> None:
+    """Nothing free reaches a line: names are names, numbers are numbers (safety note)."""
+    assert strings.render("walk_every_day", "en", minutes=20) == "Every day, walk for 20 minutes."
+    with pytest.raises(NotASlotValue):
+        strings.render("walk_every_day", "en", minutes="20; take two tablets")
+    with pytest.raises(NotASlotValue):
+        strings.render(
+            "visit_with",
+            "en",
+            doctor="Dr Tan 91234567",
+            day="Monday 14 September",
+            time="10 in the morning",
+        )
+    with pytest.raises(NotASlotValue):
+        strings.render("call_doctor_today", "en", doctor="Call 999 now. Dr Tan")
+    with pytest.raises(NotASlotValue):
+        strings.render("ask_medicine_purpose", "en", doctor="Dr Tan", medicine="")
+    with pytest.raises(NotASlotValue):
+        strings.render("call_doctor_today", "en", clinic="Dr Tan")
+    assert spoken("Ask Dr Tan about the new amount of the water pill (frusemide).") == (
+        "Ask Dr Tan about the new amount of the water pill."
+    )
+
+
+class _Says:
+    """A summariser that answers whatever a test hands it, for any transcript."""
+
+    def __init__(self, draft: SummaryDraft) -> None:
+        self.draft = draft
+
+    async def summarise(
+        self, transcript_text: str, language: str, hints: SummaryHints
+    ) -> SummaryDraft:
+        return self.draft
+
+
+async def test_a_drug_the_register_does_not_know_is_never_printed_or_written(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """B1: an unregistered drug name reaches neither his screen nor the reconcile."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text="We will change the Xyzzymab.", captured_at=VISIT_AT
+    )
+    heard = SummaryDraft(
+        medication_changes=(MedicationChangeHeard("Xyzzymab", ChangeHeard.DOSE, Span(19, 27), 0.9),)
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    lines = [str(line["text"]) for line in summary.lines]
+    assert "Ask Dr Tan about the change to your medicines." in lines
+    assert not any("xyzzymab" in line.lower() for line in lines)
+    [item] = await summary_items(sg, context=context, summary_id=summary.id)
+    assert item.payload == {"generic": None, "change": "dose"}
+    assert item.key == "ask_medicines_change"
+    decisions = [Decision(item.id, ItemState.CONFIRMED)]
+    yes = await confirm(
+        sg,
+        context,
+        await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions),
+    )
+    outcome = await confirm_summary(
+        sg,
+        context=context,
+        summary_id=summary.id,
+        decisions=decisions,
+        confirmation_id=yes.id,
+        registry=REGISTRY,
+    )
+    [flag] = outcome.flags
+    assert flag.subject == UNKNOWN_DRUG and flag.code == "dose"
+    assert set(flag.payload) == {"span", "change"} and flag.fact_ids == []
+    assert [m.text for m in outcome.memos] == ["Ask Dr Tan about the change to your medicines."]
+    # A brand the register knows is named as its generic, in his words.
+    heard = SummaryDraft(
+        medication_changes=(MedicationChangeHeard("Lasix", ChangeHeard.DOSE, Span(0, 5), 0.9),)
+    )
+    other = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in [
+        str(line["text"]) for line in other.lines
+    ]
+
+
+async def test_a_red_flag_word_in_the_transcript_is_found_when_the_summariser_omits_it(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """B2: the raw transcript is scanned, so a model that mislabels or drops the chest pain
+    still escalates; and a word inside a fact's subject is found too."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text=transcript(RED_FLAG), captured_at=VISIT_AT
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(SummaryDraft.nothing()),
+        registry=REGISTRY,
+    )
+    assert summary.red_flag is True
+    assert [str(line["text"]) for line in summary.lines][:2] == [
+        "Call Dr Tan today.",
+        "Dr Tan should hear about the chest pain today.",
+    ]
+    [flag] = (await sg.scalars(select(Flag))).all()
+    assert flag.payload["found_in"] == "transcript"
+    span = flag.payload["span"]
+    assert transcript(RED_FLAG)[span["start"] : span["end"]] == "chest pain"
+
+    # A word the summariser put in a subject code, on a transcript that has none itself.
+    plain = await store_transcript(
+        sg,
+        context=context,
+        store=store,
+        text="A quiet visit with nothing new.",
+        captured_at=VISIT_AT,
+    )
+    heard = SummaryDraft(
+        facts_heard=(FactHeard("black_stool", "reported", "twice", None, Span(0, 5), 0.8),)
+    )
+    second = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=plain.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    assert second.red_flag is True
+    codes = {f.code: f.payload["found_in"] for f in (await sg.scalars(select(Flag))).all()}
+    assert codes["black_stool"] == "fact"
+
+
+async def test_no_transcript_is_kept_without_the_agreement_to_recording(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """B3: `store_transcript` requires RECORDING under the visits scope; the refusal is on
+    the trail by name, and nothing is stored."""
+    from app.consent.service import ConsentWithheld
+
+    context = await pa(sg, language="en", recording=False)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    async with refused_unit(sg, ConsentWithheld):
+        await store_transcript(
+            sg, context=context, store=store, text=transcript(ROUTINE), captured_at=SEPT_3
+        )
+    assert (await sg.scalars(select(Artifact))).all() == []
+    refused = [e for e in await read_audit(sg, context=context) if e.outcome is Outcome.REFUSED]
+    assert ("ConsentWithheld", Scope.VISITS) in {(e.refused_because, e.scope) for e in refused}
+    await agree_to_recording(sg, context, language="en")
+    kept = await store_transcript(
+        sg, context=context, store=store, text=transcript(ROUTINE), captured_at=SEPT_3
+    )
+    assert kept.kind is ArtifactKind.TRANSCRIPT
+
+
+async def test_a_follow_up_with_a_new_doctors_name_never_adds_a_provider(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Safety note: nobody is added to his directory from a transcript; the visit is booked
+    with the doctor he saw, and the name heard is kept on the item for the record."""
+    from datetime import date
+
+    from app.memory.spine import list_providers
+    from app.reasoning.visits.summary import FollowUpHeard
+
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text="See Dr Nobody next month.", captured_at=VISIT_AT
+    )
+    heard = SummaryDraft(
+        follow_ups=(
+            FollowUpHeard(date(2026, 10, 15), "heart check", Span(0, 5), 0.9, provider="Dr Nobody"),
+        )
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    [item] = await summary_items(sg, context=context, summary_id=summary.id)
+    assert item.payload["provider_heard"] == "Dr Nobody"
+    decisions = [Decision(item.id, ItemState.CONFIRMED)]
+    yes = await confirm(
+        sg,
+        context,
+        await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions),
+    )
+    outcome = await confirm_summary(
+        sg,
+        context=context,
+        summary_id=summary.id,
+        decisions=decisions,
+        confirmation_id=yes.id,
+        registry=REGISTRY,
+    )
+    [planned] = outcome.appointments
+    assert planned.provider_id == appointment.provider_id
+    assert [p.name for p in await list_providers(sg, context=context)] == ["Dr Tan"]
+
+
+async def test_an_action_carries_only_the_slots_its_kind_allows(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Safety note: summariser slot values are constrained per template."""
+    from app.reasoning.visits.summary import ActionHeard, ActionKind
+
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text="Walk a little every day.", captured_at=VISIT_AT
+    )
+    heard = SummaryDraft(
+        actions=(
+            ActionHeard(
+                ActionKind.WALK_EVERY_DAY, {"minutes": 20, "doctor": "Dr Evil"}, Span(0, 5), 0.9
+            ),
+        )
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    [item] = await summary_items(sg, context=context, summary_id=summary.id)
+    assert item.text == "Every day, walk for 20 minutes."
+    assert item.payload["slots"] == {"minutes": 20}
+    too_long = SummaryDraft(
+        actions=(ActionHeard(ActionKind.WALK_EVERY_DAY, {"minutes": 9000}, Span(0, 5), 0.9),)
+    )
+    async with refused_unit(sg, NotASlotValue):
+        await post_visit_summary(
+            sg,
+            context=context,
+            appointment_id=appointment.id,
+            artifact_id=artifact.id,
+            store=store,
+            summariser=_Says(too_long),
+            registry=REGISTRY,
+        )
 
 
 __all__ = ["uuid"]

@@ -64,8 +64,11 @@ HIGH_RISK_CLASSES: Mapping[str, frozenset[str]] = {
 MEDICINE_SUBJECTS = frozenset({"medicine", "medication"})
 """The subjects a medicine fact is written under (`app.keys.scopes.scope_for_subject`)."""
 
-DOSE_ATTRIBUTES = frozenset({"dose"})
-"""The attribute the rule guards: what to take and how often, which is what a label says."""
+DOSE_ATTRIBUTES = frozenset({"dose", "amount", "start", "stop", "frequency", "strength"})
+"""The attributes the rule guards, whatever the subject: what to take, how much, how often,
+starting and stopping — what a label says, and what a voice might say. Keyed on the attribute
+and not on the subject, because subjects are free codes: a fact `warfarin.dose` from a
+transcript is a dose as much as `medicine.dose` from a card is (E05 review, B4)."""
 
 LINE_ATTRIBUTES = ("line:", "supply:")
 """The attributes the medicines module (E04) writes — `line:<generic>`, `supply:<generic>` —
@@ -142,10 +145,12 @@ def names_high_risk(*values: Any) -> str | None:
 
 
 def is_a_dose(draft: FactDraft) -> bool:
-    """A medicine fact that says what to take: the review card's `dose`, or a medicine line
-    or supply of the medicines module, whose value carries the dose."""
-    return draft.subject in MEDICINE_SUBJECTS and (
-        draft.attribute in DOSE_ATTRIBUTES or draft.attribute.startswith(LINE_ATTRIBUTES)
+    """A fact that says what to take: any subject with a dose attribute (`DOSE_ATTRIBUTES`),
+    or a medicine line or supply of the medicines module, whose value carries the dose. The
+    subject is not consulted: whether the drug is high-risk is read from the subject and the
+    value together, after this."""
+    return draft.attribute in DOSE_ATTRIBUTES or (
+        draft.subject in MEDICINE_SUBJECTS and draft.attribute.startswith(LINE_ATTRIBUTES)
     )
 
 

@@ -36,6 +36,16 @@ def _transcript(label: str) -> dict[str, str]:
     return {"data": base64.b64encode(transcript(label).encode()).decode(), "captured_at": VISIT_AT}
 
 
+async def _recording(deployment: Deployment, his: dict[str, str], profile_id: str) -> None:
+    agreed = await deployment.client.post(
+        f"/profiles/{profile_id}/consents/recording",
+        json={"language": "en", "captured_via": "app"},
+        headers=his,
+    )
+    assert agreed.status_code == 201, agreed.text
+    assert agreed.json()["purpose"] == "recording"
+
+
 async def _visit(deployment: Deployment, his: dict[str, str], profile_id: str) -> str:
     doctor = await deployment.client.post(
         f"/profiles/{profile_id}/providers", json={"name": "Dr Tan", "kind": "doctor"}, headers=his
@@ -77,6 +87,15 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     await _reading(deployment, his, profile_id)
     appointment_id = await _visit(deployment, his, profile_id)
 
+    # No transcript without the agreement to recording (B3).
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json=_transcript(ROUTINE),
+        headers=his,
+    )
+    assert refused.status_code == 403 and refused.json() == {"refusal": "ConsentWithheld"}
+    await _recording(deployment, his, profile_id)
+
     # The brief, in Malay, every line verifier-clean, naming its State.
     brief = await deployment.client.get(
         f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
@@ -86,7 +105,8 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     lines = [line["text"] for line in body["lines"]]
     _clean(lines, "ms")
     assert body["language"] == "ms" and body["state_id"]
-    assert lines[0] == "Anda berjumpa Dr Tan pada Khamis 10 September."
+    assert lines[0] == "Anda berjumpa Dr Tan pada Khamis 10 September pukul 10 pagi."
+    assert all(line["spoken"] for line in body["lines"])
     assert {line["section"] for line in body["lines"]} >= {"purpose", "changed", "bring"}
     again = await deployment.client.get(
         f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
@@ -99,7 +119,8 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     )
     assert asked.status_code == 200, asked.text
     card = asked.json()["card"]
-    assert card[-1] == "Anda tidak perlu ingat semua ini." and len(card) <= 4
+    assert card[-1] == "Nura simpan soalan-soalan ini untuk anda." and len(card) <= 4
+    assert asked.json()["spoken_card"] == card
     _clean(card, "ms")
     text = "Adakah pil air ini buruk untuk buah pinggang saya?"
     minted = await deployment.client.post(
@@ -132,7 +153,8 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     _clean(summary["lines"], "ms")
     assert summary["red_flag"] is False and summary["confirmed_at"] is None
     assert "Tanya Dr Tan tentang jumlah baru pil air." in summary["lines"]
-    assert "Jumpa Dr Tan lagi pada Khamis 15 Oktober." in summary["lines"]
+    assert "Jumpa Dr Tan lagi pada Khamis 15 Oktober pukul 10 pagi." in summary["lines"]
+    assert len(summary["spoken"]) == len(summary["lines"])
     kinds = {item["kind"] for item in summary["items"]}
     assert kinds == {"action", "medication_change", "follow_up", "fact_heard"}
     assert all(item["span"] and item["confidence"] > 0 for item in summary["items"])
@@ -195,6 +217,7 @@ async def test_a_red_flag_transcript_marks_the_card_and_says_call_today(
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     appointment_id = await _visit(deployment, his, profile_id)
+    await _recording(deployment, his, profile_id)
     posted = await deployment.client.post(
         f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
         json=_transcript(RED_FLAG),
@@ -203,7 +226,10 @@ async def test_a_red_flag_transcript_marks_the_card_and_says_call_today(
     assert posted.status_code == 201, posted.text
     summary = posted.json()
     assert summary["red_flag"] is True
-    assert summary["lines"][0] == "Call Dr Tan today."
+    assert summary["lines"][:2] == [
+        "Call Dr Tan today.",
+        "Dr Tan should hear about the chest pain today.",
+    ]
     _clean(summary["lines"], "en")
     trail = await deployment.client.get(
         f"/profiles/{profile_id}/audit", params={"scope": "records", "limit": 500}, headers=his
