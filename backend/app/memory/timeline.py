@@ -19,7 +19,7 @@ from __future__ import annotations
 import base64
 import binascii
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -34,11 +34,12 @@ from app.errors import Refusal
 from app.ingestion.models import EventNote
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
-from app.keys.scopes import Scope
+from app.keys.scopes import FACT_SCOPES, Scope
 from app.memory.episodic import (
     event_cites_only_what_is_held_here,
     fact_cites_only_what_is_held_here,
     held_here,
+    withheld_provenance,
 )
 from app.memory.models import (
     Appointment,
@@ -48,24 +49,12 @@ from app.memory.models import (
     ConfidenceState,
     Episode,
     Event,
-    EventKind,
     Fact,
     Provider,
 )
 from app.memory.semantic import fact_is_under
 from app.memory.spine import UPCOMING
 from app.memory.working import NoSuchEpisode
-
-FACT_SCOPES: tuple[Scope, ...] = (Scope.READINGS, Scope.MEDICINES, Scope.RECORDS)
-"""The scopes a fact can sit under; each is read on its own, and withheld by name if not held."""
-
-EVENT_SCOPES: dict[EventKind, Scope] = {
-    EventKind.READING: Scope.READINGS,
-    EventKind.DOSE_TAKEN: Scope.MEDICINES,
-}
-"""An event is the record's, except a reading taken and a tablet taken: those are the
-readings' and the medicines' parts, and a key that does not reach the part — a part marked
-"only me" among them — does not see the moment either."""
 
 PAGE_SIZE = 20
 MAX_PAGE = 50
@@ -98,6 +87,9 @@ class Hanging:
     notes: tuple[EventNote, ...] = ()
     """The voice notes and scribbles on those events (E02-06), by reference: the note's row,
     never its recording or its words."""
+    withheld: Mapping[uuid.UUID, tuple[str, ...]] = field(default_factory=dict)
+    """For an event or a fact here, what it cites that this key may not follow, by name —
+    shown without its id (`app.memory.episodic.withheld_provenance`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,10 +160,15 @@ class Gathered:
     facts: list[Fact] = field(default_factory=list)
     notes: list[EventNote] = field(default_factory=list)
     withheld: list[Scope] = field(default_factory=list)
+    withheld_refs: dict[uuid.UUID, tuple[str, ...]] = field(default_factory=dict)
+    """For each event and fact gathered, what it cites that this key may not follow."""
 
     def withhold(self, scope: Scope) -> None:
         if scope not in self.withheld:
             self.withheld.append(scope)
+
+    def refs_withheld(self, rows: Iterable[Event | Fact]) -> dict[uuid.UUID, tuple[str, ...]]:
+        return {row.id: self.withheld_refs[row.id] for row in rows if row.id in self.withheld_refs}
 
     def off_visit(self, appointment_id: uuid.UUID) -> Hanging:
         ids = {
@@ -179,9 +176,11 @@ class Gathered:
             for each in self.attachments
             if each.appointment_id == appointment_id and each.artifact_id in self.artifacts
         }
+        facts = [f for f in self.facts if f.artifact_id in ids]
         return Hanging(
             artifacts=tuple(_newest(self.artifacts[i] for i in ids)),
-            facts=tuple(_newest(f for f in self.facts if f.artifact_id in ids)),
+            facts=tuple(_newest(facts)),
+            withheld=self.refs_withheld(facts),
         )
 
     def off_episode(self, episode_id: uuid.UUID) -> Hanging:
@@ -204,6 +203,7 @@ class Gathered:
                     key=lambda note: (as_utc(note.written_at), str(note.id)),
                 )
             ),
+            withheld=self.refs_withheld([*events, *facts]),
         )
 
     def visit_item(self, appointment: Appointment) -> TimelineItem:
@@ -262,10 +262,10 @@ async def gather(session: AsyncSession, *, context: KeyContext) -> Gathered:
                 context,
                 Scope.RECORDS,
                 where=(
+                    # A reading taken and a tablet taken are written under the readings' and
+                    # the medicines' parts (`episodic.EVENT_SCOPES`), and the read returns
+                    # only the parts this key holds (`scoped_select`).
                     Event.episode_id.is_not(None),
-                    Event.kind.not_in(
-                        [kind for kind, part in EVENT_SCOPES.items() if not context.allows(part)]
-                    ),
                     event_cites_only_what_is_held_here(context, Scope.RECORDS),
                 ),
             )
@@ -315,6 +315,9 @@ async def gather(session: AsyncSession, *, context: KeyContext) -> Gathered:
                 ),
             )
         )
+    found.withheld_refs = await withheld_provenance(
+        session, context=context, rows=[*found.events, *found.facts]
+    )
     return found
 
 

@@ -19,8 +19,10 @@ label here names as its source.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
@@ -35,6 +37,9 @@ from app.channels.api.schemas import (
     TakenIn,
     TakenOut,
 )
+from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.medicines.models import MedicationLine
 from app.medicines.service import (
     active_lines,
     history,
@@ -48,10 +53,26 @@ from app.medicines.service import (
 )
 from app.medicines.story import interaction_question
 from app.medicines.strings import PLAIN_NAME, language_of
+from app.memory.episodic import withheld_references
 
 router = APIRouter(prefix="/profiles", tags=["medicines"])
 
 Language = Query(default=None, min_length=2, max_length=16)
+
+
+async def _sources_withheld(
+    session: AsyncSession, context: KeyContext, lines: Sequence[MedicationLine]
+) -> dict[uuid.UUID, tuple[str, ...]]:
+    """What each line came from that this key may not read: a line is the medicines' and its
+    label photo the record's, so a helper sees the line and is told the photo is withheld."""
+    return await withheld_references(
+        session,
+        context=context,
+        cited=[
+            (line.id, Scope.MEDICINES, line.source_artifact_id, line.source_event_id)
+            for line in lines
+        ],
+    )
 
 
 @router.get("/{profile_id}/medicines")
@@ -64,7 +85,8 @@ async def medicines(
     views = await active_lines(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
-    return [LineOut.of(view) for view in views]
+    withheld = await _sources_withheld(session, context, [view.line for view in views])
+    return [LineOut.of(view, withheld.get(view.line.id, ())) for view in views]
 
 
 @router.post("/{profile_id}/medicines/draft")
@@ -120,7 +142,9 @@ async def add(body: MedicineIn, request: Request, context: Context, session: Db)
 @router.get("/{profile_id}/medicines/history")
 async def change_log(context: Context, session: Db) -> list[LineOut]:
     """Every line ever written, superseded ones included, oldest first."""
-    return [LineOut.history_of(line) for line in await history(session, context=context)]
+    lines = await history(session, context=context)
+    withheld = await _sources_withheld(session, context, lines)
+    return [LineOut.history_of(line, withheld.get(line.id, ())) for line in lines]
 
 
 @router.get("/{profile_id}/medicines/interactions")
