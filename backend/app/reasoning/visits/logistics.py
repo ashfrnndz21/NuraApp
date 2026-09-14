@@ -71,6 +71,9 @@ LOGISTICS = "visit_logistics"
 """The trail's name for a read of the logistics card."""
 
 LETTER_KINDS = frozenset({DocumentKind.DISCHARGE_LETTER})
+DRIVERS = frozenset({KeyRole.CHIEF, KeyRole.CAREGIVER, KeyRole.HELPER, KeyRole.VIEWER})
+"""Who can be asked to drive him: the family and the helper — never a clinic's key, which is
+the clinic's, or an emergency-only key, which is a neighbour's for the worst day."""
 """The papers "the last letter" means: his hospital letter, confirmed on its review card."""
 
 
@@ -278,9 +281,9 @@ async def logistics_for(
                 written_at=newest.written_at,
             )
             lines.append(
-                _line("note", "logistics_note_by", lang, who=by)
+                _line("note", "logistics_note_by", lang, who=by, doctor=visit.doctor)
                 if by
-                else _line("note", "logistics_note_family", lang)
+                else _line("note", "logistics_note_family", lang, doctor=visit.doctor)
             )
     else:
         withheld.append(Scope.FAMILY)
@@ -297,7 +300,9 @@ async def logistics_for(
         # he is told who will tell him, when there is a chief to name.
         chief = await _chief_name(session, context)
         if chief:
-            lines.append(_line("driver", "logistics_driver_ask", lang, who=chief, day=day))
+            lines.append(
+                _line("driver", "logistics_driver_ask", lang, who=chief, doctor=visit.doctor, day=day)
+            )
 
     clinical = state.dimension(Dimension.CLINICAL) or {}
     lines.append(_line("bring", "bring_bp_book", lang, day=day))
@@ -310,7 +315,7 @@ async def logistics_for(
         withheld.append(Scope.RECORDS)
     for memo in await current_memos(session, context=context):
         if memo.kind is MemoKind.BRING and memo.language == lang:
-            lines.append(Line("bring", memo.key, memo.text, spoken(memo.text)))
+            lines.append(Line("memo", memo.key, memo.text, spoken(memo.text)))
 
     return Logistics(
         appointment_id=visit.appointment.id,
@@ -337,8 +342,16 @@ async def _driving_visit(
     visit = await require_visit(session, context=context, appointment_id=appointment_id)
     if as_utc(visit.appointment.scheduled_at) < utcnow():
         raise NotOnThisVisit(f"visit {appointment_id} has already been")
-    if not await holds_the_profile(session, profile_id=context.profile_id, person_id=person_id):
-        raise NotOnThisVisit(f"person {person_id} holds nothing on this profile")
+    moment = utcnow()
+    family = [
+        key
+        for key in await list_keys(session, context=context)
+        if key.holder_person_id == person_id and key.role in DRIVERS and key.is_active(moment)
+    ]
+    if not family or not await holds_the_profile(
+        session, profile_id=context.profile_id, person_id=person_id
+    ):
+        raise NotOnThisVisit(f"person {person_id} holds no family key on this profile")
     return visit.appointment
 
 

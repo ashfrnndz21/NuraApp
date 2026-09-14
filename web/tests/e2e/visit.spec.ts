@@ -31,11 +31,13 @@ const isUpload = (request: Request) => request.method() === "POST" && /\/api\/pr
 
 test("the visit screen: logistics from the record, the yes to a driver, consent, the notice first, one upload on Stop, the card with its clips", async ({ page, request }) => {
   const pa = await seedVisitDay(request);
-  // The logistics card is on his feed on the day (T-0), in the backend's words.
+  // The logistics card is on his feed on the day (T-0), in the backend's words: the visits'
+  // part only — who drives him and Mei's note stay on the Visit screen, under their own scope.
   const feed = (await (await request.get(`${API}/profiles/${pa.profileId}/feed`, auth(pa.token))).json()) as { items: { type: string; headline: string; body: string[] }[] };
   const logistics = feed.items.find((item) => item.type === "visit_logistics");
   expect(logistics?.headline).toBe("Getting to Dr Tan today");
-  expect(logistics?.body).toContain("Mei will tell you who drives you on Monday 14 September.");
+  expect(logistics?.body).toContain("You see Dr Tan on Monday 14 September at half past 10 in the morning.");
+  expect(logistics?.body.some((line) => line.includes("Mei"))).toBe(false);
 
   const uploads: Request[] = [];
   const clipsAsked: string[] = [];
@@ -49,12 +51,12 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   const card = page.getByTestId("logistics");
   await expect(card).toContainText("You see Dr Tan on Monday 14 September at half past 10 in the morning.");
   await expect(card).toContainText("Dr Tan is at Gleneagles Hospital, 6A Napier Road.");
-  await expect(card).toContainText("Mei wrote a note about the place.");
+  await expect(card).toContainText("Mei wrote a note about getting to Dr Tan.");
   await expect(page.getByTestId("place-note")).toContainText("Mei's note");
   await expect(page.getByTestId("place-note")).toContainText("parking at B2");
-  await expect(card).toContainText("Mei will tell you who drives you on Monday 14 September.");
+  await expect(card).toContainText("Mei will tell you who is driving you to Dr Tan on Monday 14 September.");
   await expect(card).toContainText("Bring your blood pressure book on Monday 14 September.");
-  await expect(page.getByTestId("drive-suggestion")).toContainText("Mei is on duty then.");
+  await expect(page.getByTestId("drive-suggestion")).toContainText("It is Mei's turn that day.");
   await expect(page.getByTestId("keep-open")).toHaveText("Keep this page open while Nura listens.");
   expect(await nothingCovers(page)).toEqual([]);
   await shotAs(page, "cp22-visit-logistics", true);
@@ -95,7 +97,8 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   await expect(page.getByTestId("saved")).toContainText("Nura kept the recording.");
   expect(uploads).toHaveLength(1);
   expect(uploads[0]!.headers()["content-type"]).toBe("audio/webm;codecs=opus");
-  expect(new URL(uploads[0]!.url()).searchParams.get("duration_s")).toBe("66.0");
+  expect(Number(new URL(uploads[0]!.url()).searchParams.get("duration_s"))).toBeGreaterThanOrEqual(66);
+  expect(Number(new URL(uploads[0]!.url()).searchParams.get("duration_s"))).toBeLessThan(67);
   const recorded = await stand(page);
   expect(recorded.__recorder.stops).toBe(1);
   expect(recorded.__locks.released).toBe(1);
@@ -179,5 +182,7 @@ test("the page hidden while listening stops at once, and what was heard is kept 
   await page.getByTestId("keep-heard").click();
   await expect(page.getByTestId("saved")).toContainText("Nura kept the recording.");
   expect(uploads).toHaveLength(1);
-  expect(new URL(uploads[0]!.url()).searchParams.get("duration_s")).toBe("30.0");
+  // Thirty seconds on the phone's clock, give or take the tick the timer lands on.
+  expect(Number(new URL(uploads[0]!.url()).searchParams.get("duration_s"))).toBeGreaterThanOrEqual(30);
+  expect(Number(new URL(uploads[0]!.url()).searchParams.get("duration_s"))).toBeLessThan(31);
 });

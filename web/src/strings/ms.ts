@@ -343,9 +343,9 @@ export const ms = {
     // @patient
     fromVisit: "Ini dari lawatan anda ke doktor.",
     // @patient
-    onDuty: "{name} bertugas pada masa itu.",
+    onDuty: "Hari itu giliran {name}.",
     // @patient phrase
-    driveYes: "Ya, {name} yang hantar",
+    driveYes: "Ya, {name} akan hantar",
     // @patient phrase
     start: "Mula merakam",
     // @patient
@@ -367,7 +367,7 @@ export const ms = {
     // @patient
     notHeard: "Nura tidak dapat mendengar kata-katanya.",
     // @patient
-    notHeardSub: "Rakaman itu disimpan dalam surat-surat anda.",
+    notHeardSub: "Anda boleh dengar semula dalam surat-surat anda.",
     // @patient
     cardLater: "Nura belum dapat membuat kad itu.",
     // @patient
@@ -790,7 +790,7 @@ export const ms = {
     NoSuchRecording: "Rakaman itu sudah tiada di sini.",
     NotAClip: "Nura tidak dapat mencari bahagian rakaman itu.",
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
-    NotAChief: "Hanya pemilik atau ketua boleh buat ini.",
-    NotOnThisVisit: "Orang itu tidak boleh menghantar ke lawatan ini.",
+    NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
+    NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
   },
 } satisfies Strings;

@@ -343,15 +343,15 @@ export const en = {
     // @patient
     fromVisit: "This comes from your visits to the doctor.",
     // @patient
-    onDuty: "{name} is on duty then.",
+    onDuty: "It is {name}'s turn that day.",
     // @patient phrase
-    driveYes: "Yes, {name} drives",
+    driveYes: "Yes, {name} will drive",
     // @patient phrase
     start: "Start recording",
     // @patient
     keepOpen: "Keep this page open while Nura listens.",
     // @patient
-    consentLead: "Nura needs your yes before it listens.",
+    consentLead: "Nura needs you to say yes before it listens.",
     // @patient phrase
     saidYes: "{doctor} said yes",
     // @patient phrase
@@ -367,9 +367,9 @@ export const en = {
     // @patient
     notHeard: "Nura could not hear the words.",
     // @patient
-    notHeardSub: "The recording is kept in your papers.",
+    notHeardSub: "You can listen to it in your papers.",
     // @patient
-    cardLater: "Nura could not make the card yet.",
+    cardLater: "Nura has not made the card yet.",
     // @patient
     stoppedAway: "Nura stopped listening when you left this page.",
     // @patient phrase
@@ -381,11 +381,11 @@ export const en = {
     // @patient phrase
     byHandLabel: "What {doctor} said",
     // @patient phrase
-    byHandSave: "Save the notes",
+    byHandSave: "Keep the notes",
     // @patient
     noMic: "Nura cannot use the microphone on this phone.",
     // @patient
-    noMicSub: "You can write the notes by hand instead.",
+    noMicSub: "You can write it down yourself instead.",
   },
   onboarding: {
     // @patient phrase
@@ -794,7 +794,7 @@ export const en = {
     NoSuchRecording: "That recording is not here any more.",
     NotAClip: "Nura cannot find that part of the recording.",
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
-    NotAChief: "Only the owner or the chief can do this.",
-    NotOnThisVisit: "That person cannot drive to this visit.",
+    NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
+    NotOnThisVisit: "Nura cannot give this drive to that person.",
   },
 } satisfies Strings;

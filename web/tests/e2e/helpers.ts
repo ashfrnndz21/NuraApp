@@ -423,12 +423,13 @@ async function namedToken(request: APIRequestContext, phone: string, name: strin
 
 const EVERY_PART = ["medicines", "visits", "readings", "records", "notes", "money", "family", "emergency", "ask", "send"];
 
-/** Pa, his visit to Dr Tan at half past 10 this morning (the frozen Monday), Dr Tan's
+/** Pa, his visit to Dr Tan at half past 10 this morning (the frozen Monday; sent in UTC, the
+ *  way the app's own booking sends it), Dr Tan's
  *  address, and Mei: his chief, with her note about the place and on the roster this morning.
  *  With `recording`, Pa has already agreed to Nura listening at the visit. */
 export async function seedVisitDay(
   request: APIRequestContext,
-  { recording = false, at = "2026-09-14T10:30:00+08:00" }: { recording?: boolean; at?: string } = {},
+  { recording = false, at = "2026-09-14T02:30:00Z" }: { recording?: boolean; at?: string } = {},
 ): Promise<{ phone: string; token: string; profileId: string; appointmentId: string; meiId: string }> {
   const phone = freshPhone("+659555");
   const token = await apiToken(request, phone);

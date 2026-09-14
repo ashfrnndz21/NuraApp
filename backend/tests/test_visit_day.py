@@ -278,13 +278,13 @@ async def test_the_logistics_card_is_composed_from_the_record_and_the_roster_wai
     by_section = {line["section"]: line["text"] for line in card["lines"]}
     assert by_section["when"] == "You see Dr Tan on Saturday 5 September at 9 in the morning."
     assert by_section["place"] == f"Dr Tan is at {ADDRESS}."
-    assert by_section["note"] == "Mei wrote a note about the place."
+    assert by_section["note"] == "Mei wrote a note about getting to Dr Tan."
     # The chief's note, as she wrote it, under her name: never a template, never read for facts.
     assert card["note"]["text"] == "parking at B2" and card["note"]["label"] == "Mei's note"
     # The roster has Mei on duty on Saturday mornings: a suggestion, nothing yet.
     assert card["driver"]["status"] == "suggested" and card["driver"]["name"] == "Mei"
     assert card["driver"]["needs_yes"] is True and card["driver"]["can_say_yes"] is True
-    assert by_section["driver"] == "Mei will tell you who drives you on Saturday 5 September."
+    assert by_section["driver"] == "Mei will tell you who is driving you to Dr Tan on Saturday 5 September."
     assert [line["text"] for line in card["lines"] if line["section"] == "bring"] == [
         "Bring your blood pressure book on Saturday 5 September."
     ]
@@ -318,6 +318,12 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
     kit = await _key(house, KIT, "Kit", "caregiver", EVERY_PART)
     theirs = await client.post(house.at("/confirmations"), json=draft, headers=bearer(kit["token"]))
     assert theirs.status_code == 403 and theirs.json() == {"refusal": "NotAChief"}
+    # A clinic's key is never asked to drive him.
+    clinic = await _key(house, SITI, "Clinic", "clinic", ["visits", "records"])
+    not_family = await client.post(
+        house.at("/confirmations"), json={**draft, "person_id": clinic["person_id"]}, headers=house.hers
+    )
+    assert not_family.status_code == 400 and not_family.json() == {"refusal": "NotOnThisVisit"}
 
     yes = await _ok(await client.post(house.at("/confirmations"), json=draft, headers=house.hers), 201)
     task = await _ok(
@@ -409,8 +415,12 @@ async def test_the_logistics_card_comes_the_day_before_and_on_the_day(
     tomorrow = await logistics_cards()
     assert [one["headline"] for one in tomorrow] == ["Getting to Dr Tan tomorrow"]
     card = await _ok(await deployment.client.get(f"{house.visit}/logistics", headers=house.his))
-    assert tomorrow[0]["body"] == [line["text"] for line in card["lines"]]
-    assert tomorrow[0]["voice"] == card["spoken"] and tomorrow[0]["rendered_from_state"]
+    # The card carries the visits' part only: when, where, what to bring from the visit. Who
+    # drives him and Mei's note are the family list's, and stay off a card a viewer can read.
+    visits_part = [line for line in card["lines"] if line["section"] in ("when", "place", "bring")]
+    assert tomorrow[0]["body"] == [line["text"] for line in visits_part]
+    assert tomorrow[0]["voice"] == [line["spoken"] for line in visits_part]
+    assert not any("Mei" in line for line in tomorrow[0]["body"]) and tomorrow[0]["rendered_from_state"]
     assert tomorrow[0]["boundary"] is None and tomorrow[0]["autoplay"] is False
     clock.set(SATURDAY_EARLY)
     today = await logistics_cards()
@@ -679,6 +689,6 @@ async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     if card["note"]["by_name"]:
         return  # the account has a name after all (the owner's naming reached it): nothing to prove
     assert card["note"]["label"] == "Your family's note" and card["note"]["text"] == "parking at B2"
-    assert "Your family wrote a note about the place." in texts
-    assert "Nura does not have the address of Dr Tan yet." in texts
+    assert "Your family wrote a note about getting to Dr Tan." in texts
+    assert "Nura does not have Dr Tan's address yet." in texts
     _clean(texts)

@@ -160,7 +160,8 @@ async def may_record(
     The consent is asked under the visits scope, since a recording is a visit's; the person
     asking must hold it, and the refusal — withheld, withdrawn, or given to older words — is
     written into the trail on `channel` by `require_consent`. Then the records scope, where
-    the artefact will be written (`store_artifact` writes under RECORDS): a viewer key holds
+    the artefact is kept through (`store_artifact`'s door; a consult is then written under the
+    visits scope, ADR 0004): a viewer key holds
     visits and not records, and a room told "Nura will listen now" must not then find that
     nothing was kept. That refusal is on the trail too, as a refused write of an artefact.
     The surface calls this before it opens the microphone; the store asks the consent again

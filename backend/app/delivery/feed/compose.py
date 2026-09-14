@@ -690,6 +690,12 @@ async def _readings(make: Any, *, day: Day, house: Household, readings: Sequence
         )
 
 
+ON_THE_LOGISTICS_CARD = frozenset(
+    {"visit_with", "logistics_place", "logistics_no_place", "bring_bp_book", "bring_medicines"}
+)
+"""The logistics lines the feed's card may carry: the visits' part only (E05-03, ADR 0004).
+The memos filed to bring are the visits' too (`section == "memo"`)."""
+
 BRIEF_ON_THE_CARD = ("purpose", "bring")
 """What the visit card carries of the pre-visit brief (E05-01): who and when and what the visit
 is about, and what to bring. The questions are their own card (E05-02); what changed is the
@@ -814,11 +820,15 @@ async def _logistics(
     day: Day,
     house: Household,
 ) -> None:
-    """The logistics card, the day before the next visit and on the day (E05-03): the time,
-    the place, who drives him, what to bring — the logistics card's own lines, each through
-    the verifier there and again here. The chief's note about the place is on the visit
-    screen under her name; it goes on this card only as the line saying she wrote one.
-    A card that shows the booking back infers nothing, so it carries no boundary line."""
+    """The logistics card, the day before the next visit and on the day (E05-03), carrying
+    only what its scope opens: a card is read by whoever holds its scope, and this one is the
+    visits'. So it says when, where, and what to bring from the visit's own part — his blood
+    pressure book, his medicines in their boxes (as the visit card's brief does), the memos
+    filed to bring — each line the logistics card's own, through the verifier there and
+    again here. Who drives him and the chief's note are the family list's, and his hospital
+    letter is the record's: they are on the Visit screen, each read under its own scope, and
+    never on a card a key without that part could read. A card that shows the booking back
+    infers nothing, so it carries no boundary line."""
     if not context.allows(Scope.VISITS):
         return
     visit, _ = await _next_visit(session, context=context, state=state)
@@ -842,15 +852,16 @@ async def _logistics(
             )
     except Refusal:
         return
+    shown = [line for line in card.lines if line.key in ON_THE_LOGISTICS_CARD or line.section == "memo"]
     lines = render(
         "visit_logistics",
         house.language,
         headline=headline,
-        extra=tuple(line.text for line in card.lines),
+        extra=tuple(line.text for line in shown),
         doctor=card.doctor,
         day=day.plain(at, house.language),
     )
-    lines = replace(lines, voice=tuple(card.spoken))
+    lines = replace(lines, voice=tuple(line.spoken for line in shown))
     await make(
         type=CardType.VISIT_LOGISTICS,
         lines=lines,

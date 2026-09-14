@@ -56,6 +56,7 @@ from app.channels.api.schemas import (
 )
 from app.db import utcnow
 from app.ingestion.consult import (
+    CONSULT,
     MAX_CONSULT_BYTES,
     ConsultTooLong,
     consult_clip,
@@ -64,7 +65,6 @@ from app.ingestion.consult import (
     recordings_for,
 )
 from app.keys.scopes import Scope
-from app.memory.models import Artifact
 from app.memory.spine import upcoming_appointments
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.guard import can_change_visits
@@ -304,7 +304,8 @@ async def recording(
     refused before it is read, on the trail."""
     declared = request.headers.get("content-length")
     if declared is not None and declared.isdigit() and int(declared) > MAX_CONSULT_BYTES:
-        async with audited_guard(session, context, Action.WRITE, Scope.RECORDS, Artifact.__tablename__):
+        # Refused on the trail where the recording would have been kept: a visit's (ADR 0004).
+        async with audited_guard(session, context, Action.WRITE, Scope.VISITS, CONSULT):
             raise ConsultTooLong(f"a recording is at most {MAX_CONSULT_BYTES} bytes")
     served = providers_of(request)
     outcome = await record_consult(
