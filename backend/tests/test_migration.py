@@ -19,7 +19,7 @@ from types import ModuleType
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Table, create_engine, inspect
+from sqlalchemy import Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
@@ -91,6 +91,29 @@ def test_every_revision_links_to_one_the_directory_holds(
             assert parent in revisions, f"{module.revision} revises {parent}, which is not here"
 
 
+def _tied(built: Inspector, table: Table) -> set[tuple[tuple[str, ...], str, tuple[str, ...]]]:
+    """Every foreign key on the built table, as (columns, referred table, referred columns)."""
+    return {
+        (
+            tuple(key["constrained_columns"]),
+            key["referred_table"],
+            tuple(key["referred_columns"]),
+        )
+        for key in built.get_foreign_keys(table.name)
+    }
+
+
+def _tied_by_model(table: Table) -> set[tuple[tuple[str, ...], str, tuple[str, ...]]]:
+    return {
+        (
+            tuple(element.parent.name for element in key.elements),
+            key.referred_table.name,
+            tuple(element.column.name for element in key.elements),
+        )
+        for key in table.foreign_key_constraints
+    }
+
+
 def test_the_migrations_build_the_tables_the_models_declare(
     revisions: dict[str, ModuleType],
 ) -> None:
@@ -107,6 +130,18 @@ def test_the_migrations_build_the_tables_the_models_declare(
             assert {column["name"] for column in built.get_columns(table.name)} == {
                 column.name for column in table.columns
             }, table.name
+            assert {
+                column["name"] for column in built.get_columns(table.name) if column["nullable"]
+            } == {column.name for column in table.columns if column.nullable}, table.name
+
+        # The ties that keep provenance on the profile survive the batch rewrite (0004), and
+        # so do the checks 0003 put on the fact table.
+        for table in (Artifact, Event, Fact, Episode, Provider, Appointment):
+            assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
+        assert {check["name"] for check in built.get_check_constraints("fact")} >= {
+            "ck_fact_has_provenance",
+            "ck_fact_confidence",
+        }
 
         for migration in reversed(ordered):
             with Operations.context(MigrationContext.configure(connection)):

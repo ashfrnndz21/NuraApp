@@ -4,8 +4,9 @@ Artifact and Event (episodic), Fact (semantic), Episode (working), Provider and 
 (the spine). Every table carries `profile_id`. The fact table refuses a row that names no
 artefact and no event, and one whose confidence is outside nought to one.
 
-This revision branches from 0002 beside the consent revision built in parallel; the two
-heads are joined by a merge revision, not by making one depend on the other.
+This revision follows 0002 directly. Stories built side by side may branch from the same
+parent, so the directory can hold more than one head; heads are joined by a merge revision
+when they land, never by rewriting one to depend on the other.
 
 Revision ID: 0003_memory
 Revises: 0002_audit

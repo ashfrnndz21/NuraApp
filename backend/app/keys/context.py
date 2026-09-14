@@ -19,7 +19,7 @@ from app.errors import Refusal
 from app.identity.models import Profile
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
-from app.regions import Region, guard_region
+from app.regions import OutOfRegion, Region, guard_region
 
 
 class NoKey(Refusal):
@@ -86,8 +86,17 @@ async def resolve_key_context(
     moment = now or utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
+        # There is no profile to pin a line to, so a NoKey leaves nothing at this layer: a
+        # stranger cannot put a line into a graph by asking for it, and neither can a guess at
+        # an id that does not exist. The same words, the same silence, either way.
         raise NoKey(person_id=person_id, profile_id=profile_id)
-    guard_region(held_in=profile.region, asked_from=region)
+    try:
+        guard_region(held_in=profile.region, asked_from=region)
+    except OutOfRegion:
+        # The profile is known, so the refusal is written down against it. The context is the
+        # narrowest one there is — no scopes, no key — because nothing was resolved.
+        await _record_out_of_region(session, profile=profile, person_id=person_id, now=moment)
+        raise
 
     if profile.owner_person_id == person_id:
         return KeyContext(
@@ -110,4 +119,34 @@ async def resolve_key_context(
                 role=key.role,
                 key_id=key.id,
             )
+    # A person with no active key holds nothing to pin a line to, either. See NoKey above.
     raise NoKey(person_id=person_id, profile_id=profile_id)
+
+
+async def _record_out_of_region(
+    session: AsyncSession, *, profile: Profile, person_id: uuid.UUID, now: datetime
+) -> None:
+    """One refused line for a reach across the region pin, in the name of the refusal only."""
+    # Local import: `app.audit.trail` imports this module for `KeyContext`, so importing it at
+    # the top would be a cycle. The trail is the floor of the enforcement beside the keys, and
+    # this is the one place the keys call up into it.
+    from app.audit.models import Action, Outcome
+    from app.audit.trail import record
+
+    await record(
+        session,
+        context=KeyContext(
+            profile_id=profile.id,
+            region=profile.region,
+            person_id=person_id,
+            scopes=frozenset(),
+        ),
+        action=Action.READ,
+        # Resolving a key is a reach at the whole graph; the family scope is where who holds
+        # what is kept, so the refused line sits there.
+        scope=Scope.FAMILY,
+        target=profile.__tablename__,
+        outcome=Outcome.REFUSED,
+        refused_because=OutOfRegion.__name__,
+        now=now,
+    )

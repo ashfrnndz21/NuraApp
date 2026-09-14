@@ -5,13 +5,16 @@ that it happened, which is why services call these and not the repository direct
 then no way to read, write or share a person's data and leave no trace of it.
 
 A refusal goes through the same door. The scope check is what raises, and the line is written
-before the refusal is passed on, so the owner sees the reaching as well as the reads.
+before the refusal is passed on, so the owner sees the reaching as well as the reads. The same
+holds for any other refusal raised while the profile is known — the region pin, a rule about
+what may replace what: `audited_guard` wraps the check so the refusal leaves a line too.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 
@@ -21,7 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
 from app.db import ProfileScoped
-from app.keys.context import KeyContext, OutOfScope
+from app.errors import Refusal
+from app.keys.context import KeyContext
 from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
 
@@ -44,7 +48,7 @@ async def audited_read[Row: ProfileScoped](
     """
     try:
         statement = scoped_select(model, context, scope).where(*where)
-    except OutOfScope as refusal:
+    except Refusal as refusal:
         await _refused(
             session, context, Action.READ, scope, model.__tablename__, refusal, channel, now
         )
@@ -77,7 +81,7 @@ async def audited_write[Row: ProfileScoped](
     """Add one row to this profile, and write down that it was added."""
     try:
         row = scoped_new(model, context, scope, **values)
-    except OutOfScope as refusal:
+    except Refusal as refusal:
         await _refused(
             session, context, Action.WRITE, scope, model.__tablename__, refusal, channel, now
         )
@@ -118,7 +122,7 @@ async def record_share(
     """
     try:
         context.require(scope)
-    except OutOfScope as refusal:
+    except Refusal as refusal:
         await _refused(session, context, Action.SHARE, scope, target, refusal, channel, now)
         raise
     return await record(
@@ -136,13 +140,39 @@ async def record_share(
     )
 
 
+@asynccontextmanager
+async def audited_guard(
+    session: AsyncSession,
+    context: KeyContext,
+    action: Action,
+    scope: Scope,
+    target: str,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+    now: datetime | None = None,
+) -> AsyncIterator[None]:
+    """Run a check that may refuse, and if it does, write the refusal down before passing it on.
+
+    For the checks that fire before or after a row is reached — the region pin on an artefact,
+    the rule that a person's word is not overwritten by a machine's — so that a refusal raised
+    while the profile is known is as visible to the owner as a scope refusal is. The line
+    carries the name of the refusal and nothing it held.
+    """
+    try:
+        yield
+    except Refusal as refusal:
+        await _refused(session, context, action, scope, target, refusal, channel, now)
+        raise
+
+
 async def _refused(
     session: AsyncSession,
     context: KeyContext,
     action: Action,
     scope: Scope,
     target: str,
-    refusal: OutOfScope,
+    refusal: Refusal,
     channel: Channel,
     now: datetime | None,
 ) -> None:

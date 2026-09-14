@@ -323,6 +323,7 @@ async def test_events_and_facts_hang_off_the_open_episode(sg: AsyncSession) -> N
         context=owner,
         kind=EventKind.VISIT,
         occurred_at=SEPT_3,
+        source_channel=SourceChannel.APP,
         label="saw Dr Tan",
         episode_id=infection.id,
     )
@@ -346,6 +347,8 @@ async def test_events_and_facts_hang_off_the_open_episode(sg: AsyncSession) -> N
             context=owner,
             kind=EventKind.VISIT,
             occurred_at=SEPT_10,
+            source_channel=SourceChannel.APP,
+            label="saw Dr Tan again",
             episode_id=infection.id,
         )
 
@@ -369,6 +372,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     later = await book_appointment(
         sg,
         context=owner,
+        confirmed_by_person_id=owner.person_id,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=14),
         purpose="blood pressure review",
@@ -377,6 +381,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     sooner = await book_appointment(
         sg,
         context=owner,
+        confirmed_by_person_id=owner.person_id,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection",
@@ -385,6 +390,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     cancelled = await book_appointment(
         sg,
         context=owner,
+        confirmed_by_person_id=owner.person_id,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=1),
         purpose="x-ray",
@@ -394,6 +400,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     past = await book_appointment(
         sg,
         context=owner,
+        confirmed_by_person_id=owner.person_id,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_3 - timedelta(days=30),
         purpose="last check-up",
@@ -419,6 +426,7 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
         await book_appointment(
             sg,
             context=owner,
+            confirmed_by_person_id=owner.person_id,
             provider_id=their_doctor.id,
             scheduled_at=SEPT_10,
             purpose="review",
@@ -433,6 +441,7 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
     review = await book_appointment(
         sg,
         context=owner,
+        confirmed_by_person_id=owner.person_id,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection review",
@@ -441,7 +450,12 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
     assert review.episode_id == infection.id
     with pytest.raises(NotALabel):
         await book_appointment(
-            sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="x" * 81
+            sg,
+            context=owner,
+            provider_id=dr_tan.id,
+            scheduled_at=SEPT_10,
+            purpose="x" * 81,
+            confirmed_by_person_id=owner.person_id,
         )
 
 
@@ -462,7 +476,12 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
     )
     visit = await book_appointment(
-        sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="review",
+        confirmed_by_person_id=owner.person_id,
     )
     await current_facts(sg, context=owner)
 
@@ -490,7 +509,12 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
     )
     await book_appointment(
-        sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="review"
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="review",
+        confirmed_by_person_id=owner.person_id,
     )
 
     daughter: Person = await register_person(
