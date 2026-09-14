@@ -224,7 +224,7 @@ export const zh = {
     // @patient
     fromState: "Nura 在 {date} 算出了这个。",
     // @patient
-    fromTaps: "Nura 数了您按“吃了”的天数。",
+    fromDays: "Nura 数了您吃药的天数。",
   },
   reading: {
     // @patient headline

@@ -6,7 +6,7 @@ import { ReadingScreen } from "./screens/Reading";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
 import { TodayScreen } from "./screens/Today";
 import { profile, restored, token } from "./store/session";
-import { Unreachable } from "./api/client";
+import { afterRestoreFailure } from "./restore";
 
 /** One screen at a time. On start, the page restores the session and goes to Today at once
  *  when a profile is remembered (offline included), checking the doors in the background. */
@@ -18,8 +18,8 @@ export function App(): JSX.Element | null {
     else if (profile.value) {
       go({ name: "today" });
       afterSignIn().catch((failure: unknown) => {
-        // Offline: stay on the remembered Today. A refused token: back to sign-in.
-        if (!(failure instanceof Unreachable)) go({ name: "signin" });
+        // A refused session: back to sign-in. Offline, a server error: stay on Today.
+        if (afterRestoreFailure(failure) === "signin") go({ name: "signin" });
       });
     } else afterSignIn().catch(() => go({ name: "signin" }));
     return null;

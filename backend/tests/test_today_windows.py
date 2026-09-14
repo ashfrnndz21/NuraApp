@@ -102,8 +102,7 @@ async def test_the_proud_number_is_days_with_a_tablet_taken_from_the_events(
     counted = await proud_days(sg, context=owner)
     assert counted.days == 2, "a quiet day takes nothing away"
     assert counted.as_of == clock.now()
-    # A helper's tap is her help, not his day: a day only she tapped does not count, and her
-    # key reads his number, not one of her own.
+    # A helper's "given" is his tablet taken: the day counts, and her key reads the same number.
     helper = await let_in(
         sg, owner, phone="+6592220001", name="Mei", role=KeyRole.HELPER, scopes={Scope.MEDICINES}
     )
@@ -111,12 +110,7 @@ async def test_the_proud_number_is_days_with_a_tablet_taken_from_the_events(
     await record_dose_taken(
         sg, context=helper, line_id=written.line.id, anchor="breakfast", amount=None
     )
-    assert (await proud_days(sg, context=owner)).days == 2
-    assert (await proud_days(sg, context=helper)).days == 2
-    clock.step(timedelta(days=1))
-    await record_dose_taken(
-        sg, context=owner, line_id=written.line.id, anchor="breakfast", amount=None
-    )
+    assert (await proud_days(sg, context=owner)).days == 3
     assert (await proud_days(sg, context=helper)).days == 3
 
 

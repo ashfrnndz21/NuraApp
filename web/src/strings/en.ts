@@ -224,7 +224,7 @@ export const en = {
     // @patient
     fromState: "Nura worked this out on {date}.",
     // @patient
-    fromTaps: "Nura counted the days you tapped Taken.",
+    fromDays: "Nura counted the days you took your tablets.",
   },
   reading: {
     // @patient headline

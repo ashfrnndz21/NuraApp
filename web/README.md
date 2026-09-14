@@ -94,11 +94,19 @@ carries a copy of the wording that could drift.
 paper under every card); anyone holding a key gets the caregiver density (16px, glass
 first). The person can override it under Me; the choice is per device.
 
-**The proud number.** `GET /profiles/{id}/proud`: distinct days on which the owner himself
-tapped Taken (a DOSE_TAKEN event whose tap is his), counted by the backend from the memory
-events — one audited read on his own key. A helper's tap is her help, not his day. The
-client shows that number and never one it worked out or kept for itself; the Today screen
-does not read the audit trail at all.
+**The proud number.** `GET /profiles/{id}/proud`: distinct local days with a DOSE_TAKEN event
+on the profile — the days he took his tablets, whoever tapped Taken — counted by the backend
+from the memory events in one audited read. The client shows that number and never one it
+worked out or kept for itself; the Today screen does not read the audit trail at all.
+
+**A key without the records scope.** The State reads under `records`; a key without it (a
+helper's, for the medicines) never asks for it, and its Today is the medicines and the feed's
+caregiver cards, with no State card and no refusal.
+
+**Reopening.** The app opens on the remembered Today at once and checks who is signed in in
+the background; only a refused session sends him back to sign-in (`src/restore.ts`). A lost
+network or a server error keeps him where he was. The kept page expires at midnight on the
+profile's region clock (Singapore, Kuala Lumpur), whatever zone the phone is set to.
 
 **Offline.** The worker precaches the shell on install (the Vite plugin in `vite.config.ts`
 lists the built files into it) and answers navigations from the cache when the network is

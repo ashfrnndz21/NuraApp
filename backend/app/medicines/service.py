@@ -35,7 +35,6 @@ from app.drafts import FactDraft
 from app.drugs.registry import DrugMatch, DrugRegistry, Interaction, LabelFields, NotIdentified
 from app.errors import Refusal
 from app.keys.context import KeyContext
-from app.keys.repository import scoped_select
 from app.keys.scopes import KeyRole, Scope
 from app.medicines import dose as arithmetic
 from app.medicines.dose import Dose
@@ -1011,31 +1010,14 @@ class Proud:
 
 @audited(Action.READ, Scope.MEDICINES, Event.__tablename__)
 async def proud_days(session: AsyncSession, *, context: KeyContext) -> Proud:
-    """Distinct local days with a DOSE_TAKEN event tapped by the owner himself, from the
-    memory events under the medicines scope — never the audit trail. The owner's own read is
-    one audited read; anyone else's key first reads whose papers these are (the profile row,
-    audited). A helper's tap is her help, not his day. It is a count of days, not a streak: a
-    quiet day takes nothing away, and it never goes down on the same record. Papers nobody
-    has claimed yet have no one to be proud of, so the number is 0."""
+    """Distinct local days with any DOSE_TAKEN event on the profile, from the memory events
+    under the medicines scope, in one audited read — never the audit trail. The days he took
+    his tablets, whoever tapped Taken: a helper's "given" is his tablet taken. It is a count
+    of days, not a streak: a quiet day takes nothing away, and it never goes down on the same
+    record."""
     zone = REGION_TZ[context.region]
-    owner = (
-        context.person_id
-        if context.is_owner
-        else (await audited_profile_read(session, context)).owner_person_id
-    )
-    if owner is None:
-        return Proud(days=0, as_of=utcnow())
-    his_taps = (
-        scoped_select(DoseTaken, context, Scope.MEDICINES)
-        .with_only_columns(DoseTaken.event_id)
-        .where(DoseTaken.by_person_id == owner)
-    )
     events = await audited_read(
-        session,
-        Event,
-        context,
-        Scope.MEDICINES,
-        where=(Event.kind == EventKind.DOSE_TAKEN, Event.id.in_(his_taps)),
+        session, Event, context, Scope.MEDICINES, where=(Event.kind == EventKind.DOSE_TAKEN,)
     )
     days = {as_utc(event.occurred_at).astimezone(zone).date() for event in events}
     return Proud(days=len(days), as_of=utcnow())

@@ -4,7 +4,7 @@ import { Unreachable } from "../api/client";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
-import { bindingOf, clearProfileData, isFresh, loadToday, sameBinding, saveToday, type TodayEntry } from "../offline/todayCache";
+import { bindingOf, clearProfileData, isFresh, loadToday, sameBinding, saveToday, zoneOf, type TodayEntry } from "../offline/todayCache";
 import { wantsHomeScreenHint } from "../offline/register";
 import { chooseProfile, density, me, posture, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
@@ -67,34 +67,36 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
       await chooseProfile(current);
     }
     // One call at a time; any refusal stops here and the caller deletes the phone's copy.
-    const state = await nura.state(bearer, id);
+    // The State reads under the records scope: a key without it (a helper's, for the
+    // medicines) has no State card, and Today is the medicines and the feed's cards.
+    const state = current.scopes.includes("records") ? await nura.state(bearer, id) : null;
     const lines = await nura.medicines(bearer, id, language.value);
     const slots = await nura.dosesToday(bearer, id, language.value);
     const counted = await nura.proud(bearer, id);
     const page = await nura.feed(bearer, id);
     let chief: string | null = null;
-    if (state.posture === "act" && current.standing === "owner") {
+    if (state?.posture === "act" && current.standing === "owner") {
       const held = await nura.keys(bearer, id);
       chief = held.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
     }
     const fresh: TodayModel = {
-      stateId: state.state_id,
-      posture: state.posture,
-      stale: state.stale,
-      computedAt: state.computed_at,
+      stateId: state?.state_id ?? null,
+      posture: state?.posture ?? "stable",
+      stale: state?.stale ?? null,
+      computedAt: state?.computed_at ?? null,
       slots,
       lines,
       feed: page.items,
       proud: counted.days,
       chief,
-      boundary: boundaryOf(state.boundary),
+      boundary: boundaryOf(state?.boundary),
       fetchedAt: new Date().toISOString(),
     };
     setModel(fresh);
     setKept(null);
     setOffline(false);
     posture.value = fresh.posture;
-    await saveToday(id, fresh, binding, new Date());
+    await saveToday(id, fresh, binding, new Date(), zoneOf(current.region));
   };
 
   const load = async () => {
@@ -149,7 +151,9 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const useFeed = feed.forYou.length > 0;
   // Where the State card goes: first when it says act; in place of the dose card when it is
   // stale; under "For you today" when the feed has nothing for today; else not at all.
-  const stateAt = !page ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
+  const stateAt = !page || page.stateId === null ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
+  // The all-taken and nothing-now cards speak of today's doses: the backend's source line.
+  const doseSource = page?.slots[0]?.source ?? "";
   const dose = page && !fromPhone && !stale ? nowCard(page.slots, page.lines, s) : null;
   const medicines = page ? medicinesCard(page.lines, !useFeed) : null;
   const proud = page?.proud ?? null;
@@ -241,9 +245,9 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                 </>
               )}
               {dose?.kind === "allTaken" && (
-                <Card title={s.today.allTaken} lines={[justTook ?? s.today.allTakenSub]} provenance={s.today.fromTaps} settled testId="all-taken" />
+                <Card title={s.today.allTaken} lines={[justTook ?? s.today.allTakenSub]} provenance={doseSource} settled testId="all-taken" />
               )}
-              {dose?.kind === "nothingNow" && <Card lines={[justTook ?? s.today.nothingNow]} provenance={s.today.fromTaps} testId="nothing-now" />}
+              {dose?.kind === "nothingNow" && <Card lines={[justTook ?? s.today.nothingNow]} provenance={doseSource} testId="nothing-now" />}
               {dose?.kind === "none" && <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />}
               {justTook && (dose?.kind === "due" || dose?.kind === "missed") && (
                 <Tile paper settled>
@@ -282,7 +286,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                 </div>
                 <p>{proudLine}</p>
                 <p class="caption">{s.today.proudSub}</p>
-                <p class="provenance">{s.today.fromTaps}</p>
+                <p class="provenance">{s.today.fromDays}</p>
                 <Hear lines={[proudLine, s.today.proudSub]} />
               </Tile>
             </>

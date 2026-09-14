@@ -116,7 +116,7 @@ export interface Strings {
     homeScreen3: string;
     fromToday: string;
     fromState: string;
-    fromTaps: string;
+    fromDays: string;
   };
   reading: {
     title: string;

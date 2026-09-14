@@ -129,7 +129,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
 
   // The proud number is the backend's and names its source; no badges; vertical only; the
   // tab bar never covers the last card.
-  await expect(page.getByTestId("proud")).toContainText("Nura counted the days you tapped Taken.");
+  await expect(page.getByTestId("proud")).toContainText("Nura counted the days you took your tablets.");
   await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Me\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
@@ -192,6 +192,58 @@ test("a refused read clears the phone's copy and is said in one plain sentence",
     await expect(page.getByTestId(gone)).toHaveCount(0);
   }
   expect(await medicinesInIndexedDb(page)).toEqual([]);
+});
+
+test("a key without the records scope opens Today on the medicines and the feed, with no State card", async ({ page, request }) => {
+  // Pa lets Siti give him his tablets: her key opens the medicines and nothing else. The
+  // State reads under the records scope, so her Today has no State card — and no refusal.
+  const pa = freshPhone();
+  const siti = freshPhone("+659555");
+  const paToken = await apiToken(request, pa);
+  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const opened = await request.post(`${API}/profiles/mine`, {
+    ...auth(paToken),
+    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: "Pa", language: "en" },
+  });
+  const profileId = ((await opened.json()) as { profile_id: string }).profile_id;
+  await seedMedicine(request, paToken, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
+  await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
+    ...auth(paToken),
+    data: { holder_phone_e164: siti, scopes: ["medicines"], relationship: "helper", language: "en", captured_via: "app" },
+  });
+  const key = await request.post(`${API}/profiles/${profileId}/keys`, {
+    ...auth(paToken),
+    data: { holder_phone_e164: siti, role: "helper", scopes: ["medicines"] },
+  });
+  expect(key.status()).toBe(201);
+
+  await signInThroughTheApp(page, siti, "Siti");
+  await page.getByTestId("door-key").click();
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await expect(page.locator("[data-testid=medicines-card], [data-testid=feed-card], [data-testid=now-card], [data-testid=missed-card], [data-testid=nothing-now]").first()).toBeVisible();
+  await expect(page.getByTestId("state-card")).toHaveCount(0);
+  await expect(page.getByTestId("notice")).toHaveCount(0);
+  await expect(page.locator("nav.tabbar")).toBeVisible();
+});
+
+test("a server error on reopening keeps him on Today, never back at sign-in", async ({ page }) => {
+  // What CI met: the page before the reload was still writing its feed cards when the new
+  // page asked who he is, and the answer was a 500. The token is still good.
+  const phone = freshPhone();
+  await signInThroughTheApp(page, phone, "Pa");
+  await page.getByTestId("door-for-me").click();
+  await page.getByTestId("agree").click();
+  await expect(page.getByTestId("proud")).toBeVisible();
+  let failed = 0;
+  await page.route("**/api/me", async (route) => {
+    if (failed++ === 0) await route.fulfill({ status: 500, body: "Internal Server Error" });
+    else await route.continue();
+  });
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await expect(page.getByLabel("Your phone number")).toHaveCount(0);
+  expect(failed).toBeGreaterThan(0);
 });
 
 test("a wrong code is one plain sentence, never the class name", async ({ page }) => {

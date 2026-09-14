@@ -551,12 +551,14 @@ What you will see (the operator's walk, `make web-e2e` with `make dev` serving t
 ✓ offline.spec.ts › offline: the kept page as a dated list with no Taken; past midnight only the emergency card
 ✓ today.spec.ts   › sign in, agree, Today, Taken only when due, Hear, sign out clean
 ✓ today.spec.ts   › a refused read clears the phone's copy and is said in one plain sentence
+✓ today.spec.ts   › a key without the records scope opens Today on the medicines and the feed, with no State card
+✓ today.spec.ts   › a server error on reopening keeps him on Today, never back at sign-in
 ✓ today.spec.ts   › a wrong code is one plain sentence, never the class name
 ✓ today.spec.ts   › the language picker changes every string and persists on the device
-5 passed
+7 passed
 ```
 
-**What "passed" means.** You signed in with a code that never travelled over the API; you opened your own papers on today's words; Today shows a Now card only for the dose the backend marks due — one drug in your words, one whole sentence, its source line, one paper button — and *Taken* puts the proud number up by one (the days you tapped *Taken* yourself, counted by the backend); a dose whose moment has passed shows the medicine story's own lines and no *Taken*; *For you today* is the feed's cards for today, or, when it has none, the State card under Nura's own boundary lines and the medicines card with the questions for the doctor; every card has a *Hear* button and nothing speaks until you tap it; a refused read is one plain sentence and leaves nothing behind; a wrong code is refused in one plain sentence; the language picker changes every word and is remembered; and on the Mac, the built app reopens offline on today's list, dated, and past midnight on the emergency card alone. Nothing scrolls sideways, there are no badges or counts, and the text is 20px with 56px buttons in the patient density. If a step does not do that, tell the operator which one and what you saw instead.
+**What "passed" means.** You signed in with a code that never travelled over the API; you opened your own papers on today's words; Today shows a Now card only for the dose the backend marks due — one drug in your words, one whole sentence, its source line, one paper button — and *Taken* puts the proud number up by one (the days you took your tablets, whoever tapped *Taken*, counted by the backend); a dose whose moment has passed shows the medicine story's own lines and no *Taken*; *For you today* is the feed's cards for today, or, when it has none, the State card under Nura's own boundary lines and the medicines card with the questions for the doctor; every card has a *Hear* button and nothing speaks until you tap it; a refused read is one plain sentence and leaves nothing behind; a wrong code is refused in one plain sentence; the language picker changes every word and is remembered; and on the Mac, the built app reopens offline on today's list, dated, and past midnight on the emergency card alone. Nothing scrolls sideways, there are no badges or counts, and the text is 20px with 56px buttons in the patient density. If a step does not do that, tell the operator which one and what you saw instead.
 
 ## Rules the operator follows between checkpoints
 

@@ -224,7 +224,7 @@ export const ms = {
     // @patient
     fromState: "Nura mengira ini pada {date}.",
     // @patient
-    fromTaps: "Nura mengira hari yang anda tekan Sudah ambil.",
+    fromDays: "Nura mengira hari anda ambil ubat anda.",
   },
   reading: {
     // @patient headline
