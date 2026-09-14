@@ -148,7 +148,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
 
   // The phone holds the page while signed in; after sign-out no medicine remains in IndexedDB.
   expect((await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Me" }).click();
+  await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByText("You are signed in as Pa.")).toBeVisible();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
@@ -267,7 +267,7 @@ test("the language picker changes every string and persists on the device", asyn
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
-  await page.getByRole("button", { name: "Me" }).click();
+  await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");
   await expect(page.getByTestId("sign-out")).toHaveText("Daftar keluar");
