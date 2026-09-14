@@ -8,6 +8,7 @@ the deployment says, explicitly, that it is a dev run.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -21,10 +22,21 @@ from app.identity.providers import (
     NoCodeSender,
     code_sender_for,
 )
+from app.ingestion.extract import FixtureExtractor
+from app.ingestion.objects import LocalObjectStore
 from app.regions import Region
 from app.settings import Settings, load_settings
+from tests.paper import PAPER
 
 ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
+
+
+def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
+    return Providers(
+        code_sender=sender,
+        object_store=LocalObjectStore(tmp, Region.SG),
+        extractor=FixtureExtractor(PAPER),
+    )
 
 
 def test_the_flag_is_off_unless_set_to_exactly_one() -> None:
@@ -40,16 +52,16 @@ def test_without_the_flag_there_is_no_sender_and_the_process_does_not_start() ->
     assert isinstance(revealed, LoggingCodeSender) and revealed.reveal
 
 
-async def test_create_app_refuses_the_logging_sender_outside_a_dev_run() -> None:
+async def test_create_app_refuses_the_logging_sender_outside_a_dev_run(tmp_path: Path) -> None:
     engine = create_async_engine("sqlite+aiosqlite://")
     sessions = make_session_factory(engine)
     production = Settings(region=Region.SG, database_url="sqlite+aiosqlite://")
     with pytest.raises(DevSenderInProduction):
-        create_app(production, sessions, Providers(code_sender=LoggingCodeSender()))
+        create_app(production, sessions, _providers(LoggingCodeSender(), tmp_path))
     with pytest.raises(DevSenderInProduction):
-        create_app(production, sessions, Providers(code_sender=LoggingCodeSender(reveal=True)))
+        create_app(production, sessions, _providers(LoggingCodeSender(reveal=True), tmp_path))
     dev = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True)
-    assert create_app(dev, sessions, Providers(code_sender=LoggingCodeSender())) is not None
+    assert create_app(dev, sessions, _providers(LoggingCodeSender(), tmp_path)) is not None
     await engine.dispose()
 
 
