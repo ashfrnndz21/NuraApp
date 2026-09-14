@@ -3,6 +3,7 @@
     GET  /profiles/{id}/emergency-card        the card as JSON: data and verified lines
     GET  /profiles/{id}/emergency-card.html   the same card as one printable page
     POST /profiles/{id}/not-feeling-well      the button: voice or words in, the card out
+    GET  /profiles/{id}/not-feeling-well/offline   the two cards the phone keeps for no network
     POST /profiles/{id}/symptoms              a symptom in his words, with how much and since when
     GET  /profiles/{id}/symptoms?since=       the log, in plain words with the day's name
 
@@ -22,6 +23,7 @@ from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.safety_schemas import (
     EmergencyCardOut,
+    OfflineCardsOut,
     SaidIn,
     SymptomEntryOut,
     SymptomLoggedOut,
@@ -32,7 +34,7 @@ from app.channels.printable import emergency_card_html
 from app.channels.safety_strings import severity_said
 from app.safety.emergency_card import emergency_card
 from app.safety.models import CardFormat
-from app.safety.not_feeling_well import not_feeling_well
+from app.safety.not_feeling_well import not_feeling_well, offline_cards
 from app.safety.symptom_log import (
     Entry,
     log_symptom,
@@ -79,6 +81,15 @@ async def printable(
         emergency_card_html(shown),
         headers={"Cache-Control": "private, max-age=0, must-revalidate"},
     )
+
+
+@router.get("/{profile_id}/not-feeling-well/offline")
+async def offline(context: Context, session: Db, language: str | None = Language) -> OfflineCardsOut:
+    """The two cards the phone keeps for when it cannot reach Nura (the web client, W7): one
+    for a red word tapped with no network, one for the button pressed with no network. The
+    catalogue's lines, verified, naming the chief and the region's ambulance number. A read:
+    nothing is written, nobody is told, and nothing here escalates."""
+    return OfflineCardsOut.of(await offline_cards(session, context=context, language=language))
 
 
 @router.post("/{profile_id}/not-feeling-well", status_code=status.HTTP_201_CREATED)

@@ -261,3 +261,65 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     )
     assert empty.json()["entries"] == []
     assert re.fullmatch(r"Nobody wrote anything down since \w+ \d+ September\.", empty.json()["lines"][0]["text"])
+
+
+async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deployment: Deployment) -> None:
+    """W7: what the web client shows when a red word or the button cannot reach Nura. Fixed
+    lines from the catalogue, the urgent shape (the reassurance first, the one closing line
+    last, never "Ask your doctor." after an emergency number), the chief by name, the region's
+    number; and reading them writes nothing and tells nobody."""
+    pa, profile_id = await _pa_with_the_water_pill(deployment)
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await _key(deployment, pa, profile_id, MEI, "chief")
+    his = bearer(pa["token"])
+
+    kept = await deployment.client.get(f"/profiles/{profile_id}/not-feeling-well/offline", headers=his)
+    assert kept.status_code == 200, kept.text
+    body = kept.json()
+    assert body["emergency_number"] == "995" and body["language"] == "en"
+    assert [line["text"] for line in body["red_flag"]] == [
+        "You did right to say so.",
+        "Nura could not send this to your family.",
+        "Call the ambulance now on 995.",
+        "After that, call Mei.",
+        "Nura does not decide what is wrong.",
+    ]
+    assert [line["text"] for line in body["unknown"]] == [
+        "You did right to say so.",
+        "Nura could not send this to your family.",
+        "Call Mei now.",
+        "If you feel very bad, call the ambulance now on 995.",
+        "Nura does not decide what is wrong.",
+    ]
+    assert [line["id"] for line in body["red_flag"]][0] == "boundary.opening"
+    assert [line["id"] for line in body["red_flag"]][-1] == "boundary.urgent"
+
+    malay = await deployment.client.get(
+        f"/profiles/{profile_id}/not-feeling-well/offline?language=ms", headers=bearer(mei["token"])
+    )
+    assert malay.status_code == 200, malay.text
+    # Mei reads the cards for whoever is with him; the button names whoever else is chief.
+    assert malay.json()["red_flag"][2]["text"] == "Hubungi ambulans sekarang di talian 995."
+    assert malay.json()["red_flag"][-1]["text"] == "Nura tidak menentukan apa masalahnya."
+
+    # Reading them wrote nothing: no symptom, no flag.
+    log = await deployment.client.get(f"/profiles/{profile_id}/symptoms", headers=his)
+    assert log.json()["entries"] == []
+
+    # With nobody else on his list, the card names his family, never a person Nura made up.
+    ana = await register_by_phone(deployment, ANA, "Ana")
+    alone = await own_profile(deployment, ana, language="en")
+    lonely = await deployment.client.get(f"/profiles/{alone}/not-feeling-well/offline", headers=bearer(ana["token"]))
+    assert [line["text"] for line in lonely.json()["unknown"]][2] == "Call your family now."
+    assert [line["text"] for line in lonely.json()["red_flag"]] == [
+        "You did right to say so.",
+        "Nura could not send this to your family.",
+        "Call the ambulance now on 995.",
+        "Nura does not decide what is wrong.",
+    ]
+
+    kit = await register_by_phone(deployment, KIT, "Kit")
+    refused = await deployment.client.get(
+        f"/profiles/{profile_id}/not-feeling-well/offline", headers=bearer(kit["token"])
+    )
+    assert refused.status_code == 403 and refused.json() == {"refusal": "NoKey"}

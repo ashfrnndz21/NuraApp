@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.channels.api.safety_schemas import WhatToDoOut
 from app.db import as_utc
+from app.delivery.nudges.engine import DayNudge
 from app.delivery.nudges.handoff import Held, NudgeDraft, NudgePlan
 from app.delivery.nudges.metrics import Metrics
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
@@ -412,3 +413,27 @@ class MeSummaryOut(BaseModel):
     proud_days: int
     as_of: datetime
     lines: list[str]
+
+
+class DayNudgeOut(NudgeOut):
+    """A nudge handed over for the day, as the app shows it: its lines and why, its spoken
+    twin, and what the person reading has already done with it."""
+
+    voice: list[str]
+    responses: list[ResponseKind]
+
+    @classmethod
+    def of_day(cls, shown: DayNudge) -> DayNudgeOut:
+        return cls(
+            **NudgeOut.of(shown.nudge).model_dump(),
+            voice=list(shown.nudge.voice),
+            responses=list(shown.responses),
+        )
+
+
+class DayNudgesOut(BaseModel):
+    """The day's handed-over nudges this key may read, and how many it may not (by count)."""
+
+    day: date
+    nudges: list[DayNudgeOut]
+    withheld: int

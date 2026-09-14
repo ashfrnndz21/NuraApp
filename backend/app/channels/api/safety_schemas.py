@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.ingestion.voice import MAX_VOICE_BYTES
 from app.safety.emergency_card import Card
 from app.safety.models import WhatToDoKind
-from app.safety.not_feeling_well import WhatToDoNow
+from app.safety.not_feeling_well import OfflineCards, WhatToDoNow
 from app.safety.symptom_log import Entry, Logged
 from app.state.models import Posture
 
@@ -288,8 +288,29 @@ class SymptomLogOut(BaseModel):
         return cls(since=since, entries=entries, lines=lines)
 
 
+class OfflineCardsOut(BaseModel):
+    """What the phone keeps for when it cannot reach Nura: two fixed cards, each its verified
+    lines in order. `red_flag` for a red word tapped with no network; `unknown` for the button
+    pressed with no network. Nothing was written and nobody was told when either is shown."""
+
+    language: str
+    emergency_number: str
+    red_flag: list[LineOut]
+    unknown: list[LineOut]
+
+    @classmethod
+    def of(cls, cards: OfflineCards) -> OfflineCardsOut:
+        return cls(
+            language=cards.language,
+            emergency_number=cards.emergency_number,
+            red_flag=[LineOut(id=line.id, text=line.text) for line in cards.red_flag],
+            unknown=[LineOut(id=line.id, text=line.text) for line in cards.unknown],
+        )
+
+
 __all__: list[str] = [
     "EmergencyCardOut",
+    "OfflineCardsOut",
     "SaidIn",
     "SymptomLogOut",
     "SymptomLoggedOut",
