@@ -59,7 +59,7 @@ STORY_PARTS: tuple[str, ...] = ("purpose", "how_to_take", "watch_out", "avoid", 
 said at his pace, longer than one voice note may (`app.delivery.voice.MAX_SECONDS`)."""
 
 
-class NothingToSay(Refusal):
+class NoSuchStoryPart(Refusal):
     """This part of the story says nothing for this medicine, so it has no voice note."""
 
 
@@ -74,7 +74,7 @@ def story_part(story: Story, part: str) -> tuple[list[str], str | None]:
     (`app.language.voice_script`). Pure, like the rest of the story."""
     parts = voice_parts(story)
     if part not in parts:
-        raise NothingToSay(f"the story says nothing under {part!r}")
+        raise NoSuchStoryPart(f"the story says nothing under {part!r}")
     lines = list(getattr(story, part))
     if part == parts[-1] and story.boundary:
         return [*lines, *story.boundary], "\n".join(story.boundary)

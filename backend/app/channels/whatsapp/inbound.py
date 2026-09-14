@@ -31,8 +31,15 @@ from app.audit.access import audited_guard, audited_profile_read, audited_read, 
 from app.audit.models import Action, Channel, Outcome
 from app.audit.trail import record
 from app.channels.api.deps import Providers
-from app.channels.whatsapp.classifier import Classification, Classifier, HealthEvent, Kind
+from app.channels.whatsapp.classifier import (
+    FEELING,
+    Classification,
+    Classifier,
+    HealthEvent,
+    Kind,
+)
 from app.channels.whatsapp.config import BusinessNumber
+from app.channels.whatsapp.group import group_for, is_member
 from app.channels.whatsapp.models import (
     Direction,
     MessageKind,
@@ -47,7 +54,6 @@ from app.channels.whatsapp.proposals import (
     answer,
     propose,
 )
-from app.channels.whatsapp.group import group_for, is_member
 from app.channels.whatsapp.provider import InboundMessage, Media, NoSuchMedia
 from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_names, reply
 from app.channels.whatsapp.templates import language_of
@@ -67,9 +73,9 @@ from app.delivery.triggers.ladder import (
 from app.delivery.triggers.models import Ladder
 from app.drafts import FactDraft
 from app.errors import Refusal
+from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
-from app.family.thread import post_message
 from app.ingestion.notes import NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
 from app.ingestion.photos import store_photo
@@ -103,6 +109,18 @@ TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
 IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/heic", "image/webp"})
 PDF_CONTENT_TYPE = "application/pdf"
 FEELING_VOCABULARY = frozenset({"ok", "tired", "pain"})
+CHECK_IN_OK = dict(FEELING)["ok"]
+"""His "OK": a yes when something of his is open to say yes to, else his check-in answer."""
+OK_FEELING = HealthEvent(
+    subject="feeling",
+    attribute="reported",
+    value="ok",
+    unit=None,
+    event_kind=EventKind.SYMPTOM,
+    said="feeling",
+    words={},
+    word="ok",
+)
 
 
 class NotADocument(Refusal):
@@ -812,7 +830,13 @@ async def _document(session: AsyncSession, work: _Work) -> Handled:
     )
 
 
-async def _check_in_answer(session: AsyncSession, work: _Work, event: HealthEvent) -> Handled:
+async def _check_in_answer(
+    session: AsyncSession,
+    work: _Work,
+    event: HealthEvent,
+    *,
+    kept: tuple[Artifact, WhatsAppMessage] | None = None,
+) -> Handled:
     """The patient's own feeling word, in his own thread: the reply is the yes.
 
     No proposal: there is nothing to read back. Mei's "he's tired" is a third party's
@@ -823,8 +847,14 @@ async def _check_in_answer(session: AsyncSession, work: _Work, event: HealthEven
     does for a number he typed.
     """
     assert event.word is not None
-    artifact = await _keep_text(session, work=work)
-    row = await _keep_row(session, work=work, kind=MessageKind.CHECK_IN_ANSWER, artifact=artifact)
+    if kept is not None:
+        # Already kept, as the answer it was first read as (`_answer`): the same message.
+        artifact, row = kept
+    else:
+        artifact = await _keep_text(session, work=work)
+        row = await _keep_row(
+            session, work=work, kind=MessageKind.CHECK_IN_ANSWER, artifact=artifact
+        )
     told = await record_event(
         session,
         context=work.context,
@@ -917,6 +947,13 @@ async def _answer(session: AsyncSession, work: _Work, yes: bool) -> Handled:
                     message_id=row.id,
                     artifact_id=artifact.id,
                 )
+        if work.thread.is_patient and CHECK_IN_OK.match(work.message.text or ""):
+            # "OK" is one of the three words the check-in offers him ("Answer OK, tired or
+            # pain."). With nothing of his open to say yes to, and no flag to acknowledge,
+            # it is his answer to that question, written down as his own word (E19-03).
+            return await _check_in_answer(
+                session, work, OK_FEELING, kept=(artifact, row)
+            )
         await _say(session, work, "nothing_open")
         return Handled(
             outcome="nothing_open",

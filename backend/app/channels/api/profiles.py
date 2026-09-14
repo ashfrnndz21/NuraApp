@@ -61,6 +61,7 @@ from app.channels.api.schemas import (
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
 )
+from app.channels.whatsapp.group import sync_group
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
@@ -90,7 +91,6 @@ from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
-from app.channels.whatsapp.group import sync_group
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for

@@ -15,6 +15,7 @@ from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
+from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
 from app.channels.whatsapp.provider import NotAWebhook
@@ -40,7 +41,6 @@ from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
-from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
 from app.family.roster import (
@@ -82,7 +82,7 @@ from app.language.review import (
     SourceAlreadyListed,
 )
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
-from app.medicines.story import NothingToSay
+from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
@@ -204,7 +204,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotInThatLanguage, 404),
     (NoVoiceFor, 404),
     (TooLongToSay, 404),
-    (NothingToSay, 404),
+    (NoSuchStoryPart, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),

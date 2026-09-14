@@ -41,7 +41,6 @@ import uuid
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
-from app.channels.whatsapp.group import mirror_to_group
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     DigestOut,
@@ -74,6 +73,7 @@ from app.channels.api.schemas import (
     ThreadPostIn,
     TrailDayOut,
 )
+from app.channels.whatsapp.group import mirror_to_group
 from app.family.documents import add_document, documents
 from app.family.grants import grants, helper_list, role_presets
 from app.family.photos import (
