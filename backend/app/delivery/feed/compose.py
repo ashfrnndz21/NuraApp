@@ -65,10 +65,19 @@ from app.identity.models import Profile
 from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import KeyRole, Scope, scope_for_subject
 from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event
-from app.memory.models import Appointment, Event, EventKind, Fact, Provider, SourceChannel
+from app.memory.models import (
+    Appointment,
+    Artifact,
+    ConfidenceState,
+    Event,
+    EventKind,
+    Fact,
+    Provider,
+    SourceChannel,
+)
 from app.memory.semantic import assert_fact, current_facts
 from app.notes.models import Note
 from app.notes.service import list_notes
@@ -396,7 +405,12 @@ async def _switch_format_if_ignored(
     already = await current_facts(
         session, context=context, subject=FORMAT_SUBJECT, attribute=FORMAT_ATTRIBUTE
     )
-    if any(fact.value == VOICE for fact in already):
+    if any(
+        fact.value == VOICE or fact.confidence_state is not ConfidenceState.EXTRACTED
+        for fact in already
+    ):
+        # Voice already, or a format he chose himself on his settings screen (E01-03): two
+        # unopened cards do not overturn his word, and `ConfirmedFactStands` would refuse it.
         return
     noticed = await record_event(
         session,
@@ -956,10 +970,28 @@ async def _story(
             expires_at=until,
         )
     if context.allows(Scope.RECORDS):
+        # A story about a paper is the record's card (`scope=RECORDS`), so it names only what
+        # a key to the record reads: a paper kept under the record's scope — the family's
+        # message is not a paper — and the record's facts on it. A medicine fact on a label
+        # photo is the medicines'; the photo is still one of his papers, and the card cites
+        # the photo and not the fact.
         papers: dict[uuid.UUID, list[Fact]] = {}
         for fact in await current_facts(session, context=context):
             if fact.artifact_id is not None and fact.subject != "blood_pressure":
                 papers.setdefault(fact.artifact_id, []).append(fact)
+        if papers:
+            kept = await audited_read(
+                session,
+                Artifact,
+                context,
+                Scope.RECORDS,
+                where=(
+                    Artifact.id.in_(sorted(papers, key=str)),
+                    Artifact.written_scope == Scope.RECORDS,
+                ),
+            )
+            on_the_record = {artifact.id for artifact in kept}
+            papers = {ident: facts for ident, facts in papers.items() if ident in on_the_record}
         for artifact_id, facts in papers.items():
             first = min(facts, key=lambda fact: as_utc(fact.valid_from))
             lines = render(
@@ -977,7 +1009,13 @@ async def _story(
                     kind="story",
                     plain=lines.why,
                     artifact_id=str(artifact_id),
-                    fact_ids=tuple(sorted(str(fact.id) for fact in facts)),
+                    fact_ids=tuple(
+                        sorted(
+                            str(fact.id)
+                            for fact in facts
+                            if scope_for_subject(fact.subject) is Scope.RECORDS
+                        )
+                    ),
                 ),
                 scope=Scope.RECORDS,
                 deliver_to=DeliverTo.PATIENT,

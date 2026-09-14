@@ -47,6 +47,15 @@ from app.memory.models import (
     ProviderNote,
 )
 from app.notes.models import Note
+from app.onboarding.models import (
+    ActivationPlan,
+    BiographyLine,
+    BiographyPaper,
+    BiographyQuestion,
+    BiographySession,
+    PlanPrompt,
+    ProfileSettings,
+)
 from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
     Brief,
@@ -113,6 +122,13 @@ TABLES: tuple[Table, ...] = (
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
+    ProfileSettings.__table__,
+    BiographySession.__table__,
+    BiographyPaper.__table__,
+    BiographyLine.__table__,
+    BiographyQuestion.__table__,
+    ActivationPlan.__table__,
+    PlanPrompt.__table__,
     Notice.__table__,
     WhatToDoCard.__table__,
     EmergencyCard.__table__,
@@ -198,7 +214,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0017_trends_routines_calendar"]
+    assert heads == ["0019_row_scope"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -249,6 +265,13 @@ def test_the_migrations_build_the_tables_the_models_declare(
             ThreadMessage,
             ScheduledPush,
             Document,
+            ProfileSettings,
+            BiographySession,
+            BiographyPaper,
+            BiographyLine,
+            BiographyQuestion,
+            ActivationPlan,
+            PlanPrompt,
             TrendCard,
             Routine,
             AppointmentProposal,
@@ -304,6 +327,7 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         )
         connection.execute(
             Artifact.__table__.insert().values(
+                written_scope="records",
                 id=photo,
                 profile_id=profile,
                 kind="photo",
@@ -335,6 +359,7 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         told = uuid.uuid4()
         connection.execute(
             Event.__table__.insert().values(
+                written_scope="records",
                 id=told,
                 profile_id=profile,
                 kind="visit",

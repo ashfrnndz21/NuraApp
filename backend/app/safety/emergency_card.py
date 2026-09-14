@@ -36,7 +36,7 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_profile_read, audited_read
+from app.audit.access import audited, audited_profile_read, audited_projection_read, audited_read
 from app.audit.models import Action
 from app.channels.safety_strings import (
     BLOOD_GROUP_WORDS,
@@ -270,7 +270,9 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
         if of_kind:
             clinic = max(of_kind, key=lambda one: as_utc(one.added_at))
             break
-    readings = await audited_read(
+    # The moment a reading was taken is written under the readings' part (row scope); the
+    # card's projection names its date, so it is read through the projection's own door.
+    readings = await audited_projection_read(
         session,
         Event,
         context,

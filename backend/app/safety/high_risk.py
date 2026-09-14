@@ -28,7 +28,8 @@ from app.drafts import FactDraft
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.memory import semantic
-from app.memory.models import Artifact, ArtifactKind
+from app.memory.episodic import artifact_kind_on_profile
+from app.memory.models import ArtifactKind
 
 HIGH_RISK_CLASSES: Mapping[str, frozenset[str]] = {
     "anticoagulant": frozenset(
@@ -196,15 +197,10 @@ async def refuse_dose_without_label_photo(
         return
     if draft.artifact_id is None:
         raise HighRiskNeedsLabelPhoto(danger)
-    artifact = await session.get(Artifact, draft.artifact_id)
-    if (
-        artifact is None
-        or artifact.profile_id != context.profile_id
-        or artifact.kind is not ArtifactKind.PHOTO
-    ):
+    kind = await artifact_kind_on_profile(session, context=context, artifact_id=draft.artifact_id)
+    if kind is not ArtifactKind.PHOTO:
         raise HighRiskNeedsLabelPhoto(
-            danger,
-            f"a {danger} dose is saved from its label photo, not a {artifact and artifact.kind}",
+            danger, f"a {danger} dose is saved from its label photo, not a {kind}"
         )
 
 
