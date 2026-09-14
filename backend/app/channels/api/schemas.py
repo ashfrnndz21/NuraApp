@@ -274,6 +274,17 @@ class ConsentOut(BaseModel):
         )
 
 
+class WordingOut(BaseModel):
+    """Today's words for one consent purpose, one line per idea, as `GET /consent/wording`
+    answers them; `version` is what `ConsentIn.wording_version` must carry."""
+
+    purpose: ConsentPurpose
+    version: str
+    language: str
+    region: Region
+    lines: list[str]
+
+
 class ProfileCreate(BaseModel):
     consent: ConsentIn
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
@@ -292,10 +303,14 @@ class ProfileOut(BaseModel):
     role: KeyRole | None
     scopes: list[Scope]
     standing: Standing
+    key_id: uuid.UUID | None = None
+    """The key the caller reaches it with, or none for its owner: what a client binds any
+    copy it keeps to, so a closed or narrowed key never shows what it once opened."""
 
     @classmethod
     def of(cls, profile: Profile, context: KeyContext) -> ProfileOut:
         return cls(
+            key_id=context.key_id,
             profile_id=profile.id,
             display_name=profile.display_name,
             language=profile.language,
@@ -670,10 +685,13 @@ class KeyOut(BaseModel):
     granted_at: datetime
     expires_at: datetime | None
     revoked_at: datetime | None
+    holder_display_name: str | None = None
+    """Who holds it, by name, for the owner reading his own keys: the person to call."""
 
     @classmethod
-    def of(cls, key: Key) -> KeyOut:
+    def of(cls, key: Key, holder_display_name: str | None = None) -> KeyOut:
         return cls(
+            holder_display_name=holder_display_name,
             key_id=key.id,
             profile_id=key.profile_id,
             holder_person_id=key.holder_person_id,
@@ -949,6 +967,10 @@ class LineOut(BaseModel):
     duplicate_of: list[uuid.UUID]
     doctor_question: list[str]
     taken_label: str | None
+    due_now: bool = False
+    missed: bool = False
+    source: str = ""
+    """Where the line came from and on which day, in his words: the card's source line."""
 
     @classmethod
     def of(cls, view: LineView) -> LineOut:
@@ -960,6 +982,9 @@ class LineOut(BaseModel):
             duplicate_of=view.duplicate_of,
             doctor_question=view.doctor_question,
             taken_label=view.taken_label,
+            due_now=view.due_now,
+            missed=view.missed,
+            source=view.source,
         )
 
     @classmethod
@@ -1149,6 +1174,13 @@ class SlotOut(BaseModel):
     card: str
     taken: bool
     taken_label: str
+    due_now: bool
+    """Its window is open now and it is not yet tapped: the one thing to do."""
+    missed: bool
+    """Its window has closed untapped; `if_forgotten` says what the story says to do."""
+    if_forgotten: list[str]
+    source: str
+    """Where the medicine came from and on which day: the card's source line."""
 
     @classmethod
     def of(cls, slot: Slot) -> SlotOut:
@@ -1159,7 +1191,19 @@ class SlotOut(BaseModel):
             card=slot.card,
             taken=slot.taken,
             taken_label=slot.taken_label,
+            due_now=slot.due_now,
+            missed=slot.missed,
+            if_forgotten=slot.if_forgotten,
+            source=slot.source,
         )
+
+
+class ProudOut(BaseModel):
+    """The proud number (`GET /profiles/{id}/proud`): days with a tablet taken, and when it
+    was counted. The client shows this number and nothing it worked out itself."""
+
+    days: int
+    as_of: datetime
 
 
 # --- readings and State ------------------------------------------------------------------

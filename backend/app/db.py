@@ -194,9 +194,34 @@ class KeptSession(AsyncSession):
             )
 
 
+SQLITE_LOCK_WAIT_SECONDS = 30
+"""How long a SQLite transaction waits for the one before it to finish (laptop and CI only)."""
+
+
+def _no_implicit_begin(dbapi_connection: Any, _record: Any) -> None:
+    # The driver would begin a transaction on its own, as a reader; let SQLAlchemy begin it.
+    dbapi_connection.isolation_level = None
+
+
+def _begin_immediate(connection: Any) -> None:
+    connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
 def make_engine(url: str) -> AsyncEngine:
-    """The engine for one region's database. A process serves exactly one region."""
-    return create_async_engine(url)
+    """The engine for one region's database. A process serves exactly one region.
+
+    On SQLite — the laptop's and CI's database, never a deployment's — every transaction
+    begins IMMEDIATE and waits for the one before it. Left to itself SQLite begins a
+    transaction as a reader and upgrades it at its first write, and of two requests that
+    each read and then write (every audited read writes its line) one fails at once with
+    "database is locked": the 500 a reopened page met while the page before it was still
+    writing its feed cards. Postgres needs none of this."""
+    if not url.startswith("sqlite"):
+        return create_async_engine(url)
+    engine = create_async_engine(url, connect_args={"timeout": SQLITE_LOCK_WAIT_SECONDS})
+    event.listen(engine.sync_engine, "connect", _no_implicit_begin)
+    event.listen(engine.sync_engine, "begin", _begin_immediate)
+    return engine
 
 
 def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[KeptSession]:
