@@ -12,12 +12,12 @@ to the provider it named and to the appointment a person's yes booked from it.
 `appointment_proposal`; both are non-native enums with no database constraint, so there is
 no column change for them.
 
-Follows E03's timeline revision (0016_timeline), main's head when these stories were merged
-back; the operator
+Follows E13/E14's revision (0014_emergency_symptoms), main's head when these stories were
+merged back; the operator
 repoints `down_revision` if another story lands first.
 
 Revision ID: 0017_trends_routines_calendar
-Revises: 0016_timeline
+Revises: 0014_emergency_symptoms
 Create Date: 2026-09-14
 """
 
@@ -27,7 +27,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0017_trends_routines_calendar"
-down_revision = "0016_timeline"
+down_revision = "0014_emergency_symptoms"
 branch_labels = None
 depends_on = None
 

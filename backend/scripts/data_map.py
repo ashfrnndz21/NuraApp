@@ -40,6 +40,7 @@ import app.memory.models
 import app.notes.models
 import app.reasoning.models
 import app.routines.models
+import app.safety.models
 import app.safety.red_flags
 import app.state.models  # noqa: F401
 from app.db import Base
@@ -447,6 +448,39 @@ CLASSES: dict[str, str] = {
     "scheduled_push.expires_at": OPERATIONAL,
     "scheduled_push.state_id": HEALTH,
     "scheduled_push.boundary": HEALTH,
+    # E13/E14 (ADR 0002). The notice to the family, the what-to-do card and the emergency
+    # card: codes and ids, no prose, about his health. The flag is E21's `red_flag`, above.
+    "notice.id": HEALTH,
+    "notice.kind": HEALTH,
+    "notice.to_person_id": IDENTIFIER,
+    "notice.template": HEALTH,
+    "notice.slots": HEALTH,
+    "notice.language": OPERATIONAL,
+    "notice.flag_id": HEALTH,
+    "notice.event_id": HEALTH,
+    "notice.created_at": OPERATIONAL,
+    "notice.deliver_after": OPERATIONAL,
+    "notice.delivered_at": OPERATIONAL,
+    "what_to_do_card.id": HEALTH,
+    "what_to_do_card.kind": HEALTH,
+    "what_to_do_card.language": OPERATIONAL,
+    "what_to_do_card.line_ids": HEALTH,
+    "what_to_do_card.flag_id": HEALTH,
+    "what_to_do_card.event_id": HEALTH,
+    "what_to_do_card.check_in_at": HEALTH,
+    "what_to_do_card.rendered_at": OPERATIONAL,
+    "what_to_do_card.rendered_for_person_id": IDENTIFIER,
+    "what_to_do_card.state_id": HEALTH,
+    "what_to_do_card.boundary": HEALTH,
+    "emergency_card.id": HEALTH,
+    "emergency_card.format": OPERATIONAL,
+    "emergency_card.language": OPERATIONAL,
+    "emergency_card.fact_ids": HEALTH,
+    "emergency_card.line_ids": HEALTH,
+    "emergency_card.rendered_at": OPERATIONAL,
+    "emergency_card.rendered_for_person_id": IDENTIFIER,
+    "emergency_card.state_id": HEALTH,
+    "emergency_card.boundary": HEALTH,
     "document.artifact_id": HEALTH,
     "document.tag": HEALTH,
     "document.added_by_person_id": IDENTIFIER,

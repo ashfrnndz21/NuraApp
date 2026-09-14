@@ -25,7 +25,9 @@ The not-feeling-well card is the one surface allowed to say more than the regist
 Fact holds the discharge letter's own instruction, the card carries those words, names the
 letter ("Dr Tan wrote this in your hospital letter."), and still ends on the boundary. It
 opens with a reassurance, because a man who has just said he feels unwell is not met with
-three refusals in a row (docs/plain-words.md rule 9).
+three refusals in a row (docs/plain-words.md rule 9). A red flag makes the card urgent
+(`urgent=True`): the reassurance, the calls, and one closing line, "Nura does not decide what is
+wrong." — after an emergency number the card never says "Ask your doctor."
 """
 
 from __future__ import annotations
@@ -156,6 +158,16 @@ FROM_THE_LETTER: Mapping[str, str] = {
 }
 """Where the letter's own words come from (docs/plain-words.md, glossary: "Red flag")."""
 
+# @patient
+URGENT_CLOSING: Mapping[str, str] = {
+    "en": "Nura does not decide what is wrong.",
+    "ms": "Nura tidak menentukan apa masalahnya.",
+    "zh": "Nura 不判断您出了什么问题。",
+}
+"""The one closing line of an urgent card — a red flag on the not-feeling-well surface. After
+"Call the ambulance now on 995." nothing sends him anywhere but the call: the boundary is this
+one line, and "Ask your doctor." is never said after an emergency number."""
+
 
 def boundary_lines(
     surface: Surface,
@@ -164,6 +176,7 @@ def boundary_lines(
     doctor: str | None = None,
     letter: str | None = None,
     told: str | None = None,
+    urgent: bool = False,
 ) -> tuple[str, ...]:
     """The boundary for this surface, one line per idea, in this language, naming the doctor
     when the record has one ("Ask Dr Tan.") and "your doctor" otherwise.
@@ -174,19 +187,30 @@ def boundary_lines(
     words are run-time text and go through `plain_words.verify` on the surface that shows
     them; they are never composed here. The closing two lines are last, whatever came
     before.
+
+    `urgent` is for the not-feeling-well card of a red flag only: the reassurance, the
+    letter's words in the letter's name if there are any, and `URGENT_CLOSING` as the one
+    closing line — no "Nura wrote down how you feel.", no "Ask your doctor.". The card puts
+    its calls between the reassurance and the closing.
     """
     code = language_of(language)
     who = doctor or YOUR_DOCTOR[code]
+    if urgent and surface is not Surface.NOT_FEELING_WELL:
+        raise ValueError("only the not-feeling-well card is ever urgent")
     lines: list[str] = []
     if surface is Surface.NOT_FEELING_WELL:
         lines.append(SOMEONE_KNOWS[code].format(told=told) if told else YOU_DID_RIGHT[code])
-    lines.append(WHAT_NURA_DID[code][surface])
+    if not urgent:
+        lines.append(WHAT_NURA_DID[code][surface])
     if surface is Surface.NOT_FEELING_WELL and letter:
         lines.extend(letter.strip().splitlines())
         lines.append(FROM_THE_LETTER[code])
     elif letter:
         raise ValueError("only the not-feeling-well card carries the letter's own words")
-    lines.extend(NOT_ADVICE[code])
+    if urgent:
+        lines.append(URGENT_CLOSING[code])
+    else:
+        lines.extend(NOT_ADVICE[code])
     return tuple(line.format(doctor=who) for line in lines)
 
 
@@ -197,16 +221,34 @@ def boundary_line(
     doctor: str | None = None,
     letter: str | None = None,
     told: str | None = None,
+    urgent: bool = False,
 ) -> str:
     """The same, as the one string a response or a card carries: the lines joined by newlines,
     which is also how the voice reads them, with a pause between."""
-    return "\n".join(boundary_lines(surface, language, doctor=doctor, letter=letter, told=told))
+    return "\n".join(
+        boundary_lines(surface, language, doctor=doctor, letter=letter, told=told, urgent=urgent)
+    )
 
 
 def _pattern(template: str) -> re.Pattern[str]:
     """A template with `{doctor}` or `{told}` as a regex matching any name in the slot."""
     parts = re.split(r"\{(?:doctor|told)\}", template)
     return re.compile("^" + r"\S.*".join(re.escape(part) for part in parts) + "$")
+
+
+def _is_urgent(lines: list[str]) -> bool:
+    """The urgent shape of the not-feeling-well boundary: a reassurance first, the letter's words
+    in the letter's name if any, and `URGENT_CLOSING` last — nothing else."""
+    for code in LANGUAGES:
+        if len(lines) < 2 or lines[-1] != URGENT_CLOSING[code]:
+            continue
+        opens = [_pattern(SOMEONE_KNOWS[code]), _pattern(YOU_DID_RIGHT[code])]
+        if not any(p.match(lines[0]) for p in opens):
+            continue
+        rest = lines[1:-1]
+        if not rest or (len(rest) >= 2 and _pattern(FROM_THE_LETTER[code]).match(rest[-1])):
+            return True
+    return False
 
 
 def is_boundary_line(surface: Surface, text: str | None) -> bool:
@@ -216,11 +258,14 @@ def is_boundary_line(surface: Surface, text: str | None) -> bool:
     The closing two lines must be `NOT_ADVICE` and last; the register's line for the surface
     must be there; and on the not-feeling-well card, whatever else is carried (the
     reassurance, the letter's words) sits between the register's line and the closing, with
-    the letter named. Nothing else passes.
+    the letter named. The not-feeling-well card of a red flag may instead be urgent: the
+    reassurance, the letter if any, and `URGENT_CLOSING` alone at the end. Nothing else passes.
     """
     if not text:
         return False
     lines = text.strip().splitlines()
+    if surface is Surface.NOT_FEELING_WELL and _is_urgent(lines):
+        return True
     for code in LANGUAGES:
         closing = [_pattern(t) for t in NOT_ADVICE[code]]
         if len(lines) < 3 or not all(p.match(line) for p, line in zip(closing, lines[-2:], strict=True)):
