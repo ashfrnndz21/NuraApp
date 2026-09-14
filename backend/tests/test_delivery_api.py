@@ -50,7 +50,7 @@ async def test_the_log_is_the_owners_and_his_chiefs_and_the_dev_run_fills_it(
     )
     assert felt.status_code == 201
     ran = await deployment.client.post(
-        "/dev/run-triggers", json={"profile_id": profile_id, "at": "2026-09-03T16:00:00+08:00"}
+        "/dev/run-triggers", json={"profile_id": profile_id}
     )
     assert ran.status_code == 200, ran.text
     assert ran.json()["day"] == "2026-09-03"

@@ -246,7 +246,10 @@ async def test_each_type_goes_by_its_configured_channel(
     h.push.register(h.mei.id)
     [second] = _rows(await _run(sg, h, clock, at(10, day=15)), TriggerType.REORDER)
     assert second.via is DeliveryChannel.APP_PUSH and second.template_name is None
-    assert [one.text for one in h.push.sent] == [PUSH_LINE["en"]]
+    assert second.passed_over == []
+    # Every push is the one content-free line, and only to the person with a device.
+    assert h.push.sent and {one.text for one in h.push.sent} == {PUSH_LINE["en"]}
+    assert {one.person_id for one in h.push.sent} == {h.mei.id}
 
 
 async def test_when_he_cannot_be_reached_the_caregiver_on_duty_is(

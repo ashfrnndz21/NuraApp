@@ -1,14 +1,14 @@
 """Checkpoint 20 — Delivery: triggers, the ladder, the morning ritual (E11, E00-05), over HTTP.
 
-    make dev                # one terminal
-    make checkpoint N=20    # another: this module, through scripts/checkpoint.py
+    NURA_FROZEN_CLOCK=2026-09-14T06:00:00+08:00 make dev    # one terminal: a frozen clock
+    make checkpoint N=20                                     # another: this module
 
 Pa opens his own profile, agrees to WhatsApp, and adds his blood pressure tablet (two left, so
 the reorder date is reached); Mei, his daughter, holds a chief key and is on the roster on
-weekdays; Siti, the helper, holds a helper key. Then the engine runs (`POST /dev/run-triggers`,
-the dev door onto `run_due`) at the hours the scenario needs, on tomorrow's date on Pa's wall
-clock — a tablet added today counts from tomorrow's breakfast: the morning card at breakfast
-as the approved template; the breakfast tablet's window closes with no Taken, and the ladder
+weekdays; Siti, the helper, holds a helper key. The day is Monday 14 September on a dev run's
+frozen clock (#118): the checkpoint stands it at 06:00 and steps it (`POST /dev/clock`) to each
+hour the scenario needs, running the engine there (`POST /dev/run-triggers`, the dev door onto
+`run_due`): the morning card at the time his routine sets, as the approved template; the breakfast tablet's window closes with no Taken, and the ladder
 asks Pa, then Siti, then Mei, and stops when Siti replies "sudah beri" on WhatsApp; the reorder
 reaches Mei and is held by the cap the second time that day; at 22:30 Pa writes that he fell,
 and the flag goes straight to the roster, neither quiet nor capped. Then today's top three with
@@ -24,7 +24,7 @@ import base64
 import random
 import re
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -36,6 +36,8 @@ CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 SGT = ZoneInfo("Asia/Singapore")
+DAY = date(2026, 9, 14)
+"""Monday 14 September 2026: a weekday, so Mei is on the roster."""
 
 JSON = dict[str, Any]
 
@@ -93,14 +95,20 @@ class Walk:
     def __init__(self, client: httpx.Client, dev_log: Path) -> None:
         self.client = client
         self.dev_log = dev_log
-        # Tomorrow on Pa's wall clock: a tablet added today counts from tomorrow's breakfast.
-        self.day = (datetime.now(SGT) + timedelta(days=1)).date()
+        self.day = DAY
         self.seen: list[JSON] = []
 
-    def at(self, hour: int, minute: int = 0) -> str:
-        return datetime(
-            self.day.year, self.day.month, self.day.day, hour, minute, tzinfo=SGT
-        ).isoformat()
+    def clock(self, hour: int, minute: int = 0, *, days: int = 0) -> None:
+        """Stand the dev run's frozen clock at this moment of Pa's day (`POST /dev/clock`)."""
+        day = self.day + timedelta(days=days)
+        at = datetime(day.year, day.month, day.day, hour, minute, tzinfo=SGT).isoformat()
+        moved = self.client.post("/dev/clock", json={"at": at})
+        if moved.status_code == 409:
+            raise Failed(
+                "✗ the dev server's clock is not frozen: start it with "
+                "NURA_FROZEN_CLOCK=2026-09-14T06:00:00+08:00 make dev, then run this again"
+            )
+        check(moved, 200, f"the clock stands at {hour:02d}:{minute:02d}")
 
     # --- signing in -----------------------------------------------------------------------
 
@@ -150,11 +158,11 @@ class Walk:
     # --- the engine and the thread ------------------------------------------------------------
 
     def run_due(self, profile_id: str, hour: int, minute: int = 0) -> list[JSON]:
-        """One engine run; its rows, which are also kept for the steps that look back."""
+        """The clock stepped to this hour, then one engine run; its rows, which are also kept
+        for the steps that look back."""
+        self.clock(hour, minute)
         ran = check(
-            self.client.post(
-                "/dev/run-triggers", json={"profile_id": profile_id, "at": self.at(hour, minute)}
-            ),
+            self.client.post("/dev/run-triggers", json={"profile_id": profile_id}),
             200,
             f"the engine runs at {hour:02d}:{minute:02d}",
         )
@@ -165,10 +173,10 @@ class Walk:
         return rows
 
     def inbound(self, person: Person, text: str, hour: int, minute: int) -> JSON:
+        self.clock(hour, minute)
         handled: JSON = check(
             self.client.post(
-                "/dev/whatsapp/inbound",
-                json={"from_e164": person.phone_e164, "text": text, "at": self.at(hour, minute)},
+                "/dev/whatsapp/inbound", json={"from_e164": person.phone_e164, "text": text}
             ),
             200,
             f'{person.name} writes "{text}" on WhatsApp',
@@ -196,7 +204,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     mei = Person("Mei", fresh_phone("+659220"), "en")
     siti = Person("Siti", fresh_phone("+659720"), "ms")
 
-    # 1. The family.
+    # 1. The family, at 06:00 on Monday 14 September, his wall clock.
+    w.clock(6, 0)
     for person in (pa, mei, siti):
         w.register(person)
     ok(
@@ -293,7 +302,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                     + b"\n"
                 ).decode(),
                 "content_type": "image/png",
-                "captured_at": datetime.now(UTC).isoformat(),
+                "captured_at": datetime(2026, 9, 14, 5, 59, tzinfo=SGT).isoformat(),
             },
         ),
         201,
@@ -330,8 +339,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "Pa adds amlodipine",
     )
     ok(
-        "Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route); "
-        f"the scenario runs on {w.day.isoformat()}, tomorrow on his wall clock"
+        "Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route), "
+        f"at 06:00 on {w.day.isoformat()} by the dev run's frozen clock"
     )
 
     # 3. The morning card at the time his routine sets (E10-01; 07:00 until the family sets
@@ -454,7 +463,9 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "new) goes whatever the hour; a reminder would wait out the quiet hours"
     )
 
-    # 7. Today's top three, with why; one card played as voice.
+    # 7. Today's top three, with why, the next morning (at 22:37 the quiet hours hold every
+    #    card but the flag); one card played as voice.
+    w.clock(7, 30, days=1)
     top = check(
         client.get(f"/profiles/{profile_id}/feed/today", headers=bearer(pa.token)),
         200,
@@ -465,7 +476,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("the top three lead with the alert", why=f"got {items}")
     if any(not item["why"]["plain"] for item in items):
         raise fail("every card explains itself", why=f"got {items}")
-    ok("today's top three (GET /profiles/{id}/feed/today), alert, then reminder, then insight:")
+    ok(
+        "07:30 the next morning, the flag still inside its day: today's top three "
+        "(GET /profiles/{id}/feed/today), alert, then reminder, then insight:"
+    )
     for item in items:
         say(
             f"[{item['category']:8}] {item['headline']} — one action: {item['action']}, "

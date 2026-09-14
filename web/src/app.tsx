@@ -1,6 +1,8 @@
 import type { JSX } from "preact";
 import { afterSignIn, go, screen } from "./flow";
+import { AskScreen } from "./screens/Ask";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
+import { FeedScreen } from "./screens/Feed";
 import { MeScreen } from "./screens/Me";
 import { ReadingScreen } from "./screens/Reading";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
@@ -43,6 +45,10 @@ export function App(): JSX.Element | null {
       return <ForSomeoneScreen />;
     case "today":
       return <TodayScreen saved={current.saved ?? false} />;
+    case "feed":
+      return <FeedScreen />;
+    case "ask":
+      return <AskScreen item={current.item} />;
     case "reading":
       return <ReadingScreen />;
     case "me":

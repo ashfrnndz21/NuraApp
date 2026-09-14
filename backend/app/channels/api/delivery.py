@@ -7,7 +7,8 @@
     POST /dev/run-triggers                            `run_due` for one profile at one moment
 
 `/dev/run-triggers` exists only on a declared dev run (NURA_DEV_CODE_SENDER=1), like the other
-dev doors: it is how the checkpoint drives the engine at the hours it needs. A deployment's
+dev doors: it runs the engine now, and on a dev run with a frozen clock (NURA_FROZEN_CLOCK,
+`POST /dev/clock`) "now" is whatever hour the checkpoint stepped it to. A deployment's
 scheduler calls `run_due` itself, every five minutes (`app.delivery.triggers.engine`).
 """
 
@@ -18,7 +19,7 @@ from datetime import datetime, time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.delivery.triggers.deliver import Sent, Via
@@ -144,8 +145,6 @@ class RunLineOut(DeliveryOut):
 
 class RunIn(BaseModel):
     profile_id: uuid.UUID
-    at: AwareDatetime | None = None
-    """The moment to evaluate at; now when not given. Dev runs only."""
 
 
 class RunOut(BaseModel):
@@ -224,9 +223,10 @@ def _dev_only(request: Request) -> Settings:
 
 @router.post("/dev/run-triggers")
 async def dev_run_triggers(body: RunIn, request: Request, session: Db) -> RunOut:
-    """`run_due` for one profile, at `at` or now, the way the scheduler calls it. Dev only."""
+    """`run_due` for one profile, now, the way the scheduler calls it. Dev only: on a dev run
+    started with NURA_FROZEN_CLOCK, `POST /dev/clock` moves "now" to the hour a step needs."""
     _dev_only(request)
-    report = await run_due(session, via=via_of(request), profile_id=body.profile_id, at=body.at)
+    report = await run_due(session, via=via_of(request), profile_id=body.profile_id)
     return RunOut(
         at=report.at,
         day=report.day,

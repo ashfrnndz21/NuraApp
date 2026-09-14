@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import * as nura from "./api/nura";
-import type { ClaimableOut, DoorsOut, ProfileOut } from "./api/types";
+import type { ClaimableOut, DoorsOut, FeedItemOut, ProfileOut } from "./api/types";
+import { forgetFeed } from "./feed/session";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
@@ -19,6 +20,10 @@ export type Screen =
   | { name: "claim"; offer: ClaimableOut }
   | { name: "forSomeone" }
   | { name: "today"; saved?: boolean }
+  /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
+  | { name: "feed" }
+  /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
+  | { name: "ask"; item: FeedItemOut }
   | { name: "reading" }
   | { name: "me" };
 
@@ -45,6 +50,7 @@ export async function afterSignIn(): Promise<void> {
     // The key to the remembered papers was closed since: nothing of them stays on the phone,
     // and he is told why he is back at the doors.
     await clearProfileData(remembered.profile_id);
+    forgetFeed();
     await chooseProfile(null);
     return go({ name: "doors", doors, refusal: "NoKey" });
   }
@@ -59,7 +65,10 @@ export async function afterSignIn(): Promise<void> {
  *  a page read under one key is never shown under another. */
 export async function openProfile(chosen: ProfileOut): Promise<void> {
   const before = profile.value;
-  if (before && before.profile_id !== chosen.profile_id) await clearProfileData(before.profile_id);
+  if (before && before.profile_id !== chosen.profile_id) {
+    await clearProfileData(before.profile_id);
+    forgetFeed();
+  }
   await chooseProfile(chosen);
   go({ name: "today" });
 }
@@ -76,6 +85,7 @@ export async function signOutEverywhere(): Promise<void> {
   // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
   // profile and every cached Today page go.
   await clearAllProfileData();
+  forgetFeed();
   await setToken(null);
   await chooseProfile(null);
   me.value = null;

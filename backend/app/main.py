@@ -13,6 +13,8 @@ in the region does (E05); the WhatsApp provider is the fixture (`NURA_WHATSAPP_P
 signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19); so
 does the fixture voice that says a card aloud (E11-04), and the app push reaches nobody until
 the app registers devices (E11-05).
+A dev run given NURA_FROZEN_CLOCK starts on a frozen clock (`app.clock.install_frozen`), for
+end-to-end runs; anywhere else that setting refuses to start.
 Logging is set up so that, on a dev run, the code line is seen.
 """
 
@@ -23,6 +25,7 @@ from pathlib import Path
 
 from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import whatsapp_provider_for
+from app.clock import install_frozen
 from app.db import make_engine, make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.push import push_sender_for
@@ -70,5 +73,7 @@ def providers_for(settings: Settings) -> Providers:
 
 
 settings = load_settings()
+if install_frozen(settings.frozen_clock, dev_run=settings.dev_code_sender) is not None and settings.frozen_clock:
+    logging.getLogger("nura.clock").info("dev run: the clock is frozen at %s (POST /dev/clock moves it)", settings.frozen_clock.isoformat())
 engine = make_engine(settings.database_url)
 app = create_app(settings, make_session_factory(engine), providers_for(settings))

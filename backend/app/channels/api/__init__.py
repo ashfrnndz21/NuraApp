@@ -35,6 +35,7 @@ from app.channels.api import (
     connectors,
     consent_words,
     delivery,
+    dev_clock,
     doors,
     family,
     feed,
@@ -82,6 +83,7 @@ def _api() -> APIRouter:
     api.include_router(routine.router)
     api.include_router(connectors.router)
     api.include_router(delivery.router)
+    api.include_router(dev_clock.router)
 
     @api.get("/health")
     async def health() -> dict[str, str]:
