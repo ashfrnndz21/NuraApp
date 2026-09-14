@@ -625,13 +625,20 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
   const day = (await (await request.get(`${API}/profiles/${pa.profileId}/nudges`, auth(pa.token))).json()) as { nudges: { lines: string[]; responses: string[] }[] };
   expect(day.nudges).toHaveLength(1);
   expect(day.nudges[0]).toMatchObject({ lines: draft.lines, responses: ["accepted"] });
+  // Opened again: the page restores the session and reads the doors once (`afterSignIn`), then
+  // lands on Today; the answered nudge does not come back.
+  const doors = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/doors");
   await page.reload();
+  await doors;
   await expect(page.getByTestId("not-well")).toBeVisible();
   await expect(page.getByTestId("nudge")).toHaveCount(0);
 
   // Me: the number that only goes up, as the backend says it.
   const summary = (await (await request.get(`${API}/profiles/${pa.profileId}/me-summary?language=en`, auth(pa.token))).json()) as { proud_days: number; lines: string[] };
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await expect(async () => {
+    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await expect(page.getByTestId("me-proud-number")).toBeVisible({ timeout: 2000 });
+  }).toPass();
   await expect(page.getByTestId("me-proud-number")).toHaveText(String(summary.proud_days));
   await expect(page.getByTestId("me-proud-lines").locator("p")).toHaveText(summary.lines);
   expect(summary.lines).toContain("This number only goes up.");
