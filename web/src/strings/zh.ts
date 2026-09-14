@@ -1101,6 +1101,7 @@ export const zh = {
     NobodyToAsk: ["家人名单上没有人可以请。", "请先把一个人加到家人名单上。"],
     NotACount: "请用数字打有多少。",
     NotADocument: "Nura 可以保存一封信或者一页纸的照片。",
+    DocumentTooLarge: "这份文件太大了，Nura 放不下。",
     AlreadyHangsThere: "这份文件已经在那里了。",
     EpisodeAlreadyClosed: "这次生病已经结束了。",
     NoSuchEpisode: "这次生病已经不在这里了。",

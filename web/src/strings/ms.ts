@@ -1101,6 +1101,7 @@ export const ms = {
     NobodyToAsk: ["Tiada sesiapa dalam senarai keluarga untuk diminta.", "Tambah seseorang ke senarai keluarga dahulu."],
     NotACount: "Sila taip berapa banyak, sebagai nombor.",
     NotADocument: "Nura boleh simpan surat atau gambar sehelai kertas.",
+    DocumentTooLarge: "Surat itu terlalu besar untuk Nura.",
     AlreadyHangsThere: "Surat itu sudah ada di situ.",
     EpisodeAlreadyClosed: "Sakit ini sudah berakhir.",
     NoSuchEpisode: "Sakit itu tiada di sini lagi.",

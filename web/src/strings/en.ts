@@ -1105,6 +1105,7 @@ export const en = {
     NobodyToAsk: ["Nobody is on the family list to ask.", "Add someone to the family list first."],
     NotACount: "Please type how many, as a number.",
     NotADocument: "Nura can keep a letter or a photo of a page.",
+    DocumentTooLarge: "That paper is too big for Nura.",
     AlreadyHangsThere: "That paper is already there.",
     EpisodeAlreadyClosed: "This illness is over.",
     NoSuchEpisode: "That illness is not here any more.",

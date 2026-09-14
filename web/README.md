@@ -284,3 +284,38 @@ plus one for every picked word that relates to it; top words heaviest first so t
 first screen; revealed words go straight after the word that revealed them, so nothing moves
 under his finger; unpicking drops what only it revealed. A tap speaks the word and "Doctors
 call it …" — the term is a slot value, shown only in brackets after his word.
+
+## The Record (W5)
+
+One nav entry, *Papers* (the Record: `go({ name: "record", at })`; the tab is *Papers* because
+the plain-words verifier refuses "Record" as not his word, and the glossary's word is "your
+papers"). Every screen under it is a place in `src/record/places.ts`; the logic apart from any
+screen is `src/record/model.ts`, unit-tested (`tests/unit/record.test.ts`); the screens are
+`src/screens/record/` — the first screen, his medicines (the list with source and confidence,
+the story, a medicine added and checked, "I have more at home."), his visits (the spine's three
+anchors and the cursor, an illness and a paper put with it, the directory and the chief's note,
+what changed), his blood tests and his day (the trend, the routine, the chief's builder), and his
+papers (waiting review cards on onboarding's own review card, the family's documents).
+
+**One thing a screen, or the list.** In the patient density a list is one item a screen with
+*This is 1 of N.* and *Next* (the timeline reads the next page by the backend's cursor when he
+reaches the end); in the caregiver density it is the whole list, and the day is a table.
+
+**The backend's lines.** Every card line is the backend's: the anchors, what changed, the
+story and its voice script, the count and the reorder buttons' own labels, who was asked to
+order, the trend and its boundary (shown apart and last), the day. The catalogue names the
+screens and buttons and says a few whole lines with a name, a date or a number in a slot.
+
+**Busy until read.** A Record screen says `aria-busy="true"` from its first frame until its
+reads are in, so a screen reader waits for the lines and nothing moves under a finger (the
+e2e overlap check waits for it too).
+
+**The reorder card (E04-05).** Its two buttons are on the medicines screen and on the feed's
+reorder card, labelled with the line's `reorder_actions`: *Ask the family to order.* posts
+`…/medicines/{line}/ask-to-order` (the tap is the yes, as Taken is) and shows the backend's
+lines; *I have more at home.* asks how many, mints the yes for that number (subject
+`count_correction`) and posts `…/medicines/{line}/more`.
+
+**The machine's screen (E02-08).** `src/screens/Reading.tsx` keeps typed entry and adds *Take a
+photo of the machine*: `POST …/readings/photo` answers with a review card, shown on onboarding's
+review card with the numbers already in their boxes, and one *Looks right* writes the reading.
