@@ -4,7 +4,9 @@
 scope, a table name, a refusal's class name. This turns each into sentences from
 `app.audit.strings` with the person's name, his words for the part, and the day on his
 wall clock, and groups them by day, newest first. The same reach repeated within a day is
-one sentence: the trail says who looked at what, not how many times. Nothing on a line is
+one sentence: the trail says who looked at what, not how many times. Nura's own reads — the
+delivery engine checking every few minutes — are one line a day ("On Monday 14 September,
+Nura checked your papers 288 times to remind you on time."), which the chief can open. Nothing on a line is
 ever a name from the code: every arm has a default, and a person the profile cannot name
 is "someone".
 """
@@ -20,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_profile_read
 from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.strings import (
+    NURA,
+    SYSTEM_CHECKS,
     YOU,
     allowed_lines,
     language_of,
@@ -52,6 +56,9 @@ class TrailLine:
     who: str
     sentences: list[str]
     outcome: Outcome
+    detail: list[str] = field(default_factory=list)
+    """Under Nura's folded line, for the chief: each part it checked and how often. Empty for
+    him, and on every other line."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +107,9 @@ async def trail(
 
     names: dict[uuid.UUID, str] = {}
 
-    async def name_of(person_id: uuid.UUID) -> str:
+    async def name_of(person_id: uuid.UUID | None) -> str:
+        if person_id is None:
+            return NURA
         if person_id == profile.owner_person_id:
             return YOU[words]
         if person_id not in names:
@@ -109,11 +118,20 @@ async def trail(
         return names[person_id]
 
     days: dict[date, TrailDay] = {}
-    seen: set[tuple[date, uuid.UUID, Action, str, Outcome, str | None]] = set()
+    seen: set[tuple[date, uuid.UUID | None, Action, str, Outcome, str | None]] = set()
+    # Nura's own reads (the delivery engine, every few minutes) are folded, per day, into one
+    # line in his words; the chief can open it to see what was checked and how often.
+    checks: dict[date, tuple[datetime, set[datetime], dict[str, int]]] = {}
     for entry in entries:
         at = as_utc(entry.at)
         local_day = at.astimezone(zone).date()
         what = what_words(entry.target, entry.scope, words)
+        if entry.actor_person_id is None and entry.action is Action.READ:
+            latest, minutes, parts = checks.setdefault(local_day, (at, set(), {}))
+            minutes.add(at.replace(second=0, microsecond=0))
+            parts[what] = parts.get(what, 0) + 1
+            checks[local_day] = (max(latest, at), minutes, parts)
+            continue
         key = (
             local_day,
             entry.actor_person_id,
@@ -141,6 +159,21 @@ async def trail(
                     name_of=name_of,
                 ),
                 outcome=entry.outcome,
+            )
+        )
+    for local_day, (latest, minutes, parts) in checks.items():
+        day_words = say_date(local_day, words)
+        days.setdefault(local_day, TrailDay(day=local_day, day_words=day_words)).lines.append(
+            TrailLine(
+                at=latest,
+                who=NURA,
+                sentences=[SYSTEM_CHECKS[words].format(day=day_words, count=len(minutes))],
+                outcome=Outcome.ALLOWED,
+                detail=(
+                    []
+                    if context.is_owner
+                    else [f"{part}: {count}" for part, count in sorted(parts.items())]
+                ),
             )
         )
     return [days[day] for day in sorted(days, reverse=True)]

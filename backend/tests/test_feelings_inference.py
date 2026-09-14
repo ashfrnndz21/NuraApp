@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.triggers.models import Ladder
 from app.keys.context import KeyContext, OutOfScope
 from app.memory.models import EventKind
 from app.reasoning.feelings import strings
@@ -30,7 +31,7 @@ from app.reasoning.feelings.service import (
 from app.reasoning.feelings.words import Answer, FollowUp
 from app.safety.boundary import Surface, boundary_line, is_boundary_line
 from app.safety.models import WhatToDoKind
-from app.safety.red_flags import Escalation, Feeling, Flag
+from app.safety.red_flags import Feeling, Flag
 from app.state.models import Posture
 from app.state.service import current_state
 from tests.family_support import Household, household
@@ -38,6 +39,7 @@ from tests.feelings_support import (
     REGISTRY,
     STORE,
     TRANSCRIBER,
+    VIA,
     blood_pressure,
     happened,
     new_medicine,
@@ -56,7 +58,9 @@ async def _said(
     session: AsyncSession, context: KeyContext, word: Feeling, answer: Answer
 ) -> Answered:
     tapped = await record_tap(
-        session, context=context, word=word, registry=REGISTRY, store=STORE, transcriber=TRANSCRIBER
+        session, context=context, word=word, registry=REGISTRY, store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
     )
     return await answer_tap(
         session,
@@ -66,6 +70,7 @@ async def _said(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
 
 
@@ -86,6 +91,7 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.question is not None and tapped.question.follow_up is FollowUp.SINCE_WHEN
     assert tapped.question.words == "When did it begin?"
@@ -108,6 +114,7 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     note = answered.note
     assert note is not None and answered.red is None
@@ -159,6 +166,7 @@ async def test_the_same_word_as_yesterday_asks_whether_it_is_more(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.question is not None
     assert tapped.question.follow_up is FollowUp.MORE_THAN_YESTERDAY
@@ -171,6 +179,7 @@ async def test_the_same_word_as_yesterday_asks_whether_it_is_more(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert answered.note is not None
     assert answered.note.lines == [
@@ -191,6 +200,7 @@ async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: Async
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.question is not None and tapped.question.follow_up is FollowUp.WORST_EVER
     assert tapped.question.words == "Is it the worst headache of your life?"
@@ -202,6 +212,7 @@ async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: Async
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     note = answered.note
     assert note is not None
@@ -260,16 +271,19 @@ async def test_a_red_word_goes_to_the_red_flag_path_first_and_makes_no_note(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.question is None and tapped.red is not None
     flag = tapped.red.flag
     assert flag.feeling is Feeling.CHEST_TIGHTNESS and flag.suppressed_because is None
     assert set(flag.told) == {str(home.mei.id), str(home.kit.id), str(home.siti.id)}
-    # E13's own path: a notice to everyone on his emergency list, and the ladder, kept.
-    assert tapped.red.notices == 3
+    # The ladder is the one record of who is told (E11-06, ADR 0005): the roster first, and
+    # the card counts who it asked at once.
     ladder = tapped.red.escalation
-    assert ladder is not None
-    assert ladder.roster[0] == {"person_id": str(home.mei.id), "standing": "chief"}
+    assert ladder is not None and ladder.flag_id == flag.id
+    assert ladder.rungs[0]["person_id"] == str(home.mei.id)
+    first = {rung["person_id"] for rung in ladder.rungs if rung["after_minutes"] == 0}
+    assert tapped.red.notices == len(first) >= 1
     assert tapped.red.opens == "not_feeling_well"
     # The whole button, server-side: the urgent what-to-do card, and the day's posture act.
     card = tapped.red.card
@@ -282,7 +296,7 @@ async def test_a_red_word_goes_to_the_red_flag_path_first_and_makes_no_note(
     assert "Ask your doctor." not in tapped.lines
     assert tapped.tap.red and tapped.tap.follow_up is None and tapped.tap.flag_id == flag.id
     assert await _notes(sg) == []
-    assert len((await sg.scalars(select(Escalation))).all()) == 1
+    assert len((await sg.scalars(select(Ladder))).all()) == 1
 
 
 async def test_heavier_is_named_to_the_button_not_heard_back_from_the_words(
@@ -297,6 +311,7 @@ async def test_heavier_is_named_to_the_button_not_heard_back_from_the_words(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert held.red is not None and held.red.flag.feeling is Feeling.WEIGHT_GAIN
     assert held.red.flag.suppressed_because == "no_recent_discharge_on_record"
@@ -310,6 +325,7 @@ async def test_heavier_is_named_to_the_button_not_heard_back_from_the_words(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert raised.red is not None and raised.red.flag.suppressed_because is None
     assert raised.red.card.kind is WhatToDoKind.RED_FLAG
@@ -327,6 +343,7 @@ async def test_a_yes_that_tells_the_red_variant_apart_takes_the_red_flag_path(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.red is None and tapped.question is not None
     assert tapped.question.follow_up is FollowUp.AT_REST
@@ -338,6 +355,7 @@ async def test_a_yes_that_tells_the_red_variant_apart_takes_the_red_flag_path(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert answered.note is None and answered.red is not None
     assert answered.red.flag.feeling is Feeling.BREATHLESS_AT_REST
@@ -349,7 +367,9 @@ async def test_a_helpers_key_starts_the_red_path_and_nothing_else(sg: AsyncSessi
     home, _ = await _home(sg)
     siti = await home.ctx(sg, home.siti)
     tapped = await record_tap(
-        sg, context=siti, word=Feeling.FALL, registry=REGISTRY, store=STORE, transcriber=TRANSCRIBER
+        sg, context=siti, word=Feeling.FALL, registry=REGISTRY, store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert tapped.red is not None and tapped.red.flag.feeling is Feeling.FALL
     assert len((await sg.scalars(select(Flag))).all()) == 1
@@ -361,6 +381,7 @@ async def test_a_helpers_key_starts_the_red_path_and_nothing_else(sg: AsyncSessi
             registry=REGISTRY,
             store=STORE,
             transcriber=TRANSCRIBER,
+            via=VIA,
         )
 
 
@@ -376,6 +397,7 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
             registry=REGISTRY,
             store=STORE,
             transcriber=TRANSCRIBER,
+            via=VIA,
         )
     pain = await record_tap(
         sg,
@@ -384,6 +406,7 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     async with refused_unit(sg, NotAnAnswer):
         await answer_tap(
@@ -394,6 +417,7 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
             registry=REGISTRY,
             store=STORE,
             transcriber=TRANSCRIBER,
+            via=VIA,
         )
     fine = await record_tap(
         sg,
@@ -402,6 +426,7 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert fine.question is None
     assert fine.lines == ("That is good to hear.", "Nura will ask again when something changes.")
@@ -414,6 +439,7 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
             registry=REGISTRY,
             store=STORE,
             transcriber=TRANSCRIBER,
+            via=VIA,
         )
 
 

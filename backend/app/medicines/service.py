@@ -26,7 +26,7 @@ from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read, audited_write
-from app.audit.models import Action
+from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
@@ -590,12 +590,15 @@ async def record_dose_taken(
     anchor: str | None = None,
     amount: float | None = None,
     taken_at: datetime | None = None,
+    source_channel: SourceChannel = SourceChannel.APP,
+    channel: Channel = Channel.APP,
 ) -> DoseTaken:
     """The person's own tap: this medicine, taken now, by whoever is tapping.
 
     No confirm — the tap is the yes — and no change to any line. It is a DOSE_TAKEN event
     written under the medicines scope, so the helper who gives him his tablets can tap it
-    with the medicines key she holds, and a row naming the line. Audited like every write.
+    with the medicines key she holds, and a row naming the line. Audited like every write,
+    on the channel the tap came in on: the app, or a "Taken"/"given" reply on WhatsApp.
 
     `taken_at` is a tap the phone held while it could not reach Nura (E00-08): written at the
     moment he made it, which must be today on the region's clock and not later than now
@@ -612,6 +615,7 @@ async def record_dose_taken(
         context=context,
         purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
         scope=Scope.MEDICINES,
+        channel=channel,
     )
     moment = utcnow()
     tapped = moment if taken_at is None else _tap_moment(taken_at, moment, context)
@@ -628,9 +632,10 @@ async def record_dose_taken(
         Event,
         context,
         Scope.MEDICINES,
+        channel=channel,
         kind=EventKind.DOSE_TAKEN,
         occurred_at=tapped,
-        source_channel=SourceChannel.APP,
+        source_channel=source_channel,
         label=f"taken: {line.generic}",
         artifact_id=None,
         episode_id=None,
@@ -641,6 +646,7 @@ async def record_dose_taken(
         DoseTaken,
         context,
         Scope.MEDICINES,
+        channel=channel,
         line_id=line.id,
         event_id=event.id,
         anchor=anchor,

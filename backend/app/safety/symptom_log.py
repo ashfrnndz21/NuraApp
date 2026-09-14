@@ -42,6 +42,7 @@ from app.channels.safety_strings import (
     severity_said,
 )
 from app.db import as_utc, utcnow
+from app.delivery.triggers.deliver import Via
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.transcribe import Transcriber
@@ -203,6 +204,7 @@ async def log_symptom(
     store: ObjectStore,
     transcriber: Transcriber,
     registry: DrugRegistry,
+    via: Via,
     words: str | None = None,
     audio: bytes | None = None,
     content_type: str | None = None,
@@ -227,16 +229,17 @@ async def log_symptom(
 
     flag_id: uuid.UUID | None = None
     notices: list[Notice] = []
+    notified: list[uuid.UUID] = []
     posture: Posture | None = None
     escalated: Escalated | None = None
     if feeling is not None:
         family = await family_of(session, context=context, profile=profile)
         escalated = await escalate(
-            session, context=context, captured=captured, feeling=feeling, family=family
+            session, context=context, captured=captured, feeling=feeling, family=family, via=via
         )
         if escalated.first is not None:
             flag_id = escalated.first.id
-            notices = escalated.notices
+            notified = list(escalated.asked)
             posture = Posture.ACT
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
 
@@ -270,7 +273,7 @@ async def log_symptom(
         entry=entry,
         posture=posture,
         flag_id=flag_id,
-        notified_person_ids=[notice.to_person_id for notice in notices],
+        notified_person_ids=notified or [notice.to_person_id for notice in notices],
         notices=notices,
         suppressed=list(heard.suppressed),
     )

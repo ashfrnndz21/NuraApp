@@ -14,6 +14,7 @@ import app.channels.whatsapp.models
 import app.consent.models
 import app.delivery.feed.models
 import app.delivery.nudges.models
+import app.delivery.triggers.models
 import app.family.models
 import app.identity.models
 import app.ingestion.connectors.models

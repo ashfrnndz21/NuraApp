@@ -37,6 +37,7 @@ from tests.feelings_support import (
     REGISTRY,
     STORE,
     TRANSCRIBER,
+    VIA,
     blood_pressure,
     happened,
     new_medicine,
@@ -167,6 +168,7 @@ async def test_the_first_week_home_from_hospital_comes_forward_every_day(
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     assert (await _cloud(sg, owner)).because == "tapped_today"
     clock.step(timedelta(days=1))
@@ -182,6 +184,7 @@ async def test_his_own_words_from_the_last_month_come_back(sg: AsyncSession) -> 
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     cloud = await _cloud(sg, owner)
     cramps = next(word for word in cloud.words if word.word is Feeling.CRAMPS)
@@ -202,6 +205,7 @@ async def test_the_strip_goes_after_a_tap_or_fine_today_and_comes_back_after_a_c
         registry=REGISTRY,
         store=STORE,
         transcriber=TRANSCRIBER,
+        via=VIA,
     )
     gone = await _cloud(sg, owner)
     assert gone.show is False and gone.because == "tapped_today"

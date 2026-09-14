@@ -30,6 +30,7 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
+from app.channels.api.capture import capture_language
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.onboarding_schemas import (
     AttachIn,
@@ -151,7 +152,11 @@ async def add_sitting_paper(
         )
     return PaperAddedOut(
         paper=PaperOut.of(PaperView(paper=paper, card=card)),
-        card=ReviewCardOut.of(card, await card_fields(session, context=context, card_id=card.id)),
+        card=ReviewCardOut.of(
+            card,
+            await card_fields(session, context=context, card_id=card.id),
+            language=await capture_language(session, context),
+        ),
     )
 
 

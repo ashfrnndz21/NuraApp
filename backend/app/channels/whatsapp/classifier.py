@@ -25,6 +25,8 @@ class Kind(StrEnum):
     HEALTH_EVENT = "health_event"
     COORDINATION = "coordination"
     ANSWER = "answer"
+    TAKEN = "taken"
+    """The one-word reply that a tablet was had: his "Taken", the helper's "given"."""
     IGNORE = "ignore"
     OTHER = "other"
 
@@ -71,6 +73,13 @@ NO = re.compile(
     r"^\s*(?:no|nope|tidak|tak|salah|bukan|不|不是|不对|错|❌|👎)\s*[.!]?\s*$", re.IGNORECASE
 )
 
+TAKEN_REPLY = re.compile(
+    r"^\s*(?:taken|given|i took it|he took it|sudah ambil|sudah makan ubat|dah ambil|dah makan ubat|"
+    r"sudah beri|sudah bagi|dah beri|dah bagi|吃了|已吃|吃过了|给了|已给)\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+"""The Taken button's words and the helper's "given", alone: a tap said as a reply (E11-01)."""
+
 BLOOD_PRESSURE = re.compile(
     r"(?:\bbp\b|blood pressure|tekanan(?: darah)?|血压)\D{0,24}?(\d{2,3})\s*[/／比]\s*(\d{2,3})"
     r"|(?<![\d/])(\d{2,3})\s*/\s*(\d{2,3})(?![\d/])",
@@ -116,7 +125,7 @@ def _number(text: str) -> float:
 
 
 class RuleClassifier:
-    """Rules, in the order they are tried: ignore, answer, document, health event,
+    """Rules, in the order they are tried: ignore, answer, taken, document, health event,
     coordination, other. The first to match decides."""
 
     def classify(self, *, text: str | None, content_type: str | None) -> Classification:
@@ -127,6 +136,8 @@ class RuleClassifier:
             return Classification(Kind.ANSWER, answer=True, matched="yes")
         if body and NO.match(body):
             return Classification(Kind.ANSWER, answer=False, matched="no")
+        if body and TAKEN_REPLY.match(body):
+            return Classification(Kind.TAKEN, matched="taken")
         if content_type and (IMAGE.match(content_type) or content_type.lower() == PDF):
             return Classification(Kind.DOCUMENT, matched="media")
         if not body:
