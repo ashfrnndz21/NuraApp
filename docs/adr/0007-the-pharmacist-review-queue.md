@@ -27,6 +27,20 @@ The first fifty cards are rendered for real people: they carry names ("Mei can s
 - The residual risk of de-identification is in the values kept on purpose — a number, a day, a medicine's plain name. Alone they identify nobody; together, on one card, a determined reader with other data might narrow it down. The queue is operator scope, in region, and read by the pharmacist only; a per-language balance of samples and a shorter retention after the first fifty are decided are follow-ups.
 - When a staff identity provider exists (SSO), it replaces the token list behind the same `staff` dependency; nothing else changes.
 
+## The clinical-safety review (2026-09-15)
+
+The `clinical-safety-reviewer` pass on this change asked for, and got:
+
+- **A sample never costs him the card.** `items._sample` runs where every card is written, a red flag's included; it now rolls back and logs *any* exception, not only refusals and database errors (`tests/test_review_queue.py::test_a_sample_that_fails_never_costs_him_the_card`).
+- **Names with particles are names.** "Ahmad bin Ali", "Siti binti Hassan", "Siva a/l Kumar" fill a person's slot like "Mei" does (`review.NAME_JOINERS`).
+- **On a learning card or a notice, a line that is plainly a catalogue template loses its people whatever filled the slot** — when at least 40% of its letters are the template's own (`review.TEMPLATE_SHARE`). A compressed sentence that only brushes a thin template ("{name} is {value}.") is kept as written, so "Blood pressure is how hard your blood pushes." is not mistaken for a name.
+- **Amounts are said whole** in the voice script (E22-03): "1,000 mg", "1/2 tablet", "0.5 mg" in all three languages; a fraction with no everyday words stays digits.
+
+Two points are left to the operator rather than changed here:
+
+- **The classification of `review_item.lines` and `.proposed`.** The story asks for review items to classify as operational/de-identified, and they do. The reviewer recommends *health (de-identified)*, because a sample keeps readings, days and his plain names for medicines. Changing it is one line per column in `scripts/data_map.py` and a regenerated data map.
+- **"Your body salt" for potassium** (`trend_strings.NAMES`, now 您身体的盐 in Chinese as in English and Malay) follows the glossary's own row ("A body salt. Doctors call it potassium."). The reviewer notes that salt substitutes are potassium chloride, so "salt" may mislead someone told to watch his potassium. That is the glossary's wording to settle with the pharmacist — the review queue is where it will surface.
+
 ## Alternatives considered
 
 - **A pharmacist `KeyRole`.** Keys are per profile and cut by the owner; the queue is across profiles and nobody's to cut. Rejected.
