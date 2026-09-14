@@ -314,8 +314,9 @@ async def test_the_symptom_log_shows_the_call_clinic_card_by_the_same_rule(
     written, so the card opens "You did right to say so." and says neither."""
     owner = await pa(sg, phone="+6591110066")
     quite = await _log(sg, owner, "dizzy, quite a lot")
-    assert quite.card is not None
-    assert [line.text for line in quite.card] == [
+    # Its own field: `card` stays the red flag's alone, which the app acts on (W7).
+    assert quite.card is None
+    assert [line.text for line in quite.clinic_card] == [
         "You did right to say so.",
         "Call your doctor's clinic today.",
         "Sit down and rest now.",
@@ -325,12 +326,13 @@ async def test_the_symptom_log_shows_the_call_clinic_card_by_the_same_rule(
         "Ask your doctor.",
         "Nura does not decide what is wrong.",
     ]
-    assert_plain(quite.card)
+    assert_plain(quite.clinic_card)
     # A little, this morning: no card — the log's own lines say it back.
-    assert (await _log(sg, owner, "a little tired this morning")).card is None
+    little = await _log(sg, owner, "a little tired this morning")
+    assert little.card is None and little.clinic_card == ()
     # A red flag is the button's urgent card, never the clinic's.
     chest = await _log(sg, owner, "chest pain, a lot, since yesterday")
-    assert chest.card is not None
+    assert chest.card is not None and chest.clinic_card == ()
     said = [line.text for line in chest.card]
     assert "Call the ambulance now on 995." in said
     assert not any("clinic" in text for text in said)

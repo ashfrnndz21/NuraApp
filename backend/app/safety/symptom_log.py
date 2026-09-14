@@ -123,9 +123,12 @@ class Logged:
     notices: list[Notice]
     suppressed: list[Feeling]
     card: tuple[Line, ...] | None = None
-    """What he is shown next: when a red flag was raised, the not-feeling-well button's urgent
-    card (W7); when what he said is the table's middle row — "quite a lot", a day or more, or a
-    new medicine's watch-out — its call-the-clinic card (E13-02). None otherwise."""
+    """When a red flag was raised: the not-feeling-well button's urgent card, the lines he is
+    shown next (W7). None otherwise."""
+    clinic_card: tuple[Line, ...] = ()
+    """When what he said is the not-feeling-well table's middle row — "quite a lot", a day or
+    more, or a new medicine's watch-out: its call-the-clinic card (E13-02), the same rule as the
+    button. Empty otherwise, and never beside a red flag's card."""
 
 
 def _lines(
@@ -260,9 +263,10 @@ async def log_symptom(
                 session, context=context, family=family, asked=escalated.asked, language=lang
             )
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
+    clinic: tuple[Line, ...] | None = None
     if card is None and not heard.any:
         # Not a red flag: the table's middle row, the same rule as the button (E13-02).
-        card = await call_clinic_card(
+        clinic = await call_clinic_card(
             session,
             context=context,
             registry=registry,
@@ -306,6 +310,7 @@ async def log_symptom(
         notices=notices,
         suppressed=list(heard.suppressed),
         card=card,
+        clinic_card=clinic or (),
     )
 
 

@@ -397,8 +397,10 @@ async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(deploy
         headers=his,
     )
     assert calm.status_code == 201, calm.text
-    clinic = [line["text"] for line in calm.json()["card"]]
-    assert calm.json()["flag_id"] is None
+    # The red flag's card stays the red flag's alone (the app acts on it); the middle row is its
+    # own field.
+    assert calm.json()["card"] is None and calm.json()["flag_id"] is None
+    clinic = [line["text"] for line in calm.json()["clinic_card"]]
     assert clinic[0] == "You did right to say so." and "clinic today." in clinic[1]
     assert "If it gets worse, call the ambulance now on 995." in clinic
     assert clinic[-1] == "Nura does not decide what is wrong."
@@ -409,3 +411,4 @@ async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(deploy
     )
     assert everyday.status_code == 201, everyday.text
     assert everyday.json()["card"] is None and everyday.json()["flag_id"] is None
+    assert everyday.json()["clinic_card"] == []

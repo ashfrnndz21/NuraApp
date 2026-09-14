@@ -293,9 +293,11 @@ class SymptomLoggedOut(BaseModel):
     notified_person_ids: list[uuid.UUID]
     suppressed: list[str]
     card: list[LineOut] | None = None
-    """What he is shown next, in order: a red flag's urgent card (the button's), or the table's
-    call-the-clinic card when what he said was "quite a lot", a day or more, or a new medicine's
-    watch-out (E13-02). None otherwise."""
+    """A red flag in what he said: the button's urgent card, in order — what he is shown next."""
+    clinic_card: list[LineOut] = []
+    """What he said is the not-feeling-well table's middle row — "quite a lot", a day or more,
+    or a new medicine's watch-out: the call-the-clinic card, in order (E13-02). Empty otherwise,
+    and never beside `card`."""
 
     @classmethod
     def of(cls, logged: Logged, severity_words: str | None) -> SymptomLoggedOut:
@@ -308,6 +310,7 @@ class SymptomLoggedOut(BaseModel):
             card=None
             if logged.card is None
             else [LineOut(id=line.id, text=line.text) for line in logged.card],
+            clinic_card=[LineOut(id=line.id, text=line.text) for line in logged.clinic_card],
         )
 
 
