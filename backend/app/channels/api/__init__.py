@@ -67,6 +67,7 @@ from app.channels.api import (
 )
 from app.channels.api.deps import Providers, settings_of
 from app.channels.api.refusals import refused
+from app.channels.api.uploads import UploadCaps
 from app.channels.whatsapp import api as whatsapp
 from app.channels.whatsapp.provider import check_whatsapp_provider
 from app.db import KeptSession
@@ -178,6 +179,8 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.providers = providers
     app.add_exception_handler(Refusal, refused)
+    # Every JSON upload is read against its cap before the app parses it (#133).
+    app.add_middleware(UploadCaps, prefixes=("", API_PREFIX))
     api = _api()
     app.include_router(api)
     app.include_router(api, prefix=API_PREFIX, include_in_schema=False)
