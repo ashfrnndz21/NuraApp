@@ -521,6 +521,7 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         "backend/app/family/**",
         "backend/app/medicines/**",
         "backend/app/reasoning/feelings/strings.py",
+        "backend/app/onboarding/**",
         "backend/app/reasoning/visits/strings.py",
         "backend/app/safety/boundary.py",
         "backend/app/safety/recording.py",

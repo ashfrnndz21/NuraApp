@@ -20,7 +20,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2 (ADR 0001), the web half of E21-01, E21-03, E21-04 | **ready** |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
 | 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice (his own note, ADR 0003) and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
-| 15 | Biography | Written by its story | — | planned |
+| 15 | Health biography and the first week | Mei sets up Pa (steward, as CP4) and runs his health biography: the word cloud in Malay; his settings (Malay, simple, large text, voice on, breakfast 07:30, Dr Tan, five conditions) taken by State and the profile at once; the lipid report and the medicine label through review cards; the read-back in Malay with one "no", kept as a dispute beside a fact that still holds; the questions the papers raised; the close's summary in Malay and a first week of 7 prompts from tomorrow at 07:30 SGT; Pa claims and sees the plan (one due at 07:30, one Later) and his settings in State; Kit, a caregiver, reads the settings and is refused changing them, on Pa's trail | E01-02, E01-03, E01-04 | **ready** |
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
@@ -31,7 +31,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13, 14, 16, 17, 18, 21)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13–18, 21)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -939,6 +939,87 @@ checkpoint 13 passed: every step did what docs/checkpoints.md says
 1. **Lift the mark.** As Pa, `POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "notes", "only_me": false}`, then `POST /profiles/{profile_id}/privacy/notes/lift` with that `confirmation_id`. Then, as Mei, `GET /profiles/{profile_id}/notes` works again — her key was never changed, only what it opens — and Pa's `GET /profiles/{profile_id}/trail?language=en` shows both the mark and the lift as "You wrote in what only you can see on …".
 2. **Read the trail in another language.** `GET /profiles/{profile_id}/trail?language=zh` as Pa: the same days and lines, in Chinese, with the day as `9月14日星期一`; nothing on any line is a class name or an id, whichever language.
 
+## How to run checkpoint 15
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Three fresh phone numbers every run — Mei, Pa, Kit his son — so it can be run again on the same `dev.db`. The read-back is answered the way the web's one-thing-a-screen onboarding does it: one line on its own, then the rest. The papers are the two redacted samples of checkpoint 5 (`backend/tests/fixtures/paper/`), sent as their placeholder bytes; nothing is a real photo and no model is called.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0015 adds the onboarding tables), serves on http://127.0.0.1:8000
+make checkpoint N=15    # terminal 2: walks the whole scenario, a few seconds
+```
+
+To see the first morning of his week come due, start the server on a frozen clock (#118): `NURA_FROZEN_CLOCK=2026-09-15T16:00:00+08:00 make dev`. The walk reads the server's clock (`GET /dev/clock`), moves it to 07:30 the next morning (`POST /dev/clock`) and asks what is due. On the wall clock it asks with `?at=` instead.
+
+What you will see (the numbers, ids and dates change each run; the words are in Pa's language, Malay; the first week starts tomorrow on his clock):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ the server's clock reads 2026-09-15T01:24+08:00 in Singapore (frozen, NURA_FROZEN_CLOCK; the walk moves it with POST /dev/clock)
+✓ Mei (+6594445772) registered by phone code and signed in (the code read from the server log)
+✓ Mei set up a profile for Pa (+6593339308) as he asked: she is its steward
+✓ the word cloud answers without signing in (GET /onboarding/conditions?language=ms): 20 words first, 68 in all, in Malay — Darah tinggi, Kolesterol tinggi, Kencing manis, Sakit jantung, Masalah buah pinggang …
+✓ Mei opened the biography (POST /profiles/{id}/biography): step about_you, next save_settings; the words of the step, in Pa's Malay:
+    Sedikit tentang anda
+    Beritahu kami bahasa yang anda paling suka.
+    Tekan apa-apa yang berkaitan dengan kesihatan anda.
+    Ini hanya supaya Nura tahu apa yang perlu diberi perhatian.
+✓ Mei saved Pa's settings (PUT /profiles/{id}/settings): Malay, simple, large text, voice on, breakfast 07:30, Dr Tan, and 5 conditions — Darah tinggi, Kolesterol tinggi, Kencing manis, Masuk hospital tahun lepas, Ubat cair darah
+✓ State took them at once — snapshot 19: spoken and reading language ms, format density simple and preferred voice (the fact the feed goes voice-first on), vision large_text true, setting.birth_decade 1950 (the age band lab trends read), each a fact with Mei's yes on the event of the save; the profile's own language is ms
+✓ Mei added the lipid report (POST …/biography/papers, paper lab_result): a review card of 7 fields, ldl and triglycerides dotted; the biography waited on it (next confirm_cards), and one tap confirmed it with triglycerides corrected to 54
+✓ Mei added the warfarin label (paper medicine): read as a medicine_label marked anticoagulant, and confirmed with one tap from its label photo
+✓ the biography is at the read-back: 12 lines, each a confirmed fact, in Malay:
+    Ini yang Nura faham
+    Anda beritahu kami: Darah tinggi.
+    Anda beritahu kami: Kolesterol tinggi.
+    Anda beritahu kami: Kencing manis.
+    Anda beritahu kami: Masuk hospital tahun lepas.
+    Anda beritahu kami: Ubat cair darah.
+    Doktor anda ialah Dr Tan.
+    Kolesterol anda 230 pada Khamis 7 September 2023.
+    Kolesterol baik anda 73 pada Khamis 7 September 2023.
+    Kolesterol jahat anda 152 pada Khamis 7 September 2023.
+    Label ini untuk ubat cair darah anda, Warfarin.
+    Label ini menyebut 1 biji sekali sehari waktu malam.
+    Label ini kata Dr Lim yang beri ubat ini.
+✓ Mei said no to "Kolesterol jahat anda 152 pada Khamis 7 September 2023." on its own (one line, one screen), then yes to the other 11 at once — a dispute (c0fc1d0f…) opened beside the fact, which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is overwritten
+✓ the questions the papers raised, in Malay (step questions):
+    Beberapa soalan tentang surat-surat anda
+    Mei akan lihat surat itu sekali lagi.
+    Adakah anda periksa tekanan darah di rumah?
+    Adakah anda ada surat hospital anda?
+    Bila ujian gula anda yang terakhir?
+    Bila ujian buah pinggang anda yang terakhir?
+    3 lagi boleh tunggu kemudian.
+✓ Mei kept two of them (POST …/biography/questions): bp_numbers, discharge_letter — no visit yet, so they wait on the sitting for the first one booked
+✓ Mei closed the biography: 2 papers, 13 facts, 1 disputed; the summary, in Malay:
+    Nura simpan 2 surat anda.
+    Nura catat 13 perkara daripada surat-surat anda.
+    Anda kata satu baris tidak betul.
+    Mei akan lihat surat itu sekali lagi.
+    Esok waktu sarapan, Nura akan minta satu perkara lagi.
+    Ada 7 perkara untuk diminta, satu setiap hari.
+    Halaman Hari Ini anda datang daripada apa yang anda beritahu kami.
+✓ Mei booked a visit with Dr Tan on 2026-10-01 (POST …/appointments): the two questions she kept on Day 0, when there was no visit, went on its list in the same request (E05, GET …/appointments/{id}/questions), and the sitting names the visit:
+    Adakah anda periksa tekanan darah di rumah?
+    Adakah anda ada surat hospital anda?
+✓ Pa (+6593339308) registered by phone code and signed in (the code read from the server log)
+✓ Pa claimed the profile with his OK: he is its owner, Mei his chief
+✓ Pa reads his first week (GET /profiles/{id}/plan): 7 prompts, one a day from tomorrow, 2026-09-16, at 07:30 on his clock (Asia/Singapore); nothing is due yet:
+    day 1  2026-09-16T07:30  pending  Nombor tekanan darah biasa anda — Hari ini, ambil gambar mesin tekanan darah anda.
+    day 2  2026-09-17T07:30  pending  Surat hospital anda — Hari ini, ambil gambar surat hospital anda.
+    day 3  2026-09-18T07:30  pending  Ujian gula anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
+    day 4  2026-09-19T07:30  pending  Ujian buah pinggang anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
+    day 5  2026-09-20T07:30  done     Lawatan anda yang seterusnya ke Dr Tan — Hari ini, ambil gambar kad temu janji anda.
+    day 6  2026-09-21T07:30  pending  Lawatan terakhir anda ke Dr Tan — Hari ini, ambil gambar slip lawatan terakhir anda.
+    day 7  2026-09-22T07:30  pending  Kad insurans anda — Hari ini, ambil gambar kad insurans anda.
+✓ tomorrow at 07:30 exactly one prompt is due (bp_numbers); Pa said Later to the insurance card (POST …/plan/later): it goes to the back of the week, asked once more on 2026-09-23 at 07:30; a second Later would retire it
+✓ Pa's State shows his settings: cognitive (language ms, density simple, voice), functional (large text), preference (breakfast 07:30, called Pa), and the five conditions he told in the clinical dimension, as told — no posture moved (posture stable, reading language ms)
+✓ Kit (+6595557536) registered by phone code and signed in (the code read from the server log)
+✓ Kit, his caregiver, reads the settings whole (a key to the record opens the conditions and the doctor); changing them is refused: NotTheirsToSetUp (403), and it is on Pa's trail
+checkpoint 15 passed: every step did what docs/checkpoints.md says
+```
+
+What each part rests on: the settings are `app/onboarding/settings.py` (who reads which part, and the subjects State folds them under, are in its docstring); the steps of the sitting, the read-back and the dispute are `app/onboarding/biography.py`; the questions and the plan's gaps are `app/onboarding/gaps.py` (the part of docs/gaps-and-unlocks.md this backend can act on); the first week and `due_prompts` are `app/onboarding/plan.py`; every line he reads is in `app/onboarding/strings.py` and is checked by `app/onboarding/words.py` as it is served.
 ## How to run checkpoint 14
 
 Two terminals, as before. Checkpoint 14 is a module of its own (`backend/scripts/checkpoints/cp14.py`); `make checkpoint N=14` dispatches to it.

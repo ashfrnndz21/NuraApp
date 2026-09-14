@@ -10,7 +10,7 @@ appointment changes is its status, through `change_appointment_status`, under au
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,6 +118,16 @@ async def list_providers(
     return sorted(found, key=lambda provider: provider.name)
 
 
+AppointmentBookedHook = Callable[[AsyncSession, KeyContext, Appointment], Awaitable[None]]
+
+after_appointment_booked: list[AppointmentBookedHook] = []
+"""What follows a visit being booked, run once it is written, in the same unit of work and
+under the booker's key context — the way `semantic.after_fact_write` follows a fact. The
+biography (E01) registers the hand-over of the questions a person kept before there was a
+visit to ask them at. A hook that raises a `Refusal` refuses the booking; the ones here must
+step aside rather than refuse."""
+
+
 @audited(Action.WRITE, Scope.VISITS, Appointment.__tablename__)
 async def book_appointment(
     session: AsyncSession,
@@ -157,7 +167,7 @@ async def book_appointment(
         confirmation_id,
         AppointmentDraft(provider_id=provider_id, scheduled_at=scheduled_at, purpose=named),
     )
-    return await audited_write(
+    visit = await audited_write(
         session,
         Appointment,
         context,
@@ -170,6 +180,9 @@ async def book_appointment(
         confirmed_by_person_id=yes.person_id,
         booked_at=utcnow(),
     )
+    for followed in after_appointment_booked:
+        await followed(session, context, visit)
+    return visit
 
 
 @audited(Action.WRITE, Scope.VISITS, Appointment.__tablename__)

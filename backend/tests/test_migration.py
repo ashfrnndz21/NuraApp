@@ -48,6 +48,15 @@ from app.memory.models import (
     ProviderNote,
 )
 from app.notes.models import Note
+from app.onboarding.models import (
+    ActivationPlan,
+    BiographyLine,
+    BiographyPaper,
+    BiographyQuestion,
+    BiographySession,
+    PlanPrompt,
+    ProfileSettings,
+)
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
 from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
@@ -119,6 +128,13 @@ TABLES: tuple[Table, ...] = (
     FeelingNote.__table__,
     Nudge.__table__,
     NudgeResponse.__table__,
+    ProfileSettings.__table__,
+    BiographySession.__table__,
+    BiographyPaper.__table__,
+    BiographyLine.__table__,
+    BiographyQuestion.__table__,
+    ActivationPlan.__table__,
+    PlanPrompt.__table__,
     Notice.__table__,
     WhatToDoCard.__table__,
     EmergencyCard.__table__,
@@ -259,6 +275,13 @@ def test_the_migrations_build_the_tables_the_models_declare(
             FeelingNote,
             Nudge,
             NudgeResponse,
+            ProfileSettings,
+            BiographySession,
+            BiographyPaper,
+            BiographyLine,
+            BiographyQuestion,
+            ActivationPlan,
+            PlanPrompt,
             TrendCard,
             Routine,
             AppointmentProposal,
