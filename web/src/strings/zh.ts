@@ -790,7 +790,7 @@ export const zh = {
     NoSuchRecording: "这段录音已经不在这里了。",
     NotAClip: "Nura找不到录音的这一部分。",
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
-    NotAChief: "只有本人或负责的家人可以做这件事。",
+    NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
   },
 } satisfies Strings;

@@ -27,6 +27,8 @@ the plan's `held` rather than applied in silence:
    before they expired, and that kind is held for seven days from the second.
 5. **Dismissals feed ranking.** Every "Not today" on a kind in the last week moves that kind
    down the day's order.
+6. **One reminder of a visit a day.** On a day the visit's logistics card (E05-03) is already
+   on his feed, the anticipation nudge would say it again: it is held, "logistics_card_says_it".
 
 The order itself is State's (docs/smart-nudges.md §1): after a change, the check-in and the
 pattern come first; in a steady week, recognition and presence do. A visit tomorrow comes

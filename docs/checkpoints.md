@@ -923,14 +923,14 @@ What you will see (the numbers, ids and days change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Pa (+6591223782) registered by phone code and signed in (the code read from the server log)
-✓ Mei (+6592239645) registered by phone code and signed in (the code read from the server log)
-✓ Kit (+6593248450) registered by phone code and signed in (the code read from the server log)
-✓ Siti (+6594253583) registered by phone code and signed in (the code read from the server log)
+✓ Pa (+6591225394) registered by phone code and signed in (the code read from the server log)
+✓ Mei (+6592234354) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6593249153) registered by phone code and signed in (the code read from the server log)
+✓ Siti (+6594256768) registered by phone code and signed in (the code read from the server log)
 ✓ Pa opened his profile: Mei his chief (every part), Kit a viewer (the visits, the readings), Siti a helper (the medicines)
 ✓ Dr Tan in Pa's directory at Gleneagles Hospital, 6A Napier Road; the visit tomorrow, Wednesday 16 September at 9, on Pa's yes; Mei's note about the place ("parking at B2") and Mei on the roster tomorrow from 7 to 12
 ✓ Pa's blood pressure tablet from its label, and his hospital letter confirmed: both are things to bring
-✓ GET …/appointments/{appt}/logistics: the card for tomorrow, from the record and State (state eff0552c…), every line through the plain-words verifier:
+✓ GET …/appointments/{appt}/logistics: the card for tomorrow, from the record and State (state f306b378…), every line through the plain-words verifier:
     [when  ] You see Dr Tan on Wednesday 16 September at 9 in the morning.
     [place ] Dr Tan is at Gleneagles Hospital, 6A Napier Road.
     [note  ] Mei wrote a note about getting to Dr Tan.
@@ -941,7 +941,7 @@ What you will see (the numbers, ids and days change each run):
              Mei's note: "parking at B2"  (as she wrote it)
     driver: suggested — Mei, on the roster then; needs the chief's yes: True
 ✓ the suggestion is nothing until a yes: without one, NotAConfirmerHere (400); Kit's viewer key does not reach the family list, so it cannot mint one, OutOfScope (403, family). Mei's yes (subject drive) made the task "drive Pa to Dr Tan", hers, due at the visit; the card now says: "Mei will drive you to Dr Tan on Wednesday 16 September."
-✓ Mei's list (Pa's feed keeps quiet at night): the visit_logistics card the day before — "Getting to Dr Tan tomorrow", its lines the card's, rendered from state eff0552c…, no boundary (it infers nothing), never autoplayed
+✓ Mei's list (Pa's feed keeps quiet at night): the visit_logistics card the day before — "Getting to Dr Tan tomorrow", its lines the card's, rendered from state f306b378…, no boundary (it infers nothing), never autoplayed
 ✓ no recording without Pa's agreement: the notice and the upload are both refused, ConsentWithheld (403), and nothing is kept; Kit's viewer key is refused before the room is told anything, NotTheirsToChangeVisits (403)
 ✓ Pa agreed to Nura listening (POST …/consents/recording); the notice Mei's phone says first, to Dr Tan by name:
     Nura will listen now.
@@ -949,7 +949,7 @@ What you will see (the numbers, ids and days change each run):
     Only you and those you let in can hear it.
     Is that OK, Dr Tan?
     and on a no: Nura will not listen today. / Mei will write the notes by hand.
-✓ Mei's recording, sent once on Stop (POST …/recording, audio/webm;codecs=opus, 66 s): a consult voice artefact a195f7cd… on the RECORDING consent 1cd4d5a9…, heard at 0.93, and who spoke when — 11 stretches, no words in any row:
+✓ Mei's recording, sent once on Stop (POST …/recording, audio/webm;codecs=opus, 66 s): a consult voice artefact 0b67319e… on the RECORDING consent 65c78c92…, heard at 0.93, and who spoke when — 11 stretches, no words in any row:
       0.0–8.6   unknown
       8.6–10.4  doctor  ← Dr Tan's yes, the first seconds after the notice
      10.4–19.8  doctor
@@ -961,7 +961,7 @@ What you will see (the numbers, ids and days change each run):
      55.1–59.3  patient
      59.3–63.0  doctor
      63.0–65.8  family
-✓ the post-visit card from the transcript (summary 19232fc4…), each line with where in the recording Dr Tan said it:
+✓ the post-visit card from the transcript (summary 0fb39d0f…), each line with where in the recording Dr Tan said it:
      19.8–28.9  Ask Dr Tan about the new amount of the water pill (frusemide).
      28.9–36.2  Every morning, stand on the scale before breakfast.
      36.2–39.0  Every evening, eat a lighter dinner.
@@ -972,17 +972,17 @@ What you will see (the numbers, ids and days change each run):
      47.5–55.1  You see Dr Tan again on Thursday 15 October at 10 in the morning.
      47.5–55.1  Mei will book it.
      10.4–19.8  Dr Tan wrote down your blood pressure.
-✓ Mei asks "what did Dr Tan say about the water pill": "Dr Tan talked about this on Wednesday 16 September." — citing the recording a195f7cd… from 19.8 to 28.9 seconds, the button "Hear what Dr Tan said"
+✓ Mei asks "what did Dr Tan say about the water pill": "Dr Tan talked about this on Wednesday 16 September." — citing the recording 0b67319e… from 19.8 to 28.9 seconds, the button "Hear what Dr Tan said"
 ✓ the clip (GET …/artifacts/{a}/clip?start=19.8&end=28.9): the recording's 47 bytes, audio/webm, X-Media-Fragment t=19.8,28.9 — the phone plays that stretch; Kit, who reads the visits, hears it; Siti's helper key is refused, OutOfScope (403, visits); a stretch outside the recording is NotAClip (400)
 ✓ Pa reads his trail (500 lines); every refusal of this walk is on it:
-    2026-09-14T18:34:07    Pa  read visits consult_recording  refused NotAClip
-    2026-09-14T18:34:07  Siti  read visits consult_recording  refused OutOfScope
-    2026-09-14T18:34:06   Kit  read visits consult_recording  refused NotTheirsToChangeVisits
-    2026-09-14T18:34:06   Mei  write visits consult_recording  refused ConsentWithheld
-    2026-09-14T18:34:06   Mei  read visits consent  refused ConsentWithheld
-    2026-09-14T18:34:05   Mei  read visits consult_recording  refused ConsentWithheld
-    2026-09-14T18:34:02   Kit  read family visit_logistics  refused OutOfScope
-    2026-09-14T18:34:02   Mei  write family visit_logistics  refused NotAConfirmerHere
+    2026-09-14T18:42:50    Pa  read visits consult_recording  refused NotAClip
+    2026-09-14T18:42:50  Siti  read visits consult_recording  refused OutOfScope
+    2026-09-14T18:42:50   Kit  read visits consult_recording  refused NotTheirsToChangeVisits
+    2026-09-14T18:42:50   Mei  write visits consult_recording  refused ConsentWithheld
+    2026-09-14T18:42:50   Mei  read visits consent  refused ConsentWithheld
+    2026-09-14T18:42:50   Mei  read visits consult_recording  refused ConsentWithheld
+    2026-09-14T18:42:49   Kit  read family visit_logistics  refused OutOfScope
+    2026-09-14T18:42:49   Mei  write family visit_logistics  refused NotAConfirmerHere
 checkpoint 22 passed: every step did what docs/checkpoints.md says
 ```
 
