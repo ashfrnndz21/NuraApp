@@ -325,6 +325,62 @@ async def morning_supply(
     return state, [item for item in ordered if item.supply in (Supply.NOW, Supply.TODAY)]
 
 
+CATEGORY_OF: dict[CardType, str] = {
+    CardType.FLAG: "alert",
+    CardType.NOW: "reminder",
+    CardType.VISIT: "reminder",
+    CardType.REORDER: "reminder",
+    CardType.MEMO: "reminder",
+    CardType.READING: "insight",
+    CardType.NOTICE: "insight",
+    CardType.STORY: "insight",
+    CardType.LEARNING: "insight",
+}
+"""What each card is to "today's top three" (E11-02): an alert, a reminder, or an insight.
+The gate, the duty card and a doctor's question are none of the three."""
+CATEGORY_ORDER: tuple[str, ...] = ("alert", "reminder", "insight")
+TOP = 3
+
+
+def _by_category(item: FeedItem) -> tuple[int, tuple[int, int, datetime]]:
+    return (CATEGORY_ORDER.index(CATEGORY_OF[item.type]), _order_key(item))
+
+
+async def top_three(
+    session: AsyncSession, *, context: KeyContext, engine: Engine
+) -> Page:
+    """Today's top three for this key (E11-02): alerts first, then reminders, then insights,
+    and inside each the feed's own order — from the supply this key gets, with the caps, the
+    quiet hours and his "not for me" applied exactly as the feed applies them. Every card
+    carries its why. Nothing is written as a page: the first page of the feed is the page."""
+    audience = audience_of(context)
+    day = today_for(context)
+    if await can_compose(context):
+        await refresh(session, context=context, engine=engine)
+    found = await audited_read(
+        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > day.now,)
+    )
+    visible = _visible_to(found, context)
+    held: Counter[str] = Counter()
+    quiet = False
+    if audience is DeliverTo.PATIENT:
+        quiet = in_quiet_hours(day.local)
+        declined = await _declined_today(session, context=context, day=day)
+        ordered, held = _patient_supply(visible, day=day, declined=declined, quiet=quiet)
+    else:
+        ordered = _caregiver_supply(visible)
+    chosen = sorted((item for item in ordered if item.type in CATEGORY_OF), key=_by_category)[:TOP]
+    return Page(
+        audience=audience,
+        items=tuple(chosen),
+        cursor=None,
+        next_cursor=None,
+        quiet=quiet,
+        held_by_caps=dict(held),
+        status=await _statuses(session, context=context, items=chosen, held=held),
+    )
+
+
 class NoCachedPage(Refusal):
     """No page has been rendered for this person yet: nothing to open offline."""
 
@@ -391,4 +447,9 @@ def item_json(item: FeedItem, status: str) -> dict[str, Any]:
         "day": item.day,
         "created_at": as_utc(item.created_at).isoformat(),
         "expires_at": as_utc(item.expires_at).isoformat(),
+        "number": item.number,
+        "direction": item.direction,
+        "colour": item.colour,
+        "action": item.action,
+        "category": CATEGORY_OF.get(item.type),
     }

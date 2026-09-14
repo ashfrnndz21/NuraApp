@@ -12,7 +12,7 @@ import hashlib
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -21,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.whatsapp.provider import WhatsAppProvider
 from app.db import unit_of_work
 from app.delivery.feed.compress import Compressor, Searcher
+from app.delivery.push import NoDevices, PushSender
+from app.delivery.voice import FixtureVoice, Voice
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
@@ -58,6 +60,12 @@ class Providers:
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""
+    voice: Voice = field(default_factory=FixtureVoice)
+    """What says a card aloud (E11-04), behind its port (`app.delivery.voice`); `main` passes
+    the fixture on a dev run and refuses to start anywhere else until a speech provider exists."""
+    push: PushSender = field(default_factory=NoDevices)
+    """What reaches a person's app with a content-free push (`app.delivery.push`); nobody
+    until the app registers devices, so the app channel falls through."""
 
 
 def settings_of(request: Request) -> Settings:

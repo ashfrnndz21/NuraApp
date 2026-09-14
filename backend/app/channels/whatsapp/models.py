@@ -38,6 +38,10 @@ class MessageKind(StrEnum):
     CHECK_IN_ANSWER = "check_in_answer"
     REPLY = "reply"
     TEMPLATE = "template"
+    VOICE_NOTE = "voice_note"
+    """A card's spoken twin, sent inside the window (E11-04)."""
+    TAKEN = "taken"
+    """A "Taken" or "given" reply that wrote a Taken tap (E11-01)."""
 
 
 class WhatsAppThread(ProfileScoped, Base):

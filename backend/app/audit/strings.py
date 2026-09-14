@@ -47,6 +47,9 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "task": "what the family will do",
         "privacy": "what only you can see",
         "document": "your papers",
+        "delivery": "the messages Nura sent",
+        "delivery_ladder": "who Nura asked to check on you",
+        "delivery_settings": "when Nura sends you things",
     },
     "ms": {
         "profile": "rekod anda",
@@ -63,6 +66,9 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "task": "apa yang keluarga akan buat",
         "privacy": "apa yang hanya anda boleh lihat",
         "document": "surat-surat anda",
+        "delivery": "mesej yang Nura hantar",
+        "delivery_ladder": "siapa yang Nura minta tengok anda",
+        "delivery_settings": "bila Nura hantar sesuatu kepada anda",
     },
     "zh": {
         "profile": "您的记录",
@@ -79,6 +85,9 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "task": "家人要做的事",
         "privacy": "只有您能看的部分",
         "document": "您的病历文件",
+        "delivery": "Nura 发出的消息",
+        "delivery_ladder": "Nura 请谁来看您",
+        "delivery_settings": "Nura 什么时候给您发东西",
     },
 }
 """His words for the tables whose scope's words would say the wrong thing. Every other

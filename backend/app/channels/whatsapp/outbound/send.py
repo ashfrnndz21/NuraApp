@@ -31,9 +31,11 @@ from app.channels.whatsapp.strings import REPLIES, reply
 from app.channels.whatsapp.templates import TEMPLATES, language_of, render
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
+from app.delivery.voice import Voice, voiced
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.identity.models import Person, Profile
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.safety.plain_words import verify
@@ -226,6 +228,88 @@ async def send(
         kind=how,
         template_name=template_name,
         catalogue_key=catalogue_key,
+        text=text,
+        message_id=row.id,
+        provider_message_id=provider_id,
+    )
+
+
+async def send_voice_note(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    to_person: Person,
+    lines: Sequence[str],
+    provider: WhatsAppProvider,
+    voice: Voice,
+    store: ObjectStore,
+    language: str | None = None,
+    state: StateView | None = None,
+) -> Delivered:
+    """A card's spoken twin as a WhatsApp voice note (E11-04), through the same checks as
+    every send: his WHATSAPP consent, plain words, a message row by reference, a SHARE line.
+
+    A voice note is not a template, so it goes only inside the 24-hour window
+    (`OutsideTheWindow` otherwise): outside it the card goes as its template and the twin
+    waits in his feed, where a tap plays it. The audio comes from the one `Voice` port and
+    the region's cache (`app.delivery.voice.voiced`), under thirty seconds or not at all.
+    """
+    if not to_person.phone_e164:
+        raise NoNumber(f"person {to_person.id} has no phone number")
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.WHATSAPP,
+        scope=Scope.SEND,
+        channel=Channel.WHATSAPP,
+    )
+    moment = utcnow()
+    lang = language_of(language or to_person.language)
+    thread = await thread_for(session, context=context, person=to_person)
+    if not inside_window(thread, moment):
+        raise OutsideTheWindow("a voice note is not a template: it needs the 24-hour window")
+    text = "\n".join(lines)
+    failures = [finding for finding in verify(text, lang) if finding.severity == "fail"]
+    if failures:
+        raise NotPlainWords(f"voice note in {lang}: {failures[0].problem}")
+    said = await voiced(
+        store, voice, profile_id=context.profile_id, region=context.region, lines=lines,
+        language=lang,
+    )
+    provider_id = await provider.send_audio(
+        to_person.phone_e164, said.spoken.audio, said.spoken.content_type
+    )
+    row = await audited_write(
+        session,
+        WhatsAppMessage,
+        context,
+        Scope.PROFILE,
+        channel=Channel.WHATSAPP,
+        thread_id=thread.id,
+        direction=Direction.OUTBOUND,
+        kind=MessageKind.VOICE_NOTE,
+        person_id=to_person.id,
+        at=moment,
+        provider_message_id=provider_id,
+        state_id=None if state is None else state.id,
+    )
+    await record_share(
+        session,
+        context=context,
+        scope=Scope.SEND,
+        target=MESSAGE,
+        channel=Channel.WHATSAPP,
+        shared_with_person_id=to_person.id,
+        target_id=row.id,
+    )
+    thread.last_outbound_at = moment
+    await session.flush()
+    return Delivered(
+        to_person_id=to_person.id,
+        to_e164=to_person.phone_e164,
+        kind="audio",
+        template_name=None,
+        catalogue_key=None,
         text=text,
         message_id=row.id,
         provider_message_id=provider_id,

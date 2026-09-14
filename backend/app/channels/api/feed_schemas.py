@@ -52,6 +52,16 @@ class FeedItemOut(BaseModel):
     day: str
     created_at: datetime
     expires_at: datetime
+    number: str | None = None
+    """The card grammar (E11-03): the one number the card shows, as digits, or null."""
+    direction: str | None = None
+    """up, down or same beside the number, or null."""
+    colour: str | None = None
+    """The State wash the card sits on: stable, watch or act. Never red."""
+    action: str | None = None
+    """The card's one action: taken, hear, keep_going, call, ask_to_order, open, ask_the_doctor."""
+    category: str | None = None
+    """For today's top three (E11-02): alert, reminder or insight."""
 
 
 class FeedPageOut(BaseModel):

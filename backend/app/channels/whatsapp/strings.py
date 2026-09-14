@@ -171,6 +171,46 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Saya sudah tulis.", "Kalau jadi lebih teruk, telefon {doctor} hari ini."),
         "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
     },
+    "taken_patient": {
+        "en": ("Thank you, I wrote it down.", "{who} can see it too."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{who} juga boleh melihatnya."),
+        "zh": ("谢谢，我记下了。", "{who}也能看到。"),
+    },
+    "taken_alone": {
+        "en": ("Thank you, I wrote it down.",),
+        "ms": ("Terima kasih, saya sudah tulis.",),
+        "zh": ("谢谢，我记下了。",),
+    },
+    "given": {
+        "en": ("Thank you, I wrote it down.", "{name} had {medicine}."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{name} sudah ambil {medicine}."),
+        "zh": ("谢谢，我记下了。", "{name}吃了{medicine}。"),
+    },
+    "taken_nothing_due": {
+        "en": ("There is no tablet to take right now.", "I did not write anything down."),
+        "ms": ("Tiada ubat untuk diambil sekarang.", "Saya tidak tulis apa-apa."),
+        "zh": ("现在没有要吃的药。", "我没有记下任何东西。"),
+    },
+    "flag_seen": {
+        "en": ("Thank you, you have it now.", "I will not ask anyone else."),
+        "ms": ("Terima kasih, anda uruskan sekarang.", "Saya tidak akan tanya orang lain."),
+        "zh": ("谢谢，现在由您来处理。", "我不会再问别人了。"),
+    },
+    # A red flag heard on a profile whose patient has not agreed to WhatsApp: the flag is
+    # raised and put first in the family's app; the poster gets this line and nothing else.
+    "red_flag_fixed": {
+        "en": (
+            "This one we do not wait for.",
+            "I put it first in the family's app.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "Saya letak ia paling atas dalam aplikasi keluarga.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": ("这个不能等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
+    },
     "not_understood": {
         "en": ("I did not understand that.", "Send a photo, or your blood pressure as 2 numbers."),
         "ms": ("Saya tidak faham.", "Hantar gambar, atau tekanan darah anda sebagai 2 nombor."),

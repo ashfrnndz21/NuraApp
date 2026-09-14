@@ -20,7 +20,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from app.audit.models import Channel
 from app.audit.trail import NotTheirsToRead
@@ -213,6 +213,8 @@ class DevInboundIn(BaseModel):
     media_id: str | None = Field(default=None, max_length=80)
     content_type: str | None = Field(default=None, max_length=128)
     group_id: str | None = Field(default=None, max_length=80)
+    at: AwareDatetime | None = None
+    """When the message was sent, as a provider's webhook carries it; now when not given."""
 
 
 @router.post("/dev/whatsapp/inbound")
@@ -226,7 +228,7 @@ async def dev_inbound(body: DevInboundIn, request: Request, session: Db) -> Hand
         media_id=body.media_id,
         content_type=body.content_type,
         group_id=body.group_id,
-    ).as_message(utcnow())
+    ).as_message(body.at or utcnow())
     handled = await handle_inbound(
         session,
         settings=settings,

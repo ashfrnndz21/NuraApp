@@ -52,6 +52,10 @@ from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, Wou
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
+from app.delivery.feed.twin import NotInThatLanguage
+from app.delivery.triggers.deliver import NoOneToActFor
+from app.delivery.triggers.engine import NothingToSay
+from app.delivery.triggers.ladder import NotOnTheLadder
 from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -96,6 +100,12 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
     (NoSuchItem, 404),
+    (NoOneToActFor, 404),
+    (NothingToSay, 404),
+    # Only someone a flag's ladder reached, whose key covers it, answers it (E11-06).
+    (NotOnTheLadder, 403),
+    # A card's spoken twin is said in the card's own language (E11-04).
+    (NotInThatLanguage, 409),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),

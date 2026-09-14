@@ -17,6 +17,7 @@ from app.channels.whatsapp import models as whatsapp_models  # noqa: F401
 from app.consent import models as consent_models  # noqa: F401
 from app.db import Base
 from app.delivery.feed import models as feed_models  # noqa: F401
+from app.delivery.triggers import models as delivery_models  # noqa: F401
 from app.family import models as family_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
 from app.ingestion import models as ingestion_models  # noqa: F401

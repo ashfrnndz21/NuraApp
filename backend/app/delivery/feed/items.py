@@ -1,6 +1,6 @@
 """The one way a feed item is written.
 
-Four things happen here and nowhere else. The lines are checked against the plain-words
+Five things happen here and nowhere else. The lines are checked against the plain-words
 standard in the profile's language — headline, body, voice and why, every one — and a card
 with a failing line is not made (`NotPlainWords`, written to the trail). A learning card is
 checked against the allowlist: no source, or one that is not usable, and it is not made
@@ -8,7 +8,8 @@ checked against the allowlist: no source, or one that is not usable, and it is n
 notice) ends on the boundary line it carries, or it is not made (`NoBoundaryLine`, E16-01).
 And the row is written through `render_from_state`, which stamps the State it was rendered
 from, refuses a State the record has moved past, and writes the line on the row — refusing
-it on a card that infers nothing. `autoplay` is written false, always: the schema carries
+it on a card that infers nothing. And the card grammar is checked (E11-03, `grammar`): one
+number, one direction, one colour — the State wash — and one action, written as columns. `autoplay` is written false, always: the schema carries
 the promise the pager keeps.
 """
 
@@ -24,6 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
+from app.delivery.feed.grammar import (
+    Action,
+    Direction,
+    Grammar,
+    action_for,
+    colour_for,
+)
+from app.delivery.feed.grammar import check as check_grammar
 from app.delivery.feed.models import (
     CAPS_OF,
     SUPPLY_OF,
@@ -143,6 +152,9 @@ async def create_item(
     source: Source | None = None,
     cite: dict[str, Any] | None = None,
     search_job_id: uuid.UUID | None = None,
+    number: str | None = None,
+    direction: Direction | None = None,
+    action: Action | None = None,
 ) -> FeedItem:
     """Write one card, or refuse it.
 
@@ -163,6 +175,13 @@ async def create_item(
         surface = SURFACE_OF.get(type)
         if surface is not None and not _ends_on_its_line(lines):
             raise NoBoundaryLine(f"a {type.value} card ends on the boundary line it carries")
+        grammar = Grammar(
+            colour=colour_for(state.posture),
+            action=action or action_for(type, scope, deliver_to),
+            number=number,
+            direction=direction,
+        )
+        check_grammar(grammar, headline=lines.headline, body=lines.body)
         return await render_from_state(
             session,
             FeedItem,
@@ -190,4 +209,8 @@ async def create_item(
             day=day,
             dedupe_key=dedupe_key,
             expires_at=expires_at,
+            number=grammar.number,
+            direction=None if grammar.direction is None else grammar.direction.value,
+            colour=grammar.colour.value,
+            action=grammar.action.value,
         )

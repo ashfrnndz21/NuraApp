@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,13 +30,14 @@ from app.audit.access import audited_read
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.outbound.send import Delivered, send
+from app.channels.whatsapp.outbound.send import Delivered, send, send_voice_note
 from app.channels.whatsapp.strings import YOUR_DOCTOR
 from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType
 from app.delivery.feed.rank import morning_supply
 from app.delivery.feed.search import Engine
+from app.delivery.voice import TooLongToSay
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.keys.context import KeyContext, profile_by_id, resolve_key_context
@@ -93,6 +95,83 @@ def _today(context: KeyContext, language: str) -> str:
     return say_date(utcnow().astimezone(REGION_TZ[context.region]).date(), language)
 
 
+@dataclass(frozen=True, slots=True)
+class Morning:
+    """The morning card, composed and not yet sent: who, in which language, the lines, the
+    State they came from, and whether it is a quiet day (nothing on his list, nothing new)."""
+
+    profile: Profile
+    owner: Person
+    context: KeyContext
+    language: str
+    state: StateView
+    lines: list[str]
+    quiet: bool
+
+
+async def compose_morning(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    profile_id: uuid.UUID,
+) -> Morning:
+    """What the morning card will say, from today's feed and State. Nothing is sent."""
+    profile, owner, context = await _owner(session, settings=settings, profile_id=profile_id)
+    language = language_of(profile.language)
+    state, lines, quiet = await _morning_lines(
+        session, context=context, providers=providers, language=language
+    )
+    return Morning(
+        profile=profile,
+        owner=owner,
+        context=context,
+        language=language,
+        state=state,
+        lines=lines,
+        quiet=quiet,
+    )
+
+
+async def send_morning(
+    session: AsyncSession, morning: Morning, *, providers: Providers, number: BusinessNumber
+) -> Delivered:
+    """Send a composed morning card: the approved template outside the window, text inside
+    it — and inside it, its spoken twin after it as a voice note (E11-04, E11-10). Outside
+    the window the twin cannot go (a voice note is not a template); it waits in his feed."""
+    sent = await send(
+        session,
+        context=morning.context,
+        to_person=morning.owner,
+        kind="morning_card",
+        params={
+            "name": morning.profile.display_name,
+            "day": _today(morning.context, morning.language),
+            "doses": "\n".join(morning.lines),
+        },
+        provider=providers.whatsapp,
+        number=number,
+        language=morning.language,
+        state=morning.state,
+    )
+    if sent.kind == "text":
+        try:
+            await send_voice_note(
+                session,
+                context=morning.context,
+                to_person=morning.owner,
+                lines=sent.text.splitlines(),
+                provider=providers.whatsapp,
+                voice=providers.voice,
+                store=providers.object_store,
+                language=morning.language,
+                state=morning.state,
+            )
+        except TooLongToSay:
+            pass  # a long list is read, not heard; the card itself has gone
+    return sent
+
+
 async def run_morning(
     session: AsyncSession,
     *,
@@ -103,28 +182,15 @@ async def run_morning(
 ) -> Delivered:
     """The morning card to the patient: what his feed leads with today, and one thing to
     measure. The doses slot carries the lines; the State is the one the cards came from."""
-    profile, owner, context = await _owner(session, settings=settings, profile_id=profile_id)
-    language = language_of(profile.language)
-    state, lines = await _morning_lines(
-        session, context=context, providers=providers, language=language
+    morning = await compose_morning(
+        session, settings=settings, providers=providers, profile_id=profile_id
     )
-    doses = "\n".join(lines)
-    return await send(
-        session,
-        context=context,
-        to_person=owner,
-        kind="morning_card",
-        params={"name": profile.display_name, "day": _today(context, language), "doses": doses},
-        provider=providers.whatsapp,
-        number=number,
-        language=language,
-        state=state,
-    )
+    return await send_morning(session, morning, providers=providers, number=number)
 
 
 async def _morning_lines(
     session: AsyncSession, *, context: KeyContext, providers: Providers, language: str
-) -> tuple[StateView, list[str]]:
+) -> tuple[StateView, list[str], bool]:
     """The lines between the day and the thing to measure: the now and today cards of his
     feed, in its order and under its caps. The now card about his tablets is said as today's
     doses from the medicines module (the app's card points at the list; a thread has no
@@ -142,17 +208,20 @@ async def _morning_lines(
     )
     doses = [slot.card for slot in slots]
     lines: list[str] = []
+    quiet = not doses
     for item in items:
         if item.type is CardType.NOW and item.scope is not Scope.VISITS:
             if doses:
                 lines.extend(doses)
             elif item.scope is Scope.MEDICINES:
+                quiet = False
                 lines.extend(TABLETS_ON_YOUR_LIST[language])
             else:
                 lines.append(NO_DOSES_TODAY[language])
         else:
+            quiet = False
             lines.extend(item.body)
-    return state, lines or doses or [NO_DOSES_TODAY[language]]
+    return state, lines or doses or [NO_DOSES_TODAY[language]], quiet
 
 
 async def run_feeling_check_in(
@@ -277,7 +346,10 @@ async def run_family_notice(
 
 
 __all__ = [
+    "Morning",
     "NoPatientYet",
+    "compose_morning",
+    "send_morning",
     "run_family_notice",
     "run_feeling_check_in",
     "run_morning",

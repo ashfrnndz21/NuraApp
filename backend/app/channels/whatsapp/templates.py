@@ -2,8 +2,9 @@
 
 Outside the 24-hour customer-service window a business may send nothing but a template Meta
 has approved, with its slots filled. So everything proactive — the morning card, the visit
-card, the reorder, the family digest, the feeling check-in, the red-flag notice — is one of
-these six, submitted once and named here: its slots, and the words a patient reads in each
+card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
+ladder's two asks, the reorder to the family, the count, the papers waiting and a family
+message (E11) — is one of these twelve, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -115,6 +116,94 @@ RED_FLAG_NOTICE = Template(
     },
 )
 
+# @patient
+DOSE_REMINDER = Template(
+    "dose_reminder",
+    ("name", "medicine", "anchor"),
+    {
+        "en": "{name}, this is Nura.\nHave you had {medicine} {anchor}?\nWhen you have, reply Taken.",
+        "ms": "{name}, ini Nura.\nSudahkah anda ambil {medicine} {anchor}?\nBila sudah, balas Sudah ambil.",
+        "zh": "{name}，我是 Nura。\n您{anchor}吃了{medicine}吗？\n吃了的话，请回复“吃了”。",
+    },
+)
+"""The first rung of the ladder (E11-06): the tablet's window closed with no Taken."""
+
+# @patient
+DOSE_CHECK = Template(
+    "dose_check",
+    ("name", "medicine", "anchor"),
+    {
+        "en": (
+            "{name} has not said Taken for {medicine} {anchor} yet.\n"
+            "Please check on {name}.\n"
+            "When {name} has had it, reply given."
+        ),
+        "ms": (
+            "{name} belum kata Sudah ambil untuk {medicine} {anchor}.\n"
+            "Tolong tengok {name}.\n"
+            "Bila {name} sudah ambil, balas sudah beri."
+        ),
+        "zh": "{name}{anchor}的{medicine}还没有说“吃了”。\n请去看看{name}。\n{name}吃了以后，请回复“给了”。",
+    },
+)
+"""The rungs after him: the helper, the one on duty, the chief."""
+
+# @patient
+REORDER_FAMILY = Template(
+    "reorder_family",
+    ("name", "medicine", "day"),
+    {
+        "en": "{name}'s tablets are running low.\nThe last of {medicine} is on {day}.\nPlease order more for {name}.",
+        "ms": "Ubat {name} hampir habis.\n{medicine} habis pada {day}.\nTolong pesan lagi untuk {name}.",
+        "zh": "{name}的药快吃完了。\n{medicine}{day}就吃完了。\n请再为{name}订一些。",
+    },
+)
+"""The reorder date reached, to the one who orders (E04's count)."""
+
+# @patient
+DOSES_COUNT = Template(
+    "doses_count",
+    ("name", "count"),
+    {
+        "en": (
+            "{name} did not say Taken {count} times this week.\n"
+            "This is a count, not a worry.\n"
+            "You can see which ones in the app."
+        ),
+        "ms": (
+            "Minggu ini {name} tidak kata Sudah ambil sebanyak {count} kali.\n"
+            "Ini kiraan sahaja, bukan sesuatu yang merisaukan.\n"
+            "Anda boleh lihat yang mana dalam aplikasi."
+        ),
+        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数，不用担心。\n您可以在应用里看是哪几次。",
+    },
+)
+"""The pattern (three or more in seven days), to the one on duty: a count, never a finding."""
+
+# @patient
+PAPERS_WAITING = Template(
+    "papers_waiting",
+    ("name",),
+    {
+        "en": "New papers for {name} are waiting for your yes.\nYou can check them in the app.",
+        "ms": "Surat baru untuk {name} menunggu jawapan ya anda.\nAnda boleh semak dalam aplikasi.",
+        "zh": "{name}有新文件在等您确认。\n您可以在应用里看。",
+    },
+)
+"""A paper read into a review card, to the chief: that there are papers, never what they say."""
+
+# @patient
+FAMILY_NOTE = Template(
+    "family_note",
+    ("who", "message"),
+    {
+        "en": "{who} sent you a message.\n{message}",
+        "ms": "{who} menghantar mesej kepada anda.\n{message}",
+        "zh": "{who}给您发了一条消息。\n{message}",
+    },
+)
+"""A chief's message to him, come due (E12-06): her previewed lines, exactly."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -124,10 +213,16 @@ TEMPLATES: Mapping[str, Template] = {
         FAMILY_DIGEST,
         FEELING_CHECK_IN,
         RED_FLAG_NOTICE,
+        DOSE_REMINDER,
+        DOSE_CHECK,
+        REORDER_FAMILY,
+        DOSES_COUNT,
+        PAPERS_WAITING,
+        FAMILY_NOTE,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""The six, in the order they are submitted for approval."""
+"""The twelve, in the order they are submitted for approval: E19's six, then E11's six."""
 
 
 def language_of(asked: str | None) -> str:
