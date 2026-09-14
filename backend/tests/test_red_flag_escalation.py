@@ -352,3 +352,33 @@ async def test_inside_her_window_the_tiered_notice_goes_as_free_text_until_meta_
     ]
     assert [row.template_name for row in sent] == [None]
     assert live.sent_to(live.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.HOSPITAL_NOW]]
+
+
+# --- the same step on his voice note (#146) --------------------------------------------------
+
+
+async def test_his_voice_note_at_night_is_answered_with_the_hospital_on_his_insurance(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A voice note in which he says he fell (#146 transcribes it, the flag first) goes through
+    the same step as typed words: at 22:30, with Gleneagles marked, the emergency department,
+    never "call your doctor today"."""
+    from tests.whatsapp_support import PA as PA_NUMBER
+    from tests.whatsapp_support import family
+
+    clock.set(datetime(2026, 9, 3, 12, 0, tzinfo=UTC))
+    home = await family(sg, tmp_path)
+    await add_provider(sg, context=home.owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG)
+    await add_provider(
+        sg, context=home.owner, name="Gleneagles", kind=ProviderKind.HOSPITAL, region=Region.SG, panel=True
+    )
+    clock.set(datetime(2026, 9, 3, 22, 30, tzinfo=SGT).astimezone(UTC))
+    flagged = await home.inbound(
+        sg, PA_NUMBER, media_id="pa-voice-fell", content_type="audio/ogg; codecs=opus"
+    )
+    assert flagged.outcome == "red_flag" and flagged.flag_id is not None
+    said = [line for reply in flagged.replies for line in reply.text.splitlines()]
+    assert "Go to the emergency department at Gleneagles now." in said
+    assert "If you cannot get there safely, call the ambulance now on 995." in said
+    assert not any("today." in line and line.startswith("Call ") for line in said)
+    assert said[-1] == CLOSING or CLOSING in said
