@@ -65,7 +65,7 @@ jobs:
             You are building one backlog story for Nura. The issue is #${{ steps.pick.outputs.number }}: "${{ steps.pick.outputs.title }}".
             Read CLAUDE.md, the issue body (`gh issue view ${{ steps.pick.outputs.number }}`), and the spec section it names. Follow .claude/rules. Work on a new branch named after the story ID.
             Write the acceptance test first, implement, run `make test`, `make lint` and `make plain-words` until green.
-            Do not touch .github/, .claude/ or CLAUDE.md. Files under backend/app/keys, consent, audit, safety and alembic/versions are owned by CODEOWNERS: only change them when the story requires it, and say so in the PR.
+            Do not touch .github/, .claude/ or CLAUDE.md. Files under backend/app/keys, consent, audit, safety and migrations/versions are owned by CODEOWNERS: only change them when the story requires it, and say so in the PR.
             Commit, push the branch, and open a pull request with `gh pr create` whose title starts with the story ID and whose body includes "Closes #${{ steps.pick.outputs.number }}", the acceptance line, and the plain-words output.
             If you run out of turns, push what you have, open a draft PR, and comment on the issue saying what is left.
           claude_args: "--max-turns 80 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"

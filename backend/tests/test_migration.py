@@ -19,7 +19,7 @@ from sqlalchemy import Table, create_engine, inspect
 from app.identity.models import Person, Profile
 from app.keys.models import Key
 
-VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
 
 def _load(name: str) -> ModuleType:
