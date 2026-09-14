@@ -132,9 +132,11 @@ CATALOGUE: tuple[Gap, ...] = (
         lambda k: "allergy" in k.attributes,
     ),
     Gap(
+        # "Thinner tapped, kind unknown": only when he said he takes one, never assumed from
+        # a heartbeat or a stroke tapped beside it.
         "thinner_which",
         1,
-        _told("blood_thinner", "uneven_heartbeat", "stroke"),
+        _told("blood_thinner"),
         lambda k: k.anticoagulant_named,
     ),
     Gap(

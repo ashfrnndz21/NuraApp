@@ -231,16 +231,26 @@ def changes(
     return out
 
 
-async def current_settings(session: AsyncSession, *, context: KeyContext) -> ProfileSettings | None:
-    """The settings row that stands now, whole, for the services that act on it."""
+async def _current_row(
+    session: AsyncSession, *, context: KeyContext, scope: Scope
+) -> ProfileSettings | None:
     found = await audited_read(
         session,
         ProfileSettings,
         context,
-        SETTINGS_SCOPE,
+        scope,
         where=(ProfileSettings.superseded_at.is_(None),),
     )
     return max(found, key=lambda row: as_utc(row.set_at)) if found else None
+
+
+@audited(Action.READ, Scope.RECORDS, TARGET)
+async def current_settings(session: AsyncSession, *, context: KeyContext) -> ProfileSettings | None:
+    """The settings row that stands now, whole — conditions and doctor included — for the
+    services that act on the record (the biography, the plan). Read under the record's scope,
+    so a key without it never gets the whole row; the settings screen reads through
+    `read_settings`, which narrows it."""
+    return await _current_row(session, context=context, scope=Scope.RECORDS)
 
 
 async def _write_setting(
@@ -310,7 +320,7 @@ async def save_settings(
     leaves nothing behind but the line that says so."""
     a_setter(context)
     chosen = values.checked()
-    previous = await current_settings(session, context=context)
+    previous = await _current_row(session, context=context, scope=SETTINGS_SCOPE)
     moment = utcnow()
     held = await current_facts(session, context=context)
     event = await record_event(
@@ -394,13 +404,25 @@ def _narrowed(
 @audited(Action.READ, SETTINGS_SCOPE, TARGET)
 async def read_settings(session: AsyncSession, *, context: KeyContext) -> SettingsView:
     """The settings as the caller's key reads them (see the module's note on who reads what)."""
-    row = await current_settings(session, context=context)
+    row = await _current_row(session, context=context, scope=SETTINGS_SCOPE)
     if row is None:
         profile = await audited_profile_read(session, context)
         values = SettingsValues(language=language_for(profile.language))
     else:
         values = values_of(row)
     shown, withheld = _narrowed(values, context)
+    if row is not None and not withheld:
+        # The conditions and the doctor are his record: serving them is a read of the record,
+        # and the trail says so, not only that the face of the graph was read.
+        await record(
+            session,
+            context=context,
+            action=Action.READ,
+            scope=Scope.RECORDS,
+            target=TARGET,
+            target_id=row.id,
+            rows=1,
+        )
     return SettingsView(row=row, values=shown, withheld=withheld)
 
 

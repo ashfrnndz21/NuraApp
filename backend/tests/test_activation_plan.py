@@ -11,6 +11,7 @@ due, and with nothing at all once the record holds his medicines and both visits
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from app.clock import FrozenClock
@@ -18,9 +19,11 @@ from app.db import unit_of_work
 from app.drafts import AppointmentDraft
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
+from app.keys.scopes import KeyRole, Scope
 from app.memory.models import AppointmentStatus, ProviderKind
+from app.memory.semantic import current_facts
 from app.memory.spine import add_provider, book_appointment
-from app.onboarding.plan import current_plan, due_prompts
+from app.onboarding.plan import close_prompts_on_fact, current_plan, due_prompts
 from app.regions import Region
 from tests.api import let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
@@ -246,7 +249,7 @@ async def test_fewer_gaps_fewer_prompts_and_breakfast_at_eight_until_he_says(
     assert closed["summary"]["lines"][-3:] == [
         "Tomorrow at breakfast, Nura will ask for one more thing.",
         "There are 4 things to ask, one each day.",
-        "Everything you see is built from this.",
+        "Your Today page comes from what you told us.",
     ]
 
     # Letting Kit in closes the last one the next time the plan is read; saying when he has
@@ -287,3 +290,25 @@ async def test_fewer_gaps_fewer_prompts_and_breakfast_at_eight_until_he_says(
         "NotTheirsToSetUp",
     )
     await refused(deployment, "GET", f"/profiles/{uuid.uuid4()}/plan", his, 403, "NoKey")
+
+
+async def test_a_narrow_key_writing_a_fact_never_trips_the_plan(deployment: Deployment) -> None:
+    """The eager close runs under the writer's key. A helper's key — the medicines and the face
+    of the graph — does not open the plan: the hook steps aside, and the fact lands."""
+    mei, profile_id, _ = await _closed(deployment)
+    async with deployment.sessions() as session:
+        async with unit_of_work(session):
+            chief = await resolve_key_context(
+                session,
+                region=Region.SG,
+                person_id=uuid.UUID(mei["person_id"]),
+                profile_id=uuid.UUID(profile_id),
+            )
+            helper = replace(
+                chief, scopes=frozenset({Scope.PROFILE, Scope.MEDICINES}), role=KeyRole.HELPER
+            )
+            medicine = (await current_facts(session, context=chief, subject="medicine"))[0]
+            await close_prompts_on_fact(session, helper, medicine)
+            view = await current_plan(session, context=chief)
+            assert [p.gap for p in view.prompts] == PLAN_GAPS
+        await session.commit()

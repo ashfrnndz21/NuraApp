@@ -5,7 +5,8 @@ step is worked out from the session and the record every time it is asked, never
 twice (`Step`):
 
     about_you   nothing saved on the settings screen yet (E01-03)
-    papers      settings saved; each paper is photographed with what he says it is
+    papers      settings saved; each paper — a photo, or a PDF the way the import path
+                takes it — comes with what he says it is
                 (`add_paper`), read into a review card through the capture path (E02), and
                 confirmed there with one tap
     read_back   at least one paper, and every card confirmed: what he told and what the
@@ -57,11 +58,17 @@ from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.errors import Refusal
-from app.ingestion.extract import Extractor
+from app.ingestion.documents import PDF_CONTENT_TYPE, store_pdf
+from app.ingestion.extract import DocumentKind, Extractor
 from app.ingestion.models import ReviewCard
 from app.ingestion.objects import ObjectStore
 from app.ingestion.photos import store_photo
-from app.ingestion.review import card_fields, require_review_card, review_photo
+from app.ingestion.review import (
+    card_fields,
+    require_review_card,
+    review_artifact,
+    review_photo,
+)
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
@@ -535,25 +542,47 @@ async def add_paper(
     earlier = await audited_read(
         session, BiographyPaper, context, BIO_SCOPE, where=(BiographyPaper.session_id == bio.id,)
     )
-    artifact = await store_photo(
-        session,
-        context=context,
-        store=store,
-        data=data,
-        content_type=content_type,
-        captured_at=captured_at,
-        source_channel=SourceChannel.APP,
-    )
     row = await current_settings(session, context=context)
     profile = await audited_profile_read(session, context)
-    card = await review_photo(
-        session,
-        context=context,
-        artifact_id=artifact.id,
-        store=store,
-        extractor=extractor,
-        language=settings_language(row, profile.language),
-    )
+    language = settings_language(row, profile.language)
+    if _is_pdf(content_type):
+        # A PDF goes the way `POST /profiles/{id}/imports` takes it (E02-03): kept as a PDF
+        # artefact, read page by page, with what he says it is as the hint where it is one.
+        artifact = await store_pdf(
+            session,
+            context=context,
+            store=store,
+            data=data,
+            content_type=content_type,
+            captured_at=captured_at,
+        )
+        card = await review_artifact(
+            session,
+            context=context,
+            artifact_id=artifact.id,
+            store=store,
+            extractor=extractor,
+            language=language,
+            asked_as=PDF_HINTS.get(paper),
+        )
+    else:
+        artifact = await store_photo(
+            session,
+            context=context,
+            store=store,
+            data=data,
+            content_type=content_type,
+            captured_at=captured_at,
+            source_channel=SourceChannel.APP,
+        )
+        card = await review_photo(
+            session,
+            context=context,
+            artifact_id=artifact.id,
+            store=store,
+            extractor=extractor,
+            language=language,
+        )
     written = await audited_write(
         session,
         BiographyPaper,
@@ -568,6 +597,18 @@ async def add_paper(
         added_at=utcnow(),
     )
     return written, card
+
+
+PDF_HINTS: Mapping[PaperKind, DocumentKind] = {
+    PaperKind.LAB_RESULT: DocumentKind.LAB_REPORT,
+    PaperKind.DISCHARGE_LETTER: DocumentKind.DISCHARGE_LETTER,
+    PaperKind.INSURANCE_CARD: DocumentKind.INSURANCE_LETTER,
+}
+"""What he says a PDF is, as the hint the import path takes (`DOCUMENT_HINTS`, E02-03)."""
+
+
+def _is_pdf(content_type: str) -> bool:
+    return content_type.strip().lower().split(";", 1)[0].strip() == PDF_CONTENT_TYPE
 
 
 async def _dispute(session: AsyncSession, *, context: KeyContext, fact: Fact, event: Event) -> Fact:
