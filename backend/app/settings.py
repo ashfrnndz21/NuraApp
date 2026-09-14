@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 
+from app.clock import FrozenClockOutsideDev
 from app.regions import Region
 
 
@@ -58,6 +60,11 @@ class Settings:
     whatsapp_fixtures: str | None = None
     """NURA_WHATSAPP_FIXTURES: the directory the fixture provider serves media from
     (`backend/tests/fixtures/whatsapp/`), until a real provider fetches it."""
+    frozen_clock: datetime | None = None
+    """NURA_FROZEN_CLOCK: an instant with its offset (`2026-09-14T10:00:00+08:00`) the
+    process's clock stands at from startup (`app.clock.install_frozen`), moved only by
+    `POST /dev/clock`. For end-to-end runs that must not drift with the hour. Honoured only on
+    a declared dev run: given without NURA_DEV_CODE_SENDER=1 the process refuses to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -78,6 +85,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     except KeyError as missing:
         raise MissingSetting(f"{missing.args[0]} is not set") from missing
     dev_code_sender = source.get("NURA_DEV_CODE_SENDER", "") == "1"
+    frozen_clock = _frozen_clock(source.get("NURA_FROZEN_CLOCK") or None, dev_run=dev_code_sender)
     return Settings(
         region=region,
         database_url=database_url,
@@ -92,4 +100,20 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
         whatsapp_dev_secret=source.get("NURA_WHATSAPP_DEV_SECRET") or None,
         whatsapp_fixtures=source.get("NURA_WHATSAPP_FIXTURES") or None,
+        frozen_clock=frozen_clock,
     )
+
+
+def _frozen_clock(value: str | None, *, dev_run: bool) -> datetime | None:
+    """NURA_FROZEN_CLOCK, read strictly: only on a dev run, and only an instant with an offset."""
+    if value is None:
+        return None
+    if not dev_run:
+        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK is for a declared dev run only (NURA_DEV_CODE_SENDER=1)")
+    try:
+        at = datetime.fromisoformat(value)
+    except ValueError as bad:
+        raise FrozenClockOutsideDev(f"NURA_FROZEN_CLOCK is not an instant: {value!r}") from bad
+    if at.tzinfo is None:
+        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK needs an offset, as in 2026-09-14T10:00:00+08:00")
+    return at

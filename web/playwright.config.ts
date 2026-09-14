@@ -6,6 +6,16 @@ import { defineConfig, devices } from "@playwright/test";
  *  the offline test needs the service worker and skips itself there. */
 export const BASE_URL = process.env.WEB_BASE_URL ?? "http://127.0.0.1:8000/app/";
 
+/** The API the tests seed through and the app calls (`make dev`). */
+export const API_URL = process.env.NURA_BASE_URL ?? "http://127.0.0.1:8000";
+
+/** The instant the backend's clock stands at for the whole run: 10 in the morning in
+ *  Singapore on Monday 14 September, the same moment the phone's clock is fixed to
+ *  (`fixClock`). The backend reads its own clock for the dose windows, the quiet hours and
+ *  "today"; frozen, those do not drift with the hour the suite runs at. A test that means to
+ *  cross the quiet hours or midnight moves it with `POST /dev/clock` (a dev run only). */
+export const FROZEN_CLOCK = process.env.NURA_FROZEN_CLOCK ?? "2026-09-14T10:00:00+08:00";
+
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 60_000,
@@ -26,4 +36,17 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Pixel 5"], browserName: "chromium" } }],
+  // The backend: `make dev` (its env and its command), on the port the API URL names, with its
+  // clock frozen at FROZEN_CLOCK. Build the app first (`make build-web`) so it serves /app.
+  // Locally a server already running is reused — start it with NURA_FROZEN_CLOCK too, or stop
+  // it and let this start one; the feed tests check the clock and say so if it is not frozen.
+  webServer: {
+    command: "make -C .. dev",
+    url: `${API_URL}/health`,
+    env: { UVICORN_PORT: new URL(API_URL).port || "8000", NURA_FROZEN_CLOCK: FROZEN_CLOCK },
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    stdout: "ignore",
+    stderr: "pipe",
+  },
 });
