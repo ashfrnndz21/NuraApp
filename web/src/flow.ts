@@ -27,7 +27,8 @@ export type Screen =
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
-  | { name: "me" };
+  | { name: "me" }
+  | { name: "onboarding" };
 
 export const screen = signal<Screen>({ name: "loading" });
 

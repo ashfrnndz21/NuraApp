@@ -2,7 +2,8 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { ClaimableOut, DoorsOut, ProfileOut, WordingOut } from "../api/types";
-import { afterSignIn, go, openProfile, reloadDoors } from "../flow";
+import { go, openProfile, reloadDoors } from "../flow";
+import { startOnboarding } from "../onboarding/state";
 import { me, token } from "../store/session";
 import { fill, language, t } from "../strings";
 import { Field, Header, Notice, Pill, RefusalNotice, Tile } from "../ui/components";
@@ -92,7 +93,7 @@ export function ConsentScreen(): JSX.Element {
         language: words.language,
         display_name: name.trim() || null,
       });
-      await openProfile(opened);
+      await startOnboarding(opened);
     } catch (failure) {
       setError(failure);
     } finally {
@@ -187,8 +188,7 @@ export function ForSomeoneScreen(): JSX.Element {
         version: words.version,
         relationship: relationship.trim() || null,
       });
-      await openProfile(made);
-      await afterSignIn();
+      await startOnboarding(made);
     } catch (failure) {
       setError(failure);
     } finally {

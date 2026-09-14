@@ -225,6 +225,10 @@ class SharingConsentIn(BaseModel):
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
     holder_person_id: uuid.UUID | None = None
+    holder_display_name: str | None = Field(default=None, max_length=80)
+    """The name the words use, as the owner calls the person: needed when he names them by
+    phone (`HolderNeedsAName` without it). A number that is not an account yet keeps it until
+    the person signs in and gives his own."""
     scopes: list[Scope] = Field(min_length=1)
     relationship: str | None = Field(default=None, min_length=1, max_length=80)
     language: str = Field(min_length=2, max_length=16)
@@ -238,6 +242,32 @@ class SharingConsentIn(BaseModel):
         if (self.holder_phone_e164 is None) == (self.holder_person_id is None):
             raise ValueError("name the holder by phone number or by person id, one of the two")
         return self
+
+
+class SharingPreviewIn(BaseModel):
+    """The words the owner would agree to by `POST /consents/sharing`, for this person and
+    these parts, before he agrees: the same fields, nothing kept."""
+
+    holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
+    holder_person_id: uuid.UUID | None = None
+    holder_display_name: str | None = Field(default=None, max_length=80)
+    scopes: list[Scope] = Field(min_length=1)
+    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    language: str = Field(min_length=2, max_length=16)
+
+    @model_validator(mode="after")
+    def _one_holder(self) -> SharingPreviewIn:
+        if (self.holder_phone_e164 is None) == (self.holder_person_id is None):
+            raise ValueError("name the holder by phone number or by person id, one of the two")
+        return self
+
+
+class SharingPreviewOut(BaseModel):
+    """The lines he will read, one idea each, and the version to agree to them by."""
+
+    wording_version: str
+    language: str
+    lines: list[str]
 
 
 class WhatsAppConsentIn(BaseModel):
@@ -1662,7 +1692,9 @@ class EventNoteOut(BaseModel):
             content_type=view.artifact.content_type,
             transcript=None
             if heard is None
-            else TranscriptOut(text=heard.text, confidence=heard.confidence, language=heard.language),
+            else TranscriptOut(
+                text=heard.text, confidence=heard.confidence, language=heard.language
+            ),
             notice=list(COULD_NOT_HEAR) if unheard else None,
             written_by_person_id=note.written_by_person_id,
             written_at=utc(note.written_at),

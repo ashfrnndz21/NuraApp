@@ -1,6 +1,6 @@
 import { expect, test, type Request } from "@playwright/test";
 import { FROZEN_CLOCK } from "../../playwright.config";
-import { API, backendClock, captureSpeech, fakeRecorder, fixClock, nothingCovers, seedVisitDay, shotAs, signInThroughTheApp, stand } from "./helpers";
+import { API, backendClock, captureSpeech, fakeRecorder, fixClock, nothingDrawnOverLines, seedVisitDay, shotAs, signInThroughTheApp, stand } from "./helpers";
 
 /** Checkpoint 22's web half: the Visit screen on a phone-sized screen, against `make dev`
  *  serving the build, both clocks at 10 in the morning in Singapore on Monday 14 September.
@@ -22,6 +22,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
+/** The card layout rule on the Visit screen: no control drawn over a line, every button 56 by 56
+ *  (the patient density), with #118's hit test (`nothingDrawnOverLines`). */
+const nothingCovers = (page: import("@playwright/test").Page) =>
+  nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label, blockquote, figcaption", controls: "button", minTarget: 56 });
 const spoken = (page: import("@playwright/test").Page) => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
 const isUpload = (request: Request) => request.method() === "POST" && /\/api\/profiles\/[^/]+\/appointments\/[^/]+\/recording$/.test(new URL(request.url()).pathname);
 

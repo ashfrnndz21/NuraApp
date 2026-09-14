@@ -26,6 +26,12 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 - `src/today/` — the Today model: the Now card from the backend's `due_now`/`missed`, the feed's
   cards for today, the State card with the backend's boundary, the medicines card with the
   questions for the doctor, the day and time in his words.
+- `src/onboarding/` — onboarding's logic apart from any screen, all unit-tested: `cloud.ts`
+  (which words show, how big, in what order), `about.ts` (the questions and what the answers
+  change on the phone), `review.ts` (one decision per review-card field), `plan.ts` (which gap
+  cards show), `dates.ts`; `state.ts` is where the session is, in memory only.
+- `src/screens/onboarding/` — one file per step: About, Cloud, Asks, ReadBack, Records (the
+  prompt, the capture and the review card), Questions, Plan.
 - `src/feed/` — the vertical feed (W2, E21): `store.ts` (pages by cursor, prefetch, the kept
   first page, the side actions), `model.ts` (a card as the pager shows it, from the backend's
   item alone), `playback.ts` (Hear on tap: the backend's voice or the spoken twin), `session.ts`
@@ -209,3 +215,72 @@ dev), so `make web` is for working on screens and the offline behaviour is prove
 `make dev` serving `web/dist`. Over plain http on a LAN address the browser will not
 install a worker or offer "add to home screen" — that needs https, which the cloud
 deployment brings; on the Mac, `127.0.0.1` counts as secure.
+
+## Onboarding (W3)
+
+About you → the word cloud → the papers (the sitting's prompt, photo or PDF, review card, one
+yes) → the read-back → the questions the papers raised → the first week → Today, in the order
+E01's sitting keeps (`about_you → papers → read_back → questions → closed`). It starts after
+*I agree* on the for-me door and after *Set it up* on the for-someone door; *Set up later*
+skips it and *Set up Nura* under Me starts it again.
+
+**Every route is live** — E01 (#117) is on main, and nothing is mocked: the e2e runs against
+the backend itself, both clocks frozen at 10:00 Singapore.
+
+| Route | From |
+|---|---|
+| `GET /onboarding/conditions?language=`, `GET` / `PUT /profiles/{id}/settings` | E01 |
+| `POST` / `GET /profiles/{id}/biography`, `/biography/papers`, `/biography/read-back`, `/biography/questions`, `/biography/close` | E01; a kept question goes on the next visit's list by E01 itself (E05), or waits and moves when one is booked (`handed_over_to`) |
+| `GET /profiles/{id}/plan?language=`, `POST /profiles/{id}/plan/later` | E01 |
+| `POST /profiles/{id}/photos`, `POST /profiles/{id}/imports` (a PDF), `POST /profiles/{id}/confirmations` (`review_card`), `POST /profiles/{id}/review-cards/{card}/confirm` | E02 |
+| `POST /profiles/{id}/consents/sharing/preview`, `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys` | E12 (the preview is this PR's backend seam) |
+
+**Whose words.** Every line of the sitting — the step's headline and lines, the read-back, the
+questions with their State id and source line, the summary, each prompt — is E01's, in plain
+words; the client composes none. E01's script speaks to him, so a chief setting up her father
+reads the app's own headings in his name (*A few things about Pa*). E01's writes answer in the
+language on his settings; a chief's phone reads the sitting again with `?language=` after each
+one, so choosing Malay for him never turns her screens Malay.
+
+**Papers of every kind.** A PDF goes to `POST /imports` (sent as a `share`), anything else
+to `POST /photos`; both answer with the same review card. A line Nura could not read shows
+the backend's own prompt and an empty box, and is never confirmed as read: what he types is
+the correction, or he leaves it out. A card's `notice` lines are shown as the backend wrote
+them; a page that is not a health paper has nothing to say yes to. In the patient density
+every line of the card has its own Hear (what the line is, what was read, how sure Nura is);
+the caregiver density keeps the header's.
+
+**The gap card's actions.** A photo gap opens the camera and a PDF gap the file picker; the
+breakfast gap asks that one question of About you and comes back with the gap closed. Which
+medicine he is allergic to has no route to write it yet (#117), so that card has *Later* only
+— a tap on the cloud's word would close nothing. The invite gap goes to E12's
+flow — who, which parts, the words, one *I agree*, then `POST /consents/sharing` and a
+caregiver key to the same parts (`POST /keys`). Only on his own papers: the consent route
+takes the owner's own yes. The words are never composed here: the client asks
+`POST /consents/sharing/preview`, which renders them with the same function the consent keeps
+them with — so what he reads is what is kept, word for word — and sends back their version.
+He names the person he lets in (*Their name*); the words use only that name, never the account
+the number may already be, and it gives way to the person's own when they sign in.
+
+**Nothing kept on the phone.** Settings, words, the biography, review cards and the plan live
+in memory (`src/onboarding/state.ts`) and on the backend, never in IndexedDB or web storage:
+none of it could be bound to a key and an expiry, so none of it is cached. A unit test fails
+if any onboarding file mentions browser storage; the e2e reads IndexedDB after the walk.
+
+**No sentence is composed here.** Read-back lines, prompts, what a paper taught, questions and
+gap cards are the backend's whole lines, shown with their `source` and their `state_id`
+(`data-state-id`). The client's own lines are in the catalogue; slots take only a name, a
+date or a number. A review-card correction is exactly what he typed (a number stays a number);
+a structured value such as a dose instruction cannot be retyped, only kept or left out.
+
+**One thing per screen, or the list.** In the patient density each About question, follow-up,
+read-back line and question is its own screen, and the Ready screen shows one gap card and how
+many follow. The caregiver density (a chief setting up for someone) gets each step as one page
+and the full gap list (docs/gaps-and-unlocks.md §3). His answers change his own phone at once
+(his language; the big look for small print, small buttons or memory) and never the chief's.
+
+**The word cloud.** Plain words from the backend's graph, sized by how common each is (1–3)
+plus one for every picked word that relates to it; top words heaviest first so they are on the
+first screen; revealed words go straight after the word that revealed them, so nothing moves
+under his finger; unpicking drops what only it revealed. A tap speaks the word and "Doctors
+call it …" — the term is a slot value, shown only in brackets after his word.

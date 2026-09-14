@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 
 /** The same three things `backend/scripts/checkpoint.py` does: a fresh number every run, the
  *  login code read from the `make dev` log (never from the API), and a medicine seeded by
@@ -471,32 +471,49 @@ export async function seedVisitDay(
   return { phone, token, profileId, appointmentId, meiId };
 }
 
-/** Nothing is ever drawn over a line (the card layout rule): at the centre of every line,
- *  heading, quote and button on the screen — scrolled into view first — the element the page
- *  hits is that element. Every button is at least 56 high and clear of the tab bar. */
-export async function nothingCovers(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
+/** Nothing is ever drawn over a line: the rule #118's feed test checks (`everyLineReadable`,
+ *  in feed.spec.ts), with its hit test at the centre of each line, for a screen that scrolls
+ *  the page itself (onboarding, the review card). Each visible line under `scope` is scrolled
+ *  to the middle of the viewport and must be what the page hits at its centre — never a
+ *  button, a field or another tile; each control is hit at its own centre and, when
+ *  `minTarget` is given (56 in the patient density), is at least that tall and wide. The
+ *  problems found, or an empty list. */
+export async function nothingDrawnOverLines(
+  scope: Locator,
+  options: { lines?: string; controls?: string; minTarget?: number } = {},
+): Promise<string[]> {
+  const settings = {
+    lines: options.lines ?? "h1, h2, p, .label",
+    controls: options.controls ?? "button, label.pill, input.field",
+    minTarget: options.minTarget ?? 0,
+  };
+  return scope.evaluate(async (root, { lines, controls, minTarget }) => {
     const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
     const problems: string[] = [];
-    const main = document.querySelector("main");
-    if (!main) return ["no screen"];
     const hit = (element: Element) => {
       const box = element.getBoundingClientRect();
       const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return at !== null && (at === element || element.contains(at));
     };
-    for (const element of [...main.querySelectorAll<HTMLElement>("h1, h2, p, blockquote, figcaption, button")]) {
-      if (element.closest("nav.tabbar") || element.getClientRects().length === 0) continue;
-      element.scrollIntoView({ block: "center" });
+    const visible = (element: HTMLElement) => element.offsetParent !== null && element.getBoundingClientRect().height > 0;
+    for (const line of root.querySelectorAll<HTMLElement>(lines)) {
+      if (!visible(line) || !line.textContent?.trim()) continue;
+      line.scrollIntoView({ block: "center" });
       await frame();
-      if (!hit(element)) problems.push(`covered: ${element.tagName.toLowerCase()} ${element.textContent ?? ""}`);
-      if (element.tagName === "BUTTON") {
-        const box = element.getBoundingClientRect();
-        const bar = document.querySelector("nav.tabbar")?.getBoundingClientRect();
-        if (box.height < 56) problems.push(`smaller than 56: ${element.textContent ?? ""}`);
-        if (bar && box.bottom > bar.top && box.top < bar.bottom) problems.push(`under the tab bar: ${element.textContent ?? ""}`);
+      if (!hit(line)) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}`);
+    }
+    for (const control of root.querySelectorAll<HTMLElement>(controls)) {
+      if (!visible(control)) continue;
+      control.scrollIntoView({ block: "center" });
+      await frame();
+      const name = (control.textContent || control.getAttribute("aria-label") || control.tagName).trim().slice(0, 50);
+      if (!hit(control)) problems.push(`control covered: ${name}`);
+      const box = control.getBoundingClientRect();
+      if (minTarget && (box.height < minTarget - 0.5 || box.width < minTarget - 0.5)) {
+        problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
       }
     }
+    window.scrollTo(0, 0);
     return problems;
-  });
+  }, settings);
 }
