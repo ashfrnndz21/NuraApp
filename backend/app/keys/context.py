@@ -90,12 +90,25 @@ async def resolve_key_context(
         # stranger cannot put a line into a graph by asking for it, and neither can a guess at
         # an id that does not exist. The same words, the same silence, either way.
         raise NoKey(person_id=person_id, profile_id=profile_id)
+
+    # Every key ever cut for this person on this profile, closed ones included. A person the
+    # profile knows — its owner, or someone who held a key once — is written down when
+    # refused; a person it has never known is not, or a known profile id would be a way to
+    # fill someone's trail from outside.
+    keys = list(
+        await session.scalars(
+            select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
+        )
+    )
+    known = profile.owner_person_id == person_id or bool(keys)
+
     try:
         guard_region(held_in=profile.region, asked_from=region)
-    except OutOfRegion:
-        # The profile is known, so the refusal is written down against it. The context is the
-        # narrowest one there is — no scopes, no key — because nothing was resolved.
-        await _record_out_of_region(session, profile=profile, person_id=person_id, now=moment)
+    except OutOfRegion as refusal:
+        if known:
+            await _record_refused(
+                session, profile=profile, person_id=person_id, refusal=refusal, now=moment
+            )
         raise
 
     if profile.owner_person_id == person_id:
@@ -106,9 +119,6 @@ async def resolve_key_context(
             scopes=ALL_SCOPES,
         )
 
-    keys = await session.scalars(
-        select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
-    )
     for key in keys:
         if key.is_active(moment):
             return KeyContext(
@@ -119,14 +129,28 @@ async def resolve_key_context(
                 role=key.role,
                 key_id=key.id,
             )
-    # A person with no active key holds nothing to pin a line to, either. See NoKey above.
-    raise NoKey(person_id=person_id, profile_id=profile_id)
+    refused = NoKey(person_id=person_id, profile_id=profile_id)
+    if keys:
+        # The revoked-helper case: she held a key once, it is closed, and she is reaching
+        # again. The owner sees that. See the note above for why a stranger leaves nothing.
+        await _record_refused(
+            session, profile=profile, person_id=person_id, refusal=refused, now=moment
+        )
+    raise refused
 
 
-async def _record_out_of_region(
-    session: AsyncSession, *, profile: Profile, person_id: uuid.UUID, now: datetime
+async def _record_refused(
+    session: AsyncSession,
+    *,
+    profile: Profile,
+    person_id: uuid.UUID,
+    refusal: Refusal,
+    now: datetime,
 ) -> None:
-    """One refused line for a reach across the region pin, in the name of the refusal only."""
+    """One refused line for a reach that resolved nothing, in the name of the refusal only.
+
+    The context is the narrowest there is — no scopes, no key — because nothing was resolved.
+    """
     # Local import: `app.audit.trail` imports this module for `KeyContext`, so importing it at
     # the top would be a cycle. The trail is the floor of the enforcement beside the keys, and
     # this is the one place the keys call up into it.
@@ -147,6 +171,6 @@ async def _record_out_of_region(
         scope=Scope.FAMILY,
         target=profile.__tablename__,
         outcome=Outcome.REFUSED,
-        refused_because=OutOfRegion.__name__,
+        refused_because=type(refusal).__name__,
         now=now,
     )

@@ -20,7 +20,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.errors import Refusal
-from app.identity.models import Person
+from app.keys.confirm import NobodyConfirmed, require_confirmer
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import (
@@ -35,6 +35,8 @@ from app.regions import Region
 
 UPCOMING = frozenset({AppointmentStatus.PLANNED, AppointmentStatus.CONFIRMED})
 
+__all__ = ["NoSuchAppointment", "NoSuchProvider", "NobodyConfirmed"]
+
 
 class NoSuchProvider(Refusal):
     """No provider by that id in this profile's directory."""
@@ -42,10 +44,6 @@ class NoSuchProvider(Refusal):
 
 class NoSuchAppointment(Refusal):
     """No appointment by that id on this profile."""
-
-
-class NobodyConfirmed(Refusal):
-    """Nothing is booked without a person's confirm, and the person named must be a person."""
 
 
 async def add_provider(
@@ -101,14 +99,14 @@ async def book_appointment(
 
     `confirmed_by_person_id` is the person who gave the explicit confirm. The surface owes
     that confirm — a tap, a spoken yes — before it calls this; nothing here can supply it, and
-    there is no default. The row carries who gave it, so the trail and the timeline can say.
+    there is no default. Who may give one is `app.keys.confirm.require_confirmer`: the person
+    asking, the owner, or a key holder on this profile, in its region. The row carries who.
     """
     named = short_label(purpose)
     async with audited_guard(
         session, context, Action.WRITE, Scope.VISITS, Appointment.__tablename__, now=now
     ):
-        if await session.get(Person, confirmed_by_person_id) is None:
-            raise NobodyConfirmed("an appointment is confirmed by a person")
+        await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
     found = await audited_read(
         session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,), now=now
     )

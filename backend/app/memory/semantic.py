@@ -4,8 +4,13 @@ Nothing infers without provenance. A fact is asserted from an artefact or an eve
 profile — never from nothing — with a confidence and a state, for a window of time. When it
 turns out to be wrong, or a person confirms it, a new fact supersedes it: the old row stays,
 marked with when it stopped being current, and the new one names it. The old one is read
-under the same key context as the provenance, and a person's word is never replaced by a
-machine's (`ConfirmedFactStands`).
+under the same key context as the provenance.
+
+A person's word is never replaced by a machine's. CONFIRMED_BY_PERSON and DISPUTED name the
+person who said so (`confirmed_by_person_id`, checked by `app.keys.confirm`); an extraction
+may replace only an extraction; and a dispute is kept beside the fact it disputes without
+closing it, so the person's number stays current until a person settles it. See
+`ConfirmedFactStands`.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.errors import Refusal
+from app.keys.confirm import NobodyConfirmed, require_confirmer
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import NoSuchArtifact, NoSuchEvent, require_artifact, require_event
@@ -58,27 +64,72 @@ class NotTheSameFact(Refusal):
     """A supersession says the same thing better. This one was about something else."""
 
 
+class NotTheFactInDispute(Refusal):
+    """A dispute is settled on the fact it disputes, not on the dispute."""
+
+
+class NotAPersonsWord(Refusal):
+    """An extracted fact is the machine's. It does not name a person who confirmed it."""
+
+
 class ConfirmedFactStands(Refusal):
     """A person's word is not overwritten by a machine's.
 
-    The rule: an EXTRACTED fact may supersede only an EXTRACTED fact. Once a person has spoken
-    on a fact — CONFIRMED_BY_PERSON, or DISPUTED, which records that the person and the
-    extraction disagree — only a person settling it (CONFIRMED_BY_PERSON) or an explicit
-    DISPUTED replaces it. An extraction that disagrees with what a person confirmed is
-    asserted as DISPUTED, so the current view says there is a disagreement; it never quietly
-    becomes the machine's value. For a dose, that is the difference between the person and
-    the machine having the last word.
+    The rule, in three parts.
+
+    1. An EXTRACTED fact may supersede only an EXTRACTED fact with no open dispute against
+       it. Once a person has spoken on a fact — CONFIRMED_BY_PERSON, or DISPUTED — only a
+       person replaces it.
+    2. A DISPUTED fact is an open dispute, not a replacement. It names the fact it disputes
+       in `supersedes_id`, carries the disputed value, and names the person who raised it.
+       It closes nothing and is never current: `current_facts` keeps returning the fact it
+       disputes. So a dose the person confirmed stays the recorded dose while a photo says
+       otherwise, and the disagreement is there to be read (`open_disputes`).
+    3. A person settles a dispute with a CONFIRMED_BY_PERSON supersession of the disputed
+       fact. That closes the fact and every open dispute against it, and the person's new
+       number becomes current. A dispute is not itself a predecessor (`NotTheFactInDispute`).
+
+    For a dose, that is the difference between the person and the machine having the last
+    word.
     """
 
 
-def _check_supersession(old: Fact, subject: str, attribute: str, state: ConfidenceState) -> None:
+def _check_supersession(
+    old: Fact,
+    disputes: Sequence[Fact],
+    subject: str,
+    attribute: str,
+    state: ConfidenceState,
+) -> None:
     """What a new fact may replace: the same fact, and never a person's word with a machine's."""
     if (old.subject, old.attribute) != (subject, attribute):
         raise NotTheSameFact(f"fact {old.id} is about {old.subject}.{old.attribute}")
-    if state is ConfidenceState.EXTRACTED and old.confidence_state is not ConfidenceState.EXTRACTED:
+    if old.confidence_state is ConfidenceState.DISPUTED:
+        raise NotTheFactInDispute(f"fact {old.id} is a dispute; settle the fact it disputes")
+    if state is ConfidenceState.EXTRACTED and (
+        old.confidence_state is not ConfidenceState.EXTRACTED or disputes
+    ):
         raise ConfirmedFactStands(
             f"fact {old.id} is {old.confidence_state}; an extraction does not replace it"
         )
+
+
+async def _check_who_said_so(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    state: ConfidenceState,
+    confirmed_by_person_id: uuid.UUID | None,
+    now: datetime | None,
+) -> None:
+    """A state is not a label the caller picks: a person's word names the person."""
+    if state is ConfidenceState.EXTRACTED:
+        if confirmed_by_person_id is not None:
+            raise NotAPersonsWord("an extracted fact names no person")
+        return
+    if confirmed_by_person_id is None:
+        raise NobodyConfirmed(f"a {state} fact names the person who said so")
+    await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
 
 
 async def _check_provenance(
@@ -136,6 +187,7 @@ async def _write_fact(
     confidence: float,
     unit: str | None,
     confidence_state: ConfidenceState,
+    confirmed_by_person_id: uuid.UUID | None,
     artifact_id: uuid.UUID | None,
     event_id: uuid.UUID | None,
     episode_id: uuid.UUID | None,
@@ -154,11 +206,20 @@ async def _write_fact(
     )
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id, now=now)
-    if supersedes is not None:
-        async with audited_guard(
-            session, context, Action.WRITE, Scope.RECORDS, Fact.__tablename__, now=now
-        ):
-            _check_supersession(supersedes, subject, attribute, confidence_state)
+    async with audited_guard(
+        session, context, Action.WRITE, Scope.RECORDS, Fact.__tablename__, now=now
+    ):
+        await _check_who_said_so(
+            session,
+            context=context,
+            state=confidence_state,
+            confirmed_by_person_id=confirmed_by_person_id,
+            now=now,
+        )
+        disputes: Sequence[Fact] = ()
+        if supersedes is not None:
+            disputes = await open_disputes(session, context=context, fact_id=supersedes.id, now=now)
+            _check_supersession(supersedes, disputes, subject, attribute, confidence_state)
     new = await audited_write(
         session,
         Fact,
@@ -171,6 +232,7 @@ async def _write_fact(
         unit=unit,
         confidence=sure,
         confidence_state=confidence_state,
+        confirmed_by_person_id=confirmed_by_person_id,
         artifact_id=artifact_id,
         event_id=event_id,
         episode_id=episode_id,
@@ -179,19 +241,23 @@ async def _write_fact(
         asserted_at=moment,
         supersedes_id=None if supersedes is None else supersedes.id,
     )
-    if supersedes is not None:
-        supersedes.superseded_at = moment
+    # A dispute closes nothing. Anything else closes the fact it names, and settling a fact
+    # closes the disputes that were open against it.
+    if supersedes is not None and confidence_state is not ConfidenceState.DISPUTED:
+        for closed in (supersedes, *disputes):
+            closed.superseded_at = moment
         await session.flush()
-        await record(
-            session,
-            context=context,
-            action=Action.WRITE,
-            scope=Scope.RECORDS,
-            target=Fact.__tablename__,
-            target_id=supersedes.id,
-            rows=1,
-            now=now,
-        )
+        for closed in (supersedes, *disputes):
+            await record(
+                session,
+                context=context,
+                action=Action.WRITE,
+                scope=Scope.RECORDS,
+                target=Fact.__tablename__,
+                target_id=closed.id,
+                rows=1,
+                now=now,
+            )
     return new
 
 
@@ -205,6 +271,7 @@ async def assert_fact(
     confidence: float,
     unit: str | None = None,
     confidence_state: ConfidenceState = ConfidenceState.EXTRACTED,
+    confirmed_by_person_id: uuid.UUID | None = None,
     artifact_id: uuid.UUID | None = None,
     event_id: uuid.UUID | None = None,
     episode_id: uuid.UUID | None = None,
@@ -218,6 +285,8 @@ async def assert_fact(
     `valid_from` defaults to now; `valid_to` of None means it holds until superseded.
     `supersedes_id` names a current fact on this profile, read under the key context like the
     provenance is; naming it is superseding it, under the rule in `ConfirmedFactStands`.
+    `confirmed_by_person_id` is required with CONFIRMED_BY_PERSON or DISPUTED and refused
+    with EXTRACTED; who may give it is `app.keys.confirm.require_confirmer`.
     """
     old = None
     if supersedes_id is not None:
@@ -231,6 +300,7 @@ async def assert_fact(
         confidence=confidence,
         unit=unit,
         confidence_state=confidence_state,
+        confirmed_by_person_id=confirmed_by_person_id,
         artifact_id=artifact_id,
         event_id=event_id,
         episode_id=episode_id,
@@ -250,6 +320,7 @@ async def supersede_fact(
     confidence: float,
     unit: str | None = None,
     confidence_state: ConfidenceState = ConfidenceState.EXTRACTED,
+    confirmed_by_person_id: uuid.UUID | None = None,
     artifact_id: uuid.UUID | None = None,
     event_id: uuid.UUID | None = None,
     valid_from: datetime | None = None,
@@ -261,7 +332,8 @@ async def supersede_fact(
     Subject and attribute are the old fact's: a supersession says the same thing better, it
     does not say something else. Provenance and unit are carried over unless new ones are
     given, so confirming a reading still links to the photo it was read from. What a person
-    confirmed is not replaced by an extraction: see `ConfirmedFactStands`.
+    confirmed is not replaced by an extraction, and a DISPUTED supersession is an open dispute
+    that leaves the old fact current: see `ConfirmedFactStands`.
     """
     old = await _current_fact(session, context=context, fact_id=fact_id, now=now)
     carried = artifact_id is None and event_id is None
@@ -274,6 +346,7 @@ async def supersede_fact(
         confidence=confidence,
         unit=unit if unit is not None else old.unit,
         confidence_state=confidence_state,
+        confirmed_by_person_id=confirmed_by_person_id,
         artifact_id=old.artifact_id if carried else artifact_id,
         event_id=old.event_id if carried else event_id,
         episode_id=old.episode_id,
@@ -296,11 +369,13 @@ async def current_facts(
     """The facts that hold at `at` (default now): unsuperseded, inside their window.
 
     Passing `at` is how the timeline asks what was known on a day; the window is on the
-    fact's own validity, so a fact asserted later about an earlier time is still found.
+    fact's own validity, so a fact asserted later about an earlier time is still found. An
+    open dispute is not a fact that holds: the fact it disputes is (`ConfirmedFactStands`).
     """
     moment = at or now or utcnow()
     where: list[ColumnElement[bool]] = [
         Fact.superseded_at.is_(None),
+        Fact.confidence_state != ConfidenceState.DISPUTED,
         Fact.valid_from <= moment,
         or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
     ]
@@ -310,3 +385,26 @@ async def current_facts(
         where.append(Fact.attribute == attribute)
     found = await audited_read(session, Fact, context, Scope.RECORDS, where=where, now=now)
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))
+
+
+async def open_disputes(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    fact_id: uuid.UUID,
+    now: datetime | None = None,
+) -> Sequence[Fact]:
+    """The disputes still open against a fact, oldest first. Empty once a person settled it."""
+    found = await audited_read(
+        session,
+        Fact,
+        context,
+        Scope.RECORDS,
+        where=(
+            Fact.supersedes_id == fact_id,
+            Fact.confidence_state == ConfidenceState.DISPUTED,
+            Fact.superseded_at.is_(None),
+        ),
+        now=now,
+    )
+    return sorted(found, key=lambda dispute: as_utc(dispute.asserted_at))

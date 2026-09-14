@@ -222,6 +222,7 @@ async def test_supersession_keeps_the_history_and_current_facts_returns_only_the
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by_person_id=owner.person_id,
         now=SEPT_10,
     )
 

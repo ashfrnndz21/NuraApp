@@ -1,8 +1,8 @@
 """Episodic memory: storing what came in, and recording what happened.
 
 An artefact is stored once and never changed; the bytes are already in the object store of
-the profile's region when this is called, and this writes down where, and checks the region
-again whenever the row is read back. An event is a moment — a reading taken, a visit, a
+the profile's region when this is called, and this writes down where; reading it back asks
+for the region again, in the query itself. An event is a moment — a reading taken, a visit, a
 message — that names the artefact it came from, or says which channel it came in on and what
 it was. Neither comes from nowhere.
 """
@@ -95,27 +95,26 @@ async def require_artifact(
     artifact_id: uuid.UUID,
     now: datetime | None = None,
 ) -> Artifact:
-    """The artefact by that id on this profile, or a refusal that says no more than that.
+    """The artefact by that id on this profile, in this region, or a refusal saying no more.
 
-    The region is checked again here, not only when the row was stored: a row that entered
-    out of band naming bytes held elsewhere is refused on the way out, and written down.
+    The region is part of the query, not a check after it: a row that entered out of band
+    naming bytes held elsewhere is never read, so no reader of this table can serve it. To
+    this deployment such a row is not there, and the refusal is written down as that.
     """
     found = await audited_read(
         session,
         Artifact,
         context,
         Scope.RECORDS,
-        where=(Artifact.id == artifact_id,),
+        where=(Artifact.id == artifact_id, Artifact.region == context.region),
         now=now,
     )
-    if not found:
-        raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
-    artifact = found[0]
     async with audited_guard(
         session, context, Action.READ, Scope.RECORDS, Artifact.__tablename__, now=now
     ):
-        guard_region(held_in=artifact.region, asked_from=context.region)
-    return artifact
+        if not found:
+            raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
+    return found[0]
 
 
 async def record_event(

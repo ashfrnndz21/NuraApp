@@ -4,13 +4,15 @@ Provenance is tied to the profile at the table, not only at the service: `(profi
 artifact_id)` on event and fact points at `artifact(profile_id, id)`, and the same for
 `event_id`, `episode_id`, `supersedes_id` and `provider_id`, with the `(profile_id, id)`
 uniques those keys need. The single-column keys 0003 shipped stay; these are added beside
-them. An event says where it came in from (`source_channel`), and an appointment says who
-confirmed it (`confirmed_by_person_id`).
+them. An event says where it came in from (`source_channel`), an appointment says who
+confirmed it (`confirmed_by_person_id`), and a fact says who confirmed or disputed it
+(`confirmed_by_person_id`, nullable: an extraction names nobody).
 
-Both new columns are NOT NULL and neither has a default, because a default would invent a
-source or a confirmer. `source_channel` is filled from the artefact where an event names one;
-an event with no artefact, or an appointment, that is already in the table has no honest
-value, and the upgrade stops rather than make one up.
+The event and appointment columns are NOT NULL and neither has a default, because a default
+would invent a source or a confirmer. `source_channel` is filled from the artefact where an
+event names one; an event with no artefact, or an appointment, that is already in the table
+has no honest value, and the upgrade stops rather than make one up. Precondition for an
+environment holding rows: none in `appointment`, none in `event` without an artefact.
 
 Every change is a batch operation so it runs on SQLite (the tests) as well as Postgres; on
 Postgres the batch is a plain ALTER TABLE.
@@ -36,6 +38,7 @@ SOURCE_CHANNEL = sa.Enum(
 )
 
 CONFIRMED_BY = "fk_appointment_confirmed_by_person"
+FACT_CONFIRMED_BY = "fk_fact_confirmed_by_person"
 
 _ROW_OF_PROFILE = ("artifact", "event", "episode", "fact", "provider")
 """The tables another row may be tied to: each gets a unique on (profile_id, id)."""
@@ -105,8 +108,17 @@ def upgrade() -> None:
             CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"]
         )
 
+    with op.batch_alter_table("fact") as batch:
+        batch.add_column(sa.Column("confirmed_by_person_id", sa.Uuid(), nullable=True))
+        batch.create_foreign_key(
+            FACT_CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"]
+        )
+
 
 def downgrade() -> None:
+    with op.batch_alter_table("fact") as batch:
+        batch.drop_constraint(FACT_CONFIRMED_BY, type_="foreignkey")
+        batch.drop_column("confirmed_by_person_id")
     with op.batch_alter_table("appointment") as batch:
         batch.drop_constraint(CONFIRMED_BY, type_="foreignkey")
         batch.drop_column("confirmed_by_person_id")

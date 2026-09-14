@@ -24,9 +24,11 @@ from app.db import as_utc
 from app.identity.models import Profile
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
-from app.keys.scopes import Scope
+from app.keys.grants import grant_key
+from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import (
     EventFromNowhere,
+    NoSuchArtifact,
     NotTheArtefactsChannel,
     record_event,
     require_artifact,
@@ -51,9 +53,12 @@ from app.memory.semantic import (
     ConfirmedFactStands,
     NoSuchFact,
     NoSuchProvenance,
+    NotAPersonsWord,
+    NotTheFactInDispute,
     NotTheSameFact,
     assert_fact,
     current_facts,
+    open_disputes,
     supersede_fact,
 )
 from app.memory.spine import (
@@ -112,6 +117,32 @@ async def _systolic(
         unit="mmHg",
         confidence=0.8,
         confidence_state=state,
+        artifact_id=photo.id,
+        valid_from=when,
+        now=when,
+    )
+
+
+async def _dose(
+    session: AsyncSession,
+    context: KeyContext,
+    photo: Artifact,
+    value: int,
+    *,
+    state: ConfidenceState = ConfidenceState.EXTRACTED,
+    confirmed_by: uuid.UUID | None = None,
+    when: datetime = SEPT_3,
+) -> Fact:
+    return await assert_fact(
+        session,
+        context=context,
+        subject="medication",
+        attribute="dose",
+        value=value,
+        unit="mg",
+        confidence=0.8 if state is ConfidenceState.EXTRACTED else 1.0,
+        confidence_state=state,
+        confirmed_by_person_id=confirmed_by,
         artifact_id=photo.id,
         valid_from=when,
         now=when,
@@ -261,7 +292,7 @@ async def test_a_fact_cannot_name_a_predecessor_that_is_not_a_current_fact_on_th
 async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: AsyncSession) -> None:
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
-    extracted = await _systolic(sg, owner, photo, 138)
+    extracted = await _dose(sg, owner, photo, 138)
     confirmed = await supersede_fact(
         sg,
         context=owner,
@@ -269,7 +300,9 @@ async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: Asyn
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by_person_id=owner.person_id,
     )
+    assert confirmed.confirmed_by_person_id == owner.person_id
 
     # The machine's value cannot quietly replace the person's.
     with pytest.raises(ConfirmedFactStands):
@@ -279,7 +312,106 @@ async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: Asyn
         (Action.WRITE, "fact", "ConfirmedFactStands")
     }
 
-    # It can say, explicitly, that the two disagree.
+    # The same rule holds on the public door.
+    with pytest.raises(ConfirmedFactStands):
+        await assert_fact(
+            sg,
+            context=owner,
+            subject="medication",
+            attribute="dose",
+            value=142,
+            confidence=0.9,
+            artifact_id=photo.id,
+            supersedes_id=confirmed.id,
+        )
+
+
+async def test_a_confirmed_or_disputed_state_names_the_person_who_said_so(
+    sg: AsyncSession,
+) -> None:
+    owner = await _pa(sg)
+    neighbour = await _pa(sg, phone="+6591110002")
+    abroad = await register_person(
+        sg, region=Region.MY, display_name="Cousin", phone_e164="+60121110003"
+    )
+    photo = await _photo(sg, owner)
+    extracted = await _dose(sg, owner, photo, 138)
+
+    # A label with nobody behind it is not a person's word.
+    for state in (ConfidenceState.CONFIRMED_BY_PERSON, ConfidenceState.DISPUTED):
+        with pytest.raises(NobodyConfirmed):
+            await supersede_fact(
+                sg,
+                context=owner,
+                fact_id=extracted.id,
+                value=136,
+                confidence=1.0,
+                confidence_state=state,
+            )
+        with pytest.raises(NobodyConfirmed):
+            await _dose(sg, owner, photo, 136, state=state)
+    # Nor is a person from another household, another region, or nowhere.
+    for who in (neighbour.person_id, abroad.id, uuid.uuid4()):
+        with pytest.raises(NobodyConfirmed):
+            await _dose(
+                sg,
+                owner,
+                photo,
+                136,
+                state=ConfidenceState.CONFIRMED_BY_PERSON,
+                confirmed_by=who,
+            )
+    # And an extraction does not name one: it is the machine's, not a person's.
+    with pytest.raises(NotAPersonsWord):
+        await _dose(sg, owner, photo, 136, confirmed_by=owner.person_id)
+    assert extracted.superseded_at is None
+    assert {r[2] for r in _refusals(list(await read_audit(sg, context=owner)))} == {
+        "NobodyConfirmed",
+        "NotAPersonsWord",
+    }
+
+    # The people who may: the owner, the person asking, and a key holder on this profile.
+    daughter = await register_person(
+        sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
+    )
+    await grant_key(
+        sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, basis="owner_consent"
+    )
+    by_owner = await _dose(
+        sg,
+        owner,
+        photo,
+        136,
+        state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by=owner.person_id,
+    )
+    by_daughter = await supersede_fact(
+        sg,
+        context=owner,
+        fact_id=by_owner.id,
+        value=136,
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by_person_id=daughter.id,
+    )
+    assert by_daughter.confirmed_by_person_id == daughter.id
+
+
+async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles_it(
+    sg: AsyncSession,
+) -> None:
+    """medication.dose: confirmed 136, extracted 150 disputed, current is 136, confirmed 150."""
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner)
+    confirmed = await _dose(
+        sg,
+        owner,
+        photo,
+        136,
+        state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by=owner.person_id,
+    )
+
     disputed = await supersede_fact(
         sg,
         context=owner,
@@ -287,33 +419,50 @@ async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: Asyn
         value=150,
         confidence=0.9,
         confidence_state=ConfidenceState.DISPUTED,
+        confirmed_by_person_id=owner.person_id,
+        now=SEPT_10,
     )
-    assert disputed.confidence_state is ConfidenceState.DISPUTED
-    # A disagreement is not settled by another extraction either; only a person settles it.
+    # The dispute names the fact it disputes and is kept, but it closes nothing and is not
+    # current: the person's 136 stands while the dispute is open.
+    assert disputed.supersedes_id == confirmed.id and disputed.superseded_at is None
+    assert confirmed.superseded_at is None
+    current = await current_facts(sg, context=owner, subject="medication", now=SEPT_10)
+    assert [(f.id, f.value) for f in current] == [(confirmed.id, 136)]
+    assert [d.id for d in await open_disputes(sg, context=owner, fact_id=confirmed.id)] == [
+        disputed.id
+    ]
+
+    # While it is open, no extraction settles it, and the dispute itself is not a predecessor.
     with pytest.raises(ConfirmedFactStands):
-        await supersede_fact(sg, context=owner, fact_id=disputed.id, value=140, confidence=0.9)
+        await supersede_fact(sg, context=owner, fact_id=confirmed.id, value=150, confidence=0.9)
+    with pytest.raises(NotTheFactInDispute):
+        await supersede_fact(
+            sg,
+            context=owner,
+            fact_id=disputed.id,
+            value=150,
+            confidence=1.0,
+            confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+            confirmed_by_person_id=owner.person_id,
+        )
+
+    # A person settles it: the new number is current, and the old fact and its dispute close.
     settled = await supersede_fact(
         sg,
         context=owner,
-        fact_id=disputed.id,
-        value=140,
+        fact_id=confirmed.id,
+        value=150,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmed_by_person_id=owner.person_id,
+        now=SEPT_10 + timedelta(days=1),
     )
-    assert [f.id for f in await current_facts(sg, context=owner)] == [settled.id]
-
-    # The same rule holds on the public door.
-    with pytest.raises(ConfirmedFactStands):
-        await assert_fact(
-            sg,
-            context=owner,
-            subject="blood_pressure",
-            attribute="systolic",
-            value=142,
-            confidence=0.9,
-            artifact_id=photo.id,
-            supersedes_id=settled.id,
-        )
+    later = SEPT_10 + timedelta(days=2)
+    assert [(f.id, f.value) for f in await current_facts(sg, context=owner, now=later)] == [
+        (settled.id, 150)
+    ]
+    assert confirmed.superseded_at is not None and disputed.superseded_at is not None
+    assert await open_disputes(sg, context=owner, fact_id=confirmed.id) == []
 
 
 # --- 4. an event comes from somewhere ------------------------------------------------------
@@ -557,17 +706,19 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
     sg.add(astray)
     await sg.flush()
 
-    with pytest.raises(OutOfRegion):
+    # The region is in the query itself, so the row is never read: to this deployment it is
+    # not there, and the refusal says no more than that, but it is written down.
+    with pytest.raises(NoSuchArtifact):
         await require_artifact(sg, context=owner, artifact_id=astray.id)
-    assert _refusals(list(await read_audit(sg, context=owner))) == {
-        (Action.READ, "artifact", "OutOfRegion")
-    }
+    trail = list(await read_audit(sg, context=owner))
+    assert _refusals(trail) == {(Action.READ, "artifact", "NoSuchArtifact")}
+    assert all(e.rows == 0 for e in trail if e.target == "artifact")
     # Nothing downstream can cite it either.
-    with pytest.raises(OutOfRegion):
+    with pytest.raises(NoSuchArtifact):
         await record_event(
             sg, context=owner, kind=EventKind.DISCHARGE, occurred_at=SEPT_3, artifact_id=astray.id
         )
-    with pytest.raises(OutOfRegion):
+    with pytest.raises(NoSuchProvenance):
         await assert_fact(
             sg,
             context=owner,
@@ -597,18 +748,40 @@ async def test_an_appointment_records_the_person_who_confirmed_it(sg: AsyncSessi
     )
     assert visit.confirmed_by_person_id == owner.person_id
 
-    with pytest.raises(NobodyConfirmed):
-        await book_appointment(
-            sg,
-            context=owner,
-            provider_id=dr_tan.id,
-            scheduled_at=SEPT_10,
-            purpose="see Dr Tan again",
-            confirmed_by_person_id=uuid.uuid4(),
-        )
+    # Not a person from another household, nor from the other region, nor from nowhere.
+    neighbour = await _pa(sg, phone="+6591110002")
+    abroad = await register_person(
+        sg, region=Region.MY, display_name="Cousin", phone_e164="+60121110003"
+    )
+    for who in (neighbour.person_id, abroad.id, uuid.uuid4()):
+        with pytest.raises(NobodyConfirmed):
+            await book_appointment(
+                sg,
+                context=owner,
+                provider_id=dr_tan.id,
+                scheduled_at=SEPT_10,
+                purpose="see Dr Tan again",
+                confirmed_by_person_id=who,
+            )
     assert _refusals(list(await read_audit(sg, context=owner))) == {
         (Action.WRITE, "appointment", "NobodyConfirmed")
     }
+    # A key holder on this profile may confirm.
+    daughter = await register_person(
+        sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
+    )
+    await grant_key(
+        sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, basis="owner_consent"
+    )
+    by_daughter = await book_appointment(
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="see Dr Tan again",
+        confirmed_by_person_id=daughter.id,
+    )
+    assert by_daughter.confirmed_by_person_id == daughter.id
     # The confirm is not optional at the signature either.
     with pytest.raises(TypeError):
         await book_appointment(  # type: ignore[call-arg]

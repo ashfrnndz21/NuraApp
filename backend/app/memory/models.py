@@ -189,6 +189,15 @@ class Fact(ProfileScoped, Base):
     JSON with `unit` beside it where one applies. A fact names the artefact or the event it
     was read from, and the table refuses one that names neither. It holds for the window
     `valid_from` to `valid_to`, and once superseded it stays, marked with when.
+
+    `confidence_state` is not a label the caller picks: CONFIRMED_BY_PERSON and DISPUTED
+    name the person who said so in `confirmed_by_person_id`, and the service refuses either
+    without one. An EXTRACTED fact is the machine's and names nobody. A DISPUTED fact is an
+    open dispute against the fact it `supersedes`: it closes nothing and is never current.
+
+    A `medication.dose` fact here is storage. The label-photo rule for a high-risk drug
+    (docs/medications-module.md) is the medicines module's gate (E04) above this layer; this
+    table accepts a dose whose provenance is a WHATSAPP event, and E04 must not save one.
     """
 
     __tablename__ = "fact"
@@ -223,6 +232,11 @@ class Fact(ProfileScoped, Base):
     asserted_at: Mapped[datetime] = mapped_column(default=utcnow)
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
     superseded_at: Mapped[datetime | None] = mapped_column(default=None)
+    # Who confirmed or disputed it. Required by the service for those two states, and
+    # refused for an extraction; a nullable column because an extraction names nobody.
+    confirmed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
 
 
 # --- working -------------------------------------------------------------------------------

@@ -12,18 +12,19 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import record_share
-from app.audit.models import Action, Channel, Outcome
+from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import NotTheirsToRead, read_audit
 from app.db import utcnow
 from app.identity.models import Person, Profile
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
-from app.keys.grants import grant_key
+from app.keys.grants import grant_key, revoke_key
 from app.keys.scopes import KeyRole, Scope
-from app.regions import Region
+from app.regions import OutOfRegion, Region
 from tests.support import Note, add_note, read_notes
 
 PRIVATE = "Pa keeps this one to himself."
@@ -187,9 +188,7 @@ async def test_the_patient_narrows_the_trail_by_person_action_scope_and_day(
 
     # Newest first, so the owner's screen opens on what just happened.
     newest = await read_audit(sg, context=owner)
-    assert [entry.at for entry in newest] == sorted(
-        (entry.at for entry in newest), reverse=True
-    )
+    assert [entry.at for entry in newest] == sorted((entry.at for entry in newest), reverse=True)
 
 
 # --- what was touched, never what it said ------------------------------------------------
@@ -202,9 +201,7 @@ async def test_the_trail_says_what_was_touched_and_never_what_it_said(sg: AsyncS
         await read_notes(sg, held, scope=Scope.NOTES)
 
     for entry in await read_audit(sg, context=owner):
-        written = " ".join(
-            str(value) for value in vars(entry).values() if isinstance(value, str)
-        )
+        written = " ".join(str(value) for value in vars(entry).values() if isinstance(value, str))
         assert PRIVATE not in written
         assert WATER_PILL not in written
 
@@ -228,3 +225,44 @@ async def test_a_stranger_writes_nothing_into_a_graph_he_holds_no_key_to(
     after = await read_audit(sg, context=owner)
     assert stranger.id not in {entry.actor_person_id for entry in after}
     assert len(after) == before + 1
+
+
+async def test_a_helper_whose_key_was_closed_is_refused_and_the_patient_sees_it(
+    sg: AsyncSession,
+) -> None:
+    _, owner, daughter, held = await _pa_and_his_daughter(sg)
+    assert held.key_id is not None
+    await revoke_key(sg, context=owner, key_id=held.key_id)
+    before = len(await read_audit(sg, context=owner))
+
+    with pytest.raises(NoKey):
+        await resolve_key_context(
+            sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
+        )
+
+    # She held a key once, so the profile knows her: the reaching is written down.
+    after = await read_audit(sg, context=owner)
+    assert len(after) == before + 2
+    refused = [entry for entry in after if entry.outcome is Outcome.REFUSED]
+    assert [(e.actor_person_id, e.refused_because, e.key_id, e.actor_role) for e in refused] == [
+        (daughter.id, "NoKey", None, None)
+    ]
+
+
+async def test_a_stranger_reaching_across_the_region_pin_leaves_no_line_either(
+    sg: AsyncSession,
+) -> None:
+    pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
+    astray = Profile(region=Region.MY, display_name="Pa", owner_person_id=pa.id)
+    sg.add(astray)
+    await sg.flush()
+    stranger = await register_person(
+        sg, region=Region.SG, display_name="Someone", phone_e164="+6591110099"
+    )
+
+    with pytest.raises(OutOfRegion):
+        await resolve_key_context(sg, region=Region.SG, person_id=stranger.id, profile_id=astray.id)
+    # Nobody the profile knows asked, so nothing is written: a known id is not a way to fill
+    # someone's trail. (The owner asking is written down: test_memory_review.)
+    lines = (await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id == astray.id))).all()
+    assert lines == []
