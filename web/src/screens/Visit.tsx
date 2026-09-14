@@ -414,7 +414,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       {stage.kind === "notes" && summaryCard(stage.summary, "summary")}
 
       {!listening && stage.kind !== "saving" && stage.kind !== "held" && (
-        <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+        <TabBar current="today" />
       )}
     </main>
   );

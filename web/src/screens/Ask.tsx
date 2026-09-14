@@ -102,7 +102,7 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
       <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
         {s.feed.back}
       </Pill>
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" />
     </main>
   );
 }

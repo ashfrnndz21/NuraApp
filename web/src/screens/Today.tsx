@@ -339,7 +339,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         </>
       )}
 
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" />
     </main>
   );
 }

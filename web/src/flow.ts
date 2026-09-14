@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import * as nura from "./api/nura";
 import type { ClaimableOut, DoorsOut, FeedItemOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
+import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
@@ -28,6 +29,9 @@ export type Screen =
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   | { name: "me" }
+  /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
+   *  and the family's papers; `at` is the one screen under it. */
+  | { name: "record"; at?: RecordAt }
   | { name: "onboarding" };
 
 export const screen = signal<Screen>({ name: "loading" });

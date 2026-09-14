@@ -2,6 +2,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { speak, type SpokenCard } from "../speech/speak";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
+import { go } from "../flow";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
 
@@ -210,16 +211,21 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
   );
 }
 
-export function TabBar({ current, onSelect }: { current: "today" | "me"; onSelect: (tab: "today" | "me") => void }): JSX.Element {
+/** The nav entries, in the order Today · Feed · Record · Family · Me; each one screen away.
+ *  (The Feed opens from Today's "See more for you", and the Family entry is W6's.) */
+export type Tab = "today" | "record" | "me";
+const TABS: readonly Tab[] = ["today", "record", "me"];
+
+export function TabBar({ current }: { current: Tab }): JSX.Element {
   const s = t();
+  const open = (tab: Tab) => go(tab === "record" ? { name: "record", at: { name: "hub" } } : { name: tab });
   return (
     <nav class="tabbar" aria-label={s.appName}>
-      <button type="button" aria-current={current === "today" ? "page" : undefined} onClick={() => onSelect("today")}>
-        {s.tabs.today}
-      </button>
-      <button type="button" aria-current={current === "me" ? "page" : undefined} onClick={() => onSelect("me")}>
-        {s.tabs.me}
-      </button>
+      {TABS.map((tab) => (
+        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => open(tab)} data-testid={`tab-${tab}`}>
+          {s.tabs[tab]}
+        </button>
+      ))}
     </nav>
   );
 }

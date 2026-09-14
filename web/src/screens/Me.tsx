@@ -63,7 +63,7 @@ export function MeScreen(): JSX.Element {
           {s.me.signOut}
         </Pill>
       </Tile>
-      <TabBar current="me" onSelect={(tab) => go(tab === "today" ? { name: "today" } : { name: "me" })} />
+      <TabBar current="me" />
     </main>
   );
 }

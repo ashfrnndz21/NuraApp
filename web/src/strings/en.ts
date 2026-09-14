@@ -8,6 +8,8 @@ export const en = {
     // @patient headline
     today: "Today",
     // @patient headline
+    record: "Papers",
+    // @patient headline
     me: "Me",
   },
   signIn: {
@@ -303,6 +305,10 @@ export const en = {
     saved: "Nura wrote it down.",
     // @patient phrase
     cancel: "Not now",
+    // @patient phrase
+    photo: "Take a photo of the machine",
+    // @patient
+    photoLead: "Or take a photo of the machine's screen.",
   },
   me: {
     // @patient headline
@@ -716,6 +722,293 @@ export const en = {
       },
     },
   },
+  // The Record (W5): the screens' own lines. Every card's words are the backend's.
+  record: {
+    // @patient headline
+    title: "Your papers",
+    // @patient headline
+    titleOther: "{name}'s papers",
+    // @patient headline
+    medicines: "Your medicines",
+    // @patient headline
+    papers: "Papers waiting for your yes",
+    // @patient headline
+    routine: "Your day",
+    // @patient headline
+    timeline: "Your visits",
+    // @patient headline
+    trends: "Your blood tests",
+    // @patient headline
+    providers: "Your doctors and clinics",
+    // @patient headline
+    documents: "Papers for the family",
+    // @patient headline
+    changes: "What changed",
+    // @patient phrase
+    back: "Back to your papers",
+    // @patient
+    sureYes: "You said yes to this.",
+    // @patient
+    sureRead: "Nura read this clearly.",
+    // @patient
+    disputed: "Someone said this is not right.",
+    // @patient
+    twice: "This medicine is on your list twice.",
+    // @patient phrase
+    aboutIt: "About this medicine",
+    // @patient phrase
+    add: "Add a medicine",
+    // @patient headline
+    storyPurpose: "What it is for",
+    // @patient headline
+    storyHow: "How to take it",
+    // @patient headline
+    storyWatch: "What to look out for",
+    // @patient headline
+    storyAvoid: "What to stay away from",
+    // @patient headline
+    storyForgot: "If you forget it",
+    // @patient headline
+    storyAsk: "To ask your doctor",
+    // @patient
+    addLead: "Take a photo of the label first.",
+    // @patient
+    addLead2: "Then check what Nura read.",
+    // @patient phrase
+    nameLabel: "The name on the label",
+    // @patient phrase
+    strengthLabel: "How strong it is",
+    // @patient phrase
+    howLabel: "How to take it",
+    // @patient
+    howHint: "Type it the way the label says it.",
+    // @patient phrase
+    countLabel: "How many are in the box",
+    // @patient phrase
+    doctorLabel: "The doctor's name",
+    // @patient phrase
+    checkIt: "Check it",
+    // @patient
+    outcomeNew: "This is a new medicine for your list.",
+    // @patient
+    outcomeRefill: "This is more of a medicine on your list.",
+    // @patient
+    outcomeChange: "This label has a different amount.",
+    // @patient headline
+    flaggedTitle: "Before you add it",
+    // @patient
+    flaggedNone: "Nura found nothing on your list that goes badly with it.",
+    // @patient
+    severity: {
+      major: "This one matters a lot.",
+      moderate: "This one matters.",
+      minor: "This one matters a little.",
+    },
+    // @patient phrase
+    pair: "{one} and {two}",
+    // @patient phrase
+    addIt: "Add it to my list",
+    // @patient
+    added: "Nura added it to your list.",
+    // @patient headline
+    moreTitle: "More at home",
+    // @patient
+    moreLead: "How many more did you find at home?",
+    // @patient phrase
+    moreLabel: "How many more",
+    // @patient phrase
+    moreYes: "Yes, add them",
+    // @patient
+    papersNone: "No paper is waiting for your yes.",
+    // @patient
+    paperFrom: "This came in on {date}.",
+    // @patient phrase
+    paperOpen: "Look at this paper",
+    // @patient phrase
+    older: "Show older visits",
+    // @patient
+    papersWith: "{count} papers are with it.",
+    // @patient
+    paperWith: "One paper is with it.",
+    // @patient
+    nothingWith: "Nothing is with it yet.",
+    // @patient
+    factsWith: "Nura wrote down {count} things from it.",
+    // @patient
+    factWith: "Nura wrote down one thing from it.",
+    // @patient
+    since: "It started on {date}.",
+    // @patient
+    ended: "It ended on {date}.",
+    // @patient phrase
+    seeIllness: "See this illness",
+    // @patient phrase
+    seeDoctor: "See this doctor",
+    // @patient
+    endOfList: "That is everything Nura has.",
+    // @patient
+    status: {
+      planned: "This visit is planned.",
+      confirmed: "This visit is booked.",
+      attended: "You went to this visit.",
+      not_attended: "You did not go to this visit.",
+      cancelled: "This visit was called off.",
+    },
+    // @patient headline
+    illnessPapers: "Papers with this illness",
+    // @patient headline
+    illnessVisits: "Visits during this illness",
+    // @patient headline
+    illnessMoments: "What was written down",
+    // @patient phrase
+    momentOn: "{what} on {date}",
+    // @patient
+    photoOn: "This is a photo from {date}.",
+    // @patient
+    letterOn: "This is a letter from {date}.",
+    // @patient
+    paperOn: "This is a paper from {date}.",
+    // @patient phrase
+    putWith: "Put a paper with this illness",
+    // @patient phrase
+    putThis: "Put this paper with it",
+    // @patient
+    putAsk: "Put this paper with this illness?",
+    // @patient phrase
+    putYes: "Yes, put it there",
+    // @patient
+    putDone: "The paper is with the illness now.",
+    // @patient
+    nothingToPut: "Every paper is with it already.",
+    // @patient phrase
+    kind: {
+      doctor: "Doctor",
+      clinic: "Clinic",
+      hospital: "Hospital",
+      pharmacy: "Pharmacy",
+      lab: "A place for blood tests",
+      other: "Another place",
+    },
+    // @patient
+    visitsMany: "Nura has {count} visits here.",
+    // @patient
+    visitsOne: "Nura has one visit here.",
+    // @patient
+    lastVisit: "The last visit was on {date}.",
+    // @patient
+    nextVisit: "The next visit is on {date}.",
+    // @patient phrase
+    where: "Where it is",
+    // @patient phrase
+    phone: "Phone number",
+    // @patient headline
+    medicinesFrom: "Medicines from here",
+    // @patient headline
+    notesTitle: "Notes about this place",
+    // @patient
+    notesOnly: "Only the owner and the chief can read these notes.",
+    // @patient phrase
+    noteLabel: "A note about this place",
+    // @patient phrase
+    noteSave: "Keep the note",
+    // @patient
+    noteSaved: "Nura kept your note.",
+    // @patient
+    writtenOn: "This was written on {date}.",
+    // @patient headline
+    waiting: "Still waiting",
+    // @patient
+    trendsLead: "Choose a test to see it over time.",
+    // @patient phrase
+    analytes: {
+      total_cholesterol: "Your cholesterol",
+      ldl: "Your bad cholesterol",
+      hdl: "Your good cholesterol",
+      triglycerides: "Your blood fat",
+      hba1c: "Your sugar test",
+      creatinine: "Your kidney number",
+      egfr: "Your kidney filter",
+      potassium: "Your body salt",
+      haemoglobin: "Your blood count",
+      tsh: "Your thyroid test",
+    },
+    // @patient phrase
+    resultOn: "{value} {unit} on {date}",
+    // @patient
+    rangeUnder: "The range is under {upper}.",
+    // @patient
+    rangeOver: "The range is over {lower}.",
+    // @patient
+    rangeBetween: "The range is {lower} to {upper}.",
+    // @patient
+    noRange: "Nura has no range for this one.",
+    // @patient
+    labRange: "This range is printed on your blood test.",
+    // @patient
+    guideRange: "This range is from a guide for your age.",
+    // @patient phrase
+    anchors: {
+      wake: "When you wake up",
+      breakfast: "Breakfast",
+      lunch: "Lunch",
+      dinner: "Dinner",
+      bed: "Bedtime",
+    },
+    // @patient phrase
+    readings: {
+      blood_pressure: "Blood pressure",
+      blood_sugar: "Blood sugar",
+      weight: "Weight",
+    },
+    // @patient phrase
+    walk: "A walk",
+    // @patient
+    notSet: "Nobody has set the day yet.",
+    // @patient phrase
+    setDay: "Set the day",
+    // @patient phrase
+    timeLabel: "What time",
+    // @patient phrase
+    morningCard: "When the Today page comes",
+    // @patient phrase
+    walkAfter: "A walk after this",
+    // @patient phrase
+    checkDay: "Check the day",
+    // @patient
+    dayAsk: "Is this the day?",
+    // @patient phrase
+    dayYes: "Yes, set the day",
+    // @patient
+    daySaved: "Nura wrote down the day.",
+    // @patient headline
+    tableMoment: "When",
+    // @patient headline
+    tableTime: "Time",
+    // @patient headline
+    tableMedicines: "Medicines",
+    // @patient headline
+    tableReadings: "What to check",
+    // @patient
+    documentsLead: "Keep a lasting power of attorney or a doctor's letter here.",
+    // @patient phrase
+    tags: {
+      lpa: "Lasting power of attorney",
+      medical_letter: "A doctor's letter",
+      consent_form: "A signed consent form",
+    },
+    // @patient
+    noDocuments: "Nura keeps no papers like this yet.",
+    // @patient
+    keptOn: "Nura kept this on {date}.",
+    // @patient
+    backsConsent: "An agreement to share rests on it.",
+    // @patient
+    backsStewardship: "Looking after these papers rests on it.",
+    // @patient
+    chooseKind: "What kind of paper is it?",
+    // @patient
+    documentAdded: "Nura kept the paper.",
+  },
   errors: {
     // @patient
     network: "Nura cannot reach the internet right now.",
@@ -797,5 +1090,21 @@ export const en = {
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",
+    NoteNamesHealth: "Nura cannot keep a note that names a medicine or an illness.",
+    NotAPlaceNote: "Please write one short line about the place.",
+    NotTheirsToSet: "You can see the day but not change it.",
+    NotARoutine: "The times must go in order through the day.",
+    NoSuchAnalyte: "Nura does not know that test.",
+    NobodyToAsk: ["Nobody is on the family list to ask.", "Add someone to the family list first."],
+    NotACount: "Please type how many, as a number.",
+    NotADocument: "Nura can keep a letter or a photo of a page.",
+    AlreadyHangsThere: "That paper is already there.",
+    EpisodeAlreadyClosed: "This illness is over.",
+    NoSuchEpisode: "That illness is not here any more.",
+    NoSuchProvider: "That doctor is not in your list.",
+    StaleState: ["Nura is still catching up.", "Please try again."],
+    NotIdentified: "Nura could not find this medicine.",
+    DoseNotRead: "Please type how to take it, as the label says.",
+    NotADose: "Nura did not understand how to take it.",
   },
 } satisfies Strings;
