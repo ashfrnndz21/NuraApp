@@ -25,8 +25,8 @@ doctor or from him is the surface's: nothing is uploaded, nothing is kept (`when
 `consult_clip` is the other half of E03-05: the stretch of a recording a summary line or an
 answer cites. A webm or an mp4 cannot be cut at a byte offset into something a phone will
 play without a demuxer, and Nura takes no new dependency for one, so the clip is honest about
-it: the whole artefact, under the artefact's own scope, with the start and end the citation
-carries, which the phone plays as a media fragment (`#t=start,end`) and stops at the end
+it: the whole artefact, under the scope it was written under — the visits', where every
+consult is kept (ADR 0004) — with the start and end the citation carries, which the phone plays as a media fragment (`#t=start,end`) and stops at the end
 (docs/adr/0006-consult-recording-on-the-web.md).
 """
 
@@ -50,7 +50,7 @@ from app.ingestion.speakers import Aligned, SegmentsDoNotFit, SpeakerSeparator, 
 from app.ingestion.transcribe import Transcriber, Transcript
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
-from app.memory.episodic import require_artifact, store_artifact
+from app.memory.episodic import require_artifact_under, store_artifact
 from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel
 from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.models import SummaryItem, VisitSummary
@@ -370,9 +370,10 @@ async def consult_clip(
 ) -> Clip:
     """The stretch `start_s`–`end_s` of a consult recording, or a refusal.
 
-    The recording is a visit's, so the key must hold the visits scope to find it; the bytes
-    are an artefact written under the record's scope, so it must hold that too
-    (`require_artifact`). The whole artefact comes back with the range: see the module note.
+    The recording is a visit's: its row and its bytes are the visits' part (`store_artifact`
+    writes a consult there, ADR 0004), so the key must hold the visits scope to find it, and
+    the artefact is read under the scope it was written under (`require_artifact_under`). The
+    whole artefact comes back with the range: see the module note.
     """
     guard_region(held_in=store.region, asked_from=context.region)
     found = await audited_read(
@@ -395,7 +396,9 @@ async def consult_clip(
     longest = max([recording.duration_s, *(one.end_s for one in segments)])
     if not (0 <= start_s < end_s <= longest + CLIP_SLACK_SECONDS):
         raise NotAClip(f"a clip is inside the recording's {longest:.1f} seconds")
-    artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
+    artifact = await require_artifact_under(
+        session, context=context, artifact_id=artifact_id, scope=Scope.VISITS
+    )
     data = await store.get(artifact.storage_key)
     if sha256_of(data) != artifact.sha256:
         raise NoSuchObject("the bytes under that key are not the recording")

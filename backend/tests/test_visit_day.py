@@ -313,7 +313,7 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
         json={"person_id": house.mei["person_id"], "confirmation_id": house.appointment_id},
         headers=house.hers,
     )
-    assert refused.status_code == 403 and refused.json() == {"refusal": "NotAConfirmerHere"}
+    assert refused.status_code == 400 and refused.json() == {"refusal": "NotAConfirmerHere"}
     # A caregiver is not the chief: no yes to mint.
     kit = await _key(house, KIT, "Kit", "caregiver", EVERY_PART)
     theirs = await client.post(house.at("/confirmations"), json=draft, headers=bearer(kit["token"]))
@@ -492,12 +492,20 @@ async def test_consent_then_notice_then_upload_keeps_a_consult_and_ends_in_the_p
     summary = kept["summary"]
     assert kept["summary_refused"] is None and summary["artifact_id"] == recording["transcript_artifact_id"]
     assert summary["recording_artifact_id"] == recording["artifact_id"]
-    assert "Ask Dr Tan about the new amount of the water pill." in summary["lines"]
+    assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in summary["lines"]
     _clean(summary["lines"])
-    clips = {item["text"]: (item["clip_start_s"], item["clip_end_s"]) for item in summary["items"]}
-    assert clips["Ask Dr Tan about the new amount of the water pill."] == (19.8, 28.9)
-    assert clips["Every morning, stand on the scale before breakfast."] == (28.9, 36.2)
-    assert all(start is not None and start < end for start, end in clips.values())
+
+    def clip_of(**payload: str) -> tuple[float, float]:
+        (item,) = [i for i in summary["items"] if payload.items() <= i["payload"].items()]
+        return item["clip_start_s"], item["clip_end_s"]
+
+    assert clip_of(generic="frusemide") == (19.8, 28.9)
+    assert clip_of(kind="weigh_every_morning") == (28.9, 36.2)
+    assert clip_of(subject="blood_pressure") == (10.4, 19.8)
+    assert all(
+        item["clip_start_s"] is not None and item["clip_start_s"] < item["clip_end_s"]
+        for item in summary["items"]
+    )
 
     listed = await _ok(await client.get(f"{house.visit}/recordings", headers=house.his))
     assert [one["recording_id"] for one in listed] == [recording["recording_id"]]
@@ -607,16 +615,27 @@ async def test_an_answer_cites_the_clip_and_the_clip_plays_only_under_the_record
         house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 19.8, "end": 28.9}, headers=bearer(siti["token"])
     )
     assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    # A consult is the visits' part (ADR 0004): a viewer, who reads the visits, hears it; a
+    # key to the record without the visits is refused at the door.
     kit = await _key(house, KIT, "Kit", "viewer", ["visits", "readings"])
     viewer = await client.get(
         house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 19.8, "end": 28.9}, headers=bearer(kit["token"])
     )
-    assert viewer.status_code == 403 and viewer.json() == {"refusal": "OutOfScope", "scope": "records"}
-    # A viewer's answer still says Dr Tan talked about it, with nothing to play.
+    assert viewer.status_code == 200 and viewer.content == placeholder_consult(CONSULT)
+    records_only = await _key(house, "+6591210005", "Lim", "caregiver", ["records", "ask"])
+    refused = await client.get(
+        house.at(f"/artifacts/{artifact_id}/clip"),
+        params={"start": 19.8, "end": 28.9},
+        headers=bearer(records_only["token"]),
+    )
+    assert refused.status_code == 403 and refused.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    # Its answer names no visit and plays nothing: the visits are withheld, by name.
     theirs = await _ok(
         await client.post(
-            house.at("/ask"), json={"question": "what did Dr Tan say about the water pill", "mode": "text"}, headers=bearer(kit["token"])
+            house.at("/ask"),
+            json={"question": "what did Dr Tan say about the water pill", "mode": "text"},
+            headers=bearer(records_only["token"]),
         )
     )
-    assert all(line["clip"] is None for line in theirs["lines"])
+    assert all(line["clip"] is None for line in theirs["lines"]) and "visits" in theirs["withheld"]
     assert {"OutOfScope", "NotAClip"} <= await refusals(deployment, house.pa, house.profile_id)

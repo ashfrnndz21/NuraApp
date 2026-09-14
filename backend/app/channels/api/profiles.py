@@ -25,6 +25,7 @@ from app.audit.trail import read_audit
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
 from app.channels.api.schemas import (
+    WITHHELD_TARGET,
     AppointmentConfirmIn,
     AttachConfirmIn,
     AuditOut,
@@ -527,7 +528,8 @@ async def audit(
     limit: int = Query(default=200, ge=1, le=500),
 ) -> list[AuditOut]:
     """Who touched what on this profile, newest first. Read by the owner, or by someone he
-    named to run his care; nobody else."""
+    named to run his care; nobody else. A line written under a scope the reader's key does
+    not hold is shown without the id of the row it touched, and says so."""
     entries = await read_audit(
         session,
         context=context,
@@ -537,7 +539,15 @@ async def audit(
         since=since,
         limit=limit,
     )
-    return [AuditOut.of(entry) for entry in entries]
+    return [
+        AuditOut.of(
+            entry,
+            ()
+            if entry.target_id is None or context.allows(entry.scope)
+            else (WITHHELD_TARGET,),
+        )
+        for entry in entries
+    ]
 
 
 # --- notes -------------------------------------------------------------------------------

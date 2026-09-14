@@ -185,7 +185,8 @@ class _Corpus:
     hung: dict[uuid.UUID, list[Attachment]] = field(default_factory=dict)
     consults: dict[uuid.UUID, tuple[SummaryItem, VisitSummary]] = field(default_factory=dict)
     clips_open: bool = False
-    """Whether the key reaches the recording's bytes (the record's scope) to play a clip."""
+    """Whether the key reaches the recording's bytes to play a clip: a consult is written
+    under the visits scope (ADR 0004), so a key that reads the visits hears what was said."""
     withheld: list[Scope] = field(default_factory=list)
 
     def withhold(self, scope: Scope) -> None:
@@ -321,7 +322,7 @@ async def _corpus(
             )
     else:
         corpus.withhold(Scope.MEDICINES)
-    corpus.clips_open = context.allows(Scope.RECORDS)
+    corpus.clips_open = context.allows(Scope.VISITS)
     if context.allows(Scope.VISITS):
         await _consults(session, context, registry, corpus)
     if context.allows(Scope.RECORDS):

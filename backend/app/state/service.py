@@ -51,7 +51,7 @@ from app.errors import Refusal
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.grants import list_keys
 from app.keys.models import Key
-from app.keys.scopes import Scope, scope_for_subject
+from app.keys.scopes import FACT_SCOPES, Scope, scope_for_subject
 from app.memory.models import (
     Appointment,
     AppointmentStatus,
@@ -61,7 +61,7 @@ from app.memory.models import (
     EventKind,
     Fact,
 )
-from app.memory.semantic import NoSuchFact, current_facts
+from app.memory.semantic import NoSuchFact, current_facts, fact_is_on_profile
 from app.memory.working import open_episodes
 from app.safety.boundary import Surface, is_boundary_line
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, AFTER_VISIT_WINDOW, derive
@@ -76,8 +76,14 @@ from app.state.models import (
 STATE_SCOPE = Scope.RECORDS
 """What reading or writing a snapshot costs: a snapshot is the record, folded into six."""
 
-RECOMPUTE_SCOPES: frozenset[Scope] = frozenset({Scope.RECORDS, Scope.VISITS, Scope.FAMILY})
-"""Every scope a full recompute reads from. A key without all three cannot compute a State.
+RECOMPUTE_SCOPES: frozenset[Scope] = frozenset(
+    {Scope.RECORDS, Scope.VISITS, Scope.FAMILY, *FACT_SCOPES}
+)
+"""Every scope a full recompute reads from. A key without all of them cannot compute a State.
+
+The facts are read one scope at a time (`current_facts`), so a key missing the readings or
+the medicines — a chief with a part marked "only me" — would fold a State without them, and
+that State would become the profile's for everyone. It reads the last one instead.
 
 It can still read the last one, told that it could not check it against the record. A
 helper who writes a medicine leaves State behind the record until the owner, or the chief he
@@ -348,10 +354,10 @@ async def _write_snapshot(
         raise TriggerWithoutItsFact("a recompute caused by a fact names the fact")
     if trigger is not StateTrigger.NEW_FACT and fact_id is not None:
         raise FactWithoutItsTrigger("a fact is named only by a recompute a fact caused")
-    if fact_id is not None:
-        named = await session.get(Fact, fact_id)
-        if named is None or named.profile_id != context.profile_id:
-            raise NoSuchFact("no such fact on this profile")
+    if fact_id is not None and not await fact_is_on_profile(
+        session, context=context, fact_id=fact_id
+    ):
+        raise NoSuchFact("no such fact on this profile")
 
     derived = derive(
         facts=inputs.facts,

@@ -71,6 +71,19 @@ from app.memory.providers import NotAPlaceNote, NoteNamesHealth
 from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
 from app.memory.timeline import NotACursor
 from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
+from app.onboarding.biography import (
+    AlreadyReadBack,
+    BiographyAlreadyOpen,
+    BiographyClosed,
+    CardsStillOpen,
+    NoBiography,
+    NoSuchReadBackLine,
+    NotAtThisStep,
+    PaperAlreadyAdded,
+)
+from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
+from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
+from app.onboarding.settings import NotTheirsToSetUp
 from app.reasoning.trends import NoSuchAnalyte
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
@@ -124,6 +137,21 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NothingToNarrow, 409),
     (AlreadyMarked, 409),
     (AlreadyDone, 409),
+    # Setting a profile up — settings, biography, first week — is the owner's and his
+    # chief's (E01); a sitting walks its steps in order, one sitting at a time.
+    (NotTheirsToSetUp, 403),
+    (NoBiography, 404),
+    (NoPlan, 404),
+    (NoSuchPrompt, 404),
+    (NoSuchBiographyQuestion, 404),
+    (NoSuchReadBackLine, 404),
+    (PaperAlreadyAdded, 409),
+    (BiographyAlreadyOpen, 409),
+    (BiographyClosed, 409),
+    (NotAtThisStep, 409),
+    (AlreadyReadBack, 409),
+    (CardsStillOpen, 409),
+    (PromptAlreadySettled, 409),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),

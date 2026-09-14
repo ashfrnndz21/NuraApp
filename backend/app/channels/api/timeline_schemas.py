@@ -10,6 +10,7 @@ the MESSAGE artefact the question was kept as.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -20,6 +21,7 @@ from app.ingestion.models import EventNote
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
 from app.memory.changes import ChangeLine, Changes
+from app.memory.episodic import WITHHELD_ARTIFACT
 from app.memory.models import (
     Appointment,
     AppointmentStatus,
@@ -219,16 +221,20 @@ class EventOut(BaseModel):
     label: str | None
     artifact_id: uuid.UUID | None
     episode_id: uuid.UUID | None
+    withheld: list[str] = []
+    """`artifact` when the event names an artefact the reader's key may not read: the id is
+    left out, and this says so."""
 
     @classmethod
-    def of(cls, event: Event) -> EventOut:
+    def of(cls, event: Event, withheld: Sequence[str] = ()) -> EventOut:
         return cls(
             event_id=event.id,
             kind=event.kind,
             occurred_at=utc(event.occurred_at),
             label=event.label,
-            artifact_id=event.artifact_id,
+            artifact_id=None if WITHHELD_ARTIFACT in withheld else event.artifact_id,
             episode_id=event.episode_id,
+            withheld=list(withheld),
         )
 
 
@@ -282,8 +288,8 @@ class ItemOut(BaseModel):
             episode=None if item.episode is None else EpisodeOut.of(item.episode),
             visits=list(item.visits),
             artifacts=[ArtifactOut.of(a) for a in item.hanging.artifacts],
-            events=[EventOut.of(e) for e in item.hanging.events],
-            facts=[FactOut.of(f) for f in item.hanging.facts],
+            events=[EventOut.of(e, item.hanging.withheld.get(e.id, ())) for e in item.hanging.events],
+            facts=[FactOut.of(f, item.hanging.withheld.get(f.id, ())) for f in item.hanging.facts],
             notes=[NoteRefOut.of(n) for n in item.hanging.notes],
         )
 

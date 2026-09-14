@@ -16,11 +16,11 @@ part of a visit's logistics, "drive Pa to Dr Tan" (`errand` is `drive`).
 `card_type` gains `visit_logistics` and `confirm_subject` gains `drive`: non-native enums with
 no database constraint, so no schema change for them.
 
-Follows main's head when this story was cut (0017_trends_routines_calendar); the operator
-repoints `down_revision` if another story lands first.
+Follows main's head when this story was merged back (0017 → 0015_biography → 0019_row_scope
+→ this); the operator repoints `down_revision` if another story lands first.
 
 Revision ID: 0020_visit_day
-Revises: 0017_trends_routines_calendar
+Revises: 0019_row_scope
 Create Date: 2026-09-15
 """
 
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0020_visit_day"
-down_revision = "0017_trends_routines_calendar"
+down_revision = "0019_row_scope"
 branch_labels = None
 depends_on = None
 
@@ -69,6 +69,12 @@ _INDEXES = (
     ("ix_consult_segment_profile_id", "consult_segment", ["profile_id"]),
     ("ix_consult_segment_recording_id", "consult_segment", ["recording_id"]),
 )
+
+
+def _has(table: str) -> bool:
+    """Whether a table is there. The migration test runs every revision but one in order, so a
+    revision that widens another story's table says so rather than assuming it."""
+    return sa.inspect(op.get_bind()).has_table(table)
 
 
 def upgrade() -> None:
@@ -114,6 +120,13 @@ def upgrade() -> None:
     )
     for name, table, columns in _INDEXES:
         op.create_index(name, table, columns)
+    if _has("visit_summary"):
+        _widen_the_summary()
+    if _has("task"):
+        _widen_the_task()
+
+
+def _widen_the_summary() -> None:
     with op.batch_alter_table("visit_summary") as summary:
         summary.add_column(sa.Column("recording_artifact_id", sa.Uuid(), nullable=True))
         summary.create_foreign_key(
@@ -131,6 +144,9 @@ def upgrade() -> None:
     with op.batch_alter_table("summary_item") as item:
         item.add_column(sa.Column("clip_start_s", sa.Float(), nullable=True))
         item.add_column(sa.Column("clip_end_s", sa.Float(), nullable=True))
+
+
+def _widen_the_task() -> None:
     with op.batch_alter_table("task") as task:
         task.add_column(sa.Column("appointment_id", sa.Uuid(), nullable=True))
         task.add_column(sa.Column("errand", ERRAND, nullable=True))
@@ -146,22 +162,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("task") as task:
-        task.drop_constraint("fk_task_appointment_profile", type_="foreignkey")
-        task.drop_constraint("fk_task_appointment_id_appointment", type_="foreignkey")
-        task.drop_column("errand")
-        task.drop_column("appointment_id")
-    with op.batch_alter_table("summary_item") as item:
-        item.drop_column("clip_end_s")
-        item.drop_column("clip_start_s")
-    with op.batch_alter_table("visit_summary") as summary:
-        summary.drop_constraint(
-            "fk_visit_summary_recording_artifact_profile", type_="foreignkey"
-        )
-        summary.drop_constraint(
-            "fk_visit_summary_recording_artifact_id_artifact", type_="foreignkey"
-        )
-        summary.drop_column("recording_artifact_id")
+    if _has("task"):
+        with op.batch_alter_table("task") as task:
+            task.drop_constraint("fk_task_appointment_profile", type_="foreignkey")
+            task.drop_constraint("fk_task_appointment_id_appointment", type_="foreignkey")
+            task.drop_column("errand")
+            task.drop_column("appointment_id")
+    if _has("visit_summary"):
+        with op.batch_alter_table("summary_item") as item:
+            item.drop_column("clip_end_s")
+            item.drop_column("clip_start_s")
+        with op.batch_alter_table("visit_summary") as summary:
+            summary.drop_constraint(
+                "fk_visit_summary_recording_artifact_profile", type_="foreignkey"
+            )
+            summary.drop_constraint(
+                "fk_visit_summary_recording_artifact_id_artifact", type_="foreignkey"
+            )
+            summary.drop_column("recording_artifact_id")
     for name, table, _ in reversed(_INDEXES):
         op.drop_index(name, table_name=table)
     op.drop_table("consult_segment")

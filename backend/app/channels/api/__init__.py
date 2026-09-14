@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 import app.ingestion  # wires the label-photo rule onto the memory store
 import app.medicines
+import app.onboarding
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
 from app.channels.api import (
     auth,
@@ -39,6 +40,7 @@ from app.channels.api import (
     family,
     feed,
     medicines,
+    onboarding,
     profiles,
     routine,
     safety,
@@ -77,6 +79,7 @@ def _api() -> APIRouter:
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
     api.include_router(family.router)
+    api.include_router(onboarding.router)
     api.include_router(consent_words.router)
     api.include_router(trends.router)
     api.include_router(routine.router)

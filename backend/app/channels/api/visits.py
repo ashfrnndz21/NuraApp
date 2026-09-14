@@ -352,8 +352,8 @@ async def clip(
     cites. The whole recording comes back — a phone's webm or mp4 is not cut at a byte offset
     without a demuxer — with the stretch in `X-Clip-Start`/`X-Clip-End` and as the media
     fragment the phone plays (`#t=start,end`, `X-Media-Fragment`); the phone stops at the end.
-    Under the visits scope (the recording is a visit's) and the record's (the bytes are an
-    artefact written there)."""
+    Under the visits scope, where a consult recording and its bytes are written (ADR 0004):
+    a key that reads the visits hears it; any other is refused at the door, on the trail."""
     found = await consult_clip(
         session,
         context=context,
