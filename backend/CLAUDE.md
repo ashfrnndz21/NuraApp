@@ -8,4 +8,4 @@ Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL, Alembic, pydantic v2, pytest. As
 - Model calls go through `app/llm/` with the profile's region client; prompts live in `app/llm/prompts/` as files, not strings in code.
 - Licensed drug data goes through `app/drugs/client.py`; tests use the fixture registry in `tests/fixtures/drugs/`.
 - The WhatsApp provider is behind `app/channels/whatsapp/provider.py`; templates in `app/channels/whatsapp/templates/`.
-- `make plain-words` runs `app/safety/plain_words.py` over every string tagged `@patient` in delivery, WhatsApp, consent (`app/consent/`: the wording a patient agrees to and the record he holds) and the strings catalogue.
+- `make plain-words` runs `app/safety/plain_words.py` over every string tagged `@patient` in delivery, everything under `app/channels/` (WhatsApp, the app API, and the strings catalogue `app/channels/strings.py`, where a patient-facing sentence the backend writes lives) and consent (`app/consent/`: the wording a patient agrees to and the record he holds).

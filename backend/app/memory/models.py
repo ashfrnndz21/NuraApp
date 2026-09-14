@@ -47,9 +47,7 @@ def _frozen(model: type[Any], *, except_for: frozenset[str] = frozenset()) -> No
     @event.listens_for(model, "before_update")
     def _refuse(mapper: Any, connection: Any, target: Any) -> None:
         changed = {
-            attribute.key
-            for attribute in inspect(target).attrs
-            if attribute.history.has_changes()
+            attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()
         }
         if changed - except_for:
             raise ImmutableRow(f"{model.__tablename__} rows are not edited")
@@ -122,9 +120,7 @@ class Event(ProfileScoped, Base):
     kind: Mapped[EventKind] = mapped_column(enum_column(EventKind, "event_kind"))
     occurred_at: Mapped[datetime] = mapped_column(index=True)
     label: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
-    )
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     recorded_at: Mapped[datetime] = mapped_column(default=utcnow)
 
@@ -166,9 +162,7 @@ class Fact(ProfileScoped, Base):
     confidence_state: Mapped[ConfidenceState] = mapped_column(
         enum_column(ConfidenceState, "confidence_state")
     )
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
-    )
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     valid_from: Mapped[datetime] = mapped_column()

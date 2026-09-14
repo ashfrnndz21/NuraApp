@@ -65,6 +65,30 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
 Every role holds PROFILE: a key that opens nothing of whose graph it is opens nothing."""
 
 
+_SUBJECT_SCOPES: dict[str, Scope] = {
+    "medicine": Scope.MEDICINES,
+    "blood_pressure": Scope.READINGS,
+    "blood_sugar": Scope.READINGS,
+    "heart_rate": Scope.READINGS,
+    "oxygen": Scope.READINGS,
+    "temperature": Scope.READINGS,
+    "weight": Scope.READINGS,
+}
+
+
+def scope_for_subject(subject: str | None) -> Scope:
+    """Which scope a fact about `subject` sits under. Decided here, never by the caller.
+
+    A medicine fact is read and written under MEDICINES, a reading under READINGS, and
+    anything else — or the whole record, when no subject is named — under RECORDS.
+    """
+    if subject is None:
+        return Scope.RECORDS
+    if subject.startswith("reading:"):
+        return Scope.READINGS
+    return _SUBJECT_SCOPES.get(subject, Scope.RECORDS)
+
+
 class KeyWindow(StrEnum):
     """How long a key lives. Every key states one; `ALWAYS` is the only one without an end."""
 

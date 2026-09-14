@@ -14,14 +14,14 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read, audited_write, record_share
-from app.audit.models import Action, Channel
+from app.audit.models import Action, Channel, Outcome
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
 from app.keys.models import Key
 from app.keys.scopes import DEFAULT_WINDOW, ROLE_SCOPES, KeyRole, KeyWindow, Scope, window_ends_at
 
@@ -34,10 +34,28 @@ class NoKeyToClose(Refusal):
     """There is no such key on this profile."""
 
 
-def _may_cut_keys(context: KeyContext) -> None:
-    context.require(Scope.FAMILY)
-    if not context.is_owner and context.role is not KeyRole.CHIEF:
-        raise NotTheirKeyToCut(f"a {context.role} key cannot cut another key")
+async def may_cut_keys(session: AsyncSession, context: KeyContext, *, now: datetime | None) -> None:
+    """Only the owner or a chief holding the family scope. A refusal is written down.
+
+    Public so a channel can ask before it does anything on the asker's behalf — resolving
+    the holder, say — that it would otherwise have to undo.
+    """
+    try:
+        context.require(Scope.FAMILY)
+        if not context.is_owner and context.role is not KeyRole.CHIEF:
+            raise NotTheirKeyToCut(f"a {context.role} key cannot cut another key")
+    except (OutOfScope, NotTheirKeyToCut) as refusal:
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.FAMILY,
+            target=Key.__tablename__,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refusal).__name__,
+            now=now,
+        )
+        raise
 
 
 async def grant_key(
@@ -64,7 +82,7 @@ async def grant_key(
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
-    _may_cut_keys(context)
+    await may_cut_keys(session, context, now=now)
     moment = now or utcnow()
     consent = await require_consent(
         session,
@@ -75,7 +93,8 @@ async def grant_key(
         now=moment,
     )
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
-    granted = asked & context.scopes
+    # Every key opens the face of the graph it is cut on: narrowing never removes PROFILE.
+    granted = (asked | {Scope.PROFILE}) & context.scopes
     if consent.scopes is not None:
         # Whose record it is (PROFILE) is not a part of it; the rest is what the words named.
         granted &= consent.scopes | {Scope.PROFILE}
@@ -125,7 +144,7 @@ async def revoke_key(
     now: datetime | None = None,
 ) -> Key:
     """Close a key. The row stays, so the owner can still read that it was held."""
-    _may_cut_keys(context)
+    await may_cut_keys(session, context, now=now)
     moment = now or utcnow()
     found = await audited_read(
         session, Key, context, Scope.FAMILY, where=(Key.id == key_id,), now=moment

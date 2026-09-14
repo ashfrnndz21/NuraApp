@@ -188,9 +188,7 @@ async def test_the_patient_narrows_the_trail_by_person_action_scope_and_day(
 
     # Newest first, so the owner's screen opens on what just happened.
     newest = await read_audit(sg, context=owner)
-    assert [entry.at for entry in newest] == sorted(
-        (entry.at for entry in newest), reverse=True
-    )
+    assert [entry.at for entry in newest] == sorted((entry.at for entry in newest), reverse=True)
 
 
 # --- what was touched, never what it said ------------------------------------------------
@@ -203,9 +201,7 @@ async def test_the_trail_says_what_was_touched_and_never_what_it_said(sg: AsyncS
         await read_notes(sg, held, scope=Scope.NOTES)
 
     for entry in await read_audit(sg, context=owner):
-        written = " ".join(
-            str(value) for value in vars(entry).values() if isinstance(value, str)
-        )
+        written = " ".join(str(value) for value in vars(entry).values() if isinstance(value, str))
         assert PRIVATE not in written
         assert WATER_PILL not in written
 
@@ -224,8 +220,9 @@ async def test_a_stranger_writes_nothing_into_a_graph_he_holds_no_key_to(
             sg, region=Region.SG, person_id=stranger.id, profile_id=owner.profile_id
         )
 
-    # Nothing new but the owner's own read of the trail: a person with no key cannot put a
-    # line into someone else's record, not even a line about himself.
+    # Nothing new but the owner's own read of the trail: the resolver writes nothing for a
+    # person with no key. The channel does, under a context that holds nothing — see
+    # `app.channels.api.deps.key_context` — so that the owner still sees the reaching.
     after = await read_audit(sg, context=owner)
     assert stranger.id not in {entry.actor_person_id for entry in after}
     assert len(after) == before + 1

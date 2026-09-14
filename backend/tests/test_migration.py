@@ -23,9 +23,10 @@ from sqlalchemy import Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.consent.models import Consent
-from app.identity.models import Person, Profile
+from app.identity.models import LoginChallenge, LoginSession, Person, Profile
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.notes.models import Note
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
@@ -41,6 +42,9 @@ TABLES: tuple[Table, ...] = (
     Episode.__table__,
     Provider.__table__,
     Appointment.__table__,
+    LoginChallenge.__table__,
+    LoginSession.__table__,
+    Note.__table__,
 )
 
 
@@ -97,7 +101,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0004_key_consent"]
+    assert heads == ["0004_login_and_sessions"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(

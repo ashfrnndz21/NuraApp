@@ -6,5 +6,6 @@ ios/*.xcodeproj
 ios/build/
 infra/cdk.out/
 .env
-*.egg-info/
 backend/*.db
+backend/*.db-journal
+*.egg-info/

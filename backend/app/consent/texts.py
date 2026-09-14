@@ -260,8 +260,7 @@ TEXTS: tuple[ConsentText, ...] = (
         ConsentPurpose.WHATSAPP,
         "1",
         "zh",
-        "每天早上，Nura 会把您的今日页面发到您的 WhatsApp。\n"
-        "您可以随时停止。",
+        "每天早上，Nura 会把您的今日页面发到您的 WhatsApp。\n您可以随时停止。",
     ),
 )
 """Append only. Within a purpose, versions are in the order they were introduced, and the
@@ -333,6 +332,4 @@ def render_sharing(
 ) -> str:
     """Fill the sharing template with the person and the parts, as the patient will read it."""
     parts = "\n".join(f"- {part}" for part in what_lines(scopes, language))
-    return template.format(
-        named=named_words(name, relationship, language), name=name, parts=parts
-    )
+    return template.format(named=named_words(name, relationship, language), name=name, parts=parts)

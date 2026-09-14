@@ -12,12 +12,15 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import Action
+from app.audit.trail import record
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import RecordConsent, check_opening_words, grant_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person, Profile
-from app.keys.context import resolve_key_context
+from app.keys.context import owned_profile, resolve_key_context
+from app.keys.scopes import Scope
 from app.regions import Region, guard_region
 
 
@@ -93,9 +96,8 @@ async def create_own_profile(
     # no context can exist before the profile does, and this asks only whether one does.
     # Refusals here (the words, or a graph already owned) happen before there is a profile
     # to pin a trail line to, so the channel logs them at the account, not the trail.
-    existing = await session.scalar(select(Profile).where(Profile.owner_person_id == owner.id))
-    if existing is not None:
-        raise ProfileAlreadyOwned(f"person {owner.id} already owns profile {existing.id}")
+    if await owned_profile(session, region=region, owner_person_id=owner.id) is not None:
+        raise ProfileAlreadyOwned(f"person {owner.id} already owns a profile")
 
     moment = now or utcnow()
     profile = Profile(
@@ -110,6 +112,17 @@ async def create_own_profile(
 
     context = await resolve_key_context(
         session, region=region, person_id=owner.id, profile_id=profile.id, now=moment
+    )
+    # Opening a graph is a write to it, written down under the owner's own context.
+    await record(
+        session,
+        context=context,
+        action=Action.WRITE,
+        scope=Scope.PROFILE,
+        target=Profile.__tablename__,
+        target_id=profile.id,
+        rows=1,
+        now=moment,
     )
     await grant_consent(
         session,

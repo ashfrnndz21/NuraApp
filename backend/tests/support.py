@@ -104,7 +104,8 @@ async def agree_to_family_sharing(
         captured_via=ConsentChannel.APP,
         basis=ConsentBasis.OWNER,
         language="en",
-        sharing=Sharing(holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE},
-                        relationship=relationship),
+        sharing=Sharing(
+            holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE}, relationship=relationship
+        ),
         now=now,
     )

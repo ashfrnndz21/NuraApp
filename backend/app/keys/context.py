@@ -69,6 +69,31 @@ class KeyContext:
             raise OutOfScope(scope=scope, context=self)
 
 
+async def profile_by_id(
+    session: AsyncSession, *, region: Region, profile_id: uuid.UUID
+) -> Profile | None:
+    """The profile row, if it is here and pinned to this region; otherwise nothing.
+
+    The one way to look at a profile row without a context, for the code that is about to
+    make one — the resolver below, and a channel deciding whether a refused reach has a graph
+    to be written into. Reading the row's contents for anyone goes through
+    `app.audit.access.audited_profile_read`, with a context.
+    """
+    profile = await session.get(Profile, profile_id)
+    if profile is None or profile.region is not region:
+        return None
+    return profile
+
+
+async def owned_profile(
+    session: AsyncSession, *, region: Region, owner_person_id: uuid.UUID
+) -> Profile | None:
+    """The profile this person owns, if he has opened one here. Region-filtered, like the above."""
+    return await session.scalar(
+        select(Profile).where(Profile.owner_person_id == owner_person_id, Profile.region == region)
+    )
+
+
 async def resolve_key_context(
     session: AsyncSession,
     *,

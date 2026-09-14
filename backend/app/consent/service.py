@@ -335,7 +335,9 @@ async def all_consents(
     return sorted(rows, key=lambda row: as_utc(row.granted_at))
 
 
-def _about(purpose: ConsentPurpose, holder_person_id: uuid.UUID | None) -> list[ColumnElement[bool]]:
+def _about(
+    purpose: ConsentPurpose, holder_person_id: uuid.UUID | None
+) -> list[ColumnElement[bool]]:
     """Rows about this purpose, and for a per-holder purpose about this one person."""
     where: list[ColumnElement[bool]] = [Consent.purpose == purpose]
     if purpose in PER_HOLDER:

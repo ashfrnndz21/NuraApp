@@ -102,7 +102,8 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id
     )
     assert not held.is_owner
-    assert held.scopes == frozenset({Scope.MEDICINES, Scope.VISITS})
+    # The two she was cut, and the face of the graph, which every key opens.
+    assert held.scopes == frozenset({Scope.MEDICINES, Scope.VISITS, Scope.PROFILE})
 
     assert [n.body for n in await read_notes(sg, held, scope=Scope.MEDICINES)] == [
         "The water pill is at 8 in the morning."
@@ -129,13 +130,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         scopes=[Scope.MEDICINES, Scope.FAMILY],
     )
     assert chief_key.expires_at is None
-    chief = await resolve_key_context(
-        sg, region=Region.SG, person_id=son.id, profile_id=profile.id
-    )
-    helper_key = await grant_key(
-        sg, context=chief, holder=siti, role=KeyRole.HELPER
-    )
-    assert helper_key.scopes_held == frozenset({Scope.MEDICINES})
+    chief = await resolve_key_context(sg, region=Region.SG, person_id=son.id, profile_id=profile.id)
+    helper_key = await grant_key(sg, context=chief, holder=siti, role=KeyRole.HELPER)
+    assert helper_key.scopes_held == frozenset({Scope.MEDICINES, Scope.PROFILE})
 
     # The owner reads every key cut on his own graph.
     assert {k.id for k in await list_keys(sg, context=owner)} == {
