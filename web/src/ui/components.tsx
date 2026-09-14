@@ -1,0 +1,185 @@
+import type { ComponentChildren, JSX } from "preact";
+import { speak, type SpokenCard } from "../speech/speak";
+import { language, refusalSentence, t } from "../strings";
+import { Refused, Unreachable } from "../api/client";
+
+/** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
+
+export function Brand(): JSX.Element {
+  return (
+    <div class="brand" aria-hidden="true">
+      <svg viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="nuraAura" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#B9A6E0" />
+            <stop offset="1" stop-color="#F0C9DA" />
+          </linearGradient>
+        </defs>
+        <path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round" />
+        <path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#nuraAura)" stroke-width="20" stroke-linecap="round" />
+        <circle cx="100" cy="112" r="12" fill="#4E3A78" />
+      </svg>
+      {t().appName}
+    </div>
+  );
+}
+
+interface TileProps {
+  paper?: boolean;
+  glass?: boolean;
+  sheet?: boolean;
+  settled?: boolean;
+  children: ComponentChildren;
+  role?: "alert" | "status";
+  testId?: string;
+}
+
+export function Tile({ paper, glass, sheet, settled, children, role, testId }: TileProps): JSX.Element {
+  const classes = ["tile", paper && "paper", glass && "glass", sheet && "sheet", settled && "settled"]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <section class={classes} role={role} data-testid={testId}>
+      {children}
+    </section>
+  );
+}
+
+interface PillProps {
+  onClick: () => void;
+  children: ComponentChildren;
+  plum?: boolean;
+  coral?: boolean;
+  done?: boolean;
+  quiet?: boolean;
+  disabled?: boolean;
+  label?: string;
+  testId?: string;
+}
+
+export function Pill({ onClick, children, plum, coral, done, quiet, disabled, label, testId }: PillProps): JSX.Element {
+  const classes = ["pill", plum && "plum", coral && "coral", done && "done", quiet && "quiet"].filter(Boolean).join(" ");
+  return (
+    <button type="button" class={classes} onClick={onClick} disabled={disabled} aria-label={label} data-testid={testId}>
+      {children}
+    </button>
+  );
+}
+
+/** The spoken twin of a card. Audio starts here and nowhere else. */
+export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
+  const card: SpokenCard = { lines, language: language.value };
+  return (
+    <Pill quiet onClick={() => speak(card)} label={`${t().today.hear}: ${lines[0] ?? ""}`} testId="hear">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 10v4h3l4 4V6L7 10H4z" />
+        <path d="M15 9a4 4 0 0 1 0 6" />
+        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
+      </svg>
+      {t().today.hear}
+    </Pill>
+  );
+}
+
+interface CardProps {
+  title?: string;
+  lines: readonly string[];
+  provenance?: string;
+  paper?: boolean;
+  action?: ComponentChildren;
+  hear?: boolean;
+  settled?: boolean;
+  testId?: string;
+}
+
+/** Card grammar: one title, a few whole lines, one action, and its spoken twin. */
+export function Card({ title, lines, provenance, paper = true, action, hear = true, settled, testId }: CardProps): JSX.Element {
+  const spoken = [title, ...lines].filter((line): line is string => Boolean(line));
+  return (
+    <Tile paper={paper} glass={!paper} settled={settled} testId={testId}>
+      {title && <h2 class="title">{title}</h2>}
+      <div class="lines">
+        {lines.map((line, index) => (
+          <p key={index}>{line}</p>
+        ))}
+      </div>
+      {provenance && <p class="provenance">{provenance}</p>}
+      {action}
+      {hear && <Hear lines={spoken} />}
+    </Tile>
+  );
+}
+
+/** What happened and what to do, in one plain sentence — never the class, never an id. */
+export function Notice({ error }: { error: unknown }): JSX.Element | null {
+  if (!error) return null;
+  const sentence =
+    error instanceof Unreachable
+      ? t().errors.network
+      : error instanceof Refused
+        ? refusalSentence(error.refusal)
+        : refusalSentence(undefined);
+  return (
+    <Tile paper role="alert" testId="notice">
+      <p>{sentence}</p>
+    </Tile>
+  );
+}
+
+interface FieldProps {
+  label: string;
+  value: string;
+  onInput: (value: string) => void;
+  type?: string;
+  inputMode?: JSX.HTMLAttributes<HTMLInputElement>["inputMode"];
+  autoComplete?: string;
+  big?: boolean;
+  name: string;
+  maxLength?: number;
+}
+
+export function Field({ label, value, onInput, type = "text", inputMode, autoComplete, big, name, maxLength }: FieldProps): JSX.Element {
+  return (
+    <label style="display:flex;flex-direction:column;gap:6px">
+      <span class="label">{label}</span>
+      <input
+        class={big ? "field big" : "field"}
+        name={name}
+        type={type}
+        value={value}
+        inputMode={inputMode}
+        autoComplete={autoComplete}
+        maxLength={maxLength}
+        onInput={(event) => onInput((event.target as HTMLInputElement).value)}
+      />
+    </label>
+  );
+}
+
+export function Header({ title, onBack }: { title: string; onBack?: () => void }): JSX.Element {
+  return (
+    <header style="display:flex;flex-direction:column;gap:12px">
+      <Brand />
+      <h1 class="title">{title}</h1>
+      {onBack && (
+        <Pill quiet onClick={onBack}>
+          {t().signIn.back}
+        </Pill>
+      )}
+    </header>
+  );
+}
+
+export function TabBar({ current, onSelect }: { current: "today" | "me"; onSelect: (tab: "today" | "me") => void }): JSX.Element {
+  const s = t();
+  return (
+    <nav class="tabbar" aria-label={s.appName}>
+      <button type="button" aria-current={current === "today" ? "page" : undefined} onClick={() => onSelect("today")}>
+        {s.tabs.today}
+      </button>
+      <button type="button" aria-current={current === "me" ? "page" : undefined} onClick={() => onSelect("me")}>
+        {s.tabs.me}
+      </button>
+    </nav>
+  );
+}

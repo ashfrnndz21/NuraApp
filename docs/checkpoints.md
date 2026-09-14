@@ -14,14 +14,14 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | **ready** |
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
 | 8 | Feed and WhatsApp (sandbox) | Call the feed endpoint and see the supply order (now, today, gate, story, learning); send a photo to the WhatsApp sandbox number and watch it file itself and reply | E21 backend, E19-01…E19-03 | planned |
-| 9 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | planned |
+| 9 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | **ready** |
 | 10 | Feed and onboarding on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
 | 11 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 ## How a checkpoint is tested
 
 - **Backend checkpoints (1–8)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
-- **iOS checkpoints (9–10)**: the operator runs the app on the simulator first and attaches screenshots to the checkpoint note; you then run it yourself from Xcode.
+- **Web checkpoints (9–10)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (11)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
@@ -324,6 +324,37 @@ checkpoint 6 passed: every step did what docs/checkpoints.md says
 
 1. **A refill.** `POST /profiles/{profile_id}/photos` with any base64 bytes you like as `data`, `"content_type": "image/png"` and a `captured_at` (the card comes back `unknown`; keep its `artifact_id`), then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
 2. **A yes for other words.** Mint a confirmation for a label of `"quantity": 28` and spend it on a `POST /profiles/{profile_id}/medicines` whose label says `"quantity": 30`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for a different label. Nothing is written, and the refusal is on the trail (`GET /profiles/{profile_id}/audit?scope=medicines`) as `refused_because: NotWhatWasConfirmed`.
+
+## How to run checkpoint 9
+
+Three terminals the first time, at the top of the repo. Node 20 or later is needed beside the Python 3.12 the backend uses; `make web` installs the web client's packages the first time it runs (`npm ci`, about ten seconds).
+
+```sh
+make setup              # once: the backend
+make dev                # terminal 1: the API on http://127.0.0.1:8000, log to backend/.dev.log
+make web                # terminal 2: the app on http://127.0.0.1:5173/app/, proxying /api to the backend
+make checkpoint N=6     # terminal 3, optional: gives a fresh number three medicines so Today has a Now card
+```
+
+**On the Mac.** Open http://127.0.0.1:5173 (it goes to `/app/`). Type a phone number — any Singapore-shaped one, `+65` and eight digits — and a name, tap *Send me a code*, and read the six digits from the `make dev` terminal (or `backend/.dev.log`), the way checkpoint 2's script does; nothing is sent anywhere. Type them in and tap *Sign in*. A fresh number sees the doors: tap *This is for me*, read the words (the same wording `POST /profiles/mine` records, fetched from `GET /consent/wording`), tap *I agree*. You are on Today.
+
+**A Now card.** A fresh profile has no medicines, and Today says so in one sentence. To see the Now card, add a medicine the way checkpoint 6 does — at http://127.0.0.1:8000/docs with your token (press *Authorize*): `POST /profiles/{id}/photos` with any base64 bytes as a `image/png`, then `POST /profiles/{id}/confirmations` with `{"subject": "medicine", "label": {"generic": "amlodipine", "strength": "5 mg", "dose_text": "1 tab OM", "quantity": 30, "prescriber": "Dr Tan", "source_kind": "retail"}, "source_artifact_id": …}`, then `POST /profiles/{id}/medicines` with the same label, artefact and the `confirmation_id`. Pull the Today tab again (tap *Today*): the Now card says *Your blood pressure tablet — Take 1 tablet of your blood pressure tablet with breakfast.* with one paper button, *Taken*. Or run `make checkpoint N=6` and sign in to the app with the number it printed for Pa.
+
+**On your iPhone, on the same Wi-Fi.** `make web` starts Vite with `--host`, so it also answers on the Mac's address: find it under *System Settings → Wi-Fi → Details*, or run `ipconfig getifaddr en0`, and open `http://<that address>:5173/app/` in Safari. Everything works the same; the code is still in the `make dev` terminal. Over plain http on a LAN address Safari will not offer *Add to Home Screen* as an app and will not install the offline worker — that needs https, which the cloud deployment brings (checkpoint 10's note will say so). On the Mac, `127.0.0.1` counts as secure, so the offline part is checked there.
+
+**Offline, on the Mac.** Build the app and let the backend serve it: `make build-web`, then (with `make dev` running) open http://127.0.0.1:8000/app/, sign in and reach Today once. Turn Wi-Fi off, or in Safari's *Develop → Network Conditions* pick *Offline*, and reload: Today opens on the same medicines with a line saying you are not connected, and no spinner. `make web-e2e` does exactly this in Playwright.
+
+What you will see (the operator's walk, `make web-e2e` with `make dev` serving the build):
+
+```
+✓ offline.spec.ts › Today opens offline with today's medicines
+✓ today.spec.ts   › sign in, agree, Today, Taken, Hear, sign out
+✓ today.spec.ts   › a refusal is one plain sentence, never the class name
+✓ today.spec.ts   › the language picker changes every string and persists on the device
+4 passed
+```
+
+**What "passed" means.** You signed in with a code that never travelled over the API; you opened your own papers on today's words; Today shows one Now card — one drug in your words, one whole sentence, one paper button — and *Taken* moves it to the next dose (or to *You have taken every tablet for today*) and puts the proud number up by one; every card has a *Hear* button and nothing speaks until you tap it; the tablets card and the State card are in your words with the boundary line under them; a wrong code is refused in one plain sentence; the language picker changes every word and is remembered; and on the Mac, the built app reopens offline on today's medicines with no spinner. Nothing scrolls sideways, there are no badges or counts, and the text is 20px with 56px buttons in the patient density. If a step does not do that, tell the operator which one and what you saw instead.
 
 ## Rules the operator follows between checkpoints
 

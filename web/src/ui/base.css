@@ -1,0 +1,335 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* The page base is Mist; the wash paints over it and cross-fades when State changes. */
+  background: var(--mist);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 100%; /* the system text size is the root; every size is rem */
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+  /* No horizontal gestures: nothing scrolls sideways, and no pull-to-refresh. */
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
+}
+
+#app {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--wash, var(--wash-stable));
+  transition: background var(--wash-fade);
+}
+#app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--wash-light);
+  pointer-events: none;
+}
+
+.screen {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
+    calc(var(--space-4) + var(--target) + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Type roles */
+.display {
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: 1;
+}
+.number {
+  font-size: var(--text-tile-number);
+  font-weight: var(--weight-number);
+  line-height: 1.1;
+}
+.title {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  line-height: 1.2;
+}
+.body {
+  font-size: var(--text-body);
+}
+.caption {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.soft {
+  color: var(--ink-soft);
+}
+.section {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+  margin: var(--space-1) 6px 0;
+}
+
+/* Hero: sits on the wash, no tile */
+.hero {
+  padding: var(--space-1) 6px 0;
+}
+.hero .greeting {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+}
+.hero .date {
+  color: var(--ink-soft);
+  font-size: var(--text-body);
+}
+
+/* Tiles */
+.tile {
+  position: relative;
+  border-radius: var(--radius-tile);
+  padding: var(--space-3);
+  border: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--tile-shadow);
+  background: var(--card-bg);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.tile.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+.tile.paper {
+  /* Any decision sits here, in both densities. */
+  background: var(--paper-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.tile.sheet {
+  border-radius: var(--radius-sheet);
+}
+.tile .lines p + p {
+  margin-top: 4px;
+}
+.tile .provenance {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+  margin-top: 4px;
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(43, 39, 51, 0.08);
+}
+.tile.settled {
+  transition: opacity var(--settle);
+  opacity: 0.92;
+}
+
+/* Buttons: one Plum-filled pill per screen at most; the rest are Paper outlines */
+.pill {
+  font: inherit;
+  font-size: var(--text-button);
+  font-weight: var(--weight-button);
+  color: var(--ink);
+  min-height: var(--target);
+  width: 100%;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(78, 58, 120, 0.35);
+  background: var(--paper-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  text-align: center;
+}
+.pill.plum {
+  background: var(--plum);
+  color: var(--white);
+  border-color: var(--plum);
+}
+.pill.coral {
+  background: #f7e4e1;
+  border-color: #efcfca;
+  color: #7a2e24;
+}
+.pill.done {
+  background: #e6f0e9;
+  color: #2f6247;
+  border-color: #d3e4d9;
+}
+.pill.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--plum);
+}
+.pill:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pill:focus-visible,
+.field:focus-visible,
+.choice:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.pill svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.row {
+  display: flex;
+  gap: var(--space-1);
+}
+.row .pill {
+  flex: 1;
+}
+
+/* Fields */
+.label {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.field {
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  min-height: var(--target);
+  width: 100%;
+  padding: 0 var(--space-2);
+  border-radius: 14px;
+  border: 1px solid #ddd6e2;
+  background: var(--white);
+}
+.field.big {
+  font-size: var(--text-tile-number);
+  font-weight: var(--weight-number);
+  text-align: center;
+  letter-spacing: 0.08em;
+  min-height: calc(var(--target) + 16px);
+}
+.check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--target);
+  font-size: var(--text-body);
+}
+.check input {
+  width: 28px;
+  height: 28px;
+  accent-color: var(--plum);
+}
+
+/* A choice: one thing, the whole tile is the target */
+.choice {
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: var(--target);
+}
+.choice .title {
+  color: var(--plum);
+}
+
+/* The tab bar: glass, two words, no badges */
+.tabbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+  width: min(calc(100% - 2 * var(--space-3)), 440px);
+  display: flex;
+  justify-content: space-around;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--tile-shadow);
+  z-index: 2;
+}
+.tabbar button {
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  min-height: var(--target);
+  flex: 1;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.tabbar button[aria-current="page"] {
+  color: var(--plum);
+  font-weight: 500;
+  background: var(--paper-bg);
+}
+
+/* Colour on the figure only, never as a fill */
+.good { color: var(--good); }
+.watch { color: var(--watch); }
+.act { color: var(--act); }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-title);
+  font-weight: 500;
+  color: var(--plum);
+}
+.brand svg {
+  width: 32px;
+  height: 32px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Motion answers an action: nothing moves on load, and Reduce Motion leaves only opacity. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-property: opacity, background !important;
+    transition-duration: 0ms !important;
+  }
+}

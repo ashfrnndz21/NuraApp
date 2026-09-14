@@ -32,6 +32,10 @@ class Settings:
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
     to start."""
+    web_dist: str | None = None
+    """NURA_WEB_DIST: the built web client (`web/dist`, from `make build-web`). When the
+    directory exists the API serves it at `/app`, so one origin serves the app and its API;
+    when it is unset or missing there is no `/app` and the API is unchanged."""
 
 
 class MissingSetting(RuntimeError):
@@ -59,4 +63,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
+        web_dist=source.get("NURA_WEB_DIST") or None,
     )

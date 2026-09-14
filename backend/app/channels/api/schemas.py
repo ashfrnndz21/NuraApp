@@ -225,6 +225,17 @@ class ConsentOut(BaseModel):
         )
 
 
+class WordingOut(BaseModel):
+    """Today's words for one consent purpose, one line per idea, as `GET /consent/wording`
+    answers them; `version` is what `ConsentIn.wording_version` must carry."""
+
+    purpose: ConsentPurpose
+    version: str
+    language: str
+    region: Region
+    lines: list[str]
+
+
 class ProfileCreate(BaseModel):
     consent: ConsentIn
     display_name: str | None = Field(default=None, min_length=1, max_length=120)

@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate reset-db checkpoint test lint plain-words ios-test
+.PHONY: setup dev migrate reset-db checkpoint test lint plain-words ios-test web build-web web-test web-e2e
 # Every backend target runs `python3 -m …`: the Python 3.12 that `make setup` installed the
 # backend into, never whatever bare `python` on the PATH happens to be.
 setup: ; cd backend && python3 -m pip install -e ".[dev]"
@@ -13,6 +13,9 @@ dev: export NURA_OBJECT_STORE ?= var/objects
 dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
+# The built web client (`make build-web`), served by the API at http://127.0.0.1:8000/app when
+# the directory exists; without a build there is no /app and nothing else changes.
+dev: export NURA_WEB_DIST ?= ../web/dist
 migrate: ; cd backend && python3 -m alembic upgrade heads
 # The server log is also written to backend/.dev.log (gitignored, fresh on every start) so
 # that `make checkpoint` in another terminal can read the login codes the sender prints.
@@ -26,4 +29,13 @@ lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
 # Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
 # `python3 -m app.safety.plain_words --explain` says what each rule checks; `--text "..."` checks one line.
 plain-words: ; cd backend && python3 -m app.safety.plain_words
+# The web client (ADR 0001). `make web` is the dev server on http://127.0.0.1:5173/app/, proxying
+# /api to the backend `make dev` serves; `--host` also answers on the Mac's LAN address so a phone
+# on the same Wi-Fi can open it. `make build-web` writes web/dist, which `make dev` then serves at
+# /app. `npm install` runs once, when node_modules is missing.
+web: web/node_modules ; cd web && npm run dev -- --host
+build-web: web/node_modules ; cd web && npm run build
+web-test: web/node_modules ; cd web && npm test
+web-e2e: web/node_modules ; cd web && npm run e2e
+web/node_modules: web/package.json web/package-lock.json ; cd web && npm ci
 ios-test: ; cd ios && if [ -d Nura.xcodeproj ]; then DEV=$$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+[A-Za-z ]*' | sed 's/ *$$//'); echo "simulator: $$DEV"; xcodebuild test -scheme Nura -destination "platform=iOS Simulator,name=$$DEV"; else echo "ios-test: Nura.xcodeproj not generated yet (Session 10), skipping"; fi

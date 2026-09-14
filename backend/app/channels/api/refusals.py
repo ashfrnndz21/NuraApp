@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.consent.service import (
     NoConsent,
@@ -51,6 +52,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoWordsInThatLanguage, 404),
     (NoSuchReviewCard, 404),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
