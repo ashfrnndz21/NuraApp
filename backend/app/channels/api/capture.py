@@ -45,6 +45,7 @@ from app.channels.api.schemas import (
     ScreenPhotoIn,
     TypedIn,
 )
+from app.channels.strings import language_of
 from app.ingestion.documents import store_pdf
 from app.ingestion.extract import DocumentKind
 from app.ingestion.models import NoteKind, ReviewCard
@@ -59,9 +60,11 @@ from app.ingestion.review import (
     type_field,
 )
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
 from app.memory.episodic import withheld_provenance
 from app.memory.models import SourceChannel
 from app.memory.semantic import current_facts
+from app.onboarding.settings import current_settings, values_of
 
 router = APIRouter(prefix="/profiles", tags=["capture"])
 
@@ -73,8 +76,22 @@ async def _language(session: AsyncSession, context: KeyContext) -> str:
     return (await audited_profile_read(session, context)).language
 
 
+async def capture_language(session: AsyncSession, context: KeyContext) -> str:
+    """The language the capture messages are said in: the one in his settings (E01, in
+    State, as the nudges read his check-in time) where this key opens the record, else the
+    profile's own, which the settings keep in step; English where Nura has no lines in it.
+    A key without the record never reads the settings row, so a notes-only key is not
+    refused for asking."""
+    if Scope.RECORDS in context.scopes:
+        row = await current_settings(session, context=context)
+        if row is not None:
+            return language_of(values_of(row).language)
+    return language_of(await _language(session, context))
+
+
 async def _card_out(session: AsyncSession, context: KeyContext, card: ReviewCard) -> ReviewCardOut:
-    return ReviewCardOut.of(card, await card_fields(session, context=context, card_id=card.id))
+    fields = await card_fields(session, context=context, card_id=card.id)
+    return ReviewCardOut.of(card, fields, language=await capture_language(session, context))
 
 
 @router.post("/{profile_id}/photos", status_code=status.HTTP_201_CREATED)
@@ -222,7 +239,7 @@ async def confirm_card(
         episode_id=body.episode_id,
     )
     return ReviewConfirmedOut(
-        card=ReviewCardOut.of(card, fields),
+        card=ReviewCardOut.of(card, fields, language=await capture_language(session, context)),
         facts=[FactOut.of(fact) for fact in facts],
         event_id=next((fact.event_id for fact in facts if fact.event_id is not None), None),
     )
@@ -283,7 +300,7 @@ async def add_note_on_event(
             private=body.private,
             label=body.label,
         )
-    return EventNoteOut.of(view)
+    return EventNoteOut.of(view, language=await capture_language(session, context))
 
 
 @router.get("/{profile_id}/events/{event_id}/notes")
@@ -295,7 +312,8 @@ async def notes_on_event(
     views = await notes_for(
         session, context=context, store=providers_of(request).object_store, event_id=event_id
     )
-    return [EventNoteOut.of(view) for view in views]
+    language = await capture_language(session, context)
+    return [EventNoteOut.of(view, language=language) for view in views]
 
 
 @router.get("/{profile_id}/events/{event_id}/notes/{note_id}/content")

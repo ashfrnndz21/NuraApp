@@ -25,31 +25,7 @@ from sqlalchemy import Table, TypeDecorator
 from sqlalchemy.types import TypeEngine
 
 # Every module that declares a table, so the metadata is whole.
-import app.audit.models
-import app.channels.whatsapp.models
-import app.consent.models
-import app.delivery.feed.models
-import app.delivery.nudges.models
-import app.delivery.triggers.models
-import app.family.models
-import app.identity.models
-import app.ingestion.connectors.models
-import app.ingestion.models
-import app.keys.confirm
-import app.keys.models
-import app.keys.privacy
-import app.language.models
-import app.medicines.models
-import app.memory.models
-import app.notes.models
-import app.onboarding.models
-import app.reasoning.feelings.models
-import app.reasoning.models
-import app.reasoning.visits.models
-import app.routines.models
-import app.safety.models
-import app.safety.red_flags
-import app.state.models  # noqa: F401
+import app.models_all  # noqa: F401 — every table, from the one registry
 from app.db import Base
 
 DOCUMENT = Path(__file__).resolve().parents[2] / "docs" / "trust" / "pdpa-data-map.md"

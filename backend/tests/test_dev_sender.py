@@ -85,7 +85,7 @@ async def test_the_sender_never_logs_the_code_beside_the_number_unless_told_to(
 ) -> None:
     quiet = LoggingCodeSender()
     with caplog.at_level(logging.INFO, logger="nura.identity.sender"):
-        await quiet.send_phone_code("+6591110001", "123456")
+        await quiet.send_phone_code("+6591110001", "123456", message=phone_code_message("123456"))
         await quiet.send_email_link("pa@example.sg", "tok-en")
     logged = " ".join(record.getMessage() for record in caplog.records)
     assert "123456" not in logged and "+6591110001" not in logged
@@ -95,7 +95,7 @@ async def test_the_sender_never_logs_the_code_beside_the_number_unless_told_to(
     caplog.clear()
     loud = LoggingCodeSender(reveal=True)
     with caplog.at_level(logging.INFO, logger="nura.identity.sender"):
-        await loud.send_phone_code("+6591110001", "123456")
+        await loud.send_phone_code("+6591110001", "123456", message=phone_code_message("123456"))
     assert "login code for +6591110001: 123456" in caplog.text
 
 
