@@ -1,6 +1,6 @@
 # ADR 0008 — Demo mode: a deployment on the fixtures, and it says so
 
-**Date** 2026-09-15 · **Status** proposed · **Decided by** the owner, on the operator's recommendation (to confirm on the PR)
+**Date** 2026-09-15 · **Status** accepted · **Decided by** the operator
 
 ## Context
 
@@ -106,4 +106,21 @@ the fixtures only with it. A demo holds six promises, each enforced in code and 
   data protection officer and the breach tabletop (`docs/trust/pdpa-data-map.md` §6–7).
 - **Some things are not built.** There is no rate limit on sign-in beyond each challenge's
   attempt count. The shared code has no rotation beyond the operator changing the secret.
-  Both are acceptable for a demo and listed as open questions on the PR.
+  The operator accepted both, and the shared code itself, for demo mode only, because of what
+  surrounds them: test numbers no phone can have (`+65 0…`, `+60 0…`), the banner on every
+  screen, the nightly wipe, and no real data.
+- **The sign-in message is in his language (#132), and on a demo it goes nowhere.** The demo
+  sender is handed the finished message like any sender, and it neither sends nor logs it.
+  No SMS path exists on a demo.
+
+## Before real data
+
+A demo holds none. Before a deployment holds real health information, as well as the real
+providers, the data protection officer and the breach tabletop:
+
+- **The bucket is Singapore-only.** Tigris and the instance's own disk are acceptable for the
+  demo only.
+- **The platform's request logs have been checked.** Where they are kept, and for how long,
+  matters because URLs carry profile ids, though never names or numbers.
+- **The platform accepts the largest request Nura sends.** That is a consult recording of up to
+  48 MiB (#128). The app refuses anything larger, and nothing in the image sets a lower limit.

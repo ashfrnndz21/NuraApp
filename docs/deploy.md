@@ -5,11 +5,11 @@ This is the runbook for putting Nura where a phone can reach it over https: chec
 its own database and bucket; nothing is shared across the two (`docs/trust/pdpa-data-map.md`
 §5).
 
-The repo carries both hosting options. Pick one:
-- `fly.toml` for Fly.io, region `sin`
-- `render.yaml` for Render, region `singapore`
-
-Nothing needs installing on the laptop for Render; Fly needs its `flyctl` command. Neither needs
+**Render is the recommended platform for the demo.** Nothing needs installing on the laptop:
+the Blueprint in `render.yaml` creates the web service and a Render Postgres, both in Singapore,
+from the dashboard. For the demo, artefact bytes stay on the instance's own disk: that is
+acceptable for a demo only, and a deployment with real data needs a Singapore-only bucket.
+Fly.io (`fly.toml`, region `sin`) is the alternative; it needs its `flyctl` command. Neither needs
 Docker or Postgres on the laptop: the image builds on the platform, and Postgres is the
 platform's.
 
@@ -116,7 +116,29 @@ holds:
 - demo mode and a dev run are declared together
 - a fixture would run without demo mode
 
-## 4. First deploy on Fly.io
+## 4. First deploy on Render (recommended for the demo)
+
+No local tool is needed. You create the account.
+
+1. Open **New → Blueprint** in the dashboard, connect the GitHub repository
+   `ashfrnndz21/NuraApp`, and choose the branch.
+2. Render reads `render.yaml`. It shows one web service (`nura-sg`, Docker, Singapore) and one
+   Postgres (`nura-sg-db`, Singapore, reachable only inside Render). It asks for
+   `NURA_DEMO_LOGIN_CODE`: enter six digits. It generates `NURA_WHATSAPP_DEV_SECRET` itself.
+3. Choose **Apply**. The database is created, the image builds, and the pre-deploy command
+   (`alembic upgrade heads`) migrates. The service takes traffic once `/health/ready` answers.
+   The pre-deploy command needs a paid instance; the Blueprint asks for `starter`.
+4. Check it with `https://nura-sg.onrender.com/health/ready` and `/api/deployment`, as above.
+
+Render has no bucket of its own, so the demo keeps artefact bytes on the instance's disk
+(`NURA_OBJECT_STORE=/tmp/nura-objects`). The night's wipe empties it, and a restart or
+redeploy loses it, which is acceptable for a demo only. A real deployment on Render sets the
+`NURA_OBJECT_BUCKET_*` values to a bucket in Singapore and removes `NURA_OBJECT_STORE`.
+
+`autoDeploy` is off: deploy from the dashboard (**Manual Deploy**). Roll back from the
+service's **Events** page.
+
+## 5. First deploy on Fly.io (the alternative)
 
 You create the account (the operator cannot). Install `flyctl`, the platform's one command
 (<https://fly.io/docs/flyctl/install/>), then sign in with `fly auth login`. From the repo root:
@@ -166,28 +188,6 @@ You create the account (the operator cannot). Install `flyctl`, the platform's o
 Later deploys are `fly deploy`. To roll back, run `fly releases`, then
 `fly deploy --image <an earlier image>`. A migration is forward-only on deploy; stepping one
 back is by hand: `fly ssh console -C "alembic downgrade <revision>"`.
-
-## 5. First deploy on Render
-
-No local tool is needed. You create the account.
-
-1. Open **New → Blueprint** in the dashboard, connect the GitHub repository
-   `ashfrnndz21/NuraApp`, and choose the branch.
-2. Render reads `render.yaml`. It shows one web service (`nura-sg`, Docker, Singapore) and one
-   Postgres (`nura-sg-db`, Singapore, reachable only inside Render). It asks for
-   `NURA_DEMO_LOGIN_CODE`: enter six digits. It generates `NURA_WHATSAPP_DEV_SECRET` itself.
-3. Choose **Apply**. The database is created, the image builds, and the pre-deploy command
-   (`alembic upgrade heads`) migrates. The service takes traffic once `/health/ready` answers.
-   The pre-deploy command needs a paid instance; the Blueprint asks for `starter`.
-4. Check it with `https://nura-sg.onrender.com/health/ready` and `/api/deployment`, as above.
-
-Render has no bucket of its own, so the demo keeps artefact bytes on the instance's disk
-(`NURA_OBJECT_STORE=/tmp/nura-objects`). The night's wipe empties it, and a restart or
-redeploy loses it, which is acceptable for a demo only. A real deployment on Render sets the
-`NURA_OBJECT_BUCKET_*` values to a bucket in Singapore and removes `NURA_OBJECT_STORE`.
-
-`autoDeploy` is off: deploy from the dashboard (**Manual Deploy**). Roll back from the
-service's **Events** page.
 
 ## 6. Running the checkpoints against the https address
 
@@ -239,3 +239,5 @@ people signing in with two different test numbers see two different accounts.
   - the data protection officer is named
   - the breach tabletop has been run (`docs/trust/pdpa-data-map.md` §6–7)
   - the bucket and the platform are confirmed to keep data in Singapore
+  - the platform's request logs are checked: where they are kept and for how long
+  - the platform accepts a 48 MiB request, the largest recording of a visit

@@ -21,11 +21,13 @@ from datetime import datetime, timedelta
 from sqlalchemy import Delete, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.strings import language_of, phone_code_message
 from app.db import as_utc, keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.identity.models import LoginChallenge, LoginChannel, LoginSession, Person
 from app.identity.providers import CodeSender, SharedCode
 from app.identity.service import find_person_by_phone, register_person
+from app.keys.context import profile_for_number
 from app.regions import OutOfRegion, Region, guard_region
 
 CODE_LIFETIME = timedelta(minutes=10)
@@ -128,8 +130,12 @@ async def start_phone_login(
     language: str | None = None,
 ) -> LoginChallenge:
     """Send a six-digit code to the phone. The code is given to the sender and to nobody else.
-    On a demo the person already holds the code (the operator's), and the sender says what it
-    is — or refuses a number outside the test range before anything is written."""
+
+    The message is in the language picked on the sign-in screen; with none picked, in the
+    language of the profile set up against this number here (his settings keep it); else,
+    and for a language Nura has no message in, English. On a demo the person already holds
+    the code (the operator's), and the sender says what it is — or refuses a number outside
+    the test range before anything is written; the demo sender then sends nothing."""
     code = sender.shared_code(phone_e164) if isinstance(sender, SharedCode) else _six_digits()
     challenge = await _start(
         session,
@@ -140,7 +146,11 @@ async def start_phone_login(
         display_name=display_name,
         language=language,
     )
-    await sender.send_phone_code(phone_e164, code)
+    if language is None:
+        known = await profile_for_number(session, region=region, phone_e164=phone_e164)
+        language = None if known is None else known.language
+    words = phone_code_message(code, language=language_of(language))
+    await sender.send_phone_code(phone_e164, code, message=words)
     return challenge
 
 

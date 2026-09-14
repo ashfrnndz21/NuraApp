@@ -146,6 +146,26 @@ async def test_a_test_number_signs_in_with_the_operators_code(
     assert wrong.status_code != 200  # no challenge was asked for this number
 
 
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+async def test_a_test_number_signs_in_in_his_language_and_nothing_is_sent(
+    demo: Demo, language: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#132: the sign-in screen may send a language, and the code message is written in it.
+    On a demo that message goes nowhere — the demo sender is the only sender, and it neither
+    sends nor logs — and the operator's code still signs the test number in."""
+    with caplog.at_level(logging.INFO):
+        started = await demo.client.post(
+            "/api/auth/phone/start", json={"phone_e164": PA, "language": language}
+        )
+        assert started.status_code == 202, started.text
+        verified = await demo.client.post(
+            "/api/auth/phone/verify", json={"phone_e164": PA, "code": CODE}
+        )
+        assert verified.status_code == 200, verified.text
+    assert CODE not in caplog.text and PA not in caplog.text
+    assert "nothing was sent" in caplog.text
+
+
 async def test_a_real_number_is_refused_before_anything_is_written(demo: Demo) -> None:
     refused = await demo.client.post("/auth/phone/start", json={"phone_e164": "+6591234567"})
     assert refused.status_code == 403 and refused.json() == {"refusal": "NotInTheDemo"}
@@ -158,7 +178,7 @@ async def test_the_sender_refuses_a_real_number_even_past_the_guard() -> None:
     with pytest.raises(Exception, match="test numbers"):
         sender.shared_code("+6591234567")
     with pytest.raises(Exception, match="test numbers"):
-        await sender.send_phone_code("+6591234567", CODE)
+        await sender.send_phone_code("+6591234567", CODE, message=f"Your Nura code is {CODE}.")
     assert sender.shared_code(PA) == CODE
 
 
