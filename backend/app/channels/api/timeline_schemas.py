@@ -496,11 +496,24 @@ class ChangesOut(BaseModel):
 class CiteOut(BaseModel):
     kind: str
     id: uuid.UUID
+    start_s: float | None = None
+    end_s: float | None = None
+    """For a cite of a consult recording: the stretch of it the line is about (E03-05)."""
+
+
+class ClipOut(BaseModel):
+    """What a line's "Hear what Dr Tan said" plays: the recording, from when to when."""
+
+    artifact_id: uuid.UUID
+    start_s: float
+    end_s: float
+    doctor: str
 
 
 class AnswerLineOut(BaseModel):
     text: str
     cites: list[CiteOut]
+    clip: ClipOut | None = None
 
 
 class AnswerOut(BaseModel):
@@ -529,7 +542,19 @@ class AnswerOut(BaseModel):
             answered=answer.answered,
             lines=[
                 AnswerLineOut(
-                    text=line.text, cites=[CiteOut(kind=c.kind, id=c.id) for c in line.cites]
+                    text=line.text,
+                    cites=[
+                        CiteOut(kind=c.kind, id=c.id, start_s=c.start_s, end_s=c.end_s)
+                        for c in line.cites
+                    ],
+                    clip=None
+                    if line.clip is None
+                    else ClipOut(
+                        artifact_id=line.clip.artifact_id,
+                        start_s=line.clip.start_s,
+                        end_s=line.clip.end_s,
+                        doctor=line.clip.doctor,
+                    ),
                 )
                 for line in answer.lines
             ],

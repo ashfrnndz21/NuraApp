@@ -39,6 +39,7 @@ from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.transcribe import FixtureTranscriber
 from app.keys import confirm  # noqa: F401
 from app.reasoning.ranges import FixtureRanges
@@ -56,6 +57,8 @@ VISITS = Path(__file__).resolve().parent / "fixtures" / "visits"
 WHATSAPP_SECRET = "nura-test-webhook-secret"
 """The fixed secret the fixture provider signs with in the tests; nothing real."""
 WHATSAPP_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "whatsapp"
+SPEAKERS = Path(__file__).resolve().parent / "fixtures" / "speakers"
+"""Who spoke when in a consult recording, by the digest of the audio (E02-05)."""
 FEED = Path(__file__).resolve().parent / "fixtures" / "feed"
 """Where the feed's fixture searcher and compressor answer from (E21)."""
 STAFF_TOKEN = "nura-test-pharmacist-token-0001"
@@ -162,6 +165,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         drug_registry=FixtureRegistry.load(),
         whatsapp=whatsapp,
         reference_ranges=FixtureRanges.load(),
+        speaker_separator=FixtureSeparator(SPEAKERS, region),
     )
     app = create_app(settings, sessions, providers)
     try:
