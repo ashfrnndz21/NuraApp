@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
 
 /** Where the app is. The default is the backend serving the build (`make build-web`, then
@@ -15,6 +16,20 @@ export const API_URL = process.env.NURA_BASE_URL ?? "http://127.0.0.1:8000";
  *  "today"; frozen, those do not drift with the hour the suite runs at. A test that means to
  *  cross the quiet hours or midnight moves it with `POST /dev/clock` (a dev run only). */
 export const FROZEN_CLOCK = process.env.NURA_FROZEN_CLOCK ?? "2026-09-14T10:00:00+08:00";
+
+/** Throwaway Web Push keys for this run of the suite, made here and never kept: the backend
+ *  pushes by Web Push with them (ADR 0001), and no key is ever in the repo. A server already
+ *  running locally keeps its own; the push test skips when it has none. */
+const VAPID = (() => {
+  const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const jwk = privateKey.export({ format: "jwk" }) as { d: string; x: string; y: string };
+  const point = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, "base64url"), Buffer.from(jwk.y, "base64url")]);
+  return {
+    NURA_VAPID_PUBLIC_KEY: point.toString("base64url"),
+    NURA_VAPID_PRIVATE_KEY: jwk.d,
+    NURA_VAPID_SUBJECT: "mailto:e2e@nura.invalid",
+  };
+})();
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -43,7 +58,7 @@ export default defineConfig({
   webServer: {
     command: "make -C .. dev",
     url: `${API_URL}/health`,
-    env: { UVICORN_PORT: new URL(API_URL).port || "8000", NURA_FROZEN_CLOCK: FROZEN_CLOCK },
+    env: { UVICORN_PORT: new URL(API_URL).port || "8000", NURA_FROZEN_CLOCK: FROZEN_CLOCK, ...VAPID },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     stdout: "ignore",

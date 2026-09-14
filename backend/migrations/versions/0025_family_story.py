@@ -6,8 +6,8 @@ family scope; it carries the poster's yes to its being one of his story cards an
 poster taking it back. The family group names the provider's handle for the group and who
 opened it; who is in it is never stored — it is worked out from the keys each time.
 
-Revision ID: 0024_family_story
-Revises: 0023_delivery
+Revision ID: 0025_family_story
+Revises: 0024_push_subscription
 Create Date: 2026-09-15
 """
 
@@ -16,8 +16,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0024_family_story"
-down_revision = "0023_delivery"
+revision = "0025_family_story"
+down_revision = "0024_push_subscription"
 branch_labels = None
 depends_on = None
 

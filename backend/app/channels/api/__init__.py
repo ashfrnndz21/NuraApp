@@ -127,10 +127,15 @@ def _api() -> APIRouter:
         return {"status": "ok"}
 
     @api.get("/deployment")
-    async def deployment(request: Request) -> dict[str, str | bool]:
-        """Which region this deployment serves, and whether it is a demo (ADR 0008)."""
+    async def deployment(request: Request) -> dict[str, str | bool | None]:
+        """Which region this deployment serves, whether it is a demo (ADR 0008), and the Web
+        Push key the home-screen app subscribes with (null when it has no Web Push)."""
         settings = settings_of(request)
-        return {"region": settings.region.value, "demo": settings.demo_mode}
+        return {
+            "region": settings.region.value,
+            "demo": settings.demo_mode,
+            "push_key": settings.vapid_public_key,
+        }
 
     return api
 

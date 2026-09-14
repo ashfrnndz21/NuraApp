@@ -339,6 +339,16 @@ export const ms = {
     setUp: "Sediakan Nura",
     // @patient phrase
     signOut: "Daftar keluar",
+    // @patient phrase
+    remindersGet: "Dapatkan peringatan di telefon ini",
+    // @patient
+    remindersOn: "Peringatan sudah dihidupkan untuk telefon ini.",
+    // @patient phrase
+    remindersStop: "Hentikan peringatan di telefon ini",
+    // @patient
+    remindersDenied1: "Telefon ini tidak benarkan peringatan.",
+    // @patient
+    remindersDenied2: "Anda boleh ubah dalam tetapan telefon.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

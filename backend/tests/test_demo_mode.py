@@ -68,7 +68,12 @@ def test_demo_settings_are_strict() -> None:
         load_settings({**ENV, "NURA_DEMO_LOGIN_CODE": CODE})
     with pytest.raises(DemoAndDevTogether):
         load_settings(
-            {**ENV, "NURA_DEMO_MODE": "1", "NURA_DEMO_LOGIN_CODE": CODE, "NURA_DEV_CODE_SENDER": "1"}
+            {
+                **ENV,
+                "NURA_DEMO_MODE": "1",
+                "NURA_DEMO_LOGIN_CODE": CODE,
+                "NURA_DEV_CODE_SENDER": "1",
+            }
         )
     with pytest.raises(NoCodeSender):
         code_sender_for(load_settings(ENV))
@@ -197,7 +202,12 @@ async def test_a_real_number_in_any_json_body_is_refused(demo: Demo) -> None:
 
 async def test_the_web_client_is_told_it_is_a_demo(demo: Demo) -> None:
     for path in ("/deployment", "/api/deployment"):
-        assert (await demo.client.get(path)).json() == {"region": "SG", "demo": True}
+        # A demo without the VAPID keys has no Web Push, and says so (ADR 0001).
+        assert (await demo.client.get(path)).json() == {
+            "region": "SG",
+            "demo": True,
+            "push_key": None,
+        }
     assert (await demo.client.get("/api/health/ready")).json() == {"status": "ok"}
     page = (await demo.client.get("/openapi.json")).json()
     assert "not for real health information" in page["info"]["title"]
