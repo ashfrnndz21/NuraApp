@@ -24,6 +24,9 @@ export interface TodayEntry {
 
 const PREFIX = "today.";
 const key = (profileId: string) => `${PREFIX}${profileId}`;
+/** Every page the phone keeps of a profile's papers: Today's, and the feed's first page
+ *  (`feedCache.ts`). A refusal, a switch of profile and sign-out drop them together. */
+export const KEPT_PREFIXES = [PREFIX, "feed."] as const;
 
 export function bindingOf(profile: ProfileOut): Binding {
   return {
@@ -103,9 +106,9 @@ export async function loadToday(profileId: string, binding: Binding, now: Date):
 }
 
 export async function clearProfileData(profileId: string): Promise<void> {
-  await kvDel(key(profileId));
+  for (const prefix of KEPT_PREFIXES) await kvDel(`${prefix}${profileId}`);
 }
 
 export async function clearAllProfileData(): Promise<void> {
-  for (const each of await kvKeys(PREFIX)) await kvDel(each);
+  for (const prefix of KEPT_PREFIXES) for (const each of await kvKeys(prefix)) await kvDel(each);
 }
