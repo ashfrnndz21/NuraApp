@@ -95,6 +95,7 @@ class Walk:
         self.dev_log = dev_log
         # Tomorrow on Pa's wall clock: a tablet added today counts from tomorrow's breakfast.
         self.day = (datetime.now(SGT) + timedelta(days=1)).date()
+        self.seen: list[JSON] = []
 
     def at(self, hour: int, minute: int = 0) -> str:
         return datetime(
@@ -149,6 +150,7 @@ class Walk:
     # --- the engine and the thread ------------------------------------------------------------
 
     def run_due(self, profile_id: str, hour: int, minute: int = 0) -> list[JSON]:
+        """One engine run; its rows, which are also kept for the steps that look back."""
         ran = check(
             self.client.post(
                 "/dev/run-triggers", json={"profile_id": profile_id, "at": self.at(hour, minute)}
@@ -157,6 +159,9 @@ class Walk:
             f"the engine runs at {hour:02d}:{minute:02d}",
         )
         rows: list[JSON] = ran["deliveries"]
+        for row in rows:
+            row["at"] = f"{hour:02d}:{minute:02d}"
+        self.seen.extend(rows)
         return rows
 
     def inbound(self, person: Person, text: str, hour: int, minute: int) -> JSON:
@@ -391,17 +396,24 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         for line in sent["text"].splitlines():
             say(f"→ {line}")
 
-    # 5. The reorder date reached: to Mei, and capped the second time that day.
-    first = _of(w.run_due(profile_id, 12, 0), "reorder")
-    second = _of(w.run_due(profile_id, 12, 30), "reorder")
-    if [r["outcome"] for r in first] != ["sent"] or first[0]["to_name"] != "Mei":
-        raise fail("the reorder reaches Mei", why=f"got {first}")
-    if [r["outcome"] for r in second] != ["capped"]:
-        raise fail("the second reorder that day is capped", why=f"got {second}")
-    ok("12:00, the reorder date reached: " + _line(first[0]) + ":")
-    for line in (first[0]["text"] or "").splitlines():
+    # 5. The reorder date reached (two tablets): the rule is true all day, so every run above
+    #    evaluated it — the first run of the day told Mei, the next was held by the cap, and
+    #    every run after that wrote nothing, because the hold is written down once.
+    w.run_due(profile_id, 12, 0)
+    reorders = _of(w.seen, "reorder")
+    sent = [r for r in reorders if r["outcome"] == "sent"]
+    capped = [r for r in reorders if r["outcome"] == "capped"]
+    if len(sent) != 1 or sent[0]["to_name"] != "Mei":
+        raise fail("the reorder reaches Mei, once", why=f"got {reorders}")
+    if len(capped) != 1 or capped[0]["reason"] != "once a day" or len(reorders) != 2:
+        raise fail("the second reorder that day is capped, once", why=f"got {reorders}")
+    ok(f"{sent[0]['at']}, the first run of the day, the reorder date reached: " + _line(sent[0]) + ":")
+    for line in (sent[0]["text"] or "").splitlines():
         say(f"→ {line}")
-    ok(f"12:30, the same rule again: {second[0]['outcome']} ({second[0]['reason']}) — no second message")
+    ok(
+        f"{capped[0]['at']}, the same rule the second time that day: {capped[0]['outcome']} "
+        f"({capped[0]['reason']}) — no second message, and no row at all on the runs after it"
+    )
 
     # 6. 22:30, the quiet hours: Pa writes that he fell.
     fell = w.inbound(pa, "I fell in the bathroom", 22, 30)

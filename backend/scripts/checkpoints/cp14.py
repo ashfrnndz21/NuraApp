@@ -404,9 +404,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         'Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, '
         f"heard at {chest['transcript_confidence']}, kept as his own note): the flag was written first "
         f"({chest['flag_id'][:8]}…), "
-        f"the posture is ACT, Mei and Lin were told (notices to {len(chest['notified_person_ids'])} people, "
-        '"Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, '
-        'and one closing line, never "Ask your doctor." after 995:'
+        "the posture is ACT, and the ladder (E11-06, the one record of who is told) asked "
+        f"{len(chest['notified_person_ids'])} first — Mei, never capped, never quiet; "
+        'the card, read aloud — who knows, the calls, and one closing line, never "Ask your '
+        'doctor." after 995:'
     )
     for line in lines:
         say(line)
