@@ -27,9 +27,9 @@ fact a card writes is held under its own subject's scope. The yes is minted at
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import AwareDatetime
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
@@ -295,10 +295,11 @@ async def recording(
     context: Context,
     session: Db,
     duration_s: float = Query(),
-    started_at: datetime | None = None,
+    started_at: AwareDatetime | None = None,
 ) -> ConsultOut:
     """The recording, sent once on Stop: the body is the recorder's own bytes (`audio/webm`,
-    `audio/ogg` or `audio/mp4`), `duration_s` how long the phone listened. Kept as a consult
+    `audio/ogg` or `audio/mp4`), `duration_s` how long the phone listened, `started_at` when it
+    began, with its offset (a time without one is a 422, ADR 0009). Kept as a consult
     VOICE artefact in the region, heard, separated by speaker, and read into the post-visit
     card with each line's place in the recording. A body declared bigger than a visit is
     refused before it is read, on the trail."""

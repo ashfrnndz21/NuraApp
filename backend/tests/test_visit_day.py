@@ -568,6 +568,8 @@ async def test_what_is_not_a_visit_s_recording_is_refused_on_the_trail(
     assert wrong_type.status_code == 400 and wrong_type.json() == {"refusal": "NotAConsultRecording"}
     wrong_bytes = await _upload(house, house.pa, b"OggS" + data, content_type="audio/webm")
     assert wrong_bytes.status_code == 400
+    naive = await _upload(house, house.pa, data, started_at="2026-09-05T09:00:00")
+    assert naive.status_code == 422  # a time without its offset is not a time (ADR 0009)
     too_long = await _upload(house, house.pa, data, duration_s=MAX_CONSULT_SECONDS + 1)
     assert too_long.status_code == 413 and too_long.json() == {"refusal": "ConsultTooLong"}
     monkeypatch.setattr(visits_routes, "MAX_CONSULT_BYTES", 16)

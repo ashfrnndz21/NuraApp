@@ -31,7 +31,7 @@ import base64
 import random
 import re
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -255,8 +255,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
 
     # 1. Dr Tan, his address, the visit tomorrow at 9 in the morning on Pa's yes.
     tomorrow = (datetime.now(SINGAPORE) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
-    # Sent in UTC, as the app sends it: the local database keeps a time without its offset.
-    at = tomorrow.astimezone(UTC).isoformat().replace("+00:00", "Z")
+    # On his clock, with its offset: kept as that instant (ADR 0009).
+    at = tomorrow.isoformat()
     tan = check(
         client.post(
             f"/profiles/{profile_id}/providers",
@@ -395,6 +395,9 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("Pa reads the logistics card", why=f"the roster's suggestion is not waiting for a yes: {driver}")
     if not card["note"] or card["note"]["text"] != "parking at B2" or card["note"]["label"] != "Mei's note":
         raise fail("Pa reads the logistics card", why=f"Mei's note is not under her name: {card['note']}")
+    when = next(line["text"] for line in card["lines"] if line["section"] == "when")
+    if "at 9 in the morning" not in when:
+        raise fail("Pa reads the logistics card", why=f"not the time it was booked for: {when}")
     bring = [line["text"] for line in card["lines"] if line["section"] == "bring"]
     if len(bring) != 3:
         raise fail("Pa reads the logistics card", why=f"not the book, the tablets and the letter: {bring}")
