@@ -35,6 +35,8 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import utcnow
 from app.delivery.feed.items import NotPlainWords
+from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.models import Ladder
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
@@ -57,7 +59,7 @@ from app.reasoning.feelings.words import (
 )
 from app.safety.boundary import Surface
 from app.safety.not_feeling_well import WhatToDoNow, not_feeling_well
-from app.safety.red_flags import Escalation, Feeling, Flag, is_red
+from app.safety.red_flags import Feeling, Flag, is_red
 from app.state.service import RECOMPUTE_SCOPES, render_from_state
 
 TAP = FeelingTap.__tablename__
@@ -91,7 +93,8 @@ class RedPath:
     not-feeling-well card's own reassurance and closing line."""
 
     flag: Flag
-    escalation: Escalation | None
+    escalation: Ladder | None
+    """The ladder (E11-06, ADR 0005): the one record of who is told, and in what order."""
     notices: int
     lines: tuple[str, ...]
     card: WhatToDoNow
@@ -130,6 +133,7 @@ async def _red_path(
     store: ObjectStore,
     transcriber: Transcriber,
     registry: DrugRegistry,
+    via: Via,
 ) -> tuple[uuid.UUID, RedPath]:
     """The not-feeling-well button, pressed with his word: E13's whole flow, server-side.
 
@@ -144,6 +148,7 @@ async def _red_path(
         store=store,
         transcriber=transcriber,
         registry=registry,
+        via=via,
         words=WORDS[code][feeling],
         language=code,
         feeling=feeling,
@@ -154,7 +159,7 @@ async def _red_path(
     )
     flag = flags[0]
     ladders = await audited_read(
-        session, Escalation, context, Scope.EMERGENCY, where=(Escalation.flag_id == flag.id,)
+        session, Ladder, context, Scope.EMERGENCY, where=(Ladder.flag_id == flag.id,)
     )
     return done.event_id, RedPath(
         flag=flag,
@@ -173,6 +178,7 @@ async def record_tap(
     registry: DrugRegistry,
     store: ObjectStore,
     transcriber: Transcriber,
+    via: Via,
     language: str | None = None,
 ) -> Tapped:
     """His tap on the cloud. A red word takes the red-flag path first and asks nothing."""
@@ -187,6 +193,7 @@ async def record_tap(
             store=store,
             transcriber=transcriber,
             registry=registry,
+            via=via,
         )
         tap = await audited_write(
             session,
@@ -258,6 +265,7 @@ async def answer_tap(
     registry: DrugRegistry,
     store: ObjectStore,
     transcriber: Transcriber,
+    via: Via,
     language: str | None = None,
 ) -> Answered:
     """His one answer. A yes that makes the word red takes the red-flag path, and there is no
@@ -284,6 +292,7 @@ async def answer_tap(
             store=store,
             transcriber=transcriber,
             registry=registry,
+            via=via,
         )
         tap.flag_id = red.flag.id
     tap.answer = answer

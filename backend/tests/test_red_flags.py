@@ -19,6 +19,7 @@ from app.channels import safety_strings as strings
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
 from app.identity.service import register_person
 from app.ingestion.transcribe import NOTHING_HEARD, FixtureTranscriber
 from app.ingestion.voice import NotAVoiceNote, VoiceNoteTooLong, check_voice_note
@@ -225,20 +226,25 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     assert targets.index("event") < targets.index("red_flag")
     assert targets.index("red_flag") < targets.index("artifact")
     assert targets.index("artifact") < targets.index("whatsapp_message")
-    assert targets.index("whatsapp_message") < targets.index("safety_escalation")
 
     # The reply in the thread: the doctor's word, and who knows now.
     assert len(handled.replies) == 1
     lines = handled.replies[0].text.splitlines()
     assert lines[0] == "This one we do not wait for."
     assert lines[1] == "Call your doctor today."
-    assert lines[2] == "Pa and Kit know now."
+    assert lines[2] == "Kit knows now."
 
-    # The ladder: owner, then chiefs (Mei is the poster and left out), then the rest.
-    ladder = (await sg.scalars(select(Escalation).where(Escalation.flag_id == flag.id))).one()
-    assert [step["standing"] for step in ladder.roster] == ["owner", "helper"]
-    assert [step["person_id"] for step in ladder.roster] == [str(home.pa.id), str(kit.id)]
-    assert ladder.told == [str(home.mei.id)]
+    # The ladder (E11-06), the one record of who is told: never his own rung (he is the one
+    # in trouble), never the poster (she knows). Nobody is on duty and the only chief posted
+    # it, so everyone else holding his emergency card, at once — Kit — on WhatsApp.
+    ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id == flag.id))).one()
+    assert [(step["standing"], step["person_id"]) for step in ladder.rungs] == [
+        ("key_holder", str(kit.id))
+    ]
+    sent = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).one()
+    assert sent.to_person_id == kit.id and sent.outcome is DeliveryOutcome.SENT
+    assert sent.template_name == "red_flag_notice" and sent.rule == "red_flag_raised"
+    assert list(await sg.scalars(select(Escalation))) == []
 
     # Nothing was extracted from the words: no fact, no proposal; the message is kept.
     assert list(await sg.scalars(select(Fact))) == []
@@ -252,7 +258,7 @@ async def test_a_helper_whose_key_holds_the_emergency_scope_but_not_the_record_s
 ) -> None:
     """A helper's key covers his medicines and the emergency, not the record. Her word that
     he fell is enough: the moment, the flag and her words are kept under the emergency
-    scope, and the ladder is written."""
+    scope, and the ladder (E11) is started."""
     home = await family(
         sg,
         tmp_path,
@@ -262,7 +268,7 @@ async def test_a_helper_whose_key_holds_the_emergency_scope_but_not_the_record_s
     assert not home.chief.allows(Scope.RECORDS)
     handled = await home.inbound(sg, MEI, "he fell in the bathroom")
     assert handled.outcome == "red_flag" and handled.flag_id is not None
-    assert (await sg.scalars(select(Escalation))).one().flag_id == handled.flag_id
+    assert (await sg.scalars(select(Ladder))).one().flag_id == handled.flag_id
     assert handled.replies[0].text.splitlines()[0] == "This one we do not wait for."
 
 
@@ -274,7 +280,7 @@ async def test_a_flag_heard_on_whatsapp_that_depends_on_a_missing_fact_is_kept_n
     assert handled.outcome == "red_flag_suppressed" and handled.flag_id is not None
     flag = await sg.get(Flag, handled.flag_id)
     assert flag is not None and flag.suppressed_because == "no_sugar_condition_on_record"
-    assert list(await sg.scalars(select(Escalation))) == []
+    assert list(await sg.scalars(select(Ladder))) == []
     # Not escalated, and still a next step for the poster: who to call if it gets worse.
     assert len(handled.replies) == 1
     assert handled.replies[0].text.splitlines() == [

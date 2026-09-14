@@ -171,6 +171,67 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Saya sudah tulis.", "Kalau jadi lebih teruk, telefon {doctor} hari ini."),
         "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
     },
+    "taken_patient": {
+        "en": ("Thank you, I wrote it down.", "{who} can see you took it."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{who}能看到您吃了。"),
+    },
+    "taken_alone": {
+        "en": ("Thank you, I wrote it down.",),
+        "ms": ("Terima kasih, saya sudah tulis.",),
+        "zh": ("谢谢，我记下了。",),
+    },
+    "given": {
+        "en": ("Thank you, I wrote it down.", "{name} had {medicine}."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{name} sudah ambil {medicine}."),
+        "zh": ("谢谢，我记下了。", "{name}吃了{medicine}。"),
+    },
+    "taken_nothing_due": {
+        "en": ("There is no tablet to take right now.", "I did not write anything down."),
+        "ms": ("Tiada ubat untuk diambil sekarang.", "Saya tidak tulis apa-apa."),
+        "zh": ("现在没有要吃的药。", "我没有记下任何东西。"),
+    },
+    "flag_seen": {
+        "en": ("Thank you, you have it now.", "I will not ask anyone else."),
+        "ms": ("Terima kasih, anda uruskan sekarang.", "Saya tidak akan tanya orang lain."),
+        "zh": ("谢谢，现在由您来处理。", "我不会再问别人了。"),
+    },
+    # A red flag heard on a profile whose patient has not agreed to WhatsApp: the flag is
+    # raised and put first in the family's app; the poster gets this line and nothing else.
+    "red_flag_fixed": {
+        "en": (
+            "This one we do not wait for.",
+            "I put it first in the family's app.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "Saya letak ia paling atas dalam aplikasi keluarga.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": ("这个我们不等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
+    },
+    # A red-flag word from someone on more than one family's list: raised on each, then asked.
+    "red_flag_which": {
+        "en": (
+            "This one we do not wait for.",
+            "I put it first in the family's app for {both}.",
+            "Who is it about?",
+            "Send me the name, {either}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "Saya letak ia paling atas dalam aplikasi keluarga untuk {both}.",
+            "Ini tentang siapa?",
+            "Hantar nama kepada saya, {either}.",
+        ),
+        "zh": ("这个我们不等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
+    },
+    "red_flag_which_thanks": {
+        "en": ("Thank you, it is about {name}.", "I stopped asking the other family."),
+        "ms": ("Terima kasih, ini tentang {name}.", "Saya berhenti bertanya keluarga yang lain."),
+        "zh": ("谢谢，是关于{name}的。", "我不再问另一个家庭了。"),
+    },
     "not_understood": {
         "en": ("I did not understand that.", "Send a photo, or your blood pressure as 2 numbers."),
         "ms": ("Saya tidak faham.", "Hantar gambar, atau tekanan darah anda sebagai 2 nombor."),
@@ -198,6 +259,9 @@ YOU: Mapping[str, str] = {"en": "You", "ms": "Anda", "zh": "您"}
 # @patient phrase
 AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
 
+# @patient phrase
+OR: Mapping[str, str] = {"en": " or ", "ms": " atau ", "zh": "还是"}
+
 
 def reply(key: str, language: str | None, **params: str) -> str:
     """The catalogue reply, whole lines joined, with its slots filled."""
@@ -208,11 +272,11 @@ def reply(key: str, language: str | None, **params: str) -> str:
     return "\n".join(line.format(**params) for line in lines[lang])
 
 
-def join_names(names: list[str], language: str | None) -> str:
-    """'Mei', 'Mei and Kit', 'Mei, Kit and Ash'."""
+def join_names(names: list[str], language: str | None, *, either: bool = False) -> str:
+    """'Mei', 'Mei and Kit', 'Mei, Kit and Ash' — or with `either`, 'Pa or Ma'."""
     lang = language_of(language)
     if not names:
         return ""
     if len(names) == 1:
         return names[0]
-    return ", ".join(names[:-1]) + AND[lang] + names[-1]
+    return ", ".join(names[:-1]) + (OR if either else AND)[lang] + names[-1]

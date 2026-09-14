@@ -2,7 +2,9 @@
 
 When a biography closes, the gaps it left open (`app.onboarding.gaps`) become the plan: seven
 at most, tier first, one a day from the next morning at his breakfast time on his own wall
-clock (`REGION_TZ` of the profile's region), 08:00 when he has not said. A prompt is pending
+clock (`REGION_TZ` of the profile's region) — the one breakfast time the morning card shares
+(`app.routines.breakfast`: his settings, else his routine's anchor, else 07:30). A change to
+it moves the week: a prompt is due on its day at his breakfast as it is now (`PlanView.due_of`). A prompt is pending
 until what it asks for arrives — by any route: the paper it asks for, a fact from any card, a
 reading he types, a visit booked — and is then done, naming the fact that closed it when a
 fact did; or he says Later and it is skipped. He can say Later once and be asked
@@ -26,6 +28,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,13 +57,15 @@ from app.onboarding.models import (
     PromptStatus,
 )
 from app.onboarding.settings import BREAKFAST, CONDITION, a_setter, clock_time
-from app.regions import REGION_TZ
+from app.regions import REGION_TZ, Region
+from app.routines.breakfast import DEFAULT, breakfast_time
 
 PLAN_LENGTH = 7
 """One prompt a day for the first week."""
 
-DEFAULT_BREAKFAST = time(8, 0)
-"""When he has not said when he has breakfast: eight on his clock, until he does."""
+DEFAULT_BREAKFAST = DEFAULT
+"""When neither he nor his routine has said: half past seven on his clock
+(`app.routines.breakfast`, the one breakfast the morning card shares)."""
 
 PLAN_SCOPE = Scope.RECORDS
 """The plan is about what the record holds and does not: read and written under the record."""
@@ -89,10 +94,19 @@ class PlanView:
     plan: ActivationPlan
     prompts: Sequence[PlanPrompt]
     stopped_because: tuple[str, ...]
+    breakfast: time = DEFAULT
+    """The one breakfast time now (`app.routines.breakfast`): each prompt is due at it."""
+    zone: ZoneInfo = REGION_TZ[Region.SG]
 
     @property
     def stopped(self) -> bool:
         return len(self.stopped_because) == len(STOP_PARTS)
+
+    def due_of(self, prompt: PlanPrompt) -> datetime:
+        """When a prompt is due: its day, at his breakfast as it is now — so a change to his
+        breakfast moves the week with it, and the morning card and the prompt stay together."""
+        day = as_utc(prompt.due_at).astimezone(self.zone).date()
+        return datetime.combine(day, self.breakfast, self.zone).astimezone(UTC)
 
 
 async def make_plan(
@@ -107,7 +121,7 @@ async def make_plan(
     tz = REGION_TZ[context.region]
     moment = utcnow()
     first_day = moment.astimezone(tz).date() + timedelta(days=1)
-    at = breakfast or DEFAULT_BREAKFAST
+    at = breakfast or await breakfast_time(session, context=context)
     plan = await audited_write(
         session,
         ActivationPlan,
@@ -208,7 +222,13 @@ async def _view(session: AsyncSession, *, context: KeyContext, plan: ActivationP
     prompts = await _prompts(session, context=context, plan=plan)
     known = await what_is_known(session, context=context)
     await _settle(session, context=context, plan=plan, prompts=prompts, known=known)
-    return PlanView(plan=plan, prompts=prompts, stopped_because=what_stops(known))
+    return PlanView(
+        plan=plan,
+        prompts=prompts,
+        stopped_because=what_stops(known),
+        breakfast=await breakfast_time(session, context=context),
+        zone=REGION_TZ[context.region],
+    )
 
 
 @audited(Action.READ, PLAN_SCOPE, PLAN)
@@ -241,9 +261,9 @@ def due_in(view: PlanView, at: datetime) -> list[PlanPrompt]:
     ready = [
         prompt
         for prompt in view.prompts
-        if prompt.status is PromptStatus.PENDING and as_utc(prompt.due_at) <= moment
+        if prompt.status is PromptStatus.PENDING and view.due_of(prompt) <= moment
     ]
-    return sorted(ready, key=lambda prompt: (as_utc(prompt.due_at), prompt.day))[:1]
+    return sorted(ready, key=lambda prompt: (view.due_of(prompt), prompt.day))[:1]
 
 
 @audited(Action.WRITE, PLAN_SCOPE, PROMPT)

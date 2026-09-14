@@ -17,7 +17,7 @@ from app.medicines.service import record_dose_taken
 from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import Feeling
 from tests.family_support import household
-from tests.feelings_support import REGISTRY, STORE, TRANSCRIBER, new_medicine
+from tests.feelings_support import REGISTRY, STORE, TRANSCRIBER, VIA, new_medicine
 from tests.support import refused_unit
 
 
@@ -31,7 +31,9 @@ async def test_taps_the_fine_today_share_and_acceptance_by_kind_per_week(
     await record_dose_taken(sg, context=owner, line_id=added.line.id)
     for word in (Feeling.DIZZY, Feeling.FINE, Feeling.FINE):
         await record_tap(
-            sg, context=owner, word=word, registry=REGISTRY, store=STORE, transcriber=TRANSCRIBER
+            sg, context=owner, word=word, registry=REGISTRY, store=STORE,
+            transcriber=TRANSCRIBER,
+            via=VIA,
         )
     _, nudge = await hand_over(sg, context=owner, registry=REGISTRY)
     await respond(sg, context=owner, nudge_id=nudge.id, kind=ResponseKind.ACCEPTED)
