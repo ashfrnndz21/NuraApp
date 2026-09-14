@@ -25,7 +25,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
-| 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the red-flag path, the family told, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
+| 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the not-feeling-well button runs for him: the flag, the family told, the urgent card, posture act, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
 
 **Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
 
@@ -1107,12 +1107,12 @@ What you will see (the phone numbers, ids and dates change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8113 (GET /health)
-✓ Pa (+6597116467) registered by phone code (no SMS; the six digits read from the server log)
-✓ Mei (+6597224731) registered by phone code (no SMS; the six digits read from the server log)
+✓ Pa (+6597119950) registered by phone code (no SMS; the six digits read from the server log)
+✓ Mei (+6597222932) registered by phone code (no SMS; the six digits read from the server log)
 ✓ Pa opened his profile in Malay, let Mei, his daughter, in to everything and cut her the chief key
 ✓ Pa has Dr Tan in his directory (POST /providers) and a visit with him on Thursday 17 September at 10, written down on his own yes (POST /confirmations subject appointment, POST /appointments)
 ✓ Pa added amlodipine 5 mg from a label photo with his OK (POST /medicines, the label naming Dr Tan), tapped Taken once, and typed in a blood pressure (138 over 84)
-✓ the cloud in Malay (GET /feelings/cloud?language=ms) is on Today because State changed, rendered from State b1b1a3ed…; the question, then the words biggest first — each with its reason code, kept for the audit and never shown to him:
+✓ the cloud in Malay (GET /feelings/cloud?language=ms) is on Today because State changed, rendered from State 9cd60462…; the question, then the words biggest first — each with its reason code, kept for the audit and never shown to him:
     Ubat tekanan darah anda baru sejak Selasa 15 September.
     Apa rasa anda hari ini?
     Pening                 weight 3  base, new_medicine (amlodipine, monograph rule dizzy_standing)
@@ -1126,7 +1126,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Sakit dada             weight 1  base
     Sihat hari ini         weight 1  base
 ✓ Pa tapped Pening (POST /feelings): a SYMPTOM event in his word, and one question back — "Bila ia bermula?" — with Hari ini, Sejak semalam, Beberapa hari, Seminggu atau lebih
-✓ Pa answered Sejak semalam (POST /feelings/{tap}/answer): the tap read against his medicines, his blood pressure and this week — the new medicine's licensed monograph lists dizziness — into a note kept for the visit, rendered from State b1b1a3ed…, read aloud as: headline, two things to tell Dr Tan, who does the next thing, and the boundary last:
+✓ Pa answered Sejak semalam (POST /feelings/{tap}/answer): the tap read against his medicines, his blood pressure and this week — the new medicine's licensed monograph lists dizziness — into a note kept for the visit, rendered from State 9cd60462…, read aloud as: headline, two things to tell Dr Tan, who does the next thing, and the boundary last:
     Perkara untuk diberitahu kepada Dr Tan
     Beritahu Dr Tan bahawa anda rasa pening sejak semalam.
     Ini boleh berlaku kerana ubat tekanan darah anda, yang baru sejak Selasa 15 September.
@@ -1135,15 +1135,17 @@ What you will see (the phone numbers, ids and dates change each run):
     Ini bukan nasihat doktor.
     Tanya Dr Tan.
 ✓ the strip is gone after his tap (show false, tapped_today), and stays gone until State changes again
-✓ Pa tapped Sakit dada: the red-flag path before anything else — the moment, the flag (9c7298a1…, kept), Mei told, a notice to his emergency list and the ladder (d1069e0a…) for delivery — the not-feeling-well flow opens, no question, and no note (GET /feelings/notes still holds only the one for dizzy); what it says to him:
+✓ Pa tapped Sakit dada: the red-flag path before anything else — the moment, the flag (de0fa8eb…, kept), Mei told, a notice to his emergency list and the ladder (a2f050fb…) for delivery — then the not-feeling-well button's whole flow, server-side: the what-to-do card (urgent, card a8a67205…) and the day's posture act (GET /state); no question, and no note (GET /feelings/notes still holds only the one for dizzy); the card he is shown:
     Mei sudah tahu.
+    Hubungi ambulans sekarang di talian 995.
+    Selepas itu, hubungi Mei.
     Nura tidak menentukan apa masalahnya.
 ✓ no nudge today (GET /nudges/plan): a red flag was raised today, so nothing is planned for it
 ✓ tomorrow's plan (GET /nudges/plan?day=2026-09-16): one nudge — anticipation, the visit the day after — no earlier than 10:00 on his wall, cap class one, with why; held, and said so: recognition (one_a_day):
     Anda berjumpa Dr Tan esok, Khamis 17 September.
     Sila bawa buku tekanan darah anda.
     [why] Anda nampak ini kerana lawatan anda esok.
-✓ the nudge was written down and handed to delivery (POST /nudges/plan: nudge 16e0841f…, rendered from State b1b1a3ed…; nothing sent from here — E11 sends), and Pa accepted it (POST /nudges/{id}/response: an ENGAGEMENT event and a row)
+✓ the nudge was written down and handed to delivery (POST /nudges/plan: nudge d3cfa8b1…, rendered from State 83fe6882…; nothing sent from here — E11 sends), and Pa accepted it (POST /nudges/{id}/response: an ENGAGEMENT event and a row)
 ✓ Mei, his chief, read the metrics (GET /nudge-metrics): week 2026-W38 — 2 taps on the cloud, 0 of them Fine today (share 0.0), anticipation handed over 1, accepted 1 (acceptance 1.0); no word he tapped, no line, no id in the answer
 ✓ Mei's metrics read is on Pa's trail (GET /audit): a read of nudge_metrics, in her name
 ✓ Pa's Me page (GET /me-summary): the days with a tablet taken, counted by the backend, in his words:
@@ -1152,7 +1154,7 @@ What you will see (the phone numbers, ids and dates change each run):
 checkpoint 21 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 21 passed`. The criteria: the cloud is on Today only after a change and goes after a tap; its words are weighed from State — "Pening" first because the new medicine's licensed monograph lists `dizzy_standing`, never because of a word Nura made up — and every word carries its reason code, which the client never shows; a tap asks one thing back from a fixed table; the note has at most two things to tell Dr Tan, each naming what it rests on, then who does the next thing, and ends on the boundary line for a feeling inference (E16); a red word takes the not-feeling-well button's own red-flag path (E13/E14: the moment, the flag kept, a notice to his emergency list, the ladder) and makes no note; there is no nudge on a day with a red flag, and tomorrow's plan has one nudge, no earlier than his check-in time and never at night, with the rest held and said so; the metrics are counts with no word, line or id in them, for the owner and his chief only, and the read is on his trail; the Me page says the proud number (W1's) in his words, with no streak.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 21 passed`. The criteria: the cloud is on Today only after a change and goes after a tap; its words are weighed from State — "Pening" first because the new medicine's licensed monograph lists `dizzy_standing`, never because of a word Nura made up — and every word carries its reason code, which the client never shows; a tap asks one thing back from a fixed table; the note has at most two things to tell Dr Tan, each naming what it rests on, then who does the next thing, and ends on the boundary line for a feeling inference (E16); a red word presses the not-feeling-well button for him, server-side (E13/E14: the moment and the flag first, kept; a notice to his emergency list; the ladder; the day's posture act; the urgent what-to-do card, which is what he is shown) and makes no note; there is no nudge on a day with a red flag, and tomorrow's plan has one nudge, no earlier than his check-in time and never at night, with the rest held and said so; the metrics are counts with no word, line or id in them, for the owner and his chief only, and the read is on his trail; the Me page says the proud number (W1's) in his words, with no streak.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token and the profile id:
 
