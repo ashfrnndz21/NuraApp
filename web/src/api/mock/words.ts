@@ -142,11 +142,11 @@ export const LEARNED: Record<string, string[]> = {
 
 // @patient
 export const QUESTIONS = {
-  labOld: ["Your blood test is from a while ago.", "Ask Dr {doctor} for a newer one."],
-  labStatin: ["The blood test is from before the cholesterol tablet.", "Ask Dr {doctor} if the tablet is working."],
-  thinnerLabel: ["The label says you take a blood thinner.", "Ask Dr {doctor} when your next blood test is."],
-  bpHome: ["You do not check your blood pressure at home.", "Ask Dr {doctor} if you should."],
-  noPapers: ["No papers are in yet.", "Ask Dr {doctor} for a copy of your last blood test."],
+  labOld: "Ask Dr {doctor} for a newer blood test.",
+  labStatin: "Ask Dr {doctor} if the cholesterol tablet is working.",
+  thinnerLabel: "Ask Dr {doctor} when your next blood test is.",
+  bpHome: "Ask Dr {doctor} if you should check at home.",
+  noPapers: "Ask Dr {doctor} for a copy of your last blood test.",
 };
 
 /** One gap card, docs/gaps-and-unlocks.md §1: under the heading "Missing", the fact in his

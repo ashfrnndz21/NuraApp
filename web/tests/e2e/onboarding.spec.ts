@@ -205,15 +205,15 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   await page.getByTestId("all-done").click();
   const question = page.getByTestId("question");
   await expect(question).toHaveCount(1);
-  await expect(question).toContainText("Ask Dr Tan for a newer one.");
+  await expect(question).toContainText("Ask Dr Tan for a newer blood test.");
   await expect(question).toHaveAttribute("data-state-id", /.+/);
   await question.getByTestId("hear").click();
-  expect(await spoken(page)).toEqual(["Your blood test is from a while ago.", "Ask Dr Tan for a newer one."]);
+  expect(await spoken(page)).toEqual(["Ask Dr Tan for a newer blood test."]);
   await question.getByTestId("keep").click();
   await expect(page.getByTestId("question-ack")).toHaveText("Nura will keep this one for the visit.");
-  await expect(question).toContainText("Ask Dr Tan if the tablet is working.");
+  await expect(question).toContainText("Ask Dr Tan if the cholesterol tablet is working.");
   await question.getByTestId("not-this").click();
-  await expect(question).toContainText("Ask Dr Tan if you should.");
+  await expect(question).toContainText("Ask Dr Tan if you should check at home.");
   await question.getByTestId("keep").click();
 
   // Gaps and unlocks: one card for the patient, with how many follow.
@@ -448,4 +448,45 @@ test("the Ready screen's other actions: a follow-up reopened, and one person let
   expect(key?.scopes).toEqual(expect.arrayContaining(["medicines", "visits"]));
   expect(key?.scopes).not.toContain("readings");
   expect(key?.scopes).not.toContain("records");
+});
+
+test("a question kept from the papers goes on the next visit's list (E05)", async ({ page, request }) => {
+  const phone = await signedInToOnboarding(page, request, "+659882");
+  await page.getByTestId("word-hosp").click();
+  await page.getByTestId("cloud-done").click();
+  await page.getByTestId("readback-line").getByTestId("readback-yes").click();
+  const main = page.locator("main.onboarding");
+  await expect(main).toHaveAttribute("data-stage", "records");
+
+  // A visit is booked, the way the family would: the doctor, then the visit, each with its yes.
+  const { auth, id } = await profileOf(request, phone);
+  const doctor = await request.post(`${API}/profiles/${id}/providers`, { headers: auth, data: { name: "Dr Tan", kind: "clinic" } });
+  expect(doctor.status(), await doctor.text()).toBe(201);
+  const providerId = ((await doctor.json()) as { provider_id: string }).provider_id;
+  const when = new Date(Date.now() + 14 * 86_400_000).toISOString();
+  const visit = { provider_id: providerId, scheduled_at: when, purpose: "Blood pressure check" };
+  const yes = await request.post(`${API}/profiles/${id}/confirmations`, { headers: auth, data: { subject: "appointment", ...visit } });
+  expect(yes.status(), await yes.text()).toBe(201);
+  const booked = await request.post(`${API}/profiles/${id}/appointments`, {
+    headers: auth,
+    data: { ...visit, confirmation_id: ((await yes.json()) as { confirmation_id: string }).confirmation_id },
+  });
+  expect(booked.status(), await booked.text()).toBe(201);
+  const appointmentId = ((await booked.json()) as { appointment_id: string }).appointment_id;
+
+  // No papers today; he keeps the one question the sitting raised.
+  await page.getByTestId("all-done").click();
+  const question = page.getByTestId("question");
+  const line = "Ask Dr Tan for a copy of your last blood test.";
+  await expect(question).toContainText(line);
+  await question.getByTestId("keep").click();
+  await expect(main).toHaveAttribute("data-stage", "plan");
+
+  // On the visit's list, in exactly the words he kept, added by him — never composed here.
+  const listed = (await (await request.get(`${API}/profiles/${id}/appointments/${appointmentId}/questions`, { headers: auth })).json()) as {
+    questions: { text: string; added_by_person_id: string | null }[];
+  };
+  const kept = listed.questions.find((each) => each.text === line);
+  expect(kept, JSON.stringify(listed.questions)).toBeTruthy();
+  expect(kept!.added_by_person_id).toBeTruthy();
 });

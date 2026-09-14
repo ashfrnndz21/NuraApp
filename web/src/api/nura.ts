@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  AppointmentOut,
   BiographyIn,
   BiographyOut,
   ClaimableOut,
@@ -27,6 +28,7 @@ import type {
   SlotOut,
   StateOut,
   TakenOut,
+  VisitQuestionOut,
   WordingOut,
 } from "./types";
 
@@ -257,4 +259,26 @@ export const cutKey = (token: string, profileId: string, holder_phone_e164: stri
     method: "POST",
     token,
     body: { holder_phone_e164, role: "caregiver", scopes },
+  });
+
+// --- E05: a question from the papers, kept for the next visit ----------------------------
+
+/** The visits still to come, soonest first. */
+export const upcomingAppointments = (token: string, profileId: string) =>
+  api<AppointmentOut[]>(`/profiles/${profileId}/appointments`, { token });
+
+/** The yes to adding exactly this line to this visit's questions (E05-02). */
+export const mintQuestionYes = (token: string, profileId: string, appointment_id: string, text: string) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "question", appointment_id, text },
+  });
+
+/** The line itself, on the visit's list, with the yes minted for it. */
+export const addVisitQuestion = (token: string, profileId: string, appointmentId: string, text: string, confirmation_id: string) =>
+  api<VisitQuestionOut>(`/profiles/${profileId}/appointments/${appointmentId}/questions`, {
+    method: "POST",
+    token,
+    body: { text, confirmation_id },
   });

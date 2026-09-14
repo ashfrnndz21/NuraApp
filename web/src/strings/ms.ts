@@ -590,6 +590,7 @@ export const ms = {
   // @patient
   refusals: {
     default: "Nura tidak dapat buat itu sekarang.",
+    NotPlainEnough: "Sila tulis soalan itu dengan perkataan mudah.",
     HolderNeedsAName: "Sila taip nama orang yang anda benarkan.",
     NotAPdf: "Nura tidak dapat membaca dokumen itu.",
     PdfTooLarge: "Dokumen itu terlalu besar untuk Nura.",

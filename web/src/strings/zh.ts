@@ -590,6 +590,7 @@ export const zh = {
   // @patient
   refusals: {
     default: "Nura 现在做不了这件事。",
+    NotPlainEnough: "请用简单的话写这个问题。",
     HolderNeedsAName: "请输入您要让他看的那个人的名字。",
     NotAPdf: "Nura 看不懂那个文件。",
     PdfTooLarge: "那个文件太大了，Nura 打不开。",

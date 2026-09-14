@@ -377,13 +377,15 @@ export interface PaperOut {
   source: string;
 }
 
-/** A question the papers raised: whole lines, spoken as written, one Keep / Not this one. */
+/** A question the papers raised, as E01's sitting holds it: one whole line, spoken as
+ *  written, with Keep or Not this one. E01's shape carries no State id and no source line;
+ *  the card shows them when the backend sends them. */
 export interface QuestionOut {
   question_id: string;
-  lines: string[];
+  line: string;
   kept: boolean | null;
-  state_id: string;
-  source: string;
+  state_id?: string;
+  source?: string;
 }
 
 export interface BiographyOut {
@@ -461,3 +463,23 @@ export interface ConsentOut {
   wording_text: string;
 }
 
+
+// --- E05: a question kept for the next visit ---------------------------------------------
+
+/** One visit still to come (`GET /profiles/{id}/appointments`, soonest first). */
+export interface AppointmentOut {
+  appointment_id: string;
+  provider_id: string;
+  scheduled_at: string;
+  status: string;
+  purpose: string;
+}
+
+/** A question on a visit's list (`POST /appointments/{id}/questions`), with its source. */
+export interface VisitQuestionOut {
+  question_id: string;
+  appointment_id: string;
+  text: string;
+  source: string;
+  state_id: string;
+}

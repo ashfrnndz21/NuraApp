@@ -594,6 +594,7 @@ export const en = {
   // @patient
   refusals: {
     default: "Nura could not do that right now.",
+    NotPlainEnough: "Please write the question in plain words.",
     HolderNeedsAName: "Please type the name of the person you are letting in.",
     NotAPdf: "That file is not one Nura can read.",
     PdfTooLarge: "That file is too big for Nura.",

@@ -71,8 +71,7 @@ function dayAfter(days: number): string {
 }
 
 const dated = (line: string) => line.replace("{date}", today());
-const withDoctor = (lines: string[], doctor: string | null) =>
-  lines.map((line) => line.replace("{doctor}", (doctor ?? "Tan").replace(/^Dr\.?\s+/i, "")));
+const withDoctor = (line: string, doctor: string | null) => line.replace("{doctor}", (doctor ?? "Tan").replace(/^Dr\.?\s+/i, ""));
 
 function readBackFor(words: string[], answers: Record<string, string>, before: ReadBackLineOut[]): ReadBackLineOut[] {
   const known = new Map(before.map((line) => [line.line_id, line.answer]));
@@ -101,8 +100,8 @@ const prompt = (kind: PromptOut["kind"], lines: string[]): PromptOut => ({
 function questionsFor(bio: BiographyOut, doctor: string | null): QuestionOut[] {
   const kept = new Map(bio.questions.map((each) => [each.question_id, each.kept]));
   const out: QuestionOut[] = [];
-  const add = (question_id: string, lines: string[], source: string) =>
-    out.push({ question_id, lines: withDoctor(lines, doctor), kept: kept.get(question_id) ?? null, state_id: STATE_ID, source });
+  const add = (question_id: string, line: string, source: string) =>
+    out.push({ question_id, line: withDoctor(line, doctor), kept: kept.get(question_id) ?? null, state_id: STATE_ID, source });
   const kinds = bio.papers.map((paper) => paper.document_kind);
   if (kinds.includes("lab_report")) add("q-lab-old", QUESTIONS.labOld, dated(SOURCES.paper));
   if (kinds.includes("lab_report") && bio.words.includes("statin")) add("q-lab-statin", QUESTIONS.labStatin, dated(SOURCES.paper));
