@@ -27,7 +27,7 @@ from app.memory.models import (
     Fact,
     SourceChannel,
 )
-from app.memory.semantic import NoProvenance, NotAConfidence, NoSuchProvenance, assert_fact
+from app.memory.semantic import NoProvenance, NoSuchProvenance, NotAConfidence, assert_fact
 from app.regions import Region
 
 MORNING = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
