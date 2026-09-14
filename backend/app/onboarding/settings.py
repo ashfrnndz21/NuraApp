@@ -30,7 +30,8 @@ the fact the feed reads to go voice-first; read-back and repeated prompts under
 `memory_support`; large text and high contrast under `vision`; big targets under `dexterity`;
 breakfast and the name he goes by under `nudges`. A `setting.*` subject would have folded
 into the clinical dimension, which is State's default for a subject it does not know. The
-conditions are `condition.<code>` facts "as told" and the doctor is `doctor.name`, both in
+conditions are `condition.<code>` facts "as told", the doctor is `doctor.name` and the decade
+he was born in is `setting.birth_decade` (lab trends read his age band from it), all in
 the clinical dimension and neither a `control` word, so neither moves a posture. Only what
 changed writes a fact, superseding the one before; a condition untapped is superseded with
 `false`. The language also becomes the profile's own, so the feed speaks it from the next
@@ -76,13 +77,18 @@ may write is decided by `a_setter`; which parts a key reads, by `RECORD_PARTS`."
 
 TARGET = ProfileSettings.__tablename__
 
-RECORD_PARTS: tuple[str, ...] = ("conditions", "doctor_name")
-"""The parts of the settings that are his health record: read only under `Scope.RECORDS`."""
+RECORD_PARTS: tuple[str, ...] = ("conditions", "doctor_name", "birth_decade")
+"""The parts of the settings that are his health record — and the decade he was born in, which
+the record reads his lab ranges by — read only under `Scope.RECORDS`."""
 
 CONDITION = "condition"
 DOCTOR = ("doctor", "name")
 BREAKFAST = ("nudges", "breakfast_time")
 PREFERRED_NAME = ("nudges", "preferred_name")
+BIRTH_DECADE = ("setting", "birth_decade")
+"""The one `setting.*` fact: the decade he was born in, by its first year, which lab trends
+(E07) read his age band from. Clinical by State's default, as a reference range is."""
+FIRST_DECADE = 1900
 VOICE_FACT = (FORMAT_SUBJECT, FORMAT_ATTRIBUTE)
 TEXT = CardFormat.TEXT.value
 
@@ -90,6 +96,10 @@ TEXT = CardFormat.TEXT.value
 class NotTheirsToSetUp(Refusal):
     """Setting a profile up — its settings, its biography, its first week — is the owner's
     and his chief's to do. A caregiver reads it; she does not change it."""
+
+
+class NotADecade(Refusal):
+    """The decade he was born in is its first year — 1940, 1950 — from 1900 to this one."""
 
 
 class NotALanguage(Refusal):
@@ -136,12 +146,18 @@ class SettingsValues:
     preferred_name: str | None = None
     doctor_name: str | None = None
     breakfast_time: time | None = None
+    birth_decade: int | None = None
 
     def checked(self) -> SettingsValues:
         """The same values, or a refusal: a language Nura speaks, conditions from the
         graph, names that are names, a time to the minute."""
         if self.language not in LANGUAGES:
             raise NotALanguage(f"{self.language!r} is not one of {LANGUAGES}")
+        if self.birth_decade is not None and (
+            self.birth_decade % 10
+            or not FIRST_DECADE <= self.birth_decade <= utcnow().year // 10 * 10
+        ):
+            raise NotADecade(f"{self.birth_decade} is not the first year of a decade")
         return replace(
             self,
             conditions=check_conditions(self.conditions),
@@ -168,6 +184,7 @@ def values_of(row: ProfileSettings) -> SettingsValues:
         preferred_name=row.preferred_name,
         doctor_name=row.doctor_name,
         breakfast_time=parse_clock_time(row.breakfast_time),
+        birth_decade=row.birth_decade,
     )
 
 
@@ -187,6 +204,7 @@ def facts_of(values: SettingsValues) -> dict[tuple[str, str], Any]:
         BREAKFAST: clock_time(values.breakfast_time),
         PREFERRED_NAME: values.preferred_name,
         DOCTOR: values.doctor_name,
+        BIRTH_DECADE: values.birth_decade,
     }
     for code in values.conditions:
         wanted[(CONDITION, code)] = True
@@ -362,6 +380,7 @@ async def save_settings(
         preferred_name=chosen.preferred_name,
         doctor_name=chosen.doctor_name,
         breakfast_time=clock_time(chosen.breakfast_time),
+        birth_decade=chosen.birth_decade,
         event_id=event.id,
         set_by_person_id=context.person_id,
         set_at=moment,
@@ -398,7 +417,7 @@ def _narrowed(
 ) -> tuple[SettingsValues, tuple[str, ...]]:
     if context.allows(Scope.RECORDS):
         return values, ()
-    return replace(values, conditions=(), doctor_name=None), RECORD_PARTS
+    return replace(values, conditions=(), doctor_name=None, birth_decade=None), RECORD_PARTS
 
 
 @audited(Action.READ, SETTINGS_SCOPE, TARGET)

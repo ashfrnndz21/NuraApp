@@ -69,6 +69,9 @@ class ProfileSettings(ProfileScoped, Base):
     preferred_name: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     doctor_name: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     breakfast_time: Mapped[str | None] = mapped_column(String(CLOCK_TIME_LENGTH), default=None)
+    birth_decade: Mapped[int | None] = mapped_column(Integer, default=None)
+    """The decade he was born in, by its first year (1950): the age band a lab range is read
+    from (E07, lab trends). Never the year."""
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("event.id"))
     set_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     set_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)

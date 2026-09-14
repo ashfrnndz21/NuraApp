@@ -108,6 +108,9 @@ async def test_settings_drive_density_and_voice_language_immediately(
     clinical = state["dimensions"]["clinical"]
     assert clinical["facts"]["condition"]["diabetes"]["value"] is True
     assert clinical["facts"]["doctor"]["name"]["value"] == "Dr Tan"
+    decade = clinical["facts"]["setting"]["birth_decade"]
+    assert decade["value"] == 1950 and decade["confidence_state"] == "confirmed_by_person"
+    assert decade["event_id"] and saved["birth_decade"] == 1950
     assert clinical["conditions"] == {} and state["posture"] == "stable"
     for entry in (cognitive["facts"]["format"]["preferred"], functional["vision"]["large_text"]):
         assert entry["confidence_state"] == "confirmed_by_person" and entry["event_id"]
@@ -229,8 +232,9 @@ async def test_what_each_key_reads_and_who_may_write(deployment: Deployment) -> 
     assert kits["withheld"] == []
     # A helper reads how to talk to him and when; his conditions and his doctor are withheld.
     sitis = await call(deployment, "GET", path, siti["token"], 200)
-    assert sitis["withheld"] == ["conditions", "doctor_name"]
+    assert sitis["withheld"] == ["conditions", "doctor_name", "birth_decade"]
     assert sitis["conditions"] is None and sitis["doctor_name"] is None
+    assert sitis["birth_decade"] is None and kits["birth_decade"] == 1950
     assert (sitis["language"], sitis["voice_on"], sitis["large_text"]) == ("ms", True, True)
     assert (sitis["breakfast_time"], sitis["preferred_name"]) == ("07:30", "Pa")
     # Neither of them changes it.
@@ -255,7 +259,10 @@ async def test_what_each_key_reads_and_who_may_write(deployment: Deployment) -> 
         json={"scope": "records", "confirmation_id": minted["confirmation_id"]},
     )
     narrowed = await call(deployment, "GET", path, kit["token"], 200)
-    assert narrowed["withheld"] == ["conditions", "doctor_name"] and narrowed["conditions"] is None
+    assert (
+        narrowed["withheld"] == ["conditions", "doctor_name", "birth_decade"]
+        and narrowed["conditions"] is None
+    )
 
     trail = await call(
         deployment, "GET", f"/profiles/{profile_id}/audit", his, 200, params={"limit": 500}
@@ -276,6 +283,15 @@ async def test_a_steward_sets_him_up_and_nonsense_is_refused(deployment: Deploym
     fresh = await call(deployment, "GET", path, her, 200)
     assert fresh["settings_id"] is None and fresh["language"] == "ms" and fresh["set_at"] is None
     await refused(deployment, "PUT", path, her, 400, "NotALanguage", json={"language": "ta"})
+    await refused(
+        deployment,
+        "PUT",
+        path,
+        her,
+        400,
+        "NotADecade",
+        json={"language": "ms", "birth_decade": 1955},
+    )
     await refused(
         deployment,
         "PUT",

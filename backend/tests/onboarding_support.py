@@ -31,6 +31,7 @@ SETTINGS: dict[str, Any] = {
     "breakfast_time": "07:30",
     "doctor_name": "Dr Tan",
     "preferred_name": "Pa",
+    "birth_decade": 1950,
 }
 """Pa's settings as Mei saves them: Malay, simple, large text, voice on, breakfast at 07:30,
 Dr Tan, and five conditions tapped in the cloud."""

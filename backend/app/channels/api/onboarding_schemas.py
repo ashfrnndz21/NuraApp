@@ -85,6 +85,8 @@ class SettingsIn(BaseModel):
     preferred_name: str | None = Field(default=None, max_length=80)
     doctor_name: str | None = Field(default=None, max_length=80)
     breakfast_time: str | None = Field(default=None, pattern=CLOCK)
+    birth_decade: int | None = None
+    """The decade he was born in, by its first year: 1950. Never the year."""
 
     def as_values(self) -> SettingsValues:
         return SettingsValues(
@@ -101,6 +103,7 @@ class SettingsIn(BaseModel):
             preferred_name=self.preferred_name,
             doctor_name=self.doctor_name,
             breakfast_time=parse_clock_time(self.breakfast_time),
+            birth_decade=self.birth_decade,
         )
 
 
@@ -125,6 +128,7 @@ class SettingsOut(BaseModel):
     preferred_name: str | None
     doctor_name: str | None
     breakfast_time: str | None
+    birth_decade: int | None
     set_by_person_id: uuid.UUID | None
     set_at: datetime | None
     withheld: list[str]
@@ -148,6 +152,7 @@ class SettingsOut(BaseModel):
             preferred_name=values.preferred_name,
             doctor_name=None if "doctor_name" in view.withheld else values.doctor_name,
             breakfast_time=clock_time(values.breakfast_time),
+            birth_decade=None if "birth_decade" in view.withheld else values.birth_decade,
             set_by_person_id=None if view.row is None else view.row.set_by_person_id,
             set_at=None if view.row is None else utc(view.row.set_at),
             withheld=list(view.withheld),

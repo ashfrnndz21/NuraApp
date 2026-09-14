@@ -549,6 +549,8 @@ CLASSES: dict[str, str] = {
     "profile_settings.preferred_name": IDENTIFIER,
     "profile_settings.doctor_name": HEALTH,
     "profile_settings.breakfast_time": HEALTH,
+    # The decade he was born in: part of a date of birth, so it points at a person.
+    "profile_settings.birth_decade": IDENTIFIER,
     "profile_settings.event_id": HEALTH,
     "profile_settings.set_by_person_id": IDENTIFIER,
     "profile_settings.set_at": OPERATIONAL,

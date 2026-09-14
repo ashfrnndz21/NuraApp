@@ -108,6 +108,7 @@ def upgrade() -> None:
         sa.Column("preferred_name", sa.String(length=80), nullable=True),
         sa.Column("doctor_name", sa.String(length=80), nullable=True),
         sa.Column("breakfast_time", sa.String(length=5), nullable=True),
+        sa.Column("birth_decade", sa.Integer(), nullable=True),
         sa.Column("event_id", sa.Uuid(), sa.ForeignKey("event.id"), nullable=False),
         sa.Column("set_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         _when("set_at"),

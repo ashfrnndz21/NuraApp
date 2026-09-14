@@ -54,6 +54,7 @@ SETTINGS: dict[str, Any] = {
     "breakfast_time": "07:30",
     "doctor_name": "Dr Tan",
     "preferred_name": "Pa",
+    "birth_decade": 1950,
 }
 LDL_LINE = "Kolesterol jahat anda 152 pada Khamis 7 September 2023."
 """The line Mei says is not right: the dotted LDL the extractor was not sure of."""
@@ -297,6 +298,11 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or formats.get("density", {}).get("value") != "simple"
         or formats.get("preferred", {}).get("value") != "voice"
         or functional.get("vision", {}).get("large_text", {}).get("value") is not True
+        or state["dimensions"]["clinical"]["facts"]
+        .get("setting", {})
+        .get("birth_decade", {})
+        .get("value")
+        != 1950
     ):
         raise fail("Mei reads Pa's State", why=f"settings not folded in: {cognitive}")
     profile = w.get(mei, base, "Mei reads Pa's profile")
@@ -305,7 +311,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     ok(
         f"State took them at once — snapshot {state['sequence']}: spoken and reading language "
         "ms, format density simple and preferred voice (the fact the feed goes voice-first on), "
-        "vision large_text true, each a fact with Mei's yes on the event of the save; the "
+        "vision large_text true, setting.birth_decade 1950 (the age band lab trends read), "
+        "each a fact with Mei's yes on the event of the save; the "
         "profile's own language is ms"
     )
 
