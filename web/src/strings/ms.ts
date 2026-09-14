@@ -388,6 +388,8 @@ export const ms = {
     noMicSub: "Anda boleh tulis nota dengan tangan.",
   },
   day: {
+    // @patient headline
+    topThree: "Tiga perkara untuk hari ini",
     // @patient phrase
     notWell: "Saya rasa tidak sihat",
     // @patient headline

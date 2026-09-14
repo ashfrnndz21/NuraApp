@@ -211,6 +211,7 @@ export interface Strings {
    *  are the backend's; `fallback` is the backend's offline card, word for word, for a phone
    *  that kept no copy of it (app/channels/safety_strings.py). */
   day: {
+    topThree: string;
     notWell: string;
     notWellTitle: string;
     notWellLead: string;

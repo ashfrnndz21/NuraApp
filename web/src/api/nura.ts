@@ -498,6 +498,9 @@ export const dayNudges = (token: string, profileId: string) => api<DayNudgesOut>
 export const answerNudge = (token: string, profileId: string, nudgeId: string, kind: NudgeAnswer) =>
   api<unknown>(`/profiles/${profileId}/nudges/${nudgeId}/response`, { method: "POST", token, body: { kind } });
 
+/** Today's top three (E11-02): alerts, then reminders, then insights, each with its why. */
+export const feedToday = (token: string, profileId: string) => api<FeedPageOut>(`/profiles/${profileId}/feed/today`, { token });
+
 /** The Me page (E17-04): the number that only goes up, in his words. */
 export const meSummary = (token: string, profileId: string, language: string) =>
   api<MeSummaryOut>(`/profiles/${profileId}/me-summary`, { token, query: { language } });

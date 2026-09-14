@@ -388,6 +388,8 @@ export const zh = {
     noMicSub: "您可以自己写下来。",
   },
   day: {
+    // @patient headline
+    topThree: "今天的三件事",
     // @patient phrase
     notWell: "我觉得不舒服",
     // @patient headline

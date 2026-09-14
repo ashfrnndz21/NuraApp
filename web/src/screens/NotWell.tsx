@@ -1,0 +1,118 @@
+import { useEffect, useMemo, useState } from "preact/hooks";
+import type { JSX } from "preact";
+import * as nura from "../api/nura";
+import type { Said } from "../api/types";
+import { keptCards } from "../day/offline";
+import { whatToDoLines } from "../day/model";
+import { whenNotReached } from "../day/redPath";
+import { canRecord, saidOf, voiceRecorder } from "../day/voice";
+import { go } from "../flow";
+import { bindingOf } from "../offline/todayCache";
+import { density, profile, token } from "../store/session";
+import { language, t } from "../strings";
+import { Header, Pill, Tile } from "../ui/components";
+import { timer } from "../visit/model";
+
+/** "I am not feeling well" (E13-02): he says it or types it, and the backend does the rest —
+ *  his words kept, read for a red flag first, the family told, the State checked — and answers
+ *  with the card he is shown next. The phone decides nothing: with no network, or no answer,
+ *  it shows the backend's offline card (`day/offline.ts`), never nothing. */
+export function NotWellScreen(): JSX.Element {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [words, setWords] = useState("");
+  const [stage, setStage] = useState<"ask" | "listening" | "sending">("ask");
+  const [noMic, setNoMic] = useState(false);
+  const recorder = useMemo(() => voiceRecorder(), []);
+  useEffect(() => () => recorder.discard(), [recorder]);
+
+  const send = async (said: Said) => {
+    if (!bearer || !papers) return;
+    setStage("sending");
+    try {
+      const card = await nura.notFeelingWell(bearer, papers.profile_id, said, language.value);
+      go({ name: "whatToDo", lines: whatToDoLines(card), offline: false, refusal: null });
+    } catch (failure) {
+      const kept = await keptCards(papers.profile_id, bindingOf(papers));
+      go({ name: "whatToDo", ...whenNotReached("unknown", failure, kept?.cards ?? null, papers.region, s) });
+    }
+  };
+
+  const listen = async () => {
+    setNoMic(false);
+    try {
+      await recorder.start();
+      setStage("listening");
+    } catch {
+      setNoMic(true);
+    }
+  };
+
+  const stopAndSend = async () => {
+    const kept = await recorder.stop();
+    if (kept) await send(await saidOf(kept));
+    else setStage("ask");
+  };
+
+  // A hidden page stops listening; what he said so far is sent, as he pressed the button.
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden" && stage === "listening") void stopAndSend();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, [stage]);
+
+  return (
+    <main class="screen" data-density={density()} data-testid="not-well-screen" data-stage={stage}>
+      <Header title={s.day.notWellTitle} onBack={stage === "ask" ? () => go({ name: "today" }) : undefined} />
+      {stage === "ask" && (
+        <Tile paper testId="not-well-ask">
+          <p>{s.day.notWellLead}</p>
+          <label class="by-hand-label">
+            <span class="label">{s.day.wordsLabel}</span>
+            <textarea
+              class="field"
+              name="words"
+              maxLength={2000}
+              value={words}
+              onInput={(event) => setWords((event.target as HTMLTextAreaElement).value)}
+              data-testid="not-well-words"
+            />
+          </label>
+          <Pill plum onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="not-well-send">
+            {s.day.send}
+          </Pill>
+          {canRecord() && (
+            <Pill onClick={() => void listen()} testId="not-well-say">
+              {s.day.sayIt}
+            </Pill>
+          )}
+          {noMic && <p data-testid="no-mic">{s.visit.noMic}</p>}
+        </Tile>
+      )}
+      {stage === "listening" && (
+        <>
+          <Tile paper role="status" testId="listening">
+            <p class="recording">
+              <span class="dot" aria-hidden="true" data-testid="red-dot" />
+              <span class="timer" data-testid="timer">
+                {timer(recorder.elapsed.value)}
+              </span>
+              <span>{s.visit.listening}</span>
+            </p>
+          </Tile>
+          <Pill plum onClick={() => void stopAndSend()} testId="not-well-stop">
+            {s.day.stopAndSend}
+          </Pill>
+        </>
+      )}
+      {stage === "sending" && (
+        <Tile paper role="status" testId="sending">
+          <p>{s.day.sending}</p>
+        </Tile>
+      )}
+    </main>
+  );
+}

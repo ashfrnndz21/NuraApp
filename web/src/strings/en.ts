@@ -388,6 +388,8 @@ export const en = {
     noMicSub: "You can write it down yourself instead.",
   },
   day: {
+    // @patient headline
+    topThree: "Three things for today",
     // @patient phrase
     notWell: "I am not feeling well",
     // @patient headline

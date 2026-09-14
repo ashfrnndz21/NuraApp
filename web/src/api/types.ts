@@ -159,6 +159,8 @@ export interface FeedItemOut {
   day: string;
   created_at: string;
   expires_at: string;
+  /** For today's top three (E11-02): alert, reminder or insight. */
+  category?: string | null;
 }
 
 export interface FeedPageOut {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
@@ -27,6 +27,10 @@ import {
   type TodayModel,
 } from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { ClipCard } from "../day/components";
+import { clipsOf } from "../day/model";
+import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
+import { browserClipDeps, ClipPlayer } from "../visit/clip";
 
 /** Today: the Now card, a reading prompt, today's cards and the proud number — every line the
  *  backend's or the catalogue's, every card with its source line and its spoken twin.
@@ -49,6 +53,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const [busy, setBusy] = useState(false);
   // The next visit, when the key reaches the visits: one button to its screen (E05-03).
   const [nextVisit, setNextVisit] = useState<string | null>(null);
+  // Today's top three (E11-02), read live; a kept page shows the feed's own cards instead.
+  const [topThree, setTopThree] = useState<FeedItemOut[]>([]);
+  // "Hear what Dr Tan said" on a card with a consult clip (E21-03): played on a tap only.
+  const clipPlayer = useMemo(
+    () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(bearer ?? "", papers?.profile_id ?? "", artifactId, start, end))),
+    [bearer, papers?.profile_id],
+  );
+  useEffect(() => () => clipPlayer.forget(), [clipPlayer]);
 
   /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
   const forget = async (profileId: string, failure: unknown) => {
@@ -81,6 +93,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     const slots = await nura.dosesToday(bearer, id, language.value);
     const counted = await nura.proud(bearer, id);
     const page = await nura.feed(bearer, id);
+    try {
+      setTopThree((await nura.feedToday(bearer, id)).items.filter((item) => item.status !== "dismissed"));
+    } catch {
+      setTopThree([]);
+    }
     let chief: string | null = null;
     if (state?.posture === "act" && current.standing === "owner") {
       const held = await nura.keys(bearer, id);
@@ -189,7 +206,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const proudLine =
     proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
 
-  const feedCard = (item: FeedItemOut, testId: string) => (
+  const feedCard = (item: FeedItemOut, testId: string) => {
+    const clips = clipsOf(item);
+    if (clips.size > 0) {
+      return <ClipCard key={item.item_id} item={item} clips={clips} player={clipPlayer} paper={density() === "patient" || item.supply === "flag"} testId={testId} />;
+    }
+    return plainCard(item, testId);
+  };
+  const plainCard = (item: FeedItemOut, testId: string) => (
     <Card
       key={item.item_id}
       title={item.headline}
@@ -217,6 +241,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         <div class="greeting">{greeting(now.getHours(), name, s)}</div>
         <div class="date">{dateLine(now, locale)}</div>
       </header>
+      <NotWellButton />
 
       {blank ? (
         <>
@@ -284,6 +309,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                 </Tile>
               )}
 
+              <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
+
               {!fromPhone && (
                 <Card
                   title={s.today.readingTitle}
@@ -298,7 +325,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               )}
 
               <h2 class="section">{s.today.forYou}</h2>
-              {useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))}
+              {!fromPhone && topThree.length > 0 ? (
+                <TopThree items={topThree} player={clipPlayer} />
+              ) : (
+                useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))
+              )}
               {stateAt === "forYou" && stateCard}
               <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
                 {s.feed.open}
