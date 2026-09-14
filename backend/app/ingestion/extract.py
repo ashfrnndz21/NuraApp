@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from app.errors import Refusal
 from app.ingestion.objects import sha256_of
@@ -253,6 +253,9 @@ class FixtureExtractor:
     The labelled answers beside the fixtures (`*.expected.json`) name no digest and are not
     read here; they are the accuracy harness's (`tests/paper_accuracy.py`).
     """
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, directory: Path) -> None:
         self._directory = Path(directory)

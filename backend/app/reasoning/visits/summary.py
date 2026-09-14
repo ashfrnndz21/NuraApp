@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -333,6 +333,9 @@ class FixtureSummariser:
     Each fixture carries the transcript, its digest, and the structure a summariser would
     hear in it. A transcript no fixture names is `SummaryDraft.nothing()`.
     """
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, directory: Path) -> None:
         self._directory = Path(directory)

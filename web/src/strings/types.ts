@@ -12,6 +12,8 @@ export const LANGUAGES: readonly Language[] = ["en", "ms", "zh"];
 
 export interface Strings {
   appName: string;
+  /** The demo banner (ADR 0008): a headline, then whole sentences. */
+  demo: { banner: string; lines: readonly string[] };
   tabs: { today: string; me: string };
   signIn: {
     title: string;

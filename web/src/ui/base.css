@@ -336,3 +336,23 @@ body {
     transition-duration: 0ms !important;
   }
 }
+
+/* The demo banner (ADR 0008): first on every screen of a demo deployment, never scrolled away.
+   Paper-white on Ink is above 12:1. */
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: var(--text-caption);
+  line-height: var(--line-height);
+}
+.demo-banner strong {
+  font-size: var(--text-body);
+  font-weight: 500;
+}

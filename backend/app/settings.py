@@ -73,10 +73,44 @@ class Settings:
     process's clock stands at from startup (`app.clock.install_frozen`), moved only by
     `POST /dev/clock`. For end-to-end runs that must not drift with the hour. Honoured only on
     a declared dev run: given without NURA_DEV_CODE_SENDER=1 the process refuses to start."""
+    demo_mode: bool = False
+    """NURA_DEMO_MODE=1: a deployment that runs on the fixture providers and says so on every
+    screen, takes test numbers only and is wiped each night (`app.demo`, ADR 0008). The one way
+    a process that is not a laptop may start on the fixtures. Exclusive with a dev run."""
+    demo_login_code: str | None = None
+    """NURA_DEMO_LOGIN_CODE: six digits, a secret in the platform's store. On a demo it is the
+    code that signs a test number in (`app.identity.providers.DemoCodeSender`); the operator
+    gives it to the people he invites. Required with NURA_DEMO_MODE=1, refused without it."""
+    object_bucket_url: str | None = None
+    """NURA_OBJECT_BUCKET_URL: the bucket artefact bytes go to, as its https base URL
+    (`https://<bucket>.s3.ap-southeast-1.amazonaws.com`, or path-style
+    `https://fly.storage.tigris.dev/<bucket>`), in this deployment's region
+    (`app.ingestion.s3.S3ObjectStore`). A deployment's object store; NURA_OBJECT_STORE (a
+    directory) is a laptop's, and a demo's when it has no bucket."""
+    object_bucket_region: str | None = None
+    """NURA_OBJECT_BUCKET_REGION: the region name the bucket signs requests with
+    (`ap-southeast-1`; Tigris says `auto`)."""
+    object_access_key_id: str | None = None
+    """NURA_OBJECT_ACCESS_KEY_ID: the bucket's access key id. From the platform's secrets."""
+    object_secret_access_key: str | None = None
+    """NURA_OBJECT_SECRET_ACCESS_KEY: the bucket's secret key. From the platform's secrets,
+    never the repo, never a log."""
+
+    @property
+    def fixtures_allowed(self) -> bool:
+        """Whether the fixture providers may run: on a declared dev run, or a declared demo."""
+        return self.dev_code_sender or self.demo_mode
 
 
 class MissingSetting(RuntimeError):
     """A deployment that cannot name its region must not start."""
+
+
+class DemoAndDevTogether(RuntimeError):
+    """NURA_DEMO_MODE=1 with NURA_DEV_CODE_SENDER=1: a demo never prints a login code."""
+
+
+_DEMO_CODE = re.compile(r"^[0-9]{6}$")
 
 
 _POSTGRES_SCHEMES = ("postgres://", "postgresql://")
@@ -115,6 +149,16 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise MissingSetting(f"{missing.args[0]} is not set") from missing
     dev_code_sender = source.get("NURA_DEV_CODE_SENDER", "") == "1"
     frozen_clock = _frozen_clock(source.get("NURA_FROZEN_CLOCK") or None, dev_run=dev_code_sender)
+    demo_mode = source.get("NURA_DEMO_MODE", "") == "1"
+    demo_login_code = source.get("NURA_DEMO_LOGIN_CODE") or None
+    if demo_mode and dev_code_sender:
+        raise DemoAndDevTogether(
+            "NURA_DEMO_MODE=1 and NURA_DEV_CODE_SENDER=1 are exclusive: a demo prints no code"
+        )
+    if demo_mode and (demo_login_code is None or not _DEMO_CODE.match(demo_login_code)):
+        raise MissingSetting("NURA_DEMO_MODE=1 needs NURA_DEMO_LOGIN_CODE: six digits, a secret")
+    if not demo_mode and demo_login_code is not None:
+        raise MissingSetting("NURA_DEMO_LOGIN_CODE is for a demo only (NURA_DEMO_MODE=1)")
     return Settings(
         region=region,
         database_url=database_url,
@@ -132,6 +176,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         whatsapp_fixtures=source.get("NURA_WHATSAPP_FIXTURES") or None,
         reference_ranges=source.get("NURA_REFERENCE_RANGES", "fixture"),
         frozen_clock=frozen_clock,
+        demo_mode=demo_mode,
+        demo_login_code=demo_login_code,
+        object_bucket_url=source.get("NURA_OBJECT_BUCKET_URL") or None,
+        object_bucket_region=source.get("NURA_OBJECT_BUCKET_REGION") or None,
+        object_access_key_id=source.get("NURA_OBJECT_ACCESS_KEY_ID") or None,
+        object_secret_access_key=source.get("NURA_OBJECT_SECRET_ACCESS_KEY") or None,
     )
 
 

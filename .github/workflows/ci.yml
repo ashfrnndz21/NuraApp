@@ -54,6 +54,63 @@ jobs:
       - name: The whole suite on Postgres
         working-directory: backend
         run: python -m pytest -q -rfE
+  image:
+    # The production image (Dockerfile) builds — never pushed — so it cannot rot. Then, on an
+    # empty Postgres: the release step migrates it; a demo (NURA_DEMO_MODE=1) serves the API
+    # and the web client as a non-root user; and without demo mode the same image refuses to
+    # start on the fixtures.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: nura
+          POSTGRES_PASSWORD: nura-ci-only
+          POSTGRES_DB: nura
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nura -d nura"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # The platform's form of the URL; the app gives it the asyncpg driver itself.
+      DB: postgres://nura:nura-ci-only@localhost:5432/nura
+      FIXTURES: >-
+        -e NURA_PAPER_FIXTURES=tests/fixtures/paper -e NURA_VISIT_FIXTURES=tests/fixtures/visits
+        -e NURA_VOICE_FIXTURES=tests/fixtures/voice -e NURA_FEED_FIXTURES=tests/fixtures/feed
+        -e NURA_WHATSAPP_FIXTURES=tests/fixtures/whatsapp -e NURA_OBJECT_STORE=/tmp/nura-objects
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --pull -t nura:ci .
+      - name: The release step migrates an empty Postgres
+        run: docker run --rm --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" nura:ci alembic upgrade heads
+      - name: A demo serves the API and the web client, not as root
+        run: |
+          docker run -d --name nura --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" \
+            -e NURA_DEMO_MODE=1 -e NURA_DEMO_LOGIN_CODE=246810 -e NURA_WHATSAPP_DEV_SECRET=ci-only \
+            $FIXTURES nura:ci
+          for i in $(seq 1 30); do curl -fsS localhost:8000/health/ready && break; sleep 1; done
+          curl -fsS localhost:8000/health/ready | grep -q '"ok"'
+          curl -fsS localhost:8000/api/deployment | grep -q '"demo":true'
+          curl -fsS localhost:8000/app/ | grep -q 'id="app"'
+          test "$(docker exec nura id -u)" != "0"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/api/auth/phone/start \
+            -H 'content-type: application/json' -d '{"phone_e164": "+6591234567"}')
+          test "$code" = "403"
+      - name: Without demo mode, the image refuses to start on the fixtures
+        run: |
+          set +e
+          out=$(timeout 60 docker run --rm --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" \
+            -e NURA_WHATSAPP_DEV_SECRET=ci-only $FIXTURES nura:ci 2>&1)
+          status=$?
+          set -e
+          echo "$out" | tail -5
+          test "$status" -ne 0 && test "$status" -ne 124
+          echo "$out" | grep -q NoCodeSender
+      - if: failure()
+        run: docker logs nura || true
   web:
     runs-on: ubuntu-latest
     steps:
@@ -92,7 +149,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: ios-screenshot, path: ios/build/screenshot.png, if-no-files-found: ignore }
   automerge:
-    needs: [backend, backend-postgres, web]
+    needs: [backend, backend-postgres, image, web]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'risk:low')
     runs-on: ubuntu-latest
     # Auto-merge is not available on this private repository's plan; the operator merges

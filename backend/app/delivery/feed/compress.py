@@ -21,7 +21,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +86,9 @@ class FixtureSearcher:
     text}]}`. A page whose domain is not among the domains asked for is never returned, so
     the fixture cannot smuggle a source past the allowlist either."""
 
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
+
     def __init__(self, root: Path) -> None:
         self._root = root
 
@@ -112,6 +115,9 @@ class FixtureCompressor:
     why_topic, passage, start_sec?, end_sec?}}`. No file, or no entry in the language, is
     "nothing for him". The `facts` are ignored by the fixture; the real adapter grounds on
     them."""
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, root: Path) -> None:
         self._root = root

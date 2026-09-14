@@ -25,6 +25,7 @@ tests.paper_accuracy`) the way the owner would, from the backend directory.
 from __future__ import annotations
 
 import base64
+import os
 import random
 import re
 import subprocess
@@ -35,6 +36,9 @@ from typing import Any
 
 import httpx
 
+DEMO_LOGIN_CODE = os.environ.get("NURA_DEMO_LOGIN_CODE") or None
+"""Against a demo deployment (docs/deploy.md, ADR 0008): the operator's code signs every test
+number in, so no log is read, and every number is drawn from the test range (+65 0…)."""
 CODE_LINE = re.compile(r"login code for (\+[0-9]+): ([0-9]{6})")
 CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
@@ -127,10 +131,14 @@ def refused(response: httpx.Response, status: int, refusal: str, what: str) -> J
 
 
 def fresh_phone(prefix: str) -> str:
+    if DEMO_LOGIN_CODE is not None:
+        prefix = "+650" + prefix.removeprefix("+65")[1:]
     return f"{prefix}{random.randint(0, 9999):04d}"
 
 
 def code_from_log(dev_log: Path, phone_e164: str, since: float) -> str:
+    if DEMO_LOGIN_CODE is not None:
+        return DEMO_LOGIN_CODE
     deadline = time.monotonic() + CODE_WAIT_SECONDS
     while True:
         if dev_log.exists():

@@ -28,6 +28,7 @@ from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
+from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
@@ -92,6 +93,8 @@ from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
+    # A demo takes test numbers only, and signs in by phone (app.demo, ADR 0008).
+    (NotInTheDemo, 403),
     (NoKey, 403),
     (OutOfScope, 403),
     (OutOfRegion, 403),

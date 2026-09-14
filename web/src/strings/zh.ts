@@ -4,6 +4,12 @@ import type { Strings } from "./types";
 export const zh = {
   // @patient headline
   appName: "Nura",
+  demo: {
+    // @patient headline
+    banner: "演示版 — 不用于真实的健康信息",
+    // @patient
+    lines: ["这是演示版。", "请不要输入真实的健康信息。", "这里的一切每晚都会清除。"],
+  },
   tabs: {
     // @patient headline
     today: "今天",
@@ -339,6 +345,7 @@ export const zh = {
   // @patient
   refusals: {
     default: "Nura 现在做不了这件事。",
+    NotInTheDemo: ["演示版只接受测试电话号码。", "测试号码以 +65 0 开头。"],
     NoSession: "请重新登录。",
     NoOpenChallenge: "请先要一个新的验证码。",
     WrongCode: "这个验证码不对。",

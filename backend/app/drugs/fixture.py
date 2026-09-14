@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from app.drugs.registry import (
     DrugMatch,
@@ -40,6 +40,9 @@ def _same_strength(a: str | None, b: str) -> bool:
 class FixtureRegistry:
     """The fixture, loaded once. Every answer is read from the file, none is computed from
     the name of the drug."""
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, data: dict[str, Any]) -> None:
         self._products: list[DrugMatch] = [

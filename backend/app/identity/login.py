@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import as_utc, keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.identity.models import LoginChallenge, LoginChannel, LoginSession, Person
-from app.identity.providers import CodeSender
+from app.identity.providers import CodeSender, SharedCode
 from app.identity.service import find_person_by_phone, register_person
 from app.regions import OutOfRegion, Region, guard_region
 
@@ -127,8 +127,10 @@ async def start_phone_login(
     display_name: str | None = None,
     language: str | None = None,
 ) -> LoginChallenge:
-    """Send a six-digit code to the phone. The code is given to the sender and to nobody else."""
-    code = _six_digits()
+    """Send a six-digit code to the phone. The code is given to the sender and to nobody else.
+    On a demo the person already holds the code (the operator's), and the sender says what it
+    is — or refuses a number outside the test range before anything is written."""
+    code = sender.shared_code(phone_e164) if isinstance(sender, SharedCode) else _six_digits()
     challenge = await _start(
         session,
         region=region,

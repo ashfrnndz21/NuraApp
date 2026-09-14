@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from app.errors import Refusal
 from app.settings import Settings
@@ -127,6 +127,9 @@ class FixtureProvider:
     the same placeholder the paper fixtures use (`tests/paper.py`), so a forwarded photo of
     the lipid report reads as the lipid report. No image is committed.
     """
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     name = "fixture"
 
@@ -248,21 +251,22 @@ def whatsapp_provider_for(settings: Settings) -> WhatsAppProvider:
             f"no WhatsApp provider named {settings.whatsapp_provider!r} is built; "
             "set NURA_WHATSAPP_PROVIDER=fixture for a local run"
         )
-    if not settings.dev_code_sender or not settings.whatsapp_dev_secret:
+    if not settings.fixtures_allowed or not settings.whatsapp_dev_secret:
         raise NoWhatsAppProvider(
-            "the fixture WhatsApp provider runs only on a dev run: set NURA_DEV_CODE_SENDER=1 "
-            "and NURA_WHATSAPP_DEV_SECRET"
+            "the fixture WhatsApp provider runs only on a dev run or a demo: set "
+            "NURA_DEV_CODE_SENDER=1 (or NURA_DEMO_MODE=1) and NURA_WHATSAPP_DEV_SECRET"
         )
     fixtures = Path(settings.whatsapp_fixtures) if settings.whatsapp_fixtures else None
     return FixtureProvider(secret=settings.whatsapp_dev_secret, fixtures=fixtures)
 
 
 def check_whatsapp_provider(settings: Settings, provider: WhatsAppProvider) -> None:
-    """Refuse the fixture anywhere but a declared dev run. `create_app` calls this."""
-    if isinstance(provider, FixtureProvider) and not settings.dev_code_sender:
+    """Refuse the fixture anywhere but a declared dev run or demo. `create_app` calls this."""
+    if isinstance(provider, FixtureProvider) and not settings.fixtures_allowed:
         raise FixtureProviderInProduction(
             "FixtureProvider sends nothing and signs with a dev secret; set "
-            "NURA_DEV_CODE_SENDER=1 for a local run or configure a real provider"
+            "NURA_DEV_CODE_SENDER=1 for a local run, NURA_DEMO_MODE=1 for a demo, or "
+            "configure a real provider"
         )
 
 

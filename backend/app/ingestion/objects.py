@@ -16,7 +16,7 @@ import hashlib
 import re
 import uuid
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from app.errors import Refusal
 from app.regions import Region
@@ -66,6 +66,9 @@ class LocalObjectStore:
     sees half a file.
     """
 
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
+
     def __init__(self, root: Path, region: Region) -> None:
         self._root = Path(root) / region.value
         self._region = region
@@ -73,6 +76,11 @@ class LocalObjectStore:
     @property
     def region(self) -> Region:
         return self._region
+
+    @property
+    def root(self) -> Path:
+        """This region's directory: what a demo's night wipe empties."""
+        return self._root
 
     def path_of(self, key: str) -> Path:
         return self._root / check_key(key)

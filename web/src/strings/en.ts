@@ -4,6 +4,12 @@ import type { Strings } from "./types";
 export const en = {
   // @patient headline
   appName: "Nura",
+  demo: {
+    // @patient headline
+    banner: "Demo — not for real health information",
+    // @patient
+    lines: ["This is a demo.", "Do not put real health information in it.", "Everything here is wiped each night."],
+  },
   tabs: {
     // @patient headline
     today: "Today",
@@ -341,6 +347,7 @@ export const en = {
   // @patient
   refusals: {
     default: "Nura could not do that right now.",
+    NotInTheDemo: ["This demo only takes test phone numbers.", "A test number starts with +65 0."],
     NoSession: "Please sign in again.",
     NoOpenChallenge: "Ask for a new code first.",
     WrongCode: "That code is not right.",

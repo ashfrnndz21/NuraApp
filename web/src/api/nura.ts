@@ -2,6 +2,7 @@ import { api, apiBlob } from "./client";
 import type {
   ClaimableOut,
   ConfirmationOut,
+  DeploymentOut,
   DoorsOut,
   AnswerOut,
   AskMode,
@@ -24,6 +25,9 @@ import type {
 } from "./types";
 
 /** Every route the client uses, one function each, in the backend's own names. */
+
+/** Which region this is, and whether it is a demo (ADR 0008). No token: it is not anyone's data. */
+export const deployment = () => api<DeploymentOut>("/deployment");
 
 export const startPhone = (phone_e164: string, display_name: string | null, language: string) =>
   api<{ expires_in_seconds: number }>("/auth/phone/start", {

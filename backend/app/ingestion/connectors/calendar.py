@@ -18,7 +18,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
-from typing import Protocol
+from typing import ClassVar, Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.errors import Refusal
@@ -54,6 +54,9 @@ class NotACalendar(Refusal):
 
 class FixtureCalendar:
     """A calendar that answers from the events it was given. For tests."""
+
+    FIXTURE: ClassVar[bool] = True
+    """A fixture: runs only on a declared dev run or demo (`app.fixtures`)."""
 
     def __init__(self, events: Sequence[CalendarEvent]) -> None:
         self._events = tuple(events)
