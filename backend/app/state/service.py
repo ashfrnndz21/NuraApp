@@ -226,9 +226,7 @@ def _narrowed(held: dict[str, Any], context: KeyContext) -> tuple[dict[str, Any]
             taken.add(scope)
     if not taken:
         return held, taken
-    kept_ids = {
-        entry["fact_id"] for attributes in kept.values() for entry in attributes.values()
-    }
+    kept_ids = {entry["fact_id"] for attributes in kept.values() for entry in attributes.values()}
     return {
         **held,
         "facts": kept,
@@ -371,7 +369,12 @@ async def _write_snapshot(
         supersedes_id=None if previous is None else previous.id,
         stale_after=derived.stale_after,
         computed_from=inputs.fingerprint(),
-        **{dimension.value: derived.dimensions[dimension] for dimension in Dimension},
+        clinical=derived.dimensions[Dimension.CLINICAL],
+        functional=derived.dimensions[Dimension.FUNCTIONAL],
+        cognitive=derived.dimensions[Dimension.COGNITIVE],
+        situational=derived.dimensions[Dimension.SITUATIONAL],
+        preference=derived.dimensions[Dimension.PREFERENCE],
+        family=derived.dimensions[Dimension.FAMILY],
     )
     return _view(snapshot, context, stale=False)
 

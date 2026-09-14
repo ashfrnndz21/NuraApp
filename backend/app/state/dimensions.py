@@ -315,7 +315,11 @@ def derive(
             # here so a person can read what a clinician wrote; never quietly dropped.
             control_not_read=not_read,
             open_episodes=[
-                {"id": str(episode.id), "kind": episode.kind.value, "since": _moment(episode.opened_at)}
+                {
+                    "id": str(episode.id),
+                    "kind": episode.kind.value,
+                    "since": _moment(episode.opened_at),
+                }
                 for episode in sorted(episodes, key=lambda one: as_utc(one.opened_at))
             ],
             discharged_at=_moment(discharged_at),

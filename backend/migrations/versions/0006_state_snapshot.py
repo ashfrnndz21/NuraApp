@@ -59,9 +59,7 @@ def upgrade() -> None:
         sa.Column("posture", POSTURE, nullable=False),
         sa.Column("trigger", STATE_TRIGGER, nullable=False),
         sa.Column("trigger_fact_id", sa.Uuid(), sa.ForeignKey("fact.id"), nullable=True),
-        sa.Column(
-            "supersedes_id", sa.Uuid(), sa.ForeignKey("state_snapshot.id"), nullable=True
-        ),
+        sa.Column("supersedes_id", sa.Uuid(), sa.ForeignKey("state_snapshot.id"), nullable=True),
         # The six dimensions, one column each, so the table names them all.
         sa.Column("clinical", sa.JSON(), nullable=False),
         sa.Column("functional", sa.JSON(), nullable=False),

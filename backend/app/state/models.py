@@ -127,9 +127,7 @@ class StateSnapshot(ProfileScoped, Base):
     # The worst of the six dimensions' postures. Each dimension carries its own, and why.
     posture: Mapped[Posture] = mapped_column(enum_column(Posture, "posture"))
     trigger: Mapped[StateTrigger] = mapped_column(enum_column(StateTrigger, "state_trigger"))
-    trigger_fact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("fact.id"), default=None
-    )
+    trigger_fact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
     supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("state_snapshot.id"), default=None
     )
