@@ -30,6 +30,8 @@ export interface Call {
   body?: unknown;
   token?: string | null;
   query?: Record<string, string | undefined>;
+  /** Goes ahead of every call still waiting (see `enqueue`): the red-flag path only. */
+  urgent?: boolean;
 }
 
 function isRefusalBody(value: unknown): value is RefusalBody {
@@ -39,14 +41,96 @@ function isRefusalBody(value: unknown): value is RefusalBody {
 /** Calls go out one at a time. The person does one thing at a time, and the local dev
  *  database (SQLite) refuses two requests that each read and then write their audit line
  *  at once; a queue costs a few milliseconds and makes the app's behaviour the same on a
- *  laptop as on the deployment. */
-let queue: Promise<unknown> = Promise.resolve();
+ *  laptop as on the deployment.
+ *
+ *  An `urgent` call — a red word on the feeling cloud, the not-feeling-well button — goes
+ *  next: ahead of every call still waiting, behind only the one already on the wire (and any
+ *  urgent call before it). A red word reaches the flag before any page read that was queued
+ *  first (W7, E13-02, E17-02). */
+interface Job {
+  urgent: boolean;
+  run: () => Promise<void>;
+}
+const waiting: Job[] = [];
+let sending = false;
+
+/** How long an urgent call may take from the tap before it is given up as unreachable, whatever
+ *  is on the wire: the red-flag path shows the backend's offline card then, never a page that
+ *  waits (W7, ADR 0012). A call still waiting then is taken out of the queue and never sent; one
+ *  on the wire is aborted. */
+export const URGENT_DEADLINE_MS = 10_000;
+
+/** How long any other call may hang before it is given up as unreachable, so that one stuck
+ *  request never holds the queue — and an urgent call behind it — for ever. */
+export const CALL_DEADLINE_MS = 30_000;
+
+function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const control = new AbortController();
+    let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const settle = (done: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (deadline !== undefined) clearTimeout(deadline);
+      done();
+    };
+    const job: Job = {
+      urgent,
+      run: () =>
+        settled
+          ? Promise.resolve()
+          : work(control.signal).then(
+              (value) => settle(() => resolve(value)),
+              (failure: unknown) => settle(() => reject(failure)),
+            ),
+    };
+    if (urgent) {
+      const first = waiting.findIndex((one) => !one.urgent);
+      waiting.splice(first < 0 ? waiting.length : first, 0, job);
+      deadline = setTimeout(
+        () =>
+          settle(() => {
+            const at = waiting.indexOf(job);
+            if (at >= 0) waiting.splice(at, 1);
+            control.abort();
+            reject(new Unreachable());
+          }),
+        URGENT_DEADLINE_MS,
+      );
+    } else waiting.push(job);
+    void pump();
+  });
+}
+
+/** A fetch that gives up after `CALL_DEADLINE_MS`, or when the call's own signal aborts. */
+async function fetchWithin(url: URL, init: RequestInit, signal: AbortSignal): Promise<Response> {
+  const control = new AbortController();
+  const stop = () => control.abort();
+  const timer = setTimeout(stop, CALL_DEADLINE_MS);
+  if (signal.aborted) stop();
+  else signal.addEventListener("abort", stop, { once: true });
+  try {
+    return await fetch(url, { ...init, signal: control.signal });
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+}
+
+async function pump(): Promise<void> {
+  if (sending) return;
+  sending = true;
+  try {
+    for (let job = waiting.shift(); job; job = waiting.shift()) await job.run();
+  } finally {
+    sending = false;
+  }
+}
 
 /** One call to the API. Bearer token in a header, never a cookie; JSON in and out. */
 export function api<T>(path: string, call: Call = {}): Promise<T> {
-  const next = queue.then(() => send<T>(path, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue((signal) => send<T>(path, call, signal), call.urgent);
 }
 
 function urlFor(path: string, call: Call): URL {
@@ -61,17 +145,15 @@ function urlFor(path: string, call: Call): URL {
  *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
  *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
 export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
-  const next = queue.then(() => sendBlob(path, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue((signal) => sendBlob(path, call, signal), call.urgent);
 }
 
-async function sendBlob(path: string, call: Call): Promise<Blob> {
+async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<Blob> {
   const headers: Record<string, string> = { Accept: "audio/*" };
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit" });
+    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit", signal });
   } catch {
     throw new Unreachable();
   }
@@ -90,17 +172,15 @@ async function sendBlob(path: string, call: Call): Promise<Blob> {
 
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
-  const next = queue.then(() => sendBytes<T>(path, body, contentType, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent);
 }
 
-async function sendBytes<T>(path: string, body: Blob, contentType: string, call: Call): Promise<T> {
+async function sendBytes<T>(path: string, body: Blob, contentType: string, call: Call, signal: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json", "Content-Type": contentType };
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "POST", headers, body, cache: "no-store", credentials: "omit" });
+    response = await fetch(urlFor(path, call), { method: "POST", headers, body, cache: "no-store", credentials: "omit", signal });
   } catch {
     throw new Unreachable();
   }
@@ -118,20 +198,24 @@ async function answer<T>(response: Response): Promise<T> {
   return parsed as T;
 }
 
-async function send<T>(path: string, call: Call): Promise<T> {
+async function send<T>(path: string, call: Call, signal: AbortSignal): Promise<T> {
   const url = urlFor(path, call);
   const headers: Record<string, string> = { Accept: "application/json" };
   if (call.body !== undefined) headers["Content-Type"] = "application/json";
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(url, {
-      method: call.method ?? "GET",
-      headers,
-      body: call.body === undefined ? null : JSON.stringify(call.body),
-      cache: "no-store",
-      credentials: "omit",
-    });
+    response = await fetchWithin(
+      url,
+      {
+        method: call.method ?? "GET",
+        headers,
+        body: call.body === undefined ? null : JSON.stringify(call.body),
+        cache: "no-store",
+        credentials: "omit",
+      },
+      signal,
+    );
   } catch {
     throw new Unreachable();
   }

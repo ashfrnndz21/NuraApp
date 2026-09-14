@@ -32,7 +32,7 @@ from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_car
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.models import CardType, FeedItem
-from app.delivery.nudges.models import Nudge, NudgeKind
+from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import theirs
 from app.delivery.triggers.deliver import (
     Firing,
@@ -122,6 +122,7 @@ async def run_due(
     await _brief(run)
     await _papers(run)
     await _family_messages(run)
+    await _hand_over_nudge(run)
     await _nudges(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
@@ -601,6 +602,31 @@ async def _family_messages(run: Run) -> None:
 
 
 
+async def _hand_over_nudge(run: Run) -> None:
+    """The day's planned nudge, handed over at its planned time (E17-03, W7): no earlier than
+    the planner's `send_after` — his check-in time — never in the quiet hours his delivery
+    settings keep, and never on a day a red flag was raised (the planner holds every nudge
+    then). Through the same door the web uses as he answers (`app.delivery.nudges.engine.
+    hand_over`), which gives back the day's nudge when it was handed over already: one row, and
+    `_nudges`, right after, sends it once under the cap on nudges a day."""
+    if run.patient is None or run.config.is_quiet(run.local):
+        return
+    # Imported here: the planner reads delivery's cap, and delivery reads the planner.
+    from app.delivery.nudges.engine import PLAN_SCOPES, hand_over, plan_nudges
+
+    if not PLAN_SCOPES <= run.acting.scopes:
+        return
+    registry = run.via.providers.drug_registry
+    try:
+        plan = await plan_nudges(run.session, context=run.acting, registry=registry)
+        if not plan.drafts or as_utc(plan.drafts[0].send_after) > run.at:
+            return
+        await hand_over(run.session, context=run.acting, registry=registry)
+    except Refusal:
+        return
+    run.forget_state()
+
+
 async def _nudges(run: Run) -> None:
     """The day's smart nudge (E17-03), handed over by its planner: the `nudge` row is the
     queue (`app.delivery.nudges.handoff`). It goes to him from its `send_after` until it
@@ -618,6 +644,27 @@ async def _nudges(run: Run) -> None:
         where=(Nudge.day == run.day, Nudge.send_after <= run.at, Nudge.expires_at > run.at),
         channel=Channel.SYSTEM,
     )
+    # What he did with them in the app (W7): a nudge he accepted or said "Not today" to there is
+    # not sent to him again.
+    answered = {
+        row.nudge_id
+        for row in (
+            await audited_read(
+                run.session,
+                NudgeResponse,
+                run.acting,
+                Scope.PROFILE,
+                where=(
+                    NudgeResponse.nudge_id.in_([nudge.id for nudge in nudges]),
+                    NudgeResponse.person_id == run.patient.id,
+                    NudgeResponse.kind.in_((ResponseKind.ACCEPTED, ResponseKind.DISMISSED)),
+                ),
+                channel=Channel.SYSTEM,
+            )
+            if nudges
+            else []
+        )
+    }
     rows = [*await run.deliveries(), *(sent.delivery for sent in run.report)]
     reminded = {
         str(row.why.get("appointment_id"))
@@ -650,6 +697,16 @@ async def _nudges(run: Run) -> None:
                 state=await run.state(),
             )
 
+        if nudge.id in answered:
+            if not any(row.dedupe_key == firing.dedupe_key for row in rows):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason="answered in the app",
+                )
+            continue
         visit = str((nudge.reason or {}).get("appointment_id"))
         if nudge.kind is NudgeKind.ANTICIPATION and visit in reminded:
             # The visit reminder reached him today: the nudge would say it a second time.

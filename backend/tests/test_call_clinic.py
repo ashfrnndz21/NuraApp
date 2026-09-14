@@ -48,6 +48,7 @@ from app.safety.not_feeling_well import (
     within_the_boundary,
 )
 from app.safety.plain_words import verify
+from app.safety.symptom_log import log_symptom
 from app.safety.symptoms import Duration
 from tests.delivery_support import via_for
 from tests.medicines_support import add, label
@@ -288,3 +289,89 @@ async def test_a_clinic_is_called_by_its_own_name_and_the_card_says_what_if_it_g
     assert "If it gets worse, call the ambulance now on 995." in texts
     assert texts[-2:] == ["Ask your doctor.", "Nura does not decide what is wrong."]
     assert_plain(done.lines)
+
+
+# --- the same row on the symptom log (E14-01 × E13-02) ---------------------------------------
+
+
+async def _log(session: AsyncSession, context, words: str):
+    return await log_symptom(
+        session,
+        context=context,
+        store=_Store(),
+        transcriber=transcriber_for(context.region),
+        registry=REGISTRY,
+        via=via_for(context.region),
+        words=words,
+    )
+
+
+async def test_the_symptom_log_shows_the_call_clinic_card_by_the_same_rule(
+    sg: AsyncSession,
+) -> None:
+    """Written in the log rather than said to the button, "quite a lot" is the same row: call
+    the clinic today, rest, the ambulance if it gets worse. Nobody was told and no check-in was
+    written, so the card opens "You did right to say so." and says neither."""
+    owner = await pa(sg, phone="+6591110066")
+    quite = await _log(sg, owner, "dizzy, quite a lot")
+    assert quite.card is not None
+    assert [line.text for line in quite.card] == [
+        "You did right to say so.",
+        "Call your doctor's clinic today.",
+        "Sit down and rest now.",
+        "If it gets worse, call the ambulance now on 995.",
+        "Nura wrote down how you feel.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
+        "Nura does not decide what is wrong.",
+    ]
+    assert_plain(quite.card)
+    # A little, this morning: no card — the log's own lines say it back.
+    assert (await _log(sg, owner, "a little tired this morning")).card is None
+    # A red flag is the button's urgent card, never the clinic's.
+    chest = await _log(sg, owner, "chest pain, a lot, since yesterday")
+    assert chest.card is not None
+    said = [line.text for line in chest.card]
+    assert "Call the ambulance now on 995." in said
+    assert not any("clinic" in text for text in said)
+
+
+# --- the same row on the feeling cloud's follow-up (E17-02 × E13-02) --------------------------
+
+
+async def test_the_clouds_follow_up_shows_the_call_clinic_card_by_the_same_rule(
+    sg: AsyncSession,
+) -> None:
+    """A tap on "Dizzy", asked when it began: "a few days" is a day or more — the table's middle
+    row, beside the note; "today" is not. With a medicine started this fortnight that lists
+    dizziness as a watch-out, "today" is the middle row too. Never beside a red flag."""
+    from app.reasoning.feelings.service import answer_tap, record_tap
+    from app.reasoning.feelings.words import Answer
+    from app.safety.red_flags import Feeling
+    from tests.family_support import household
+    from tests.feelings_support import REGISTRY as CLOUD_REGISTRY
+    from tests.feelings_support import STORE, TRANSCRIBER, VIA, new_medicine
+
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+
+    async def said(answer: Answer):
+        tapped = await record_tap(
+            sg, context=owner, word=Feeling.DIZZY, registry=CLOUD_REGISTRY, store=STORE,
+            transcriber=TRANSCRIBER, via=VIA,
+        )
+        return await answer_tap(
+            sg, context=owner, tap_id=tapped.tap.id, answer=answer, registry=CLOUD_REGISTRY,
+            store=STORE, transcriber=TRANSCRIBER, via=VIA,
+        )
+
+    days = await said(Answer.FEW_DAYS)
+    texts = [line.text for line in days.clinic_card]
+    assert days.red is None and texts[0] == "You did right to say so."
+    assert "clinic today." in texts[1] and "If it gets worse, call the ambulance now on 995." in texts
+    assert texts[-1] == "Nura does not decide what is wrong."
+    assert_plain(days.clinic_card)
+    assert (await said(Answer.TODAY)).clinic_card == ()
+    await new_medicine(sg, owner)
+    watched = await said(Answer.TODAY)
+    assert watched.clinic_card and "clinic today." in watched.clinic_card[1].text

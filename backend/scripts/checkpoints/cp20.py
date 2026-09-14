@@ -409,6 +409,32 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         for line in sent["text"].splitlines():
             say(f"→ {line}")
 
+    # 4b. His check-in time, 10:00: the schedule handed the day's nudge over at 10:05 and
+    #     delivery sent it; the web handing it over again as he answers is the same nudge.
+    nudged = [row for row in _of(w.seen, "nudge") if row["outcome"] == "sent"]
+    if len(nudged) != 1 or nudged[0]["at"] != "10:05" or nudged[0]["template_name"] != "nudge":
+        raise fail("the day's nudge goes at his check-in time, once", why=f"got {_of(w.seen, 'nudge')}")
+    handed = check(
+        client.post(f"/profiles/{profile_id}/nudges/plan", headers=bearer(pa.token)),
+        201,
+        "the web hands the day's nudge over as he answers",
+    )
+    listed = check(
+        client.get(f"/profiles/{profile_id}/nudges", headers=bearer(pa.token)), 200, "the day's nudges"
+    )
+    if [one["nudge_id"] for one in listed["nudges"]] != [handed["nudge"]["nudge_id"]]:
+        raise fail("handing the nudge over twice is one nudge", why=f"got {listed}")
+    if any(row["trigger_type"] == "nudge" and row["outcome"] == "sent" for row in w.run_due(profile_id, 10, 10)):
+        raise fail("the nudge is sent once", why="10:10 sent it again")
+    ok(
+        "10:05, after his check-in time (10:00): the schedule handed the day's nudge over and "
+        "delivery sent it — " + _line(nudged[0]) + "; the web handing it over again as he answers "
+        "(POST /nudges/plan) gives back the same nudge — one row (GET /nudges) — and 10:10 sends "
+        "it no second time. What he reads:"
+    )
+    for line in (nudged[0].get("text") or "").splitlines():
+        say(f"→ {line}")
+
     # 5. The reorder date reached (two tablets): the rule is true all day, so every run above
     #    evaluated it — the first run of the day told Mei, the next was held by the cap, and
     #    every run after that wrote nothing, because the hold is written down once.

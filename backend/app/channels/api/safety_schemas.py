@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.ingestion.voice import MAX_VOICE_BYTES
 from app.safety.emergency_card import Card
 from app.safety.models import WhatToDoKind
-from app.safety.not_feeling_well import WhatToDoNow
+from app.safety.not_feeling_well import OfflineCards, WhatToDoNow
 from app.safety.symptom_log import Entry, Logged
 from app.state.models import Posture
 
@@ -292,6 +292,10 @@ class SymptomLoggedOut(BaseModel):
     flag_id: uuid.UUID | None
     notified_person_ids: list[uuid.UUID]
     suppressed: list[str]
+    card: list[LineOut] | None = None
+    """What he is shown next, in order: a red flag's urgent card (the button's), or the table's
+    call-the-clinic card when what he said was "quite a lot", a day or more, or a new medicine's
+    watch-out (E13-02). None otherwise."""
 
     @classmethod
     def of(cls, logged: Logged, severity_words: str | None) -> SymptomLoggedOut:
@@ -301,6 +305,9 @@ class SymptomLoggedOut(BaseModel):
             flag_id=logged.flag_id,
             notified_person_ids=logged.notified_person_ids,
             suppressed=[one.value for one in logged.suppressed],
+            card=None
+            if logged.card is None
+            else [LineOut(id=line.id, text=line.text) for line in logged.card],
         )
 
 
@@ -320,8 +327,29 @@ class SymptomLogOut(BaseModel):
         return cls(since=since, entries=entries, lines=lines)
 
 
+class OfflineCardsOut(BaseModel):
+    """What the phone keeps for when it cannot reach Nura: two fixed cards, each its verified
+    lines in order. `red_flag` for a red word tapped with no network; `unknown` for the button
+    pressed with no network. Nothing was written and nobody was told when either is shown."""
+
+    language: str
+    emergency_number: str
+    red_flag: list[LineOut]
+    unknown: list[LineOut]
+
+    @classmethod
+    def of(cls, cards: OfflineCards) -> OfflineCardsOut:
+        return cls(
+            language=cards.language,
+            emergency_number=cards.emergency_number,
+            red_flag=[LineOut(id=line.id, text=line.text) for line in cards.red_flag],
+            unknown=[LineOut(id=line.id, text=line.text) for line in cards.unknown],
+        )
+
+
 __all__: list[str] = [
     "EmergencyCardOut",
+    "OfflineCardsOut",
     "SaidIn",
     "SymptomLogOut",
     "SymptomLoggedOut",

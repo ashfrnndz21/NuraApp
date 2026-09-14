@@ -758,14 +758,22 @@ async def _missed_dose(
     return due[0] if due else None
 
 
+def cloud_words_of(parsed: Parsed) -> frozenset[Feeling]:
+    """His words read to the cloud's words (`SYMPTOM_FEELINGS`), for the monograph rule."""
+    return frozenset(SYMPTOM_FEELINGS[one] for one in parsed.symptoms if one in SYMPTOM_FEELINGS)
+
+
 async def _new_medicine(
-    session: AsyncSession, *, context: KeyContext, registry: DrugRegistry, parsed: Parsed
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    registry: DrugRegistry,
+    said: frozenset[Feeling],
 ) -> MedicationLine | None:
     """A medicine started in the last fourteen days whose licensed monograph lists what he said
     as a watch-out — the rule the feeling cloud reads a tap by (E17: `WATCH_OUT_WORDS` from the
-    registry's rule ids, `NEW_MEDICINE_WINDOW`), with his words read to the cloud's word
-    (`SYMPTOM_FEELINGS`). The pharmacology is the register's; nothing here is a finding."""
-    said = {SYMPTOM_FEELINGS[one] for one in parsed.symptoms if one in SYMPTOM_FEELINGS}
+    registry's rule ids, `NEW_MEDICINE_WINDOW`), on the cloud's words for what he said. The
+    pharmacology is the register's; nothing here is a finding."""
     if not said or not context.allows(Scope.MEDICINES):
         return None
     moment = utcnow()
@@ -796,7 +804,10 @@ async def _directory_doctor(
 ) -> tuple[str, ProviderKind] | None:
     """The doctor, else the clinic, his directory names, and which it is — read under the
     emergency scope, the part every role holds and the one his emergency card names the
-    doctor from (ADR 0002). A clinic is called by its own name, never as "Dr …'s clinic"."""
+    doctor from (ADR 0002). A clinic is called by its own name, never as "Dr …'s clinic". A key
+    narrowed past the emergency card names nobody: "your doctor"."""
+    if not context.allows(BUTTON_SCOPE):
+        return None
     providers = await audited_read(session, Provider, context, BUTTON_SCOPE)
     for kind in (ProviderKind.DOCTOR, ProviderKind.CLINIC):
         for provider in sorted(providers, key=lambda one: (as_utc(one.added_at), one.name)):
@@ -947,7 +958,9 @@ async def not_feeling_well(
     new_line = (
         None
         if heard.any
-        else await _new_medicine(session, context=context, registry=registry, parsed=parsed)
+        else await _new_medicine(
+            session, context=context, registry=registry, said=cloud_words_of(parsed)
+        )
     )
     notices: list[Notice] = list(escalated.notices) if escalated is not None else []
     if not heard.any:
@@ -1097,6 +1110,119 @@ async def not_feeling_well(
     )
 
 
+# --- the middle row, off the button ------------------------------------------------------------
+
+NOT_OFF_THE_BUTTON = frozenset({"nfw.will_call", "nfw.check_in"})
+"""The call-the-clinic row's lines that only the button can say: the button tells the family
+and writes the check-in; the symptom log and the cloud's follow-up do neither."""
+
+
+async def call_clinic_card(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    registry: DrugRegistry,
+    language: str,
+    severity: int | None,
+    lasting: bool,
+    feelings: frozenset[Feeling],
+) -> tuple[Line, ...] | None:
+    """The table's middle row where he said how he feels without pressing the button — the
+    symptom log, the feeling cloud's follow-up (E13-02): the same rule (`DECISION_TABLE`), so
+    "quite a lot", a day or more, or a new medicine's watch-out is "Call Dr Tan's clinic today."
+    wherever it was said. Nobody was told and no check-in was written there, so the card is the
+    call, rest, what to do if it gets worse, and the boundary opening "You did right to say so."
+    and ending "Nura does not decide what is wrong.". None when the row does not apply."""
+    new_line = await _new_medicine(session, context=context, registry=registry, said=feelings)
+    decision = decide(
+        Situation(
+            red_flag=False,
+            heard=True,
+            missed=None,
+            chief=None,
+            others_told=False,
+            region=context.region,
+            severity=severity,
+            lasting=lasting,
+            new_medicine=new_line is not None,
+        )
+    )
+    if decision.kind is not WhatToDoKind.CALL_CLINIC:
+        return None
+    lang = language_of(language)
+    doctor = None if new_line is None else new_line.prescriber
+    clinic: str | None = None
+    if doctor is None:
+        named = await _directory_doctor(session, context=context)
+        if named is not None and named[1] is ProviderKind.DOCTOR:
+            doctor = named[0]
+        elif named is not None:
+            clinic = named[0]
+    said = Decision(
+        kind=decision.kind,
+        line_ids=tuple(one for one in decision.line_ids if one not in NOT_OFF_THE_BUTTON),
+        check_in=False,
+    )
+    lines = compose(
+        said, language=lang, chief=None, missed_medicine=None, doctor=doctor, clinic=clinic
+    )
+    return tuple(within_the_boundary(lines, language=lang, doctor=doctor, told=None))
+
+
+# --- when the phone cannot reach Nura --------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class OfflineCards:
+    """The two cards the phone keeps for when it cannot reach Nura at all (the web client, W7).
+
+    When either is shown, nothing was written and nobody was told, and the phone cannot read
+    what he said for a red flag. `red_flag` is for a red word on the feeling cloud tapped with
+    no network: the urgent card's shape — the reassurance, that the family was not told, the
+    ambulance, then the chief — and the one closing line. `unknown` is for the button pressed
+    with no network, whatever he said: call the family now, and the ambulance if it is very
+    bad. Both end on "Nura does not decide what is wrong.", never "Ask your doctor." after an
+    emergency number (`app.safety.boundary`). Every line is the catalogue's, through `render`.
+    Nothing is written by reading them."""
+
+    language: str
+    emergency_number: str
+    red_flag: tuple[Line, ...]
+    unknown: tuple[Line, ...]
+
+
+OFFLINE_TARGET = "offline_card"
+
+
+@audited(Action.READ, BUTTON_SCOPE, OFFLINE_TARGET)
+async def offline_cards(
+    session: AsyncSession, *, context: KeyContext, language: str | None = None
+) -> OfflineCards:
+    """The two offline cards for this profile, in `language` or the profile's own, naming the
+    chief the button would name now (`family_of`) and the region's ambulance number. Read
+    under the button's door, which every key holds: whoever is with him may need them."""
+    profile = await audited_profile_read(session, context)
+    lang = language_of(language or profile.language)
+    family = await family_of(session, context=context, profile=profile)
+    chief = family.chief.display_name if family.chief is not None else None
+    number = EMERGENCY_NUMBER[context.region]
+    red = ["nfw.offline_not_sent", f"nfw.call_{number}"]
+    red += ["nfw.then_call_chief"] if chief else []
+    unknown = [
+        "nfw.offline_not_sent",
+        "nfw.offline_call_chief" if chief else "nfw.offline_call_family",
+        f"nfw.offline_bad_{number}",
+    ]
+
+    def card(ids: list[str]) -> tuple[Line, ...]:
+        lines = [Line(one, render(one, lang, chief=chief or "")) for one in ids]
+        return tuple(within_the_boundary(lines, language=lang, doctor=None, told=None, urgent=True))
+
+    return OfflineCards(
+        language=lang, emergency_number=number, red_flag=card(red), unknown=card(unknown)
+    )
+
+
 __all__ = [
     "A_DAY_OR_MORE",
     "BUTTON_SCOPE",
@@ -1110,14 +1236,18 @@ __all__ = [
     "Heard",
     "Line",
     "NothingSaid",
+    "OfflineCards",
     "SaidTwice",
     "Situation",
     "WhatToDoNow",
+    "call_clinic_card",
+    "cloud_words_of",
     "capture",
     "decide",
     "escalate",
     "family_of",
     "not_feeling_well",
     "notice_lines",
+    "offline_cards",
     "write_the_moment",
 ]

@@ -135,8 +135,10 @@ async def test_the_nudge_plan_and_its_hand_over_over_http(deployment: Deployment
         f"/profiles/{profile_id}/nudges/{nudge_id}/response", json={"kind": "accepted"}, headers=his
     )
     assert answered.status_code == 201, answered.text
-    nothing = await deployment.client.post(f"/profiles/{profile_id}/nudges/plan", headers=his)
-    assert nothing.status_code == 409 and nothing.json() == {"refusal": "NothingToHandOver"}
+    # Handed over twice — the web as he answers, the schedule at its time (W7): the same nudge.
+    again = await deployment.client.post(f"/profiles/{profile_id}/nudges/plan", headers=his)
+    assert again.status_code == 201
+    assert again.json()["nudge"]["nudge_id"] == handed.json()["nudge"]["nudge_id"]
 
 
 def test_no_route_is_declared_twice(deployment: Deployment) -> None:
@@ -211,3 +213,63 @@ async def test_a_tap_is_the_records_and_a_note_on_a_medicine_is_withheld_without
         await deployment.client.get(f"/profiles/{profile_id}/feelings/notes", headers=both)
     ).json()
     assert [n["note_id"] for n in shown["notes"]] == [answered.json()["note"]["note_id"]]
+
+
+async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(deployment: Deployment) -> None:
+    """W7: a push carries no words, so the app reads the day's handed-over nudge — its lines,
+    its why — and what the reader has done with it; he answers at the response route."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    empty = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=his)
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["nudges"] == [] and empty.json()["withheld"] == 0
+
+    handed = await deployment.client.post(f"/profiles/{profile_id}/nudges/plan", headers=his)
+    assert handed.status_code == 201, handed.text
+    nudge = handed.json()["nudge"]
+    day = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=his)
+    (shown,) = day.json()["nudges"]
+    assert shown["nudge_id"] == nudge["nudge_id"] and shown["lines"] == nudge["lines"]
+    assert shown["why"] == nudge["why"] and shown["voice"] and shown["responses"] == []
+    assert day.json()["day"] == nudge["day"]
+
+    answered = await deployment.client.post(
+        f"/profiles/{profile_id}/nudges/{nudge['nudge_id']}/response", json={"kind": "accepted"}, headers=his
+    )
+    assert answered.status_code == 201, answered.text
+    again = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=his)
+    assert again.json()["nudges"][0]["responses"] == ["accepted"]
+
+    # Each person's own answers: Mei, his chief, has done nothing with it.
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await let_in(deployment, pa, profile_id, MEI, ["emergency", "medicines", "visits", "readings", "records", "family", "notes"])
+    key = await deployment.client.post(
+        f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his
+    )
+    assert key.status_code == 201, key.text
+    hers = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=bearer(mei["token"]))
+    assert hers.json()["nudges"][0]["responses"] == []
+
+    other = await deployment.client.get(f"/profiles/{profile_id}/nudges?day=2026-01-05", headers=his)
+    assert other.json()["nudges"] == []
+
+
+async def test_the_answer_that_makes_a_word_red_says_so(deployment: Deployment) -> None:
+    """W7: the phone shows the red offline card if a red-making answer cannot be sent, so each
+    answer says whether it makes the word red — a yes to the question that tells the red variant
+    apart, and nothing else."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    breathless = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings", json={"word": "breathless"}, headers=his
+    )
+    assert breathless.status_code == 201, breathless.text
+    question = breathless.json()["question"]
+    assert question["follow_up"] == "at_rest"
+    assert {one["answer"]: one["red"] for one in question["answers"]} == {"yes": True, "no": False}
+    low = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings", json={"word": "low"}, headers=his
+    )
+    assert [one["red"] for one in low.json()["question"]["answers"]] == [False] * 4

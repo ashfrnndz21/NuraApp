@@ -335,7 +335,7 @@ RED_FLAG_KNOWS: Mapping[str, Mapping[str, str]] = {
 RED_FLAG_CLOSING: Mapping[str, str] = {
     "en": "Nura does not decide what is wrong.",
     "ms": "Nura tidak menentukan apa masalahnya.",
-    "zh": "Nura不判断是什么病。",
+    "zh": "Nura 不判断您出了什么问题。",
 }
 """The last line of every reply to a red flag: the step is Nura's to say, and what is wrong is
 not (the not-feeling-well card's own closing line, `app.safety.boundary.URGENT_CLOSING`)."""
