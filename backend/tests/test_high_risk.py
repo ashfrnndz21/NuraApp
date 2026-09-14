@@ -26,7 +26,7 @@ from app.memory.semantic import assert_fact, current_facts
 from app.regions import Region
 from app.safety.high_risk import (
     HIGH_RISK_CLASSES,
-    NotFromALabelPhoto,
+    HighRiskNeedsLabelPhoto,
     high_risk_class,
     names_high_risk,
     refuse_dose_without_label_photo,
@@ -125,7 +125,7 @@ async def test_a_high_risk_dose_from_a_message_alone_is_refused_and_written_down
         source_channel=SourceChannel.WHATSAPP,
         label="the helper says one at night",
     )
-    async with refused_unit(sg, NotFromALabelPhoto):
+    async with refused_unit(sg, HighRiskNeedsLabelPhoto):
         await _dose(sg, owner, "Warfarin", event_id=told.id)
     assert list(await current_facts(sg, context=owner, subject="medicine")) == []
     trail = await read_audit(sg, context=owner)
@@ -133,7 +133,7 @@ async def test_a_high_risk_dose_from_a_message_alone_is_refused_and_written_down
         e.outcome is Outcome.REFUSED
         and e.action is Action.WRITE
         and e.target == "fact"
-        and e.refused_because == "NotFromALabelPhoto"
+        and e.refused_because == "HighRiskNeedsLabelPhoto"
         for e in trail
     )
 
@@ -143,10 +143,10 @@ async def test_a_high_risk_dose_from_a_pdf_or_a_screenshot_is_refused_too(
 ) -> None:
     owner = await _pa(sg)
     letter = await _artifact(sg, owner, ArtifactKind.PDF)
-    with pytest.raises(NotFromALabelPhoto):
+    with pytest.raises(HighRiskNeedsLabelPhoto):
         await _dose(sg, owner, "insulin glargine", artifact_id=letter.id)
     screen = await _artifact(sg, owner, ArtifactKind.SCREENSHOT)
-    with pytest.raises(NotFromALabelPhoto):
+    with pytest.raises(HighRiskNeedsLabelPhoto):
         await _dose(sg, owner, "digoxin", artifact_id=screen.id)
     assert list(await current_facts(sg, context=owner, subject="medicine")) == []
 
@@ -189,7 +189,7 @@ async def test_the_drug_may_be_named_in_the_subject(sg: AsyncSession) -> None:
         source_channel=SourceChannel.WHATSAPP,
         label="a voice note",
     )
-    with pytest.raises(NotFromALabelPhoto):
+    with pytest.raises(HighRiskNeedsLabelPhoto):
         await assert_fact(
             sg,
             context=owner,

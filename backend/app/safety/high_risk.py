@@ -7,10 +7,13 @@
 generic names each covers. It is a product rule written down, not pharmacology — identifying
 a brand as one of these generics is the licensed drug data client's job (E04), and nothing
 here is model output. `refuse_dose_without_label_photo` is the rule as a hook on
-`app.memory.semantic.before_fact_write`: a medicine dose fact that names one of these drugs
-and does not rest on a PHOTO artefact is refused before it is written, and the refusal is on
-the trail like any other. It runs for every writer — the review card, WhatsApp, a voice note
-— because it lives under the store, not in a surface.
+`app.memory.semantic.before_fact_write`: a medicine fact that names one of these drugs — by
+generic name anywhere in it, or by the `drug_class` the registry put on a medicine line's
+value — and does not rest on a PHOTO artefact is refused before it is written, and the
+refusal is on the trail like any other. It runs for every writer — the review card, the
+medicines module, WhatsApp, a voice note — because it lives under the store, not in a
+surface. The medicines module (E04) checks the same rule at its own door first, so the
+person is told before a yes is spent; this hook is the floor under it.
 """
 
 from __future__ import annotations
@@ -64,6 +67,13 @@ MEDICINE_SUBJECTS = frozenset({"medicine", "medication"})
 DOSE_ATTRIBUTES = frozenset({"dose"})
 """The attribute the rule guards: what to take and how often, which is what a label says."""
 
+LINE_ATTRIBUTES = ("line:", "supply:")
+"""The attributes the medicines module (E04) writes — `line:<generic>`, `supply:<generic>` —
+which carry the dose inside the value, so the rule guards them too."""
+
+MEDICATION = "medication"
+"""The subject the medicines module writes every medicine fact under."""
+
 _NAMES: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     (danger, re.compile(rf"\b{re.escape(name)}\b", re.IGNORECASE))
     for danger, names in HIGH_RISK_CLASSES.items()
@@ -71,8 +81,31 @@ _NAMES: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
 )
 
 
-class NotFromALabelPhoto(Refusal):
-    """A high-risk drug's dose is saved from its label photo, never from words alone."""
+class HighRiskNeedsLabelPhoto(Refusal):
+    """A high-risk drug's dose is saved from its label photo, never from words alone. Carries
+    the class, so the answer can name it."""
+
+    def __init__(self, drug_class: str, message: str | None = None) -> None:
+        super().__init__(message or f"a {drug_class} is saved from its label photo, not from words")
+        self.drug_class = drug_class
+
+
+def is_high_risk(drug_class: str | None) -> bool:
+    """Whether a registry class code is one of the five."""
+    return drug_class is not None and drug_class.lower() in HIGH_RISK_CLASSES
+
+
+def class_of(value: Any) -> str | None:
+    """The high-risk class a medicine line's value carries, from the registry: its
+    `drug_class` when that is one of the five, or `high_risk` marked true with no class."""
+    if not isinstance(value, Mapping):
+        return None
+    drug_class = value.get("drug_class")
+    if isinstance(drug_class, str) and is_high_risk(drug_class):
+        return drug_class.lower()
+    if value.get("high_risk") is True:
+        return "high_risk"
+    return None
 
 
 def high_risk_class(name: str | None) -> str | None:
@@ -109,7 +142,11 @@ def names_high_risk(*values: Any) -> str | None:
 
 
 def is_a_dose(draft: FactDraft) -> bool:
-    return draft.subject in MEDICINE_SUBJECTS and draft.attribute in DOSE_ATTRIBUTES
+    """A medicine fact that says what to take: the review card's `dose`, or a medicine line
+    or supply of the medicines module, whose value carries the dose."""
+    return draft.subject in MEDICINE_SUBJECTS and (
+        draft.attribute in DOSE_ATTRIBUTES or draft.attribute.startswith(LINE_ATTRIBUTES)
+    )
 
 
 async def refuse_dose_without_label_photo(
@@ -117,27 +154,30 @@ async def refuse_dose_without_label_photo(
 ) -> None:
     """The rule, as `before_fact_write` sees it.
 
-    A dose names its drug — in the subject, or inside its value (`{"drug": "warfarin", …}`,
-    the shape the review card writes). If that drug is high-risk, the draft must rest on an
-    artefact of kind PHOTO. An event alone (a message, a voice note), or a PDF or a
-    screenshot, is refused. The artefact row was read a moment ago by `_check_provenance`
-    under the writer's own key, so looking at its kind here writes no second line.
+    A dose names its drug — in the subject, inside its value (`{"drug": "warfarin", …}`,
+    the shape the review card writes), or by the class the registry put on it
+    (`{"drug_class": "anticoagulant", …}`, the shape the medicines module writes). If EITHER
+    names a high-risk drug, the draft must rest on an artefact of kind PHOTO. An event alone
+    (a message, a voice note), or a PDF or a screenshot, is refused. The artefact row was
+    read a moment ago by `_check_provenance` under the writer's own key, so looking at its
+    kind here writes no second line.
     """
     if not is_a_dose(draft):
         return
-    danger = names_high_risk(draft.subject, draft.value)
+    danger = names_high_risk(draft.subject, draft.value) or class_of(draft.value)
     if danger is None:
         return
     if draft.artifact_id is None:
-        raise NotFromALabelPhoto(f"a {danger} dose is saved from its label photo, not from words")
+        raise HighRiskNeedsLabelPhoto(danger)
     artifact = await session.get(Artifact, draft.artifact_id)
     if (
         artifact is None
         or artifact.profile_id != context.profile_id
         or artifact.kind is not ArtifactKind.PHOTO
     ):
-        raise NotFromALabelPhoto(
-            f"a {danger} dose is saved from its label photo, not a {artifact and artifact.kind}"
+        raise HighRiskNeedsLabelPhoto(
+            danger,
+            f"a {danger} dose is saved from its label photo, not a {artifact and artifact.kind}",
         )
 
 

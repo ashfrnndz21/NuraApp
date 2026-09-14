@@ -1,0 +1,355 @@
+{
+  "_about": "The fixture drug registry: a dozen medicines common in Malaysia and Singapore, shaped like the NPRA and HSA registers with a licensed monograph beside each. Registration numbers are shaped like real ones and are not real ones. This file is the only source of pharmacology in the tests and on a dev run; nothing in app/ writes drug facts from anywhere else. Monographs carry rule ids, not prose: the sentences live in app/medicines/strings.py.",
+  "products": [
+    {
+      "registration_no": "MAL19970001A",
+      "brand": "Norvasc",
+      "generic": "amlodipine",
+      "strength": "5 mg",
+      "form": "tablet",
+      "drug_class": "calcium_channel_blocker"
+    },
+    {
+      "registration_no": "MAL19970002A",
+      "brand": "Norvasc",
+      "generic": "amlodipine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "calcium_channel_blocker"
+    },
+    {
+      "registration_no": "MAL20050031A",
+      "brand": "Amlong",
+      "generic": "amlodipine",
+      "strength": "5 mg",
+      "form": "tablet",
+      "drug_class": "calcium_channel_blocker"
+    },
+    {
+      "registration_no": "SIN04412P",
+      "brand": "Glucophage",
+      "generic": "metformin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "biguanide"
+    },
+    {
+      "registration_no": "MAL20011207A",
+      "brand": "Lipitor",
+      "generic": "atorvastatin",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "statin"
+    },
+    {
+      "registration_no": "SIN02231P",
+      "brand": "Marevan",
+      "generic": "warfarin",
+      "strength": "3 mg",
+      "form": "tablet",
+      "drug_class": "anticoagulant"
+    },
+    {
+      "registration_no": "SIN02232P",
+      "brand": "Marevan",
+      "generic": "warfarin",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "anticoagulant"
+    },
+    {
+      "registration_no": "SIN12208P",
+      "brand": "Lantus SoloStar",
+      "generic": "insulin glargine",
+      "strength": "100 units/ml",
+      "form": "pen",
+      "drug_class": "insulin"
+    },
+    {
+      "registration_no": "MAL19881011A",
+      "brand": "Cardiprin",
+      "generic": "aspirin",
+      "strength": "100 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet"
+    },
+    {
+      "registration_no": "MAL19960119A",
+      "brand": "Cozaar",
+      "generic": "losartan",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "angiotensin_receptor_blocker"
+    },
+    {
+      "registration_no": "MAL19850044A",
+      "brand": "Lasix",
+      "generic": "frusemide",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "loop_diuretic"
+    },
+    {
+      "registration_no": "SIN06171P",
+      "brand": "Losec",
+      "generic": "omeprazole",
+      "strength": "20 mg",
+      "form": "capsule",
+      "drug_class": "proton_pump_inhibitor"
+    },
+    {
+      "registration_no": "MAL20020911A",
+      "brand": "Diamicron MR",
+      "generic": "gliclazide",
+      "strength": "30 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea"
+    },
+    {
+      "registration_no": "SIN09931P",
+      "brand": "Trexan",
+      "generic": "methotrexate",
+      "strength": "2.5 mg",
+      "form": "tablet",
+      "drug_class": "antimetabolite"
+    },
+    {
+      "registration_no": "MAL19910602X",
+      "brand": "Panadol",
+      "generic": "paracetamol",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "analgesic"
+    },
+    {
+      "registration_no": "MAL19920217A",
+      "brand": "Zocor",
+      "generic": "simvastatin",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "statin"
+    }
+  ],
+  "interactions": [
+    {
+      "pair": [
+        "warfarin",
+        "aspirin"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "paracetamol"
+      ],
+      "severity": "moderate",
+      "text_id": "bleeding_check"
+    },
+    {
+      "pair": [
+        "methotrexate",
+        "aspirin"
+      ],
+      "severity": "major",
+      "text_id": "methotrexate_levels"
+    },
+    {
+      "pair": [
+        "methotrexate",
+        "omeprazole"
+      ],
+      "severity": "moderate",
+      "text_id": "methotrexate_levels"
+    },
+    {
+      "pair": [
+        "frusemide",
+        "losartan"
+      ],
+      "severity": "moderate",
+      "text_id": "low_pressure_kidney"
+    },
+    {
+      "pair": [
+        "gliclazide",
+        "aspirin"
+      ],
+      "severity": "minor",
+      "text_id": "low_sugar"
+    }
+  ],
+  "duplicate_therapy": {
+    "severity": "duplicate",
+    "text_id": "same_kind_twice"
+  },
+  "monographs": {
+    "amlodipine": {
+      "plain_name_id": "blood_pressure_tablet",
+      "purpose_id": "blood_pressure",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "swollen_ankles",
+        "dizzy_standing"
+      ],
+      "avoid_ids": [
+        "grapefruit"
+      ]
+    },
+    "metformin": {
+      "plain_name_id": "sugar_tablet",
+      "purpose_id": "sugar",
+      "food_rule_id": "with_meals",
+      "missed_dose_rule_id": "skip_and_take_next",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": [
+        "alcohol"
+      ]
+    },
+    "atorvastatin": {
+      "plain_name_id": "cholesterol_tablet",
+      "purpose_id": "cholesterol",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "muscle_ache"
+      ],
+      "avoid_ids": [
+        "grapefruit"
+      ]
+    },
+    "warfarin": {
+      "plain_name_id": "blood_thinner_tablet",
+      "purpose_id": "clots",
+      "food_rule_id": "same_time_each_day",
+      "missed_dose_rule_id": "same_day_or_tell_clinic",
+      "watch_out_ids": [
+        "bleeding_signs",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "leafy_greens_steady",
+        "tcm_supplements_ask",
+        "alcohol"
+      ]
+    },
+    "insulin glargine": {
+      "plain_name_id": "insulin",
+      "purpose_id": "sugar",
+      "food_rule_id": "same_time_each_day",
+      "missed_dose_rule_id": "ask_before_extra",
+      "watch_out_ids": [
+        "shaky_sweaty"
+      ],
+      "avoid_ids": [
+        "skipping_meals",
+        "alcohol"
+      ]
+    },
+    "aspirin": {
+      "plain_name_id": "aspirin",
+      "purpose_id": "heart_protect",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "black_stools",
+        "bleeding_signs"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "alcohol"
+      ]
+    },
+    "losartan": {
+      "plain_name_id": "blood_pressure_tablet",
+      "purpose_id": "blood_pressure",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "dizzy_standing"
+      ],
+      "avoid_ids": [
+        "salt_substitutes"
+      ]
+    },
+    "frusemide": {
+      "plain_name_id": "water_pill",
+      "purpose_id": "water",
+      "food_rule_id": "morning",
+      "missed_dose_rule_id": "skip_if_late_in_day",
+      "watch_out_ids": [
+        "dizzy_standing",
+        "cramps"
+      ],
+      "avoid_ids": [
+        "painkillers_ask"
+      ]
+    },
+    "omeprazole": {
+      "plain_name_id": "stomach_tablet",
+      "purpose_id": "stomach",
+      "food_rule_id": "before_breakfast",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": []
+    },
+    "gliclazide": {
+      "plain_name_id": "sugar_tablet",
+      "purpose_id": "sugar",
+      "food_rule_id": "with_breakfast",
+      "missed_dose_rule_id": "skip_and_take_next",
+      "watch_out_ids": [
+        "shaky_sweaty"
+      ],
+      "avoid_ids": [
+        "skipping_meals",
+        "alcohol"
+      ]
+    },
+    "methotrexate": {
+      "plain_name_id": "joint_tablet",
+      "purpose_id": "joints",
+      "food_rule_id": "once_a_week",
+      "missed_dose_rule_id": "weekly_ask_if_late",
+      "watch_out_ids": [
+        "mouth_sores_fever",
+        "tummy_upset"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "alcohol",
+        "folic_acid_ask"
+      ]
+    },
+    "paracetamol": {
+      "plain_name_id": "pain_tablet",
+      "purpose_id": "pain",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [],
+      "avoid_ids": [
+        "other_paracetamol",
+        "alcohol"
+      ]
+    },
+    "simvastatin": {
+      "plain_name_id": "cholesterol_tablet",
+      "purpose_id": "cholesterol",
+      "food_rule_id": "same_time_each_day",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "muscle_ache"
+      ],
+      "avoid_ids": [
+        "grapefruit"
+      ]
+    }
+  }
+}

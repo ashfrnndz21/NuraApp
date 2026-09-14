@@ -3,9 +3,9 @@
 `/profiles/mine` is the "for me" door: it opens the caller's own graph. `/profiles/for-someone`
 is the second door: a graph set up for someone by his number, held until he claims it, and
 `/profiles/mine/claimable` and `/profiles/{id}/claim` are that claim (E01, `app.identity.doors`).
-The third door, I was invited, is `GET /doors`. Notes and medicines are here so that
-checkpoint 2 has a scoped thing to read and a scoped thing to be refused; the real medicines
-module arrives with E04 and will replace the placeholder read. Readings and State are here
+The third door, I was invited, is `GET /doors`. Notes are here so that checkpoint 2 has a
+scoped thing to read and a scoped thing to be refused; the medicines routes are in
+`app.channels.api.medicines` (E04). Readings and State are here
 so that checkpoint 3 has a fact to add and a State to watch recompute; the real capture is
 E02.
 """
@@ -22,7 +22,7 @@ from fastapi import APIRouter, Query, Request, status
 from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
 from app.audit.trail import read_audit
-from app.channels.api.deps import Context, CurrentPerson, Db, settings_of
+from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
 from app.channels.api.schemas import (
     AuditOut,
     ClaimableOut,
@@ -33,7 +33,7 @@ from app.channels.api.schemas import (
     ConsentOut,
     KeyGrant,
     KeyOut,
-    MedicineOut,
+    MedicineConfirmIn,
     NoteIn,
     NoteOut,
     ProfileCreate,
@@ -64,9 +64,10 @@ from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
+from app.medicines.service import draft_for
 from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel
-from app.memory.semantic import assert_fact, current_facts
+from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
 from app.state.service import current_state
 
@@ -174,7 +175,9 @@ async def claimable(
 
 
 @router.post("/{profile_id}/confirmations", status_code=status.HTTP_201_CREATED)
-async def mint_confirmation(body: ConfirmIn, context: Context, session: Db) -> ConfirmationOut:
+async def mint_confirmation(
+    body: ConfirmIn, request: Request, context: Context, session: Db
+) -> ConfirmationOut:
     """Write down that the caller said yes to a draft on this profile, and hand him the yes.
 
     The caller confirms only as himself. For a claim, the draft is recomputed from the
@@ -186,6 +189,19 @@ async def mint_confirmation(body: ConfirmIn, context: Context, session: Db) -> C
     if isinstance(body, ClaimConfirmIn):
         draft = await claim_draft_for(session, context=context, language=body.language)
         return ConfirmationOut.of(await confirm(session, context, draft))
+    if isinstance(body, MedicineConfirmIn):
+        # For a medicine, the draft is recomputed from the label and the list
+        # (`app.medicines.service.plan`), so the yes binds to what `POST
+        # /profiles/{id}/medicines/draft` showed; a label that would write nothing has
+        # nothing to say yes to (`AlreadyRecorded`, 409).
+        medicine = await draft_for(
+            session,
+            context=context,
+            registry=providers_of(request).drug_registry,
+            label=body.label.as_label(),
+            source_artifact_id=body.source_artifact_id,
+        )
+        return ConfirmationOut.of(await confirm(session, context, medicine))
     review = await review_draft_for(
         session,
         context=context,
@@ -351,7 +367,7 @@ async def audit(
     return [AuditOut.of(entry) for entry in entries]
 
 
-# --- notes and medicines -----------------------------------------------------------------
+# --- notes -------------------------------------------------------------------------------
 
 
 @router.get("/{profile_id}/notes")
@@ -362,16 +378,6 @@ async def notes(context: Context, session: Db) -> list[NoteOut]:
 @router.post("/{profile_id}/notes", status_code=status.HTTP_201_CREATED)
 async def add_note(body: NoteIn, context: Context, session: Db) -> NoteOut:
     return NoteOut.of(await write_note(session, context=context, text=body.text))
-
-
-@router.get("/{profile_id}/medicines")
-async def medicines(context: Context, session: Db) -> list[MedicineOut]:
-    """The current facts with subject "medicine", which `app.keys.scopes` puts under the
-    medicines scope. A placeholder until E04 builds the medicine line — it is here so a
-    caregiver key has something to open — and not to be bound to a patient-mode screen
-    before then: attribute codes, units and confidences are not plain words."""
-    facts = await current_facts(session, context=context, subject="medicine")
-    return [MedicineOut.of(fact) for fact in facts]
 
 
 # --- readings and State ------------------------------------------------------------------

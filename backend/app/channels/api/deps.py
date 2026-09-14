@@ -19,6 +19,7 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import unit_of_work
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
 from app.identity.models import LoginSession, Person
@@ -41,6 +42,9 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    drug_registry: DrugRegistry
+    """The licensed drug data behind its port (`app.drugs`): identification, interactions and
+    monographs come from it and from nowhere else."""
 
 
 def settings_of(request: Request) -> Settings:

@@ -3,6 +3,7 @@ paths:
   - "backend/app/delivery/**"
   - "backend/app/channels/**"
   - "backend/app/consent/**"
+  - "backend/app/medicines/**"
   - "ios/Nura/**"
 ---
 # Patient-facing strings
