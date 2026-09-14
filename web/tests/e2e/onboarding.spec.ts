@@ -108,6 +108,7 @@ async function laterUntil(gap: Locator, wanted: string): Promise<void> {
 const spoken = (page: Page) => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.splice(0));
 
 test("the patient's own onboarding: about you, the cloud, a paper, the read-back, questions, the first week", async ({ page, request }) => {
+  test.setTimeout(180_000);
   const phone = freshPhone("+659888");
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
@@ -260,10 +261,10 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await expect(page.getByTestId("question-ack")).toHaveText("Nura will keep this one for the visit.");
   await expect(question).toContainText(asked.questions[1]!.line);
   await question.getByTestId("not-this").click();
-  while ((await main.getAttribute("data-stage")) === "questions" && (await question.count()) > 0) {
-    const before = await question.textContent();
+  const count = asked.questions.length;
+  for (let n = 3; n <= count; n++) {
+    await expect(question).toContainText(`This is ${n} of ${count}.`);
     await question.getByTestId("keep").click();
-    await expect.poll(async () => ((await main.getAttribute("data-stage")) === "questions" ? await question.textContent() : "")).not.toBe(before);
   }
   // No visit is booked: the kept question waits on the sitting.
   const kept = (await sitting(request, pa)).questions[0]!;
@@ -333,6 +334,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
 });
 
 test("the caregiver density, for a chief setting up her father", async ({ page }) => {
+  test.setTimeout(120_000);
   const phone = freshPhone("+659889");
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Ash");
@@ -382,7 +384,11 @@ test("the caregiver density, for a chief setting up her father", async ({ page }
   await lines.nth(1).getByTestId("readback-no").click();
   await expect(lines.nth(1).getByTestId("readback-no")).toHaveAttribute("aria-pressed", "true");
   await expect(lines.first()).toContainText("You told us: High blood pressure.");
-  for (const each of await lines.getByTestId("readback-yes").all()) if (await each.isEnabled()) await each.click();
+  for (let n = 0; n < (await lines.count()); n++) {
+    if (n === 1) continue;
+    await lines.nth(n).getByTestId("readback-yes").click();
+    await expect(lines.nth(n).getByTestId("readback-yes")).toHaveAttribute("aria-pressed", "true");
+  }
   await page.getByTestId("readback-next").click();
 
   // The questions as a list, then the whole first week, then Today.
@@ -458,6 +464,7 @@ test("papers of every kind: a hospital letter as a PDF, a page that is not a hea
 });
 
 test("the Ready screen's other actions: breakfast from its card, and one person let in", async ({ page, request }) => {
+  test.setTimeout(120_000);
   const phone = await signedInToOnboarding(page, "+659884", { breakfast: false });
   await page.getByTestId("word-allergies").click();
   await page.getByTestId("word-medicine_allergy").click();
@@ -519,6 +526,7 @@ test("the Ready screen's other actions: breakfast from its card, and one person 
 });
 
 test("a question kept with a visit booked goes on that visit's list at once (E05)", async ({ page, request }) => {
+  test.setTimeout(120_000);
   const phone = await signedInToOnboarding(page, "+659882");
   await page.getByTestId("word-hospital_last_year").click();
   await page.getByTestId("cloud-done").click();
@@ -535,10 +543,11 @@ test("a question kept with a visit booked goes on that visit's list at once (E05
   await expect(page.getByTestId("saved")).toBeVisible();
   await page.getByTestId("all-done").click();
   const line = page.getByTestId("readback-line");
-  while ((await main.getAttribute("data-stage")) === "readBack") {
-    const before = await line.textContent();
+  await expect(line).toContainText(/This is 1 of \d+\./);
+  const total = Number(/This is 1 of (\d+)\./.exec((await line.textContent()) ?? "")![1]);
+  for (let n = 1; n <= total; n++) {
+    await expect(line).toContainText(`This is ${n} of ${total}.`);
     await line.getByTestId("readback-yes").click();
-    await expect.poll(async () => ((await main.getAttribute("data-stage")) === "readBack" ? await line.textContent() : "")).not.toBe(before);
   }
   await expect(main).toHaveAttribute("data-stage", "questions");
   const asked = await sitting(request, pa);

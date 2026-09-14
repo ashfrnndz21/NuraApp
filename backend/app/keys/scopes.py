@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Any
+
+from sqlalchemy import ColumnElement, and_, not_, or_
+from sqlalchemy.orm import QueryableAttribute
 
 
 class Scope(StrEnum):
@@ -89,11 +93,34 @@ NAMED_SUBJECTS = frozenset(_SUBJECT_SCOPES)
 """Every subject this module names a scope for; any other sits under RECORDS."""
 
 
+FACT_SCOPES: tuple[Scope, ...] = (Scope.READINGS, Scope.MEDICINES, Scope.RECORDS)
+"""The scopes a fact can sit under (`scope_for_subject`). A reader of more than one subject
+reads each on its own, under its own scope, and names the ones the key does not hold."""
+
+
 def subjects_under(scope: Scope) -> frozenset[str]:
     """The named subjects whose facts sit under `scope`. READINGS also takes every subject
     starting `reading:`, and RECORDS every subject not named here (`scope_for_subject`), so
     a query narrowing facts to one scope says the same thing this module says."""
     return frozenset(subject for subject, held in _SUBJECT_SCOPES.items() if held is scope)
+
+
+Column = ColumnElement[Any] | QueryableAttribute[Any]
+"""A column to narrow on: a Core column or an ORM attribute."""
+
+
+def subject_is_under(subject: Column, scope: Scope) -> ColumnElement[bool]:
+    """The rows whose `subject` sits under `scope`, as `scope_for_subject` decides it, said as
+    SQL — so a query narrowing rows to one scope says the same thing this module says."""
+    if scope is Scope.RECORDS:
+        return and_(
+            subject.not_in(sorted(NAMED_SUBJECTS)),
+            not_(subject.startswith(READING_PREFIX)),
+        )
+    named = subject.in_(sorted(subjects_under(scope)))
+    if scope is Scope.READINGS:
+        return or_(named, subject.startswith(READING_PREFIX))
+    return named
 
 
 def scope_for_subject(subject: str | None) -> Scope:

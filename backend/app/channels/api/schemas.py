@@ -85,6 +85,7 @@ from app.medicines.service import (
 )
 from app.medicines.service import Outcome as MedicineOutcome
 from app.medicines.story import Story
+from app.memory.episodic import WITHHELD_ARTIFACT, WITHHELD_EVENT
 from app.memory.models import (
     LABEL_LENGTH,
     Appointment,
@@ -775,6 +776,9 @@ class KeyOut(BaseModel):
 # --- the audit trail ---------------------------------------------------------------------
 
 
+WITHHELD_TARGET = "target"
+
+
 class AuditOut(BaseModel):
     """One line of the trail: what was touched and by whom, never what it said."""
 
@@ -793,9 +797,12 @@ class AuditOut(BaseModel):
     refused_because: str | None
     shared_with_person_id: uuid.UUID | None
     shared_with_label: str | None
+    withheld: list[str] = []
+    """`target` when the line was written under a scope the reader's key does not hold: the
+    line is there — who, when, what kind, under which scope — and the row's id is not."""
 
     @classmethod
-    def of(cls, entry: AuditEntry) -> AuditOut:
+    def of(cls, entry: AuditEntry, withheld: Sequence[str] = ()) -> AuditOut:
         return cls(
             entry_id=entry.id,
             at=entry.at,
@@ -806,12 +813,13 @@ class AuditOut(BaseModel):
             scope=entry.scope,
             channel=entry.channel,
             target=entry.target,
-            target_id=entry.target_id,
+            target_id=None if WITHHELD_TARGET in withheld else entry.target_id,
             rows=entry.rows,
             outcome=entry.outcome,
             refused_because=entry.refused_because,
             shared_with_person_id=entry.shared_with_person_id,
             shared_with_label=entry.shared_with_label,
+            withheld=list(withheld),
         )
 
 
@@ -1038,11 +1046,14 @@ class LineOut(BaseModel):
     missed: bool = False
     source: str = ""
     """Where the line came from and on which day, in his words: the card's source line."""
+    withheld: list[str] = []
+    """The source the reader's key may not read — `artifact` (the label photo is the
+    record's), `event` — by name, its id left out."""
 
     @classmethod
-    def of(cls, view: LineView) -> LineOut:
+    def of(cls, view: LineView, withheld: Sequence[str] = ()) -> LineOut:
         return cls(
-            **cls._columns(view.line),
+            **cls._columns(view.line, withheld),
             name=view.name,
             count=CountOut.of(view.count),
             flags=[FlaggedOut.of(flag) for flag in view.flags],
@@ -1052,22 +1063,24 @@ class LineOut(BaseModel):
             due_now=view.due_now,
             missed=view.missed,
             source=view.source,
+            withheld=list(withheld),
         )
 
     @classmethod
-    def history_of(cls, line: MedicationLine) -> LineOut:
+    def history_of(cls, line: MedicationLine, withheld: Sequence[str] = ()) -> LineOut:
         return cls(
-            **cls._columns(line),
+            **cls._columns(line, withheld),
             name=line.generic,
             count=None,
             flags=[],
             duplicate_of=[],
             doctor_question=[],
             taken_label=None,
+            withheld=list(withheld),
         )
 
     @staticmethod
-    def _columns(line: MedicationLine) -> dict[str, Any]:
+    def _columns(line: MedicationLine, withheld: Sequence[str] = ()) -> dict[str, Any]:
         dose = Dose.from_json(line.dose)
         return {
             "line_id": line.id,
@@ -1087,8 +1100,10 @@ class LineOut(BaseModel):
             ),
             "prescriber": line.prescriber,
             "source_kind": line.source_kind,
-            "source_artifact_id": line.source_artifact_id,
-            "source_event_id": line.source_event_id,
+            "source_artifact_id": (
+                None if WITHHELD_ARTIFACT in withheld else line.source_artifact_id
+            ),
+            "source_event_id": None if WITHHELD_EVENT in withheld else line.source_event_id,
             "confidence": line.confidence,
             "confidence_state": line.confidence_state,
             "status": line.status,
@@ -1571,9 +1586,12 @@ class FactOut(BaseModel):
     valid_from: datetime
     valid_to: datetime | None
     asserted_at: datetime
+    withheld: list[str] = []
+    """What the fact cites that the reader's key may not follow, by name — `artifact`,
+    `event` — its id left out (`app.memory.episodic.withheld_provenance`)."""
 
     @classmethod
-    def of(cls, fact: Fact) -> FactOut:
+    def of(cls, fact: Fact, withheld: Sequence[str] = ()) -> FactOut:
         return cls(
             fact_id=fact.id,
             subject=fact.subject,
@@ -1583,8 +1601,9 @@ class FactOut(BaseModel):
             confidence=fact.confidence,
             confidence_state=fact.confidence_state,
             confirmed_by_person_id=fact.confirmed_by_person_id,
-            artifact_id=fact.artifact_id,
-            event_id=fact.event_id,
+            artifact_id=None if WITHHELD_ARTIFACT in withheld else fact.artifact_id,
+            event_id=None if WITHHELD_EVENT in withheld else fact.event_id,
+            withheld=list(withheld),
             valid_from=utc(fact.valid_from),
             valid_to=None if fact.valid_to is None else utc(fact.valid_to),
             asserted_at=utc(fact.asserted_at),
