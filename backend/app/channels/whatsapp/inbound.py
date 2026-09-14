@@ -521,7 +521,9 @@ async def _taken(session: AsyncSession, work: _Work) -> Handled:
     that tablet stops at once.
     """
     registry = work.providers.drug_registry
-    asked = await dose_for_reply(session, context=work.context, registry=registry)
+    asked = await dose_for_reply(
+        session, context=work.context, registry=registry, at=work.message.at
+    )
     if asked is None:
         await _say(session, work, "taken_nothing_due")
         return Handled(
@@ -537,7 +539,7 @@ async def _taken(session: AsyncSession, work: _Work) -> Handled:
         source_channel=SourceChannel.WHATSAPP,
         channel=Channel.WHATSAPP,
     )
-    day = utcnow().astimezone(REGION_TZ[work.context.region]).date().isoformat()
+    day = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]).date().isoformat()
     await acknowledge_dose(
         session,
         context=work.context,

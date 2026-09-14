@@ -522,6 +522,11 @@ CAREGIVER_DUTY_WHY = "Who holds a key is in the family dimension of State."
 CAREGIVER_ROSTER_WHY = "The roster says who is on duty now; the keys say who else can step in."
 CAREGIVER_HELD_WHY = "Held for you: nothing for {name} to do, or a question for the doctor."
 CAREGIVER_SUPPRESSED_HEADLINE = "Considered, not raised: {feeling}"
+CAREGIVER_HEARD_HEADLINE = "Heard at the visit: {word}"
+CAREGIVER_HEARD_LINE = (
+    'The words "{word}" were heard in the transcript of {name}\'s visit. '
+    "His summary card tells him to call his doctor today."
+)
 CAREGIVER_SUPPRESSED_LINE = (
     "{name} said {feeling}. This flag depends on a fact that is not on the record ({reason}), "
     "so it was not raised to him. Add the fact, or ask the doctor."

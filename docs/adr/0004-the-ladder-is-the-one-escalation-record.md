@@ -1,0 +1,21 @@
+# ADR 0004 — The ladder is the one record of who is told; the trigger engine has no scheduler of its own
+
+**Date** 2026-09-15 · **Status** proposed · **Decided by** the operator, for the owner · **Stories** E00-05, E11-05, E11-06 (and E13/E14, E19-05, E05 as the doors a red flag comes in by)
+
+## Context
+
+Before E11, a red flag wrote three records of who was told, none of which sent anything: the flag's own `told` list with a share line each (E21), E19's `Escalation` row with a calling order "for E11 to walk", and E13's per-person `Notice` rows "to be delivered by E11/E19". The WhatsApp reply already said "Mei and Kit know now" when nobody had been sent a word. E11-06 asks for one ladder — Dad, the helper, the caregiver on duty, the chief — that stops when someone answers, and E00-05 for triggers with per-type channels and caps.
+
+## Decision
+
+1. **One record.** `app.delivery.triggers.ladder.escalate_flag(session, context, flag, *, told_already, via)` is the one door a red flag is escalated through, from every door it comes in by: the WhatsApp thread, the feeling cloud, the not-feeling-well button and the symptom log, a word heard in a visit transcript. It writes a `Ladder` (the calling order, fixed when it starts) and a `Delivery` row per rung per person — the channel, the template, the outcome, the rule — and a SHARE when a message reached someone. No `Escalation` row and no red-flag `Notice` row is written any more; the tables stay, with the rows already written. The flag's `told` list keeps its meaning: whose key held the emergency card at that moment.
+2. **Red flags skip his rung.** A red flag goes straight to the roster: whoever `who_is_on_duty` names at once, the chief five minutes on if nobody has answered, then everyone else holding the emergency card — never capped, never held for the quiet hours. A tablet with no Taken climbs from him: the helper half an hour on, the one on duty half an hour after, then the chief. A rung with nobody on it costs no wait. Nobody is on a rung whose key (after "only me") does not cover the part it is about.
+3. **What the family is told is who was reached.** The WhatsApp reply names the people a message reached; the not-feeling-well card names who the ladder asked first. Without the patient's WhatsApp agreement the ladder's WhatsApp channel is closed, the app push reaches only a registered device (none yet), and the flag leads the family's feed.
+4. **The engine is a function, not a scheduler.** `run_due(profile, at)` evaluates every trigger for one profile at one moment, flags first. The deployment's in-region scheduler calls it every five minutes for every profile in the region (`*/5 * * * *`); a red flag's first rung does not wait for it. `POST /dev/run-triggers` drives it on a dev run.
+5. **The ladder runs as the profile's owner** (or the steward before a claim), the way his Level 0 day does, so a helper's word can start it though her key does not open the roster.
+
+## Consequences
+
+- E13's tests and checkpoint 14 now read "who the ladder asked first" where they read "who got a notice"; E19's red-flag reply names only people reached.
+- The engine's reads are written to the owner's trail, on the system channel where the doors allow it; at a five-minute cadence the trail needs a way to fold system lines (open question for E12's trail).
+- Twelve WhatsApp templates now, not six: E11's six are to be submitted for approval with E19's.

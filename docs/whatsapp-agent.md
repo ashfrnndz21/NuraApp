@@ -82,9 +82,9 @@ Every inbound message that is kept becomes an artefact with provenance ("Mei, fa
 ## 7. Guardrails
 
 - The agent keeps health information about the profile owner only. Other people's health mentions in the group ("Mum's knee is bad too") are not stored unless Mum has her own profile and the poster holds a key to it.
-- "ignore" at the start of a message is honoured absolutely.
+- "ignore" at the start of a message is honoured absolutely — except that red-flag words are read first, before "ignore" and before the WhatsApp agreement: "ignore that, he fell" is still a fall. From anyone who holds a key on the profile, a red-flag word raises the flag; on a profile whose patient has not agreed to WhatsApp the flag is raised on the word alone (the message is not kept), escalated through the family's app rather than to anyone's WhatsApp, and the sender gets one fixed line. An unknown number still gets only its fixed reply and leaves no trace.
 - Nothing from a group changes the record without the poster's confirmation tap, except a document that goes through the review card.
-- Red flags posted by anyone ("he's very breathless") trigger the escalation ladder immediately and the agent says so in the thread.
+- Red flags posted by anyone ("he's very breathless") trigger the escalation ladder immediately (E11-06: the roster first, never capped, never quiet) and the agent says so in the thread, naming only the people the ladder actually reached.
 - The boundary line is in the agent's profile and in its first reply to any new person.
 - Retention for unclassified media: deleted within days.
 

@@ -1,23 +1,44 @@
-"""Red flags: the things we do not wait for.
+"""Red flags: the things we do not wait for — the words, the rule, and the one row they raise.
 
-The words come from docs/smart-nudges.md §2 and `.claude/rules/safety.md`: chest tightness,
+The list comes from docs/smart-nudges.md §2 and `.claude/rules/safety.md`: chest tightness,
 breathlessness at rest, one-sided swelling, worst-ever headache, sudden blurring, a fall,
 confusion, shaky-and-sweaty on sugar medicines, a kilo or more in two days after a heart
-discharge. A tap on one of them in the feeling cloud, or a word to that effect on any
-channel, comes here first — before planning, before ranking, before any cap or quiet hour —
-and raises a `Flag`: a row on the profile naming the feeling and the event it was said in,
-who was told, and, for the two flags that depend on a fact, whether the fact was there.
+discharge — plus the discharge-watch words the spec names for a visit (black stool, a fever
+beside a medicine). Whichever way one comes in, it comes here first — before planning,
+before ranking, before any cap or quiet hour — and raises a `Flag`, one row on the profile:
+
+- **The feeling cloud (E21).** A tap on a red feeling: `raise_flag` writes the `Flag` naming
+  the feeling and the SYMPTOM event it was said in, and tells every live key that holds the
+  emergency scope, with a share line each.
+- **Free text on WhatsApp (E19-05).** `RED_FLAG_WORDS` and `detect` read a message for the same
+  nine flags, in the three languages a family here writes in, and give back the `Feeling` a
+  tap would have; `record_the_moment` writes the SYMPTOM event under the emergency scope so a
+  helper's word can raise it, and `Escalation` is the ladder written beside it — the owner,
+  then the chief keys, then every other live key, in calling order — for E11 to walk;
+  `roster_for` reads it off the keys table.
+- **Words heard at a visit (E05).** `RED_FLAG_TERMS` is the list as words a transcript
+  carries, with the discharge-watch words; `find_red_flags` finds them with their spans and
+  `red_flags_heard` reads a transcript and everything the summariser heard for them, the
+  transcript's own span winning. `write_red_flag` writes the `Flag` before the summary card is
+  composed, in a way that outlives a refusal later in the same request. The same row carries
+  a medicine change heard at a visit (`FlagKind.MEDICINE_CHANGE_HEARD`) for E04's reconcile —
+  never applied here, never an amount.
+
+The two word tables are kept apart on purpose: a family member writing "he fell" means a
+fall, and E19 matches the bare word; a doctor's transcript says "fall" of a season or a
+number, and E05 matches the phrase. They share one vocabulary (`FEELING_CODE`), so a flag from
+any door names the same thing the same way in `code`.
 
 A flag that depends on a missing fact is not raised in silence and not raised loudly either:
 it is written with `suppressed_because` so the caregiver sees the suppression (safety.md).
-Nothing here diagnoses. The card that follows says his words back to him, that this one we
-do not wait for, and who to call; it names no condition.
+Nothing here diagnoses. The sentences live with the surfaces that say them
+(`app.delivery.strings`, `app.channels.whatsapp`, `app.reasoning.visits.strings`) and name a
+person and a day, never a condition.
 
-The words themselves are a table too (`RED_FLAG_WORDS`, `detect`): the same nine flags heard in
-free text on WhatsApp (E19-05), in the three languages a family here writes in. `Escalation`
-was the ladder E19 wrote beside a flag raised there, for E11 to walk; E11's ladder
-(`app.delivery.triggers.ladder.escalate_flag`) is now the one record of who is told, and no
-`Escalation` row is written any more (the rows already written stay, as the record they were).
+E11's ladder (`app.delivery.triggers.ladder.escalate_flag`) is the one record of who is told
+about a red flag, whichever door raised it: no `Escalation` row is written any more (the rows
+already written stay, as the record they were), and the share lines a flag writes on `told`
+say whose key held the emergency card at that moment, not that a message reached them.
 
 The not-feeling-well button and the symptom log (E13/E14) hear the same words (`detect`) and
 raise the same flag, on the SYMPTOM event `record_the_moment` writes under the emergency scope.
@@ -25,18 +46,20 @@ Their flag is written through `write_flag_kept`: `raise_flag`, and a keeper on t
 (`app.db.keep_on_refusal`, the mechanism refused audit lines use) that writes the flag, the
 event it rests on and their lines on the trail again if something later in the same request
 is refused and the unit of work is rolled back. "This one we do not wait for" has to survive
-a template that fails, a State that is stale, or a door that refuses further on; `keep_row`
-does the same for the notices and the ladder written beside the flag.
+a template that fails, a State that is stale, or a door that refuses further on. A flag heard
+at a visit (`write_red_flag`) is kept by the same keeper (`_keep_flag`), and `keep_row` does
+the same for the notices and the ladder written beside a flag.
 """
 
 from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy import JSON, ForeignKey, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,6 +88,8 @@ from app.memory.models import (
     _tied_to_profile,
 )
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
+
+# --- the feeling cloud -----------------------------------------------------------------------
 
 
 class Feeling(StrEnum):
@@ -115,6 +140,8 @@ glibenclamide. On one of them shaky-and-sweaty escalates whether or not a sugar 
 written down. A class, never a list of names; widening it (meglitinides) is the pharmacist's."""
 
 FLAG_TARGET = "red_flag"
+
+# --- the words written on WhatsApp (E19-05) --------------------------------------------------
 
 RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
     Feeling.CHEST_TIGHTNESS: (
@@ -215,33 +242,278 @@ def detect(text: str | None) -> Feeling | None:
     return None
 
 
+# --- the words heard at a visit (E05) --------------------------------------------------------
+
+RED_FLAG_TERMS: Mapping[str, tuple[str, ...]] = {
+    "chest_pain": (
+        "chest pain",
+        "chest tightness",
+        "tight chest",
+        "sakit dada",
+        "dada ketat",
+        "胸痛",
+        "胸闷",
+    ),
+    "breathless": (
+        "breathless",
+        "breathlessness",
+        "short of breath",
+        "cannot breathe",
+        "sesak nafas",
+        "susah bernafas",
+        "气促",
+        "呼吸困难",
+    ),
+    "black_stool": ("black stool", "black stools", "najis hitam", "berak hitam", "黑便"),
+    "fall": ("a fall", "fell down", "fell over", "had a fall", "jatuh", "terjatuh", "跌倒"),
+    "confusion": ("confusion", "confused", "keliru", "celaru", "神志不清", "糊涂"),
+    "one_sided_swelling": (
+        "one-sided swelling",
+        "one leg swollen",
+        "sebelah kaki bengkak",
+        "单侧肿胀",
+    ),
+    "worst_headache": (
+        "worst headache",
+        "worst-ever headache",
+        "sakit kepala paling teruk",
+        "最严重的头痛",
+    ),
+    "sudden_blurring": ("sudden blurring", "suddenly blurry", "kabur tiba-tiba", "突然模糊"),
+    "shaky_and_sweaty": ("shaky and sweaty", "menggigil dan berpeluh", "发抖出汗"),
+    "fever_on_medicine": ("fever", "demam", "发烧", "发热"),
+}
+"""The codes and the words a transcript or a fact might carry them in, in the three
+languages. `fever_on_medicine` is the discharge-watch entry: a fever is a red-flag word only
+beside a medicine name (`FEVER_NEEDS_A_MEDICINE`)."""
+
+FEELING_CODE: Mapping[Feeling, str] = {
+    Feeling.FALL: "fall",
+    Feeling.CHEST_TIGHTNESS: "chest_pain",
+    Feeling.BREATHLESS_AT_REST: "breathless",
+    Feeling.ONE_SIDED_SWELLING: "one_sided_swelling",
+    Feeling.WORST_HEADACHE: "worst_headache",
+    Feeling.SUDDEN_BLURRING: "sudden_blurring",
+    Feeling.CONFUSION: "confusion",
+    Feeling.SHAKY_SWEATY: "shaky_and_sweaty",
+    Feeling.WEIGHT_GAIN: "weight_gain",
+}
+"""Every red feeling as its code in `RED_FLAG_TERMS`, so a flag from the cloud or WhatsApp and
+one heard at a visit name the same thing the same way. `weight_gain` has no words to hear: it
+is a number rule (a kilo in two days after a discharge), raised from the cloud or a reading."""
+
+FEVER_NEEDS_A_MEDICINE = frozenset({"fever_on_medicine"})
+
+MEDICINE_WORDS = re.compile(
+    r"\b(?:tablet|tablets|pill|pills|medicine|medicines|ubat|pil|药|药片)\b", re.IGNORECASE
+)
+"""How a medicine is named beside a fever: a word for a medicine, or a drug name the
+caller passes in (`medicine_names`)."""
+
+
+@dataclass(frozen=True, slots=True)
+class RedFlagHit:
+    """One red-flag word found: the code, the word as it appeared, and where."""
+
+    code: str
+    word: str
+    start: int
+    end: int
+
+    def span(self) -> dict[str, int]:
+        return {"start": self.start, "end": self.end}
+
+
+def _term_pattern(word: str) -> re.Pattern[str]:
+    # Words in Latin script match whole words; Chinese has no word boundaries.
+    if re.search(r"[A-Za-z]", word):
+        return re.compile(r"(?<![\w-])" + re.escape(word) + r"(?![\w-])", re.IGNORECASE)
+    return re.compile(re.escape(word))
+
+
+_TERM_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = tuple(
+    (code, word, _term_pattern(word))
+    for code, words in RED_FLAG_TERMS.items()
+    for word in sorted(words, key=len, reverse=True)
+)
+
+
+def _strings_in(value: Any) -> Iterator[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for inner in value.values():
+            yield from _strings_in(inner)
+    elif isinstance(value, list | tuple):
+        for inner in value:
+            yield from _strings_in(inner)
+
+
+def find_red_flags(text: str, *, medicine_names: tuple[str, ...] = ()) -> list[RedFlagHit]:
+    """Every red-flag word in `text`, in the order found. A fever counts only beside a
+    medicine word or one of `medicine_names` on the same text."""
+    names_medicine = bool(MEDICINE_WORDS.search(text)) or any(
+        name and name.lower() in text.lower() for name in medicine_names
+    )
+    hits: list[RedFlagHit] = []
+    for code, word, pattern in _TERM_PATTERNS:
+        if code in FEVER_NEEDS_A_MEDICINE and not names_medicine:
+            continue
+        for match in pattern.finditer(text):
+            if any(h.start <= match.start() < h.end for h in hits):
+                continue
+            hits.append(RedFlagHit(code, match.group(), match.start(), match.end()))
+    return sorted(hits, key=lambda h: h.start)
+
+
+def red_flags_in(*values: Any, medicine_names: tuple[str, ...] = ()) -> list[RedFlagHit]:
+    """Red-flag words anywhere in these values — strings, or the strings inside JSON."""
+    found: list[RedFlagHit] = []
+    for value in values:
+        for text in _strings_in(value):
+            found.extend(find_red_flags(text, medicine_names=medicine_names))
+    return found
+
+
+class HeardSpan(Protocol):
+    """Where in a transcript something was heard, as the summariser gives it."""
+
+    def as_json(self) -> dict[str, int]: ...
+
+
+class HeardFact(Protocol):
+    """A fact the summariser heard: its code, its value, where."""
+
+    @property
+    def subject(self) -> str: ...
+    @property
+    def attribute(self) -> str: ...
+    @property
+    def value(self) -> Any: ...
+    @property
+    def span(self) -> HeardSpan: ...
+
+
+class HeardAction(Protocol):
+    """An action the summariser heard: its slots, where."""
+
+    @property
+    def slots(self) -> Mapping[str, Any]: ...
+    @property
+    def span(self) -> HeardSpan: ...
+
+
+class HeardDraft(Protocol):
+    """What the summariser heard (`app.reasoning.visits.summary.SummaryDraft`), as far as the
+    red-flag rule reads it."""
+
+    @property
+    def facts_heard(self) -> Sequence[HeardFact]: ...
+    @property
+    def actions(self) -> Sequence[HeardAction]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Heard:
+    """One red-flag word heard at a visit: the word, its span in the transcript, and where it
+    was found — the transcript itself, a fact the summariser heard, or an action's slots."""
+
+    word: str
+    span: dict[str, int]
+    found_in: str
+
+
+def red_flags_heard(
+    text: str, draft: HeardDraft, *, medicine_names: tuple[str, ...]
+) -> dict[str, Heard]:
+    """Every red-flag word, wherever it was heard: the raw transcript first (with the word's
+    own span in it), then every fact's subject, attribute and value, then every action's
+    slots. One entry per code, the transcript's span winning — so a word the summariser left
+    out is still found (E05 review, B2)."""
+    found: dict[str, Heard] = {}
+    for hit in find_red_flags(text, medicine_names=medicine_names):
+        found.setdefault(hit.code, Heard(hit.word, hit.span(), "transcript"))
+    for fact in draft.facts_heard:
+        # A subject or attribute is an underscore-joined code ("black_stool"); read as words.
+        for hit in red_flags_in(
+            fact.subject.replace("_", " "),
+            fact.attribute.replace("_", " "),
+            fact.value,
+            medicine_names=medicine_names,
+        ):
+            found.setdefault(hit.code, Heard(hit.word, fact.span.as_json(), "fact"))
+    for action in draft.actions:
+        for hit in red_flags_in(action.slots, medicine_names=medicine_names):
+            found.setdefault(hit.code, Heard(hit.word, action.span.as_json(), "action"))
+    return found
+
+
+# --- the rows --------------------------------------------------------------------------------
+
+
 class NotAFeeling(Refusal):
     """The feeling cloud has a fixed set of words. This was not one of them."""
 
 
-class Flag(ProfileScoped, Base):
-    """One red flag raised on one profile: his word, the event it was said in, who was told.
+class FlagKind(StrEnum):
+    """What a flag is. None of these is a diagnosis; each is a thing that bypasses planning
+    (a red flag) or becomes a question for the doctor (a change heard)."""
 
-    `suppressed_because` is set when the flag depends on a fact that is not on the record
+    RED_FLAG = "red_flag"
+    MEDICINE_CHANGE_HEARD = "medicine_change_heard"
+    """A change to a medicine the doctor said at a visit (E05-05). Never applied here: the
+    row is what E04's reconcile picks up, with the person's OK on a plan. Its `subject` is
+    the generic, `code` the kind of change, and `payload` carries `generic`, `change`,
+    `line_id` (the active line of that generic, when there is one), `span` in the transcript
+    and `ask_the_doctor: true` — and never an amount. Interactions are E04's own
+    `InteractionFlag` rows, not a kind here."""
+
+
+class Flag(ProfileScoped, Base):
+    """One flag on one profile: what it is, where it came from, who raised it, who was told.
+
+    `code` is the entry in `RED_FLAG_TERMS` (`FEELING_CODE` for one from the cloud or
+    WhatsApp) or, for a change heard, the kind of change. A flag from the cloud or WhatsApp
+    names the `feeling` and the SYMPTOM `event_id` it was said in; one heard at a visit names
+    the transcript `artifact_id` and the `appointment_id`, with the word, its span and where
+    it was found in `payload`. `payload` is structured — a generic name, a span — never a
+    sentence and never an amount.
+
+    `suppressed_because` is set when a flag depends on a fact that is not on the record
     (`SUGAR_CONDITIONS`, a discharge inside the window): the flag is written so the
     caregiver sees it was considered, and it does not reach the patient's feed as a flag.
-    Escalation is the `told` list and the share lines beside it: every key holder who holds
-    the emergency scope at that moment.
+    Escalation is the `told` list and the share lines beside it, and on WhatsApp the
+    `Escalation` ladder. A flag takes one change, `resolved_at`: set by a person when the
+    doctor has been asked.
     """
 
     __tablename__ = FLAG_TARGET
     __table_args__ = (
         _row_of_profile(FLAG_TARGET),
         _tied_to_profile(FLAG_TARGET, "event_id", "event"),
+        _tied_to_profile(FLAG_TARGET, "artifact_id", "artifact"),
+        _tied_to_profile(FLAG_TARGET, "appointment_id", "appointment"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    feeling: Mapped[Feeling] = mapped_column(enum_column(Feeling, "feeling"))
-    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("event.id"))
+    kind: Mapped[FlagKind] = mapped_column(
+        enum_column(FlagKind, "flag_kind"), default=FlagKind.RED_FLAG
+    )
+    code: Mapped[str] = mapped_column(String(64))
+    subject: Mapped[str] = mapped_column(String(64), default="symptom")
+    feeling: Mapped[Feeling | None] = mapped_column(enum_column(Feeling, "feeling"), default=None)
+    event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event.id"), default=None)
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("appointment.id"), default=None
+    )
+    fact_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     raised_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     raised_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     told: Mapped[list[str]] = mapped_column(JSON, default=list)
     suppressed_because: Mapped[str | None] = mapped_column(String(64), default=None)
+    resolved_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 class Escalation(ProfileScoped, Base):
@@ -265,7 +537,7 @@ class Escalation(ProfileScoped, Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
-frozen(Flag)
+frozen(Flag, except_for=frozenset({"resolved_at"}))
 frozen(Escalation)
 
 FLAG_WINDOW = timedelta(hours=24)
@@ -382,6 +654,16 @@ async def _live_keys(session: AsyncSession, *, context: KeyContext) -> Sequence[
     return keys
 
 
+async def _emergency_holders(session: AsyncSession, *, context: KeyContext) -> list[str]:
+    """Everyone holding a live key with the emergency scope right now: who a red flag tells."""
+    moment = utcnow()
+    return [
+        str(key.holder_person_id)
+        for key in await _live_keys(session, context=context)
+        if key.is_active(moment) and Scope.EMERGENCY in key.scopes_held
+    ]
+
+
 @audited(Action.WRITE, Scope.EMERGENCY, FLAG_TARGET)
 async def record_the_moment(
     session: AsyncSession,
@@ -441,17 +723,16 @@ async def raise_flag(
         raise NotAFeeling(f"{feeling} is not a red flag")
     suppressed = await _missing_fact(session, context=context, feeling=feeling)
     moment = utcnow()
-    told: list[str] = []
-    if suppressed is None:
-        for key in await _live_keys(session, context=context):
-            if key.is_active(moment) and Scope.EMERGENCY in key.scopes_held:
-                told.append(str(key.holder_person_id))
+    told = [] if suppressed is not None else await _emergency_holders(session, context=context)
     flag = await audited_write(
         session,
         Flag,
         context,
         Scope.EMERGENCY,
         channel=channel,
+        kind=FlagKind.RED_FLAG,
+        code=FEELING_CODE[feeling],
+        subject="symptom",
         feeling=feeling,
         event_id=event_id,
         raised_by_person_id=context.person_id,
@@ -472,17 +753,64 @@ async def raise_flag(
     return flag
 
 
+async def write_red_flag(
+    session: AsyncSession, *, context: KeyContext, tell_the_family: bool = False, **values: Any
+) -> Flag:
+    """A flag heard at a visit that outlives the request it was written in.
+
+    With `tell_the_family` (a red-flag word heard, not a change heard) the flag tells what a
+    tapped one tells: everyone holding a live key with the emergency scope is on `told`, with
+    a share line each, and the caregiver's feed shows it (`open_flags`); the patient's own
+    summary card leads with calling the doctor today.
+
+    The request is one savepoint (`app.db.unit_of_work`): a refusal later in the same
+    request — a line the verifier will not pass, a slot value that is not one — rolls the
+    savepoint back. A red flag must not go with it, so the write also registers a keeper
+    (`app.db.keep_on_refusal`), the mechanism the refused audit lines use: after the
+    rollback the channel replays it and the same row, with the same id, lands and is
+    written down again. On success the keeper is dropped, the row already there. Written
+    under the record's scope, where the transcript it was heard in is kept.
+    """
+    values.setdefault("raised_by_person_id", context.person_id)
+    if tell_the_family:
+        values["told"] = await _emergency_holders(session, context=context)
+    flag = await audited_write(session, Flag, context, Scope.RECORDS, **values)
+    for person in flag.told:
+        await record_share(
+            session,
+            context=context,
+            scope=Scope.EMERGENCY,
+            target=FLAG_TARGET,
+            channel=Channel.APP,
+            shared_with_person_id=uuid.UUID(person),
+            target_id=flag.id,
+        )
+    # Kept the way every flag is kept, the button's included (`write_flag_kept`).
+    _keep_flag(session, context, flag, scope=Scope.RECORDS)
+    return flag
+
+
 @audited(Action.READ, Scope.EMERGENCY, FLAG_TARGET)
 async def open_flags(session: AsyncSession, *, context: KeyContext) -> Sequence[Flag]:
-    """The flags raised inside the window, newest first, suppressed ones included: the
-    caller decides who sees which (`compose`)."""
+    """The red flags inside the window, newest first, suppressed ones included: raised on a
+    feeling — tapped on the cloud or heard on WhatsApp — or a word heard in a visit
+    transcript. The caller decides who sees which (`compose`): a word heard at a visit is the
+    caregiver's card only, since his own summary card already leads with calling the doctor
+    today and a word in a transcript can be one said in passing ("no chest pain"), while the
+    patient's flag card says to call the emergency number. A medicine change heard is a
+    question for the doctor, never a card here.
+    """
     moment = utcnow()
     found = await audited_read(
         session,
         Flag,
         context,
         Scope.EMERGENCY,
-        where=(Flag.raised_at > moment - FLAG_WINDOW,),
+        where=(
+            Flag.raised_at > moment - FLAG_WINDOW,
+            Flag.kind == FlagKind.RED_FLAG,
+            or_(Flag.feeling.is_not(None), Flag.artifact_id.is_not(None)),
+        ),
         order_by=(Flag.raised_at.desc(),),
     )
     return [flag for flag in found if as_utc(flag.raised_at) <= moment]
@@ -594,18 +922,36 @@ async def write_flag_kept(
     flag = await raise_flag(
         session, context=context, feeling=feeling, event_id=event.id, channel=channel
     )
-    event_values = _columns(event)
+    _keep_flag(session, context, flag, event=event, scope=FLAG_SCOPE, channel=channel)
+    return flag
+
+
+def _keep_flag(
+    session: AsyncSession,
+    context: KeyContext,
+    flag: Flag,
+    *,
+    scope: Scope,
+    event: Event | None = None,
+    channel: Channel = Channel.APP,
+) -> None:
+    """The one way a flag is kept, whichever door raised it: a keeper on the session
+    (`app.db.keep_on_refusal`) that, if the unit of work the flag was written in is rolled back
+    on a later refusal, writes the event it rests on (when there is one) and the flag again —
+    the same ids, the same moment — with their WRITE lines under `scope` and a share line for
+    each person on `told`. On success the keeper is dropped: the rows are already there."""
+    event_values = None if event is None else _columns(event)
     flag_values = _columns(flag)
 
     async def keep(again: AsyncSession) -> None:
-        if await again.get(Event, event_values["id"]) is None:
+        if event_values is not None and await again.get(Event, event_values["id"]) is None:
             again.add(Event(**event_values))
             await again.flush()
             await record(
                 again,
                 context=context,
                 action=Action.WRITE,
-                scope=FLAG_SCOPE,
+                scope=scope,
                 target=Event.__tablename__,
                 target_id=event_values["id"],
                 rows=1,
@@ -618,7 +964,7 @@ async def write_flag_kept(
                 again,
                 context=context,
                 action=Action.WRITE,
-                scope=FLAG_SCOPE,
+                scope=scope,
                 target=FLAG_TARGET,
                 target_id=flag_values["id"],
                 rows=1,
@@ -636,7 +982,6 @@ async def write_flag_kept(
                 )
 
     keep_on_refusal(session, keep)
-    return flag
 
 
 def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Scope) -> None:
@@ -664,23 +1009,32 @@ def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Sco
 
 
 __all__ = [
+    "FEELING_CODE",
     "FLAG_SCOPE",
     "FLAG_TARGET",
     "FLAG_WINDOW",
     "RED_FLAGS",
+    "RED_FLAG_TERMS",
     "RED_FLAG_WORDS",
     "Escalation",
     "Feeling",
     "Flag",
+    "FlagKind",
+    "Heard",
     "NotAFeeling",
+    "RedFlagHit",
     "SourceChannel",
     "detect",
     "escalate",
+    "find_red_flags",
     "is_red",
     "keep_row",
     "open_flags",
     "raise_flag",
     "record_the_moment",
+    "red_flags_heard",
+    "red_flags_in",
     "roster_for",
     "write_flag_kept",
+    "write_red_flag",
 ]

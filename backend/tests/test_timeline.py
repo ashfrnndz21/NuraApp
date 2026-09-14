@@ -34,6 +34,7 @@ from app.memory.timeline import NotACursor, episode_view, timeline
 from app.memory.working import NoSuchEpisode, close_episode
 from app.regions import Region
 from tests.medicines_support import let_in
+from tests.support import agree_to_recording
 from tests.timeline_support import (
     KIT_PHONE,
     again,
@@ -91,6 +92,7 @@ async def test_every_artefact_can_hang_off_a_visit_and_the_visit_shows_it(
     sg: AsyncSession,
 ) -> None:
     rec = await record(sg)
+    await agree_to_recording(sg, rec.owner)  # a visit's transcript is a consult (ADR 0003)
     hung = []
     for kind in ArtifactKind:
         paper = await artefact(sg, rec.owner, kind=kind)

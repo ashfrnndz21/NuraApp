@@ -7,7 +7,7 @@ card grammar (E11-03): one number, one direction, one colour, one action — nul
 rows written before the grammar was a column.
 
 Revision ID: 0019_delivery
-Revises: 0014_emergency_symptoms
+Revises: 0012_visits
 Create Date: 2026-09-15
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_delivery"
-down_revision = "0014_emergency_symptoms"
+down_revision = "0012_visits"
 branch_labels = None
 depends_on = None
 

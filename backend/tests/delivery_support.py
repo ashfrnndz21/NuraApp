@@ -42,9 +42,10 @@ from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.medicines.models import MedicationLine
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
-from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET
+from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.medicines_support import add, label
 from tests.paper import PAPER
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
@@ -69,6 +70,7 @@ def via_for(region: Region = Region.SG, root: Path | None = None) -> Via:
         code_sender=LoggingCodeSender(),
         object_store=LocalObjectStore(store_root, region),
         extractor=FixtureExtractor(PAPER),
+        summariser=FixtureSummariser(VISITS),
         transcriber=FixtureTranscriber(VOICE, region),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),

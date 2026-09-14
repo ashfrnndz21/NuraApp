@@ -57,7 +57,8 @@ def scope_of(draft: Draft) -> Scope:
     """The scope of the act: a fact's is from its subject, a visit's is the visits scope, a
     claim's is the face of the graph — whose it is — which is all a claimant holds, and a
     review card's is the record, where the card and the photo it came from are kept (the
-    facts it then writes each check their own subject's scope). Narrowing a key and marking
+    facts it then writes each check their own subject's scope). A question and a post-visit
+    summary hang off a visit, so theirs is the visits scope too. Narrowing a key and marking
     a part "only me" are the family list's (E12); a task's done is the doer's own footing on
     the graph, which every key holds; a message to the patient is a send. Hanging an
     artefact off an episode or a visit (E03) is an arrangement of the record, where the
@@ -74,6 +75,7 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, PushDraft):
         return Scope.SEND
+    # A visit's booking, its status, a question for it and its summary are all the visits'.
     return Scope.VISITS
 
 

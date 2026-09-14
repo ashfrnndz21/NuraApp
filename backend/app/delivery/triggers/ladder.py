@@ -548,13 +548,15 @@ async def dose_for_reply(
     *,
     context: KeyContext,
     registry: DrugRegistry,
+    at: datetime | None = None,
     channel: Channel = Channel.WHATSAPP,
 ) -> DoseAsked | None:
     """Which tablet a "Taken" or "given" reply is about: the one the ladder last asked this
-    person about today; else the one whose window is open now and has no Taken yet; else none
-    — and then nothing is written down."""
+    person about that day; else the one whose window is open at that moment and has no Taken
+    yet; else none — and then nothing is written down. `at` is when the reply was sent (the
+    message's own time, as the provider stamps it); now when not given."""
     zone = REGION_TZ[context.region]
-    moment = utcnow()
+    moment = as_utc(at) if at is not None else utcnow()
     local = moment.astimezone(zone)
     day = local.date().isoformat()
     ladders = await audited_read(

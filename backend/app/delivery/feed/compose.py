@@ -14,9 +14,10 @@ folds it and the next snapshot says why the cards changed shape.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -24,7 +25,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
-from app.db import as_utc, utcnow
+from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.grammar import Direction
 from app.delivery.feed.items import NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
@@ -42,6 +43,8 @@ from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
     CAREGIVER_DUTY_WHY,
+    CAREGIVER_HEARD_HEADLINE,
+    CAREGIVER_HEARD_LINE,
     CAREGIVER_NO_ROSTER_LINE,
     CAREGIVER_ON_DUTY_LINE,
     CAREGIVER_ROSTER_WHY,
@@ -55,6 +58,7 @@ from app.delivery.strings import (
     render,
     test_name,
 )
+from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Profile
 from app.keys.context import KeyContext
@@ -63,11 +67,21 @@ from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event
-from app.memory.models import Event, EventKind, Fact, Provider, SourceChannel
+from app.memory.models import Appointment, Event, EventKind, Fact, Provider, SourceChannel
 from app.memory.semantic import assert_fact, current_facts
 from app.notes.models import Note
 from app.notes.service import list_notes
+from app.reasoning.visits.brief import brief_for, latest_brief
+from app.reasoning.visits.guard import (
+    NotTheirsToChangeVisits,
+    can_change_visits,
+    may_change_visits,
+)
+from app.reasoning.visits.memos import consolidate_memos, current_memos
+from app.reasoning.visits.models import Brief, Memo, MemoSource, SummaryItem, VisitSummary
+from app.reasoning.visits.strings import spoken
 from app.regions import REGION_TZ
+from app.safety.boundary import Surface, boundary_line, is_boundary_line
 from app.safety.red_flags import Flag, open_flags
 from app.state.dimensions import BEFORE_VISIT_WINDOW
 from app.state.models import Dimension
@@ -246,10 +260,24 @@ async def refresh(
     async def make(**values: Any) -> FeedItem | None:
         if values["dedupe_key"] in keys:
             return None
-        try:
-            item = await create_item(session, context=context, state=state, format=format, **values)
-        except NotPlainWords:
-            return None
+        if values["type"] is CardType.FLAG:
+            # A flag card is made first, on its own: nothing made after it can take it back.
+            try:
+                item = await create_item(
+                    session, context=context, state=state, format=format, **values
+                )
+            except NotPlainWords:
+                return None
+        else:
+            # Every other card in its own savepoint: a refusal is written down, that card is
+            # skipped, and the flag cards made before it stand.
+            try:
+                async with nested_unit_of_work(session):
+                    item = await create_item(
+                        session, context=context, state=state, format=format, **values
+                    )
+            except Refusal:
+                return None
         keys.add(item.dedupe_key)
         made.append(item)
         return item
@@ -270,7 +298,10 @@ async def refresh(
     )
     await _reorder(make, day=day, house=house, medicines=medicines)
     await _readings(make, day=day, house=house, readings=readings)
-    await _visit(make, session, context=context, state=state, day=day, house=house)
+    await _visit(
+        make, session, context=context, engine=engine, state=state, day=day, house=house
+    )
+    await _memos(make, session, context=context, day=day, house=house)
     await make(
         type=CardType.GATE,
         lines=render("gate", house.language, body=("gate",)),
@@ -393,6 +424,33 @@ async def _flags(
         return
     number = EMERGENCY_NUMBER[context.region.value]
     for flag in await open_flags(session, context=context):
+        if flag.feeling is None:
+            # A word heard at a visit (E05): his summary card already leads with calling the
+            # doctor today; the family is told here, in the caregiver's fuller words.
+            word = str(flag.payload.get("word") or flag.code)
+            heard = CAREGIVER_HEARD_LINE.format(word=word, name=house.profile.display_name)
+            await make(
+                type=CardType.FLAG,
+                lines=Lines(
+                    language=house.language,
+                    headline=CAREGIVER_HEARD_HEADLINE.format(word=word),
+                    body=(heard,),
+                    voice=(),
+                    why=heard,
+                ),
+                why=Why(
+                    kind="flag",
+                    plain="",
+                    flag_id=str(flag.id),
+                    artifact_id=None if flag.artifact_id is None else str(flag.artifact_id),
+                ),
+                scope=Scope.EMERGENCY,
+                deliver_to=DeliverTo.CAREGIVER,
+                day=day.key,
+                dedupe_key=f"flag:{flag.id}",
+                expires_at=as_utc(flag.raised_at) + timedelta(hours=24),
+            )
+            continue
         feeling = feeling_words(flag.feeling.value, house.language)
         if flag.suppressed_because is not None:
             await make(
@@ -636,36 +694,227 @@ async def _readings(make: Any, *, day: Day, house: Household, readings: Sequence
         )
 
 
+BRIEF_ON_THE_CARD = ("purpose", "bring")
+"""What the visit card carries of the pre-visit brief (E05-01): who and when and what the visit
+is about, and what to bring. The questions are their own card (E05-02); what changed is the
+brief's own."""
+
+MEMO_CARD_DAYS = timedelta(days=14)
+"""How long the memos from a visit with nothing booked after it stay on his feed. With a
+follow-up booked they stay until it: they are filed against it (E05-06)."""
+
+
+def _ending_on(lines: Lines, carried: Sequence[str], boundary: str) -> Lines:
+    """A card that repeats words from an inferring surface: those words, then that surface's
+    boundary line, in print and in voice (the chemical name in brackets is not read aloud),
+    and the line kept whole on the row (E16-01)."""
+    closing = tuple(boundary.splitlines())
+    return replace(
+        lines,
+        body=(*carried, *closing),
+        voice=(*(spoken(line) for line in carried), *closing),
+        boundary=boundary,
+    )
+
+
+async def _brief(
+    session: AsyncSession, *, context: KeyContext, engine: Engine, appointment_id: uuid.UUID
+) -> Brief | None:
+    """The pre-visit brief for the visit card.
+
+    Inside the week before a visit the feed is what asks for it — the T-minus trigger the
+    brief waits for (E05-01) — so a key that may change the visits has it built, or gets the
+    one State has not moved past; a key that only reads them gets the newest there is. A
+    brief that cannot be built is refused inside its own savepoint, so nothing of it is kept
+    but the refusal on the trail, and the card falls back to its template.
+    """
+    if not context.allows(Scope.VISITS):
+        return None
+    try:
+        may_change_visits(context)
+    except NotTheirsToChangeVisits:
+        return await latest_brief(session, context=context, appointment_id=appointment_id)
+    try:
+        async with nested_unit_of_work(session):
+            built = await brief_for(
+                session, context=context, appointment_id=appointment_id, registry=engine.registry
+            )
+    except Refusal:
+        return await latest_brief(session, context=context, appointment_id=appointment_id)
+    return built
+
+
 async def _visit(
     make: Any,
     session: AsyncSession,
     *,
     context: KeyContext,
+    engine: Engine,
     state: StateView,
     day: Day,
     house: Household,
 ) -> None:
+    """A visit inside the week. Its words are the pre-visit brief's (E05-01) — who and when,
+    what it is about, what to bring — ending on the brief's boundary line; with no brief (a
+    key that does not reach the visits, or one that could not be built) it is the template,
+    which shows the booking back and infers nothing."""
     visit, doctor = await _next_visit(session, context=context, state=state)
     if visit is None:
         return
     at = datetime.fromisoformat(visit["at"])
     if day.same_day(at) or at > day.now + BEFORE_VISIT_WINDOW:
         return
-    lines = render(
-        "visit",
-        house.language,
-        body=("visit",),
-        doctor=doctor or YOUR_DOCTOR[house.language],
-        day=day.plain(at, house.language),
+    who = doctor or YOUR_DOCTOR[house.language]
+    when = day.plain(at, house.language)
+    lines = render("visit", house.language, body=("visit",), doctor=who, day=when)
+    why = Why(kind="visit", plain=lines.why, visit_id=visit["id"])
+    surface: Surface | None = None
+    brief = await _brief(
+        session, context=context, engine=engine, appointment_id=uuid.UUID(visit["id"])
     )
+    # A stored brief is used only if it carries the brief's own boundary line: one written
+    # before the line existed, or with other words, leaves the card to its template.
+    if (
+        brief is not None
+        and brief.language == house.language
+        and is_boundary_line(Surface.BRIEF, brief.boundary)
+        and brief.boundary is not None
+    ):
+        carried = [str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD]
+        if carried:
+            surface = Surface.BRIEF
+            lines = _ending_on(
+                render("visit", house.language, doctor=who, day=when), carried, brief.boundary
+            )
+            why = Why(
+                kind="visit",
+                plain=lines.why,
+                visit_id=visit["id"],
+                brief_id=str(brief.id),
+                fact_ids=tuple(brief.sources.get("gap_fact_ids", ())),
+            )
     await make(
         type=CardType.VISIT,
         lines=lines,
-        why=Why(kind="visit", plain=lines.why, visit_id=visit["id"]),
+        surface=surface,
+        why=why,
         scope=Scope.VISITS,
         deliver_to=DeliverTo.PATIENT,
         day=day.key,
         dedupe_key=f"visit:{visit['id']}:{day.key}",
+        expires_at=day.ends_at,
+    )
+
+
+async def _memos(
+    make: Any, session: AsyncSession, *, context: KeyContext, day: Day, house: Household
+) -> None:
+    """What was agreed at the last visit, in his words (E05-06).
+
+    The memos heard at the most recent visit that has any — the current ones, after
+    consolidation, so two that say the same thing are one — on one card, until the
+    appointment they are filed against has passed (two weeks, when nothing was booked after
+    it). The card ends on the summary's boundary line: these are the doctor's words as Nura
+    wrote them down (E16-01).
+    """
+    if not context.allows(Scope.VISITS):
+        return
+    memos = [
+        memo
+        for memo in (
+            await consolidate_memos(session, context=context)
+            if can_change_visits(context)
+            else await current_memos(session, context=context)
+        )
+        if memo.source is MemoSource.VISIT
+        and memo.source_id is not None
+        and memo.language == house.language
+    ]
+    if not memos:
+        return
+    items = await audited_read(
+        session,
+        SummaryItem,
+        context,
+        Scope.VISITS,
+        where=(SummaryItem.id.in_([memo.source_id for memo in memos]),),
+    )
+    summaries = await audited_read(
+        session,
+        VisitSummary,
+        context,
+        Scope.VISITS,
+        where=(VisitSummary.id.in_(sorted({item.summary_id for item in items})),),
+    )
+    visit_of = {summary.id: summary.appointment_id for summary in summaries}
+    heard_at = {item.id: visit_of.get(item.summary_id) for item in items}
+    wanted = {one for one in heard_at.values() if one is not None} | {
+        memo.appointment_id for memo in memos if memo.appointment_id is not None
+    }
+    booked = {
+        appointment.id: appointment
+        for appointment in await audited_read(
+            session,
+            Appointment,
+            context,
+            Scope.VISITS,
+            where=(Appointment.id.in_(sorted(wanted)),),
+        )
+    }
+    by_visit: dict[uuid.UUID, list[Memo]] = {}
+    for memo in memos:
+        visit_id = heard_at.get(memo.source_id) if memo.source_id is not None else None
+        if visit_id is not None and visit_id in booked:
+            by_visit.setdefault(visit_id, []).append(memo)
+    if not by_visit:
+        return
+    visit = max((booked[one] for one in by_visit), key=lambda one: as_utc(one.scheduled_at))
+    kept = by_visit[visit.id]
+    until = max(
+        [
+            as_utc(visit.scheduled_at) + MEMO_CARD_DAYS,
+            *(
+                as_utc(booked[memo.appointment_id].scheduled_at)
+                for memo in kept
+                if memo.appointment_id is not None and memo.appointment_id in booked
+            ),
+        ]
+    )
+    if day.now > until:
+        return
+    providers = await audited_read(
+        session, Provider, context, Scope.VISITS, where=(Provider.id == visit.provider_id,)
+    )
+    doctor = providers[0].name if providers else None
+    lines = render(
+        "memo",
+        house.language,
+        body=("memo",),
+        doctor=doctor or YOUR_DOCTOR[house.language],
+        day=day.plain(visit.scheduled_at, house.language),
+    )
+    lines = _ending_on(
+        lines,
+        [*lines.body, *(memo.text for memo in kept)],
+        boundary_line(Surface.SUMMARY, house.language, doctor=doctor),
+    )
+    ids = tuple(str(memo.id) for memo in kept)
+    digest = hashlib.sha256(" ".join(sorted(ids)).encode()).hexdigest()[:12]
+    await make(
+        type=CardType.MEMO,
+        lines=lines,
+        surface=Surface.SUMMARY,
+        why=Why(
+            kind="memo",
+            plain=lines.why,
+            visit_id=str(visit.id),
+            memo_id=ids[0],
+            memo_ids=ids,
+        ),
+        scope=Scope.VISITS,
+        deliver_to=DeliverTo.PATIENT,
+        day=day.key,
+        dedupe_key=f"memo:{visit.id}:{digest}:{day.key}",
         expires_at=day.ends_at,
     )
 

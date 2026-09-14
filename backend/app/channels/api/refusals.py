@@ -63,6 +63,11 @@ from app.memory.providers import NotAPlaceNote, NoteNamesHealth
 from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
 from app.memory.timeline import NotACursor
 from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
+from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
+from app.reasoning.visits.guard import NotTheirsToChangeVisits
+from app.reasoning.visits.questions import NoSuchQuestion
+from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
+from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.search.ask import NotAQuestion
@@ -76,6 +81,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
     (NoSuchHolder, 403),
+    # A key that reads the visits does not write them; same footing as the medicines.
+    (NotTheirsToChangeVisits, 403),
     # A webhook body not signed by the provider, or a verify token that is not ours.
     (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
@@ -110,6 +117,13 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
+    (NoSuchAppointment, 404),
+    (NoSuchVisit, 404),
+    (NoSuchProvider, 404),
+    (NoSuchQuestion, 404),
+    (NoSuchSummary, 404),
+    # A fact heard at a visit that names a drug is never written; the answer names the rule.
+    (DrugNamedInAFact, 400),
     (NoSuchItem, 404),
     (NoOneToActFor, 404),
     (NothingToSay, 404),
@@ -125,14 +139,13 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchLine, 404),
     # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
     # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
-    (NoSuchAppointment, 404),
     (NoSuchEpisode, 404),
-    (NoSuchProvider, 404),
     (AlreadyHangsThere, 409),
     (EpisodeAlreadyOpen, 409),
     (EpisodeAlreadyClosed, 409),
     (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
+    (TranscriptTooLarge, 413),
     (VoiceNoteTooLong, 413),
     # The record moved past the State a card was composed from: read it again, compose again.
     (StaleState, 409),
@@ -149,6 +162,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
+    (SummaryAlreadyConfirmed, 409),
     # The same label twice, or one that adds nothing, changes nothing.
     (AlreadyRecorded, 409),
     (AlreadyRegistered, 409),

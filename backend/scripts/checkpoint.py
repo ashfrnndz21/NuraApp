@@ -14,11 +14,14 @@ fresh phone numbers, so it can be run again on the same dev.db; `make reset-db` 
 from __future__ import annotations
 
 import base64
+import json
 import os
 import random
 import re
+import subprocess
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,8 @@ CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
 """Today's words for `hold_health_record`, from `app/consent/texts.py`. Move this when they move."""
 STALE_WORDING = "0"
+RECORDING_WORDING = "1"
+"""Today's words for the agreement to Nura listening at the visit (E16-02)."""
 """A version that was never on file: opening a profile on it must refuse."""
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -44,6 +49,12 @@ LIPID_PANEL = "lipid-panel-2023-09-07"
 WARFARIN_LABEL = "warfarin-label-2024-03-12"
 CONFIDENCE_THRESHOLD = 0.8
 """Below this a field is shown dotted; `app/ingestion/models.py`. Move this when it moves."""
+
+VISIT_FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "visits"
+"""The visit transcripts the fixture summariser knows (E05). The script reads the transcript
+text from the JSON beside it, the way the owner would paste it, and uploads that."""
+ROUTINE_VISIT = "routine-bp-review"
+RED_FLAG_VISIT = "red-flag-chest-pain"
 
 
 def placeholder_png(label: str) -> bytes:
@@ -1798,6 +1809,523 @@ def checkpoint_6(client: httpx.Client) -> None:
         )
 
 
+# --- checkpoint 7: the visit loop -----------------------------------------------------------
+
+
+def transcript_of(label: str) -> str:
+    found = json.loads((VISIT_FIXTURES / f"{label}.json").read_text())
+    text: str = found["transcript"]
+    return text
+
+
+def verifier_clean(lines: list[str], language: str, what: str) -> None:
+    """Every line through the plain-words verifier, as the owner would check by hand:
+    `python3 -m app.safety.plain_words --text … --lang …`, run as a command, not imported."""
+    for line in lines:
+        ran = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "app.safety.plain_words",
+                "--text",
+                line,
+                "--lang",
+                language,
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parent.parent,
+            check=False,
+        )
+        try:
+            report = json.loads(ran.stdout)
+        except json.JSONDecodeError:
+            raise Failed(
+                f"✗ {what}: the verifier did not answer for {line!r}: {ran.stderr}"
+            ) from None
+        if report["failures"]:
+            raise Failed(f"✗ {what}: the verifier fails {line!r}: {report['failures']}")
+
+
+def mint(client: httpx.Client, person: Person, profile_id: str, body: JSON, what: str) -> str:
+    minted = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations", headers=bearer(person.token), json=body
+        ),
+        201,
+        f"{what}: {person.name} says OK",
+    )
+    confirmation_id: str = minted["confirmation_id"]
+    return confirmation_id
+
+
+def checkpoint_7(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+    language = "ms"
+
+    # 1. Pa opens his profile in Malay, with a blood pressure reading and a medicine line.
+    profile_id = open_own_profile(client, pa, language)
+    agreed = check(
+        client.post(
+            f"/profiles/{profile_id}/consents/recording",
+            headers=bearer(pa.token),
+            json={"wording_version": RECORDING_WORDING, "language": language, "captured_via": "app"},
+        ),
+        201,
+        "Pa agrees to Nura listening at the visit",
+    )
+    if agreed["purpose"] != "recording":
+        raise fail("Pa agrees to Nura listening at the visit", why=f"got {agreed}")
+    ok(
+        "Pa agreed to Nura listening at the visit and keeping what is said "
+        "(POST /profiles/{id}/consents/recording, the words in Malay): no transcript is kept on a "
+        "profile without this; without it POST …/transcript is refused, ConsentWithheld (403)"
+    )
+    taken = (datetime.now(UTC) - timedelta(days=20)).replace(microsecond=0)
+    check(
+        client.post(
+            f"/profiles/{profile_id}/readings",
+            headers=bearer(pa.token),
+            json={
+                "systolic": 138,
+                "diastolic": 84,
+                "taken_at": taken.isoformat().replace("+00:00", "Z"),
+            },
+        ),
+        201,
+        "Pa adds a blood pressure reading",
+    )
+    for generic, strength, dose_text, what in (
+        ("amlodipine", "5 mg", "1 biji sekali sehari pagi", "Pa adds amlodipine"),
+        ("warfarin", "3 mg", "1 tab ON", "Pa adds warfarin"),
+        ("aspirin", "100 mg", "1 tab OM", "Pa adds aspirin"),
+    ):
+        photo = label_photo(client, pa, profile_id, f"{what}: the label photo")
+        added = check(
+            add_medicine(
+                client,
+                pa,
+                profile_id,
+                medicine_label(generic, strength, dose_text, 30),
+                photo,
+                what,
+            ),
+            201,
+            what,
+        )
+        if added["generic"] != generic or added["outcome"] != "new_line":
+            raise fail(what, why=f"got {added}")
+    lines_before = medicines_of(client, pa, profile_id, "Pa reads his medicines")
+    flagged = {g for g, row in lines_before.items() if row.get("flags")}
+    # E04 writes the flag on the line that arrived, naming the one already there.
+    if set(lines_before) != {"amlodipine", "warfarin", "aspirin"} or flagged != {"aspirin"}:
+        raise fail("Pa reads his medicines", why=f"lines {sorted(lines_before)}, flagged {flagged}")
+    ok(
+        "Pa opened his profile in Malay, added a blood pressure reading (138/84, taken twenty days "
+        "ago) and three medicines through E04 (POST /profiles/{id}/medicines, each from a label photo "
+        "with his yes): amlodipine, warfarin and aspirin — the licensed data flagged aspirin against "
+        "the warfarin already there, and every monograph says what its medicine is for"
+    )
+
+    # 2. He books a visit with Dr Tan, three days from now at 10 in the morning.
+    doctor = check(
+        client.post(
+            f"/profiles/{profile_id}/providers",
+            headers=bearer(pa.token),
+            json={"name": "Dr Tan", "kind": "doctor"},
+        ),
+        201,
+        "Pa adds Dr Tan to his directory",
+    )
+    when = (datetime.now(UTC) + timedelta(days=3)).replace(
+        hour=2, minute=0, second=0, microsecond=0
+    )
+    booking = {
+        "provider_id": doctor["provider_id"],
+        "scheduled_at": when.isoformat().replace("+00:00", "Z"),
+        "purpose": "tekanan darah",
+    }
+    yes = mint(client, pa, profile_id, {"subject": "appointment", **booking}, "the booking")
+    visit = check(
+        client.post(
+            f"/profiles/{profile_id}/appointments",
+            headers=bearer(pa.token),
+            json={**booking, "confirmation_id": yes},
+        ),
+        201,
+        "Pa writes down the visit",
+    )
+    if visit["status"] != "planned" or visit["confirmed_by_person_id"] != pa.person_id:
+        raise fail("Pa writes down the visit", why=f"got {visit}")
+    appointment_id = visit["appointment_id"]
+    ok(
+        f"Pa booked a visit with Dr Tan (POST /profiles/{{id}}/appointments) for {when.date()} at 10 in "
+        "the morning, on a yes minted for exactly that booking (subject appointment): status planned"
+    )
+
+    # 3. The pre-visit brief, in Malay; every line through the verifier.
+    brief = check(
+        client.get(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=bearer(pa.token)
+        ),
+        200,
+        "Pa reads the pre-visit brief",
+    )
+    lines = [line["text"] for line in brief["lines"]]
+    sections = {line["section"] for line in brief["lines"]}
+    if brief["language"] != language or not brief["state_id"]:
+        raise fail("Pa reads the pre-visit brief", why=f"got {brief}")
+    if not {"purpose", "changed", "questions", "bring"} <= sections:
+        raise fail("Pa reads the pre-visit brief", why=f"sections {sections}")
+    verifier_clean(lines, language, "Pa reads the pre-visit brief")
+    ok(
+        f"the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot "
+        f"{brief['state_id'][:8]}…: purpose, what changed, the open questions, what to bring — "
+        f"{len(lines)} lines, every one passed the plain-words verifier (checked here again, one by "
+        "one, with `python3 -m app.safety.plain_words --text … --lang ms`):"
+    )
+    for line in brief["lines"]:
+        print(f"    [{line['section']:<9}] {line['text']}")
+
+    # 3b. His feed carries the visit, in the brief's own words, ending on its boundary line.
+    page = _page(client, pa, profile_id, "Pa opens his feed")
+    visit_cards = [item for item in page["items"] if item["type"] == "visit"]
+    carried = [line["text"] for line in brief["lines"] if line["section"] in ("purpose", "bring")]
+    if (
+        not visit_cards
+        or visit_cards[0]["body"] != [*carried, *brief["boundary"].splitlines()]
+        or visit_cards[0]["why"].get("brief_id") != brief["brief_id"]
+    ):
+        raise fail("Pa opens his feed", why=f"expected the visit card from the brief: {visit_cards}")
+    ok(
+        "his feed carries the visit (GET /profiles/{id}/feed): the visit card is the brief's own "
+        "words — who and when, what it is about, what to bring — ending on the brief's boundary "
+        "line, and why names the brief:"
+    )
+    for line in visit_cards[0]["body"]:
+        print(f"    {line}")
+
+    # 4. Pa adds a question of his own, with a yes for exactly those words; then the card:
+    # three lines for him, and the line that says he need not remember.
+    own = "Adakah pil air ini buruk untuk buah pinggang saya?"
+    yes = mint(
+        client,
+        pa,
+        profile_id,
+        {"subject": "question", "appointment_id": appointment_id, "text": own},
+        "his own question",
+    )
+    added = check(
+        client.post(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/questions",
+            headers=bearer(pa.token),
+            json={"text": own, "confirmation_id": yes},
+        ),
+        201,
+        "Pa adds his own question",
+    )
+    if added["source"] != "person" or added["added_by_person_id"] != pa.person_id:
+        raise fail("Pa adds his own question", why=f"got {added}")
+    asked = check(
+        client.get(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/questions",
+            headers=bearer(pa.token),
+        ),
+        200,
+        "Pa reads the questions",
+    )
+    card = asked["card"]
+    sources = {q["source"] for q in asked["questions"]}
+    if len(card) != 4 + 3 or len(asked["questions"]) < 3 or sources != {"gap", "person"}:
+        raise fail("Pa reads the questions", why=f"got {asked}")
+    verifier_clean(card, language, "Pa reads the questions")
+    ok(
+        f"the questions (GET …/questions): {len(asked['questions'])} for the caregiver, each naming its "
+        "source — Pa's own (with his yes, subject question), the interaction the licensed data "
+        "flagged between two of his lines, a reading with nothing recent (the gaps, with the facts "
+        "and lines each rests on); one card for Pa, one "
+        "screen — the first three by priority and one reassurance — every line verifier-clean:"
+    )
+    for line in card:
+        print(f"    {line}")
+    for question in asked["questions"]:
+        print(
+            f"      from {question['source']} {question['source_kind'] or ''}: "
+            f"{len(question['source_ids'])} id(s) — {question['text']}"
+        )
+
+    # 5. A fragment typed as a question is refused by the verifier, over HTTP, live. In Malay
+    # the verifier checks the shape of a sentence — a capital, a full stop — so the fragment
+    # is one with neither; the English rule about a sentence with nobody doing anything in
+    # it ("Only the part for you.") is proven in backend/tests/test_visits.py.
+    fragment = "hanya bahagian untuk anda"
+    yes = mint(
+        client,
+        pa,
+        profile_id,
+        {"subject": "question", "appointment_id": appointment_id, "text": fragment},
+        "the fragment",
+    )
+    refused(
+        client.post(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/questions",
+            headers=bearer(pa.token),
+            json={"text": fragment, "confirmation_id": yes},
+        ),
+        400,
+        "NotPlainEnough",
+        "Pa adds a fragment as a question",
+    )
+    ok(
+        f'a fragment offered as a question ("{fragment}": no capital, no full stop, docs/plain-words.md '
+        "rule 1) is refused by the verifier: NotPlainEnough (400), nothing written, the refusal on the "
+        'trail. The English fragment ("Only the part for you.") and a memo from a deliberately bad '
+        "template are refused the same way in backend/tests/test_visits.py "
+        "(test_a_fragment_typed_by_a_person_is_refused_by_the_verifier, "
+        "test_a_memo_from_a_template_that_is_not_plain_is_refused)"
+    )
+
+    # 6. The routine transcript in: the summary card, the dose change as a question.
+    summary = check(
+        client.post(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+            headers=bearer(pa.token),
+            json={
+                "data": base64.b64encode(transcript_of(ROUTINE_VISIT).encode()).decode(),
+                "captured_at": booking["scheduled_at"],
+            },
+        ),
+        201,
+        "Pa uploads the routine transcript",
+    )
+    kinds = {item["kind"] for item in summary["items"]}
+    if summary["red_flag"] or kinds != {
+        "action",
+        "medication_change",
+        "follow_up",
+        "follow_up_who",
+        "fact_heard",
+    }:
+        raise fail("Pa uploads the routine transcript", why=f"got {summary}")
+    if "Anda akan tempahkannya." not in summary["lines"]:
+        raise fail("Pa uploads the routine transcript", why="nobody named to book the follow-up")
+    if "Tanya Dr Tan tentang jumlah baru pil air." not in summary["lines"]:
+        raise fail(
+            "Pa uploads the routine transcript",
+            why=f"no question for the change: {summary['lines']}",
+        )
+    if any(
+        word in " ".join(summary["lines"]).lower() for word in ("penuh", "full", "half", "separuh")
+    ):
+        raise fail("Pa uploads the routine transcript", why="the card carries an amount")
+    verifier_clean(summary["lines"], language, "Pa uploads the routine transcript")
+    ok(
+        f"Pa uploaded the routine transcript (POST …/transcript): stored as artefact "
+        f"{summary['artifact_id'][:8]}… in the SG object store, read by the fixture summariser, and "
+        f"answered with the summary card — {len(summary['items'])} items, each with its span in the "
+        "transcript and its confidence; the dose change is a question for the doctor, never an "
+        'amount ("Tanya Dr Tan tentang jumlah baru pil air." — in English, "Ask Dr Tan about the new '
+        'amount of the water pill."); nothing is a memo, a booking or a fact yet:'
+    )
+    for line in summary["lines"]:
+        print(f"    {line}")
+
+    # 7. He confirms: memos, a planned follow-up, facts with the transcript as provenance.
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    yes = mint(
+        client,
+        pa,
+        profile_id,
+        {"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+        "the summary",
+    )
+    confirmed = check(
+        client.post(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/summary/{summary['summary_id']}/confirm",
+            headers=bearer(pa.token),
+            json={"decisions": decisions, "confirmation_id": yes},
+        ),
+        200,
+        "Pa confirms the summary",
+    )
+    planned = confirmed["appointments"]
+    heard = confirmed["facts"]
+    if (
+        len(planned) != 1
+        or planned[0]["status"] != "planned"
+        or not heard
+        or any(f["artifact_id"] != summary["artifact_id"] for f in heard)
+        or not confirmed["memos"]
+        or len(confirmed["flag_ids"]) != 1
+    ):
+        raise fail("Pa confirms the summary", why=f"got {confirmed}")
+    lines_after = medicines_of(client, pa, profile_id, "Pa reads his medicines after the summary")
+    if {g: row["line_id"] for g, row in lines_after.items()} != {
+        g: row["line_id"] for g, row in lines_before.items()
+    }:
+        raise fail(
+            "Pa reads his medicines after the summary", why="a line changed from a transcript"
+        )
+    upcoming = check(
+        client.get(f"/profiles/{profile_id}/appointments", headers=bearer(pa.token)),
+        200,
+        "Pa reads his visits",
+    )
+    if planned[0]["appointment_id"] not in {a["appointment_id"] for a in upcoming}:
+        raise fail("Pa reads his visits", why=f"the follow-up is not among {upcoming}")
+    ok(
+        f"one OK saved the card: {len(confirmed['memos'])} memos filed against the next visit; the "
+        f"follow-up appears as a planned visit with Dr Tan on {planned[0]['scheduled_at'][:10]} "
+        "(GET …/appointments), needing its own confirm to be confirmed; the fact heard "
+        f"({heard[0]['subject']}.{heard[0]['attribute']}) carries the transcript artefact "
+        f"{heard[0]['artifact_id'][:8]}… as provenance, confirmed by Pa; the dose change became a flag "
+        "for E04's reconcile (the generic, the kind of change, the line it is about, no amount; ask "
+        "the doctor) and no line changed — his three medicines are as they were"
+    )
+
+    # 8. The memo card.
+    memos = check(
+        client.get(f"/profiles/{profile_id}/memos", headers=bearer(pa.token)),
+        200,
+        "Pa reads his memo card",
+    )
+    if not memos["card"] or set(memos["card"][:-3]) != {m["text"] for m in confirmed["memos"]}:
+        raise fail("Pa reads his memo card", why=f"got {memos}")
+    verifier_clean(memos["card"], language, "Pa reads his memo card")
+    ok(
+        "the memo card (GET /profiles/{id}/memos): the current memos, one line each, in his words, verified:"
+    )
+    for line in memos["card"]:
+        print(f"    {line}")
+    page = _page(client, pa, profile_id, "Pa opens his feed after the visit")
+    memo_cards = [item for item in page["items"] if item["type"] == "memo"]
+    if not memo_cards or memo_cards[0]["body"][1:] != memos["card"]:
+        raise fail("Pa opens his feed after the visit", why=f"expected the memo card: {memo_cards}")
+    ok(
+        "and the same memos are one card on his feed: what Dr Tan said at the visit, consolidated, "
+        "in his words, ending on the summary's boundary line, until the follow-up they are filed "
+        f"against has passed (why: {len(memo_cards[0]['why']['memo_ids'])} memo ids, the visit):"
+    )
+    for line in memo_cards[0]["body"]:
+        print(f"    {line}")
+
+    # 9. The red-flag transcript: the card carries the flag and the same-day line first.
+    red = check(
+        client.post(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+            headers=bearer(pa.token),
+            json={
+                "data": base64.b64encode(transcript_of(RED_FLAG_VISIT).encode()).decode(),
+                "captured_at": booking["scheduled_at"],
+            },
+        ),
+        201,
+        "Pa uploads the red-flag transcript",
+    )
+    if not red["red_flag"] or red["lines"][:2] != [
+        "Telefon Dr Tan hari ini.",
+        "Beritahu Dr Tan tentang sakit dada hari ini.",
+    ]:
+        raise fail("Pa uploads the red-flag transcript", why=f"got {red}")
+    verifier_clean(red["lines"], language, "Pa uploads the red-flag transcript")
+    trail = check(
+        client.get(
+            f"/profiles/{profile_id}/audit",
+            headers=bearer(pa.token),
+            params={"scope": "records", "limit": 500},
+        ),
+        200,
+        "Pa reads his trail for the flag",
+    )
+    if ("write", "red_flag") not in {
+        (e["action"], e["target"]) for e in trail if e["outcome"] == "allowed"
+    }:
+        raise fail("Pa reads his trail for the flag", why="no flag written")
+    ok(
+        'the red-flag transcript ("chest pain", app/safety/red_flags.py): a Flag row was written before '
+        "the card was composed (on the trail as a write of red_flag), the card carries red_flag=true and its "
+        f'first line is "{red["lines"][0]}" (the English template: "Call Dr Tan today."), the next says '
+        f'what happened, "{red["lines"][1]}" — a person, a day and what was heard, never a diagnosis; the '
+        "word is found in the raw transcript itself, not only in what the summariser chose to report:"
+    )
+    for line in red["lines"]:
+        print(f"    {line}")
+
+    # 10. Mei with a key to the readings only cannot read the brief or the memos.
+    register(client, mei, "en")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": ["readings", "records"],
+                "relationship": "daughter",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei see his readings and his record",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "role": "caregiver",
+                "scopes": ["readings", "records"],
+            },
+        ),
+        201,
+        "Pa cuts Mei a key to the readings and the record",
+    )
+    body = refused(
+        client.get(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=bearer(mei.token)
+        ),
+        403,
+        "OutOfScope",
+        "Mei reads the brief without the visits",
+    )
+    if body.get("scope") != "visits":
+        raise fail(
+            "Mei reads the brief without the visits", why=f"expected scope visits, got {body}"
+        )
+    refused(
+        client.get(f"/profiles/{profile_id}/memos", headers=bearer(mei.token)),
+        403,
+        "OutOfScope",
+        "Mei reads the memos without the visits",
+    )
+    trail = check(
+        client.get(
+            f"/profiles/{profile_id}/audit", headers=bearer(pa.token), params={"limit": 500}
+        ),
+        200,
+        "Pa reads his audit trail",
+    )
+    refusals = [e for e in trail if e["outcome"] == "refused"]
+    names = {e["refused_because"] for e in refusals}
+    if not {"NotPlainEnough", "OutOfScope"} <= names:
+        raise fail("Pa reads his audit trail", why=f"refusals on it: {names}")
+    ok(
+        "Pa cut Mei a caregiver key to the readings and the record; the brief and the memos refuse her: "
+        "OutOfScope visits (403) — briefs, questions, summaries and memos are the visits'"
+    )
+    ok(f"Pa reads his audit trail ({len(trail)} lines); the refusals are on it:")
+    for row in refusals:
+        who = {mei.person_id: "Mei", pa.person_id: "Pa"}.get(row["actor_person_id"], "?")
+        print(
+            f"    {row['at'][:19]}  {who:>3}  {row['action']} {row['scope']} {row['target']}  "
+            f"refused {row['refused_because']}"
+        )
+
+
+
 # --- checkpoint 8: the feed (backend) ---------------------------------------------------------
 
 
@@ -2594,12 +3122,14 @@ CHECKPOINTS = {
     4: checkpoint_4,
     5: checkpoint_5,
     6: checkpoint_6,
+    7: checkpoint_7,
     8: checkpoint_8,
     9: checkpoint_9,
     13: lambda client: checkpoints.cp13.run(BASE_URL, DEV_LOG) and sys.exit(1),
     14: lambda client: checkpoints.cp14.run(BASE_URL, DEV_LOG) and sys.exit(1),
     16: lambda client: checkpoints.cp16.run(BASE_URL, DEV_LOG) and sys.exit(1),
     18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    20: lambda client: checkpoints.cp20.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }
 
 

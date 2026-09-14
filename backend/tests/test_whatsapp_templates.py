@@ -52,6 +52,10 @@ MESSAGES = {
 AT_THE_START = {"reorder_family"}
 """Templates whose `{medicine}` starts a line: the engine fills it with a capital (`engine`)."""
 
+DAYS = {"en": "Monday 14 September", "ms": "Isnin 14 September", "zh": "9月14日星期一"}
+"""The day slot as `app.delivery.feed.compose.plain_day` renders it in each language: rule 5
+reads a Malay line for a Malay weekday (docs/plain-words.md)."""
+
 FILL = {
     "name": "Pa",
     "day": "Monday 14 September",
@@ -84,7 +88,12 @@ def test_there_are_twelve_and_each_has_every_language() -> None:
 @pytest.mark.parametrize("name", TWELVE)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
-    fill = {**FILL, "doses": DOSES[language], "message": MESSAGES[language]}
+    fill = {
+        **FILL,
+        "doses": DOSES[language],
+        "day": DAYS[language],
+        "message": MESSAGES[language],
+    }
     if name in AT_THE_START:
         fill["medicine"] = fill["medicine"][:1].upper() + fill["medicine"][1:]
     params = {slot: fill[slot] for slot in TEMPLATES[name].slots}

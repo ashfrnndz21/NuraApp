@@ -22,3 +22,5 @@ E02-06 adds voice notes on any event, and E13/E14 hear "not feeling well" said a
 - `POST /profiles/{id}/consents/recording` stays (E02 added it; E05 adds the same route — the second to merge dedupes). Checkpoint 18's voice note no longer grants it and asserts it is not asked.
 - The RECORDING words stay as they are: they describe consult recordings, which is now all they cover. If a future surface records other people outside a visit (a family call), it is a consult for this purpose and the words must first be checked to describe it.
 - The trail shows the difference: a consult refused without the consent is a refused read of `consent` under `visits`; an own note has no such line.
+
+**Addendum (E11-04, 2026-09-15).** A card's spoken twin is synthesised speech of Nura's own lines, not a recording of anyone: it is never a VOICE artefact and never an `Artifact` row, so neither `Recording` applies. It is a derived cache object in the region-pinned object store, keyed by the digest of the voice, the language and the words (`voice/<profile_id>/<sha256>`, `app.delivery.voice`).
