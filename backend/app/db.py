@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Uuid, event, inspect
+from sqlalchemy import DateTime, Dialect, Enum, ForeignKey, TypeDecorator, Uuid, event, inspect
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -47,6 +47,39 @@ def enum_column[E: PyEnum](enum_class: type[E], name: str) -> Enum:
         length=32,
         values_callable=lambda members: [member.value for member in members],
     )
+
+
+class NaiveDatetime(ValueError):
+    """A datetime with no offset was about to be stored. A time without an offset is a bug:
+    it is never taken to be UTC, because 09:00 in Singapore stored as 09:00 UTC is 5 pm."""
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """Every datetime column: stored as UTC, read back as UTC, on any database (ADR 0009).
+
+    Postgres keeps an offset and SQLite drops it, so a column typed `DateTime(timezone=True)`
+    alone stores 09:00+08:00 on SQLite as a bare 09:00 that reads back as 09:00 UTC. Here the
+    instant is turned into UTC before the database sees it, and a bare value coming back is
+    UTC by construction. A naive datetime is refused, never assumed.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise NaiveDatetime(
+                f"refusing to store a datetime with no offset ({value.isoformat()}); "
+                "use app.clock or give it a timezone"
+            )
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 class ImmutableRow(Refusal):
@@ -92,7 +125,7 @@ def frozen(
 class Base(DeclarativeBase):
     type_annotation_map: ClassVar[dict[Any, Any]] = {
         uuid.UUID: Uuid(),
-        datetime: DateTime(timezone=True),
+        datetime: UTCDateTime(),
     }
 
 

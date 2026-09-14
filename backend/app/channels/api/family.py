@@ -32,9 +32,9 @@ Every profile route takes the key context like every other. The yeses are minted
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
+from pydantic import AwareDatetime
 
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
@@ -144,7 +144,7 @@ async def helpers(
 async def thread(
     context: Context,
     session: Db,
-    cursor: datetime | None = None,
+    cursor: AwareDatetime | None = None,
     limit: int = Query(default=50, ge=1, le=200),
 ) -> ThreadPageOut:
     entries, next_cursor = await read_thread(session, context=context, cursor=cursor, limit=limit)
@@ -166,7 +166,7 @@ async def post(body: ThreadPostIn, context: Context, session: Db) -> ThreadEntry
 async def thread_digest(
     context: Context,
     session: Db,
-    since: datetime,
+    since: AwareDatetime,
     language: str | None = Query(default=None, min_length=2, max_length=16),
 ) -> DigestOut:
     """The thread and the day's cards since `since`, for the caller, in whole sentences."""
@@ -204,7 +204,9 @@ async def roster_end(slot_id: uuid.UUID, context: Context, session: Db) -> Roste
 
 
 @router.get("/profiles/{profile_id}/roster/on-duty")
-async def on_duty(context: Context, session: Db, at: datetime | None = None) -> list[OnDutyOut]:
+async def on_duty(
+    context: Context, session: Db, at: AwareDatetime | None = None
+) -> list[OnDutyOut]:
     return [OnDutyOut.of(duty) for duty in await who_is_on_duty(session, context=context, at=at)]
 
 
@@ -255,7 +257,7 @@ async def trail_days(
     context: Context,
     session: Db,
     language: str | None = Query(default=None, min_length=2, max_length=16),
-    since: datetime | None = None,
+    since: AwareDatetime | None = None,
     limit: int = Query(default=500, ge=1, le=2000),
 ) -> list[TrailDayOut]:
     """Who looked at what, in his words, by day, newest first. Owner and chief only."""

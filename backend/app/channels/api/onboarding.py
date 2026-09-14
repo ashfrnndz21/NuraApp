@@ -26,6 +26,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
+from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
@@ -221,7 +222,7 @@ async def close_sitting(context: Context, session: Db) -> ClosedOut:
 
 @router.get("/profiles/{profile_id}/plan")
 async def get_plan(
-    context: Context, session: Db, at: datetime | None = None, language: str | None = None
+    context: Context, session: Db, at: AwareDatetime | None = None, language: str | None = None
 ) -> PlanOut:
     """The first week, reconciled with the record first, and the one prompt due at `at`
     (now by default), its words in his language (or `?language=`). `NoPlan` (404) before a

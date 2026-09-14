@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from app.channels.api.schemas import FactOut, utc
 from app.channels.api.voice_schemas import VoiceScriptOut
@@ -73,7 +73,7 @@ class AppointmentIn(BaseModel):
     (`POST /confirmations`, subject `appointment`). `episode_id` puts it in an open episode."""
 
     provider_id: uuid.UUID
-    scheduled_at: datetime
+    scheduled_at: AwareDatetime
     purpose: str = Field(min_length=1, max_length=80)
     confirmation_id: uuid.UUID
     episode_id: uuid.UUID | None = None
