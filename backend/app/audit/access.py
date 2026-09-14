@@ -21,7 +21,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from sqlalchemy import Column, ColumnElement, or_
+from sqlalchemy import Column, ColumnElement, Select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.visitors import iterate
 
@@ -33,7 +33,7 @@ from app.errors import Refusal
 from app.identity.models import Person, Profile, Stewardship
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.models import Key
-from app.keys.repository import scoped_new, scoped_select
+from app.keys.repository import scoped_new, scoped_projection, scoped_select
 from app.keys.scopes import Scope
 
 
@@ -72,8 +72,24 @@ async def audited_read[Row: ProfileScoped](
     key does not cover decide which row comes back, so the statement is checked for having
     stayed on the one table before it runs.
     """
+    return await _read(
+        session, scoped_select, model, context, scope, where, order_by, limit, channel
+    )
+
+
+async def _read[Row: ProfileScoped](
+    session: AsyncSession,
+    select_of: Callable[[type[Row], KeyContext, Scope], Select[tuple[Row]]],
+    model: type[Row],
+    context: KeyContext,
+    scope: Scope,
+    where: Sequence[ColumnElement[bool]],
+    order_by: Sequence[ColumnElement[Any]],
+    limit: int | None,
+    channel: Channel,
+) -> Sequence[Row]:
     try:
-        statement = scoped_select(model, context, scope).where(*where).order_by(*order_by)
+        statement = select_of(model, context, scope).where(*where).order_by(*order_by)
         if limit is not None:
             statement = statement.limit(limit)
         _stays_on_one_table(model.__tablename__, order_by)
@@ -91,6 +107,27 @@ async def audited_read[Row: ProfileScoped](
         channel=channel,
     )
     return found
+
+
+async def audited_projection_read[Row: ProfileScoped](
+    session: AsyncSession,
+    model: type[Row],
+    context: KeyContext,
+    scope: Scope,
+    /,
+    *,
+    where: Sequence[ColumnElement[bool]] = (),
+    order_by: Sequence[ColumnElement[Any]] = (),
+    limit: int | None = None,
+    channel: Channel = Channel.APP,
+) -> Sequence[Row]:
+    """`audited_read` for ADR 0002's fixed projection (`scoped_projection`), and nothing else:
+    the emergency card reads, under EMERGENCY, the date of the last blood-pressure reading,
+    a moment written under the readings' part. The door, the line and the refusal are the
+    same as any read's."""
+    return await _read(
+        session, scoped_projection, model, context, scope, where, order_by, limit, channel
+    )
 
 
 async def audited_write[Row: ProfileScoped](

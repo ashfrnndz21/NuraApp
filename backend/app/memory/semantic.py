@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, and_, not_, or_
+from sqlalchemy import ColumnElement, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -34,13 +34,7 @@ from app.drafts import FactDraft
 from app.errors import Refusal
 from app.keys.confirm import NotAConfirmerHere, consume_confirmation
 from app.keys.context import KeyContext
-from app.keys.scopes import (
-    NAMED_SUBJECTS,
-    READING_PREFIX,
-    Scope,
-    scope_for_subject,
-    subjects_under,
-)
+from app.keys.scopes import FACT_SCOPES, Scope, scope_for_subject, subject_is_under
 from app.memory.episodic import (
     NoSuchArtifact,
     NoSuchEvent,
@@ -56,15 +50,7 @@ def fact_is_under(scope: Scope) -> ColumnElement[bool]:
     """The facts whose subject sits under `scope`, as `app.keys.scopes.scope_for_subject`
     decides it — for a read that gathers facts one scope at a time, so a key reads the
     subjects its scopes cover and never a row of another scope's subject."""
-    if scope is Scope.RECORDS:
-        return and_(
-            Fact.subject.not_in(sorted(NAMED_SUBJECTS)),
-            not_(Fact.subject.startswith(READING_PREFIX)),
-        )
-    named = Fact.subject.in_(sorted(subjects_under(scope)))
-    if scope is Scope.READINGS:
-        return or_(named, Fact.subject.startswith(READING_PREFIX))
-    return named
+    return subject_is_under(Fact.subject, scope)
 
 
 class NoProvenance(Refusal):
@@ -445,7 +431,10 @@ async def current_facts(
     open dispute is not a fact that holds: the fact it disputes is (`ConfirmedFactStands`).
 
     The scope is the subject's, decided in `app.keys.scopes`: medicines under MEDICINES,
-    readings under READINGS, the whole record — no subject named — under RECORDS.
+    readings under READINGS. With no subject named the door is the record's, and the facts
+    are read one scope at a time (`FACT_SCOPES`), each under its own, for the scopes the key
+    holds: a key to the record alone reads the record's facts and not the medicines or the
+    readings. A key holding every scope reads every fact, as State's recompute does.
     """
     moment = at or utcnow()
     where: list[ColumnElement[bool]] = [
@@ -453,13 +442,31 @@ async def current_facts(
         Fact.confidence_state != ConfidenceState.DISPUTED,
         Fact.valid_from <= moment,
         or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
-        fact_cites_only_what_is_held_here(context, scope_for_subject(subject)),
     ]
     if subject is not None:
         where.append(Fact.subject == subject)
     if attribute is not None:
         where.append(Fact.attribute == attribute)
-    found = await audited_read(session, Fact, context, scope_for_subject(subject), where=where)
+    scopes = (
+        (scope_for_subject(subject),)
+        if subject is not None
+        else tuple(scope for scope in FACT_SCOPES if context.allows(scope))
+    )
+    found: list[Fact] = []
+    for scope in scopes:
+        found.extend(
+            await audited_read(
+                session,
+                Fact,
+                context,
+                scope,
+                where=(
+                    *where,
+                    fact_is_under(scope),
+                    fact_cites_only_what_is_held_here(context, scope),
+                ),
+            )
+        )
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))
 
 

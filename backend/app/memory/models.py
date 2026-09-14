@@ -30,6 +30,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ImmutableRow, ProfileScoped, enum_column, frozen, utcnow
 from app.errors import Refusal
+from app.keys.rows import RowScoped
 from app.regions import Region
 
 LABEL_LENGTH = 80
@@ -109,11 +110,16 @@ class SourceChannel(StrEnum):
     CLINIC = "clinic"
 
 
-class Artifact(ProfileScoped, Base):
+class Artifact(ProfileScoped, RowScoped, Base):
     """A raw thing that came in, kept where it came in.
 
     The bytes live in the object store of the profile's region under `storage_key`; this row
     is the reference, the digest and the circumstances. Nothing here holds content.
+
+    `written_scope` is the scope it was kept under (`RowScoped`): a paper, a photo or a voice
+    under the record's, the family's WhatsApp message under the family's, the words of a fall
+    under the emergency scope, a question asked of Nura under the ask scope. A key reads the
+    artefacts written under the scopes it holds, whatever door it reads them through.
     """
 
     __tablename__ = "artifact"
@@ -145,13 +151,17 @@ class EventKind(StrEnum):
     shared. The moment a preference fact can rest on."""
 
 
-class Event(ProfileScoped, Base):
+class Event(ProfileScoped, RowScoped, Base):
     """Something that happened: a reading taken, a visit, a message, a dose taken.
 
     An event comes from somewhere: it names the artefact it was read from, or it says which
     channel it came in on and, in the label, what it was. An event is provenance for a fact,
     so one from nowhere would let a fact rest on nothing. The label is a name for the moment,
     never what was said in it; the artefact is where that is.
+
+    `written_scope` is the part it was written under (`RowScoped`, `episodic.EVENT_SCOPES`):
+    the record's, a reading taken the readings', a tablet taken the medicines', the family's
+    message the family's, the moment of a fall said on WhatsApp the emergency scope.
     """
 
     __tablename__ = "event"
@@ -201,6 +211,9 @@ class Fact(ProfileScoped, Base):
     (docs/medications-module.md) is a hook, `semantic.before_fact_write`, that the medicines
     module (E04) registers; until it does, this table accepts a dose whose provenance is a
     WHATSAPP event.
+
+    A fact sits under the scope of its subject (`scope_for_subject`): every reader of more
+    than one subject narrows by it, one held scope at a time (`semantic.fact_is_under`).
     """
 
     __tablename__ = "fact"

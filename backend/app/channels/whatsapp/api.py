@@ -17,6 +17,7 @@ they are not there at all. The webhook carries no bearer token — the provider 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -36,6 +37,7 @@ from app.channels.whatsapp.provider import DevInbound, FixtureProvider, NotAWebh
 from app.db import utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
+from app.memory.episodic import WITHHELD_ARTIFACT, withheld_references
 from app.settings import Settings
 
 router = APIRouter(tags=["whatsapp"])
@@ -114,9 +116,12 @@ class ThreadMessageOut(BaseModel):
     template_name: str | None
     catalogue_key: str | None
     state_id: uuid.UUID | None
+    withheld: list[str] = []
+    """`artifact` when the kept message's artefact is under a scope the reader's key does not
+    hold — a health message is the record's, a fall the emergency scope's — its id left out."""
 
     @classmethod
-    def of(cls, row: WhatsAppMessage) -> ThreadMessageOut:
+    def of(cls, row: WhatsAppMessage, withheld: Sequence[str] = ()) -> ThreadMessageOut:
         return cls(
             message_id=row.id,
             thread_id=row.thread_id,
@@ -124,11 +129,12 @@ class ThreadMessageOut(BaseModel):
             kind=row.kind.value,
             person_id=row.person_id,
             at=row.at,
-            artifact_id=row.artifact_id,
+            artifact_id=None if WITHHELD_ARTIFACT in withheld else row.artifact_id,
             flag_id=row.flag_id,
             template_name=row.template_name,
             catalogue_key=row.catalogue_key,
             state_id=row.state_id,
+            withheld=list(withheld),
         )
 
 
@@ -194,7 +200,13 @@ async def thread(context: Context, session: Db) -> list[ThreadMessageOut]:
     """Every kept message on this profile's WhatsApp threads, oldest first, by reference:
     who, when, what kind, and the artefact, template or key it names. Never the words."""
     _may_read_the_thread(context)
-    return [ThreadMessageOut.of(row) for row in await thread_messages(session, context=context)]
+    rows = await thread_messages(session, context=context)
+    withheld = await withheld_references(
+        session,
+        context=context,
+        cited=[(row.id, Scope.FAMILY, row.artifact_id, None) for row in rows],
+    )
+    return [ThreadMessageOut.of(row, withheld.get(row.id, ())) for row in rows]
 
 
 # --- dev only ---------------------------------------------------------------------------------

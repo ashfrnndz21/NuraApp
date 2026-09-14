@@ -563,16 +563,22 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
     written = {(entry.target, entry.target_id) for entry in trail if entry.action is Action.WRITE}
     for row in rows:
         assert (row.__tablename__, row.id) in written
-    assert {e.scope for e in trail if e.target in {"artifact", "event", "episode"}} == {
-        Scope.RECORDS
-    }
+    assert {e.scope for e in trail if e.target in {"artifact", "episode"}} == {Scope.RECORDS}
+    # An event is read through the record's door; a reading taken is written under the
+    # readings' part, and the row keeps the scope it was written under (row scope).
+    events = {(e.action, e.scope) for e in trail if e.target == "event"}
+    assert (Action.WRITE, Scope.READINGS) in events
+    assert events <= {(Action.READ, Scope.RECORDS), (Action.WRITE, Scope.READINGS)}
     # A fact is written under its subject's scope — a blood-pressure reading is a reading —
-    # and the whole record, read with no subject named, is read under RECORDS.
+    # and the whole record, read with no subject named, is read one scope at a time, each
+    # under its own, for the scopes the key holds: the owner holds all three.
     assert {e.scope for e in trail if e.target == "fact" and e.action is Action.WRITE} == {
         Scope.READINGS
     }
     assert {e.scope for e in trail if e.target == "fact" and e.action is Action.READ} == {
-        Scope.RECORDS
+        Scope.RECORDS,
+        Scope.READINGS,
+        Scope.MEDICINES,
     }
     assert {e.scope for e in trail if e.target in {"provider", "appointment"}} == {Scope.VISITS}
     assert any(e.action is Action.READ and e.target == "fact" for e in trail)
