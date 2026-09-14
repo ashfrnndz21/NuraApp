@@ -11,9 +11,10 @@ calls each registered `NudgeDelivery`; with none registered the row is the queue
 reads it. When E11 lands, it appends its engine to `deliveries`; nothing here changes.
 
 The commitment nudge quotes his own words from a memo (E11-07). Memos are E05's (the visit
-loop, #105); a `CommitmentSource` gives the nudges what he said and the memo it is in, and
-E05 appends one to `commitment_sources` when it lands. The nudges never rephrase, shorten or
-add a target to what he said: the line is his, in quotation, as the memo holds it.
+loop); a `CommitmentSource` gives the nudges what he said and the memo it is in —
+`commitments.memo_commitments` reads E05's current action memos and is registered on
+`commitment_sources` when `app.delivery.nudges` is imported. The nudges never rephrase,
+shorten or add a target to what he said: the line is his, as the memo holds it.
 """
 
 from __future__ import annotations
@@ -111,4 +112,5 @@ class CommitmentSource(Protocol):
 
 
 commitment_sources: list[CommitmentSource] = []
-"""Registered by the visit loop (E05) when its memo table is on main. Empty until then."""
+"""Where commitments come from: E05's memos (`commitments.memo_commitments`), registered when
+`app.delivery.nudges` is imported, and any other source that appends itself."""

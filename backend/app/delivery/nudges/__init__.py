@@ -7,3 +7,9 @@ and returns `NudgeDraft`s. `engine.hand_over` writes the chosen one down and giv
 delivery (`handoff.deliveries`); nothing here sends anything. `metrics` counts what he did
 with them, and with the feeling cloud, for the owner and the chief.
 """
+
+from app.delivery.nudges.commitments import memo_commitments
+from app.delivery.nudges.handoff import commitment_sources
+
+if memo_commitments not in commitment_sources:
+    commitment_sources.append(memo_commitments)

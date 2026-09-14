@@ -405,13 +405,20 @@ async def _commitment(p: _Planner, session: AsyncSession) -> NudgeDraft | None:
     heard: list[Commitment] = []
     for source in commitment_sources:
         heard.extend(await source(session, context=p.context))
-    recent = {
-        n.memo_id
-        for n in p.nudges
-        if n.memo_id is not None and as_utc(n.handed_over_at) > p.situation.now - REST
-    }
+    # A memo is quoted once, ever: the feed already carries the memo card, and a nudge that
+    # came back to the same words would be a reminder, not his own words said back once.
+    quoted: set[uuid.UUID] = set()
+    if heard:
+        already = await audited_read(
+            session,
+            Nudge,
+            p.context,
+            Scope.PROFILE,
+            where=(Nudge.memo_id.in_([c.memo_id for c in heard]),),
+        )
+        quoted = {n.memo_id for n in already if n.memo_id is not None}
     for commitment in sorted(heard, key=lambda c: as_utc(c.said_at), reverse=True):
-        if commitment.memo_id in recent or not commitment.words.strip():
+        if commitment.memo_id in quoted or not commitment.words.strip():
             continue
         table = said.LINES[p.code]
         # His words, exactly as the memo holds them: nothing rephrased, nothing added.

@@ -29,6 +29,8 @@ from app.keys.context import KeyContext, OutOfScope
 from app.medicines.service import record_dose_taken
 from app.reasoning.feelings.service import answer_tap, record_tap
 from app.reasoning.feelings.words import Answer
+from app.reasoning.visits.memos import write_memo
+from app.reasoning.visits.models import MemoKind, MemoSource
 from app.regions import REGION_TZ, Region
 from app.safety.plain_words import verify
 from app.safety.red_flags import Feeling
@@ -262,12 +264,39 @@ async def test_a_commitment_quotes_his_own_words_and_adds_no_target(
     [draft] = (await _plan(sg, owner)).drafts
     assert draft.kind is NudgeKind.COMMITMENT
     assert draft.lines == (
-        "You said this at your visit:",
+        "You said you would do this:",
         "Less salt at lunch.",
         "How did it go today?",
     )
     assert draft.memo_id == his_memo and draft.reason == {"code": "memo", "memo_id": str(his_memo)}
-    assert draft.why == "You see this because you said it at your visit."
+    assert draft.why == "You see this because you said you would do it."
+
+
+async def test_a_memo_from_the_visit_loop_is_quoted_once_exactly_as_it_was_filed(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    _, owner = await _home(sg)
+    await new_medicine(sg, owner)
+    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    memo = await write_memo(
+        sg,
+        context=owner,
+        kind=MemoKind.ACTION,
+        key="lighter_dinners",
+        slots={},
+        source=MemoSource.PERSON,
+    )
+    assert memo.text == "Every evening, eat a lighter dinner."
+    [draft] = (await _plan(sg, owner)).drafts
+    assert draft.kind is NudgeKind.COMMITMENT and draft.memo_id == memo.id
+    assert draft.lines == ("You said you would do this:", memo.text, "How did it go today?")
+    await hand_over(sg, context=owner, registry=REGISTRY)
+    clock.step(timedelta(days=9))
+    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    again = await _plan(sg, owner)
+    assert NudgeKind.COMMITMENT not in {d.kind for d in again.drafts} | {
+        h.kind for h in again.held
+    }, "a memo is quoted once"
 
 
 async def test_hand_over_writes_it_from_state_and_gives_it_to_delivery(sg: AsyncSession) -> None:
