@@ -32,6 +32,10 @@ class Settings:
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
     without it the process refuses to start."""
+    drug_registry: str = "fixture"
+    """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
+    (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
+    to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -59,4 +63,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
+        drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
     )

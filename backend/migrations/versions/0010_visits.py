@@ -1,18 +1,18 @@
 """E05-01, E05-02, E05-05, E05-06: the visit loop.
 
-Six tables. `flag` is a safety row — a red-flag word heard, a medicine change heard, an
-interaction — written before anything is ranked and never shown as it stands. `brief` is the
+Six tables. `flag` is a safety row — a red-flag word heard, a medicine change heard for
+E04's reconcile — written before anything is ranked and never shown as it stands. `brief` is the
 pre-visit brief for one appointment as rendered, `question` one question to ask the doctor
 (generated from a gap, a memo or a flag, or a person's own; superseded, never edited), `memo`
 one line in his words filed against the next appointment, `visit_summary` what the doctor said
 read from a transcript held in the object store, and `summary_item` one thing heard on it. The
 four a person is shown carry `state_id`: the State snapshot each was rendered from.
 
-`confirm_subject` gains `question` and `visit_summary`, checked strings with no database
+Follows E04's medicines revision (0009_medicines). `confirm_subject` gains `question` and `visit_summary`, checked strings with no database
 constraint, so no schema change there. `artifact_kind` gains `transcript` the same way.
 
-Revision ID: 0009_visits
-Revises: 0008_ingestion
+Revision ID: 0010_visits
+Revises: 0009_medicines
 Create Date: 2026-09-14
 """
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0009_visits"
-down_revision = "0008_ingestion"
+revision = "0010_visits"
+down_revision = "0009_medicines"
 branch_labels = None
 depends_on = None
 
@@ -31,7 +31,7 @@ def _enum(name: str, *values: str) -> sa.Enum:
     return sa.Enum(*values, name=name, native_enum=False, length=32)
 
 
-FLAG_KIND = _enum("flag_kind", "red_flag", "medicine_change_heard", "interaction")
+FLAG_KIND = _enum("flag_kind", "red_flag", "medicine_change_heard")
 QUESTION_SOURCE = _enum("question_source", "gap", "memo", "flag", "person")
 MEMO_KIND = _enum("memo_kind", "action", "ask", "bring", "tell")
 MEMO_SOURCE = _enum("memo_source", "visit", "conversation", "person")

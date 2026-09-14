@@ -18,29 +18,25 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read
 from app.audit.models import Action
 from app.db import as_utc, utcnow
+from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.medicines.models import InteractionFlag, LineStatus, MedicationLine
 from app.memory.episodic import fact_cites_only_what_is_held_here
 from app.memory.models import Appointment, ConfidenceState, Fact
-from app.reasoning.visits.models import Flag, FlagKind
-from app.safety.high_risk import MEDICINE_SUBJECTS
 
 READING_WINDOW = timedelta(days=14)
 """A reading the record has had before, and none inside this window, is a gap."""
 
 READING_SUBJECTS = frozenset({"blood_pressure", "blood_sugar", "weight"})
 
-PURPOSE_ATTRIBUTES = frozenset({"purpose", "indication", "reason"})
-"""The attribute a medicine line's "why" is recorded under. E04's line may name it
-differently; the set is the seam."""
 
 UNSTATED_PURPOSES = frozenset({"visit", "appointment", "check-up", "checkup", "unknown", "-"})
 """A purpose that says nothing: the visit was booked with no word for why."""
@@ -74,9 +70,12 @@ class Gap:
     medicine: str | None = None
     other: str | None = None
     flag_id: uuid.UUID | None = None
+    line_id: uuid.UUID | None = None
 
     def source_ids(self) -> tuple[str, ...]:
         ids = [str(one) for one in self.fact_ids]
+        if self.line_id is not None:
+            ids.append(str(self.line_id))
         if self.flag_id is not None:
             ids.append(str(self.flag_id))
         return tuple(ids)
@@ -88,24 +87,30 @@ def _holds_at(fact: Fact, moment: datetime) -> bool:
     )
 
 
-def _medicine_name(group: Sequence[Fact]) -> str | None:
-    for fact in group:
-        if fact.attribute == "name" and isinstance(fact.value, str):
-            return fact.value
-    for fact in group:
-        if isinstance(fact.value, dict) and isinstance(fact.value.get("drug"), str):
-            return str(fact.value["drug"])
-    return None
+def purpose_known(registry: DrugRegistry, generic: str) -> bool:
+    """Whether the licensed monograph says what this medicine is for. The purpose is the
+    monograph's (`Monograph.purpose_id`, rendered by E04's story); a line the register has no
+    monograph for, or one with no purpose, is a line with no purpose."""
+    try:
+        return bool(registry.monograph(generic).purpose_id)
+    except UnknownDrug:
+        return False
 
 
 def gaps_in(
     facts: Sequence[Fact],
-    flags: Sequence[Flag],
+    lines: Sequence[MedicationLine],
+    interactions: Sequence[InteractionFlag],
     appointment: Appointment | None,
     *,
     now: datetime,
+    registry: DrugRegistry,
 ) -> list[Gap]:
-    """The gaps among these rows at `now`. Pure: what `find_gaps` reads, worked out."""
+    """The gaps among these rows at `now`. Pure: what `find_gaps` reads, worked out.
+
+    `lines` are the active medication lines (E04's `MedicationLine`), `interactions` the
+    `InteractionFlag` rows the licensed data wrote when a line arrived.
+    """
     disputes = [f for f in facts if f.confidence_state is ConfidenceState.DISPUTED]
     settled = [f for f in facts if f.confidence_state is not ConfidenceState.DISPUTED]
     current = [f for f in settled if _holds_at(f, now)]
@@ -136,42 +141,39 @@ def gaps_in(
                 Gap(GapKind.READING_STALE, subject, (newest.id,), as_utc(newest.valid_from))
             )
 
-    # 3. A medicine line with no purpose. A line is the medicine facts sharing one provenance.
-    lines: dict[tuple[Any, Any], list[Fact]] = {}
-    for fact in current:
-        if fact.subject in MEDICINE_SUBJECTS:
-            lines.setdefault((fact.artifact_id, fact.event_id), []).append(fact)
-    for _provenance, group in sorted(lines.items(), key=lambda kv: str(kv[0])):
-        if any(f.attribute in PURPOSE_ATTRIBUTES for f in group):
+    # 3. A medicine line with no purpose: the monograph has none, or the register has no
+    # monograph for it. The line is E04's row, read under the medicines scope.
+    active = {line.id: line for line in lines}
+    for line in sorted(lines, key=lambda one: (as_utc(one.started_at), one.generic)):
+        if purpose_known(registry, line.generic):
             continue
-        name = _medicine_name(group)
-        if name is None:
-            continue
-        since = min(as_utc(f.valid_from) for f in group)
         gaps.append(
             Gap(
                 GapKind.MEDICINE_NO_PURPOSE,
-                group[0].subject,
-                tuple(sorted((f.id for f in group), key=str)),
-                since,
-                medicine=name,
+                line.generic,
+                (line.fact_id,),
+                as_utc(line.started_at),
+                medicine=line.generic,
+                line_id=line.id,
             )
         )
 
-    # 4. An interaction the licensed data client flagged and nobody has asked about.
-    for flag in sorted(flags, key=lambda f: as_utc(f.raised_at)):
-        if flag.kind is FlagKind.INTERACTION and flag.resolved_at is None:
-            gaps.append(
-                Gap(
-                    GapKind.INTERACTION_FLAGGED,
-                    flag.subject,
-                    tuple(uuid.UUID(one) for one in flag.fact_ids),
-                    as_utc(flag.raised_at),
-                    medicine=flag.payload.get("medicine") or flag.subject,
-                    other=flag.payload.get("other"),
-                    flag_id=flag.id,
-                )
+    # 4. An interaction the licensed data flagged between two lines still active.
+    for flag in sorted(interactions, key=lambda one: (as_utc(one.flagged_at), str(one.id))):
+        flagged, other = active.get(flag.line_id), active.get(flag.other_line_id)
+        if flagged is None or other is None:
+            continue
+        gaps.append(
+            Gap(
+                GapKind.INTERACTION_FLAGGED,
+                flagged.generic,
+                (flagged.fact_id, other.fact_id),
+                as_utc(flag.flagged_at),
+                medicine=flagged.generic,
+                other=other.generic,
+                flag_id=flag.id,
             )
+        )
 
     # 5. An open dispute: a person or a paper disagrees with a fact nobody has settled.
     for dispute in sorted(disputes, key=lambda f: as_utc(f.asserted_at)):
@@ -193,13 +195,19 @@ def gaps_in(
 
 @audited(Action.READ, Scope.RECORDS, GAP_TARGET)
 async def find_gaps(
-    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID | None = None
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    registry: DrugRegistry,
+    appointment_id: uuid.UUID | None = None,
 ) -> list[Gap]:
     """The gaps in this profile's record now, and in the visit named, if one is.
 
     Every fact not yet superseded is read — current, expired and disputed — because a gap
     is exactly what the current facts do not say. The read is the record's, under
-    `Scope.RECORDS`, as State's is.
+    `Scope.RECORDS`, as State's is. The medicine lines and the interaction flags are E04's
+    rows under `Scope.MEDICINES`: a key without it sees no medicine gaps, and that is a
+    narrower brief, not a wrong one.
     """
     moment = utcnow()
     facts = await audited_read(
@@ -212,9 +220,27 @@ async def find_gaps(
             fact_cites_only_what_is_held_here(context, Scope.RECORDS),
         ),
     )
-    flags = await audited_read(
-        session, Flag, context, Scope.RECORDS, where=(Flag.resolved_at.is_(None),)
-    )
+    lines: Sequence[MedicationLine] = ()
+    interactions: Sequence[InteractionFlag] = ()
+    if context.allows(Scope.MEDICINES):
+        lines = await audited_read(
+            session,
+            MedicationLine,
+            context,
+            Scope.MEDICINES,
+            where=(
+                MedicationLine.superseded_at.is_(None),
+                MedicationLine.status == LineStatus.ACTIVE,
+            ),
+        )
+        if lines:
+            interactions = await audited_read(
+                session,
+                InteractionFlag,
+                context,
+                Scope.MEDICINES,
+                where=(InteractionFlag.line_id.in_([line.id for line in lines]),),
+            )
     appointment = None
     if appointment_id is not None:
         found = await audited_read(
@@ -225,4 +251,4 @@ async def find_gaps(
                 f"no appointment {appointment_id} on profile {context.profile_id}"
             )
         appointment = found[0]
-    return gaps_in(facts, flags, appointment, now=moment)
+    return gaps_in(facts, lines, interactions, appointment, now=moment, registry=registry)

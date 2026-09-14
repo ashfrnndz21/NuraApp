@@ -42,15 +42,20 @@ class FlagKind(StrEnum):
 
     RED_FLAG = "red_flag"
     MEDICINE_CHANGE_HEARD = "medicine_change_heard"
-    INTERACTION = "interaction"
+    """A change to a medicine the doctor said at a visit (E05-05). Never applied here: the
+    row is what E04's reconcile picks up, with the person's OK on a plan. Its `subject` is
+    the generic, `code` the kind of change (`summary.ChangeHeard`), and `payload` carries
+    `generic`, `change`, `line_id` (the active line of that generic, when there is one),
+    `span` in the transcript and `ask_the_doctor: true` — and never an amount. Interactions
+    are E04's own `InteractionFlag` rows, not a kind here."""
 
 
 class Flag(ProfileScoped, Base):
     """A safety row: what was found, in which facts or artefact, and when.
 
-    `code` is the entry in the red-flag table (`app.safety.red_flags`), the kind of change
-    heard, or the interaction the licensed data client named. `payload` is structured — a
-    drug name, a span in the transcript — never a sentence. A flag takes one change: it is
+    `code` is the entry in the red-flag table (`app.safety.red_flags`) or the kind of change
+    heard. `payload` is structured — a generic name, a span in the transcript — never a
+    sentence and never an amount. A flag takes one change: it is
     resolved, by a person, when the doctor has been asked.
     """
 

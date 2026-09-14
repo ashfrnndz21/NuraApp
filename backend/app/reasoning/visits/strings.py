@@ -17,7 +17,9 @@ from datetime import datetime
 from typing import Any
 
 from app.db import as_utc
+from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
+from app.medicines.strings import PLAIN_NAME
 from app.regions import REGION_TZ, Region
 from app.safety.plain_words import Kind, verify
 
@@ -215,16 +217,27 @@ def subject_words(subject: str, language: str) -> str:
     return SUBJECT_WORDS[lang].get(subject, subject.replace("_", " "))
 
 
-def medicine_words(name: str, language: str) -> str:
-    """His name for the medicine first, the chemical name second in brackets in English; in
-    Malay and Chinese his name alone, because the verifier's glossary knows the chemical
-    name and only the English word beside it. A medicine the glossary has no word for is
-    named as it is, and the verifier decides."""
+def medicine_words(name: str, language: str, registry: DrugRegistry | None = None) -> str:
+    """His name for the medicine first — the licensed monograph's plain name (E04,
+    `app.medicines.strings.PLAIN_NAME`) when the registry knows the generic, the glossary's
+    otherwise — with the generic second in brackets in English; in Malay and Chinese his name
+    alone, because the verifier's glossary knows the chemical name and only the English word
+    beside it. A medicine neither knows is named as it is, and the verifier decides."""
     lang = language_for(language)
-    plain = MEDICINE_WORDS[lang].get(name.strip().lower())
+    generic = name.strip().lower()
+    plain: str | None = None
+    if registry is not None:
+        try:
+            plain = PLAIN_NAME[lang][registry.monograph(generic).plain_name_id]
+        except (UnknownDrug, KeyError):
+            plain = None
+    if plain is None:
+        plain = MEDICINE_WORDS[lang].get(generic)
     if plain is None:
         return name.strip()
-    return f"{plain} ({name.strip().lower()})" if lang == "en" else plain
+    if lang != "en" or generic in plain.lower():
+        return plain
+    return f"{plain} ({generic})"
 
 
 def red_flag_words(code: str, language: str) -> str:

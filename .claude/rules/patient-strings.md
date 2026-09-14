@@ -3,6 +3,7 @@ paths:
   - "backend/app/delivery/**"
   - "backend/app/channels/**"
   - "backend/app/consent/**"
+  - "backend/app/medicines/**"
   - "backend/app/reasoning/visits/strings.py"
   - "ios/Nura/**"
 ---

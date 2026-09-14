@@ -100,19 +100,35 @@ async def appointments(context: Context, session: Db) -> list[AppointmentOut]:
 
 
 @router.get("/{profile_id}/appointments/{appointment_id}/brief")
-async def brief(appointment_id: uuid.UUID, context: Context, session: Db) -> BriefOut:
+async def brief(
+    appointment_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> BriefOut:
     """The pre-visit brief in the profile's language: purpose, what changed since the last
     visit, the open questions, what to bring. Rebuilt when State has moved past the last
     one. Every line passed the plain-words verifier; a brief that would not is refused
     (`NotPlainEnough`, 400) rather than shown."""
-    return BriefOut.of(await brief_for(session, context=context, appointment_id=appointment_id))
+    return BriefOut.of(
+        await brief_for(
+            session,
+            context=context,
+            appointment_id=appointment_id,
+            registry=providers_of(request).drug_registry,
+        )
+    )
 
 
 @router.get("/{profile_id}/appointments/{appointment_id}/questions")
-async def questions(appointment_id: uuid.UUID, context: Context, session: Db) -> QuestionsOut:
+async def questions(
+    appointment_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> QuestionsOut:
     """The current questions for this visit, refreshed from gaps, memos and flags, each with
     its source; and the one card for him — the first three by priority."""
-    found = await questions_for(session, context=context, appointment_id=appointment_id)
+    found = await questions_for(
+        session,
+        context=context,
+        appointment_id=appointment_id,
+        registry=providers_of(request).drug_registry,
+    )
     card = await patient_card(session, context=context, appointment_id=appointment_id)
     return QuestionsOut(questions=[QuestionOut.of(one) for one in found], card=card)
 
@@ -160,6 +176,7 @@ async def transcript(
         artifact_id=artifact.id,
         store=served.object_store,
         summariser=served.summariser,
+        registry=served.drug_registry,
     )
     return SummaryOut.of(
         summary, await summary_items(session, context=context, summary_id=summary.id)
@@ -180,6 +197,7 @@ async def confirm_card(
     appointment_id: uuid.UUID,
     summary_id: uuid.UUID,
     body: SummaryConfirmBodyIn,
+    request: Request,
     context: Context,
     session: Db,
 ) -> SummaryConfirmedOut:
@@ -192,6 +210,7 @@ async def confirm_card(
         summary_id=summary_id,
         decisions=[one.as_decision() for one in body.decisions],
         confirmation_id=body.confirmation_id,
+        registry=providers_of(request).drug_registry,
     )
     return SummaryConfirmedOut(
         summary=SummaryOut.of(outcome.summary, outcome.items),

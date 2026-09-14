@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,11 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.drafts import AppointmentDraft
+from app.drugs.registry import DrugMatch, Interaction, LabelFields, Monograph, UnknownDrug
 from app.identity.service import create_own_profile, register_person
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, resolve_key_context
+from app.medicines.service import Reconciled
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Appointment,
@@ -28,6 +31,7 @@ from app.memory.models import (
 from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider, book_appointment
 from app.regions import Region
+from tests.medicines_support import REGISTRY, add, label
 from tests.support import OPENING_CONSENT
 
 VISITS = Path(__file__).resolve().parent / "fixtures" / "visits"
@@ -129,46 +133,32 @@ async def medicine(
     session: AsyncSession,
     context: KeyContext,
     *,
-    name: str = "Furosemide",
-    purpose: str | None = None,
-    digest: str = "a" * 64,
-) -> list[Fact]:
-    """A medicine line from a label: name and dose, and a purpose when one is given."""
-    photo = await label_photo(session, context, digest)
-    facts = [
-        await assert_fact(
-            session,
-            context=context,
-            subject="medicine",
-            attribute="name",
-            value=name,
-            confidence=0.96,
-            artifact_id=photo.id,
-        ),
-        await assert_fact(
-            session,
-            context=context,
-            subject="medicine",
-            attribute="dose",
-            value={"drug": name, "instruction": "half a tablet in the morning"},
-            unit="tablet",
-            confidence=0.9,
-            artifact_id=photo.id,
-        ),
-    ]
-    if purpose is not None:
-        facts.append(
-            await assert_fact(
-                session,
-                context=context,
-                subject="medicine",
-                attribute="purpose",
-                value=purpose,
-                confidence=0.9,
-                artifact_id=photo.id,
-            )
-        )
-    return facts
+    generic: str = "frusemide",
+    strength: str = "40 mg",
+    dose: str = "1 tab OM",
+) -> Reconciled:
+    """A medicine line from a label, the way E04 writes it: identified in the fixture
+    registry, confirmed with the person's yes, a Fact and a `MedicationLine`."""
+    return await add(session, context, label(generic, strength, dose, quantity=30))
+
+
+class Unknown:
+    """The fixture registry, told to know no monograph for some generics: a line whose
+    purpose the licensed data cannot say (`GapKind.MEDICINE_NO_PURPOSE`)."""
+
+    def __init__(self, *generics: str) -> None:
+        self._unknown = frozenset(g.lower() for g in generics)
+
+    def identify(self, fields: LabelFields) -> Sequence[DrugMatch]:
+        return REGISTRY.identify(fields)
+
+    def interactions(self, generics: Sequence[str]) -> Sequence[Interaction]:
+        return REGISTRY.interactions(generics)
+
+    def monograph(self, generic: str) -> Monograph:
+        if generic.lower() in self._unknown:
+            raise UnknownDrug(f"no monograph for {generic}")
+        return REGISTRY.monograph(generic)
 
 
 def a_week() -> timedelta:

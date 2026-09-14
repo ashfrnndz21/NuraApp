@@ -36,6 +36,7 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
@@ -43,6 +44,7 @@ from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.episodic import require_artifact, store_artifact
 from app.memory.models import (
     Appointment,
@@ -74,7 +76,6 @@ from app.reasoning.visits.models import (
 from app.reasoning.visits.questions import CHANGE_TEMPLATE, Visit, require_visit
 from app.reasoning.visits.strings import (
     day_and_date,
-    medicine_words,
     say,
     subject_words,
 )
@@ -150,7 +151,7 @@ class ActionKind(StrEnum):
     BLOOD_TEST_ON = "blood_test_on"
 
 
-class ChangeKind(StrEnum):
+class ChangeHeard(StrEnum):
     """What kind of change to a medicine was heard. Never how much: the amount is the
     label's and the doctor's, and the sentence rendered is a question, not the change."""
 
@@ -182,7 +183,7 @@ class ActionHeard:
 @dataclass(frozen=True, slots=True)
 class MedicationChangeHeard:
     drug: str
-    change: ChangeKind
+    change: ChangeHeard
     span: Span
     confidence: float
 
@@ -264,7 +265,7 @@ def draft_from_fixture(fixture: Mapping[str, Any]) -> SummaryDraft:
         changes = tuple(
             MedicationChangeHeard(
                 str(one["drug"]),
-                ChangeKind(one["change"]),
+                ChangeHeard(one["change"]),
                 _span(one),
                 check_confidence(one["confidence"]),
             )
@@ -404,9 +405,9 @@ def reroute_medicine_facts(draft: SummaryDraft) -> SummaryDraft:
                 else fact.subject
             )
             change = (
-                ChangeKind(fact.attribute)
+                ChangeHeard(fact.attribute)
                 if fact.attribute in {"start", "stop"}
-                else ChangeKind.DOSE
+                else ChangeHeard.DOSE
             )
             changes.append(MedicationChangeHeard(str(drug), change, fact.span, fact.confidence))
         else:
@@ -428,6 +429,22 @@ def _at(on: date, at: time | None, region: Region) -> datetime:
     return datetime.combine(on, at or FOLLOW_UP_HOUR, tzinfo=REGION_TZ[region]).astimezone(UTC)
 
 
+async def _active_lines(
+    session: AsyncSession, *, context: KeyContext, generic: str | None = None
+) -> Sequence[MedicationLine]:
+    """E04's active lines, under the medicines scope; none for a key that does not hold it,
+    which is a summariser told less, not a refusal."""
+    if not context.allows(Scope.MEDICINES):
+        return ()
+    where: list[Any] = [
+        MedicationLine.superseded_at.is_(None),
+        MedicationLine.status == LineStatus.ACTIVE,
+    ]
+    if generic is not None:
+        where.append(MedicationLine.generic == generic)
+    return await audited_read(session, MedicationLine, context, Scope.MEDICINES, where=where)
+
+
 async def _carer(session: AsyncSession, context: KeyContext) -> str | None:
     """The chief's name, when the key reaching can read the family list; else nobody named."""
     if not context.allows(Scope.FAMILY):
@@ -447,11 +464,11 @@ def compose_items(draft: SummaryDraft, visit: Visit, region: Region) -> list[Ite
     items: list[Item] = []
     for change in draft.medication_changes:
         key = CHANGE_TEMPLATE.get(change.change.value, "ask_medicine_change")
-        medicine = medicine_words(change.drug, lang)
+        medicine = visit.medicine(change.drug)
         items.append(
             Item(
                 SummaryItemKind.MEDICATION_CHANGE,
-                {"drug": change.drug, "change": change.change.value},
+                {"generic": change.drug.strip().lower(), "change": change.change.value},
                 change.span,
                 change.confidence,
                 key,
@@ -527,6 +544,7 @@ async def post_visit_summary(
     artifact_id: uuid.UUID,
     store: ObjectStore,
     summariser: Summariser,
+    registry: DrugRegistry | None = None,
 ) -> VisitSummary:
     """Read the transcript into a card for the person to confirm.
 
@@ -535,18 +553,26 @@ async def post_visit_summary(
     every item is rendered through its template and the verifier; a medicine change is a
     question for the doctor. The card names the transcript, the visit and the State.
     """
-    visit = await require_visit(session, context=context, appointment_id=appointment_id)
+    visit = await require_visit(
+        session, context=context, appointment_id=appointment_id, registry=registry
+    )
     artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
     if artifact.kind not in TRANSCRIPT_KINDS:
         raise NotATranscript(f"artefact {artifact_id} is a {artifact.kind}, not a transcript")
     text = (await store.get(artifact.storage_key)).decode("utf-8", errors="replace")
     if not text.strip():
         raise NotATranscript("the transcript was empty")
+    lines_now = await _active_lines(session, context=context)
     heard = reroute_medicine_facts(
         await summariser.summarise(
             text,
             visit.language,
-            SummaryHints(language=visit.language, region=context.region, doctor=visit.doctor),
+            SummaryHints(
+                language=visit.language,
+                region=context.region,
+                doctor=visit.doctor,
+                medicines=tuple(sorted({line.generic for line in lines_now})),
+            ),
         )
     )
     state = await current_state(session, context=context)
@@ -817,6 +843,7 @@ async def confirm_summary(
     summary_id: uuid.UUID,
     decisions: Sequence[Decision],
     confirmation_id: uuid.UUID,
+    registry: DrugRegistry | None = None,
 ) -> Outcome:
     """Close the card on the person's yes and write what it decided.
 
@@ -830,7 +857,9 @@ async def confirm_summary(
         session, context=context, summary_id=summary_id, decisions=decisions
     )
     summary = await require_summary(session, context=context, summary_id=summary_id)
-    visit = await require_visit(session, context=context, appointment_id=summary.appointment_id)
+    visit = await require_visit(
+        session, context=context, appointment_id=summary.appointment_id, registry=registry
+    )
     items = await summary_items(session, context=context, summary_id=summary_id)
     yes = await consume_confirmation(session, context, confirmation_id, draft)
     state: StateView = await current_state(session, context=context)
@@ -877,6 +906,10 @@ async def confirm_summary(
                 item.memo_id = memo.id
                 outcome.memos.append(memo)
             elif item.kind is SummaryItemKind.MEDICATION_CHANGE:
+                # The change as E04's reconcile picks it up, with the person's OK on a plan:
+                # the generic, the kind of change, the active line it is about — no amount.
+                generic = str(item.payload["generic"])
+                lines = await _active_lines(session, context=context, generic=generic)
                 flag = await audited_write(
                     session,
                     Flag,
@@ -884,9 +917,15 @@ async def confirm_summary(
                     Scope.RECORDS,
                     kind=FlagKind.MEDICINE_CHANGE_HEARD,
                     code=str(item.payload["change"]),
-                    subject=str(item.payload["drug"]),
-                    fact_ids=[],
-                    payload={**item.payload, "span": item.span, "ask_the_doctor": True},
+                    subject=generic,
+                    fact_ids=[str(line.fact_id) for line in lines],
+                    payload={
+                        "generic": generic,
+                        "change": str(item.payload["change"]),
+                        "line_id": str(lines[0].id) if lines else None,
+                        "span": item.span,
+                        "ask_the_doctor": True,
+                    },
                     artifact_id=summary.artifact_id,
                     appointment_id=summary.appointment_id,
                     raised_at=moment,
@@ -896,10 +935,7 @@ async def confirm_summary(
                     context=context,
                     kind=MemoKind.ASK,
                     key=item.key,
-                    slots={
-                        "doctor": visit.doctor,
-                        "medicine": medicine_words(str(item.payload["drug"]), summary.language),
-                    },
+                    slots={"doctor": visit.doctor, "medicine": visit.medicine(generic)},
                     source=MemoSource.VISIT,
                     source_id=item.id,
                     appointment_id=filed_against,

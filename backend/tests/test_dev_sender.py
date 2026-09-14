@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.db import make_session_factory
+from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
     LoggingCodeSender,
@@ -39,6 +40,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
         summariser=FixtureSummariser(VISITS),
+        drug_registry=FixtureRegistry.load(),
     )
 
 

@@ -26,6 +26,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import QuestionDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
@@ -90,6 +91,10 @@ class NotAQuestion(Refusal):
     """A question is one line of at most 120 characters. This was empty, or longer."""
 
 
+class NoRegistry(Refusal):
+    """Questions about medicines need the licensed drug data behind its port; none was given."""
+
+
 @dataclass(frozen=True, slots=True)
 class Visit:
     """The appointment and the doctor it is with, read once for the whole loop."""
@@ -97,10 +102,15 @@ class Visit:
     appointment: Appointment
     provider: Provider
     language: str
+    registry: DrugRegistry | None = None
+    """The licensed drug data, for his name for a medicine; None where no medicine is named."""
 
     @property
     def doctor(self) -> str:
         return self.provider.name
+
+    def medicine(self, generic: str) -> str:
+        return medicine_words(generic, self.language, self.registry)
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +134,11 @@ def _slots_json(slots: Mapping[str, Any]) -> str:
 
 @audited(Action.READ, Scope.VISITS, Appointment.__tablename__)
 async def require_visit(
-    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    appointment_id: uuid.UUID,
+    registry: DrugRegistry | None = None,
 ) -> Visit:
     """The visit, its doctor and the language to speak in, or a refusal."""
     found = await audited_read(
@@ -137,7 +151,7 @@ async def require_visit(
         session, Provider, context, Scope.VISITS, where=(Provider.id == appointment.provider_id,)
     )
     profile = await audited_profile_read(session, context)
-    return Visit(appointment, providers[0], language_for(profile.language))
+    return Visit(appointment, providers[0], language_for(profile.language), registry)
 
 
 def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
@@ -154,7 +168,7 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
             "ask_medicine_purpose",
             {
                 **doctor,
-                "medicine": medicine_words(gap.medicine or gap.subject, lang),
+                "medicine": visit.medicine(gap.medicine or gap.subject),
             },
         )
     elif gap.kind is GapKind.INTERACTION_FLAGGED:
@@ -162,8 +176,8 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
             "ask_interaction",
             {
                 **doctor,
-                "medicine": medicine_words(gap.medicine or gap.subject, lang),
-                "other": medicine_words(gap.other or "", lang),
+                "medicine": visit.medicine(gap.medicine or gap.subject),
+                "other": visit.medicine(gap.other or ""),
             },
         )
     elif gap.kind is GapKind.OPEN_DISPUTE:
@@ -175,7 +189,7 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
 
 def question_from_flag(flag: Flag, visit: Visit) -> Proposed | None:
     """A red flag becomes "tell the doctor"; a change heard becomes "ask the doctor". An
-    interaction is a gap (`gaps.py`) and is not repeated here."""
+    interaction is E04's `InteractionFlag`, read as a gap (`gaps.py`), not a kind here."""
     lang = visit.language
     doctor = visit.doctor
     if flag.kind is FlagKind.RED_FLAG:
@@ -190,7 +204,7 @@ def question_from_flag(flag: Flag, visit: Visit) -> Proposed | None:
     if flag.kind is FlagKind.MEDICINE_CHANGE_HEARD:
         return Proposed(
             CHANGE_TEMPLATE.get(flag.code, "ask_medicine_change"),
-            {"doctor": doctor, "medicine": medicine_words(flag.subject, lang)},
+            {"doctor": doctor, "medicine": visit.medicine(flag.subject)},
             QuestionSource.FLAG,
             flag.kind.value,
             (str(flag.id),),
@@ -221,7 +235,11 @@ async def propose_questions(
     flags = await audited_read(
         session, Flag, context, Scope.RECORDS, where=(Flag.resolved_at.is_(None),)
     )
-    gaps = await find_gaps(session, context=context, appointment_id=visit.appointment.id)
+    if visit.registry is None:
+        raise NoRegistry("proposing questions needs the licensed drug data for his names")
+    gaps = await find_gaps(
+        session, context=context, registry=visit.registry, appointment_id=visit.appointment.id
+    )
     memos = await current_memos(session, context=context)
     proposed: list[Proposed] = []
     for flag in sorted(flags, key=lambda f: (as_utc(f.raised_at), str(f.id))):
@@ -265,7 +283,11 @@ def _current(rows: Sequence[Question]) -> list[Question]:
 
 @audited(Action.WRITE, Scope.VISITS, QUESTION)
 async def questions_for(
-    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    appointment_id: uuid.UUID,
+    registry: DrugRegistry,
 ) -> Sequence[Question]:
     """The current questions for this visit, refreshed from the record.
 
@@ -273,7 +295,9 @@ async def questions_for(
     its template and the verifier; one whose source has gone is superseded. One a person
     removed is not proposed again. The person's own questions stand as he wrote them.
     """
-    visit = await require_visit(session, context=context, appointment_id=appointment_id)
+    visit = await require_visit(
+        session, context=context, appointment_id=appointment_id, registry=registry
+    )
     state = await current_state(session, context=context)
     rows = await _rows(session, context=context, appointment_id=appointment_id)
     current = _current(rows)
@@ -465,6 +489,7 @@ async def patient_card(
 
 __all__ = [
     "CARD_SIZE",
+    "NoRegistry",
     "NoSuchQuestion",
     "NotAQuestion",
     "Proposed",

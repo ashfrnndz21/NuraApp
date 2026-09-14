@@ -27,6 +27,7 @@ from app.keys.confirm import NotWhatWasConfirmed, confirm
 from app.keys.context import OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import MedicationLine
 from app.memory.models import (
     AppointmentStatus,
     Artifact,
@@ -62,7 +63,7 @@ from app.reasoning.visits.questions import (
 from app.reasoning.visits.strings import NotPlainEnough, day_and_date
 from app.reasoning.visits.summary import (
     AlreadyConfirmed,
-    ChangeKind,
+    ChangeHeard,
     Decision,
     FactHeard,
     FixtureSummariser,
@@ -79,6 +80,7 @@ from app.reasoning.visits.summary import (
 from app.regions import Region
 from app.safety.plain_words import verify
 from app.state.service import current_state
+from tests.medicines_support import REGISTRY
 from tests.support import agree_to_family_sharing, refused_unit
 from tests.visits import (
     RED_FLAG,
@@ -86,6 +88,7 @@ from tests.visits import (
     SEPT_3,
     VISIT_AT,
     VISITS,
+    Unknown,
     medicine,
     pa,
     reading,
@@ -107,8 +110,8 @@ async def test_gaps_are_structured_and_name_their_facts(
 ) -> None:
     context = await pa(sg)
     bp = await reading(sg, context)
-    line = await medicine(sg, context, name="Furosemide")
-    await medicine(sg, context, name="Amlodipine", purpose="blood pressure", digest="b" * 64)
+    line = (await medicine(sg, context, generic="frusemide", strength="40 mg")).line
+    await medicine(sg, context, generic="amlodipine", strength="5 mg")
     _provider, appointment = await visit(sg, context, purpose="visit")
     disputed = await supersede_fact(
         sg,
@@ -140,7 +143,10 @@ async def test_gaps_are_structured_and_name_their_facts(
     )
     clock.step(timedelta(days=20))
 
-    gaps = await find_gaps(sg, context=context, appointment_id=appointment.id)
+    # The register knows what amlodipine is for; it has no monograph for the water pill here.
+    gaps = await find_gaps(
+        sg, context=context, registry=Unknown("frusemide"), appointment_id=appointment.id
+    )
     kinds = {gap.kind: gap for gap in gaps}
     assert set(kinds) == {
         GapKind.READING_STALE,
@@ -151,8 +157,12 @@ async def test_gaps_are_structured_and_name_their_facts(
     assert kinds[GapKind.READING_STALE].fact_ids == (bp.id,)
     assert kinds[GapKind.READING_STALE].since == SEPT_3
     no_purpose = kinds[GapKind.MEDICINE_NO_PURPOSE]
-    assert no_purpose.medicine == "Furosemide"
-    assert set(no_purpose.fact_ids) == {fact.id for fact in line}
+    assert no_purpose.medicine == "frusemide" and no_purpose.line_id == line.id
+    assert no_purpose.fact_ids == (line.fact_id,)
+    assert set(no_purpose.source_ids()) == {str(line.fact_id), str(line.id)}
+    # With the real monograph the purpose is known and the gap is gone.
+    with_purpose = await find_gaps(sg, context=context, registry=REGISTRY)
+    assert GapKind.MEDICINE_NO_PURPOSE not in {gap.kind for gap in with_purpose}
     assert kinds[GapKind.OPEN_DISPUTE].fact_ids == (disputed.id, bp.id)
     assert kinds[GapKind.APPOINTMENT_NO_PURPOSE].subject == str(appointment.id)
 
@@ -174,7 +184,7 @@ async def test_an_expired_fact_with_nothing_current_is_a_gap(
         valid_from=SEPT_3 - timedelta(days=400),
         valid_to=SEPT_3 - timedelta(days=30),
     )
-    gaps = await find_gaps(sg, context=context)
+    gaps = await find_gaps(sg, context=context, registry=REGISTRY)
     assert [(gap.kind, gap.subject, gap.fact_ids) for gap in gaps] == [
         (GapKind.FACT_EXPIRED, "lipid_panel", (old.id,))
     ]
@@ -189,7 +199,32 @@ async def test_an_expired_fact_with_nothing_current_is_a_gap(
         confidence=0.9,
         artifact_id=photo.id,
     )
-    assert await find_gaps(sg, context=context) == []
+    assert await find_gaps(sg, context=context, registry=REGISTRY) == []
+
+
+async def test_an_interaction_the_licensed_data_flagged_is_a_gap_naming_both_lines(
+    sg: AsyncSession,
+) -> None:
+    context = await pa(sg, language="en")
+    warfarin = (
+        await medicine(sg, context, generic="warfarin", strength="3 mg", dose="1 tab ON")
+    ).line
+    done = await medicine(sg, context, generic="aspirin", strength="100 mg")
+    [flag] = done.flags
+    gaps = await find_gaps(sg, context=context, registry=REGISTRY)
+    [gap] = [one for one in gaps if one.kind is GapKind.INTERACTION_FLAGGED]
+    assert gap.flag_id == flag.id
+    assert {gap.medicine, gap.other} == {"warfarin", "aspirin"}
+    assert set(gap.fact_ids) == {warfarin.fact_id, done.line.fact_id}
+    _provider, appointment = await visit(sg, context)
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    asked = [q for q in found if q.source_kind == GapKind.INTERACTION_FLAGGED.value]
+    assert [q.text for q in asked] == [
+        "Ask Dr Tan if the aspirin and the blood thinner tablet (warfarin) are OK together."
+    ]
+    assert str(flag.id) in asked[0].source_ids
 
 
 # --- the brief ------------------------------------------------------------------------------
@@ -198,10 +233,11 @@ async def test_an_expired_fact_with_nothing_current_is_a_gap(
 async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSession) -> None:
     context = await pa(sg, language="ms")
     await reading(sg, context)
-    await medicine(sg, context)
+    await medicine(sg, context, generic="warfarin", strength="3 mg", dose="1 tab ON")
+    await medicine(sg, context, generic="aspirin", strength="100 mg")
     _provider, appointment = await visit(sg, context)
 
-    brief = await build_brief(sg, context=context, appointment_id=appointment.id)
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     texts = [line["text"] for line in brief.lines]
     _clean(texts, "ms")
     assert brief.language == "ms"
@@ -211,11 +247,14 @@ async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSessi
     assert sections[:2] == ["purpose", "purpose"]
     assert "changed" in sections and "questions" in sections and "bring" in sections
     changed = [line for line in brief.lines if line["section"] == "changed"]
-    # The reading and the two medicine facts arrived since the first snapshot.
+    # The reading and the medicine lines' facts arrived since the record began.
     assert {line["key"] for line in changed} == {"changed_readings", "changed_medicines"}
     assert all(line["sources"] for line in changed)
     asked = [line for line in brief.lines if line["section"] == "questions"]
-    assert "Tanya Dr Tan untuk apa pil air." in [line["text"] for line in asked]
+    # The interaction E04's licensed data flagged, as a question, in his words for the two.
+    assert "Tanya Dr Tan sama ada aspirin dan ubat cair darah boleh dimakan bersama." in [
+        line["text"] for line in asked
+    ]
     assert brief.state_id == (await current_state(sg, context=context)).id
     assert brief.since_state_id is None  # no earlier visit: measured from nothing
     assert "Bawa buku tekanan darah anda." in texts and "Bawa ubat anda dalam kotaknya." in texts
@@ -230,11 +269,11 @@ async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSessi
 async def test_the_brief_is_rebuilt_only_when_state_moved(sg: AsyncSession) -> None:
     context = await pa(sg, language="en")
     _provider, appointment = await visit(sg, context)
-    first = await brief_for(sg, context=context, appointment_id=appointment.id)
-    again = await brief_for(sg, context=context, appointment_id=appointment.id)
+    first = await brief_for(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    again = await brief_for(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     assert again.id == first.id
     await reading(sg, context)
-    third = await brief_for(sg, context=context, appointment_id=appointment.id)
+    third = await brief_for(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     assert third.id != first.id and third.state_id != first.state_id
     assert (await sg.scalar(select(Brief.id).where(Brief.id == first.id))) is not None
 
@@ -252,7 +291,7 @@ async def test_a_brief_with_one_line_that_fails_the_verifier_is_refused_whole(
     }
     monkeypatch.setattr(strings, "TEMPLATES", bad)
     async with refused_unit(sg, NotPlainEnough):
-        await build_brief(sg, context=context, appointment_id=appointment.id)
+        await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     assert (await sg.scalars(select(Brief))).all() == []
     refused = [e for e in await read_audit(sg, context=context) if e.outcome is Outcome.REFUSED]
     assert {(e.refused_because, e.target) for e in refused} == {("NotPlainEnough", "brief")}
@@ -263,7 +302,7 @@ async def test_a_purpose_that_is_not_plain_refuses_the_brief(sg: AsyncSession) -
     context = await pa(sg, language="en")
     _provider, appointment = await visit(sg, context, purpose="BP review")
     with pytest.raises(NotPlainEnough) as refused:
-        await build_brief(sg, context=context, appointment_id=appointment.id)
+        await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     assert "review" in refused.value.text
 
 
@@ -285,7 +324,7 @@ async def test_a_key_without_the_visits_cannot_read_the_brief(sg: AsyncSession) 
         sg, region=Region.SG, person_id=mei.id, profile_id=context.profile_id
     )
     async with refused_unit(sg, OutOfScope):
-        await brief_for(sg, context=hers, appointment_id=appointment.id)
+        await brief_for(sg, context=hers, appointment_id=appointment.id, registry=REGISTRY)
     refused = [
         e
         for e in await read_audit(sg, context=context)
@@ -301,7 +340,7 @@ async def test_questions_carry_their_source_and_a_flag_becomes_a_question_not_ad
     sg: AsyncSession,
 ) -> None:
     context = await pa(sg, language="en")
-    line = await medicine(sg, context, name="Furosemide")
+    line = (await medicine(sg, context, generic="frusemide", strength="40 mg")).line
     _provider, appointment = await visit(sg, context)
     await __import__("app.audit.access", fromlist=["audited_write"]).audited_write(
         sg,
@@ -309,28 +348,32 @@ async def test_questions_carry_their_source_and_a_flag_becomes_a_question_not_ad
         context,
         Scope.RECORDS,
         kind=FlagKind.MEDICINE_CHANGE_HEARD,
-        code=ChangeKind.DOSE.value,
-        subject="furosemide",
-        fact_ids=[],
-        payload={"drug": "furosemide", "change": "dose"},
+        code=ChangeHeard.DOSE.value,
+        subject="frusemide",
+        fact_ids=[str(line.fact_id)],
+        payload={"generic": "frusemide", "change": "dose", "line_id": str(line.id)},
         raised_at=SEPT_3,
     )
-    found = await questions_for(sg, context=context, appointment_id=appointment.id)
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=Unknown("frusemide")
+    )
     by_text = {q.text: q for q in found}
     _clean(list(by_text), "en")
-    dose = by_text["Ask Dr Tan about the new amount of the water pill (furosemide)."]
+    dose = by_text["Ask Dr Tan about the new amount of the water pill (frusemide)."]
     assert dose.source is QuestionSource.FLAG and dose.priority == 1
-    purpose = by_text["Ask Dr Tan what the water pill (furosemide) is for."]
+    purpose = by_text["Ask Dr Tan what the water pill (frusemide) is for."]
     assert purpose.source is QuestionSource.GAP
     assert purpose.source_kind == GapKind.MEDICINE_NO_PURPOSE.value
-    assert set(purpose.source_ids) == {str(fact.id) for fact in line}
+    assert set(purpose.source_ids) == {str(line.fact_id), str(line.id)}
     assert found[0] is dose  # the medicine change first
     for text in by_text:
         assert not any(word in text.lower() for word in ("take ", "stop ", "start ", "half"))
     assert all(q.state_id for q in found)
 
     # Asking again with nothing moved writes nothing new.
-    again = await questions_for(sg, context=context, appointment_id=appointment.id)
+    again = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=Unknown("frusemide")
+    )
     assert [q.id for q in again] == [q.id for q in found]
 
 
@@ -338,7 +381,10 @@ async def test_a_person_adds_edits_and_removes_a_question_with_a_yes(sg: AsyncSe
     context = await pa(sg, language="en")
     await medicine(sg, context)
     _provider, appointment = await visit(sg, context)
-    before = await questions_for(sg, context=context, appointment_id=appointment.id)
+    registry = Unknown("frusemide")
+    before = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=registry
+    )
     generated = before[0]
 
     text = "Is the water pill bad for my kidneys?"
@@ -381,7 +427,9 @@ async def test_a_person_adds_edits_and_removes_a_question_with_a_yes(sg: AsyncSe
         question_id=added.id,
     )
     assert edited.supersedes_id == added.id and added.superseded_at is not None
-    current = await questions_for(sg, context=context, appointment_id=appointment.id)
+    current = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=registry
+    )
     assert edited.id in {q.id for q in current} and added.id not in {q.id for q in current}
 
     # A removal of a generated question is a tombstone, and it is not proposed again.
@@ -395,7 +443,9 @@ async def test_a_person_adds_edits_and_removes_a_question_with_a_yes(sg: AsyncSe
         remove=True,
     )
     assert gone.removed and gone.supersedes_id == generated.id
-    current = await questions_for(sg, context=context, appointment_id=appointment.id)
+    current = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=registry
+    )
     assert generated.id not in {q.id for q in current}
     assert generated.text not in {q.text for q in current}
 
@@ -421,10 +471,15 @@ async def test_a_fragment_typed_by_a_person_is_refused_by_the_verifier(sg: Async
 async def test_his_card_is_the_first_three_by_priority_and_one_screen(sg: AsyncSession) -> None:
     context = await pa(sg, language="ms")
     await reading(sg, context)
-    await medicine(sg, context, name="Furosemide")
-    await medicine(sg, context, name="Amlodipine", digest="b" * 64)
+    await medicine(sg, context, generic="frusemide", strength="40 mg")
+    await medicine(sg, context, generic="amlodipine", strength="5 mg")
     _provider, appointment = await visit(sg, context, purpose="visit")
-    found = await questions_for(sg, context=context, appointment_id=appointment.id)
+    found = await questions_for(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        registry=Unknown("frusemide", "amlodipine"),
+    )
     assert len(found) >= 3
     card = await patient_card(sg, context=context, appointment_id=appointment.id)
     assert card[:CARD_SIZE] == [q.text for q in found[:CARD_SIZE]]
@@ -465,7 +520,7 @@ async def test_memos_are_verified_consolidated_and_read_back_as_the_card(
         context=context,
         kind=MemoKind.ASK,
         key="ask_new_amount",
-        slots={"doctor": "Dr Tan", "medicine": "the water pill (furosemide)"},
+        slots={"doctor": "Dr Tan", "medicine": "the water pill (frusemide)"},
         source=MemoSource.CONVERSATION,
         appointment_id=appointment.id,
     )
@@ -476,7 +531,7 @@ async def test_memos_are_verified_consolidated_and_read_back_as_the_card(
     card = await memo_card(sg, context=context)
     assert card == [
         "Eat lighter dinners.",
-        "Ask Dr Tan about the new amount of the water pill (furosemide).",
+        "Ask Dr Tan about the new amount of the water pill (frusemide).",
     ]
     _clean(card, "en")
     assert [
@@ -550,8 +605,8 @@ def test_a_fact_heard_about_a_dose_is_rerouted_as_a_question_never_a_fact() -> N
     )
     rerouted = reroute_medicine_facts(draft)
     assert [(c.drug, c.change) for c in rerouted.medication_changes] == [
-        ("warfarin", ChangeKind.DOSE),
-        ("aspirin", ChangeKind.STOP),
+        ("warfarin", ChangeHeard.DOSE),
+        ("aspirin", ChangeHeard.STOP),
     ]
     assert [f.subject for f in rerouted.facts_heard] == ["blood_pressure"]
 
@@ -561,7 +616,7 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
 ) -> None:
     context = await pa(sg, language="en")
     await reading(sg, context)
-    await medicine(sg, context, name="Furosemide")
+    water_pill = (await medicine(sg, context, generic="frusemide", strength="40 mg")).line
     _provider, appointment = await visit(sg, context)
     store = LocalObjectStore(tmp_path, Region.SG)
     clock.set(VISIT_AT + timedelta(hours=1))
@@ -587,7 +642,7 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     _clean(lines, "en")
     assert summary.red_flag is False and summary.is_open and summary.state_id
     assert lines[0] == "Dr Tan said this on Thursday 10 September."
-    assert "Ask Dr Tan about the new amount of the water pill (furosemide)." in lines
+    assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in lines
     assert "See Dr Tan again on Thursday 15 October." in lines
     assert "Every morning, stand on the scale before breakfast." in lines
     assert "Do not eat after 12 midnight on Sunday 27 September." in lines
@@ -596,14 +651,16 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     kinds = {item.kind for item in items}
     assert kinds == set(SummaryItemKind)
     change = next(item for item in items if item.kind is SummaryItemKind.MEDICATION_CHANGE)
-    assert change.payload == {"drug": "furosemide", "change": "dose"}
+    assert change.payload == {"generic": "frusemide", "change": "dose"}
     assert text[change.span["start"] : change.span["end"]].startswith("From Friday")
     assert all(item.state is ItemState.PROPOSED and item.confidence > 0 for item in items)
 
     # Nothing is a memo, a visit or a fact yet.
     assert await current_memos(sg, context=context) == []
     assert len(await upcoming_appointments(sg, context=context)) == 0
-    medicines_before = await current_facts(sg, context=context, subject="medicine")
+    lines_before = [
+        (l.id, l.superseded_at) for l in (await sg.scalars(select(MedicationLine))).all()
+    ]
 
     decisions = [Decision(item.id, ItemState.CONFIRMED) for item in items]
     draft = await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions)
@@ -614,7 +671,12 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
             sg, context=context, summary_id=summary.id, decisions=other, confirmation_id=yes.id
         )
     outcome = await confirm_summary(
-        sg, context=context, summary_id=summary.id, decisions=decisions, confirmation_id=yes.id
+        sg,
+        context=context,
+        summary_id=summary.id,
+        decisions=decisions,
+        confirmation_id=yes.id,
+        registry=REGISTRY,
     )
 
     # Follow-ups → a PLANNED visit, needing its own confirm to become CONFIRMED.
@@ -625,17 +687,28 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     # Actions → memos filed against the next visit; the change → an ASK memo and a flag.
     memo_texts = {m.text for m in outcome.memos}
     assert "Every morning, stand on the scale before breakfast." in memo_texts
-    assert "Ask Dr Tan about the new amount of the water pill (furosemide)." in memo_texts
+    assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in memo_texts
     assert all(
         m.appointment_id == planned.id and m.source is MemoSource.VISIT for m in outcome.memos
     )
     [flag] = outcome.flags
-    assert flag.kind is FlagKind.MEDICINE_CHANGE_HEARD and flag.subject == "furosemide"
+    assert flag.kind is FlagKind.MEDICINE_CHANGE_HEARD and flag.subject == "frusemide"
     assert flag.artifact_id == artifact.id and flag.payload["ask_the_doctor"] is True
-    # Never a change to a medicine: the medicine facts are as they were.
-    medicines_after = await current_facts(sg, context=context, subject="medicine")
-    assert [f.id for f in medicines_after] == [f.id for f in medicines_before]
-    assert not any(f.artifact_id == artifact.id for f in medicines_after)
+    # What E04's reconcile picks up: the generic, the kind of change, the line — no amount.
+    assert flag.payload["generic"] == "frusemide" and flag.payload["change"] == "dose"
+    assert flag.payload["line_id"] == str(water_pill.id) and flag.fact_ids == [
+        str(water_pill.fact_id)
+    ]
+    assert "amount" not in flag.payload and "dose_text" not in flag.payload
+    # Never a change to a medicine: the lines are as they were, none superseded, none new.
+    lines_after = [
+        (l.id, l.superseded_at) for l in (await sg.scalars(select(MedicationLine))).all()
+    ]
+    assert lines_after == lines_before == [(water_pill.id, None)]
+    assert not any(
+        f.artifact_id == artifact.id
+        for f in await current_facts(sg, context=context, subject="medication")
+    )
     # Facts heard → facts with the transcript as provenance, confirmed by him, valid from the visit.
     [heard] = outcome.facts
     assert heard.artifact_id == artifact.id and heard.subject == "blood_pressure"
@@ -651,7 +724,7 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
         await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions)
     # The memo card, consolidated, in card order: what to do, then what to ask.
     card = await memo_card(sg, context=context)
-    assert card[-1] == "Ask Dr Tan about the new amount of the water pill (furosemide)."
+    assert card[-1] == "Ask Dr Tan about the new amount of the water pill (frusemide)."
     assert len(card) == len(outcome.memos)
     _clean(card, "en")
 
@@ -740,7 +813,9 @@ async def test_a_red_flag_word_writes_a_flag_first_and_the_card_says_call_today(
     assert {"flag", "visit_summary"} <= {e.target for e in trail}
     # And on the next visit's questions, first.
     _p, next_visit = await visit(sg, context, when=VISIT_AT + timedelta(days=30), doctor="Dr Tan")
-    found = await questions_for(sg, context=context, appointment_id=next_visit.id)
+    found = await questions_for(
+        sg, context=context, appointment_id=next_visit.id, registry=REGISTRY
+    )
     assert found[0].text == "Tell Dr Tan about the chest pain." and found[0].priority == 0
 
 
@@ -781,6 +856,18 @@ async def test_a_photo_is_not_a_transcript_and_an_unknown_transcript_hears_nothi
     ]
     rows = (await sg.scalars(select(VisitSummary))).all()
     assert len(rows) == 1 and (await sg.scalars(select(Artifact))).all()
+
+
+def test_his_name_for_a_medicine_comes_from_the_licensed_monograph_first() -> None:
+    from app.reasoning.visits.strings import medicine_words
+
+    assert medicine_words("frusemide", "en", REGISTRY) == "the water pill (frusemide)"
+    assert medicine_words("frusemide", "ms", REGISTRY) == "pil air"
+    assert medicine_words("aspirin", "en", REGISTRY) == "the aspirin"
+    assert medicine_words("warfarin", "zh", REGISTRY) == "薄血药"
+    # Unknown to the register: the docs' glossary, then the name as it is.
+    assert medicine_words("furosemide", "en", REGISTRY) == "the water pill (furosemide)"
+    assert medicine_words("Xylocaine", "en", REGISTRY) == "Xylocaine"
 
 
 def test_day_and_date_says_the_day_in_each_language() -> None:

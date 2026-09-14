@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited, audited_read
 from app.audit.models import Action
 from app.db import as_utc, utcnow
+from app.drugs.registry import DrugRegistry
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
 from app.memory.models import Appointment, AppointmentStatus, Fact
@@ -211,7 +212,11 @@ def compose(
 
 @audited(Action.WRITE, Scope.VISITS, BRIEF)
 async def build_brief(
-    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    appointment_id: uuid.UUID,
+    registry: DrugRegistry,
 ) -> Brief:
     """Compose and file the brief for one visit, in the profile's language, from State.
 
@@ -219,7 +224,9 @@ async def build_brief(
     from and the one "what changed" was measured against, and every line carries the ids it
     rests on.
     """
-    visit = await require_visit(session, context=context, appointment_id=appointment_id)
+    visit = await require_visit(
+        session, context=context, appointment_id=appointment_id, registry=registry
+    )
     state = await current_state(session, context=context)
     since, since_moment = await _since_snapshot(session, context=context, visit=visit)
     changed = await _changed(session, context=context, state=state, since=since)
@@ -243,7 +250,9 @@ async def build_brief(
         has_medicines=has_medicines,
         context=context,
     )
-    gaps = await find_gaps(session, context=context, appointment_id=appointment_id)
+    gaps = await find_gaps(
+        session, context=context, registry=registry, appointment_id=appointment_id
+    )
     return await render_from_state(
         session,
         Brief,
@@ -279,7 +288,11 @@ async def latest_brief(
 
 @audited(Action.READ, Scope.VISITS, BRIEF)
 async def brief_for(
-    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    appointment_id: uuid.UUID,
+    registry: DrugRegistry,
 ) -> Brief:
     """The brief for this visit as it stands: the newest one, rebuilt when State has moved
     past it, so what he reads is always rendered from the record as it is now."""
@@ -287,4 +300,6 @@ async def brief_for(
     state = await current_state(session, context=context)
     if newest is not None and newest.state_id == state.id:
         return newest
-    return await build_brief(session, context=context, appointment_id=appointment_id)
+    return await build_brief(
+        session, context=context, appointment_id=appointment_id, registry=registry
+    )
