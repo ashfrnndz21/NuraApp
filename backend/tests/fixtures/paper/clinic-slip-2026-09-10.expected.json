@@ -1,0 +1,47 @@
+{
+  "placeholder": "clinic-slip-2026-09-10",
+  "note": "What the slip says, labelled by hand from the redacted original. The frequency is 'OM', once a day in the morning; the recogniser could not read it, so the harness counts it as put to a person.",
+  "document_kind": "clinic_slip",
+  "fields": [
+    {
+      "subject": "visit",
+      "attribute": "doctor",
+      "value": "Dr Tan",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Amlodipine",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 5,
+      "unit": "mg"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Amlodipine",
+        "instruction": "1 tablet",
+        "as_written": "1 tab"
+      },
+      "unit": "tablet"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "frequency",
+      "value": "once a day in the morning",
+      "unit": null
+    },
+    {
+      "subject": "visit",
+      "attribute": "next_visit",
+      "value": "2026-12-10",
+      "unit": null
+    }
+  ]
+}

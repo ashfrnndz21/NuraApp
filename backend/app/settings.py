@@ -28,6 +28,10 @@ class Settings:
     """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
     from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
     a later adapter, and without either the process refuses to start."""
+    voice_fixtures: str | None = None
+    """NURA_VOICE_FIXTURES: the directory of transcripts the fixture transcriber answers from
+    (`app.ingestion.transcribe.FixtureTranscriber`). Set on a laptop; a speech provider in the
+    region is a later adapter, and without either the process refuses to start."""
     feed_fixtures: str | None = None
     """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
     (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
@@ -76,6 +80,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         dev_code_sender=dev_code_sender,
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
+        voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         whatsapp_provider=source.get("NURA_WHATSAPP_PROVIDER", "fixture"),

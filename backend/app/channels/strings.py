@@ -32,3 +32,24 @@ def phone_code_message(code: str, *, asked_by: str | None = None) -> str:
     """The text a phone receives with its six digits, for the person or on his behalf."""
     lines = PHONE_CODE_SELF if asked_by is None else PHONE_CODE_ON_BEHALF
     return "\n".join(lines).format(code=code, who=asked_by or "")
+
+
+# --- capture (E02) ---------------------------------------------------------------------------
+
+COULD_NOT_READ = (
+    "Nura could not read this.",
+    "Please type it.",
+)
+"""@patient The lines beside a field on a review card that Nura could not read (E02-02)."""
+
+NOT_A_HEALTH_PAPER = ("This does not look like a health paper.",)
+"""@patient The line on a card for a page that is not a health paper: a receipt (E02-03)."""
+
+NOT_A_MACHINE_SCREEN = ("This does not look like the screen of a machine.",)
+"""@patient The line on a card for a photo sent as a machine screen that is not one (E02-08)."""
+
+COULD_NOT_HEAR = (
+    "Nura could not hear this note.",
+    "Nura kept the note.",
+)
+"""@patient The lines under a voice note Nura could not hear; the recording is kept (E02-06)."""

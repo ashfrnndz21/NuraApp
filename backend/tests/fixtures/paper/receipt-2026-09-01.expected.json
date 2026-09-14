@@ -1,0 +1,6 @@
+{
+  "placeholder": "receipt-2026-09-01",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "not_health",
+  "fields": []
+}

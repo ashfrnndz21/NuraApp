@@ -28,6 +28,7 @@ from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
+from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
 from app.settings import Settings
@@ -44,6 +45,9 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    transcriber: Transcriber
+    """What hears a voice note, in this deployment's region; the fixture one until a speech
+    provider in the region exists (E02-06)."""
     searcher: Searcher
     """What finds pages for a self-search job, from allowlisted sources only (E21)."""
     compressor: Compressor
