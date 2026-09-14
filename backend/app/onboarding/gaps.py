@@ -24,7 +24,7 @@ call the biography makes for them — the place the visit loop's renderer plugs 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,7 +110,11 @@ class Gap:
     applies: Rule
     closed: Rule
     capture: str = "photo"
-    """What doing it now opens: the camera ("photo"), a tap ("tap"), or nothing yet ("none")."""
+    """How it is filled, which is what doing it now opens: the camera ("photo"), a PDF from
+    a portal or an email ("pdf"), a tap on a follow-up question ("tap"), or letting someone
+    in ("invite")."""
+    words: tuple[str, ...] = ()
+    """The words of the cloud (`conditions.json`) it is about, the first the one shown."""
 
 
 CATALOGUE: tuple[Gap, ...] = (
@@ -132,7 +136,6 @@ CATALOGUE: tuple[Gap, ...] = (
         1,
         _told("allergies", "medicine_allergy"),
         lambda k: "allergy" in k.attributes,
-        capture="tap",
     ),
     Gap(
         # "Thinner tapped, kind unknown": only when he said he takes one, never assumed from
@@ -174,10 +177,34 @@ CATALOGUE: tuple[Gap, ...] = (
         _always,
         lambda k: PaperKind.INSURANCE_CARD.value in k.papers or _holds(INSURANCE_SUBJECTS)(k),
     ),
-    Gap("meal_times", 2, _always, lambda k: k.breakfast_set, capture="tap"),
-    Gap("someone_to_see", 3, _always, lambda k: k.someone_holds_a_key, capture="none"),
+    Gap("meal_times", 2, _always, lambda k: k.breakfast_set),
+    Gap("someone_to_see", 3, _always, lambda k: k.someone_holds_a_key),
 )
 """The document's catalogue, in its order, for what this backend can act on today."""
+
+_HOW: dict[str, tuple[str, tuple[str, ...]]] = {
+    "medicines": ("photo", ()),
+    "bp_numbers": ("photo", ("high_blood_pressure", "bp_tablets", "bp_at_home")),
+    "weight": ("photo", ("weak_heart", "weigh_myself", "water_pill")),
+    "allergy_which": ("tap", ("medicine_allergy", "allergies")),
+    "thinner_which": ("photo", ("blood_thinner",)),
+    "discharge_letter": ("photo", ("hospital_last_year", "have_hospital_letter")),
+    "cholesterol_result": ("pdf", ("cholesterol", "cholesterol_tablet")),
+    "sugar_result": ("pdf", ("diabetes", "sugar_tablets", "insulin", "sugar_at_home")),
+    "kidney_result": ("pdf", ("kidneys", "kidney_watched", "dialysis")),
+    "next_visit": ("photo", ()),
+    "last_visit": ("photo", ()),
+    "insurance": ("photo", ()),
+    "meal_times": ("tap", ()),
+    "someone_to_see": ("invite", ()),
+}
+"""How each gap is filled, and the words of the cloud it is about — set beside the rules, so
+the rules read on their own. A lab result comes most often as a PDF from a portal or an email
+(E02-03); the papers route takes a photo of it as well."""
+
+CATALOGUE = tuple(
+    replace(gap, capture=_HOW[gap.code][0], words=_HOW[gap.code][1]) for gap in CATALOGUE
+)
 
 BY_CODE = {gap.code: gap for gap in CATALOGUE}
 

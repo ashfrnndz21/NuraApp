@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.channels.api.schemas import PhotoIn, ReviewCardOut, utc
 from app.onboarding.biography import BiographyView, LineView, PaperView, Question, Summary
-from app.onboarding.conditions import Condition
+from app.onboarding.conditions import Condition, name_of
 from app.onboarding.gaps import BY_CODE
 from app.onboarding.models import Answer, Density, PaperKind, PlanPrompt, PromptStatus
 from app.onboarding.plan import PlanView
@@ -320,6 +320,11 @@ class ReadBackIn(BaseModel):
 # --- E01-04: the first week -------------------------------------------------------------------
 
 
+def _word_of(gap: str, language: str) -> str | None:
+    found = BY_CODE.get(gap)
+    return None if found is None or not found.words else name_of(found.words[0], language)
+
+
 class PromptOut(BaseModel):
     """One day's prompt: the gap it asks to fill (`prompt`, the code the skip route takes),
     which day, when it is due — in UTC and on his clock — where it stands, and its words."""
@@ -328,7 +333,10 @@ class PromptOut(BaseModel):
     day: int
     tier: int
     capture: str
-    """What doing it now opens: "photo" (the camera), "tap", or "none" yet."""
+    """How it is filled: "photo" (the camera), "pdf" (an import), "tap" (a follow-up
+    question), or "invite" (letting someone in)."""
+    word: str | None
+    """The word of the cloud the gap is about, in his language, or null when it is about none."""
     deferred: int
     """How many times he said Later: once sends it to the back of the week, twice retires it."""
     due_at: datetime
@@ -351,7 +359,8 @@ class PromptOut(BaseModel):
             prompt=prompt.gap,
             day=prompt.day,
             tier=BY_CODE[prompt.gap].tier if prompt.gap in BY_CODE else 3,
-            capture=BY_CODE[prompt.gap].capture if prompt.gap in BY_CODE else "none",
+            capture=BY_CODE[prompt.gap].capture if prompt.gap in BY_CODE else "photo",
+            word=_word_of(prompt.gap, language),
             deferred=prompt.deferred,
             due_at=due,
             due_local=due.astimezone(REGION_TZ[region]).isoformat(),

@@ -84,6 +84,13 @@ async def test_seven_prompts_one_a_day_from_tomorrow_at_breakfast(deployment: De
     assert prompts[0]["headline"] == "Nombor tekanan darah biasa anda"
     assert prompts[0]["action"] == "Hari ini, ambil gambar mesin tekanan darah anda."
     assert prompts[4]["headline"] == "Lawatan anda yang seterusnya ke Dr Tan"
+    assert (prompts[0]["word"], prompts[0]["capture"], prompts[0]["tier"]) == (
+        "Darah tinggi",
+        "photo",
+        1,
+    )
+    assert (prompts[3]["word"], prompts[3]["capture"]) == ("Masalah buah pinggang", "pdf")
+    assert (prompts[4]["word"], prompts[6]["capture"]) == (None, "photo")
     assert plan["due"] == []  # nothing before the first morning
 
     got = await call(deployment, "GET", f"/profiles/{profile_id}/plan", mei["token"], 200)
@@ -246,6 +253,8 @@ async def test_fewer_gaps_fewer_prompts_and_breakfast_at_eight_until_he_says(
     ]
     assert plan["prompts"][0]["due_local"] == "2026-09-04T08:00:00+08:00"
     assert plan["prompts"][0]["action"] == "Today, take a photo of the medicine bag."
+    how = {p["prompt"]: (p["capture"], p["word"]) for p in plan["prompts"]}
+    assert how["meal_times"] == ("tap", None) and how["someone_to_see"] == ("invite", None)
     assert closed["summary"]["lines"][-3:] == [
         "Tomorrow at breakfast, Nura will ask for one more thing.",
         "There are 4 things to ask, one each day.",
