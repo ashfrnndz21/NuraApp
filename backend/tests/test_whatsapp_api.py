@@ -14,6 +14,30 @@ MEI = "+6591110002"
 KIT = "+6591110003"
 
 
+
+def _words_in(payload: object) -> str:
+    """Every string value in a response except ids and times, joined.
+
+    "No words by reference" means no value a person wrote comes back; ids and
+    timestamps are random or clock-derived and may contain any digits.
+    """
+    out: list[str] = []
+
+    def walk(node: object, key: str = "") -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, k)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v, key)
+        elif isinstance(node, (str, int, float)) and not (
+            key == "id" or key.endswith("_id") or key.endswith("_at") or key in {"at", "sha256"}
+        ):
+            out.append(str(node))
+
+    walk(payload)
+    return " ".join(out)
+
 async def _pa_on_whatsapp(deployment: Deployment) -> tuple[dict[str, str], str, dict[str, str]]:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)
@@ -118,7 +142,7 @@ async def test_an_unsigned_webhook_is_refused_and_a_signed_one_walks_the_thread(
     assert deployment.whatsapp.sent[0].to_e164 == MEI
     assert deployment.whatsapp.sent[0].text.startswith("Did I get this right?")
     # Nothing about what was said is on the wire back to the provider.
-    assert "150" not in signed.text
+    assert "150" not in _words_in(signed.json())
 
 
 async def test_the_dev_door_drives_the_same_path_and_the_owner_reads_the_thread(
@@ -156,7 +180,7 @@ async def test_the_dev_door_drives_the_same_path_and_the_owner_reads_the_thread(
         ("outbound", "reply"),
     ]
     assert all(m["artifact_id"] for m in thread.json() if m["direction"] == "inbound")
-    assert "150" not in thread.text  # by reference, never the words
+    assert "150" not in _words_in(thread.json())  # by reference, never the words
     # The chief reads it too; a stranger to the profile cannot.
     as_mei = await deployment.client.get(
         f"/profiles/{profile_id}/whatsapp/thread", headers=bearer(mei["token"])
