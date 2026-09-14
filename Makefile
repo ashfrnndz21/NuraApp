@@ -20,6 +20,8 @@ dev: export NURA_VOICE_FIXTURES ?= tests/fixtures/voice
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
+# NURA_FROZEN_CLOCK=2026-09-14T10:00:00+08:00 stands the dev run's clock still (end-to-end runs:
+# web/playwright.config.ts sets it); POST /dev/clock moves it. Refused outside a dev run.
 # The built web client (`make build-web`), served by the API at http://127.0.0.1:8000/app when
 # the directory exists; without a build there is no /app and nothing else changes.
 dev: export NURA_WEB_DIST ?= ../web/dist

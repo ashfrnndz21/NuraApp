@@ -28,12 +28,8 @@ jobs:
       - run: cd web && npm run plain-words
       - run: pip install -e "backend[dev]"
       - run: cd web && npx playwright install --with-deps chromium
-      - name: Start the backend serving the build (make dev, in the background)
-        run: |
-          make migrate
-          nohup make dev > /tmp/make-dev.out 2>&1 &
-          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/health && break; sleep 1; done
-          curl -sf -o /dev/null http://127.0.0.1:8000/app/
+      # Playwright starts the backend itself (web/playwright.config.ts `webServer`): `make dev`
+      # serving the build just made, its clock frozen at 10:00 in Singapore (NURA_FROZEN_CLOCK).
       - run: cd web && npx playwright test
       - uses: actions/upload-artifact@v4
         if: failure()
