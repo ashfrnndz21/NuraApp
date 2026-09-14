@@ -887,5 +887,7 @@ export const ms = {
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
     TapNotToday: "Nura hanya menulis apa yang anda tekan hari ini.",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "Dokumen itu terlalu besar untuk Nura.",
   },
 } satisfies Strings;

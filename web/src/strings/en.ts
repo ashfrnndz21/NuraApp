@@ -891,5 +891,7 @@ export const en = {
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",
     TapNotToday: "Nura writes down only what you tapped today.",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "That file is too big for Nura.",
   },
 } satisfies Strings;

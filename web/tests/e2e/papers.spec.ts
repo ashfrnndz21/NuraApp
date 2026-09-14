@@ -108,6 +108,25 @@ test("papers from his photos: many at once, a grid he confirms, nothing sent bef
   expect(await photosOnThePhone(page)).toEqual({ blobs: 0, cached: [], local: 0, session: 0, paperBytes: 0 });
 });
 
+test("a photo too large for Nura: the backend's own sentence on that paper, and the rest of the batch still goes", async ({ page, request }) => {
+  const pa = await seedOwner(request, "Pa", []);
+  const sent = captures(page);
+  await openPapers(page, pa.phone);
+  // Past the photo route's cap of 10 MB: the layer in front of the app refuses it at once (#135).
+  const huge = { name: "IMG_huge.png", mimeType: "image/png", buffer: Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(11 * 1024 * 1024, 7)]) };
+  await page.getByTestId("photos-input").setInputFiles([paperPhoto("lipid-panel-2023-09-07"), huge, paperPhoto("receipt-2026-09-01")]);
+  await expect(page.getByTestId("send-papers")).toHaveText("Send 3 papers");
+  await page.getByTestId("send-papers").click();
+  await expect(page.getByTestId("nothing-kept")).toBeVisible({ timeout: 30_000 });
+  const results = page.getByTestId("paper-result");
+  await expect(results).toHaveCount(3);
+  await expect(results.nth(0)).toHaveAttribute("data-outcome", "card");
+  await expect(results.nth(1)).toHaveAttribute("data-outcome", "refused");
+  await expect(results.nth(1).getByRole("alert")).toHaveText("That photo is too big for Nura.");
+  await expect(results.nth(2)).toHaveAttribute("data-outcome", "notHealth");
+  expect(sent).toEqual(["photos", "photos", "photos"]);
+});
+
 /** A real one-by-one PNG: the grid decodes what is on screen. */
 const DOT = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 

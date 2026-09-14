@@ -887,5 +887,7 @@ export const zh = {
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
     TapNotToday: "Nura 只记下您今天点的。",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "那个文件太大了，Nura 打不开。",
   },
 } satisfies Strings;
