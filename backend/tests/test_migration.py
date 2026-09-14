@@ -25,13 +25,19 @@ from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.consent.models import Consent
+from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
+from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.models import ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
+from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
+from app.safety.models import EmergencyCard, Notice, WhatToDoCard
+from app.safety.models import Flag as HeardFlag
+from app.safety.red_flags import Flag
 from app.state.models import StateSnapshot
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -56,10 +62,26 @@ TABLES: tuple[Table, ...] = (
     StateSnapshot.__table__,
     ReviewCard.__table__,
     ReviewField.__table__,
+    Source.__table__,
+    SearchJob.__table__,
+    FeedItem.__table__,
+    Engagement.__table__,
+    FeedPage.__table__,
+    Flag.__table__,
     MedicationLine.__table__,
     Supply.__table__,
     DoseTaken.__table__,
     InteractionFlag.__table__,
+    Privacy.__table__,
+    RosterSlot.__table__,
+    Task.__table__,
+    ThreadMessage.__table__,
+    ScheduledPush.__table__,
+    Document.__table__,
+    HeardFlag.__table__,
+    Notice.__table__,
+    WhatToDoCard.__table__,
+    EmergencyCard.__table__,
 )
 
 
@@ -139,7 +161,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0012_emergency_symptoms"]
+    assert heads == ["0014_emergency_symptoms"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -174,10 +196,20 @@ def test_the_migrations_build_the_tables_the_models_declare(
             Appointment,
             ReviewCard,
             ReviewField,
+            FeedItem,
+            Engagement,
+            Flag,
             MedicationLine,
             Supply,
             DoseTaken,
             InteractionFlag,
+            ThreadMessage,
+            ScheduledPush,
+            Document,
+            HeardFlag,
+            Notice,
+            WhatToDoCard,
+            EmergencyCard,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

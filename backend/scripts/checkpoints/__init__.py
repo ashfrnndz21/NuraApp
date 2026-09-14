@@ -1,6 +1,7 @@
-"""One module per checkpoint from here on, each exposing `run(base_url, dev_log) -> int`.
+"""One module per checkpoint from `docs/checkpoints.md`, each exposing
+`run(base_url, dev_log) -> int` in the runner's ✓/✗ style; `scripts/checkpoint.py` dispatches.
+Each module is self-contained, so two stories can add theirs side by side."""
 
-`scripts.checkpoint` dispatches to them by number; a module walks its scenario over HTTP
-only, prints one ✓/✗ line per step, and returns the exit code. Checkpoints 2 to 6 still live
-in `scripts.checkpoint` itself.
-"""
+from scripts.checkpoints import cp13, cp14
+
+__all__ = ["cp13", "cp14"]

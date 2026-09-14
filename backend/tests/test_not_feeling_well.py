@@ -11,7 +11,7 @@ transcriber; every line is verified; a Malaysian profile is told 999.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import time, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -21,6 +21,7 @@ from app.clock import FrozenClock
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import NoConsent, grant_consent
 from app.db import utcnow
+from app.family.roster import add_slot
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import record_dose_taken
 from app.memory.models import Artifact, ArtifactKind, Fact
@@ -437,3 +438,36 @@ async def test_a_voice_note_never_reaches_a_transcriber_in_another_region(
         Artifact.profile_id == owner.profile_id, Artifact.kind == ArtifactKind.VOICE
     )
     assert (await sg.scalars(voice_notes)).all() == []
+
+
+async def test_the_roster_names_who_is_on_duty_and_a_red_flag_still_tells_everyone(
+    sg: AsyncSession,
+) -> None:
+    """With a roster (E12), whoever is on duty now is named on his card and gets the ordinary
+    notice; a red flag still goes to everyone let in to his emergency card, on duty first. A
+    key that cannot read the roster (a caregiver's) falls back to the whole list and the chief."""
+    owner, mei, lin, siti, _kit = await _household(sg)
+    await add_slot(
+        sg,
+        context=owner,
+        person_id=lin.person_id,
+        role=KeyRole.EMERGENCY,
+        from_time=time(0, 0),
+        to_time=time(23, 59),
+        weekdays=list(range(7)),
+    )
+    tired = await _press(sg, owner, words="tired today")
+    assert tired.notified_person_ids == [lin.person_id]
+    assert "Lin will call you today." in [line.text for line in tired.lines]
+    chest = await _press(sg, owner, words="chest pain")
+    assert chest.notified_person_ids[0] == lin.person_id
+    assert set(chest.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}
+    assert [line.text for line in chest.lines] == [
+        "Lin knows already.",
+        "Call the ambulance now on 995.",
+        "After that, call Lin.",
+    ]
+    ana = await let_in(sg, owner, phone="+6595550042", name="Ana", role=KeyRole.CAREGIVER)
+    theirs = await _press(sg, ana, words="chest pain")
+    assert theirs.lines[0].text == "Mei knows already."
+    assert set(theirs.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}

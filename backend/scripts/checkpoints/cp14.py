@@ -1,7 +1,7 @@
-"""Checkpoint 11 — emergency card, not feeling well, symptoms (E13-01, E13-02, E14-01).
+"""Checkpoint 14 — emergency card, not feeling well, symptoms (E13-01, E13-02, E14-01).
 
     make dev                # one terminal
-    make checkpoint N=11    # another
+    make checkpoint N=14    # another
 
 `run(base_url, dev_log)` walks the scenario over HTTP and returns the exit code. Like
 `scripts.checkpoint`, it is a client and nothing more: it never imports the app, reads the
@@ -460,7 +460,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
 
 
 def run(base_url: str, dev_log: Path) -> int:
-    """Walk checkpoint 11 against the server at `base_url`; 0 when every step is ✓."""
+    """Walk checkpoint 14 against the server at `base_url`; 0 when every step is ✓."""
     try:
         with httpx.Client(base_url=base_url, timeout=10.0) as client:
             try:
@@ -474,7 +474,7 @@ def run(base_url: str, dev_log: Path) -> int:
             walk(client, Path(dev_log))
     except Failed as failed:
         print(str(failed), flush=True)
-        print("checkpoint 11 stopped at the first ✗", flush=True)
+        print("checkpoint 14 stopped at the first ✗", flush=True)
         return 1
-    print("checkpoint 11 passed: every step did what docs/checkpoints.md says", flush=True)
+    print("checkpoint 14 passed: every step did what docs/checkpoints.md says", flush=True)
     return 0

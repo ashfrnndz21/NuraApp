@@ -31,25 +31,32 @@ from app.channels.api.schemas import (
     ConfirmationOut,
     ConfirmIn,
     ConsentOut,
+    KeyChangeConfirmIn,
     KeyGrant,
     KeyOut,
     MedicineConfirmIn,
     NoteIn,
     NoteOut,
+    OnlyMeConfirmIn,
     ProfileCreate,
     ProfileForSomeone,
     ProfileOut,
+    PushConfirmIn,
     ReadingIn,
     ReadingOut,
     SharingConsentIn,
     StateOut,
     StewardshipOut,
+    TaskDoneConfirmIn,
 )
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
 from app.db import utcnow
 from app.drafts import FactDraft
 from app.errors import Refusal
+from app.family.privacy import only_me_draft
+from app.family.pushes import preview_push, push_draft
+from app.family.roster import task_done_draft_for
 from app.identity.doors import (
     claim_draft_for,
     claim_profile,
@@ -62,7 +69,7 @@ from app.identity.service import create_own_profile, register_person
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
-from app.keys.grants import grant_key, list_keys, may_cut_keys, revoke_key
+from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
 from app.memory.episodic import record_event
@@ -202,6 +209,35 @@ async def mint_confirmation(
             source_artifact_id=body.source_artifact_id,
         )
         return ConfirmationOut.of(await confirm(session, context, medicine))
+    if isinstance(body, KeyChangeConfirmIn):
+        # Narrowing a key (E12-01): the draft is recomputed from the key, so a yes cannot
+        # be minted for anything wider than it opens; `WouldWiden` refuses here already.
+        _, _, _, change = await key_change_draft_for(
+            session, context=context, key_id=body.key_id, scopes=body.scopes, window=body.window
+        )
+        return ConfirmationOut.of(await confirm(session, context, change))
+    if isinstance(body, OnlyMeConfirmIn):
+        return ConfirmationOut.of(
+            await confirm(session, context, only_me_draft(body.scope, only_me=body.only_me))
+        )
+    if isinstance(body, TaskDoneConfirmIn):
+        # The doer's own tap (E12-03): the task must name the person minting.
+        done = await task_done_draft_for(session, context=context, task_id=body.task_id)
+        return ConfirmationOut.of(await confirm(session, context, done))
+    if isinstance(body, PushConfirmIn):
+        # The yes binds to the lines exactly as previewed (E12-06).
+        preview = await preview_push(
+            session,
+            context=context,
+            template_id=body.template_id,
+            slots=body.slots,
+            memo_lines=body.memo_lines,
+            language=body.language,
+        )
+        push = push_draft(
+            preview, send_at=body.send_at, channel=body.channel, expires_at=body.expires_at
+        )
+        return ConfirmationOut.of(await confirm(session, context, push))
     review = await review_draft_for(
         session,
         context=context,

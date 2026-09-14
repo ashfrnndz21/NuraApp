@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "Taking your blood pressure at home",
+    "body": [
+      "Sit down and rest for 5 minutes first.",
+      "Keep your feet flat and your arm on the table.",
+      "Take it at the same time each morning.",
+      "Write both numbers in your blood pressure book."
+    ],
+    "why_topic": "your blood pressure",
+    "passage": "Rest for five minutes before measuring. Sit with your back supported, feet flat on the floor and arm resting on a table"
+  },
+  "ms": {
+    "headline": "Ambil tekanan darah di rumah",
+    "body": [
+      "Duduk dan berehat 5 minit dahulu.",
+      "Kaki rata di lantai, tangan di atas meja.",
+      "Ambil pada waktu yang sama setiap pagi.",
+      "Tulis kedua-dua nombor dalam buku tekanan darah anda."
+    ],
+    "why_topic": "tekanan darah anda",
+    "passage": "Rest for five minutes before measuring. Sit with your back supported, feet flat on the floor and arm resting on a table"
+  },
+  "zh": {
+    "headline": "在家量血压",
+    "body": [
+      "先坐下休息5分钟。",
+      "脚放平，手臂放在桌上。",
+      "每天早上同一个时间量。",
+      "把两个数字都写进您的血压本。"
+    ],
+    "why_topic": "您的血压",
+    "passage": "Rest for five minutes before measuring. Sit with your back supported, feet flat on the floor and arm resting on a table"
+  }
+}

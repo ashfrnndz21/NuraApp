@@ -13,6 +13,9 @@ dev: export NURA_OBJECT_STORE ?= var/objects
 dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
 # The voice transcripts the fixture transcriber answers from, keyed by the digest of the bytes (E13).
 dev: export NURA_VOICE_FIXTURES ?= tests/fixtures/voice
+# The feed's fixture searcher and compressor (E21) answer from here until the real fetcher
+# and the grounded model call exist behind the same two ports.
+dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
 migrate: ; cd backend && python3 -m alembic upgrade heads

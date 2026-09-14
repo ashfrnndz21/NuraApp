@@ -2,7 +2,7 @@
 
 No audio is committed. Each note is a small deterministic byte string — a marker and a
 label — whose sha256 is the key the fixture transcriber answers by, and a JSON file in
-`tests/fixtures/voice/` that says what it heard and how sure it was. `scripts/checkpoints/cp11.py`
+`tests/fixtures/voice/` that says what it heard and how sure it was. `scripts/checkpoints/cp14.py`
 carries the same one-line generator so it can send the same bytes over HTTP without
 importing anything from here. A label with no file is a note the transcriber cannot hear.
 """

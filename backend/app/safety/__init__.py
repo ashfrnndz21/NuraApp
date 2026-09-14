@@ -10,5 +10,17 @@ registry's class on the line; one table, one refusal (`HighRiskNeedsLabelPhoto`)
 string tagged `@patient` passes the standard or does not ship, and `plain_words.verify` is the
 same check for the memos and cards the backend writes at run time.
 
-The boundary copy and the red-flag rules arrive with their own stories.
+`red_flags` is the list of the things we do not wait for (docs/smart-nudges.md §2), reached
+two ways. A word tapped on the feeling cloud (E21) raises a `Flag` on the SYMPTOM event it
+was said in, before any ranking or cap, telling every live key with the emergency scope. Words
+said or typed to the not-feeling-well button or the symptom log (E13/E14) are read against
+the same list (`match_red_flags`) and the flag is written first and kept (`write_flag_kept`).
+Either way a flag that depends on a fact not on the record is suppressed visibly, so the
+caregiver sees it was considered.
+
+`emergency_card`, `not_feeling_well` and `symptom_log` are E13/E14: the card a stranger is
+handed, the one button, and how he feels in his words (ADR 0002). `people` is the two narrow,
+audited reads of a Person row they make; `transcribe` is the region-pinned speech port.
+
+The boundary copy arrives with its own story.
 """

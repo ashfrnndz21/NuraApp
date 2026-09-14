@@ -1,0 +1,194 @@
+"""The push composer (E12-06): a chief drafts a message to him, previews it as he will read
+it, and puts it on the calendar. Nothing here sends; E11 delivers at a State-appropriate
+moment between `send_at` and `expires_at`.
+
+The message comes from a template in plain words (`app.family.strings.PUSH_TEMPLATES`), in
+his language, with the chief's name and a time in words filled in — or as a memo, lines the
+chief wrote herself. Either way the preview is exactly what he will see, and it passes
+`app.safety.plain_words.verify` or it is refused with the findings, so the composer can
+fix the line. The yes binds to the lines: what was previewed is what is scheduled.
+"""
+
+from __future__ import annotations
+
+import uuid
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit.access import audited, audited_profile_read, audited_read
+from app.audit.models import Action
+from app.db import as_utc, utcnow
+from app.drafts import PushDraft
+from app.errors import Refusal
+from app.family.common import NotPlainWords, a_chief
+from app.family.models import PushChannel, ScheduledPush
+from app.family.strings import PUSH_TEMPLATES, TEMPLATE_SLOTS, language_of
+from app.keys.confirm import consume_confirmation
+from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.safety.plain_words import verify
+from app.state.service import render_from_state
+
+PUSH_TARGET = ScheduledPush.__tablename__
+
+MAX_MEMO_LINES = 6
+"""A memo to him is a few short lines, not a letter."""
+
+
+class NoSuchTemplate(Refusal):
+    """No message template by that id."""
+
+
+class MissingSlot(Refusal):
+    """The template names a person, a time or a doctor the composer did not give."""
+
+
+class NotAMemo(Refusal):
+    """A memo is one to six lines, each with words in it."""
+
+
+class BadWindow(Refusal):
+    """A message is scheduled for a moment ahead, and stops being worth sending after it."""
+
+
+@dataclass(frozen=True, slots=True)
+class Preview:
+    """What he will see: the lines, in his language, and the verifier's notes on them."""
+
+    language: str
+    template_id: str | None
+    lines: list[str]
+    notes: list[str]
+
+
+def render(
+    *,
+    language: str,
+    template_id: str | None,
+    slots: Mapping[str, str],
+    memo_lines: Sequence[str] | None,
+) -> Preview:
+    """The lines as he will read them, from a template or a memo, through the verifier.
+
+    Pure: the same inputs give the same lines, which is what lets a yes minted on the
+    preview be spent on the schedule.
+    """
+    words = language_of(language)
+    if (template_id is None) == (memo_lines is None):
+        raise NotAMemo("a message is a template or a memo, one of the two")
+    if template_id is not None:
+        templates = PUSH_TEMPLATES[words]
+        if template_id not in templates:
+            raise NoSuchTemplate(f"no template {template_id}")
+        missing = TEMPLATE_SLOTS[template_id] - {k for k, v in slots.items() if v.strip()}
+        if missing:
+            raise MissingSlot(f"template {template_id} needs {sorted(missing)}")
+        filled = {k: v.strip() for k, v in slots.items()}
+        lines = [line.format(**filled) for line in templates[template_id]]
+    else:
+        assert memo_lines is not None
+        lines = [line.strip() for line in memo_lines if line.strip()]
+        if not lines or len(lines) > MAX_MEMO_LINES:
+            raise NotAMemo(f"a memo is one to {MAX_MEMO_LINES} lines")
+    findings = [finding for line in lines for finding in verify(line, words, "line")]
+    failures = [str(f) for f in findings if f.severity == "fail"]
+    if failures:
+        raise NotPlainWords(failures)
+    return Preview(
+        language=words,
+        template_id=template_id,
+        lines=lines,
+        notes=[str(f) for f in findings if f.severity == "note"],
+    )
+
+
+@audited(Action.READ, Scope.SEND, PUSH_TARGET)
+async def preview_push(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    template_id: str | None = None,
+    slots: Mapping[str, str] | None = None,
+    memo_lines: Sequence[str] | None = None,
+    language: str | None = None,
+) -> Preview:
+    """Exactly what he will see, in his language unless another is asked for."""
+    a_chief(context)
+    profile = await audited_profile_read(session, context)
+    return render(
+        language=language or profile.language,
+        template_id=template_id,
+        slots=slots or {},
+        memo_lines=memo_lines,
+    )
+
+
+def push_draft(
+    preview: Preview, *, send_at: datetime, channel: PushChannel, expires_at: datetime
+) -> PushDraft:
+    """What the chief says yes to: these lines, then, there, until."""
+    return PushDraft(
+        language=preview.language,
+        lines=tuple(preview.lines),
+        send_at=as_utc(send_at),
+        channel=channel.value,
+        expires_at=as_utc(expires_at),
+    )
+
+
+@audited(Action.WRITE, Scope.SEND, PUSH_TARGET)
+async def schedule_push(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    send_at: datetime,
+    channel: PushChannel,
+    expires_at: datetime,
+    confirmation_id: uuid.UUID,
+    template_id: str | None = None,
+    slots: Mapping[str, str] | None = None,
+    memo_lines: Sequence[str] | None = None,
+    language: str | None = None,
+) -> ScheduledPush:
+    """Put the previewed message on the calendar, on the chief's yes for exactly its lines.
+
+    The preview is rendered again here and the yes checked against it, so nothing can be
+    scheduled that was not shown. The row names the State it was composed against, like
+    every rendered thing; nothing is sent.
+    """
+    a_chief(context)
+    moment = utcnow()
+    if as_utc(expires_at) <= as_utc(send_at) or as_utc(expires_at) <= moment:
+        raise BadWindow("a message expires after it is due, and after now")
+    profile = await audited_profile_read(session, context)
+    preview = render(
+        language=language or profile.language,
+        template_id=template_id,
+        slots=slots or {},
+        memo_lines=memo_lines,
+    )
+    draft = push_draft(preview, send_at=send_at, channel=channel, expires_at=expires_at)
+    await consume_confirmation(session, context, confirmation_id, draft)
+    return await render_from_state(
+        session,
+        ScheduledPush,
+        context,
+        Scope.SEND,
+        composed_by_person_id=context.person_id,
+        composed_at=moment,
+        language=preview.language,
+        template_id=preview.template_id,
+        lines=preview.lines,
+        send_at=as_utc(send_at),
+        via_channel=channel,
+        expires_at=as_utc(expires_at),
+    )
+
+
+async def pushes(session: AsyncSession, *, context: KeyContext) -> list[ScheduledPush]:
+    """Every scheduled message, soonest first."""
+    found = await audited_read(session, ScheduledPush, context, Scope.SEND)
+    return sorted(found, key=lambda push: as_utc(push.send_at))

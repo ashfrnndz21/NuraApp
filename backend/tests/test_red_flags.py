@@ -14,7 +14,7 @@ import pytest
 from app.channels import safety_strings as strings
 from app.regions import OutOfRegion, Region
 from app.safety.plain_words import verify
-from app.safety.red_flags import RED_FLAGS, RedFlag, match_red_flags, words_for
+from app.safety.red_flags import RED_FLAG_RULES, RedFlag, match_red_flags, words_for
 from app.safety.symptoms import (
     Duration,
     Symptom,
@@ -77,9 +77,9 @@ def test_shaky_and_sweaty_is_a_flag_only_on_a_sugar_medicine_and_named_when_unkn
 
 
 def test_the_table_is_the_whole_rule_and_the_scales_row_has_no_words() -> None:
-    flags = {rule.flag for rule in RED_FLAGS}
+    flags = {rule.flag for rule in RED_FLAG_RULES}
     assert flags == set(RedFlag)
-    scales = next(rule for rule in RED_FLAGS if rule.flag is RedFlag.WEIGHT_GAIN_AFTER_DISCHARGE)
+    scales = next(rule for rule in RED_FLAG_RULES if rule.flag is RedFlag.WEIGHT_GAIN_AFTER_DISCHARGE)
     assert scales.from_readings and scales.words == {}
     assert words_for(RedFlag.CHEST_PAIN, "ms") == "sakit dada"
     assert words_for(RedFlag.WEIGHT_GAIN_AFTER_DISCHARGE, "en") == "weight gain after discharge"

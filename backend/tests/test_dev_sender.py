@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.db import make_session_factory
+from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
@@ -28,6 +29,7 @@ from app.ingestion.objects import LocalObjectStore
 from app.regions import Region
 from app.safety.transcribe import FixtureTranscriber
 from app.settings import Settings, load_settings
+from tests.conftest import FEED
 from tests.paper import PAPER
 from tests.voice import VOICE
 
@@ -39,6 +41,8 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         code_sender=sender,
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        searcher=FixtureSearcher(FEED),
+        compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         transcriber=FixtureTranscriber(VOICE, Region.SG),
     )

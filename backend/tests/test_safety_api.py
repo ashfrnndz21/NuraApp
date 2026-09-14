@@ -1,4 +1,4 @@
-"""The safety routes over HTTP: what checkpoint 11 walks.
+"""The safety routes over HTTP: what checkpoint 14 walks.
 
     GET  /profiles/{id}/emergency-card        JSON
     GET  /profiles/{id}/emergency-card.html   the printable page

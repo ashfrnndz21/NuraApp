@@ -7,11 +7,12 @@ profile's flag. The two cards carry `state_id`, not nullable: nothing rendered r
 database without the State it was rendered from (0006). No column holds prose: a flag is a
 code from the red-flag table, a notice a template id and codes, a card the ids of its lines.
 
-Branches from E04's medicines revision (0009), main's head when E13 was cut; parallel heads
-from the other epics are expected and merged by the operator.
+Follows E12's family revision (0013), which follows E21's feed (0010): one head. The
+`flag` table here is the flag heard in his words by the not-feeling-well button and the
+symptom log (E13/E14); E21's `red_flag` (0010) is the flag tapped on the feeling cloud.
 
-Revision ID: 0012_emergency_symptoms
-Revises: 0009_medicines
+Revision ID: 0014_emergency_symptoms
+Revises: 0013_family
 Create Date: 2026-09-14
 """
 
@@ -20,8 +21,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0012_emergency_symptoms"
-down_revision = "0009_medicines"
+revision = "0014_emergency_symptoms"
+down_revision = "0013_family"
 branch_labels = None
 depends_on = None
 

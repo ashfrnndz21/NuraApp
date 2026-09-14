@@ -2,7 +2,7 @@
 
 No audio is committed. Each file here is named by the sha256 of a placeholder byte string —
 `b"nura-voice-placeholder:<label>\n"` (`backend/tests/voice.py`, and the same line in
-`backend/scripts/checkpoints/cp11.py`) — and holds what the fixture transcriber
+`backend/scripts/checkpoints/cp14.py`) — and holds what the fixture transcriber
 (`app/safety/transcribe.py`) heard on it: `{"text", "confidence", "language"}`. Bytes with no
 file here are a note the transcriber cannot hear; the flow keeps the note, tells the family,
 and asks him to say it again.

@@ -63,6 +63,7 @@ from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile
 from app.ingestion.objects import ObjectStore
 from app.ingestion.voice import store_voice, store_words
@@ -169,10 +170,17 @@ class Captured:
 
 @dataclass(frozen=True, slots=True)
 class Family:
-    """Who is told: the chief (first, by name on the card) and everyone with EMERGENCY."""
+    """Who is told, and who is named on his card.
+
+    `chief` is the one the card names ("Mei knows already."): whoever is on duty now, else the
+    chief key holder. `to_tell` is who the ordinary notice goes to: whoever is on duty, else
+    everyone on the emergency list. `everyone` is the whole list, whoever is on duty first: a
+    red flag goes to all of them.
+    """
 
     chief: Person | None
     to_tell: list[Person]
+    everyone: list[Person]
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,31 +402,45 @@ async def sugar_medicine(
 async def family_of(
     session: AsyncSession, *, context: KeyContext, profile: Profile
 ) -> Family:
-    """Who is told: every active key holder with EMERGENCY, the chief named first.
+    """Who is told, and who is named on his card.
 
-    Read under EMERGENCY, not FAMILY: who the patient let in to his emergency card is part
-    of the emergency card (ADR 0002), and a caregiver or a helper pressing the button holds
-    no FAMILY key. The roster (E12) will decide who is on duty; until it lands, everyone the
-    patient let in to his emergency card is the roster. The person pressing is not told.
+    The emergency list is every active key holder with EMERGENCY but the person pressing,
+    read under EMERGENCY, not FAMILY: who the patient let in to his emergency card is part of
+    the emergency card (ADR 0002), and a caregiver or a helper pressing the button holds no
+    FAMILY key. The roster (E12, `who_is_on_duty`) is read when the key can read it — the
+    owner, a chief — and says who does the next thing: whoever on the list is on duty now is
+    named on the card and is the one the ordinary notice goes to. A red flag still goes to
+    everyone on the list, whoever is on duty first. With no roster, nobody on duty, or a key
+    that cannot read the roster, the whole list is told and the chief is named.
     """
     moment = utcnow()
     keys = await audited_read(session, Key, context, BUTTON_SCOPE)
     chief: Person | None = None
-    to_tell: list[Person] = []
+    listed: list[Person] = []
     for key in sorted(keys, key=lambda one: (as_utc(one.granted_at), str(one.id))):
         if not key.is_active(moment) or Scope.EMERGENCY not in key.scopes_held:
             continue
         if key.holder_person_id == context.person_id:
             continue
-        if any(one.id == key.holder_person_id for one in to_tell):
+        if any(one.id == key.holder_person_id for one in listed):
             continue
         person = await key_holder(session, context, key.holder_person_id, scope=BUTTON_SCOPE)
         if person is None:
             continue
-        to_tell.append(person)
+        listed.append(person)
         if chief is None and key.role is KeyRole.CHIEF:
             chief = person
-    return Family(chief=chief, to_tell=to_tell)
+    on_duty: list[Person] = []
+    if context.allows(Scope.FAMILY):
+        by_id = {person.id: person for person in listed}
+        for duty in await who_is_on_duty(session, context=context, at=moment):
+            found = by_id.get(duty.person_id)
+            if found is not None and found not in on_duty:
+                on_duty.append(found)
+    if not on_duty:
+        return Family(chief=chief, to_tell=listed, everyone=listed)
+    rest = [person for person in listed if person not in on_duty]
+    return Family(chief=on_duty[0], to_tell=on_duty, everyone=on_duty + rest)
 
 
 def _words_code(heard: Heard, parsed: Parsed) -> str | None:
@@ -462,7 +484,7 @@ async def escalate(
         )
     first = flags[0] if flags else None
     notices: list[Notice] = []
-    for person in family.to_tell:
+    for person in family.everyone:
         notice = await _notice(
             session,
             context=context,
@@ -773,7 +795,7 @@ async def not_feeling_well(
         heard=captured.heard,
         missed=missed,
         chief=family.chief,
-        others_told=bool(family.to_tell),
+        others_told=bool(family.everyone),
         region=context.region,
     )
     decision = decide(situation)

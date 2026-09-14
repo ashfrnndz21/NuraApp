@@ -4,7 +4,7 @@ Speech recognition is a provider (docs/00-MASTER-BUILD-SPEC.md §11: English, Ma
 Mandarin via cloud in the profile's region). Nothing in Nura calls one directly; the flows
 that hear a voice note (`app.safety.not_feeling_well`, `app.safety.symptom_log`) take a
 `Transcriber` and ask it for a `Transcript`. `FixtureTranscriber` is the one that runs on a
-laptop, in the tests and at checkpoint 11: it answers from files keyed by the sha256 of the
+laptop, in the tests and at checkpoint 14: it answers from files keyed by the sha256 of the
 bytes, under `backend/tests/fixtures/voice/`, and for bytes it has no file for it answers
 that it heard nothing — the flow goes on, the family is still told, and he is asked to say it
 again or type it. A voice note is never silently dropped because a provider was down.
