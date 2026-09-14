@@ -1,0 +1,214 @@
+/* The vertical feed (E21, docs/feed-vertical.html): one card fills the pager, the pager snaps
+   to one card at a time, and it moves only up and down. The pager is a size container, so a
+   card's height is the pager's (container-relative), whatever the phone and whatever sits
+   above it. */
+
+.feed-screen {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: env(safe-area-inset-top);
+  /* The floating tab bar: its target, its padding, the gap it floats above the edge, the
+     phone's own inset — nothing of a card sits under it. */
+  padding-bottom: calc(var(--target) + 3 * var(--space-2) + env(safe-area-inset-bottom));
+}
+
+.feed-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
+}
+.feed-strip:empty {
+  display: none;
+}
+
+.feed-pager {
+  position: relative; /* the cards' offsetParent: where each one starts */
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  /* No pull-to-refresh, no scroll chaining to the page, nothing sideways. */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  container-type: size;
+  scrollbar-width: none;
+  outline: none;
+}
+.feed-pager::-webkit-scrollbar {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .feed-pager {
+    scroll-behavior: smooth;
+  }
+}
+
+.feed-card {
+  height: 100%;
+  height: 100cqh;
+}
+.feed-end {
+  min-height: 100%;
+  min-height: 100cqh;
+}
+.feed-card,
+.feed-end {
+  scroll-snap-align: start;
+  scroll-snap-stop: always; /* one card at a time, never flung past */
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  outline: none;
+}
+.feed-card:focus-visible > .tile {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.feed-end {
+  justify-content: center;
+}
+
+/* The card's tile never outgrows the card: a column of the lines, then the buttons. */
+.feed-card > .tile {
+  max-height: 100%;
+  min-height: 0;
+}
+
+/* The lines. When they are taller than the space above the buttons they scroll here, inside
+   the card, and a soft shadow at the edge says there is more. The shadow is this region's own
+   background — painted behind the text, never over it (the "scrolling shadows" technique:
+   covers that move with the content hide it at either end). A scroll that reaches the end
+   carries on to the pager, so a swipe still moves to the next card. */
+.feed-body {
+  --cover: var(--white);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  outline: none;
+  background:
+    linear-gradient(var(--cover) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), var(--cover) 70%) center bottom / 100% 28px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(78, 58, 120, 0.2), rgba(78, 58, 120, 0)) center top / 100% 12px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(78, 58, 120, 0.28), rgba(78, 58, 120, 0)) center bottom / 100% 14px no-repeat scroll;
+}
+.tile.glass .feed-body {
+  --cover: rgba(255, 255, 255, 0.8);
+}
+.feed-body:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+/* The one action and the side actions: after the lines, in normal flow. */
+.feed-controls {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.feed-section {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.feed-card .lines p + p {
+  margin-top: 4px;
+}
+.feed-card .boundary {
+  font-size: var(--text-caption);
+  color: var(--ink);
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(43, 39, 51, 0.08);
+}
+.feed-status,
+.feed-note {
+  font-size: var(--text-caption);
+  color: var(--ink);
+}
+.feed-note {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-chip);
+  background: rgba(59, 122, 87, 0.08);
+}
+.feed-card.declined .title {
+  color: var(--ink-soft);
+}
+
+/* The gate: a pause, not content. */
+.feed-card[data-variant="gate"] {
+  justify-content: center;
+  text-align: center;
+}
+
+/* A red flag: Act on a dot, never as a fill. */
+.feed-card[data-variant="flag"] .title::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--act);
+  vertical-align: middle;
+}
+
+/* The four side actions: always visible, each a word beside its icon, each a full target
+   (56px in the patient's density — on a short phone the lines scroll, the buttons never
+   shrink). The pager ends above the tab bar, so the tab bar never covers them. */
+.feed-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+}
+.feed-actions.one {
+  grid-template-columns: 1fr;
+}
+.feed-actions button {
+  font: inherit;
+  font-size: var(--text-button);
+  font-weight: var(--weight-button);
+  color: var(--plum);
+  min-height: var(--target);
+  min-width: var(--target);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(78, 58, 120, 0.35);
+  background: var(--paper-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  line-height: 1.15;
+  text-align: center;
+}
+.feed-actions button:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.feed-actions svg {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
