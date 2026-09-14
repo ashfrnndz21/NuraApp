@@ -17,6 +17,7 @@ from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.db import make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
     LoggingCodeSender,
@@ -40,6 +41,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         extractor=FixtureExtractor(PAPER),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
+        drug_registry=FixtureRegistry.load(),
     )
 
 

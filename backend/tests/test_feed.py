@@ -47,6 +47,7 @@ from app.delivery.feed.rank import (
 from app.delivery.feed.search import Engine, list_jobs
 from app.delivery.feed.sources import SourceNotAllowlisted
 from app.delivery.strings import Lines, render
+from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.scopes import Scope
@@ -60,7 +61,11 @@ from tests.conftest import FEED
 from tests.support import OPENING_CONSENT
 
 MONDAY = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
-ENGINE = Engine(searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED))
+ENGINE = Engine(
+    searcher=FixtureSearcher(FEED),
+    compressor=FixtureCompressor(FEED),
+    registry=FixtureRegistry.load(),
+)
 
 
 async def _pa(

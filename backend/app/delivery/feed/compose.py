@@ -56,6 +56,7 @@ from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event
 from app.memory.models import Event, EventKind, Fact, Provider, SourceChannel
 from app.memory.semantic import assert_fact, current_facts
@@ -236,11 +237,21 @@ async def refresh(
         made.append(item)
         return item
 
+    medicines: list[LineView] = (
+        await active_lines(
+            session, context=context, registry=engine.registry, language=house.language
+        )
+        if context.allows(Scope.MEDICINES)
+        else []
+    )
     await _flags(make, session, context=context, day=day, house=house)
-    await _now(make, session, context=context, state=state, day=day, house=house)
+    await _now(
+        make, session, context=context, state=state, day=day, house=house, medicines=medicines
+    )
     readings = await current_facts(
         session, context=context, subject="blood_pressure", attribute="reading"
     )
+    await _reorder(make, day=day, house=house, medicines=medicines)
     await _readings(make, day=day, house=house, readings=readings)
     await _visit(make, session, context=context, state=state, day=day, house=house)
     await make(
@@ -275,7 +286,14 @@ async def refresh(
     await _story(make, session, context=context, day=day, house=house, readings=readings)
     made.extend(
         await _learning(
-            session, context=context, engine=engine, state=state, day=day, house=house, keys=keys
+            session,
+            context=context,
+            engine=engine,
+            state=state,
+            day=day,
+            house=house,
+            keys=keys,
+            medicines=medicines,
         )
     )
     return state, made
@@ -441,8 +459,12 @@ async def _now(
     state: StateView,
     day: Day,
     house: Household,
+    medicines: Sequence[LineView],
 ) -> None:
     has_medicines, medicine_ids = _has_medicines(state)
+    if medicines:
+        has_medicines = True
+        medicine_ids = sorted({*medicine_ids, *(str(view.line.fact_id) for view in medicines)})
     boosts = tuple(
         window for window in (state.dimension(Dimension.SITUATIONAL) or {}).get("windows", [])
     )
@@ -491,6 +513,38 @@ async def _now(
         dedupe_key=f"now:{day.key}",
         expires_at=day.ends_at,
     )
+
+
+async def _reorder(make: Any, *, day: Day, house: Household, medicines: Sequence[LineView]) -> None:
+    """A medicine running low: E04 worked the count and the date out and wrote the lines;
+    the card repeats them and says how many days are left (docs/medications-module.md)."""
+    for view in medicines:
+        count = view.count
+        if not count.reorder_due or not count.reorder or count.days_left is None:
+            continue
+        lines = render(
+            "reorder",
+            house.language,
+            body=(),
+            extra=tuple(count.reorder),
+            medicine=view.name,
+            days=count.days_left,
+        )
+        await make(
+            type=CardType.REORDER,
+            lines=lines,
+            why=Why(
+                kind="reorder",
+                plain=lines.why,
+                fact_ids=(str(view.line.fact_id),),
+                gap=f"{count.remaining:g} {count.unit} left, {count.days_left} days",
+            ),
+            scope=Scope.MEDICINES,
+            deliver_to=DeliverTo.PATIENT,
+            day=day.key,
+            dedupe_key=f"reorder:{view.line.id}:{day.key}",
+            expires_at=day.ends_at,
+        )
 
 
 def _numbers(fact: Fact) -> tuple[int, int] | None:
@@ -668,15 +722,25 @@ async def _story(
             )
 
 
-def _gaps(state: StateView) -> list[tuple[str, str, list[str]]]:
-    """What the record holds that deserves an explainer: (term, scope word, fact ids)."""
+def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[str, str, list[str]]]:
+    """What the record holds that deserves an explainer: (term, scope word, fact ids). A
+    medicine is one E04 reconciled into a line, or one a label card wrote as a fact."""
     clinical = state.dimension(Dimension.CLINICAL) or {}
     facts = clinical.get("facts", {})
     gaps: list[tuple[str, str, list[str]]] = []
+    seen: set[str] = set()
+    for view in medicines:
+        term = view.line.generic.strip().lower()
+        if term not in seen:
+            seen.add(term)
+            gaps.append((term, "medicines", [str(view.line.fact_id)]))
     for subject in ("medicine", "medication"):
         name = facts.get(subject, {}).get("name")
         if name and isinstance(name.get("value"), str):
-            gaps.append((name["value"].strip().lower(), "medicines", [name["fact_id"]]))
+            term = name["value"].strip().lower()
+            if term not in seen:
+                seen.add(term)
+                gaps.append((term, "medicines", [name["fact_id"]]))
     if "blood_pressure" in facts:
         ids = [entry["fact_id"] for entry in facts["blood_pressure"].values()]
         gaps.append(("blood pressure", "readings", ids))
@@ -692,6 +756,7 @@ async def _learning(
     day: Day,
     house: Household,
     keys: set[str],
+    medicines: Sequence[LineView] = (),
 ) -> list[FeedItem]:
     """A self-search for each gap State shows, run now against the fixture ports, its
     findings made into learning cards (or questions for the memo, or notices)."""
@@ -700,7 +765,7 @@ async def _learning(
     jobs = await audited_read(session, SearchJob, context, Scope.RECORDS)
     have = {(job.kind, tuple(job.terms)) for job in jobs}
     wanted: list[tuple[JobKind, str, str, list[str], str]] = []
-    for term, scope_word, fact_ids in _gaps(state):
+    for term, scope_word, fact_ids in _gaps(state, medicines):
         wanted.append((JobKind.EXPLAINER, term, scope_word, fact_ids, "on_change"))
         if scope_word == "medicines":
             # Any medicine on the list starts a daily safety-notice job (spec §9).

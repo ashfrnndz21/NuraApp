@@ -33,6 +33,10 @@ class Settings:
     (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
     call are later adapters behind the same two ports, and without either the process
     refuses to start."""
+    drug_registry: str = "fixture"
+    """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
+    (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
+    to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -60,4 +64,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
+        drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
     )

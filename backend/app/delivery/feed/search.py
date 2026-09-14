@@ -41,6 +41,7 @@ from app.delivery.feed.sources import (
     usable_sources,
 )
 from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -63,10 +64,13 @@ class NoTerms(Refusal):
 
 @dataclass(frozen=True, slots=True)
 class Engine:
-    """The two ports, as one deployment has them. Fixtures here; real adapters later."""
+    """The ports the feed composes from, as one deployment has them: the searcher and the
+    compressor (fixtures here; real adapters later), and the licensed drug registry
+    (`app.drugs`) the medicines module reads a line's plain name and count through."""
 
     searcher: Searcher
     compressor: Compressor
+    registry: DrugRegistry
 
 
 @audited(Action.WRITE, Scope.RECORDS, JOB_TARGET)

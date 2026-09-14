@@ -221,8 +221,11 @@ async def test_a_label_card_shows_the_high_risk_class_and_its_facts_sit_under_me
     }
     dose = next(f for f in facts if f["attribute"] == "dose")
     assert dose["value"]["drug"] == "Warfarin" and dose["artifact_id"] == card["artifact_id"]
-    # The placeholder medicines route reads subject "medicine": the label's facts are there.
-    medicines = await deployment.client.get(f"/profiles/{profile_id}/medicines", headers=his)
+    # The label's facts read back under subject "medicine" (the medicines scope). The E04 list
+    # at GET /medicines holds reconciled lines, which a card does not write yet.
+    medicines = await deployment.client.get(
+        f"/profiles/{profile_id}/facts", params={"subject": "medicine"}, headers=his
+    )
     assert {m["attribute"] for m in medicines.json()} == {f["attribute"] for f in facts}
     # Under the medicines scope: Mei with a key to the record alone is refused them.
     mei = await register_by_phone(deployment, MEI, "Mei")

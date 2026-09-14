@@ -11,12 +11,12 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 3 | Memory and State | Add a blood-pressure reading as a Fact with provenance, watch State recompute and record the trigger; a Fact without provenance is rejected; a key without the record cannot read State | E00-03, E00-04 | **ready** |
 | 4 | Three doors, proxy, claim | Set up a profile *for someone* by phone number, try to create a second one for the same number (refused, in words that name nobody), then claim it as the patient and see the steward key become the chief key with consent recorded | E01-01, E01-02 | **ready** |
 | 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence (the unsure fields dotted), correct one value, confirm with one OK, and see Facts with provenance appear; upload the warfarin label and see the high-risk class on the card; a key without the record cannot see a card | E02-01, E02-07, E16-04 | **ready** |
-| 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | planned |
+| 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | **ready** |
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
-| 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs | E21 backend (Session 8) | **ready** |
+| 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs; a medicine running low makes a reorder card from E04's count | E21 backend (Session 8) | **ready** |
 | 9 | WhatsApp (sandbox) | Send a photo to the WhatsApp sandbox number and watch it file itself and reply | E19-01…E19-03 | planned |
-| 10 | iOS Today on the simulator | Open `ios/Nura.xcodeproj`, run on iPhone simulator, sign in with a phone code, see the Today shell with the Now card and Taken, and the medium widget | Session 10 | planned |
-| 11 | iOS feed and onboarding | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | Sessions 11–12 | planned |
+| 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | planned |
+| 11 | Feed and onboarding on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
 | 12 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 ## How a checkpoint is tested
@@ -236,8 +236,8 @@ What you will see (the numbers, ids and times change each run):
     dispensed_at         2024-03-12                               confidence 0.90  clear
     prescriber           Dr Lim                                   confidence 0.61  dotted — needs your eye
 ✓ Pa rejected the unclear prescriber and confirmed the rest: five medicine facts under the medicines scope, the dose naming its drug and resting on the label photo; the rejected field wrote nothing
-✓ GET /profiles/{id}/medicines now lists the label's facts (subject medicine → scope medicines)
-✓ the high-risk label rule (E16-04): a warfarin dose fact whose provenance is not a PHOTO artefact is refused, NotFromALabelPhoto (400), and written to the trail. No route can express it — the only way to write a medicine dose over HTTP is a card from a photo — so the refusal is held at the service (app/safety/high_risk.py, a hook on before_fact_write) and proven in backend/tests/test_high_risk.py from a WhatsApp message, a PDF and a screenshot
+✓ GET /profiles/{id}/facts?subject=medicine now lists the label's facts (subject medicine → scope medicines); the reconciled list at GET /profiles/{id}/medicines is checkpoint 6
+✓ the high-risk label rule (E16-04): a warfarin dose fact whose provenance is not a PHOTO artefact is refused, HighRiskNeedsLabelPhoto (400), and written to the trail. No route can express it — the only way to write a medicine dose over HTTP is a card from a photo — so the refusal is held at the service (app/safety/high_risk.py, a hook on before_fact_write) and proven in backend/tests/test_high_risk.py from a WhatsApp message, a PDF and a screenshot
 ✓ Mei (+6592220898) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
 ✓ Pa cut Mei a caregiver key to the readings only; the review cards refuse her: OutOfScope records (403)
 ✓ Pa re-cut the key to readings and records; Mei reads both cards, each closed and naming Pa as its confirmer
@@ -257,7 +257,74 @@ checkpoint 5 passed: every step did what docs/checkpoints.md says
 1. **A page the extractor cannot read.** `POST /profiles/{profile_id}/photos` with `"content_type": "image/png"`, any `captured_at`, and `"data"` set to the base64 of a few bytes of your own (`printf 'hello' | base64`). The answer is `201` with a card whose `document_kind` is `unknown` and whose `fields` are `[]`: nothing was guessed. Try again with `"content_type": "application/pdf"` and the answer is `400 {"refusal": "NotAPhoto"}`.
 2. **The yes is the confirmer's own.** Take an open card's `card_id` (upload the lipid report again: the same bytes make a new card), mint an OK as Pa with `POST /profiles/{profile_id}/confirmations` and `{"subject": "review_card", "card_id": …, "decisions": [{"field_id": …, "decision": "confirmed"}, …]}` naming every field. Then, as Mei (her token, with the key to `readings` and `records` the run cut her), call `POST /profiles/{profile_id}/review-cards/{card_id}/confirm` with those decisions and Pa's `confirmation_id`: `403 {"refusal": "NotAConfirmerHere"}` — a yes is spent only by the person who said it. As Pa, the same call goes through, and `GET /profiles/{profile_id}/audit?scope=records&limit=500` shows Mei's refused write of `review_card` beside it.
 
-The high-risk refusal is at the service, not over HTTP: the only way to write a medicine dose over the API is a card made from a photo, so there is no request that could offer a WhatsApp message or a PDF as the provenance of a warfarin dose. The rule (`NotFromALabelPhoto`, which the API would answer with 400) lives in `backend/app/safety/high_risk.py` as a hook the memory store runs before any fact is written, and is proven from a message, a PDF and a screenshot in `backend/tests/test_high_risk.py`.
+The high-risk refusal is at the service, not over HTTP: the only way to write a medicine dose over the API is a card made from a photo, so there is no request that could offer a WhatsApp message or a PDF as the provenance of a warfarin dose. The rule (`HighRiskNeedsLabelPhoto`, which the API would answer with 400) lives in `backend/app/safety/high_risk.py` as a hook the memory store runs before any fact is written, and is proven from a message, a PDF and a screenshot in `backend/tests/test_high_risk.py`.
+
+## How to run checkpoint 6
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having been run. The drug data is the fixture register in `backend/tests/fixtures/drugs/registry.json` (a dozen medicines common in Malaysia and Singapore, with NPRA- and HSA-shaped numbers that are not real ones); no licensed database is called, and no model writes a sentence.
+
+```sh
+make setup              # once, if you have not
+make dev                # terminal 1: migrates dev.db (0009 adds the medicine tables), serves on http://127.0.0.1:8000
+make checkpoint N=6     # terminal 2: walks the whole scenario, about three seconds
+```
+
+Two fresh phone numbers every run — Pa and Mei, his helper — so it can be run again on the same `dev.db`. Each "label photo" is a few placeholder bytes sent through `POST /profiles/{id}/photos` (checkpoint 5's route): the fixture extractor knows nothing about them, so the review card comes back `unknown` with no fields, and the artefact — a photo, stored under `backend/var/objects/SG/` — is what the label names as its source. The label's own fields are typed in this checkpoint; reading them off the photo is the extractor's job (E02) and the two meet at the artefact id.
+
+What you will see (the numbers, ids and dates change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591110353) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
+✓ Pa reads his medicines (GET /profiles/{id}/medicines): none yet ([])
+✓ Pa kept a label photo (POST /profiles/{id}/photos: stored in the region's object store, an artefact of kind photo; the extractor read nothing off it, so no card to confirm) and asked what the label means (POST /profiles/{id}/medicines/draft): a new line — the fixture register identified Norvasc 5 mg as amlodipine (MAL19970001A), the dose read from the label's Malay words, 1 biji sekali sehari pagi; nothing written yet
+✓ Pa said OK (POST /profiles/{id}/confirmations, subject medicine: a yes for exactly this label, good for ten minutes, used once) and added it (POST /profiles/{id}/medicines): one medication fact on the photo, confirmed by him, one line, one supply of 30
+✓ Pa reads the story in Malay (GET .../story; his profile's language): purpose, how to take, what to look out for, what to avoid, if he forgot, and the boundary — from templates keyed by the licensed monograph, no model, the chemical name kept small:
+    Ini ubat tekanan darah anda.
+    Ia menjaga tekanan darah anda supaya tidak tinggi.
+    Ambil 1 biji sekali sehari.
+    Ambil bersama sarapan.
+    Makan atau tidak, tidak mengapa untuk ubat ini.
+    Jika buku lali anda bengkak, beritahu Dr Tan.
+    Jika anda pening semasa berdiri, duduk dahulu.
+    Kemudian beritahu Dr Tan.
+    Limau gedang tidak sesuai dengan ubat tekanan darah anda.
+    Jika anda terlupa, ambil apabila anda teringat.
+    Jika yang seterusnya sudah dekat, tunggu yang seterusnya.
+    Jangan sekali-kali ambil dua serentak.
+    Ini membantu anda ambil apa yang Dr Tan beri.
+    Tanya Dr Tan atau ahli farmasi sebelum anda ubah apa-apa.
+✓ Pa tapped Taken twice (POST .../taken: his own tap, no confirm, a DOSE_TAKEN event each): 30 dispensed − 2 taken = 28 left, about 28 days; reorder on 2026-10-09 (days left − 3 days lead time for a retail pharmacy); in his words:
+    You have 28 tablets of your blood pressure tablet left.
+    That is about 28 days.
+✓ warfarin: the register marks its class, anticoagulant, high-risk; from the label photo it was added (201), marked high_risk. Without a label photo it is refused by class — HighRiskNeedsLabelPhoto (400, the body names the class) — at the medicines service and again as the hook on the memory store; no route can offer a voice note or a PDF as a medicine's source (POST /photos takes only photos), so that refusal is proven in backend/tests/test_medicines.py and test_medicines_api.py from a voice note and a PDF
+✓ aspirin was screened before it was saved: the licensed data flagged aspirin with warfarin, major (bleeding_risk), shown on the draft and written as a flag with the line; GET .../medicines/interactions renders it as a question for the doctor, both medicines named in his words:
+    Ask Dr Tan about taking the aspirin and the blood thinner tablet together.
+    Together they can make you bleed more easily.
+✓ the new pack says 10 mg: the draft classifies it as a dose_change on the 5 mg line; written without his OK it is refused, NotAConfirmerHere (400), and the 5 mg line stays current
+✓ with his OK the 10 mg line supersedes the 5 mg line (kept, marked with when, in GET .../medicines/history); the story does not tell him an amount — it asks the doctor:
+    Your new pack says a different amount from before.
+    Ask Dr Tan about the new amount.
+✓ Pa reads today's doses (GET .../medicines/today): one card per medicine at its anchor:
+    breakfast  Take 1 tablet of your blood pressure tablet with breakfast.  [Taken: taken]
+    breakfast  Take 1 tablet of the aspirin with breakfast.  [Taken: not yet]
+          bed  Take 1 tablet of the blood thinner tablet before bed.  [Taken: not yet]
+✓ Mei (+6592223326) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Mei (helper key, medicines) reads the list (3 lines) and the warfarin story in Pa's language, and taps Taken for him in her own name; asking what a label means, minting a yes and adding a line are all refused: NotTheirsToChange (403) — a key to read the medicines is not a key to change them
+✓ Pa reads his trail under the medicines scope (125 lines for the two of them); every refusal is on it by name, and no line says which medicine:
+    2026-09-14T09:58:09   Pa  write medicines fact  refused NotAConfirmerHere
+    2026-09-14T09:58:09  Mei  write medicines medication_line  refused NotTheirsToChange
+    2026-09-14T09:58:09  Mei  read medicines medication_line  refused NotTheirsToChange
+checkpoint 6 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 6 passed`. The criteria: a medicine is identified through the licensed data port and never guessed — the register's product, class and registration number, the dose read from the label's own words in Malay or English; nothing is written until the person says yes to exactly that label (a yes for anything else, or no yes, is refused and the list does not move); the story comes from templates keyed by the licensed monograph in his language, with the chemical name kept out of every sentence and no sentence telling him to start, stop or change anything; his taps bring the count down and the reorder date is arithmetic over what was dispensed, what was taken and the lead time of where it came from; a high-risk medicine (warfarin, insulin, digoxin, methotrexate, opioids — by class) is refused from anything but a label photo, by class name, at the service and again as the one hook on the memory store (`HighRiskNeedsLabelPhoto`, shared with checkpoint 5's card) — over HTTP every artefact is a photo, so that refusal is proven in the tests from a voice note and a PDF; a new medicine is screened against the list before it is saved and every flag names both medicines with a severity and reads as a question for the doctor; a dose change supersedes the old line only with his OK, keeps the old line in the history, and renders as a question for the doctor rather than a new amount; a helper's key reads the list and the story and taps Taken, and cannot add or change a line; every refusal is on the trail by name and nothing on the trail says which medicine. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it) and the profile id from it:
+
+1. **A refill.** `POST /profiles/{profile_id}/photos` with any base64 bytes you like as `data`, `"content_type": "image/png"` and a `captured_at` (the card comes back `unknown`; keep its `artifact_id`), then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
+2. **A yes for other words.** Mint a confirmation for a label of `"quantity": 28` and spend it on a `POST /profiles/{profile_id}/medicines` whose label says `"quantity": 30`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for a different label. Nothing is written, and the refusal is on the trail (`GET /profiles/{profile_id}/audit?scope=medicines`) as `refused_because: NotWhatWasConfirmed`.
 
 ## How to run checkpoint 8
 
@@ -265,7 +332,7 @@ The same two terminals as checkpoint 2; it does not depend on any earlier checkp
 
 ```sh
 make setup              # once, if you have not
-make dev                # terminal 1: migrates dev.db (0009_feed adds the feed tables), serves on http://127.0.0.1:8000
+make dev                # terminal 1: migrates dev.db (0010_feed adds the feed tables), serves on http://127.0.0.1:8000
 make checkpoint N=8     # terminal 2: walks the whole scenario, about five seconds
 ```
 
@@ -274,7 +341,9 @@ ports — the searcher that finds pages and the compressor that turns a page int
 says — answer from `backend/tests/fixtures/feed/` (`NURA_FEED_FIXTURES`, which `make dev` sets), the
 way the paper extractor does. The real fetcher and the grounded model call are later adapters behind
 the same two ports. Pa is set up in English here so every line can be read on the terminal; the same
-cards come in Malay and Chinese for a profile in those languages.
+cards come in Malay and Chinese for a profile in those languages. He has a warfarin label from
+checkpoint 5 and an amlodipine line added the checkpoint-6 way, five tablets at one a day, so the
+medicines module's own count puts a reorder card on the feed.
 
 The feed is the patient's on the owner's key and the caregiver's list on any other key. Two rules the
 script leans on are dev-run only: `?at=` on `GET /profiles/{id}/feed` pretends it is another hour
@@ -286,44 +355,46 @@ What you will see (the numbers, ids and times change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Pa (+6591116553) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa (+6591118751) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
 ✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
 ✓ Pa added three blood pressures (POST /profiles/{id}/readings): 146/90 a week ago, 142/88 three days ago, 138/84 today — each an event and a fact, State recomputing as they land
 ✓ Pa uploaded the warfarin label and confirmed the card (the checkpoint-5 steps): five medicine facts under the medicines scope, resting on the photo
-✓ GET /profiles/{id}/feed: the supply order — now, reading, gate, story, story — every card rendered from State snapshot 8 (70947012…), none set to autoplay, and each says why it is there:
+✓ Pa added amlodipine the checkpoint-6 way (POST /profiles/{id}/medicines with his OK): one line (amlodipine 5 mg), a supply of 5 at one a day — five days left, inside the reorder threshold
+✓ GET /profiles/{id}/feed: the supply order — now, reorder, reading, gate, story — every card rendered from State snapshot 9 (5fe4a891…), none set to autoplay, and each says why it is there:
     [now     ] now       Your tablets today  (generated)
-               why: You have medicines on your list.  (fact_ids [1ba6c543…, 82574b9e…, b85d2e14…, ded41017…, f2230413…])
+               why: You have medicines on your list.  (fact_ids [1ac2b695…, 1db3d221…, 58595a13…, 7b457ac6…, 896072c4…, 8b77c208…])
+    [today   ] reorder   Your blood pressure tablet is running low  (generated)
+               why: You have about 5 days of your blood pressure tablet left.  (fact_ids [8b77c208…], gap 5 tablet…)
     [today   ] reading   Your blood pressure today  (generated)
-               why: You took your blood pressure today.  (fact_ids [a4728e91…], event_id 4d687b26…)
+               why: You took your blood pressure today.  (fact_ids [8f42fd86…], event_id be54233a…)
     [gate    ] gate      That is all that is new  (generated)
                why: You have seen everything new for today.  (no refs)
     [story   ] story     From your blood pressure book  (generated)
-               why: This is from your own blood pressure book.  (fact_ids [a6d2fa09…])
-    [story   ] story     From your blood pressure book  (generated)
-               why: This is from your own blood pressure book.  (fact_ids [79e11f12…])
-✓ the reading card says his number back — "Your blood pressure today was 138 over 84." — cites fact a4728e91… and event 4d687b26…, and has a spoken twin of 3 lines
+               why: This is from your own blood pressure book.  (fact_ids [05118949…])
+✓ the reorder card repeats E04's own lines — "Your blood pressure tablet runs out on Saturday 19 September." — cites the medication fact 8b77c208… and says why: "You have about 5 days of your blood pressure tablet left."
+✓ the reading card says his number back — "Your blood pressure today was 138 over 84." — cites fact 8f42fd86… and event be54233a…, and has a spoken twin of 3 lines
 ✓ paged twice with the cursor (GET …/feed?cursor=): 5 then 5 cards, all story or learning — the list is endless past the gate — and the same cursor answers the same page
 ✓ caps: three numbers today made three cards, one is shown — one of each kind a day, two new cards a day — and the page says what was held: {'reading': 2}
-✓ quiet hours (21:00–07:00 on his wall clock, pretended with ?at=22:30 on this dev run): nothing is delivered; held: {'now': 1, 'reading': 3, 'gate': 1, 'story': 4, 'learning': 2}
+✓ quiet hours (21:00–07:00 on his wall clock, pretended with ?at=22:30 on this dev run): nothing is delivered; held: {'now': 1, 'reorder': 1, 'reading': 3, 'gate': 1, 'story': 5, 'learning': 2}
 ✓ a red flag jumps the queue: POST /profiles/{id}/feelings {word: fall} raised a flag before any ranking; the flag card is first, in quiet hours too, and took no place from the two a day:
     You told Nura about a fall.
     This one we do not wait for.
     Call 995 now.
-✓ 'Not for me' (POST …/feed/{item}/engagement {event: dismissed}): the reading cards are held for the rest of today ({'reading': 3}); his word is a fact — declined.reading, confirmed by him, resting on the engagement event d65dc30a… — and State folded it into the preference dimension (snapshot 11)
-✓ Mei (+6592220564) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
-✓ Mei (caregiver key: medicines, visits, readings, records, emergency) sees the caregiver supply — flag, now, notice, reading, reading — the flag first, no gate, each with its status; the safety notice about a warfarin batch that is not the one on his box is held for her and was never on his feed:
+✓ 'Not for me' (POST …/feed/{item}/engagement {event: dismissed}): the reading cards are held for the rest of today ({'reading': 3}); his word is a fact — declined.reading, confirmed by him, resting on the engagement event 8b813447… — and State folded it into the preference dimension (snapshot 12)
+✓ Mei (+6592224500) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Mei (caregiver key: medicines, visits, readings, records, emergency) sees the caregiver supply — flag, now, notice, reorder, reading — the flag first, no gate, each with its status; the safety notice about a warfarin batch that is not the one on his box is held for her and was never on his feed:
     [flag    ] flag      This one we do not wait for  (sent)
-               why: This is one of the things we never wait for.  (event_id 2b8c8e9e…, flag_id 23602ebe…)
+               why: This is one of the things we never wait for.  (event_id 636dae6b…, flag_id d44bd812…)
     [now     ] now       Your tablets today  (sent)
-               why: You have medicines on your list.  (fact_ids [1ba6c543…, 82574b9e…, b85d2e14…, ded41017…, f2230413…])
+               why: You have medicines on your list.  (fact_ids [1ac2b695…, 1db3d221…, 58595a13…, 7b457ac6…, 896072c4…, 8b77c208…])
     [today   ] notice    A notice about one batch of your blood thinner  (held)
-               why: This is about your blood thinner, which is on your papers.  (fact_ids [1ba6c543…, 82574b9e…], source_id 2b3c2fc0…, gap warfarin, suppressed batch_do…)
+               why: This is about your blood thinner, which is on your papers.  (fact_ids [1ac2b695…, 896072c4…], source_id 62821400…, gap warfarin, suppressed batch_do…)
+    [today   ] reorder   Your blood pressure tablet is running low  (sent)
+               why: You have about 5 days of your blood pressure tablet left.  (fact_ids [8b77c208…], gap 5 tablet…)
     [today   ] reading   Your blood pressure today  (dismissed)
-               why: You took your blood pressure today.  (fact_ids [a4728e91…], event_id 4d687b26…)
-    [today   ] reading   Your blood pressure today  (generated)
-               why: You took your blood pressure today.  (fact_ids [3cbeecbe…], event_id 90bb0e69…)
+               why: You took your blood pressure today.  (fact_ids [8f42fd86…], event_id be54233a…)
 ✓ the allowlist is the owner's and his chief's: Mei's caregiver key is refused, NotTheirsToManage (403)
-✓ self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, 3 jobs, all done against the fixture searcher); the explainer made a learning card "Your blood thinner and your food" citing https://www.hsa.gov.sg/consumer-safety/articles/warfarin-and-food — a source on the allowlist (GET …/sources, 6 sources) — and rerouted the page that would change a dose as a question for the memo (1), never a card:
+✓ self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, 5 jobs, all done against the fixture searcher); the explainer made a learning card "Your blood thinner and your food" citing https://www.hsa.gov.sg/consumer-safety/articles/warfarin-and-food — a source on the allowlist (GET …/sources, 6 sources) — and rerouted the page that would change a dose as a question for the memo (1), never a card:
     Your blood thinner is called warfarin.
     Green leafy food changes how well it works.
     Keep the same amount of greens each week.
@@ -332,7 +403,7 @@ What you will see (the numbers, ids and times change each run):
     This is not a doctor's advice.
     Ask your doctor.
 ✓ GET …/feed/cached: the last first page rendered for Pa, 5 cards, as it was — what the app keeps for an offline launch
-✓ Pa reads his audit trail (459 lines): every card, page, job and engagement is on it as a write, Mei's refusal is on it by name, and the flag's escalation is 0 share line(s) — none, here, because the fall came before Mei held a key with the emergency scope
+✓ Pa reads his audit trail (500 lines): every card, page, job and engagement is on it as a write, Mei's refusal is on it by name, and the flag's escalation is 0 share line(s) — none, here, because the fall came before Mei held a key with the emergency scope
 checkpoint 8 passed: every step did what docs/checkpoints.md says
 ```
 
@@ -348,7 +419,8 @@ and takes no place from the caps; "Not for me" is his word, written as a fact (`
 confirmed by him, holding until midnight) that State folds into the preference dimension and ranking
 reads back; a caregiver key reads the caregiver supply narrowed to the parts of the record it covers,
 with the flag first and no gate, and never a card built from his private notes; a safety notice that
-does not match the batch on his pack is held for the caregiver and never sent to him; a learning card
+does not match the batch on his pack is held for the caregiver and never sent to him; a medicine
+running low is a reorder card that repeats E04's own lines and cites the medication fact; a learning card
 comes only from an allowlisted, approved source in the profile's region and cites the page; the
 allowlist and the search jobs are the owner's and his chief's; every line on a patient card passed
 `app/safety/plain_words.py` before the card was written, and a card that fails is not made; no card

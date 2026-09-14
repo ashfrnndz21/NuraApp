@@ -597,3 +597,53 @@ async def test_sources_and_search_jobs_are_the_owners_and_allowlist_scoped(
         and e["actor_person_id"] == mei["person_id"]
         for e in trail
     )
+
+
+# --- E04: a medicine running low is a reorder card, from the medicines module's own count ----
+
+
+async def test_a_medicine_running_low_makes_a_reorder_card_from_the_count(
+    deployment: Deployment,
+) -> None:
+    from tests.test_medicines_api import _add, _artefact, _label
+
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = pa["token"]
+    photo = await _artefact(deployment.client, profile_id, pa)
+    # Five tablets, one a day: inside the seven-day reorder threshold from the first day.
+    added = await _add(
+        deployment.client,
+        profile_id,
+        pa,
+        _label("amlodipine", "5 mg", "1 biji sekali sehari pagi", quantity=5),
+        photo,
+    )
+    assert added.status_code == 201, added.text
+    page = await _feed(deployment, profile_id, his)
+    types = _types(page)
+    assert types[:3] == ["now", "reorder", "gate"], types
+    reorder = page["items"][1]
+    assert reorder["headline"] == "Your blood pressure tablet is running low"
+    assert reorder["body"] == [
+        "Your blood pressure tablet runs out on Tuesday 8 September.",
+        "Ask your family to order more.",
+    ]
+    assert reorder["why"]["plain"] == "You have about 5 days of your blood pressure tablet left."
+    assert reorder["why"]["fact_ids"] == [added.json()["fact_id"]]
+    assert reorder["scope"] == "medicines" and reorder["caps_class"] == "one"
+    now = page["items"][0]
+    assert now["scope"] == "medicines" and added.json()["fact_id"] in now["why"]["fact_ids"]
+    # The medicine also started an explainer and a daily safety job by its generic name.
+    jobs = (
+        await deployment.client.get(f"/profiles/{profile_id}/search-jobs", headers=bearer(his))
+    ).json()
+    assert {(job["kind"], job["cadence"]) for job in jobs if job["terms"] == ["amlodipine"]} == {
+        ("explainer", "on_change"),
+        ("safety", "daily"),
+    }
+    # A key without the medicines scope sees neither card.
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await _caregiver_key(deployment, pa, profile_id, MEI, ["readings", "records"])
+    hers = await _feed(deployment, profile_id, mei["token"])
+    assert "reorder" not in _types(hers) and "now" not in _types(hers)

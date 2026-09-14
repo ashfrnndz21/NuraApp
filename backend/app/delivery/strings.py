@@ -32,7 +32,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "reading": "Your blood pressure today",
         "visit": "{doctor} on {day}",
         "memo": "What {doctor} said",
-        "reorder": "Your {medicine} is running low",
+        "reorder": "{medicine} is running low",
         "gate": "That is all that is new",
         "story_reading": "From your blood pressure book",
         "story_paper": "From your papers",
@@ -47,7 +47,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "reading": "Tekanan darah anda hari ini",
         "visit": "{doctor} pada {day}",
         "memo": "Apa yang {doctor} kata",
-        "reorder": "{medicine} anda hampir habis",
+        "reorder": "{medicine} hampir habis",
         "gate": "Itu sahaja yang baru",
         "story_reading": "Dari buku tekanan darah anda",
         "story_paper": "Dari surat-surat anda",
@@ -104,7 +104,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Bring your blood pressure book and your tablets.",
         ),
         "memo": ("At your last visit {doctor} said this:",),
-        "reorder": ("Your {medicine} will run out on {day}.", "{who} will order more."),
         "gate": (
             "That is all that is new today.",
             "Do you want to keep going?",
@@ -167,7 +166,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Bawa buku tekanan darah dan ubat anda.",
         ),
         "memo": ("Pada lawatan terakhir {doctor} berkata begini:",),
-        "reorder": ("{medicine} anda akan habis pada {day}.", "{who} akan pesan lagi."),
         "gate": (
             "Itu sahaja yang baru hari ini.",
             "Mahu terus?",
@@ -218,7 +216,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "reading_alone": ("我已经记下了。",),
         "visit": ("您{day}见{doctor}。", "请带上您的血压本和您的药。"),
         "memo": ("上次看病时{doctor}这样说：",),
-        "reorder": ("您的{medicine}会在{day}用完。", "{who}会再去买。"),
         "gate": ("今天新的就这些了。", "您想继续吗？", "向上滑，多听听关于您的事。"),
         "story_reading": ("{day}您的血压是{top_number}比{bottom_number}。", "它记在您的血压本里。"),
         "story_paper": ("您{day}的{test_name}在您的文件里。", "您随时可以拿给{doctor}看。"),
@@ -245,7 +242,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "reading": "You took your blood pressure today.",
         "visit": "Your visit to {doctor} is on {day}.",
         "memo": "You saw {doctor} on {day}.",
-        "reorder": "Your {medicine} is on your list.",
+        "reorder": "You have about {days} days of {medicine} left.",
         "gate": "You have seen everything new for today.",
         "story_reading": "This is from your own blood pressure book.",
         "story_paper": "This is one of your own papers.",
@@ -261,7 +258,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "reading": "Anda ambil tekanan darah anda hari ini.",
         "visit": "Lawatan anda kepada {doctor} pada {day}.",
         "memo": "Anda berjumpa {doctor} pada {day}.",
-        "reorder": "{medicine} anda ada dalam senarai anda.",
+        "reorder": "{medicine} anda tinggal lebih kurang {days} hari lagi.",
         "gate": "Anda sudah lihat semua yang baru hari ini.",
         "story_reading": "Ini dari buku tekanan darah anda sendiri.",
         "story_paper": "Ini salah satu surat anda sendiri.",
@@ -277,7 +274,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "reading": "您今天量了血压。",
         "visit": "您{day}要见{doctor}。",
         "memo": "您{day}见了{doctor}。",
-        "reorder": "您的清单上有{medicine}。",
+        "reorder": "{medicine}大概还够{days}天。",
         "gate": "今天新的您都看过了。",
         "story_reading": "这来自您自己的血压本。",
         "story_paper": "这是您自己的一份文件。",
@@ -353,6 +350,7 @@ TEST_NAMES: Mapping[str, Mapping[str, str]] = {
         "kidney_panel": "kidney test",
         "blood_test": "blood test",
         "medicine": "medicine label",
+        "medication": "medicine label",
         "paper": "paper",
     },
     "ms": {
@@ -360,6 +358,7 @@ TEST_NAMES: Mapping[str, Mapping[str, str]] = {
         "kidney_panel": "Ujian buah pinggang",
         "blood_test": "Ujian darah",
         "medicine": "Label ubat",
+        "medication": "Label ubat",
         "paper": "Surat",
     },
     "zh": {
@@ -367,6 +366,7 @@ TEST_NAMES: Mapping[str, Mapping[str, str]] = {
         "kidney_panel": "肾检查",
         "blood_test": "血检",
         "medicine": "药盒标签",
+        "medication": "药盒标签",
         "paper": "文件",
     },
 }
@@ -399,7 +399,13 @@ class Lines:
 
 
 def _fill(template: str, slots: Mapping[str, Any]) -> str:
-    return template.format_map(slots)
+    return _sentence(template.format_map(slots))
+
+
+def _sentence(line: str) -> str:
+    """A line that begins with his name for a thing ("your blood pressure tablet runs out…")
+    starts with a capital, as any line he reads does. Nothing else about it changes."""
+    return line[:1].upper() + line[1:]
 
 
 def render(
@@ -423,10 +429,11 @@ def render(
     """
     code = language_for(language)
     heads, lines, whys = HEADLINES[code], LINES[code], WHY[code]
-    body_lines = tuple(_fill(line, slots) for group in body for line in lines[group]) + extra
+    tail = tuple(_sentence(line) for line in extra)
+    body_lines = tuple(_fill(line, slots) for group in body for line in lines[group]) + tail
     spoken = body_lines
     if voice is not None:
-        spoken = tuple(_fill(line, slots) for group in voice for line in lines[group]) + extra
+        spoken = tuple(_fill(line, slots) for group in voice for line in lines[group]) + tail
     return Lines(
         language=code,
         headline=_fill(heads[headline or kind], slots),

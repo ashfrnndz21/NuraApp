@@ -49,7 +49,11 @@ router = APIRouter(prefix="/profiles", tags=["feed"])
 
 def _engine(request: Request) -> Engine:
     providers = providers_of(request)
-    return Engine(searcher=providers.searcher, compressor=providers.compressor)
+    return Engine(
+        searcher=providers.searcher,
+        compressor=providers.compressor,
+        registry=providers.drug_registry,
+    )
 
 
 @router.get("/{profile_id}/feed")

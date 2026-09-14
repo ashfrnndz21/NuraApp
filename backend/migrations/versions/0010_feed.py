@@ -16,11 +16,11 @@ the two flags that depend on a fact, why it was suppressed.
 `event_kind` gains `engagement` and `feeling` is a new checked string; both are non-native
 enums with no database constraint, so there is no column change for them.
 
-Built beside 0008_medicines (E04) and 0009_visits (E05) from the same parent; the operator
-adds the merge revision when the heads meet.
+Follows E04's medicines revision (0009). E05 visits and E19 WhatsApp land as 0010_* beside
+this one; the operator repoints the last of them when the heads meet.
 
-Revision ID: 0009_feed
-Revises: 0008_ingestion
+Revision ID: 0010_feed
+Revises: 0009_medicines
 Create Date: 2026-09-14
 """
 
@@ -29,8 +29,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0009_feed"
-down_revision = "0008_ingestion"
+revision = "0010_feed"
+down_revision = "0009_medicines"
 branch_labels = None
 depends_on = None
 

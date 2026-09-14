@@ -31,7 +31,9 @@ from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
+from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -49,6 +51,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # The engine's sources and jobs are the owner's and his chief's to see (E21).
     (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
+    # A key to read the medicines is not a key to change them.
+    (NotTheirsToChange, 403),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
@@ -57,17 +61,21 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchItem, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
+    (NoSuchLine, 404),
     (PhotoTooLarge, 413),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
+    # The same label twice, or one that adds nothing, changes nothing.
+    (AlreadyRecorded, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
     # up for, are answered by name and nothing else.
     (AlreadySetUp, 409),
     (WaitingToBeClaimed, 409),
 )
-"""Every other refusal is a 400: the request was well formed and the answer is no."""
+"""Every other refusal is a 400: the request was well formed and the answer is no. The
+high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class."""
 
 
 def status_of(refusal: Refusal) -> int:
@@ -82,4 +90,6 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
     body: dict[str, str] = {"refusal": type(refusal).__name__}
     if isinstance(refusal, OutOfScope):
         body["scope"] = refusal.scope.value
+    if isinstance(refusal, HighRiskNeedsLabelPhoto):
+        body["drug_class"] = refusal.drug_class
     return JSONResponse(status_code=status_of(refusal), content=body)
