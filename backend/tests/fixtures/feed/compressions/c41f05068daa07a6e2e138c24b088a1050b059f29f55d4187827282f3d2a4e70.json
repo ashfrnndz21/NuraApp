@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "Your blood thinner and your food",
+    "body": [
+      "Your blood thinner is called warfarin.",
+      "Green leafy food changes how well it works.",
+      "Keep the same amount of greens each week.",
+      "Tell your doctor before any new tablet or herb."
+    ],
+    "why_topic": "your blood thinner",
+    "passage": "keep their intake consistent from week to week so that the INR stays stable"
+  },
+  "ms": {
+    "headline": "Ubat pencair darah dan makanan anda",
+    "body": [
+      "Ubat pencair darah anda dipanggil warfarin.",
+      "Sayur hijau mengubah cara ia bekerja.",
+      "Makan jumlah sayur hijau yang sama setiap minggu.",
+      "Beritahu doktor anda sebelum ambil ubat atau herba baru."
+    ],
+    "why_topic": "ubat pencair darah anda",
+    "passage": "keep their intake consistent from week to week so that the INR stays stable"
+  },
+  "zh": {
+    "headline": "您的抗凝血药和您的食物",
+    "body": [
+      "您的抗凝血药叫华法林。",
+      "绿叶菜会改变它的效果。",
+      "每周吃差不多一样多的绿叶菜。",
+      "吃任何新的药或草药之前，先告诉您的医生。"
+    ],
+    "why_topic": "您的抗凝血药",
+    "passage": "keep their intake consistent from week to week so that the INR stays stable"
+  }
+}

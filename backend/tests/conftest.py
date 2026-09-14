@@ -33,6 +33,7 @@ from sqlalchemy.pool import StaticPool
 from app.channels.api import Providers, create_app
 from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
+from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
@@ -44,6 +45,9 @@ from app.settings import Settings
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
 from tests.paper import PAPER
+
+FEED = Path(__file__).resolve().parent / "fixtures" / "feed"
+"""Where the feed's fixture searcher and compressor answer from (E21)."""
 
 
 async def _engine() -> AsyncEngine:
@@ -131,6 +135,8 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         code_sender=sender,
         object_store=objects,
         extractor=FixtureExtractor(PAPER),
+        searcher=FixtureSearcher(FEED),
+        compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
     )
     app = create_app(settings, sessions, providers)
