@@ -26,9 +26,10 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 
 ## How to run checkpoint 2
 
-Two terminals, both at the top of the repo, with the backend's Python environment active (the one `pip install -e "backend[dev]"` went into).
+Two terminals, both at the top of the repo. Every `make` target uses `python3`, the Python 3.12 on your Mac; the first time, `make setup` installs the backend into it.
 
 ```sh
+make setup              # once: python3 -m pip install -e "backend[dev]"
 make dev                # terminal 1: migrates dev.db, serves on http://127.0.0.1:8000, log also goes to backend/.dev.log
 make checkpoint N=2     # terminal 2: walks the whole scenario, about two seconds
 ```
