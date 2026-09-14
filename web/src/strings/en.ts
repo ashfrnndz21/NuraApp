@@ -334,7 +334,338 @@ export const en = {
     // @patient phrase
     switchProfile: "Look at someone else's papers",
     // @patient phrase
+    setUp: "Set up Nura",
+    // @patient phrase
     signOut: "Sign out",
+  },
+  onboarding: {
+    // @patient phrase
+    next: "Next",
+    // @patient phrase
+    notNow: "Not now",
+    // @patient phrase
+    later: "Set up later",
+    // @patient phrase
+    back: "Go back",
+    // @patient
+    saving: "Nura is writing that down.",
+    about: {
+      // @patient headline
+      titleSelf: "A few things about you",
+      // @patient headline
+      titleOther: "A few things about {name}",
+      // @patient
+      leadSelf: "These set how Nura talks to you.",
+      // @patient
+      leadOther: "These set how Nura talks to {name}.",
+      // @patient
+      nameSelf: "What should Nura call you?",
+      // @patient
+      nameOther: "What should Nura call {name}?",
+      // @patient phrase
+      nameLabel: "The name Nura uses",
+      // @patient
+      languageSelf: "Which language do you want to hear?",
+      // @patient
+      languageOther: "Which language does {name} want to hear?",
+      // @patient
+      bornSelf: "When were you born?",
+      // @patient
+      bornOther: "When was {name} born?",
+      // @patient phrase
+      decade: "In the {decade}s",
+      // @patient
+      doctorSelf: "Which doctor do you see most?",
+      // @patient
+      doctorOther: "Which doctor does {name} see most?",
+      // @patient phrase
+      doctorLabel: "The doctor's name",
+      // @patient
+      doctorHint: "Nura will use this name every time.",
+      // @patient
+      breakfastSelf: "When do you usually have breakfast?",
+      // @patient
+      breakfastOther: "When does {name} usually have breakfast?",
+      // @patient
+      breakfastHint: "Nura ties morning tablets to breakfast.",
+      // @patient phrase
+      times: {
+        "06:00": "At 6 in the morning",
+        "06:30": "At half past 6",
+        "07:00": "At 7 in the morning",
+        "07:30": "At half past 7",
+        "08:00": "At 8 in the morning",
+        "08:30": "At half past 8",
+        "09:00": "At 9 in the morning",
+        "10:00": "At 10 in the morning",
+      },
+      // @patient
+      switchSelf: {
+        large_text: "Would bigger writing help you?",
+        high_contrast: "Would darker writing help you read?",
+        voice_on: "Should Nura read things out loud to you?",
+        big_targets: "Would bigger buttons help you?",
+        one_thing_per_screen: "Should Nura show one thing at a time?",
+        read_back: "Should Nura say back what it understood?",
+        repeat_prompts: "Should Nura remind you a second time?",
+      },
+      // @patient
+      switchOther: {
+        large_text: "Would bigger writing help {name}?",
+        high_contrast: "Would darker writing help {name} read?",
+        voice_on: "Should Nura read things out loud to {name}?",
+        big_targets: "Would bigger buttons help {name}?",
+        one_thing_per_screen: "Should Nura show {name} one thing at a time?",
+        read_back: "Should Nura say back to {name} what it understood?",
+        repeat_prompts: "Should Nura remind {name} a second time?",
+      },
+      // @patient
+      densitySelf: "How much should Nura show you at once?",
+      // @patient
+      densityOther: "How much should Nura show {name} at once?",
+      // @patient phrase
+      densitySimple: "A little, kept simple",
+      // @patient phrase
+      densityDetailed: "Everything, in full",
+      // @patient phrase
+      yes: "Yes",
+      // @patient phrase
+      no: "No",
+    },
+    cloud: {
+      // @patient headline
+      titleSelf: "What is part of your health?",
+      // @patient headline
+      titleOther: "What is part of {name}'s health?",
+      // @patient
+      lead: "Tap each one that is part of it.",
+      // @patient
+      lead2: "Nura then shows what often goes with it.",
+      // @patient
+      lead3: "Nura only uses this to know where to look.",
+      // @patient
+      noted: "Nura noted that.",
+      // @patient
+      removed: "Nura took that off.",
+      // @patient phrase
+      more: "Show more words",
+      // @patient phrase
+      fewer: "Show fewer words",
+      // @patient phrase
+      done: "That is everything",
+      // @patient
+      term: "Doctors call it {term}.",
+    },
+    asks: {
+      // @patient
+      lead: "Tap the one that is right for you.",
+    },
+    readBack: {
+      // @patient headline
+      title: "Here is what Nura understood",
+      // @patient
+      lead: "Please say if this is right.",
+      // @patient
+      lineOf: "This is {n} of {total}.",
+      // @patient phrase
+      yes: "Yes, that is right",
+      // @patient phrase
+      no: "No, that is not right",
+      // @patient
+      agreed: "Nura will keep that.",
+      // @patient
+      disputed: "Nura will not build on that one.",
+      // @patient
+      nothing: "You did not tap anything.",
+      // @patient
+      nothingFine: "That is fine.",
+      // @patient
+      nothingSub: "Your papers can fill this in.",
+    },
+    records: {
+      // @patient headline
+      titleSelf: "Now, your papers",
+      // @patient headline
+      titleOther: "Now, {name}'s papers",
+      // @patient phrase
+      photo: "Take a photo",
+      // @patient phrase
+      file: "Choose a file instead",
+      // @patient phrase
+      allPapers: "That is all my papers",
+      // @patient phrase
+      allDone: "That is all for today",
+      // @patient
+      looking: "Nura is looking at your paper.",
+      // @patient headline
+      reviewTitle: "What Nura read",
+      // @patient
+      reviewLead: "Check each line against the paper.",
+      // @patient
+      reviewLead2: "Change anything that is wrong.",
+      // @patient
+      sure: "Nura is sure of this one.",
+      // @patient
+      check: "Please check this one.",
+      // @patient phrase
+      changeLabel: "What the paper says",
+      // @patient
+      notANumber: "Please type the number from the paper.",
+      // @patient
+      cannotChange: "If this one is wrong, leave it out.",
+      // @patient phrase
+      leaveOut: "Leave this one out",
+      // @patient phrase
+      keepIn: "Keep this one",
+      // @patient
+      leftOut: "Nura will leave this one out.",
+      // @patient phrase
+      looksRight: "Looks right",
+      // @patient
+      saved: "Nura wrote it down.",
+      // @patient headline
+      learnedTitle: "What Nura learned",
+      // @patient
+      kindLabReport: "This is a blood test.",
+      // @patient
+      kindMedicineLabel: "This is a medicine label.",
+      // @patient
+      kindDischargeLetter: "This is a hospital letter.",
+      // @patient
+      kindClinicSlip: "This is an appointment card.",
+      // @patient
+      kindHandwritten: "This is a note in a doctor's writing.",
+      // @patient
+      kindInsuranceLetter: "This is an insurance letter.",
+      // @patient
+      kindDeviceScreen: "This is the screen of a machine.",
+      // @patient
+      unreadable: "Nura could not read this one.",
+      // @patient
+      typeIt: "Please type what the paper says.",
+      // @patient
+      kindUnknown: "Nura could not read this page.",
+      // @patient
+      unknownHint: "Try again with the page flat, in daylight.",
+      // @patient
+      dated: "The paper is dated {date}.",
+      // @patient
+      highRisk: "Nura takes extra care with this medicine.",
+      // @patient
+      fromPhoto: "From the photo you added on {date}.",
+      // @patient phrase
+      otherLine: "Another line on the paper",
+    },
+    questions: {
+      // @patient headline
+      titleSelf: "Your papers raised a few questions",
+      // @patient headline
+      titleOther: "{name}'s papers raised a few questions",
+      // @patient
+      lead: "Keep the ones to ask the doctor.",
+      // @patient phrase
+      keep: "Keep this one",
+      // @patient phrase
+      notThis: "Not this one",
+      // @patient
+      kept: "Nura will keep this one for the visit.",
+      // @patient
+      dropped: "Nura will leave this one out.",
+      // @patient
+      none: "Your papers raised no questions.",
+    },
+    invite: {
+      // @patient headline
+      title: "Who should see your papers?",
+      // @patient
+      lead: "Nura will let this one person in.",
+      // @patient phrase
+      nameLabel: "Their name",
+      // @patient phrase
+      phoneLabel: "Their phone number",
+      // @patient phrase
+      relationshipLabel: "Who they are to you",
+      // @patient
+      partsLead: "Tap each part they can see.",
+      // @patient phrase
+      parts: {
+        medicines: "Your medicines",
+        visits: "Your visits to the doctor",
+        readings: "Your blood pressure book and your sugar numbers",
+        records: "Your papers",
+      },
+      // @patient phrase
+      seeWords: "See the words",
+      // @patient
+      wordsLead: "Please read these words.",
+      // @patient phrase
+      agree: "I agree, let them in",
+      // @patient
+      done: "They can see those parts now.",
+    },
+    plan: {
+      // @patient headline
+      title: "Nura is ready",
+      // @patient
+      lead: "Everything you see is built from this.",
+      // @patient
+      cadence1: "Nura will ask for one thing a day, never more.",
+      // @patient
+      cadence2: "Tap Later and Nura asks once more.",
+      // @patient phrase
+      missing: "Missing",
+      // @patient
+      onDay: "Nura will ask for this on {date}.",
+      // @patient phrase
+      later: "Later",
+      // @patient
+      laterSaid: "Nura will ask once more in a few days.",
+      // @patient
+      moreOne: "There is 1 more after that.",
+      // @patient
+      more: "There are {count} more after that.",
+      // @patient
+      nothing: "Nothing is missing for now.",
+      // @patient phrase
+      open: "Open Nura",
+    },
+    // His words for the lines a paper carries, by the backend's subject then attribute code
+    // (E02's fixture extractor: a lipid panel and a medicine label so far).
+    // @patient phrase
+    fields: {
+      lipid_panel: {
+        total_cholesterol: "The total cholesterol",
+        hdl: "The good cholesterol",
+        ldl: "The bad cholesterol",
+        triglycerides: "The blood fats",
+        vldl: "Another blood fat number",
+        tc_hdl_ratio: "The cholesterol ratio",
+        non_hdl_cholesterol: "The cholesterol without the good part",
+      },
+      device: { kind: "The machine" },
+      blood_pressure: { systolic: "The top number", diastolic: "The bottom number" },
+      heart_rate: { pulse: "The heartbeat" },
+      reading: { taken_at: "When it was taken" },
+      visit: { doctor: "The doctor", next_visit: "The next visit" },
+      discharge: {
+        admitted_on: "When you went in",
+        discharged_on: "When you came home",
+        reason: "Why you were in hospital",
+        weight_at_discharge: "Your weight when you came home",
+      },
+      blood_sugar: { glucose: "The sugar number" },
+      lab_report: { lab: "Where the blood was tested" },
+      person: { birth_year: "The year of birth", sex: "Male or female" },
+      medicine: {
+        name: "The medicine",
+        strength: "How strong it is",
+        dose: "How to take it",
+        frequency: "How often to take it",
+        quantity: "How many were given",
+        dispensed_at: "When it was given",
+        prescriber: "Which doctor wrote it",
+      },
+    },
   },
   errors: {
     // @patient
@@ -348,6 +679,22 @@ export const en = {
   refusals: {
     default: "Nura could not do that right now.",
     NotInTheDemo: ["This demo only takes test phone numbers.", "A test number starts with +65 0."],
+    CardsStillOpen: "A paper still waits for your yes.",
+    NotAtThisStep: "That step comes a little later.",
+    BiographyClosed: "This setting-up is already finished.",
+    PaperAlreadyAdded: "That paper is already with the others.",
+    NotTheirsToSetUp: "Only the owner or his family can set this up.",
+    NotADecade: "Please choose a decade from the list.",
+    NotALanguage: "Nura does not speak that language yet.",
+    NoPlan: "Nura has nothing to ask for yet.",
+    NotPlainEnough: "Please write the question in plain words.",
+    HolderNeedsAName: "Please type the name of the person you are letting in.",
+    NotAPdf: "That file is not one Nura can read.",
+    PdfTooLarge: "That file is too big for Nura.",
+    UnreadableField: "Please type the line Nura could not read.",
+    NotEveryFieldDecided: "Please check every line first.",
+    NotADecision: "Nura did not understand that answer.",
+    NoSuchReviewField: "That line is not on the card any more.",
     NoSession: "Please sign in again.",
     NoOpenChallenge: "Ask for a new code first.",
     WrongCode: "That code is not right.",

@@ -47,6 +47,8 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await expect(words).toContainText("Nura keeps your papers, your medicines and your blood pressure book.");
   await expect(words).toContainText("They never leave Singapore.");
   await page.getByTestId("agree").click();
+  // Onboarding comes next (W3); this walk is Today's, so set up later.
+  await page.getByTestId("set-up-later").click();
 
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await expect(page.getByTestId("proud-number")).toHaveText("0");
@@ -173,7 +175,7 @@ test("a refused read clears the phone's copy and is said in one plain sentence",
   await seedMedicine(request, paToken, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
   await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     ...auth(paToken),
-    data: { holder_phone_e164: mei, scopes: ["medicines", "records"], relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes: ["medicines", "records"], relationship: "daughter", language: "en", captured_via: "app" },
   });
   const key = await request.post(`${API}/profiles/${profileId}/keys`, {
     ...auth(paToken),
@@ -213,7 +215,7 @@ test("a key without the records scope opens Today on the medicines and the feed,
   await seedMedicine(request, paToken, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
   await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     ...auth(paToken),
-    data: { holder_phone_e164: siti, scopes: ["medicines"], relationship: "helper", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: siti, holder_display_name: "Siti", scopes: ["medicines"], relationship: "helper", language: "en", captured_via: "app" },
   });
   const key = await request.post(`${API}/profiles/${profileId}/keys`, {
     ...auth(paToken),
@@ -237,6 +239,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
+  await page.getByTestId("set-up-later").click();
   await expect(page.getByTestId("proud")).toBeVisible();
   let failed = 0;
   await page.route("**/api/me", async (route) => {
@@ -267,6 +270,7 @@ test("the language picker changes every string and persists on the device", asyn
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
+  await page.getByTestId("set-up-later").click();
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");

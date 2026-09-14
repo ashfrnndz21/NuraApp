@@ -183,8 +183,13 @@ async def _person_for(
         existing = await session.scalar(select(Person).where(Person.email == challenge.email))
     if existing is not None:
         guard_region(held_in=existing.region, asked_from=region)
-        if not existing.display_name and challenge.display_name:
+        if challenge.display_name and (
+            not existing.display_name or existing.named_by_person_id is not None
+        ):
+            # His own name fills an empty one, and replaces one somebody else typed when they
+            # let him in; it never overwrites a name he chose.
             existing.display_name = challenge.display_name
+            existing.named_by_person_id = None
         return existing
     return await register_person(
         session,

@@ -282,6 +282,7 @@ def checkpoint_2(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["medicines", "visits"],
                 "relationship": "daughter",
                 "language": "en",
@@ -585,6 +586,7 @@ def checkpoint_3(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
                 "relationship": "daughter",
                 "language": "en",
@@ -599,7 +601,8 @@ def checkpoint_3(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": ["readings"]},
+            json={"holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name, "role": "caregiver", "scopes": ["readings"]},
         ),
         201,
         "Pa cuts Mei a key to the readings only",
@@ -1273,6 +1276,7 @@ def checkpoint_5(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
                 "relationship": "daughter",
                 "language": "en",
@@ -1286,7 +1290,8 @@ def checkpoint_5(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": ["readings"]},
+            json={"holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name, "role": "caregiver", "scopes": ["readings"]},
         ),
         201,
         "Pa cuts Mei a key to the readings only",
@@ -1713,6 +1718,7 @@ def checkpoint_6(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["medicines"],
                 "relationship": "helper",
                 "language": "en",
@@ -1726,7 +1732,8 @@ def checkpoint_6(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_phone_e164": mei.phone_e164, "role": "helper", "scopes": ["medicines"]},
+            json={"holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name, "role": "helper", "scopes": ["medicines"]},
         ),
         201,
         "Pa cuts Mei a helper key",
@@ -2640,6 +2647,7 @@ def checkpoint_8(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": scopes,
                 "relationship": "daughter",
                 "language": "en",
@@ -2653,7 +2661,8 @@ def checkpoint_8(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": scopes},
+            json={"holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name, "role": "caregiver", "scopes": scopes},
         ),
         201,
         "Pa cuts Mei a caregiver key",
@@ -2824,6 +2833,7 @@ def checkpoint_9(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": [
                     "medicines",
                     "visits",
@@ -2845,7 +2855,8 @@ def checkpoint_9(client: httpx.Client) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_phone_e164": mei.phone_e164, "role": "chief"},
+            json={"holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name, "role": "chief"},
         ),
         201,
         "Pa cuts Mei a chief key",

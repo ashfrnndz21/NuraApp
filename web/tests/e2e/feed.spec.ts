@@ -350,10 +350,11 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   await seedWarfarinLabel(request, pa.token, pa.profileId);
   const mei = freshPhone("+659333");
   const scopes = ["medicines", "visits", "readings", "records", "emergency", "ask"];
-  await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
+  const agreed = await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
     ...auth(pa.token),
-    data: { holder_phone_e164: mei, scopes, relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes, relationship: "daughter", language: "en", captured_via: "app" },
   });
+  expect(agreed.status(), await agreed.text()).toBe(201);
   const key = await request.post(`${API}/profiles/${pa.profileId}/keys`, { ...auth(pa.token), data: { holder_phone_e164: mei, role: "caregiver", scopes } });
   expect(key.status()).toBe(201);
   // Pa's feed is rendered first, as his own morning would; Mei then reads what became of it.

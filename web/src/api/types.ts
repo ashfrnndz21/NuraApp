@@ -280,6 +280,301 @@ export interface RefusalBody {
   drug_class?: string;
 }
 
+// --- E02: a photo in, a review card out ------------------------------------------------
+
+export type FieldState = "proposed" | "confirmed" | "corrected" | "rejected";
+
+export interface ReviewFieldOut {
+  field_id: string;
+  position: number;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+  confidence: number;
+  /** Below the backend's threshold: the dotted underline, "please check this one". */
+  needs_confirm: boolean;
+  /** Nura saw this line and could not read it: `value` is null and `prompt` asks for it. */
+  unreadable: boolean;
+  /** The backend's whole lines shown beside a line nobody has typed yet (E02-02). */
+  prompt: string[] | null;
+  /** For a PDF of several pages, the page the line was read on. */
+  page: number | null;
+  state: FieldState;
+  corrected_value: unknown | null;
+  fact_id: string | null;
+}
+
+export type DocumentKind =
+  | "lab_report"
+  | "medicine_label"
+  | "discharge_letter"
+  | "clinic_slip"
+  | "handwritten_prescription"
+  | "insurance_letter"
+  | "device_screen"
+  | "not_health"
+  | "unknown";
+
+/** Where an imported PDF came from, in the backend's words (E02-03). */
+export type DocumentSource = "portal" | "email" | "share";
+
+export interface ReviewCardOut {
+  card_id: string;
+  profile_id: string;
+  artifact_id: string;
+  document_kind: DocumentKind;
+  document_date: string | null;
+  /** What he said a PDF was, and where it came from (E02-03). */
+  asked_as: DocumentKind | null;
+  source: DocumentSource | null;
+  /** The backend's whole lines where the page is not what it was offered as, or not a
+   *  health paper at all (then the card has no fields). */
+  notice: string[] | null;
+  high_risk_class: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  fields: ReviewFieldOut[];
+}
+
+export interface DecisionIn {
+  field_id: string;
+  decision: "confirmed" | "corrected" | "rejected";
+  corrected_value?: unknown;
+}
+
+export interface FactOut {
+  fact_id: string;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+}
+
+export interface ReviewConfirmedOut {
+  card: ReviewCardOut;
+  facts: FactOut[];
+}
+
+// --- E01: onboarding — #117's contract (branch E01-biography-profile, "Client contract") --
+//
+// #117 is merged; these are the shapes its routes answer with.
+
+/** One word of the cloud (`GET /onboarding/conditions`): its code, his name for it, how large
+ *  it sits, the words that appear once it is tapped, and whether the cloud shows it first. A
+ *  word can appear under two picked words (a kidney number under pressure and sugar). */
+export interface ConditionOut {
+  code: string;
+  name: string;
+  weight: number;
+  related: string[];
+  top: boolean;
+  /** Not modelled by E01 yet (its open question): the clinic's word, shown in brackets. */
+  term?: string | null;
+  /** Not modelled by E01 yet: a follow-up question and its options. */
+  ask?: { question: string; options: { id: string; text: string }[] } | null;
+}
+
+export interface ConditionsOut {
+  language: string;
+  version: number;
+  top: string[];
+  conditions: ConditionOut[];
+}
+
+export type Density = "detailed" | "simple";
+
+/** The settings screen, whole (`PUT /profiles/{id}/settings` replaces it). The words he
+ *  tapped go here, as `conditions`. */
+export interface SettingsIn {
+  language: string;
+  conditions: string[];
+  density: Density;
+  large_text: boolean;
+  high_contrast: boolean;
+  voice_on: boolean;
+  big_targets: boolean;
+  one_thing_per_screen: boolean;
+  read_back: boolean;
+  repeat_prompts: boolean;
+  preferred_name: string | null;
+  doctor_name: string | null;
+  /** "07:30" on his wall clock. */
+  breakfast_time: string | null;
+  /** The decade he was born in, by its first year: 1950. */
+  birth_decade: number | null;
+}
+
+/** The settings as the caller's key reads them; `withheld` names what it does not open. */
+export interface SettingsOut extends Omit<SettingsIn, "conditions" | "doctor_name" | "birth_decade"> {
+  settings_id: string | null;
+  profile_id: string;
+  conditions: string[] | null;
+  doctor_name: string | null;
+  birth_decade: number | null;
+  set_by_person_id: string | null;
+  set_at: string | null;
+  withheld: string[];
+}
+
+/** The words of the step he is at, in his language. */
+export interface ScriptOut {
+  headline: string;
+  lines: string[];
+}
+
+export type PaperKind = "discharge_letter" | "lab_result" | "medicine" | "clinic_card" | "insurance_card" | "other";
+
+export interface PaperOut {
+  paper_id: string;
+  position: number;
+  paper: PaperKind;
+  artifact_id: string;
+  card_id: string;
+  document_kind: string;
+  confirmed: boolean;
+}
+
+/** A paper joined to the sitting, and the review card it was read into. */
+export interface PaperAddedOut {
+  paper: PaperOut;
+  card: ReviewCardOut;
+}
+
+/** A read-back line: the confirmed fact it reads back (its own source), the words, and his
+ *  answer once given. E01 renders these from facts, not from State, so there is no State id. */
+export interface ReadBackLineOut {
+  fact_id: string;
+  line: string;
+  answer: "yes" | "no" | null;
+  dispute_fact_id: string | null;
+}
+
+/** A question the papers raised: the gap it would fill, one whole line, Keep or Not this one,
+ *  the State it was rendered from and its source line — and, once kept and handed over, the
+ *  visit (appointment) whose list it went onto (E05). */
+export interface QuestionOut {
+  question_id: string;
+  line: string;
+  kept: boolean | null;
+  state_id: string | null;
+  source: string | null;
+  handed_over_to: string | null;
+}
+
+export type BiographyStep = "about_you" | "papers" | "read_back" | "questions" | "closed";
+
+/** Where the sitting stands (`POST`/`GET /profiles/{id}/biography`): its step, the one call to
+ *  make next, the step's words, its papers, the read-back and the questions. */
+export interface BiographyOut {
+  biography_id: string;
+  profile_id: string;
+  step: BiographyStep;
+  next: string | null;
+  language: string;
+  opened_at: string;
+  opened_by_person_id: string;
+  read_back_at: string | null;
+  closed_at: string | null;
+  prompt: ScriptOut;
+  papers: PaperOut[];
+  open_cards: number;
+  read_back: ReadBackLineOut[];
+  questions: QuestionOut[];
+  /** After a "no" on the read-back: who looks at the paper again. */
+  after_no: string | null;
+  /** How many more questions wait for later. */
+  more: string | null;
+}
+
+export interface SummaryOut {
+  papers: number;
+  facts: number;
+  conditions: number;
+  medicines: number;
+  disputes: number;
+  questions: number;
+  prompts: number;
+  first_prompt_at: string | null;
+  lines: string[];
+}
+
+export type PromptCapture = "photo" | "pdf" | "tap" | "invite";
+
+/** One day's prompt of the first week: the gap it fills, when it is due, how it is filled,
+ *  and its words. E01 carries no State id or source line on a prompt; shown when present. */
+export interface PromptOut {
+  prompt: string;
+  day: number;
+  tier: number;
+  capture: PromptCapture;
+  /** The cloud word the gap is about, in his language (a name, not a code), or null. */
+  word: string | null;
+  deferred: number;
+  due_at: string;
+  due_local: string;
+  status: "pending" | "done" | "skipped";
+  done_at: string | null;
+  done_by_fact_id: string | null;
+  skipped_at: string | null;
+  headline: string | null;
+  line: string | null;
+  action: string | null;
+  state_id?: string;
+  source?: string;
+}
+
+export interface PlanOut {
+  plan_id: string;
+  profile_id: string;
+  biography_id: string | null;
+  created_at: string;
+  first_day: string;
+  breakfast_time: string;
+  timezone: string;
+  stopped: boolean;
+  stopped_because: string[];
+  prompts: PromptOut[];
+  due: PromptOut[];
+}
+
+/** The close of a sitting: where it stands, the summary in his words, and the first week. */
+export interface ClosedOut {
+  biography: BiographyOut;
+  summary: SummaryOut;
+  plan: PlanOut;
+}
+
+// --- E12: letting one person in (sharing consent, then a key), from the Ready screen ---
+
+export type Part = "medicines" | "visits" | "readings" | "records";
+
+export interface SharingIn {
+  holder_phone_e164: string;
+  /** The name the words use for the person, as he calls them (`HolderNeedsAName` without it). */
+  holder_display_name: string;
+  scopes: Part[];
+  relationship: string | null;
+  language: string;
+}
+
+/** The words he agrees to, rendered by the backend for this person and these parts before
+ *  he says yes (`POST /profiles/{id}/consents/sharing/preview`), by the same function the
+ *  consent keeps them with. The client never composes them. */
+export interface SharingPreviewOut {
+  wording_version: string;
+  language: string;
+  lines: string[];
+}
+
+export interface ConsentOut {
+  consent_id: string;
+  holder_person_id: string | null;
+  scopes: string[] | null;
+  text_version: string;
+  wording_text: string;
+}
+
 /** `GET /api/deployment`: the region this backend serves, and whether it is a demo (ADR 0008). */
 export interface DeploymentOut {
   region: "SG" | "MY";
