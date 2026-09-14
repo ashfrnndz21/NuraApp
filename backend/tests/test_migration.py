@@ -25,6 +25,7 @@ from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
+from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 
@@ -34,6 +35,7 @@ TABLES: tuple[Table, ...] = (
     Person.__table__,
     Profile.__table__,
     Key.__table__,
+    Confirmation.__table__,
     AuditEntry.__table__,
     Artifact.__table__,
     Event.__table__,

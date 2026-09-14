@@ -8,6 +8,7 @@ by any route that goes through a context.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -20,6 +21,18 @@ from app.identity.models import Profile
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.regions import OutOfRegion, Region, guard_region
+
+on_unknown_reach: Callable[[uuid.UUID, uuid.UUID], None] | None = None
+"""Called with (person_id, profile_id) each time an unknown account is refused in silence.
+
+Accepted residual risk: a person the profile has never known — no key ever cut, not the
+owner — is refused with `NoKey` and no line in the trail, because a line would let anyone
+fill a victim's trail by repeating a known id, and because the same words for a missing
+profile, a real one and one pinned elsewhere are what stop a profile being found or placed
+by asking. The cost is that repeated reaching by an unknown account is invisible to the
+owner from inside the trail. The channel wires a counter here — rate limits and alerts live
+out of band, keyed on the account reaching, never written into the profile it reached for.
+"""
 
 
 class NoKey(Refusal):
@@ -87,6 +100,7 @@ async def resolve_key_context(
     moment = now or utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
+        _unknown_reach(person_id, profile_id)
         raise NoKey(person_id=person_id, profile_id=profile_id)
 
     # Every key ever cut for this person on this profile, closed ones included. A person the
@@ -100,6 +114,7 @@ async def resolve_key_context(
         )
     )
     if profile.owner_person_id != person_id and not keys:
+        _unknown_reach(person_id, profile_id)
         raise NoKey(person_id=person_id, profile_id=profile_id)
 
     try:
@@ -134,6 +149,31 @@ async def resolve_key_context(
         session, profile=profile, person_id=person_id, refusal=refused, now=moment
     )
     raise refused
+
+
+def _unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+    if on_unknown_reach is not None:
+        on_unknown_reach(person_id, profile_id)
+
+
+async def holds_the_profile(
+    session: AsyncSession, *, profile_id: uuid.UUID, person_id: uuid.UUID, now: datetime
+) -> bool:
+    """Whether this person could open this profile now: its owner, or a live key on it.
+
+    A yes-or-no with no context resolved and no line written — for checking a person who
+    is *named* in a request (the one whose confirm is being used) without ever acting as
+    them. Only the person who reached is ever the actor on a line.
+    """
+    profile = await session.get(Profile, profile_id)
+    if profile is None:
+        return False
+    if profile.owner_person_id == person_id:
+        return True
+    keys = await session.scalars(
+        select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
+    )
+    return any(key.is_active(now) for key in keys)
 
 
 async def _record_refused(

@@ -14,7 +14,8 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db import Base, make_session_factory
+from app.db import Base, make_session_factory, take_keepers
+from app.keys import confirm  # noqa: F401
 
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
@@ -35,7 +36,14 @@ async def _deployment() -> AsyncIterator[AsyncSession]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
     async with make_session_factory(engine)() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            # A test is its own channel: `pytest.raises` is its request boundary, and the
+            # lines a channel would replay after the rollback are simply left standing, since
+            # nothing rolled back. What is dropped here is only the replay; a test of the
+            # boundary itself goes through `tests.support.refused_unit`.
+            take_keepers(session)
     await engine.dispose()
 
 

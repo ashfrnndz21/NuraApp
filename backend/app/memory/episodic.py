@@ -13,7 +13,7 @@ import re
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, SQLColumnExpression, or_
+from sqlalchemy import ColumnElement, Select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -23,7 +23,15 @@ from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
-from app.memory.models import Artifact, ArtifactKind, Event, EventKind, SourceChannel, short_label
+from app.memory.models import (
+    Artifact,
+    ArtifactKind,
+    Event,
+    EventKind,
+    Fact,
+    SourceChannel,
+    short_label,
+)
 from app.memory.working import require_open_episode
 from app.regions import Region, guard_region
 
@@ -38,11 +46,11 @@ class NoSuchArtifact(Refusal):
     """No artefact by that id on this profile."""
 
 
-class EventFromNowhere(Refusal):
+class SourceNotNamed(Refusal):
     """An event names its artefact, or says its channel and what it was. This did neither."""
 
 
-class NotTheArtefactsChannel(Refusal):
+class CameInAnotherWay(Refusal):
     """An event read from an artefact came in the way the artefact did, not some other way."""
 
 
@@ -55,20 +63,37 @@ def held_here(context: KeyContext) -> ColumnElement[bool]:
     return Artifact.region == context.region
 
 
-def cites_only_what_is_held_here(
-    artifact_id: SQLColumnExpression[uuid.UUID | None], context: KeyContext
-) -> ColumnElement[bool]:
-    """For a table that names an artefact: the rows naming none, or one held here.
-
-    Part of every query that returns an event or a fact, so nothing citing bytes held
-    elsewhere is served either, and a cite always leads to an artefact that can be read.
-    """
-    here = (
+def _artefacts_held_here(context: KeyContext) -> Select[tuple[uuid.UUID]]:
+    return (
         scoped_select(Artifact, context, Scope.RECORDS)
         .with_only_columns(Artifact.id)
         .where(held_here(context))
     )
-    return or_(artifact_id.is_(None), artifact_id.in_(here))
+
+
+def event_cites_only_what_is_held_here(context: KeyContext) -> ColumnElement[bool]:
+    """The events naming no artefact, or one held here. Part of every query returning events."""
+    return or_(Event.artifact_id.is_(None), Event.artifact_id.in_(_artefacts_held_here(context)))
+
+
+def fact_cites_only_what_is_held_here(context: KeyContext) -> ColumnElement[bool]:
+    """The facts whose provenance, followed all the way down, is held here.
+
+    A fact names an artefact, or an event, or both; an event names an artefact. This follows
+    the chain: the artefact the fact names is held here, and the event it names itself names
+    nothing or something held here. Part of every query returning facts, so a cite always
+    leads to an artefact that can be read, and nothing resting on bytes held elsewhere is
+    served by any reader.
+    """
+    events_here = (
+        scoped_select(Event, context, Scope.RECORDS)
+        .with_only_columns(Event.id)
+        .where(event_cites_only_what_is_held_here(context))
+    )
+    return and_(
+        or_(Fact.artifact_id.is_(None), Fact.artifact_id.in_(_artefacts_held_here(context))),
+        or_(Fact.event_id.is_(None), Fact.event_id.in_(events_here)),
+    )
 
 
 @audited(Action.WRITE, Scope.RECORDS, Artifact.__tablename__)
@@ -199,11 +224,11 @@ async def _where_it_came_from(
     """The channel an event came in on: the artefact's, or the one given beside a label."""
     if artifact_id is None:
         if source_channel is None or label is None:
-            raise EventFromNowhere("an event names its artefact, or says its channel and label")
+            raise SourceNotNamed("an event names its artefact, or says its channel and label")
         return source_channel
     artifact = await require_artifact(session, context=context, artifact_id=artifact_id, now=now)
     if source_channel is not None and source_channel is not artifact.source_channel:
-        raise NotTheArtefactsChannel(
+        raise CameInAnotherWay(
             f"the artefact came in by {artifact.source_channel}, not {source_channel}"
         )
     return artifact.source_channel
@@ -223,7 +248,7 @@ async def require_event(
         Event,
         context,
         Scope.RECORDS,
-        where=(Event.id == event_id, cites_only_what_is_held_here(Event.artifact_id, context)),
+        where=(Event.id == event_id, event_cites_only_what_is_held_here(context)),
         now=now,
     )
     if not found:

@@ -198,8 +198,9 @@ class Fact(ProfileScoped, Base):
     open dispute against the fact it `supersedes`: it closes nothing and is never current.
 
     A `medication.dose` fact here is storage. The label-photo rule for a high-risk drug
-    (docs/medications-module.md) is the medicines module's gate (E04) above this layer; this
-    table accepts a dose whose provenance is a WHATSAPP event, and E04 must not save one.
+    (docs/medications-module.md) is a hook, `semantic.before_fact_write`, that the medicines
+    module (E04) registers; until it does, this table accepts a dose whose provenance is a
+    WHATSAPP event.
     """
 
     __tablename__ = "fact"

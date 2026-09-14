@@ -176,7 +176,9 @@ def audited[**P, R](
     """The door on a service function: one `audited_guard` around the whole call.
 
     The function takes the session first and `context` and `now` by keyword, as every service
-    here does. Whatever it refuses — a reach at another profile's row, a rule, a format — is
+    here does. The scope is checked at the door, before the body runs — so nothing in the
+    body, a confirm being used least of all, happens for a caller the scope does not cover.
+    Whatever the body then refuses — a reach at another profile's row, a rule, a format — is
     written down against the profile in the context before it is passed on.
     """
 
@@ -187,6 +189,7 @@ def audited[**P, R](
             context = cast(KeyContext, kwargs["context"])
             now = cast("datetime | None", kwargs.get("now"))
             async with audited_guard(session, context, action, scope, target, now=now):
+                context.require(scope)
                 return await service(*args, **kwargs)
 
         return guarded

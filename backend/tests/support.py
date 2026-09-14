@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
-from app.db import Base, ProfileScoped, enum_column, take_keepers
+from app.db import Base, ProfileScoped, enum_column, unit_of_work
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -28,21 +28,16 @@ from app.keys.scopes import Scope
 async def refused_unit(session: AsyncSession, expect: type[Refusal]) -> AsyncIterator[None]:
     """One unit of work that ends in a refusal, run the way a channel runs a request.
 
-    The body runs inside a savepoint. It must raise `expect`; when it does, the savepoint is
-    rolled back — everything the body wrote is gone — and then the keepers the trail
-    registered (`app.db.keep_on_refusal`) are replayed and flushed, so the refused lines
-    land anyway. Anything else raised, or nothing raised, is a failed test.
+    A thin wrapper over `app.db.unit_of_work`: the body must raise `expect`, the boundary
+    rolls the savepoint back and replays the refused lines, and the refusal is swallowed
+    here so the test can look at what is left. Anything else raised, or nothing raised, is a
+    failed test.
     """
-    savepoint = await session.begin_nested()
     try:
-        yield
+        async with unit_of_work(session):
+            yield
     except expect:
-        await savepoint.rollback()
-        for keeper in take_keepers(session):
-            await keeper(session)
-        await session.flush()
         return
-    await savepoint.commit()
     raise AssertionError(f"expected {expect.__name__}, nothing was refused")
 
 

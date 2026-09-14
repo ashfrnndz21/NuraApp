@@ -21,16 +21,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import read_audit
 from app.db import as_utc
+from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.identity.service import create_own_profile, register_person
+from app.keys.confirm import (
+    Confirmation,
+    ConfirmationExpired,
+    ConfirmationSpent,
+    ConfirmSubject,
+    NotAConfirmerHere,
+    confirm,
+)
 from app.keys.context import KeyContext, resolve_key_context
-from app.keys.grants import grant_key
+from app.keys.grants import grant_key, revoke_key
 from app.keys.scopes import KeyRole, Scope
+from app.memory import semantic
 from app.memory.episodic import (
-    EventFromNowhere,
+    CameInAnotherWay,
     NoSuchArtifact,
     NoSuchEvent,
-    NotTheArtefactsChannel,
+    SourceNotNamed,
     record_event,
     require_artifact,
     require_event,
@@ -54,6 +64,7 @@ from app.memory.models import (
 from app.memory.semantic import (
     AlreadySuperseded,
     ConfirmedFactStands,
+    FactDraft,
     NoSuchFact,
     NoSuchProvenance,
     NotAPersonsWord,
@@ -66,7 +77,6 @@ from app.memory.semantic import (
 )
 from app.memory.spine import (
     STATUS_GOES_TO,
-    NobodyConfirmed,
     NoSuchAppointment,
     NotThatStatusChange,
     add_provider,
@@ -129,6 +139,17 @@ async def _systolic(
     )
 
 
+async def _yes(
+    session: AsyncSession,
+    context: KeyContext,
+    subject: ConfirmSubject = ConfirmSubject.APPOINTMENT,
+    subject_id: uuid.UUID | None = None,
+    when: datetime | None = None,
+) -> uuid.UUID:
+    """The person asking says yes, the way the surface writes it down."""
+    return (await confirm(session, context, subject=subject, subject_id=subject_id, now=when)).id
+
+
 async def _dose(
     session: AsyncSession,
     context: KeyContext,
@@ -136,9 +157,12 @@ async def _dose(
     value: int,
     *,
     state: ConfidenceState = ConfidenceState.EXTRACTED,
-    confirmed_by: uuid.UUID | None = None,
+    confirmation_id: uuid.UUID | None = None,
+    yes: bool = False,
     when: datetime = SEPT_3,
 ) -> Fact:
+    if yes:
+        confirmation_id = await _yes(session, context, ConfirmSubject.FACT, when=when)
     return await assert_fact(
         session,
         context=context,
@@ -148,7 +172,7 @@ async def _dose(
         unit="mg",
         confidence=0.8 if state is ConfidenceState.EXTRACTED else 1.0,
         confidence_state=state,
-        confirmed_by_person_id=confirmed_by,
+        confirmation_id=confirmation_id,
         artifact_id=photo.id,
         valid_from=when,
         now=when,
@@ -306,7 +330,7 @@ async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: Asyn
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, ConfirmSubject.FACT, extracted.id),
     )
     assert confirmed.confirmed_by_person_id == owner.person_id
 
@@ -332,75 +356,157 @@ async def test_an_extraction_does_not_supersede_what_a_person_confirmed(sg: Asyn
         )
 
 
-async def test_a_confirmed_or_disputed_state_names_the_person_who_said_so(
+async def test_a_confirmed_or_disputed_state_is_a_persons_yes_used_once(
     sg: AsyncSession,
 ) -> None:
     owner = await _pa(sg)
-    neighbour = await _pa(sg, phone="+6591110002")
-    abroad = await register_person(
-        sg, region=Region.MY, display_name="Cousin", phone_e164="+60121110003"
-    )
     photo = await _photo(sg, owner)
     extracted = await _dose(sg, owner, photo, 138)
 
-    # A label with nobody behind it is not a person's word.
+    # A label with no yes behind it is not a person's word; an extraction has no yes at all.
     for state in (ConfidenceState.CONFIRMED_BY_PERSON, ConfidenceState.DISPUTED):
-        with pytest.raises(NobodyConfirmed):
-            await supersede_fact(
-                sg,
-                context=owner,
-                fact_id=extracted.id,
-                value=136,
-                confidence=1.0,
-                confidence_state=state,
-            )
-        with pytest.raises(NobodyConfirmed):
+        with pytest.raises(NotAConfirmerHere):
             await _dose(sg, owner, photo, 136, state=state)
-    # Nor is a person from another household, another region, or nowhere.
-    for who in (neighbour.person_id, abroad.id, uuid.uuid4()):
-        with pytest.raises(NobodyConfirmed):
+    with pytest.raises(NotAPersonsWord):
+        await _dose(
+            sg,
+            owner,
+            photo,
+            136,
+            confirmation_id=await _yes(sg, owner, ConfirmSubject.FACT, when=SEPT_3),
+        )
+
+    # A yes is for one act: wrong subject, wrong fact, another profile's — none fits.
+    neighbour = await _pa(sg, phone="+6591110002")
+    for wrong in (
+        await _yes(sg, owner, ConfirmSubject.APPOINTMENT, when=SEPT_3),
+        await _yes(sg, owner, ConfirmSubject.FACT, uuid.uuid4(), when=SEPT_3),
+        await _yes(sg, neighbour, ConfirmSubject.FACT, when=SEPT_3),
+        uuid.uuid4(),
+    ):
+        with pytest.raises(NotAConfirmerHere):
             await _dose(
                 sg,
                 owner,
                 photo,
                 136,
                 state=ConfidenceState.CONFIRMED_BY_PERSON,
-                confirmed_by=who,
+                confirmation_id=wrong,
             )
-    # And an extraction does not name one: it is the machine's, not a person's.
-    with pytest.raises(NotAPersonsWord):
-        await _dose(sg, owner, photo, 136, confirmed_by=owner.person_id)
+
+    # A yes is used once, and only while it is fresh.
+    once = await _yes(sg, owner, ConfirmSubject.FACT, when=SEPT_3)
+    by_owner = await _dose(
+        sg, owner, photo, 136, state=ConfidenceState.CONFIRMED_BY_PERSON, confirmation_id=once
+    )
+    assert by_owner.confirmed_by_person_id == owner.person_id
+    with pytest.raises(ConfirmationSpent):
+        await _dose(sg, owner, photo, 136, state=ConfidenceState.DISPUTED, confirmation_id=once)
+    stale = await _yes(sg, owner, ConfirmSubject.FACT, by_owner.id, when=SEPT_3)
+    with pytest.raises(ConfirmationExpired):
+        await supersede_fact(
+            sg,
+            context=owner,
+            fact_id=by_owner.id,
+            value=140,
+            confidence=1.0,
+            confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+            confirmation_id=stale,
+            now=SEPT_3 + timedelta(minutes=11),
+        )
     assert extracted.superseded_at is None
     assert {r[2] for r in _refusals(list(await read_audit(sg, context=owner)))} == {
-        "NobodyConfirmed",
+        "NotAConfirmerHere",
         "NotAPersonsWord",
+        "ConfirmationSpent",
+        "ConfirmationExpired",
     }
 
-    # The people who may: the owner, the person asking, and a key holder on this profile.
+    # A caregiver cannot say yes as the patient: a confirm names its creator and nobody else.
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
     await grant_key(
         sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, basis="owner_consent"
     )
-    by_owner = await _dose(
-        sg,
-        owner,
-        photo,
-        136,
-        state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by=owner.person_id,
+    held = await resolve_key_context(
+        sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
     )
+    hers = await confirm(sg, held, subject=ConfirmSubject.FACT, subject_id=by_owner.id)
+    assert hers.person_id == daughter.id
     by_daughter = await supersede_fact(
         sg,
-        context=owner,
+        context=held,
         fact_id=by_owner.id,
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by_person_id=daughter.id,
+        confirmation_id=hers.id,
     )
     assert by_daughter.confirmed_by_person_id == daughter.id
+    # And the patient's own yes, used by her request, still names him.
+    his = await _yes(sg, owner, ConfirmSubject.FACT, by_daughter.id)
+    by_him = await supersede_fact(
+        sg,
+        context=held,
+        fact_id=by_daughter.id,
+        value=136,
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        confirmation_id=his,
+    )
+    assert by_him.confirmed_by_person_id == owner.person_id
+
+
+async def test_a_rule_from_above_this_layer_stops_a_fact_before_it_is_written(
+    sg: AsyncSession,
+) -> None:
+    """The label-photo rule (E04) is a hook on `before_fact_write`, not a docstring."""
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner)
+    told = await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.MESSAGE,
+        occurred_at=SEPT_3,
+        source_channel=SourceChannel.WHATSAPP,
+        label="the helper says half a tablet",
+    )
+
+    class NeedsTheLabelPhoto(Refusal):
+        """A high-risk dose is saved from a label photo, never from a message alone."""
+
+    seen: list[FactDraft] = []
+
+    async def label_photo_rule(
+        session: AsyncSession, context: KeyContext, draft: FactDraft
+    ) -> None:
+        seen.append(draft)
+        if (draft.subject, draft.attribute) == ("medication", "dose") and draft.artifact_id is None:
+            raise NeedsTheLabelPhoto("a dose is saved from the label photo")
+
+    semantic.before_fact_write.append(label_photo_rule)
+    try:
+        with pytest.raises(NeedsTheLabelPhoto):
+            await assert_fact(
+                sg,
+                context=owner,
+                subject="medication",
+                attribute="dose",
+                value=0.5,
+                unit="tablet",
+                confidence=0.7,
+                event_id=told.id,
+            )
+        from_photo = await _dose(sg, owner, photo, 138)
+    finally:
+        semantic.before_fact_write.remove(label_photo_rule)
+    assert [d.event_id for d in seen] == [told.id, None]
+    assert from_photo.artifact_id == photo.id
+    assert _refusals(list(await read_audit(sg, context=owner))) == {
+        (Action.WRITE, "fact", "NeedsTheLabelPhoto")
+    }
+    assert [f.value for f in await current_facts(sg, context=owner, subject="medication")] == [138]
 
 
 async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles_it(
@@ -415,7 +521,7 @@ async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles
         photo,
         136,
         state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by=owner.person_id,
+        yes=True,
     )
 
     disputed = await supersede_fact(
@@ -425,7 +531,7 @@ async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles
         value=150,
         confidence=0.9,
         confidence_state=ConfidenceState.DISPUTED,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, ConfirmSubject.FACT, confirmed.id, when=SEPT_10),
         now=SEPT_10,
     )
     # The dispute names the fact it disputes and is kept, but it closes nothing and is not
@@ -449,7 +555,7 @@ async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles
             value=150,
             confidence=1.0,
             confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-            confirmed_by_person_id=owner.person_id,
+            confirmation_id=await _yes(sg, owner, ConfirmSubject.FACT, disputed.id),
         )
 
     # A person settles it: the new number is current, and the old fact and its dispute close.
@@ -460,7 +566,9 @@ async def test_a_dispute_keeps_the_persons_number_current_until_a_person_settles
         value=150,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(
+            sg, owner, ConfirmSubject.FACT, confirmed.id, when=SEPT_10 + timedelta(days=1)
+        ),
         now=SEPT_10 + timedelta(days=1),
     )
     later = SEPT_10 + timedelta(days=2)
@@ -479,7 +587,7 @@ async def test_an_event_names_its_artefact_or_says_where_it_came_in_from(
 ) -> None:
     owner = await _pa(sg)
     for source, label in ((None, None), (SourceChannel.APP, None), (None, "saw Dr Tan")):
-        with pytest.raises(EventFromNowhere):
+        with pytest.raises(SourceNotNamed):
             await record_event(
                 sg,
                 context=owner,
@@ -505,7 +613,7 @@ async def test_an_event_names_its_artefact_or_says_where_it_came_in_from(
         sg, context=owner, kind=EventKind.READING, occurred_at=SEPT_3, artifact_id=photo.id
     )
     assert reading.source_channel is photo.source_channel
-    with pytest.raises(NotTheArtefactsChannel):
+    with pytest.raises(CameInAnotherWay):
         await record_event(
             sg,
             context=owner,
@@ -517,8 +625,8 @@ async def test_an_event_names_its_artefact_or_says_where_it_came_in_from(
 
     # Each of the four refusals is in the trail, in name only.
     assert _refusals(list(await read_audit(sg, context=owner))) == {
-        (Action.WRITE, "event", "EventFromNowhere"),
-        (Action.WRITE, "event", "NotTheArtefactsChannel"),
+        (Action.WRITE, "event", "SourceNotNamed"),
+        (Action.WRITE, "event", "CameInAnotherWay"),
     }
 
     # The table refuses an event with no source at all.
@@ -648,7 +756,7 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="see Dr Tan again",
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, when=SEPT_3),
         now=SEPT_3,
     )
     neighbour = await _pa(sg, phone="+6591110002")
@@ -660,7 +768,9 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
                 context=neighbour,
                 appointment_id=visit.id,
                 status=AppointmentStatus.CANCELLED,
-                confirmed_by_person_id=neighbour.person_id,
+                confirmation_id=await _yes(
+                    sg, neighbour, ConfirmSubject.APPOINTMENT_STATUS, visit.id
+                ),
             )
         visit.scheduled_at = SEPT_10 + timedelta(days=1)
         await sg.flush()
@@ -677,40 +787,48 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
         context=owner,
         appointment_id=visit.id,
         status=AppointmentStatus.CONFIRMED,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(
+            sg, owner, ConfirmSubject.APPOINTMENT_STATUS, visit.id, when=SEPT_10
+        ),
         now=SEPT_10,
     )
     assert confirmed.status is AppointmentStatus.CONFIRMED
     assert confirmed.status_changed_by_person_id == owner.person_id
     assert confirmed.confirmed_by_person_id == owner.person_id
     trail = await read_audit(sg, context=owner)
-    # One read to find it, one write to change it, then the owner's own read of the trail.
-    assert len(trail) == before + 3
+    # The yes written down; then one read to find the visit, one read of the yes, one write
+    # to use it, one write to change the visit; then the owner's own read of the trail.
+    assert len(trail) == before + 6
     assert (Action.WRITE, "appointment", visit.id) in {
         (e.action, e.target, e.target_id) for e in trail if as_utc(e.at) == SEPT_10
     }
-    with pytest.raises(NobodyConfirmed):
-        await change_appointment_status(
-            sg,
-            context=owner,
-            appointment_id=visit.id,
-            status=AppointmentStatus.CANCELLED,
-            confirmed_by_person_id=neighbour.person_id,
-        )
+    # A yes for a different visit, or from another profile, does not fit this one.
+    for wrong in (
+        await _yes(sg, owner, ConfirmSubject.APPOINTMENT_STATUS, uuid.uuid4()),
+        await _yes(sg, neighbour, ConfirmSubject.APPOINTMENT_STATUS, visit.id),
+    ):
+        with pytest.raises(NotAConfirmerHere):
+            await change_appointment_status(
+                sg,
+                context=owner,
+                appointment_id=visit.id,
+                status=AppointmentStatus.CANCELLED,
+                confirmation_id=wrong,
+            )
     with pytest.raises(NotThatStatusChange):
         await change_appointment_status(
             sg,
             context=owner,
             appointment_id=visit.id,
             status=AppointmentStatus.PLANNED,
-            confirmed_by_person_id=owner.person_id,
+            confirmation_id=await _yes(sg, owner, ConfirmSubject.APPOINTMENT_STATUS, visit.id),
         )
     cancelled = await change_appointment_status(
         sg,
         context=owner,
         appointment_id=visit.id,
         status=AppointmentStatus.CANCELLED,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, ConfirmSubject.APPOINTMENT_STATUS, visit.id),
     )
     assert cancelled.status is AppointmentStatus.CANCELLED
     # Nothing leaves cancelled, attended or not attended: no way back to planned.
@@ -721,7 +839,7 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
                 context=owner,
                 appointment_id=visit.id,
                 status=status,
-                confirmed_by_person_id=owner.person_id,
+                confirmation_id=await _yes(sg, owner, ConfirmSubject.APPOINTMENT_STATUS, visit.id),
             )
     assert all(AppointmentStatus.PLANNED not in goes_to for goes_to in STATUS_GOES_TO.values())
 
@@ -764,14 +882,14 @@ async def test_deleting_a_profile_takes_every_row_of_it_with_it(sg: AsyncSession
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="see Dr Tan again",
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner),
         episode_id=episode.id,
     )
     assert reading.artifact_id == photo.id
 
     # The profile goes (PDPA), and the ties cascade past every composite key.
     await sg.execute(delete(Profile).where(Profile.id == owner.profile_id))
-    for table in (Artifact, Event, Fact, Episode, Appointment, AuditEntry):
+    for table in (Artifact, Event, Fact, Episode, Appointment, Confirmation, AuditEntry):
         rows = (await sg.scalars(select(table).where(table.profile_id == owner.profile_id))).all()
         assert rows == [], table.__tablename__
     assert await sg.get(Person, owner.person_id) is not None
@@ -846,6 +964,20 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
     assert await current_facts(sg, context=owner, subject="weight") == []
     with pytest.raises(NoSuchFact):
         await supersede_fact(sg, context=owner, fact_id=stray_fact.id, value=71, confidence=0.8)
+    # ...and the chain is followed: a fact with no artefact, citing an event that cites it.
+    twice_removed = Fact(
+        profile_id=owner.profile_id,
+        subject="weight",
+        attribute="kg",
+        value=69,
+        confidence=0.8,
+        confidence_state=ConfidenceState.EXTRACTED,
+        event_id=stray_event.id,
+        valid_from=SEPT_3,
+    )
+    sg.add(twice_removed)
+    await sg.flush()
+    assert await current_facts(sg, context=owner, subject="weight") == []
     # ...while the same rows citing an artefact held here are.
     photo = await _photo(sg, owner)
     here = await _systolic(sg, owner, photo, 138)
@@ -855,7 +987,7 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
 # --- 8. an appointment carries who confirmed it --------------------------------------------
 
 
-async def test_an_appointment_records_the_person_who_confirmed_it(sg: AsyncSession) -> None:
+async def test_an_appointment_records_the_person_whose_yes_was_used(sg: AsyncSession) -> None:
     owner = await _pa(sg)
     dr_tan = await add_provider(
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
@@ -866,46 +998,71 @@ async def test_an_appointment_records_the_person_who_confirmed_it(sg: AsyncSessi
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="see Dr Tan again",
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner),
     )
     assert visit.confirmed_by_person_id == owner.person_id
 
-    # Not a person from another household, nor from the other region, nor from nowhere.
+    # Another profile's yes, a yes for something else, or no yes at all: none fits.
     neighbour = await _pa(sg, phone="+6591110002")
-    abroad = await register_person(
-        sg, region=Region.MY, display_name="Cousin", phone_e164="+60121110003"
-    )
-    for who in (neighbour.person_id, abroad.id, uuid.uuid4()):
-        with pytest.raises(NobodyConfirmed):
+    for wrong in (
+        await _yes(sg, neighbour),
+        await _yes(sg, owner, ConfirmSubject.FACT),
+        uuid.uuid4(),
+    ):
+        with pytest.raises(NotAConfirmerHere):
             await book_appointment(
                 sg,
                 context=owner,
                 provider_id=dr_tan.id,
                 scheduled_at=SEPT_10,
                 purpose="see Dr Tan again",
-                confirmed_by_person_id=who,
+                confirmation_id=wrong,
             )
     assert _refusals(list(await read_audit(sg, context=owner))) == {
-        (Action.WRITE, "appointment", "NobodyConfirmed")
+        (Action.WRITE, "appointment", "NotAConfirmerHere")
     }
-    # A key holder on this profile may confirm.
+    # The confirm is not optional at the signature either.
+    with pytest.raises(TypeError):
+        await book_appointment(  # type: ignore[call-arg]
+            sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="see Dr Tan"
+        )
+
+    # A key holder's yes names her; and once her key is closed, her yes is nobody's here —
+    # refused to the person who reached, with not one line written in her name.
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
-    await grant_key(
+    key = await grant_key(
         sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, basis="owner_consent"
     )
+    held = await resolve_key_context(
+        sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
+    )
+    hers = await confirm(sg, held, subject=ConfirmSubject.APPOINTMENT)
     by_daughter = await book_appointment(
         sg,
         context=owner,
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="see Dr Tan again",
-        confirmed_by_person_id=daughter.id,
+        confirmation_id=hers.id,
     )
     assert by_daughter.confirmed_by_person_id == daughter.id
-    # The confirm is not optional at the signature either.
-    with pytest.raises(TypeError):
-        await book_appointment(  # type: ignore[call-arg]
-            sg, context=owner, provider_id=dr_tan.id, scheduled_at=SEPT_10, purpose="see Dr Tan"
+
+    hers_again = await confirm(sg, held, subject=ConfirmSubject.APPOINTMENT)
+    await revoke_key(sg, context=owner, key_id=key.id)
+    before = list(await read_audit(sg, context=owner))
+    with pytest.raises(NotAConfirmerHere):
+        await book_appointment(
+            sg,
+            context=owner,
+            provider_id=dr_tan.id,
+            scheduled_at=SEPT_10,
+            purpose="see Dr Tan again",
+            confirmation_id=hers_again.id,
         )
+    since = [e for e in await read_audit(sg, context=owner) if e not in before]
+    assert {e.actor_person_id for e in since} == {owner.person_id}
+    assert [e.refused_because for e in since if e.outcome is Outcome.REFUSED] == [
+        "NotAConfirmerHere"
+    ]

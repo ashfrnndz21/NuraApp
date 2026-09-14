@@ -7,7 +7,9 @@ uniques those keys need. The single-column keys 0003 shipped stay; these are add
 them. An event says where it came in from (`source_channel`), an appointment says who
 confirmed it (`confirmed_by_person_id`), and a fact says who confirmed or disputed it
 (`confirmed_by_person_id`, nullable: an extraction names nobody); a change of an
-appointment's status names who confirmed the step (`status_changed_by_person_id`).
+appointment's status names who confirmed the step (`status_changed_by_person_id`). The
+person named is the creator of a `confirmation` row — the new table here: a yes the surface
+wrote down, from the person asking only, for one act, good for ten minutes, used once.
 
 The event and appointment columns are NOT NULL and neither has a default, because a default
 would invent a source or a confirmer. `source_channel` is filled from the artefact where an
@@ -44,6 +46,24 @@ SOURCE_CHANNEL = sa.Enum(
     length=32,
 )
 
+CONFIRM_SUBJECT = sa.Enum(
+    "fact",
+    "appointment",
+    "appointment_status",
+    name="confirm_subject",
+    native_enum=False,
+    length=32,
+)
+AUDIT_CHANNEL = sa.Enum(
+    "app",
+    "whatsapp",
+    "share_link",
+    "clinic",
+    "system",
+    name="audit_channel",
+    native_enum=False,
+    length=32,
+)
 CONFIRMED_BY = "fk_appointment_confirmed_by_person"
 STATUS_CHANGED_BY = "fk_appointment_status_changed_by_person"
 FACT_CONFIRMED_BY = "fk_fact_confirmed_by_person"
@@ -136,14 +156,39 @@ def upgrade() -> None:
         batch.add_column(sa.Column("confirmed_by_person_id", sa.Uuid(), nullable=True))
         batch.create_foreign_key(FACT_CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"])
 
+    op.create_table(
+        "confirmation",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column(
+            "profile_id",
+            sa.Uuid(),
+            sa.ForeignKey("profile.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
+        sa.Column("subject", CONFIRM_SUBJECT, nullable=False),
+        sa.Column("subject_id", sa.Uuid(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("channel", AUDIT_CHANNEL, nullable=False),
+    )
+    op.create_index("ix_confirmation_profile_id", "confirmation", ["profile_id"])
+    op.create_index("ix_confirmation_person_id", "confirmation", ["person_id"])
+
 
 def downgrade() -> None:
     # The mirror of the upgrade: as it will not invent a source or a confirmer, this will not
     # drop one. On a database holding any of them, the downgrade stops.
+    _refuse_if_kept("confirmation", "consumed_at")
     _refuse_if_kept("fact", "confirmed_by_person_id")
     _refuse_if_kept("appointment", "status_changed_by_person_id")
     _refuse_if_kept("appointment", "confirmed_by_person_id")
     _refuse_if_kept("event", "source_channel")
+
+    op.drop_index("ix_confirmation_person_id", table_name="confirmation")
+    op.drop_index("ix_confirmation_profile_id", table_name="confirmation")
+    op.drop_table("confirmation")
 
     with op.batch_alter_table("fact") as batch:
         batch.drop_constraint(FACT_CONFIRMED_BY, type_="foreignkey")

@@ -13,6 +13,7 @@ from app.audit.trail import read_audit
 from app.db import as_utc
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
+from app.keys.confirm import ConfirmSubject, confirm
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
@@ -69,6 +70,17 @@ async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
+
+
+async def _yes(
+    session: AsyncSession,
+    context: KeyContext,
+    subject: ConfirmSubject = ConfirmSubject.APPOINTMENT,
+    subject_id: uuid.UUID | None = None,
+    when: datetime | None = None,
+) -> uuid.UUID:
+    """The person asking says yes, the way the surface writes it down."""
+    return (await confirm(session, context, subject=subject, subject_id=subject_id, now=when)).id
 
 
 async def _photo(session: AsyncSession, context: KeyContext, when: datetime = SEPT_3) -> Artifact:
@@ -225,7 +237,7 @@ async def test_supersession_keeps_the_history_and_current_facts_returns_only_the
         value=136,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, ConfirmSubject.FACT, extracted.id, when=SEPT_10),
         now=SEPT_10,
     )
 
@@ -377,7 +389,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     later = await book_appointment(
         sg,
         context=owner,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, when=SEPT_3),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=14),
         purpose="blood pressure review",
@@ -386,7 +398,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     sooner = await book_appointment(
         sg,
         context=owner,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, when=SEPT_3),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection",
@@ -395,7 +407,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     cancelled = await book_appointment(
         sg,
         context=owner,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, when=SEPT_3),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10 + timedelta(days=1),
         purpose="x-ray",
@@ -405,7 +417,7 @@ async def test_appointments_hang_off_a_provider_and_come_back_soonest_first(
     past = await book_appointment(
         sg,
         context=owner,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner, when=SEPT_3),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_3 - timedelta(days=30),
         purpose="last check-up",
@@ -431,7 +443,7 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
         await book_appointment(
             sg,
             context=owner,
-            confirmed_by_person_id=owner.person_id,
+            confirmation_id=await _yes(sg, owner),
             provider_id=their_doctor.id,
             scheduled_at=SEPT_10,
             purpose="review",
@@ -446,7 +458,7 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
     review = await book_appointment(
         sg,
         context=owner,
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner),
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="chest infection review",
@@ -460,7 +472,7 @@ async def test_an_appointment_needs_a_provider_on_this_profile_and_may_join_an_e
             provider_id=dr_tan.id,
             scheduled_at=SEPT_10,
             purpose="x" * 81,
-            confirmed_by_person_id=owner.person_id,
+            confirmation_id=await _yes(sg, owner),
         )
 
 
@@ -486,7 +498,7 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="review",
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner),
     )
     await current_facts(sg, context=owner)
 
@@ -519,7 +531,7 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
         provider_id=dr_tan.id,
         scheduled_at=SEPT_10,
         purpose="review",
-        confirmed_by_person_id=owner.person_id,
+        confirmation_id=await _yes(sg, owner),
     )
 
     daughter: Person = await register_person(

@@ -11,17 +11,26 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import cast
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.audit.access import record_share
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import NotTheirsToRead, read_audit
-from app.db import take_keepers, utcnow
+from app.db import (
+    KeepersNotReplayed,
+    keep_on_refusal,
+    make_session_factory,
+    take_keepers,
+    unit_of_work,
+    utcnow,
+)
 from app.identity.models import Person, Profile
 from app.identity.service import create_own_profile, register_person
+from app.keys import context as keys_context
 from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key, revoke_key
 from app.keys.scopes import KeyRole, Scope
@@ -263,13 +272,21 @@ async def test_a_stranger_cannot_learn_that_a_profile_exists_or_where_it_is_pinn
         sg, region=Region.SG, display_name="Someone", phone_e164="+6591110099"
     )
 
-    # Missing, here, or pinned elsewhere: the same refusal, in the same words, and no line.
-    for profile_id in (uuid.uuid4(), here.id, astray.id):
-        with pytest.raises(NoKey) as refused:
-            await resolve_key_context(
-                sg, region=Region.SG, person_id=stranger.id, profile_id=profile_id
-            )
-        assert "MY" not in str(refused.value) and "held in" not in str(refused.value)
+    # Missing, here, or pinned elsewhere: the same refusal, in the same words, and no line —
+    # but the out-of-band counter the channel wires sees each one.
+    reaches: list[tuple[uuid.UUID, uuid.UUID]] = []
+    keys_context.on_unknown_reach = lambda person, profile: reaches.append((person, profile))
+    try:
+        for profile_id in (uuid.uuid4(), here.id, astray.id):
+            with pytest.raises(NoKey) as refused:
+                await resolve_key_context(
+                    sg, region=Region.SG, person_id=stranger.id, profile_id=profile_id
+                )
+            assert "MY" not in str(refused.value) and "held in" not in str(refused.value)
+    finally:
+        keys_context.on_unknown_reach = None
+    assert [person for person, _ in reaches] == [stranger.id] * 3
+    assert [profile for _, profile in reaches][1:] == [here.id, astray.id]
     lines = (
         await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id.in_([here.id, astray.id])))
     ).all()
@@ -302,3 +319,31 @@ async def test_a_refused_line_survives_the_rollback_the_refusal_causes(sg: Async
     assert not any(e.action is Action.WRITE and e.target == Note.__tablename__ for e in after)
     # The keepers were replayed and dropped; a unit that succeeds has none to replay.
     assert take_keepers(sg) == []
+
+
+async def test_the_unit_of_work_is_the_boundary_and_skipping_it_is_loud(sg: AsyncSession) -> None:
+    _, owner, _, _ = await _pa_and_his_daughter(sg)
+
+    # Success: the work stands, and there is nothing left to replay.
+    async with unit_of_work(sg):
+        await add_note(sg, owner, scope=Scope.NOTES, body=PRIVATE)
+    assert [n.body for n in await read_notes(sg, owner, scope=Scope.NOTES)] == [PRIVATE]
+    assert take_keepers(sg) == []
+
+    # A break that is not a refusal: the work is gone, and so are the keepers.
+    with pytest.raises(RuntimeError, match="wire"):
+        async with unit_of_work(sg):
+            await add_note(sg, owner, scope=Scope.NOTES, body=WATER_PILL)
+            raise RuntimeError("the wire dropped")
+    assert [n.body for n in await read_notes(sg, owner, scope=Scope.NOTES)] == [PRIVATE]
+    assert take_keepers(sg) == []
+
+    # A session closed with a refused line nobody replayed does not close quietly.
+    stray = make_session_factory(cast(AsyncEngine, sg.bind))()
+
+    async def never_replayed(_: AsyncSession) -> None:
+        raise AssertionError("not replayed")
+
+    keep_on_refusal(stray, never_replayed)
+    with pytest.raises(KeepersNotReplayed):
+        await stray.close()

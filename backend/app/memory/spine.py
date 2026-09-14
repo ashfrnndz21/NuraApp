@@ -20,7 +20,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.errors import Refusal
-from app.keys.confirm import NobodyConfirmed, require_confirmer
+from app.keys.confirm import ConfirmSubject, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import (
@@ -54,7 +54,6 @@ __all__ = [
     "STATUS_GOES_TO",
     "NoSuchAppointment",
     "NoSuchProvider",
-    "NobodyConfirmed",
     "NotThatStatusChange",
 ]
 
@@ -118,20 +117,19 @@ async def book_appointment(
     provider_id: uuid.UUID,
     scheduled_at: datetime,
     purpose: str,
-    confirmed_by_person_id: uuid.UUID,
+    confirmation_id: uuid.UUID,
     status: AppointmentStatus = AppointmentStatus.PLANNED,
     episode_id: uuid.UUID | None = None,
     now: datetime | None = None,
 ) -> Appointment:
     """Write down an appointment a person has arranged with a provider on this profile.
 
-    `confirmed_by_person_id` is the person who gave the explicit confirm. The surface owes
-    that confirm — a tap, a spoken yes — before it calls this; nothing here can supply it, and
-    there is no default. Who may give one is `app.keys.confirm.require_confirmer`: the person
-    asking, the owner, or a key holder on this profile, in its region. The row carries who.
+    `confirmation_id` is the yes the surface wrote down (`app.keys.confirm.confirm`, for an
+    APPOINTMENT) when the person confirmed — a tap, a spoken word. Nothing here can supply
+    it and there is no default; it is used once, after every other check, and the row
+    records the person who gave it.
     """
     named = short_label(purpose)
-    await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
     found = await audited_read(
         session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,), now=now
     )
@@ -139,6 +137,9 @@ async def book_appointment(
         raise NoSuchProvider(f"no provider {provider_id} on profile {context.profile_id}")
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id, now=now)
+    yes = await consume_confirmation(
+        session, context, confirmation_id, subject=ConfirmSubject.APPOINTMENT, now=now
+    )
     return await audited_write(
         session,
         Appointment,
@@ -150,7 +151,7 @@ async def book_appointment(
         status=status,
         purpose=named,
         episode_id=episode_id,
-        confirmed_by_person_id=confirmed_by_person_id,
+        confirmed_by_person_id=yes.person_id,
         booked_at=now or utcnow(),
     )
 
@@ -162,16 +163,16 @@ async def change_appointment_status(
     context: KeyContext,
     appointment_id: uuid.UUID,
     status: AppointmentStatus,
-    confirmed_by_person_id: uuid.UUID,
+    confirmation_id: uuid.UUID,
     now: datetime | None = None,
 ) -> Appointment:
     """Move a visit one step along `STATUS_GOES_TO`, on a person's confirm.
 
     Cancelling a booked visit changes a booking, and confirming one is a person's word too,
-    so every step names who gave it, in `status_changed_by_person_id`; the person who
-    confirmed the booking stays where they were. Who may confirm is `require_confirmer`.
+    so every step uses a yes written down for this visit (`confirm`, APPOINTMENT_STATUS with
+    the visit's id) and names who gave it in `status_changed_by_person_id`; the person who
+    confirmed the booking stays where they were.
     """
-    await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
     found = await audited_read(
         session,
         Appointment,
@@ -185,8 +186,16 @@ async def change_appointment_status(
     appointment = found[0]
     if status not in STATUS_GOES_TO[appointment.status]:
         raise NotThatStatusChange(f"a {appointment.status} visit does not become {status}")
+    yes = await consume_confirmation(
+        session,
+        context,
+        confirmation_id,
+        subject=ConfirmSubject.APPOINTMENT_STATUS,
+        subject_id=appointment.id,
+        now=now,
+    )
     appointment.status = status
-    appointment.status_changed_by_person_id = confirmed_by_person_id
+    appointment.status_changed_by_person_id = yes.person_id
     await session.flush()
     await record(
         session,

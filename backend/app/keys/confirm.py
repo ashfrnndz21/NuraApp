@@ -1,55 +1,152 @@
-"""Who may give a confirm on a profile.
+"""The confirm: evidence that a person said yes, not a name a caller passes.
 
 Nothing changes a medicine, books anything or sends anything without an explicit confirm from
-a person. The surface collects the confirm — a tap, a spoken yes — and passes who gave it; this
-says who that may be: someone who could open this profile right now — its owner, or a person
-holding a key on it that is live at this moment — and who is in the region the profile is in.
-That is asked of `resolve_key_context` itself, not of a copy of its rules, so a key that was
-closed after the asker's own context was resolved no longer confirms anything, and there is no
-second reading of the key table to keep in step. Any other person row — another household's,
-the other region's, none at all — is not a confirmer, and the refusal is the same for each,
-so the check is not a way to learn which person ids exist.
+a person. The surface collects the yes — a tap, a spoken word — and turns it into a row here:
+who said it (only ever the person asking), what it was for, when it stops being good, and on
+which channel. The service that acts then consumes that row, once, and records who it named.
+So a caregiver cannot confirm as the patient: a confirmation names its creator and nobody
+else, a used one is spent, an old one has expired, and one made for a different act does
+not fit. Every failure is refused in the same words to the person who reached, and no line
+is ever written as the person who was named.
 """
 
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from enum import StrEnum
 
+from sqlalchemy import ForeignKey
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
+from app.audit.access import audited_read, audited_write
+from app.audit.models import Action, Channel
+from app.audit.trail import record
+from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
 from app.errors import Refusal
-from app.identity.models import Person
-from app.keys.context import KeyContext, resolve_key_context
+from app.keys.context import KeyContext, holds_the_profile
+from app.keys.scopes import Scope
+
+CONFIRM_WINDOW = timedelta(minutes=10)
+"""How long a yes is good for. A confirm is for the thing in front of the person now."""
 
 
-class NobodyConfirmed(Refusal):
-    """A confirm comes from a person on this profile. This named nobody, or somebody else."""
+class ConfirmSubject(StrEnum):
+    """What a confirm is for. The scope of the act is the scope the confirm is written under."""
+
+    FACT = "fact"
+    APPOINTMENT = "appointment"
+    APPOINTMENT_STATUS = "appointment_status"
 
 
-async def require_confirmer(
+SCOPE_OF: dict[ConfirmSubject, Scope] = {
+    ConfirmSubject.FACT: Scope.RECORDS,
+    ConfirmSubject.APPOINTMENT: Scope.VISITS,
+    ConfirmSubject.APPOINTMENT_STATUS: Scope.VISITS,
+}
+
+
+class Confirmation(ProfileScoped, Base):
+    """One yes, from one person, for one act, good for ten minutes, used once."""
+
+    __tablename__ = "confirmation"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    subject: Mapped[ConfirmSubject] = mapped_column(enum_column(ConfirmSubject, "confirm_subject"))
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column()
+    consumed_at: Mapped[datetime | None] = mapped_column(default=None)
+    via_channel: Mapped[Channel] = mapped_column("channel", enum_column(Channel, "audit_channel"))
+
+
+class NotAConfirmerHere(Refusal):
+    """The confirm offered is not a yes from a person on this profile for this act."""
+
+
+class ConfirmationSpent(Refusal):
+    """This yes was already used. A confirm is used once."""
+
+
+class ConfirmationExpired(Refusal):
+    """This yes is too old. A confirm is for the thing in front of the person now."""
+
+
+async def confirm(
     session: AsyncSession,
-    *,
     context: KeyContext,
-    person_id: uuid.UUID,
+    *,
+    subject: ConfirmSubject,
+    subject_id: uuid.UUID | None = None,
+    channel: Channel = Channel.APP,
     now: datetime | None = None,
-) -> Person:
-    """The person who gave the confirm, or one refusal whatever was wrong with the name."""
-    person = await session.get(Person, person_id)
-    if person is None or person.region is not context.region:
-        raise NobodyConfirmed("a confirm comes from a person on this profile, in this region")
-    try:
-        # The profile is in `context.region`, so this cannot be refused for the region; it is
-        # refused when the person is nobody to the profile, or held a key that is now closed.
-        await resolve_key_context(
-            session,
-            region=context.region,
-            person_id=person.id,
-            profile_id=context.profile_id,
-            now=now,
-        )
-    except Refusal as refused:
-        raise NobodyConfirmed(
-            "a confirm comes from a person on this profile, in this region"
-        ) from refused
-    return person
+) -> Confirmation:
+    """Write down that the person asking said yes, for one act. A person confirms only as
+    themselves: there is no way to name anyone else here."""
+    moment = now or utcnow()
+    return await audited_write(
+        session,
+        Confirmation,
+        context,
+        SCOPE_OF[subject],
+        channel=channel,
+        now=now,
+        person_id=context.person_id,
+        subject=subject,
+        subject_id=subject_id,
+        created_at=moment,
+        expires_at=moment + CONFIRM_WINDOW,
+        via_channel=channel,
+    )
+
+
+async def consume_confirmation(
+    session: AsyncSession,
+    context: KeyContext,
+    confirmation_id: uuid.UUID,
+    *,
+    subject: ConfirmSubject,
+    subject_id: uuid.UUID | None = None,
+    now: datetime | None = None,
+) -> Confirmation:
+    """Use a yes, once: it must be on this profile, for this act, unspent, unexpired, and from
+    a person who could still open the profile now. The row comes back so the act can record
+    who said yes. The actor on every line is the person asking, never the person named."""
+    moment = now or utcnow()
+    scope = SCOPE_OF[subject]
+    found = await audited_read(
+        session,
+        Confirmation,
+        context,
+        scope,
+        where=(Confirmation.id == confirmation_id,),
+        now=now,
+    )
+    if not found:
+        raise NotAConfirmerHere("no such confirm on this profile for this act")
+    yes = found[0]
+    if yes.subject != subject or yes.subject_id != subject_id:
+        raise NotAConfirmerHere("no such confirm on this profile for this act")
+    if yes.consumed_at is not None:
+        raise ConfirmationSpent("this confirm was already used")
+    if moment >= as_utc(yes.expires_at):
+        raise ConfirmationExpired("this confirm is too old")
+    if not await holds_the_profile(
+        session, profile_id=context.profile_id, person_id=yes.person_id, now=moment
+    ):
+        raise NotAConfirmerHere("no such confirm on this profile for this act")
+    yes.consumed_at = moment
+    await session.flush()
+    await record(
+        session,
+        context=context,
+        action=Action.WRITE,
+        scope=scope,
+        target=Confirmation.__tablename__,
+        target_id=yes.id,
+        rows=1,
+        now=now,
+    )
+    return yes
