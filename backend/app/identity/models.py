@@ -38,6 +38,12 @@ class Person(Base):
     phone_e164: Mapped[str | None] = mapped_column(String(20), unique=True, default=None)
     email: Mapped[str | None] = mapped_column(String(320), unique=True, default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    named_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
+    """Who typed `display_name`, while it is somebody else's word for him: set when the owner
+    lets in a number that is not an account yet (the words he agreed to need a name), and
+    cleared when the person signs in and gives his own (`app.identity.login`)."""
 
 
 class Profile(Base):

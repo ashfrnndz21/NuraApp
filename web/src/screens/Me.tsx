@@ -1,7 +1,8 @@
 import type { JSX } from "preact";
 import { go, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
-import { density, densityChosen, me, setDensity, setLanguage } from "../store/session";
+import { startOnboarding } from "../onboarding/state";
+import { density, densityChosen, me, profile, setDensity, setLanguage } from "../store/session";
 import { fill, LANGUAGES, language, t, type Language } from "../strings";
 import { Header, Pill, TabBar, Tile } from "../ui/components";
 
@@ -45,6 +46,11 @@ export function MeScreen(): JSX.Element {
         <Pill onClick={() => void reloadDoors()} testId="switch-profile">
           {s.me.switchProfile}
         </Pill>
+        {profile.value && (
+          <Pill onClick={() => void startOnboarding(profile.value!)} testId="set-up">
+            {s.me.setUp}
+          </Pill>
+        )}
       </Tile>
       {wantsHomeScreenHint() && (
         <Tile glass>
