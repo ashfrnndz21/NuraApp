@@ -884,7 +884,7 @@ What you will see (the numbers and ids change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8112 (GET /health)
-✓ Pa (+6591207822), Mei (+6592209967) and Siti (+6597208235) registered by phone code (the codes read from the server log)
+✓ Pa (+6591209498), Mei (+6592203294) and Siti (+6597200174) registered by phone code (the codes read from the server log)
 ✓ Pa opened his profile and agreed to WhatsApp; Mei (his daughter) holds a chief key and is on duty weekdays 6 in the morning to 11 at night; Siti holds a helper key (medicines, emergency, send)
 ✓ Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route), at 06:00 on 2026-09-14 by the dev run's frozen clock
 ✓ 06:50: nothing; 07:01, the time his routine sets for it (breakfast is at 07:30): the morning card, the approved template (he has not written in 24 hours), once — 07:15 sends nothing. Pa (patient): sent by whatsapp, template morning_card; rule breakfast_anchor_reached. What he reads:
@@ -913,11 +913,11 @@ What you will see (the numbers and ids change each run):
     → Pa's blood pressure tablet runs out on Wednesday 16 September.
     → Can you order more for Pa?
 ✓ 07:15, the same rule the second time that day: capped (once a day) — no second message, and no row at all on the runs after it
-✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice), category alert, never capped and never quiet; not to him. His reply:
+✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice_self), category alert, never capped and never quiet; not to him. His reply:
     → This one we do not wait for.
     → Call your doctor today.
     → Mei knows now.
-✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
+✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_self; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
 ✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
     [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
     [reminder] Your tablets today — one action: taken, on the stable wash. Why: You have medicines on your list.
