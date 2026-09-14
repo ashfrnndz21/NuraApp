@@ -78,7 +78,7 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   await expect(notice).toContainText("Nura will listen now.");
   await expect(notice).toContainText("Is that OK, Dr Tan?");
   await expect.poll(async () => (await stand(page)).__recorder.starts).toBe(1);
-  expect(await spoken(page)).toEqual(["Nura will listen now.", "Nura keeps what you and Dr Tan say.", "Only you and those you let in can hear it.", "Is that OK, Dr Tan?"]);
+  expect(await spoken(page)).toEqual(["Nura will listen now.", "Nura keeps what you and Dr Tan say.", "Only you and the family you let in can hear it.", "Is that OK, Dr Tan?"]);
   expect((await stand(page)).__recorder.types).toEqual(["audio/webm;codecs=opus"]);
   await expect(page.getByTestId("red-dot")).toBeVisible();
   await expect(page.getByRole("navigation")).toHaveCount(0);
@@ -116,12 +116,30 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   expect(clipsAsked).toHaveLength(1);
   await expect(line.getByTestId("hear-clip")).toHaveText("Hear what Dr Tan said");
 
-  // Ask finds where he said it, and plays the same stretch.
-  await page.getByTestId("hear").first().isVisible();
-  const asked = (await (
-    await request.post(`${API}/profiles/${pa.profileId}/ask`, { ...auth(pa.token), data: { question: "what did Dr Tan say about the water pill", mode: "voice" } })
-  ).json()) as { lines: { text: string; clip: { start_s: number; end_s: number } | null }[] };
-  expect(asked.lines[0]?.clip).toMatchObject({ start_s: 19.8, end_s: 28.9 });
+  // Ask: before his yes the card is waiting and nothing Dr Tan said is cited; after it, the
+  // answer finds where he said it and plays the same stretch.
+  type Answer = { lines: { text: string; clip: { start_s: number; end_s: number } | null }[] };
+  const askIt = async () =>
+    (await (
+      await request.post(`${API}/profiles/${pa.profileId}/ask`, { ...auth(pa.token), data: { question: "what did Dr Tan say about the water pill", mode: "voice" } })
+    ).json()) as Answer;
+  const before = await askIt();
+  expect(before.lines[0]?.text).toBe("Your card from Dr Tan on Monday 14 September is waiting for your yes.");
+  expect(before.lines.every((each) => each.clip === null)).toBe(true);
+  const cards = (await (await request.get(`${API}/profiles/${pa.profileId}/appointments/${pa.appointmentId}/summaries`, auth(pa.token))).json()) as {
+    summary_id: string;
+    items: { item_id: string }[];
+  }[];
+  const decisions = cards[0]!.items.map((item) => ({ item_id: item.item_id, decision: "confirmed" }));
+  const yes = (await (
+    await request.post(`${API}/profiles/${pa.profileId}/confirmations`, { ...auth(pa.token), data: { subject: "visit_summary", summary_id: cards[0]!.summary_id, decisions } })
+  ).json()) as { confirmation_id: string };
+  const closed = await request.post(`${API}/profiles/${pa.profileId}/appointments/${pa.appointmentId}/summary/${cards[0]!.summary_id}/confirm`, {
+    ...auth(pa.token),
+    data: { decisions, confirmation_id: yes.confirmation_id },
+  });
+  expect(closed.ok()).toBe(true);
+  expect((await askIt()).lines[0]?.clip).toMatchObject({ start_s: 19.8, end_s: 28.9 });
 });
 
 test("a no keeps nothing: the recorder stops, nothing is sent, and the notes are written by hand", async ({ page, request }) => {

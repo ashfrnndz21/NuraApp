@@ -57,4 +57,22 @@ describe("ask", () => {
     );
     expect(view.lines[0]).toEqual({ text: "Dr Tan talked about this on Monday 14 September.", source: "sourceVisits", clip });
   });
+
+  it("a line saying the visit's card waits for his yes is from his visits, and plays nothing", () => {
+    const view = answerView(
+      answer({
+        lines: [
+          {
+            text: "Your card from Dr Tan on Monday 14 September is waiting for your yes.",
+            cites: [
+              { kind: "visit_summary", id: "c1" },
+              { kind: "appointment", id: "a1" },
+            ],
+            clip: null,
+          },
+        ],
+      }),
+    );
+    expect(view.lines[0]).toEqual({ text: "Your card from Dr Tan on Monday 14 September is waiting for your yes.", source: "sourceVisits", clip: null });
+  });
 });

@@ -69,6 +69,7 @@ from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.memory.attach import AlreadyHangsThere
+from app.memory.episodic import OnlyTheFamilyHears
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
 from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
 from app.memory.timeline import NotACursor
@@ -188,6 +189,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A visit's recording (E02-05): too big or too long to be one visit; no recording of that
     # artefact on this profile.
     (ConsultTooLong, 413),
+    # A visit's recording is heard by him and the family he let in, and nobody else.
+    (OnlyTheFamilyHears, 403),
     (NoSuchRecording, 404),
     (TranscriptTooLarge, 413),
     (VoiceNoteTooLong, 413),

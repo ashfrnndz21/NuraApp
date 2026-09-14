@@ -49,7 +49,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
 from app.medicines.strings import PLAIN_NAME
-from app.memory.episodic import fact_cites_only_what_is_held_here, held_here
+from app.memory.episodic import fact_cites_only_what_is_held_here, hears_consults, held_here
 from app.memory.models import (
     Appointment,
     AppointmentStatus,
@@ -185,8 +185,8 @@ class _Corpus:
     hung: dict[uuid.UUID, list[Attachment]] = field(default_factory=dict)
     consults: dict[uuid.UUID, tuple[SummaryItem, VisitSummary]] = field(default_factory=dict)
     clips_open: bool = False
-    """Whether the key reaches the recording's bytes to play a clip: a consult is written
-    under the visits scope (ADR 0004), so a key that reads the visits hears what was said."""
+    """Whether the key may hear the recording to play a clip: the patient and the family he
+    let in (`app.memory.episodic.hears_consults`), the rule the artefact door keeps."""
     withheld: list[Scope] = field(default_factory=list)
 
     def withhold(self, scope: Scope) -> None:
@@ -322,7 +322,7 @@ async def _corpus(
             )
     else:
         corpus.withhold(Scope.MEDICINES)
-    corpus.clips_open = context.allows(Scope.VISITS)
+    corpus.clips_open = context.allows(Scope.VISITS) and hears_consults(context)
     if context.allows(Scope.VISITS):
         await _consults(session, context, registry, corpus)
     if context.allows(Scope.RECORDS):
@@ -367,7 +367,12 @@ async def _consults(
 ) -> None:
     """What was said at a recorded visit, one candidate per thing heard that has a place in
     the recording (E03-05): named by what it was about — his name for the medicine, the words
-    for the action — so "what did Dr Tan say about the water pill" finds where he said it."""
+    for the action — so "what did Dr Tan say about the water pill" finds where he said it.
+
+    Only what he has confirmed is cited. Before the post-visit card has his yes, a thing heard
+    is a `consult_waiting` candidate: the answer says the card is waiting for his yes and cites
+    the card, never the recording's words; after it, a confirmed item is a `consult`, with its
+    place in the recording, and a rejected one is nothing."""
     summaries = await audited_read(
         session,
         VisitSummary,
@@ -406,10 +411,14 @@ async def _consults(
             names |= FOLLOW_UP_WORDS
         if not names:
             continue
+        if summary.confirmed_at is None:
+            kind = "consult_waiting"
+        elif item.state is ItemState.CONFIRMED:
+            kind = "consult"
+        else:
+            continue
         corpus.consults[item.id] = (item, summary)
-        corpus.candidates.append(
-            Candidate("consult", item.id, visit.scheduled_at, _with_words(names))
-        )
+        corpus.candidates.append(Candidate(kind, item.id, visit.scheduled_at, _with_words(names)))
 
 
 def _providers_of(corpus: _Corpus, artifact_id: uuid.UUID) -> set[str]:
@@ -565,6 +574,22 @@ def _compose(
                     summary.recording_artifact_id, item.clip_start_s, item.clip_end_s, doctor
                 )
             groups.append([AnswerLine(text, tuple(consult_cites), clip)])
+        elif hit.kind == "consult_waiting":
+            _, summary = corpus.consults[hit.ref]
+            if summary.id in visits_heard:
+                continue
+            visits_heard.add(summary.id)
+            visit = corpus.visits[summary.appointment_id]
+            provider = corpus.providers.get(visit.provider_id)
+            text = words.recall_line(
+                "consult_waiting",
+                language,
+                doctor="" if provider is None else provider.name,
+                date=_day(visit.scheduled_at, context, language),
+            )
+            groups.append(
+                [AnswerLine(text, (Cite("visit_summary", summary.id), Cite("appointment", visit.id)))]
+            )
         elif hit.kind == "paper":
             if hit.ref in papers_said:
                 continue

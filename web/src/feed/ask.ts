@@ -19,7 +19,7 @@ export function sourceOf(cites: AnswerLineOut["cites"]): SourceLine | null {
   if (cites.length === 0) return null;
   const kinds = new Set(cites.map((cite) => cite.kind));
   if (kinds.has("medication_line")) return "sourceMedicines";
-  if (kinds.has("appointment") || kinds.has("provider") || kinds.has("summary_item")) return "sourceVisits";
+  if (kinds.has("appointment") || kinds.has("provider") || kinds.has("summary_item") || kinds.has("visit_summary")) return "sourceVisits";
   return "sourcePapers";
 }
 

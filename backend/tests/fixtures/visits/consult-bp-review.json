@@ -1,8 +1,8 @@
 {
   "placeholder": "consult-bp-review",
-  "sha256": "fd0d37ba1373c9983a6cac4f3d67c04f220e2e8bbb96272bcb8c1a99877e49bf",
+  "sha256": "2d975a7eaf915c74ba136617954611fc0d85700d4802c36c52a2d1509b57bbd1",
   "note": "The routine blood pressure review as a recording would be heard (E02-05): the in-room notice first, then Dr Tan's spoken yes as the first seconds after it, then the visit, Pa's question and Mei's word. The words Dr Tan says are routine-bp-review's, so the summary is the same card; the spans are offsets into this transcript. No real person.",
-  "transcript": "Nura will listen now. Nura keeps what you and Dr Tan say. Only you and those you let in can hear it. Is that OK, Dr Tan? Yes, that is fine. Good morning. Your blood pressure book shows the morning numbers drifting up. Last week 138 over 84, this week 142 over 88. From Friday I want you to take the full water pill in the morning instead of half. Keep the blood pressure tablet as it is. Every morning, before breakfast, stand on the scale and write the number in the book. Eat lighter dinners, less salt. We will do a blood test on Monday 28 September. Nothing to eat after midnight the night before, water is fine. I will see you again on Thursday 15 October at ten in the morning. Bring the book. Thank you, doctor. Is the water pill bad for my kidneys? No. We will check your kidneys with the blood test. I will bring the book on the day.",
+  "transcript": "Nura will listen now. Nura keeps what you and Dr Tan say. Only you and the family you let in can hear it. Is that OK, Dr Tan? Yes, that is fine. Good morning. Your blood pressure book shows the morning numbers drifting up. Last week 138 over 84, this week 142 over 88. From Friday I want you to take the full water pill in the morning instead of half. Keep the blood pressure tablet as it is. Every morning, before breakfast, stand on the scale and write the number in the book. Eat lighter dinners, less salt. We will do a blood test on Monday 28 September. Nothing to eat after midnight the night before, water is fine. I will see you again on Thursday 15 October at ten in the morning. Bring the book. Thank you, doctor. Is the water pill bad for my kidneys? No. We will check your kidneys with the blood test. I will bring the book on the day.",
   "summary": {
     "actions": [
       {
@@ -10,8 +10,8 @@
         "slots": {},
         "confidence": 0.93,
         "span": {
-          "start": 388,
-          "end": 473
+          "start": 393,
+          "end": 478
         }
       },
       {
@@ -19,8 +19,8 @@
         "slots": {},
         "confidence": 0.9,
         "span": {
-          "start": 474,
-          "end": 505
+          "start": 479,
+          "end": 510
         }
       },
       {
@@ -30,8 +30,8 @@
         },
         "confidence": 0.91,
         "span": {
-          "start": 506,
-          "end": 553
+          "start": 511,
+          "end": 558
         }
       },
       {
@@ -41,8 +41,8 @@
         },
         "confidence": 0.84,
         "span": {
-          "start": 554,
-          "end": 616
+          "start": 559,
+          "end": 621
         }
       },
       {
@@ -50,8 +50,8 @@
         "slots": {},
         "confidence": 0.84,
         "span": {
-          "start": 602,
-          "end": 615
+          "start": 607,
+          "end": 620
         }
       },
       {
@@ -59,8 +59,8 @@
         "slots": {},
         "confidence": 0.88,
         "span": {
-          "start": 684,
-          "end": 699
+          "start": 689,
+          "end": 704
         }
       }
     ],
@@ -70,8 +70,8 @@
         "change": "dose",
         "confidence": 0.86,
         "span": {
-          "start": 264,
-          "end": 346
+          "start": 269,
+          "end": 351
         }
       }
     ],
@@ -83,8 +83,8 @@
         "purpose": "blood pressure check",
         "confidence": 0.9,
         "span": {
-          "start": 617,
-          "end": 683
+          "start": 622,
+          "end": 688
         }
       }
     ],
@@ -99,8 +99,8 @@
         "unit": "mmHg",
         "confidence": 0.8,
         "span": {
-          "start": 241,
-          "end": 262
+          "start": 246,
+          "end": 267
         }
       }
     ]

@@ -17,6 +17,7 @@ day.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,7 @@ from sqlalchemy import select
 
 from app.channels.api import visits as visits_routes
 from app.clock import FrozenClock
+from app.db import take_keepers
 from app.ingestion.consult import (
     MAX_CONSULT_SECONDS,
     ConsultTooLong,
@@ -37,7 +39,9 @@ from app.ingestion.consult import (
 from app.ingestion.models import ConsultRecording, ConsultSegment, Speaker
 from app.ingestion.speakers import Segment, SegmentsDoNotFit, Unseparated, align
 from app.ingestion.transcribe import Transcript
+from app.keys.context import resolve_key_context
 from app.keys.scopes import Scope
+from app.memory.episodic import OnlyTheFamilyHears, require_artifact
 from app.memory.models import Artifact, ArtifactKind
 from app.reasoning.visits.summary import ConsultClips, Span
 from app.regions import Region
@@ -53,6 +57,7 @@ PA, MEI, KIT, SITI = "+6591210001", "+6591210002", "+6591210003", "+6591210004"
 VISIT_AT = "2026-09-05T01:00:00Z"
 """Saturday 5 September, 9 in the morning in Singapore."""
 ADDRESS = "Gleneagles Hospital, 6A Napier Road"
+QUESTION = "what did Dr Tan say about the water pill"
 EVERY_PART = [scope.value for scope in Scope if scope is not Scope.PROFILE]
 ADR = Path(__file__).resolve().parents[2] / "docs" / "adr" / "0006-consult-recording-on-the-web.md"
 
@@ -218,7 +223,7 @@ def test_segments_are_kept_as_pointers_into_the_transcript_in_order() -> None:
 def test_an_item_plays_from_the_segments_its_words_fall_in() -> None:
     text = "Is that OK? Yes. Take half. Thank you."
     clips = ConsultClips(
-        artifact_id=__import__("uuid").uuid4(),
+        artifact_id=uuid.uuid4(),
         segments=align(
             text,
             [
@@ -488,8 +493,8 @@ async def test_consent_then_notice_then_upload_keeps_a_consult_and_ends_in_the_p
 
     # A consult VOICE artefact in the region's store, byte for byte; the transcript beside it.
     async with deployment.sessions() as session:
-        voice = await session.get(Artifact, __import__("uuid").UUID(recording["artifact_id"]))
-        transcript = await session.get(Artifact, __import__("uuid").UUID(recording["transcript_artifact_id"]))
+        voice = await session.get(Artifact, uuid.UUID(recording["artifact_id"]))
+        transcript = await session.get(Artifact, uuid.UUID(recording["transcript_artifact_id"]))
         segments = list((await session.execute(select(ConsultSegment))).scalars())
     assert voice is not None and voice.kind is ArtifactKind.VOICE and voice.content_type == "audio/webm"
     assert deployment.objects.path_of(voice.storage_key).read_bytes() == data
@@ -576,23 +581,52 @@ async def test_what_is_not_a_visit_s_recording_is_refused_on_the_trail(
 # --- E03-05: the answer cites the clip, and the clip plays under the artefact's scope ---------
 
 
-async def test_an_answer_cites_the_clip_and_the_clip_plays_only_under_the_recordings_scope(
+async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only_by_his_family(
     deployment: Deployment,
 ) -> None:
     house = await household(deployment)
     client = deployment.client
     await agree_to_recording(deployment, house.pa, house.profile_id)
-    kept = await _ok(await _upload(house, house.mei, placeholder_consult(CONSULT)), 201)
+    data = placeholder_consult(CONSULT)
+    kept = await _ok(await _upload(house, house.mei, data), 201)
     artifact_id = kept["recording"]["artifact_id"]
+    summary = kept["summary"]
+    ask = {"question": QUESTION, "mode": "text"}
 
-    # Transcript searchable: "what did Dr Tan say about the water pill" finds where he said it.
-    answer = await _ok(
+    # Before his yes, recall cites nothing Dr Tan said: the card is waiting for it.
+    waiting = await _ok(await client.post(house.at("/ask"), json=ask, headers=house.hers))
+    on_the_card = [
+        line for line in waiting["lines"] if any(c["kind"] == "visit_summary" for c in line["cites"])
+    ]
+    assert [line["text"] for line in on_the_card] == [
+        "Your card from Dr Tan on Saturday 5 September is waiting for your yes."
+    ]
+    _clean([line["text"] for line in on_the_card])
+    assert all(line["clip"] is None for line in waiting["lines"])
+    assert not any(
+        c["kind"] in ("artifact", "summary_item") for line in on_the_card for c in line["cites"]
+    )
+
+    # His yes, through Mei, his chief: every item kept.
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    yes = await _ok(
         await client.post(
-            house.at("/ask"),
-            json={"question": "what did Dr Tan say about the water pill", "mode": "text"},
+            house.at("/confirmations"),
+            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            headers=house.hers,
+        ),
+        201,
+    )
+    await _ok(
+        await client.post(
+            f"{house.visit}/summary/{summary['summary_id']}/confirm",
+            json={"decisions": decisions, "confirmation_id": yes["confirmation_id"]},
             headers=house.hers,
         )
     )
+
+    # After it, transcript searchable: the answer finds where he said it, and cites it.
+    answer = await _ok(await client.post(house.at("/ask"), json=ask, headers=house.hers))
     said = [line for line in answer["lines"] if line["clip"] is not None]
     assert [line["text"] for line in said] == ["Dr Tan talked about this on Saturday 5 September."]
     clip = said[0]["clip"]
@@ -601,54 +635,52 @@ async def test_an_answer_cites_the_clip_and_the_clip_plays_only_under_the_record
     assert cited == [{"kind": "artifact", "id": artifact_id, "start_s": 19.8, "end_s": 28.9}]
     assert {"summary_item", "appointment"} <= {cite["kind"] for cite in said[0]["cites"]}
     voiced = await _ok(
-        await client.post(
-            house.at("/ask"), json={"question": "what did Dr Tan say about the water pill", "mode": "voice"}, headers=house.his
-        )
+        await client.post(house.at("/ask"), json={**ask, "mode": "voice"}, headers=house.his)
     )
     assert voiced["lines"][0]["clip"]["start_s"] == 19.8
 
-    # The clip: the recording, with the stretch to play; under the visits and the record's scope.
-    played = await client.get(
-        house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 19.8, "end": 28.9}, headers=house.his
-    )
-    assert played.status_code == 200, played.text
-    assert played.content == placeholder_consult(CONSULT)
+    # The clip, and the whole recording: him and the family he let in hear it, nobody else.
+    where = house.at(f"/artifacts/{artifact_id}/clip")
+    stretch, whole = {"start": 19.8, "end": 28.9}, {"start": 0, "end": DURATION_S}
+    played = await client.get(where, params=stretch, headers=house.his)
+    assert played.status_code == 200 and played.content == data
     assert played.headers["content-type"].startswith("audio/webm")
     assert played.headers["x-clip-start"] == "19.8" and played.headers["x-clip-end"] == "28.9"
     assert played.headers["x-media-fragment"] == "t=19.8,28.9"
-    outside = await client.get(
-        house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 10, "end": 500}, headers=house.his
-    )
+    lim = await _key(house, "+6591210006", "Lim", "caregiver", ["visits", "records", "readings"])
+    kit = await _key(house, KIT, "Kit", "viewer", ["visits", "readings"])
+    clinic = await _key(house, "+6591210007", "Clinic", "clinic", ["visits", "records"])
+    for params in (stretch, whole):
+        heard = await client.get(where, params=params, headers=bearer(lim["token"]))
+        assert heard.status_code == 200 and heard.content == data, heard.text
+        for who in (kit, clinic):
+            refused = await client.get(where, params=params, headers=bearer(who["token"]))
+            assert refused.status_code == 403 and refused.json() == {"refusal": "OnlyTheFamilyHears"}
+    outside = await client.get(where, params={"start": 10, "end": 500}, headers=house.his)
     assert outside.status_code == 400 and outside.json() == {"refusal": "NotAClip"}
     siti = await _key(house, SITI, "Siti", "helper", ["medicines"])
-    helper = await client.get(
-        house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 19.8, "end": 28.9}, headers=bearer(siti["token"])
-    )
+    helper = await client.get(where, params=stretch, headers=bearer(siti["token"]))
     assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
-    # A consult is the visits' part (ADR 0004): a viewer, who reads the visits, hears it; a
-    # key to the record without the visits is refused at the door.
-    kit = await _key(house, KIT, "Kit", "viewer", ["visits", "readings"])
-    viewer = await client.get(
-        house.at(f"/artifacts/{artifact_id}/clip"), params={"start": 19.8, "end": 28.9}, headers=bearer(kit["token"])
-    )
-    assert viewer.status_code == 200 and viewer.content == placeholder_consult(CONSULT)
-    records_only = await _key(house, "+6591210005", "Lim", "caregiver", ["records", "ask"])
-    refused = await client.get(
-        house.at(f"/artifacts/{artifact_id}/clip"),
-        params={"start": 19.8, "end": 28.9},
-        headers=bearer(records_only["token"]),
-    )
-    assert refused.status_code == 403 and refused.json() == {"refusal": "OutOfScope", "scope": "visits"}
-    # Its answer names no visit and plays nothing: the visits are withheld, by name.
-    theirs = await _ok(
-        await client.post(
-            house.at("/ask"),
-            json={"question": "what did Dr Tan say about the water pill", "mode": "text"},
-            headers=bearer(records_only["token"]),
+
+    # The transcript heard from it is behind the same door: a clinic key cannot read it either.
+    async with deployment.sessions() as session:
+        context = await resolve_key_context(
+            session,
+            region=Region.SG,
+            person_id=uuid.UUID(clinic["person_id"]),
+            profile_id=uuid.UUID(house.profile_id),
         )
+        with pytest.raises(OnlyTheFamilyHears):
+            await require_artifact(
+                session,
+                context=context,
+                artifact_id=uuid.UUID(kept["recording"]["transcript_artifact_id"]),
+            )
+        take_keepers(session)
+        await session.commit()
+    assert {"OnlyTheFamilyHears", "NotAClip", "OutOfScope"} <= await refusals(
+        deployment, house.pa, house.profile_id
     )
-    assert all(line["clip"] is None for line in theirs["lines"]) and "visits" in theirs["withheld"]
-    assert {"OutOfScope", "NotAClip"} <= await refusals(deployment, house.pa, house.profile_id)
 
 
 async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(

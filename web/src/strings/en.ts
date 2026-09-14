@@ -793,6 +793,7 @@ export const en = {
     ConsultTooLong: "That recording is too long for Nura.",
     NoSuchRecording: "That recording is not here any more.",
     NotAClip: "Nura cannot find that part of the recording.",
+    OnlyTheFamilyHears: "Only the owner and the family he let in can hear this.",
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",

@@ -48,6 +48,7 @@ from app.keys.scopes import ALL_SCOPES, ROLE_SCOPES, KeyRole, Scope, scope_for_s
 from app.memory.episodic import (
     NoSuchArtifact,
     NoSuchEvent,
+    OnlyTheFamilyHears,
     record_event,
     require_artifact,
     require_event,
@@ -1119,7 +1120,7 @@ async def _services(
                     await require_event(session, context=context, event_id=uuid.UUID(ident))
                 else:
                     continue
-            except (NoSuchArtifact, NoSuchEvent, OutOfScope):
+            except (NoSuchArtifact, NoSuchEvent, OutOfScope, OnlyTheFamilyHears):
                 continue
             if scope not in held:
                 problems.append(f"{holder.name} require: {kind} {ident} under {scope}")

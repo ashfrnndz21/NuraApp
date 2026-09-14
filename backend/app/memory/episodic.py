@@ -25,7 +25,7 @@ from app.db import utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_references
-from app.keys.scopes import ALL_SCOPES, Column, Scope, scope_for_subject
+from app.keys.scopes import ALL_SCOPES, Column, KeyRole, Scope, scope_for_subject
 from app.memory.models import (
     Artifact,
     ArtifactKind,
@@ -223,6 +223,42 @@ async def store_artifact(
     )
 
 
+CONSULT_HEARERS: frozenset[KeyRole] = frozenset({KeyRole.CHIEF, KeyRole.CAREGIVER})
+"""Who hears a visit's recording besides the patient himself: the family he let in, his chief
+and his caregivers. It is what the room was told ("Only you and the family you let in can
+hear it") and what the printed card says ("The patient can let his family hear it too").
+A viewer, a clinic, a helper or an emergency key reads the visit and its card, and not what
+was said in the room, whatever scope it holds."""
+
+
+class OnlyTheFamilyHears(Refusal):
+    """A visit's recording, and the transcript heard from it, are for the patient and the
+    family he let in — his chief and his caregivers. This key reads the visits; it does not
+    hear what was said in the room."""
+
+
+def is_consult(artifact: Artifact) -> bool:
+    """Whether an artefact is a visit's recording or its transcript (`Recording.CONSULT`):
+    a recorded kind, written under the visits scope — `store_artifact` writes a consult
+    there and a person's own voice note under the record's or the notes'."""
+    return artifact.kind in RECORDED_KINDS and artifact.written_scope is Scope.VISITS
+
+
+def hears_consults(context: KeyContext) -> bool:
+    """Whether this key may hear a visit's recording: the patient, or the family he let in."""
+    return context.is_owner or context.role in CONSULT_HEARERS
+
+
+def _heard_only_by_the_family(context: KeyContext, artifact: Artifact) -> Artifact:
+    """The artefact door's one rule for a consult, whichever reader asks: every read of an
+    artefact by id comes through `require_artifact` or `require_artifact_under`, so the clip,
+    the transcript the post-visit card is read from and anything later all ask here. Refused
+    in plain words, and on his trail by the door around the reader."""
+    if is_consult(artifact) and not hears_consults(context):
+        raise OnlyTheFamilyHears(f"a {context.role} key does not hear a visit's recording")
+    return artifact
+
+
 @audited(Action.READ, Scope.RECORDS, Artifact.__tablename__)
 async def require_artifact(
     session: AsyncSession,
@@ -245,7 +281,7 @@ async def require_artifact(
     )
     if not found:
         raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
-    return found[0]
+    return _heard_only_by_the_family(context, found[0])
 
 
 @audited(Action.READ, lambda call: call["scope"], Artifact.__tablename__)
@@ -270,7 +306,7 @@ async def require_artifact_under(
     )
     if not found:
         raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
-    return found[0]
+    return _heard_only_by_the_family(context, found[0])
 
 
 @audited(Action.WRITE, Scope.RECORDS, Event.__tablename__)

@@ -45,25 +45,27 @@ SPOKEN_NOTICE: Mapping[str, tuple[str, ...]] = {
     "en": (
         "Nura will listen now.",
         "Nura keeps what you and {doctor} say.",
-        "Only you and those you let in can hear it.",
+        "Only you and the family you let in can hear it.",
         "Is that OK, {doctor}?",
     ),
     "ms": (
         "Nura akan mendengar sekarang.",
         "Nura menyimpan apa yang anda dan {doctor} kata.",
-        "Hanya anda dan orang yang anda benarkan boleh mendengarnya.",
+        "Hanya anda dan keluarga yang anda benarkan boleh mendengarnya.",
         "Boleh, {doctor}?",
     ),
     "zh": (
         "Nura 现在开始听。",
         "Nura 会保存您和{doctor}说的话。",
-        "只有您和您让进来的人可以听。",
+        "只有您和您让进来的家人可以听。",
         "{doctor}，可以吗？",
     ),
 }
 """What the app says aloud in the room, before the recording starts, in the patient's language.
 The last line is to the doctor, by name; the doctor's answer is the first seconds kept.
-"Those you let in" is the consent's own phrase and is true of a clinic key as well as family."""
+"The family you let in" is the consent's own phrase (`app.consent.texts`), word for word, and
+it is the rule: a visit's recording is heard by him and the family he let in — his chief and
+his caregivers — and the artefact door refuses anyone else (`episodic.OnlyTheFamilyHears`)."""
 
 # @patient
 VOCATIVE_LINE: Mapping[str, str] = {

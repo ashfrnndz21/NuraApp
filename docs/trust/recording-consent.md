@@ -32,13 +32,13 @@ Every line passes `docs/plain-words.md` (`make plain-words`; `tests/test_recordi
 
 | | |
 |---|---|
-| English | Nura will listen now. / Nura keeps what you and Dr Tan say. / Only you and those you let in can hear it. / Is that OK, Dr Tan? |
-| Malay | Nura akan mendengar sekarang. / Nura menyimpan apa yang anda dan Dr Tan kata. / Hanya anda dan orang yang anda benarkan boleh mendengarnya. / Boleh, Dr Tan? |
-| Chinese | Nura 现在开始听。/ Nura 会保存您和Dr Tan说的话。/ 只有您和您让进来的人可以听。/ Dr Tan，可以吗？ |
+| English | Nura will listen now. / Nura keeps what you and Dr Tan say. / Only you and the family you let in can hear it. / Is that OK, Dr Tan? |
+| Malay | Nura akan mendengar sekarang. / Nura menyimpan apa yang anda dan Dr Tan kata. / Hanya anda dan keluarga yang anda benarkan boleh mendengarnya. / Boleh, Dr Tan? |
+| Chinese | Nura 现在开始听。/ Nura 会保存您和Dr Tan说的话。/ 只有您和您让进来的家人可以听。/ Dr Tan，可以吗？ |
 
 With no doctor named, the last line is: Is that OK, doctor? / Boleh ya, doktor? / 医生，可以吗？
 
-"Those you let in" is the consent's own phrase ("the family you let in", `texts.py`) widened by one word, because it has to be true: a clinic key holds visits and records too, and whoever the patient lets in — family or clinic — can hear it. Whether the consent wording itself should say "those" rather than "the family" is an owner decision (a new wording version), noted in the E16 PR.
+"The family you let in" is the consent's own phrase (`texts.py`), word for word. Until E05-04 the notice said "those you let in", widened by one word because a clinic key holding the visits could hear a recording. Access is now narrowed instead, to match the printed card ("Only the patient can hear it. The patient can let his family hear it too.") and the words he agreed to: a visit's recording, its clips and the transcript heard from it are heard only by the patient and the family he let in — his chief and his caregivers. The artefact door refuses every other key even when it holds the visits — a viewer, a clinic, a helper, an emergency key — in plain words and on his trail (`OnlyTheFamilyHears`, `app/memory/episodic.py`). A clinic key reads the visit and its card, not what was said in the room.
 
 **Printed card for the clinic desk**
 
@@ -63,7 +63,7 @@ The Malay and Chinese lines are a first translation awaiting a native speaker's 
 - **The agreement**: one `consent` row, purpose `recording`, with the words as read, the language, `captured_via` (app, WhatsApp, paper, or a witnessed spoken yes), the basis (`owner`, or a proxy basis with the document or the recording behind it), when it was given and when withdrawn. The row outlives the graph (`ondelete="RESTRICT"`; see `pdpa-data-map.md` §4).
 - **The recording**: one `artifact` row of kind `voice`, the bytes in the object store of the profile's region under `storage_key`, the digest on the row, and nothing of the content anywhere in the database. The transcript, the summary and the memo (E05) are facts and artefacts that name this artefact as their provenance.
 - **The doctor's answer**: the first seconds of that artefact. It is not a separate row and it is not transcribed into a column; if it is ever needed it is played.
-- **Who has heard it**: every read of the artefact is an `audit_entry` the owner can see. Who *can* hear it is whoever holds a key with the visits scope, where a consult and its transcript are written (row scope, ADR 0004) — family the patient let in, and a clinic key, which holds the visits (`keys/scopes.py`). A stretch of it is played the same way: `GET /profiles/{id}/artifacts/{a}/clip` reads the recording under the visits scope and nothing else (ADR 0006). The notice says "those you let in" for that reason.
+- **Who has heard it**: every read of the artefact is an `audit_entry` the owner can see. Who *can* hear it is the patient and the family he let in — a chief or a caregiver key — and nobody else: the recording and its transcript are written under the visits scope (row scope, ADR 0004), and the artefact door refuses a consult to any other key even when it holds the visits (a viewer, a clinic, a helper, an emergency key; `OnlyTheFamilyHears`, on his trail). Access was narrowed to this in E05-04 so that it matches the printed card and the words he agreed to. A stretch of it is played through the same door: `GET /profiles/{id}/artifacts/{a}/clip` (ADR 0006). The notice says "the family you let in" for that reason. A person's own voice note keeps its own rule (ADR 0003).
 - **Who else handles it**: the bytes go to a speech provider for transcription and to the model for the sentence of the summary (E05), on region-pinned endpoints, under contract not to keep or train on them (`pdpa-data-map.md` §5). The notice does not name them, because they hold nothing once the transcript is back; whether it must is question 8 for counsel in each country.
 
 What is not stored: the doctor's name against the recording as a person Nura knows. The doctor is a `provider` row on the patient's own profile — a directory entry the patient keeps, not an account — and providers are never linked across profiles.

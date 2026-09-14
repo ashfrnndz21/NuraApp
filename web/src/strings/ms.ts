@@ -789,6 +789,7 @@ export const ms = {
     ConsultTooLong: "Rakaman itu terlalu panjang untuk Nura.",
     NoSuchRecording: "Rakaman itu sudah tiada di sini.",
     NotAClip: "Nura tidak dapat mencari bahagian rakaman itu.",
+    OnlyTheFamilyHears: "Hanya pemilik dan keluarga yang dia benarkan boleh mendengar ini.",
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",

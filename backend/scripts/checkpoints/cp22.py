@@ -14,8 +14,10 @@ recording without Pa's agreement to Nura listening; a viewer is refused before t
 told anything. Pa agrees; the notice is said to Dr Tan by name; Mei's recording goes up once,
 on Stop, and is kept as a consult, heard, separated by speaker — Dr Tan's yes the first
 seconds after the notice — and read into the post-visit card with each line's place in the
-recording. Mei asks what Dr Tan said about the water pill and the answer cites the stretch;
-the clip plays for a key that reads the visits, and nobody else. Last, the refusals on Pa's
+recording. Mei asks what Dr Tan said about the water pill: before the card has a yes the
+answer says it is waiting for it; after Mei confirms it, the answer cites the stretch. The clip
+plays for Pa and the family he let in — Mei, Lim his caregiver — and a viewer's key and the
+clinic's are refused, as the room was told. Last, the refusals on Pa's
 trail.
 
 Self-contained: every helper this module needs is here, so the shared runner only dispatches.
@@ -235,14 +237,21 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     mei = Person("Mei", fresh_phone("+659223"))
     kit = Person("Kit", fresh_phone("+659324"))
     siti = Person("Siti", fresh_phone("+659425"))
-    for person in (pa, mei, kit, siti):
+    lim = Person("Lim", fresh_phone("+659526"))
+    clinic = Person("Clinic", fresh_phone("+659627"))
+    for person in (pa, mei, kit, siti, lim, clinic):
         register(client, dev_log, person, "en")
     profile_id = open_profile(client, pa)
     his, hers = bearer(pa.token), bearer(mei.token)
     let_in(client, pa, profile_id, mei, "chief", EVERY_PART)
     let_in(client, pa, profile_id, kit, "viewer", ["visits", "readings"])
     let_in(client, pa, profile_id, siti, "helper", ["medicines"])
-    ok("Pa opened his profile: Mei his chief (every part), Kit a viewer (the visits, the readings), Siti a helper (the medicines)")
+    let_in(client, pa, profile_id, lim, "caregiver", ["visits", "records", "readings"])
+    let_in(client, pa, profile_id, clinic, "clinic", ["visits", "records"])
+    ok(
+        "Pa opened his profile: Mei his chief (every part), Lim a caregiver (the visits, the record, the readings), "
+        "Kit a viewer (the visits, the readings), Siti a helper (the medicines), and the clinic (the visits, the record)"
+    )
 
     # 1. Dr Tan, his address, the visit tomorrow at 9 in the morning on Pa's yes.
     tomorrow = (datetime.now(SINGAPORE) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
@@ -535,7 +544,37 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if len(placed) != len(summary["items"]):
         raise fail("the post-visit card", why="an item with no place in the recording")
 
-    # 8. Ask, and the clip under the recording's scope.
+    # 8. Ask: before his yes the card is waiting; after it, the answer cites where Dr Tan said it.
+    waiting = check(
+        client.post(f"/profiles/{profile_id}/ask", headers=hers, json={"question": QUESTION, "mode": "text"}),
+        200,
+        "Mei asks what Dr Tan said, before the card is confirmed",
+    )
+    on_the_card = [
+        line["text"] for line in waiting["lines"] if any(c["kind"] == "visit_summary" for c in line["cites"])
+    ]
+    if not on_the_card or any(line.get("clip") for line in waiting["lines"]):
+        raise fail("Mei asks before the card is confirmed", why=f"the recording was cited: {waiting['lines']}")
+    ok(f"Mei asks \"{QUESTION}\" before the card has a yes: \"{on_the_card[0]}\" — nothing Dr Tan said is cited yet")
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    card_yes = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=hers,
+            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+        ),
+        201,
+        "Mei says yes to the card",
+    )
+    check(
+        client.post(
+            f"{route}/summary/{summary['summary_id']}/confirm",
+            headers=hers,
+            json={"decisions": decisions, "confirmation_id": card_yes["confirmation_id"]},
+        ),
+        200,
+        "Mei confirms the card",
+    )
     answer = check(
         client.post(f"/profiles/{profile_id}/ask", headers=hers, json={"question": QUESTION, "mode": "text"}),
         200,
@@ -546,34 +585,50 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("Mei asks what Dr Tan said", why=f"no line plays the clip: {answer['lines']}")
     clip = said[0]["clip"]
     ok(
-        f"Mei asks \"{QUESTION}\": \"{said[0]['text']}\" — citing the recording {clip['artifact_id'][:8]}… from "
-        f"{clip['start_s']:g} to {clip['end_s']:g} seconds, the button \"Hear what {clip['doctor']} said\""
+        f"Mei confirms the card on her yes, then asks again: \"{said[0]['text']}\" — citing the recording "
+        f"{clip['artifact_id'][:8]}… from {clip['start_s']:g} to {clip['end_s']:g} seconds, the button "
+        f"\"Hear what {clip['doctor']} said\""
     )
     where = f"/profiles/{profile_id}/artifacts/{clip['artifact_id']}/clip"
     stretch = {"start": clip["start_s"], "end": clip["end_s"]}
+    whole = {"start": 0, "end": DURATION_S}
     played = client.get(where, headers=his, params=stretch)
     if played.status_code != 200 or played.content != audio:
         raise fail("Pa plays the clip", played)
-    heard_by_kit = client.get(where, headers=bearer(kit.token), params=stretch)
-    if heard_by_kit.status_code != 200:
-        raise fail("Kit plays the clip", heard_by_kit)
+    for params in (stretch, whole):
+        heard = client.get(where, headers=bearer(lim.token), params=params)
+        if heard.status_code != 200 or heard.content != audio:
+            raise fail("Lim plays the recording", heard)
+        refused(client.get(where, headers=bearer(kit.token), params=params), 403, "OnlyTheFamilyHears", "Kit plays the recording")
+        refused(client.get(where, headers=bearer(clinic.token), params=params), 403, "OnlyTheFamilyHears", "the clinic plays the recording")
     refused(client.get(where, headers=bearer(siti.token), params=stretch), 403, "OutOfScope", "Siti plays the clip")
     refused(client.get(where, headers=his, params={"start": 10, "end": 500}), 400, "NotAClip", "Pa plays past the end")
     ok(
         f"the clip (GET …/artifacts/{{a}}/clip?start={clip['start_s']:g}&end={clip['end_s']:g}): the recording's "
         f"{len(played.content)} bytes, {played.headers['content-type']}, X-Media-Fragment {played.headers['x-media-fragment']} "
-        "— the phone plays that stretch; Kit, who reads the visits, hears it; Siti's helper key is refused, "
-        "OutOfScope (403, visits); a stretch outside the recording is NotAClip (400)"
+        "— the phone plays that stretch"
+    )
+    ok(
+        "who hears it is what the room was told: Pa and the family he let in — Lim, his caregiver, hears the clip and the "
+        "whole recording; Kit's viewer key and the clinic's key both hold the visits and are refused, OnlyTheFamilyHears "
+        "(403); Siti's helper key does not reach the visits, OutOfScope (403); a stretch outside the recording is NotAClip (400)"
     )
 
     # 9. The trail.
     trail = check(
         client.get(f"/profiles/{profile_id}/audit", headers=his, params={"limit": 500}), 200, "Pa reads his trail"
     )
-    names = {"Pa": pa.person_id, "Mei": mei.person_id, "Kit": kit.person_id, "Siti": siti.person_id}
+    names = {
+        "Pa": pa.person_id,
+        "Mei": mei.person_id,
+        "Kit": kit.person_id,
+        "Siti": siti.person_id,
+        "Lim": lim.person_id,
+        "Clin": clinic.person_id,
+    }
     who = {value: key for key, value in names.items()}
     refusals = [e for e in trail if e["outcome"] == "refused"]
-    wanted = {"ConsentWithheld", "NotTheirsToChangeVisits", "NotAClip", "OutOfScope"}
+    wanted = {"ConsentWithheld", "NotTheirsToChangeVisits", "NotAClip", "OutOfScope", "OnlyTheFamilyHears"}
     missing = wanted - {e["refused_because"] for e in refusals}
     if missing:
         raise fail("Pa reads his trail", why=f"not on it: {sorted(missing)}")
