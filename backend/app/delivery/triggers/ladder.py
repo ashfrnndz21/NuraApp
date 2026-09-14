@@ -51,7 +51,6 @@ from app.delivery.triggers.models import (
     LADDER_STEP,
     Delivery,
     DeliveryOutcome,
-    DeliverySettings,
     Ladder,
     Subject,
     TriggerType,
@@ -67,6 +66,7 @@ from app.medicines.service import today as doses_today
 from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME
 from app.memory.models import Provider, ProviderKind
 from app.regions import REGION_TZ
+from app.routines.service import current_routine
 from app.safety.boundary import YOUR_DOCTOR
 from app.safety.red_flags import FLAG_WINDOW, Flag
 
@@ -403,9 +403,12 @@ def flag_message(run: Run, flag: Flag) -> Say:
 # --- red flags -------------------------------------------------------------------------------------
 
 
-async def flag_ladder(run: Run, flag: Flag, *, exclude: Sequence[uuid.UUID]) -> Ladder:
+async def flag_ladder(
+    run: Run, flag: Flag, *, exclude: Sequence[uuid.UUID], now: bool = False
+) -> Ladder:
     """The ladder for one flag: straight to the roster, him and whoever already knows left
-    out. It starts the moment the flag was raised, or now if that is earlier."""
+    out. Escalated at the moment it was said (`now`), it starts then; picked up by the engine's
+    run, it starts when the flag was raised, or at the run if that is earlier."""
     skip = [*exclude, flag.raised_by_person_id]
     if run.profile.owner_person_id is not None:
         skip.append(run.profile.owner_person_id)
@@ -416,7 +419,7 @@ async def flag_ladder(run: Run, flag: Flag, *, exclude: Sequence[uuid.UUID]) -> 
         dedupe_key=f"flag:{flag.id}",
         spec=FLAG_RUNGS,
         exclude=skip,
-        started_at=min(as_utc(flag.raised_at), run.at),
+        started_at=run.at if now else min(as_utc(flag.raised_at), run.at),
         flag_id=flag.id,
     )
 
@@ -446,7 +449,7 @@ async def escalate_flag(
     if flag.suppressed_because is not None:
         return Escalated(ladder=None, told=(), asked=(), deliveries=())
     run = await open_run(session, via=via, profile_id=context.profile_id, at=at or utcnow())
-    ladder = await flag_ladder(run, flag, exclude=told_already)
+    ladder = await flag_ladder(run, flag, exclude=told_already, now=True)
     await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
     reached = tuple(
         sent.delivery.to_person_id
@@ -553,7 +556,8 @@ async def dose_for_reply(
 ) -> DoseAsked | None:
     """Which tablet a "Taken" or "given" reply is about: the one the ladder last asked this
     person about that day; else the one whose window is open at that moment and has no Taken
-    yet; else none — and then nothing is written down. `at` is when the reply was sent (the
+    yet; else the latest one today whose moment has passed with none; else none — and then
+    nothing is written down. The moments are his routine's (E10-01). `at` is when the reply was sent (the
     message's own time, as the provider stamps it); now when not given."""
     zone = REGION_TZ[context.region]
     moment = as_utc(at) if at is not None else utcnow()
@@ -582,22 +586,21 @@ async def dose_for_reply(
         generic = generic_of.get(newest.line_id)
         if generic is not None:
             return DoseAsked(line_id=newest.line_id, anchor=newest.anchor, generic=generic)
-    settings = await audited_read(
-        session,
-        DeliverySettings,
-        context,
-        Scope.PROFILE,
-        order_by=(DeliverySettings.set_at.desc(),),
-        limit=1,
-        channel=channel,
-    )
-    config = config_of(settings[0] if settings else None)
-    for slot in slots:
-        if slot.taken:
-            continue
+    config = config_of(None, await current_routine(session, context=context))
+    untapped = [slot for slot in slots if not slot.taken]
+    for slot in untapped:
         opens, closes = config.window(local.date(), slot.anchor, zone)
         if opens <= local < closes:
             return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
+    # Late: the latest tablet today whose moment has passed with no Taken yet.
+    passed = [
+        slot
+        for slot in untapped
+        if datetime.combine(local.date(), config.anchor_at(slot.anchor), zone) <= local
+    ]
+    if passed:
+        slot = max(passed, key=lambda one: config.anchor_at(one.anchor))
+        return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
     return None
 
 

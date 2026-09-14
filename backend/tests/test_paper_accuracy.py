@@ -12,7 +12,7 @@ from dataclasses import replace
 import pytest
 
 from app.ingestion.extract import DocumentKind, ExtractedField, Extraction, FixtureExtractor, Hints
-from tests.paper import CLINIC_SLIP, LIPID_PANEL, PAPER, expected, papers
+from tests.paper import CLINIC_SLIP, LIPID_PANEL, PAPER, expected, papers, placeholder_of
 from tests.paper_accuracy import Outcome, measure
 
 
@@ -59,7 +59,9 @@ class _Confident:
             for one in read.fields
         )
         extra = (ExtractedField("lipid_panel", "made_up", 1, None, 0.99),)
-        if read.document_kind is DocumentKind.LAB_REPORT:
+        # The one lipid panel of E02-01, by its bytes: a second lab report (E09-01's) is read
+        # as it is, so the harness still sees exactly one invented field.
+        if read.document_kind is DocumentKind.LAB_REPORT and data == placeholder_of(LIPID_PANEL):
             fields = fields + extra
         return replace(read, fields=fields)
 

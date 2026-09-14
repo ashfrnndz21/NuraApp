@@ -61,10 +61,11 @@ async def test_an_untapped_tablet_asks_pa_then_siti_then_the_roster_and_stops_at
     clock.set(at(6))
     h = await home(sg, tmp_path)
 
-    # Breakfast at 07:30; the window closes at 09:30. Before that, nobody is asked.
-    assert _of(await _run(sg, h, clock, at(9, 29)), TriggerType.DOSE) == []
+    # Breakfast at 07:30 (his routine, not yet set); the routine calls it due for an hour, so
+    # the window closes at 08:30. Before that, nobody is asked.
+    assert _of(await _run(sg, h, clock, at(8, 29)), TriggerType.DOSE) == []
 
-    first = await _run(sg, h, clock, at(9, 31))
+    first = await _run(sg, h, clock, at(8, 31))
     assert _of(first, TriggerType.DOSE) == [(h.pa.id, 0, DeliveryOutcome.SENT)]
     asked = next(s.delivery for s in first.sent if s.delivery.trigger_type is TriggerType.DOSE)
     assert asked.template_name == "dose_reminder" and asked.via is DeliveryChannel.WHATSAPP
@@ -75,9 +76,9 @@ async def test_an_untapped_tablet_asks_pa_then_siti_then_the_roster_and_stops_at
         "When you have, reply Taken.",
     ]
     # Nothing twice: the same rung is not asked again.
-    assert _of(await _run(sg, h, clock, at(9, 45)), TriggerType.DOSE) == []
+    assert _of(await _run(sg, h, clock, at(8, 45)), TriggerType.DOSE) == []
 
-    second = await _run(sg, h, clock, at(10, 1))
+    second = await _run(sg, h, clock, at(9, 1))
     assert _of(second, TriggerType.DOSE) == [(h.siti.id, 1, DeliveryOutcome.SENT)]
     assert h.sent_to(h.siti)[-1].splitlines() == [
         "Pa belum kata Sudah ambil untuk ubat tekanan darah Pa bersama sarapan.",
@@ -86,14 +87,14 @@ async def test_an_untapped_tablet_asks_pa_then_siti_then_the_roster_and_stops_at
     ]
 
     # The third ask goes to the roster — whoever is on duty now — not to him.
-    third = await _run(sg, h, clock, at(10, 31))
+    third = await _run(sg, h, clock, at(9, 31))
     assert _of(third, TriggerType.DOSE) == [(h.mei.id, 2, DeliveryOutcome.SENT)]
     rung = next(s.delivery for s in third.sent if s.delivery.trigger_type is TriggerType.DOSE)
     assert rung.standing == "on_duty" and rung.template_name == "dose_check"
     assert len([text for text in h.sent_to(h.pa) if "Have you had" in text]) == 1
 
     # Siti taps "given" on WhatsApp: the Taken tap is written for that tablet, the ladder stops.
-    clock.set(at(10, 35))
+    clock.set(at(9, 35))
     handled = await h.inbound(sg, SITI, "sudah beri")
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
@@ -109,7 +110,7 @@ async def test_an_untapped_tablet_asks_pa_then_siti_then_the_roster_and_stops_at
     assert ladder.closed_because == "answered" and ladder.acknowledged_by_person_id == h.siti.id
     assert [step["standing"] for step in ladder.rungs] == ["patient", "helper", "on_duty"]
     assert [step["after_minutes"] for step in ladder.rungs] == [0, 30, 60]
-    assert _of(await _run(sg, h, clock, at(11, 5)), TriggerType.DOSE) == []
+    assert _of(await _run(sg, h, clock, at(10, 5)), TriggerType.DOSE) == []
 
 
 async def test_his_own_taken_stops_the_ladder_before_anyone_else_is_asked(
@@ -117,8 +118,8 @@ async def test_his_own_taken_stops_the_ladder_before_anyone_else_is_asked(
 ) -> None:
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    await _run(sg, h, clock, at(9, 31))
-    clock.set(at(9, 40))
+    await _run(sg, h, clock, at(8, 31))
+    clock.set(at(8, 40))
     handled = await h.inbound(sg, PA, "Taken")
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
@@ -126,7 +127,7 @@ async def test_his_own_taken_stops_the_ladder_before_anyone_else_is_asked(
         "Mei can see it too.",
     ]
     assert (await sg.scalars(select(DoseTaken))).one().by_person_id == h.pa.id
-    assert _of(await _run(sg, h, clock, at(10, 1)), TriggerType.DOSE) == []
+    assert _of(await _run(sg, h, clock, at(9, 1)), TriggerType.DOSE) == []
     assert h.sent_to(h.siti) == []
 
 
@@ -140,7 +141,7 @@ async def test_nobody_whose_key_does_not_cover_the_medicines_is_on_the_ladder(
     )
     await agree_to_family_sharing(sg, h.owner, kit, scopes={Scope.VISITS})
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes={Scope.VISITS})
-    await _run(sg, h, clock, at(9, 31))
+    await _run(sg, h, clock, at(8, 31))
     ladder = (await sg.scalars(select(Ladder))).one()
     people = [step["person_id"] for step in ladder.rungs]
     assert str(kit.id) not in people

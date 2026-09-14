@@ -1,7 +1,7 @@
 """The settings a profile's deliveries follow, read and changed (E11-05, E11-10).
 
-The owner and his chief change them; anyone holding a key reads them (the time of his
-breakfast is what a helper's "given" is matched against). A change is a new row, checked by
+The owner and his chief change them; anyone holding a key reads them. The times of his day
+are E10-01's routine (`app.routines`), read here and set there. A change is a new row, checked by
 `rules.check_settings` — an alert cannot be given a cap or quiet hours — and the newest row
 is in force. The log of what went out (`Delivery`) is the owner's and his chief's to read,
 narrowed to the parts of the record their key covers.
@@ -21,6 +21,7 @@ from app.delivery.triggers.models import Delivery, DeliverySettings
 from app.delivery.triggers.rules import Config, check_settings, config_of
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
+from app.routines.service import current_routine
 
 
 def owner_or_chief(context: KeyContext) -> None:
@@ -44,14 +45,14 @@ async def current(
         limit=1,
     )
     row = rows[0] if rows else None
-    return config_of(row), row
+    routine = await current_routine(session, context=context) if context.allows(Scope.MEDICINES) else None
+    return config_of(row, routine), row
 
 
 async def change(
     session: AsyncSession,
     *,
     context: KeyContext,
-    breakfast_at: time | None,
     skip_quiet_days: bool,
     quiet_from: time | None,
     quiet_until: time | None,
@@ -65,7 +66,6 @@ async def change(
         DeliverySettings,
         context,
         Scope.FAMILY,
-        breakfast_at=None if breakfast_at is None else breakfast_at.replace(tzinfo=None),
         skip_quiet_days=skip_quiet_days,
         quiet_from=None if quiet_from is None else quiet_from.replace(tzinfo=None),
         quiet_until=None if quiet_until is None else quiet_until.replace(tzinfo=None),

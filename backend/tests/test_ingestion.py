@@ -72,6 +72,7 @@ from tests.paper import (
     GLUCOMETER,
     HANDWRITTEN_PRESCRIPTION,
     LIPID_PANEL,
+    LIPID_PANEL_2025,
     PAPER,
     RECEIPT,
     WARFARIN_LABEL,
@@ -185,9 +186,10 @@ def _refusals(trail: Any) -> set[tuple[Action, str, str]]:
 
 def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     """The extractor answers by digest, so a fixture whose digest drifted is a page it would
-    never recognise. Eight fixtures are here: the lipid panel and the warfarin label (E02-01),
+    never recognise. Nine fixtures are here: the lipid panel and the warfarin label (E02-01),
     the clinic slip and the prescription by hand (E02-02), the hospital letter and the receipt
-    as PDFs (E02-03), and two machines' screens (E02-08). The labelled answers beside them
+    as PDFs (E02-03), two machines' screens (E02-08), and the second lipid panel
+    the lab trend reads (E09-01). The labelled answers beside them
     (`*.expected.json`) are the accuracy harness's and name no digest."""
     labels = papers()
     assert set(labels) == {
@@ -199,6 +201,7 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         RECEIPT,
         BP_CUFF,
         GLUCOMETER,
+        LIPID_PANEL_2025,
     }
     for label in labels:
         paper = fixture(label)

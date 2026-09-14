@@ -20,16 +20,19 @@ async def test_the_settings_are_read_changed_and_an_alert_is_never_capped(
     now = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
     assert now.status_code == 200, now.text
     body = now.json()
-    assert body["breakfast_at"] == "07:30:00" and body["caps"]["flag"] is None
+    # The times of his day are E10-01's routine: not set yet, its defaults.
+    assert body["morning_card_at"] == "07:00:00" and body["anchors"]["breakfast"] == "07:30:00"
+    assert body["caps"]["flag"] is None
     assert body["channels"]["reorder"] == ["app_push", "whatsapp", "caregiver"]
     assert body["channels"]["flag"] == ["whatsapp", "app_push"]
     changed = await deployment.client.put(
         f"/profiles/{profile_id}/delivery-settings",
-        json={"breakfast_at": "08:15:00", "channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}},
+        json={"skip_quiet_days": True, "channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}},
         headers=his,
     )
     assert changed.status_code == 200, changed.text
-    assert changed.json()["breakfast_at"] == "08:15:00" and changed.json()["caps"]["reorder"] == 2
+    assert changed.json()["skip_quiet_days"] is True and changed.json()["caps"]["reorder"] == 2
+    assert changed.json()["channels"]["reorder"] == ["whatsapp"]
     refused = await deployment.client.put(
         f"/profiles/{profile_id}/delivery-settings", json={"caps": {"flag": 5}}, headers=his
     )

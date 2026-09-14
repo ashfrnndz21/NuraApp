@@ -9,7 +9,7 @@ count, never a diagnosis; a family message comes due and reaches him.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -33,7 +33,9 @@ from app.delivery.triggers.preferences import change
 from app.delivery.triggers.rules import RULES, AlertsAreNeverHeld, NotASetting, check_settings
 from app.family.models import PushChannel, ScheduledPush
 from app.ingestion.models import DocumentKind, ReviewCard
+from app.keys.confirm import confirm
 from app.keys.scopes import Scope
+from app.routines.service import routine_draft_for, set_routine
 from app.state.service import render_from_state
 from tests.delivery_support import PA, Home, home
 from tests.medicines_support import add, artefact, label
@@ -62,12 +64,13 @@ async def test_the_morning_card_goes_at_breakfast_once_a_day_by_whatsapp(
 ) -> None:
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    assert _rows(await _run(sg, h, clock, at(7, 20)), TriggerType.MORNING) == []
+    # His routine (E10-01) is not set yet: the morning card's time is its default, 07:00.
+    assert _rows(await _run(sg, h, clock, at(6, 50)), TriggerType.MORNING) == []
     report = await _run(sg, h, clock, at(7, 31))
     [card] = _rows(report, TriggerType.MORNING)
     assert card.outcome is DeliveryOutcome.SENT and card.via is DeliveryChannel.WHATSAPP
     assert card.template_name == "morning_card" and card.rule == "breakfast_anchor_reached"
-    assert card.trigger_kind is TriggerKind.RULE and card.why["breakfast_at"] == "07:30"
+    assert card.trigger_kind is TriggerKind.RULE and card.why["morning_card_at"] == "07:00"
     text = h.sent_to(h.pa)[-1].splitlines()
     assert text[:3] == [
         "Good morning, Pa, this is Nura.",
@@ -94,26 +97,34 @@ async def test_the_morning_card_goes_at_breakfast_once_a_day_by_whatsapp(
         assert row.to_person_id == entry.shared_with_person_id and row.scope is entry.scope
 
 
-async def test_the_breakfast_time_is_his_and_a_quiet_day_is_skipped_when_asked(
+async def test_the_times_are_his_routines(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:
+    """E10-01's routine is the clock of his day: the family sets breakfast at 08:15 and the
+    morning card at 08:00, on a yes for exactly that day, and the engine follows it."""
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    await change(
-        sg,
-        context=h.owner,
-        breakfast_at=time(8, 15),
-        skip_quiet_days=True,
-        quiet_from=None,
-        quiet_until=None,
-        channels={},
-        caps={},
-    )
+    day = {
+        "anchors": {
+            "wake": "07:00",
+            "breakfast": "08:15",
+            "lunch": "12:30",
+            "dinner": "18:30",
+            "bed": "22:00",
+        },
+        "reading_prompts": (),
+        "walks": (),
+        "morning_card_at": "08:00",
+    }
+    draft = await routine_draft_for(sg, context=h.owner, **day)  # type: ignore[arg-type]
+    yes = await confirm(sg, h.owner, draft)
+    await set_routine(sg, context=h.owner, confirmation_id=yes.id, **day)  # type: ignore[arg-type]
     assert _rows(await _run(sg, h, clock, at(7, 31)), TriggerType.MORNING) == []
-    assert len(_rows(await _run(sg, h, clock, at(8, 16)), TriggerType.MORNING)) == 1
-    # The breakfast tablet hangs on the same anchor: its window closes at 10:15 now.
-    assert _rows(await _run(sg, h, clock, at(9, 45)), TriggerType.DOSE) == []
-    assert len(_rows(await _run(sg, h, clock, at(10, 16)), TriggerType.DOSE)) == 1
+    [card] = _rows(await _run(sg, h, clock, at(8, 1)), TriggerType.MORNING)
+    assert card.why["morning_card_at"] == "08:00"
+    # The breakfast tablet hangs on the same anchor: its window closes an hour after 08:15.
+    assert _rows(await _run(sg, h, clock, at(9, 10)), TriggerType.DOSE) == []
+    assert len(_rows(await _run(sg, h, clock, at(9, 16)), TriggerType.DOSE)) == 1
 
 
 async def test_a_quiet_day_is_skipped_only_when_he_asked(
@@ -131,7 +142,6 @@ async def test_a_quiet_day_is_skipped_only_when_he_asked(
     await change(
         sg,
         context=fam.owner,
-        breakfast_at=None,
         skip_quiet_days=True,
         quiet_from=None,
         quiet_until=None,
@@ -185,7 +195,6 @@ async def test_no_one_receives_more_than_the_configured_cap_a_day(
     await change(
         sg,
         context=h.owner,
-        breakfast_at=None,
         skip_quiet_days=False,
         quiet_from=None,
         quiet_until=None,
@@ -223,7 +232,6 @@ async def test_each_type_goes_by_its_configured_channel(
     await change(
         sg,
         context=h.owner,
-        breakfast_at=None,
         skip_quiet_days=False,
         quiet_from=None,
         quiet_until=None,
@@ -248,7 +256,7 @@ async def test_when_he_cannot_be_reached_the_caregiver_on_duty_is(
     h = await home(sg, tmp_path)
     h.pa.phone_e164 = None
     await sg.flush()
-    [rung] = _rows(await _run(sg, h, clock, at(9, 31)), TriggerType.DOSE)
+    [rung] = _rows(await _run(sg, h, clock, at(8, 31)), TriggerType.DOSE)
     assert rung.via is DeliveryChannel.CAREGIVER and rung.to_person_id == h.mei.id
     assert rung.for_person_id == h.pa.id and rung.reason == "for the patient"
     assert rung.passed_over == ["app_push: no device", "whatsapp: no number"]

@@ -76,15 +76,14 @@ class Subject(StrEnum):
 
 
 class DeliverySettings(ProfileScoped, Base):
-    """What a profile changed of the defaults (`rules.RULES`): the breakfast time the morning
-    card and the breakfast tablet hang on, whether a quiet day's morning card is skipped, the
-    quiet hours, and per type the channel list and the cap. A change is a new row."""
+    """What a profile changed of the delivery defaults (`rules.RULES`): whether a quiet day's
+    morning card is skipped, the quiet hours, and per type the channel list and the cap. The
+    times of his day are E10-01's routine, not kept here. A change is a new row."""
 
     __tablename__ = "delivery_settings"
     __table_args__ = (_row_of_profile("delivery_settings"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    breakfast_at: Mapped[time | None] = mapped_column(Time, default=None)
     skip_quiet_days: Mapped[bool] = mapped_column(Boolean, default=False)
     quiet_from: Mapped[time | None] = mapped_column(Time, default=None)
     quiet_until: Mapped[time | None] = mapped_column(Time, default=None)

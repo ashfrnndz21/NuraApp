@@ -32,6 +32,7 @@ from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.reasoning.ranges import FixtureRanges, ReferenceRanges
 from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
 from app.search.retrieve import KeywordRetriever, Retriever
@@ -65,6 +66,11 @@ class Providers:
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""
+    reference_ranges: ReferenceRanges = field(default_factory=FixtureRanges.load)
+    """The reference ranges the lab trend reads (E09-01, `app.reasoning.ranges`): the fixture
+    table until a licensed one is signed off. `main` chooses it by `NURA_REFERENCE_RANGES`; the
+    default is there so a test that builds `Providers` for another purpose need not name it,
+    the way `retriever` is."""
     voice: Voice = field(default_factory=FixtureVoice)
     """What says a card aloud (E11-04), behind its port (`app.delivery.voice`); `main` passes
     the fixture on a dev run and refuses to start anywhere else until a speech provider exists."""

@@ -7,7 +7,7 @@ card grammar (E11-03): one number, one direction, one colour, one action — nul
 rows written before the grammar was a column.
 
 Revision ID: 0019_delivery
-Revises: 0012_visits
+Revises: 0017_trends_routines_calendar
 Create Date: 2026-09-15
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_delivery"
-down_revision = "0012_visits"
+down_revision = "0017_trends_routines_calendar"
 branch_labels = None
 depends_on = None
 
@@ -102,7 +102,6 @@ def upgrade() -> None:
         "delivery_settings",
         sa.Column("id", sa.Uuid(), primary_key=True),
         _profile_id(),
-        sa.Column("breakfast_at", sa.Time(), nullable=True),
         sa.Column("skip_quiet_days", sa.Boolean(), nullable=False),
         sa.Column("quiet_from", sa.Time(), nullable=True),
         sa.Column("quiet_until", sa.Time(), nullable=True),

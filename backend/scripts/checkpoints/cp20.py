@@ -334,11 +334,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"the scenario runs on {w.day.isoformat()}, tomorrow on his wall clock"
     )
 
-    # 3. The morning card at breakfast (07:30 by default), by WhatsApp, once.
-    assert_none = _of(w.run_due(profile_id, 7, 20), "morning")
+    # 3. The morning card at the time his routine sets (E10-01; 07:00 until the family sets
+    #    the day), by WhatsApp, once.
+    assert_none = _of(w.run_due(profile_id, 6, 50), "morning")
     if assert_none:
         raise fail("nothing before breakfast", why=f"got {assert_none}")
-    [morning] = _of(w.run_due(profile_id, 7, 31), "morning") or [None]
+    [morning] = _of(w.run_due(profile_id, 7, 1), "morning") or [None]
     if (
         morning is None
         or morning["outcome"] != "sent"
@@ -346,36 +347,38 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or morning["template_name"] != "morning_card"
     ):
         raise fail("the morning card goes at breakfast", why=f"got {morning}")
-    if _of(w.run_due(profile_id, 7, 45), "morning"):
+    if _of(w.run_due(profile_id, 7, 15), "morning"):
         raise fail("one morning card a day", why="a second one went")
     ok(
-        "07:20: nothing; 07:31, his breakfast: the morning card, the approved template "
-        "(he has not written in 24 hours), once — 07:45 sends nothing. "
+        "06:50: nothing; 07:01, the time his routine sets for it (breakfast is at 07:30): the "
+        "morning card, the approved template (he has not written in 24 hours), once — 07:15 "
+        "sends nothing. "
         + _line(morning)
         + ". What he reads:"
     )
     for line in (morning["text"] or "").splitlines():
         say(f"→ {line}")
 
-    # 4. The breakfast tablet's window closes at 09:30 with no Taken: the ladder.
-    rows = _of(w.run_due(profile_id, 9, 31), "dose")
+    # 4. The breakfast tablet's window closes at 08:30 with no Taken (the routine calls
+    #    breakfast due for an hour): the ladder.
+    rows = _of(w.run_due(profile_id, 8, 31), "dose")
     if [r["to_name"] for r in rows] != ["Pa"] or rows[0]["outcome"] != "sent":
         raise fail("the ladder asks Pa first", why=f"got {rows}")
-    ok("09:31, the window closed untapped: rung 0, Pa — " + _line(rows[0]))
+    ok("08:31, the window closed untapped: rung 0, Pa — " + _line(rows[0]))
     for line in (rows[0]["text"] or "").splitlines():
         say(f"→ {line}")
-    rows = _of(w.run_due(profile_id, 10, 1), "dose")
+    rows = _of(w.run_due(profile_id, 9, 1), "dose")
     if [r["to_name"] for r in rows] != ["Siti"] or rows[0]["outcome"] != "sent":
         raise fail("half an hour on, the ladder asks Siti", why=f"got {rows}")
-    ok("10:01, nobody answered: rung 1, the helper — " + _line(rows[0]) + ", in Malay:")
+    ok("09:01, nobody answered: rung 1, the helper — " + _line(rows[0]) + ", in Malay:")
     for line in (rows[0]["text"] or "").splitlines():
         say(f"→ {line}")
-    rows = _of(w.run_due(profile_id, 10, 31), "dose")
+    rows = _of(w.run_due(profile_id, 9, 31), "dose")
     if [r["to_name"] for r in rows] != ["Mei"] or rows[0]["outcome"] != "sent":
         raise fail("the third ask goes to the roster", why=f"got {rows}")
-    ok("10:31, still nobody: the third ask goes to the roster, not to him — " + _line(rows[0]))
+    ok("09:31, still nobody: the third ask goes to the roster, not to him — " + _line(rows[0]))
 
-    given = w.inbound(siti, "sudah beri", 10, 35)
+    given = w.inbound(siti, "sudah beri", 9, 35)
     if given["outcome"] != "taken":
         raise fail('Siti replies "sudah beri"', why=f"got {given}")
     today = check(
@@ -385,12 +388,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     )
     if not any(slot["taken"] for slot in today):
         raise fail("the Taken tap is on his list", why=f"got {today}")
-    if _of(w.run_due(profile_id, 11, 5), "dose"):
+    if _of(w.run_due(profile_id, 10, 5), "dose"):
         raise fail("the ladder stops at an answer", why="it asked again")
     ok(
         'Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast '
         "tablet — on the medicines key she holds, on the WhatsApp channel — and the ladder "
-        "stopped; 11:05 asks nobody. Her reply in the thread:"
+        "stopped; 10:05 asks nobody. Her reply in the thread:"
     )
     for sent in given["replies"]:
         for line in sent["text"].splitlines():
@@ -401,12 +404,17 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     #    every run after that wrote nothing, because the hold is written down once.
     w.run_due(profile_id, 12, 0)
     reorders = _of(w.seen, "reorder")
+    quiet = [r for r in reorders if r["outcome"] == "quiet"]
     sent = [r for r in reorders if r["outcome"] == "sent"]
     capped = [r for r in reorders if r["outcome"] == "capped"]
     if len(sent) != 1 or sent[0]["to_name"] != "Mei":
         raise fail("the reorder reaches Mei, once", why=f"got {reorders}")
-    if len(capped) != 1 or capped[0]["reason"] != "once a day" or len(reorders) != 2:
+    if len(capped) != 1 or capped[0]["reason"] != "once a day":
         raise fail("the second reorder that day is capped, once", why=f"got {reorders}")
+    if len(reorders) != len(quiet) + 2:
+        raise fail("the hold is written down once", why=f"got {reorders}")
+    if quiet:
+        ok(f"{quiet[0]['at']}, before 7 in the morning: the reorder was held for the quiet hours")
     ok(f"{sent[0]['at']}, the first run of the day, the reorder date reached: " + _line(sent[0]) + ":")
     for line in (sent[0]["text"] or "").splitlines():
         say(f"→ {line}")

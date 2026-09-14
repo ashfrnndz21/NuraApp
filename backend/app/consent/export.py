@@ -56,6 +56,7 @@ PURPOSE_TITLES: Mapping[ConsentPurpose, str] = {
     ConsentPurpose.SHARE_WITH_PERSON: "Who can see your papers",
     ConsentPurpose.RECORDING: "Recording when you see the doctor",
     ConsentPurpose.WHATSAPP: "Sending your Today page on WhatsApp",
+    ConsentPurpose.CALENDAR: "Looking in your calendar for visits to the doctor",
 }
 # @patient phrase
 CHANNEL_WORDS: Mapping[ConsentChannel, str] = {

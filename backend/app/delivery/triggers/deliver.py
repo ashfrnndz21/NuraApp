@@ -56,6 +56,7 @@ from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.medicines.models import DoseTaken, MedicationLine
 from app.regions import REGION_TZ
+from app.routines.service import current_routine
 from app.settings import Settings
 from app.state.service import StateView, current_state
 
@@ -289,13 +290,14 @@ async def open_run(
         limit=1,
         channel=Channel.SYSTEM,
     )
+    routine = await current_routine(session, context=acting)
     return Run(
         session=session,
         via=via,
         profile=profile,
         patient=patient,
         acting=acting,
-        config=config_of(settings[0] if settings else None),
+        config=config_of(settings[0] if settings else None, routine),
         at=as_utc(at),
     )
 

@@ -9,10 +9,14 @@ it goes first (`channels`: app push, then WhatsApp, then the caregiver, by defau
 a person may have of it in his day (`cap`) and whether it waits out the quiet hours. An
 alert — a red flag — has no cap and no quiet hours, and no setting can give it either.
 
-A profile changes the defaults with `DeliverySettings` (E11-05): the list and the cap per
-type, the quiet hours, the breakfast time the morning card and the breakfast tablet hang on
-(07:30 on his wall clock until a routine says otherwise, E11-10), and whether a quiet day's
-morning card is skipped. `Config` is those settings read over the defaults.
+The clock of his day is E10-01's routine (`app.routines`), not a second one kept here: the
+morning card goes at its `morning_card_at` (07:00 until the family sets the day, E11-10), a
+tablet hangs on its anchor's time (breakfast 07:30 until set), and a tablet's window runs from
+an hour before its anchor to the end of the routine's own "due" for that anchor (`DUE_FOR`,
+or the next anchor if that comes sooner) — untapped then, the ladder starts. A profile changes
+the delivery defaults with `DeliverySettings` (E11-05): the list and the cap per type, the
+quiet hours, and whether a quiet day's morning card is skipped. `Config` is those settings
+and the routine's day read over the defaults.
 """
 
 from __future__ import annotations
@@ -33,6 +37,8 @@ from app.delivery.triggers.models import (
 from app.errors import Refusal
 from app.keys.scopes import Scope
 from app.medicines.dose import Anchor
+from app.routines.models import Routine
+from app.routines.service import ANCHORS, DUE_FOR, Day, day_of
 
 EVERYWHERE: tuple[DeliveryChannel, ...] = (
     DeliveryChannel.APP_PUSH,
@@ -136,18 +142,10 @@ RULES: Mapping[TriggerType, Rule] = {
     )
 }
 
-BREAKFAST_AT = time(7, 30)
-"""The breakfast anchor on his wall clock until the family or a routine says otherwise."""
-ANCHOR_AT: Mapping[Anchor, time] = {
-    Anchor.BREAKFAST: BREAKFAST_AT,
-    Anchor.LUNCH: time(12, 30),
-    Anchor.DINNER: time(18, 30),
-    Anchor.BED: time(21, 0),
-}
 WINDOW_BEFORE = timedelta(hours=1)
-WINDOW_AFTER = timedelta(hours=2)
-"""A dose's window: an hour before its anchor to two hours after. Untapped at the end of it,
-the ladder starts."""
+"""A tablet may be tapped from an hour before its anchor; its window closes at the end of the
+routine's "due" for that anchor (`app.routines.service.DUE_FOR`). Untapped then, the ladder
+starts."""
 MORNING_LATEST = timedelta(hours=3)
 """A morning card not sent by three hours after breakfast is dropped, never sent late."""
 
@@ -162,7 +160,8 @@ class NotASetting(Refusal):
 
 @dataclass(frozen=True, slots=True)
 class Config:
-    breakfast_at: time = BREAKFAST_AT
+    day: Day = field(default_factory=lambda: day_of(None))
+    """His day as E10-01's routine sets it: the anchors' times and the morning card's."""
     skip_quiet_days: bool = False
     quiet_from: time = QUIET_FROM
     quiet_until: time = QUIET_UNTIL
@@ -186,24 +185,31 @@ class Config:
         return self.quiet_from <= at < self.quiet_until
 
     def anchor_at(self, anchor: str) -> time:
-        if anchor == Anchor.BREAKFAST.value:
-            return self.breakfast_at
-        return ANCHOR_AT[Anchor(anchor)]
+        return self.day.anchors[Anchor(anchor).value]
 
     def window(self, day: date, anchor: str, tz: ZoneInfo) -> tuple[datetime, datetime]:
-        """When a dose at this anchor on this day of his may be tapped: opens, closes."""
+        """When a tablet at this anchor on this day of his may be tapped: opens, closes. It
+        closes where the routine stops calling the anchor due: `DUE_FOR` after it, or at the
+        next anchor if that comes sooner (`app.routines.service.due_at`)."""
         at = datetime.combine(day, self.anchor_at(anchor), tz)
-        return at - WINDOW_BEFORE, at + WINDOW_AFTER
+        closes = at + DUE_FOR
+        order = list(ANCHORS)
+        after = order.index(Anchor(anchor).value) + 1
+        if after < len(order):
+            closes = min(closes, datetime.combine(day, self.day.anchors[order[after]], tz))
+        return at - WINDOW_BEFORE, closes
 
-    def breakfast(self, day: date, tz: ZoneInfo) -> datetime:
-        return datetime.combine(day, self.breakfast_at, tz)
+    def morning(self, day: date, tz: ZoneInfo) -> datetime:
+        """When the morning card goes: the routine's `morning_card_at` on this day of his."""
+        return datetime.combine(day, self.day.morning_card_at, tz)
 
 
-def config_of(row: DeliverySettings | None) -> Config:
+def config_of(row: DeliverySettings | None, routine: Routine | None = None) -> Config:
+    day = day_of(routine)
     if row is None:
-        return Config()
+        return Config(day=day)
     return Config(
-        breakfast_at=row.breakfast_at or BREAKFAST_AT,
+        day=day,
         skip_quiet_days=row.skip_quiet_days,
         quiet_from=row.quiet_from or QUIET_FROM,
         quiet_until=row.quiet_until or QUIET_UNTIL,

@@ -26,7 +26,7 @@ from app.delivery.triggers.engine import run_due
 from app.delivery.triggers.ladder import acknowledge_flag
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, TriggerType
 from app.delivery.triggers.preferences import change, current, log
-from app.delivery.triggers.rules import Config, config_of
+from app.delivery.triggers.rules import Config
 from app.settings import Settings
 
 router = APIRouter(tags=["delivery"])
@@ -38,9 +38,6 @@ def via_of(request: Request) -> Via:
 
 
 class SettingsIn(BaseModel):
-    breakfast_at: time | None = None
-    """His breakfast on his wall clock: the morning card and the breakfast tablet hang on it.
-    Null for the default, 07:30."""
     skip_quiet_days: bool = False
     quiet_from: time | None = None
     quiet_until: time | None = None
@@ -51,7 +48,10 @@ class SettingsIn(BaseModel):
 
 
 class SettingsOut(BaseModel):
-    breakfast_at: time
+    morning_card_at: time
+    """When the morning card goes: E10-01's routine (`PUT …/routine` sets it), 07:00 until set."""
+    anchors: dict[str, time]
+    """The routine's anchors the tablets hang on (breakfast 07:30 until set)."""
     skip_quiet_days: bool
     quiet_from: time
     quiet_until: time
@@ -63,7 +63,8 @@ class SettingsOut(BaseModel):
     @classmethod
     def of(cls, config: Config, row: DeliverySettings | None) -> SettingsOut:
         return cls(
-            breakfast_at=config.breakfast_at,
+            morning_card_at=config.day.morning_card_at,
+            anchors=dict(config.day.anchors),
             skip_quiet_days=config.skip_quiet_days,
             quiet_from=config.quiet_from,
             quiet_until=config.quiet_until,
@@ -182,17 +183,18 @@ async def settings_now(context: Context, session: Db) -> SettingsOut:
 async def settings_change(body: SettingsIn, context: Context, session: Db) -> SettingsOut:
     """Change them: a new row, the newest in force. An alert's cap is refused
     (`AlertsAreNeverHeld`, 400)."""
-    row = await change(
+    changed = await change(
         session,
         context=context,
-        breakfast_at=body.breakfast_at,
         skip_quiet_days=body.skip_quiet_days,
         quiet_from=body.quiet_from,
         quiet_until=body.quiet_until,
         channels=body.channels,
         caps=body.caps,
     )
-    return SettingsOut.of(config_of(row), row)
+    config, row = await current(session, context=context)
+    assert row is not None and row.id == changed.id
+    return SettingsOut.of(config, row)
 
 
 @router.get("/profiles/{profile_id}/deliveries")
