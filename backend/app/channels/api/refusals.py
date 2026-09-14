@@ -12,7 +12,13 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
-from app.channels.api.profiles import ConsentNotRecordedYet, NoSuchHolder
+from app.channels.api.profiles import NoSuchHolder
+from app.consent.service import (
+    NoConsent,
+    NoConsentToWithdraw,
+    NotTheirConsentToGive,
+    NotTheirConsentToWithdraw,
+)
 from app.errors import Refusal
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned
@@ -28,7 +34,11 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
     (NoSuchHolder, 403),
-    (ConsentNotRecordedYet, 501),
+    # No consent in force for the act: withheld, withdrawn or out of date, by name.
+    (NoConsent, 403),
+    (NotTheirConsentToGive, 403),
+    (NotTheirConsentToWithdraw, 403),
+    (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),

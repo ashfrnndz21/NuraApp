@@ -20,24 +20,21 @@ from app.keys.scopes import KeyRole, Scope
 from app.notes.models import Note
 from app.notes.service import list_notes, write_note
 from app.regions import Region
+from tests.support import OPENING_CONSENT, agree_to_family_sharing
 
 
 async def test_a_unit_that_writes_then_refuses_keeps_the_refused_line_and_not_the_write(
     sg: AsyncSession,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    profile = await create_own_profile(sg, region=Region.SG, owner=pa)
+    profile = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
+    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES])
     await grant_key(
-        sg,
-        context=owner,
-        holder=daughter,
-        role=KeyRole.CAREGIVER,
-        scopes=[Scope.MEDICINES],
-        basis="owner_consent",
+        sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, scopes=[Scope.MEDICINES]
     )
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id

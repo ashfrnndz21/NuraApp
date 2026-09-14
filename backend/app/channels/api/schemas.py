@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
+from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.service import RecordConsent
 from app.identity.models import Person, Profile
 from app.keys.context import KeyContext
 from app.keys.models import Key
@@ -94,13 +96,85 @@ class ConsentIn(BaseModel):
     """The agreement the owner gave to Nura holding his record, as the app captured it.
 
     Which words (by version), in which language he read them, and how — in the app, on
-    WhatsApp, on paper, or spoken and witnessed. Recording it is E00-02; the door takes it
-    from the first day so no profile is ever opened without it.
+    WhatsApp, on paper, or spoken and witnessed. It becomes the `HOLD_HEALTH_RECORD`
+    consent recorded on the new profile in the same transaction (E00-02); words that are
+    not today's words on file refuse before a profile exists.
     """
 
-    wording_version: str = Field(min_length=1, max_length=16, pattern=r"^[0-9A-Za-z._-]+$")
+    wording_version: str = Field(min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._-]+$")
     language: str = Field(min_length=2, max_length=16)
-    captured_via: Literal["app", "whatsapp", "paper", "verbal_witnessed"]
+    captured_via: ConsentChannel
+
+    def as_record(self) -> RecordConsent:
+        return RecordConsent(
+            text_version=self.wording_version,
+            language=self.language,
+            captured_via=self.captured_via,
+        )
+
+
+class SharingConsentIn(BaseModel):
+    """The owner lets one person in: who, to which parts, and who they are to him.
+
+    The words the patient reads are rendered with that name and those parts and kept as
+    read. A key for this person can only be cut once this is in force, and never wider.
+    """
+
+    holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
+    holder_person_id: uuid.UUID | None = None
+    scopes: list[Scope] = Field(min_length=1)
+    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: ConsentChannel
+    wording_version: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._-]+$"
+    )
+
+    @model_validator(mode="after")
+    def _one_holder(self) -> SharingConsentIn:
+        if (self.holder_phone_e164 is None) == (self.holder_person_id is None):
+            raise ValueError("name the holder by phone number or by person id, one of the two")
+        return self
+
+
+class ConsentOut(BaseModel):
+    """One agreement on the profile, as the owner or his chief reads it back."""
+
+    consent_id: uuid.UUID
+    purpose: ConsentPurpose
+    person_id: uuid.UUID
+    holder_person_id: uuid.UUID | None
+    scopes: list[Scope] | None
+    text_version: str
+    language: str
+    wording_text: str
+    captured_via: ConsentChannel
+    basis: ConsentBasis
+    granted_at: datetime
+    revoked_at: datetime | None
+    revoked_by_person_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, consent: Consent) -> ConsentOut:
+        return cls(
+            consent_id=consent.id,
+            purpose=consent.purpose,
+            person_id=consent.person_id,
+            holder_person_id=consent.holder_person_id,
+            scopes=(
+                sorted(Scope(name) for name in consent.scopes)
+                if consent.scopes is not None
+                else None
+            ),
+            text_version=consent.text_version,
+            language=consent.language,
+            wording_text=consent.wording_text,
+            captured_via=consent.captured_via,
+            basis=consent.basis,
+            granted_at=consent.granted_at,
+            revoked_at=consent.revoked_at,
+            revoked_by_person_id=consent.revoked_by_person_id,
+        )
 
 
 class ProfileCreate(BaseModel):
@@ -135,14 +209,17 @@ class ProfileOut(BaseModel):
 
 
 class KeyGrant(BaseModel):
-    """Cut a key: for whom, as what, over which parts, for how long, on what basis."""
+    """Cut a key: for whom, as what, over which parts, for how long.
+
+    The key rests on the sharing consent the owner gave for this person
+    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused.
+    """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
     holder_person_id: uuid.UUID | None = None
     role: KeyRole
     scopes: list[Scope] | None = None
     window: KeyWindow | None = None
-    basis: str = Field(min_length=1, max_length=64)
 
     @model_validator(mode="after")
     def _one_holder(self) -> KeyGrant:
@@ -157,7 +234,7 @@ class KeyOut(BaseModel):
     holder_person_id: uuid.UUID
     role: KeyRole
     scopes: list[Scope]
-    basis: str
+    consent_id: uuid.UUID | None
     granted_by_person_id: uuid.UUID
     granted_at: datetime
     expires_at: datetime | None
@@ -171,7 +248,7 @@ class KeyOut(BaseModel):
             holder_person_id=key.holder_person_id,
             role=key.role,
             scopes=sorted(key.scopes_held),
-            basis=key.basis,
+            consent_id=key.consent_id,
             granted_by_person_id=key.granted_by_person_id,
             granted_at=key.granted_at,
             expires_at=key.expires_at,

@@ -110,9 +110,13 @@ async def assert_fact(
     starts = valid_from or moment
     _check_window(starts, valid_to)
     sure = _check_confidence(confidence)
-    # Keeping a fact rests on the consent to hold the record (E00-02).
+    # Keeping a fact rests on the consent to hold the record (E00-02). The gate runs under
+    # the scope of the act it guards, which is the subject's (`app.keys.scopes`).
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=scope_for_subject(subject),
         now=now,
     )
     await _check_provenance(

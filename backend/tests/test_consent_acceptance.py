@@ -212,7 +212,11 @@ async def test_nothing_is_kept_once_the_consent_to_keep_it_is_withdrawn(
         )
     with pytest.raises(ConsentRevoked):
         await record_event(
-            sg, context=owner, kind=EventKind.READING, occurred_at=later, artifact_id=photo.id,
+            sg,
+            context=owner,
+            kind=EventKind.READING,
+            occurred_at=later,
+            artifact_id=photo.id,
             now=later,
         )
     with pytest.raises(ConsentRevoked):
@@ -354,7 +358,10 @@ async def test_withdrawing_sharing_from_one_person_closes_their_keys_within_a_mi
     a_minute_short = a_week_on + timedelta(seconds=59)
     with pytest.raises(NoKey):
         await resolve_key_context(
-            sg, region=Region.SG, person_id=neighbour.id, profile_id=profile.id,
+            sg,
+            region=Region.SG,
+            person_id=neighbour.id,
+            profile_id=profile.id,
             now=a_minute_short,
         )
     for person in (family[KeyRole.CAREGIVER], family[KeyRole.CHIEF]):
@@ -509,13 +516,14 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         now=CLAIMED_AT + timedelta(days=40, hours=1),
     )
     await grant_key(
-        sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER,
+        sg,
+        context=owner,
+        holder=daughter,
+        role=KeyRole.CAREGIVER,
         now=CLAIMED_AT + timedelta(days=40, hours=1),
     )
 
-    record = await export_consent_record(
-        sg, context=owner, now=CLAIMED_AT + timedelta(days=41)
-    )
+    record = await export_consent_record(sg, context=owner, now=CLAIMED_AT + timedelta(days=41))
 
     # The structured half: one entry per consent ever given, oldest first.
     assert record.document["profile"] == {
@@ -526,7 +534,10 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
     assert record.document["prepared_at"] == "2026-10-25T08:00:00+00:00"
     entries = record.document["consents"]
     assert [entry["id"] for entry in entries] == [
-        str(first.id), str(second.id), str(whatsapp.id), str(sharing.id)
+        str(first.id),
+        str(second.id),
+        str(whatsapp.id),
+        str(sharing.id),
     ]
     assert entries[0]["version"] == "1" and entries[0]["status"] == "out_of_date"
     assert entries[1]["version"] == current_version(ConsentPurpose.HOLD_HEALTH_RECORD) == "2"
@@ -578,11 +589,11 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
     assert (
         "## Who can see your papers\n\n"
         "- You said yes in the app on Saturday 24 October 2026.\n"
-        "  Daughter can see these parts:\n" + parts +
-        "  These are the words you read in English:\n"
+        "  Daughter can see these parts:\n" + parts + "  These are the words you read in English:\n"
         "  You are letting Daughter, your daughter, see some of your record.\n"
-        "  Daughter can see these parts:\n" + parts +
-        "  Daughter can see them until you say stop.\n"
+        "  Daughter can see these parts:\n"
+        + parts
+        + "  Daughter can see them until you say stop.\n"
         "  You can stop this at any time."
     ) in text
     for jargon in ("UTC", "version", "08:00", "in force", "withdrew", "SG", "agreed", "Pa"):
@@ -653,9 +664,7 @@ async def test_a_page_made_for_the_chief_names_the_patient(sg: AsyncSession) -> 
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
     await agree_to_family_sharing(sg, owner, son, now=CLAIMED_AT)
     await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF, now=CLAIMED_AT)
-    chief = await resolve_key_context(
-        sg, region=Region.SG, person_id=son.id, profile_id=profile.id
-    )
+    chief = await resolve_key_context(sg, region=Region.SG, person_id=son.id, profile_id=profile.id)
     text = (await export_consent_record(sg, context=chief, now=CLAIMED_AT)).rendered.body.decode()
     assert text.startswith("# What Pa said yes to\n\nPa said yes to the things on this page.")
     assert "Nura made this page for Son on Monday 14 September 2026." in text
@@ -664,7 +673,9 @@ async def test_a_page_made_for_the_chief_names_the_patient(sg: AsyncSession) -> 
 
 async def test_a_key_is_never_wider_than_the_words_the_patient_read(sg: AsyncSession) -> None:
     _, _, owner = await _pa(sg)
-    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
+    siti = await register_person(
+        sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
+    )
     let_in = await agree_to_family_sharing(sg, owner, siti, scopes={Scope.MEDICINES})
     assert let_in.wording_text.splitlines()[:3] == [
         "You are letting Siti see some of your record.",
@@ -700,7 +711,9 @@ async def test_who_else_was_let_in_is_read_under_the_family_scope_whatever_the_a
     sg: AsyncSession,
 ) -> None:
     _, profile, owner = await _pa(sg)
-    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
+    siti = await register_person(
+        sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
+    )
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )

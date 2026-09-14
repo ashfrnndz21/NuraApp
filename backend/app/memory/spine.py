@@ -51,7 +51,10 @@ async def add_provider(
     """Add a doctor, clinic, hospital or pharmacy to this profile's directory."""
     # The directory is kept on the same footing as the rest of the record (E00-02).
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.VISITS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.VISITS,
         now=now,
     )
     if not name.strip():
@@ -92,7 +95,10 @@ async def book_appointment(
 ) -> Appointment:
     """Write down an appointment a person has arranged with a provider on this profile."""
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.VISITS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.VISITS,
         now=now,
     )
     named = short_label(purpose)

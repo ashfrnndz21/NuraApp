@@ -62,52 +62,52 @@ GIVEN_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 # Editing shipped words fails this test; the only way to change what a person is asked to
 # agree to is a new version, appended below the old one.
 SHIPPED_WORDS: dict[tuple[str, str, str, str | None], str] = {
-    ('hold_health_record', '1', 'en', 'SG'): (
+    ("hold_health_record", "1", "en", "SG"): (
         "2aea4af78b13a6fdae529b78d1928ff776c5e67bf6e71ba71e34ea48dc02dbf5"
     ),
-    ('hold_health_record', '1', 'en', 'MY'): (
+    ("hold_health_record", "1", "en", "MY"): (
         "63d5b2baeda85fc14284d3457a23928c4c1a0dba749e270002511fbe1840a025"
     ),
-    ('hold_health_record', '1', 'ms', 'SG'): (
+    ("hold_health_record", "1", "ms", "SG"): (
         "b009031c9853727a5b02f550187b931e6fcf626f10143faae3a84738e0a1a51f"
     ),
-    ('hold_health_record', '1', 'ms', 'MY'): (
+    ("hold_health_record", "1", "ms", "MY"): (
         "0aba6a356b3c07edcd145ad1a64338fbb33c663e652fdbbd55b8645bf5ff9953"
     ),
-    ('hold_health_record', '1', 'zh', 'SG'): (
+    ("hold_health_record", "1", "zh", "SG"): (
         "bdec731b3823f2610e38c7d4701971af27bcc389ccb7bcb1fe516af6184df23a"
     ),
-    ('hold_health_record', '1', 'zh', 'MY'): (
+    ("hold_health_record", "1", "zh", "MY"): (
         "fc2658c5698e33f0816d9e2eee07e7894bb9e52b930a8b3be68fd9c3fc2af254"
     ),
-    ('share_with_family', '1', 'en', None): (
+    ("share_with_family", "1", "en", None): (
         "ef22011a7d39e10bae9b0290acc235434b53573e0590042d574e86cc0e7632a2"
     ),
-    ('share_with_family', '2', 'en', None): (
+    ("share_with_family", "2", "en", None): (
         "e2b00d6b1f5072de1d8fc9a3848263de7dd26d41c2377fea7b726ceda0645db0"
     ),
-    ('share_with_family', '2', 'ms', None): (
+    ("share_with_family", "2", "ms", None): (
         "da5308c6de39947d364fc14432aaf1a7b433bfb6a1585388aa1a0bc7e052d5be"
     ),
-    ('share_with_family', '2', 'zh', None): (
+    ("share_with_family", "2", "zh", None): (
         "939138cd82fb2d96f9197f221f4a960785d235556908a86e384d6a8c4020bc25"
     ),
-    ('recording', '1', 'en', None): (
+    ("recording", "1", "en", None): (
         "198f6e974300bd444db2daac51b432a39ddf297f6367cca507712040fb2387dc"
     ),
-    ('recording', '1', 'ms', None): (
+    ("recording", "1", "ms", None): (
         "1c46a6e298b9f1adc84819a2b2b0989e713352cac13adfbed8129ef256c86870"
     ),
-    ('recording', '1', 'zh', None): (
+    ("recording", "1", "zh", None): (
         "1bca2bf9b2e3f6cc062def6511c5ab1f2e5657762305caf5540fee98b378487b"
     ),
-    ('whatsapp', '1', 'en', None): (
+    ("whatsapp", "1", "en", None): (
         "1283a808cf6d595478dea88539a79a780b501a10e57a52e3a2ecff8c7cea1ed7"
     ),
-    ('whatsapp', '1', 'ms', None): (
+    ("whatsapp", "1", "ms", None): (
         "12fbab219fbba2bae475b3abc7413b46fb3af3ce4d6f1f0ab79d86b6c50dc0ee"
     ),
-    ('whatsapp', '1', 'zh', None): (
+    ("whatsapp", "1", "zh", None): (
         "a957b200988658c0da126071b6131cd5fb76a8bee528e24de7ba09f81fcf37e7"
     ),
 }
@@ -233,7 +233,11 @@ def test_the_record_can_put_words_to_every_purpose_basis_channel_and_region() ->
         assert all(line.count(". ") == 0 for line in lines), "one idea per line"
     spoken = basis_lines(
         ConsentBasis.VERBAL_RECORDED,
-        giver="Ash", patient="Pa", patients="Pa's", witness="Mei", recording_kept=True,
+        giver="Ash",
+        patient="Pa",
+        patients="Pa's",
+        witness="Mei",
+        recording_kept=True,
     )
     assert spoken == [
         "Pa said yes out loud.",
@@ -535,7 +539,9 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(sg: AsyncSessio
 async def test_a_gate_is_only_open_to_someone_the_act_itself_is_open_to(sg: AsyncSession) -> None:
     """The consent check runs under the scope of the act it guards, never wider."""
     owner, _ = await _pa_and_his_son(sg)
-    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
+    siti = await register_person(
+        sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
+    )
     await agree_to_family_sharing(sg, owner, siti)
     await grant_key(sg, context=owner, holder=siti, role=KeyRole.HELPER)
     helper = await resolve_key_context(

@@ -241,7 +241,9 @@ class PlainTextRenderer:
                     lines.append(f"  {cap(line)}")
                 if entry["wording"]:
                     if entry["language_name"]:
-                        lines.append(f"  These are the words {giver} read in {entry['language_name']}:")
+                        lines.append(
+                            f"  These are the words {giver} read in {entry['language_name']}:"
+                        )
                     else:
                         lines.append(f"  These are the words {giver} read:")
                     lines.extend(f"  {line}" for line in _lines_of(entry["wording"]))

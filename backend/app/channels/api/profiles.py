@@ -8,6 +8,8 @@ module arrives with E04 and will replace the placeholder read.
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import uuid
 from datetime import datetime
 
@@ -19,6 +21,7 @@ from app.audit.trail import read_audit
 from app.channels.api.deps import Context, CurrentPerson, Db, settings_of
 from app.channels.api.schemas import (
     AuditOut,
+    ConsentOut,
     KeyGrant,
     KeyOut,
     MedicineOut,
@@ -26,7 +29,10 @@ from app.channels.api.schemas import (
     NoteOut,
     ProfileCreate,
     ProfileOut,
+    SharingConsentIn,
 )
+from app.consent.models import ConsentBasis, ConsentPurpose
+from app.consent.service import Sharing, all_consents, grant_consent
 from app.errors import Refusal
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
@@ -37,6 +43,7 @@ from app.memory.semantic import current_facts
 from app.notes.service import list_notes, write_note
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+log = logging.getLogger("nura.channels.api")
 
 
 class NoSuchHolder(Refusal):
@@ -47,36 +54,34 @@ class NoSuchHolder(Refusal):
     """
 
 
-class ConsentNotRecordedYet(Refusal):
-    """The door takes the owner's agreement but cannot yet write it down, so it stays shut.
-
-    Consent at claim is recorded by the consent service (E00-02). Until that lands, opening
-    a profile here would answer as though the agreement were on file when it is not, so the
-    route refuses instead. Nothing between now and that merge claims a consent it did not
-    record.
-    """
-
-
 @router.post("/mine", status_code=status.HTTP_201_CREATED)
 async def create_mine(
     body: ProfileCreate, request: Request, person: CurrentPerson, session: Db
 ) -> ProfileOut:
     """Open the caller's own health graph, here, pinned to this region.
 
-    Shut until the consent service can record the agreement: see `ConsentNotRecordedYet`.
+    The agreement he gave is recorded on it as the `HOLD_HEALTH_RECORD` consent in the same
+    transaction; words that are not today's words on file refuse first, and no profile is
+    opened. Those refusals have no profile to be written under, so the channel logs them
+    at the account, by a handle.
     """
     region = settings_of(request).region
-    if body.consent is not None:  # always: the door is shut until E00-02 records the agreement
-        raise ConsentNotRecordedYet("consent at claim is not recorded yet (E00-02)")
-    # What the door does once the consent service can record what it was given:
-    profile = await create_own_profile(
-        session,
-        region=region,
-        owner=person,
-        consent=body.consent.model_dump(),
-        display_name=body.display_name,
-        language=body.language,
-    )
+    try:
+        profile = await create_own_profile(
+            session,
+            region=region,
+            owner=person,
+            consent=body.consent.as_record(),
+            display_name=body.display_name,
+            language=body.language,
+        )
+    except Refusal as refusal:
+        log.info(
+            "profile door refused: refusal=%s account=%s",
+            type(refusal).__name__,
+            hashlib.sha256(str(person.id).encode()).hexdigest()[:8],
+        )
+        raise
     context = await resolve_key_context(
         session, region=region, person_id=person.id, profile_id=profile.id
     )
@@ -95,7 +100,7 @@ async def get_profile(context: Context, session: Db) -> ProfileOut:
 # --- keys --------------------------------------------------------------------------------
 
 
-async def _holder(session: Db, *, request: Request, body: KeyGrant) -> Person:
+async def _holder(session: Db, *, request: Request, body: KeyGrant | SharingConsentIn) -> Person:
     """The person the key is for.
 
     By phone, a number that is not an account yet becomes one — a name-less account the
@@ -126,7 +131,6 @@ async def grant(body: KeyGrant, request: Request, context: Context, session: Db)
         role=body.role,
         scopes=body.scopes,
         window=body.window,
-        basis=body.basis,
     )
     return KeyOut.of(key)
 
@@ -139,6 +143,44 @@ async def keys(context: Context, session: Db) -> list[KeyOut]:
 @router.delete("/{profile_id}/keys/{key_id}")
 async def revoke(key_id: uuid.UUID, context: Context, session: Db) -> KeyOut:
     return KeyOut.of(await revoke_key(session, context=context, key_id=key_id))
+
+
+# --- consent -----------------------------------------------------------------------------
+
+
+@router.get("/{profile_id}/consents")
+async def consents(context: Context, session: Db) -> list[ConsentOut]:
+    """Every agreement ever given on this profile, withdrawn ones included, oldest first.
+    Read under the family scope: the owner's and his chief's."""
+    return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
+
+
+@router.post("/{profile_id}/consents/sharing", status_code=status.HTTP_201_CREATED)
+async def let_someone_in(
+    body: SharingConsentIn, request: Request, context: Context, session: Db
+) -> ConsentOut:
+    """The owner agrees to let one person in, to these parts of his record.
+
+    This is what a key for that person rests on: `POST /profiles/{id}/keys` is refused
+    (`ConsentWithheld`) until it is in force. The owner agrees for himself; anyone else
+    needs a recorded proxy basis, which is not on this route.
+    """
+    holder = await _holder(session, request=request, body=body)
+    consent = await grant_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
+        captured_via=body.captured_via,
+        basis=ConsentBasis.OWNER,
+        language=body.language,
+        sharing=Sharing(
+            holder=holder,
+            scopes=frozenset(body.scopes) - {Scope.PROFILE},
+            relationship=body.relationship,
+        ),
+        text_version=body.wording_version,
+    )
+    return ConsentOut.of(consent)
 
 
 # --- the audit trail ---------------------------------------------------------------------

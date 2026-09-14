@@ -6,10 +6,8 @@ read the code from: nothing on the wire carries it.
 
 from __future__ import annotations
 
-import uuid
-
-from app.identity.models import Person
-from app.identity.service import create_own_profile
+from app.consent.models import ConsentPurpose
+from app.consent.texts import current_version
 from tests.conftest import Deployment
 
 
@@ -35,20 +33,44 @@ async def register_by_phone(
     return session
 
 
-CONSENT = {"wording_version": "1", "language": "en", "captured_via": "app"}
-"""The agreement every door takes: which words, in which language, captured how."""
+CONSENT = {
+    "wording_version": current_version(ConsentPurpose.HOLD_HEALTH_RECORD),
+    "language": "en",
+    "captured_via": "app",
+}
+"""The agreement every door takes: today's words, in English, in the app."""
 
 
 async def own_profile(deployment: Deployment, session: dict[str, str], **body: str) -> str:
-    """Open this person's own health graph on the deployment; its id.
+    """Open this person's own health graph over HTTP, with today's agreement; its id."""
+    created = await deployment.client.post(
+        "/profiles/mine", json={"consent": CONSENT, **body}, headers=bearer(session["token"])
+    )
+    assert created.status_code == 201, created.text
+    profile_id: str = created.json()["profile_id"]
+    return profile_id
 
-    `POST /profiles/mine` is shut until the consent service can record the agreement
-    (`ConsentNotRecordedYet`), so the tests open the graph through the service, the way the
-    consent merge will wire the door. Committed, so the app's own sessions see it.
-    """
-    async with deployment.sessions() as db:
-        person = await db.get(Person, uuid.UUID(session["person_id"]))
-        assert person is not None
-        profile = await create_own_profile(db, region=deployment.region, owner=person, **body)
-        await db.commit()
-        return str(profile.id)
+
+async def let_in(
+    deployment: Deployment,
+    owner: dict[str, str],
+    profile_id: str,
+    holder_phone_e164: str,
+    scopes: list[str],
+    relationship: str | None = None,
+) -> dict[str, object]:
+    """The owner agrees to let this number in, to these parts; what a key rests on."""
+    agreed = await deployment.client.post(
+        f"/profiles/{profile_id}/consents/sharing",
+        json={
+            "holder_phone_e164": holder_phone_e164,
+            "scopes": scopes,
+            "relationship": relationship,
+            "language": "en",
+            "captured_via": "app",
+        },
+        headers=bearer(owner["token"]),
+    )
+    assert agreed.status_code == 201, agreed.text
+    consent: dict[str, object] = agreed.json()
+    return consent

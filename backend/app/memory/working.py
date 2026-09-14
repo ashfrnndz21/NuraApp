@@ -65,7 +65,10 @@ async def open_episode(
     """Start an episode, refused while one of the same kind is open."""
     # Keeping an episode rests on the consent to hold the record (E00-02).
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.RECORDS,
         now=now,
     )
     named = short_label(label)

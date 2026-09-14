@@ -14,19 +14,20 @@ import logging
 import uuid
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
+from app.keys.scopes import Scope
 from app.regions import Region
-from tests.api import CONSENT, bearer, own_profile, register_by_phone
+from tests.api import CONSENT, bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 
 PA = "+6591110001"
 DAUGHTER = "+6591110002"
 SON = "+6591110004"
 PRIVATE = "I did not tell the children about the fall."
+SCOPE_NAMES = tuple(scope.value for scope in Scope if scope is not Scope.PROFILE)
 
 
 async def _pa_with_a_note(deployment: Deployment) -> tuple[dict[str, str], str]:
@@ -41,18 +42,19 @@ async def _pa_with_a_note(deployment: Deployment) -> tuple[dict[str, str], str]:
 
 
 async def _caregiver_key(
-    client: AsyncClient, owner_token: str, profile_id: str, holder_phone: str
+    deployment: Deployment, owner: dict[str, str], profile_id: str, holder_phone: str
 ) -> dict[str, object]:
-    granted = await client.post(
+    """Pa lets the number in to medicines and visits, then cuts a caregiver key on that."""
+    await let_in(deployment, owner, profile_id, holder_phone, ["medicines", "visits"], "daughter")
+    granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={
             "holder_phone_e164": holder_phone,
             "role": "caregiver",
             "scopes": ["medicines", "visits"],
             "window": "thirty_days",
-            "basis": "owner_consent",
         },
-        headers=bearer(owner_token),
+        headers=bearer(owner["token"]),
     )
     assert granted.status_code == 201, granted.text
     key: dict[str, object] = granted.json()
@@ -67,7 +69,7 @@ async def test_a_caregiver_key_scoped_to_medicines_and_visits_cannot_read_notes(
 ) -> None:
     pa, profile_id = await _pa_with_a_note(deployment)
     daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
-    key = await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    key = await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
     assert key["holder_person_id"] == daughter["person_id"]
     assert key["scopes"] == ["medicines", "profile", "visits"]
     hers = bearer(daughter["token"])
@@ -116,6 +118,10 @@ async def test_a_caregiver_key_scoped_to_medicines_and_visits_cannot_read_notes(
     theirs = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=hers)
     assert theirs.status_code == 403
     assert theirs.json() == {"refusal": "NotTheirsToRead"}
+    # Nor the record of who was let in.
+    agreements = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=hers)
+    assert agreements.status_code == 403
+    assert agreements.json() == {"refusal": "OutOfScope", "scope": "family"}
 
 
 async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deployment) -> None:
@@ -124,10 +130,11 @@ async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deploymen
     son = await register_by_phone(deployment, SON, "Son")
     his = bearer(pa["token"])
 
-    hers = await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    hers = await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
+    await let_in(deployment, pa, profile_id, SON, list(SCOPE_NAMES), "son")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_person_id": son["person_id"], "role": "chief", "basis": "owner_consent"},
+        json={"holder_person_id": son["person_id"], "role": "chief"},
         headers=his,
     )
     assert granted.status_code == 201
@@ -140,9 +147,9 @@ async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deploymen
         (hers["key_id"], daughter["person_id"], "caregiver"),
         (chief["key_id"], son["person_id"], "chief"),
     }
-    # Every key names who cut it and rests on a basis.
+    # Every key names who cut it and the consent it rests on.
     assert {k["granted_by_person_id"] for k in listed.json()} == {pa["person_id"]}
-    assert {k["basis"] for k in listed.json()} == {"owner_consent"}
+    assert all(k["consent_id"] is not None for k in listed.json())
 
     # Holding a key is not the same as reading who else holds one.
     theirs = await deployment.client.get(
@@ -236,15 +243,14 @@ async def test_no_profile_route_is_reachable_without_a_key_context(
 # --- the owner's own profile -------------------------------------------------------------
 
 
-async def test_the_for_me_door_is_shut_until_consent_can_be_recorded(
+async def test_the_for_me_door_records_the_agreement_it_was_given(
     deployment: Deployment,
 ) -> None:
-    """The door takes the agreement and validates it, and then refuses: until the consent
-    service (E00-02) can write it down, answering 201 would claim a consent nobody recorded."""
+    """Opening a profile is agreeing to Nura keeping it: the door takes today's words and
+    records a HOLD_HEALTH_RECORD consent in the same transaction; stale words open nothing."""
     pa = await register_by_phone(deployment, PA, "Pa")
     his = bearer(pa["token"])
 
-    # No agreement, or an agreement in words the door does not know: not even a refusal.
     unsigned = await deployment.client.post(
         "/profiles/mine", json={"display_name": "Pa"}, headers=his
     )
@@ -256,21 +262,43 @@ async def test_the_for_me_door_is_shut_until_consent_can_be_recorded(
     )
     assert unknown.status_code == 422
 
-    # A well-formed agreement: refused by name, because it cannot be recorded yet.
-    shut = await deployment.client.post(
-        "/profiles/mine",
-        json={"consent": CONSENT, "display_name": "Pa", "language": "ms"},
-        headers=his,
-    )
-    assert shut.status_code == 501
-    assert shut.json() == {"refusal": "ConsentNotRecordedYet"}
-
-    # And nothing was opened or written down on the way.
+    # Words that have moved on, or in a language Nura does not speak: refused, nothing opened.
+    for stale in ({**CONSENT, "wording_version": "0"}, {**CONSENT, "language": "xx"}):
+        refused = await deployment.client.post(
+            "/profiles/mine", json={"consent": stale, "display_name": "Pa"}, headers=his
+        )
+        assert refused.status_code == 400
+        assert refused.json()["refusal"] in {"NotTheCurrentWording", "WordingNotOnFile"}
     async with deployment.sessions() as db:
         assert (await db.scalars(select(Profile))).all() == []
         assert (await db.scalars(select(AuditEntry))).all() == []
-    me = await deployment.client.get("/me", headers=his)
-    assert me.json()["profile_id"] is None
+    assert (await deployment.client.get("/me", headers=his)).json()["profile_id"] is None
+
+    created = await deployment.client.post(
+        "/profiles/mine",
+        json={"consent": {**CONSENT, "language": "ms"}, "display_name": "Pa", "language": "ms"},
+        headers=his,
+    )
+    assert created.status_code == 201
+    profile_id = created.json()["profile_id"]
+
+    again = await deployment.client.post("/profiles/mine", json={"consent": CONSENT}, headers=his)
+    assert again.status_code == 409
+    assert again.json() == {"refusal": "ProfileAlreadyOwned"}
+
+    # The agreement is on the record, in the words he read, and the trail shows it written.
+    consents = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=his)
+    assert consents.status_code == 200
+    [held] = consents.json()
+    assert held["purpose"] == "hold_health_record"
+    assert held["person_id"] == pa["person_id"]
+    assert held["text_version"] == CONSENT["wording_version"]
+    assert held["language"] == "ms" and held["captured_via"] == "app" and held["basis"] == "owner"
+    assert held["wording_text"] and held["revoked_at"] is None
+
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    written = [(e["scope"], e["target"]) for e in trail.json() if e["action"] == "write"]
+    assert ("profile", "profile") in written and ("family", "consent") in written
 
     assert (await deployment.client.post("/profiles/mine", json={})).status_code == 401
 
@@ -321,20 +349,29 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
     his = bearer(pa["token"])
 
     neither = await deployment.client.post(
-        f"/profiles/{profile_id}/keys",
-        json={"role": "caregiver", "basis": "owner_consent"},
-        headers=his,
+        f"/profiles/{profile_id}/keys", json={"role": "caregiver"}, headers=his
     )
     assert neither.status_code == 422
 
-    # Cutting a key for a number that has not registered yet reserves that number an account,
-    # so the invite can land on it later. Whether the number was known is not answered.
+    # No key without the owner's agreement to let that person in, by name.
+    unagreed = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": "+6591110003", "role": "helper"},
+        headers=his,
+    )
+    assert unagreed.status_code == 403
+    assert unagreed.json() == {"refusal": "ConsentWithheld"}
+
+    # Letting a number in that has not registered yet reserves that number an account, so
+    # the invite can land on it later. Whether the number was known is not answered.
+    await let_in(deployment, pa, profile_id, "+6591110003", ["medicines"], "helper")
     invited = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_phone_e164": "+6591110003", "role": "helper", "basis": "owner_consent"},
+        json={"holder_phone_e164": "+6591110003", "role": "helper"},
         headers=his,
     )
     assert invited.status_code == 201
+    assert invited.json()["scopes"] == ["medicines", "profile"]
     async with deployment.sessions() as db:
         siti = await db.scalar(select(Person).where(Person.phone_e164 == "+6591110003"))
     assert siti is not None and str(siti.id) == invited.json()["holder_person_id"]
@@ -349,12 +386,12 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
         ash_id = str(ash.id)
     elsewhere = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_person_id": ash_id, "role": "viewer", "basis": "owner_consent"},
+        json={"holder_person_id": ash_id, "role": "viewer"},
         headers=his,
     )
     nobody = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_person_id": str(uuid.uuid4()), "role": "viewer", "basis": "owner_consent"},
+        json={"holder_person_id": str(uuid.uuid4()), "role": "viewer"},
         headers=his,
     )
     # In the same words as an id that is nobody's, so an account elsewhere cannot be probed.
@@ -362,10 +399,10 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
     assert elsewhere.json() == nobody.json() == {"refusal": "NoSuchHolder"}
 
     # A caregiver may not cut a key.
-    await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
     hers = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_phone_e164": SON, "role": "viewer", "basis": "owner_consent"},
+        json={"holder_phone_e164": SON, "role": "viewer"},
         headers=bearer(daughter["token"]),
     )
     assert hers.status_code == 403
@@ -400,7 +437,7 @@ async def test_an_ex_key_holders_reach_appears_in_the_owners_trail(
 ) -> None:
     pa, profile_id = await _pa_with_a_note(deployment)
     daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
-    key = await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    key = await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
     his = bearer(pa["token"])
     await deployment.client.delete(f"/profiles/{profile_id}/keys/{key['key_id']}", headers=his)
 
@@ -439,11 +476,11 @@ async def test_a_refused_request_keeps_its_audit_line_and_nothing_else_it_wrote(
     it would have left behind is gone with it."""
     pa, profile_id = await _pa_with_a_note(deployment)
     daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
-    await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
 
     refused = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
-        json={"holder_phone_e164": "+6591110003", "role": "helper", "basis": "owner_consent"},
+        json={"holder_phone_e164": "+6591110003", "role": "helper"},
         headers=bearer(daughter["token"]),
     )
     assert refused.status_code == 403

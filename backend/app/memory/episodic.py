@@ -56,7 +56,10 @@ async def store_artifact(
     guard_region(held_in=region, asked_from=context.region)
     # Keeping anything at all rests on the consent to hold the record (E00-02).
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.RECORDS,
         now=now,
     )
     digest = sha256.strip().lower()
@@ -119,7 +122,10 @@ async def record_event(
     artefact, and only there.
     """
     await require_consent(
-        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.RECORDS,
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.RECORDS,
         now=now,
     )
     named = short_label(label) if label is not None else None

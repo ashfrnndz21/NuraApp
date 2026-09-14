@@ -131,9 +131,7 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     )
     assert chief_key.expires_at is None
     chief = await resolve_key_context(sg, region=Region.SG, person_id=son.id, profile_id=profile.id)
-    helper_key = await grant_key(
-        sg, context=chief, holder=siti, role=KeyRole.HELPER
-    )
+    helper_key = await grant_key(sg, context=chief, holder=siti, role=KeyRole.HELPER)
     assert helper_key.scopes_held == frozenset({Scope.MEDICINES, Scope.PROFILE})
 
     # The owner reads every key cut on his own graph.

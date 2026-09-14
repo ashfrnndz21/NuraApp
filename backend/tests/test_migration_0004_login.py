@@ -12,6 +12,13 @@ from alembic.operations import Operations
 from tests.test_migration import _load
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
+BEFORE = (
+    "0001_accounts_profiles_and_keys",
+    "0002_audit_entry",
+    "0003_memory_stores",
+    "0003_consent_record",
+    "0004_key_consent",
+)
 
 
 def _keys() -> sa.TableClause:
@@ -19,10 +26,7 @@ def _keys() -> sa.TableClause:
 
 
 def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out() -> None:
-    before = [
-        _load(VERSIONS / f"{name}.py")
-        for name in ("0001_accounts_profiles_and_keys", "0002_audit_entry", "0003_memory_stores")
-    ]
+    before = [_load(VERSIONS / f"{name}.py") for name in BEFORE]
     login = _load(VERSIONS / "0004_login_and_sessions.py")
     engine = sa.create_engine("sqlite+pysqlite://")
     with engine.begin() as connection:
@@ -56,7 +60,6 @@ def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out()
             sa.column("holder_person_id", sa.Uuid()),
             sa.column("role", sa.String()),
             sa.column("scopes", sa.JSON()),
-            sa.column("basis", sa.String()),
             sa.column("granted_by_person_id", sa.Uuid()),
             sa.column("granted_at", sa.DateTime(timezone=True)),
         )
@@ -84,7 +87,6 @@ def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out()
                 holder_person_id=daughter,
                 role="caregiver",
                 scopes=["medicines", "visits"],
-                basis="owner_consent",
                 granted_by_person_id=pa,
                 granted_at=now,
             )
