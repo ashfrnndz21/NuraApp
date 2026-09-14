@@ -20,21 +20,21 @@ from app.keys.context import NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key, list_keys, revoke_key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.regions import OutOfRegion, Region
-from tests.support import Note, add_note, read_notes
+from tests.support import OPENING_CONSENT, Note, add_note, agree_to_family_sharing, read_notes
 
 # --- the patient node owns all data ------------------------------------------------------
 
 
 async def test_the_patient_owns_every_row_of_his_health_graph(sg: AsyncSession) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    profile = await create_own_profile(sg, region=Region.SG, owner=pa)
+    profile = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
 
     assert profile.owner_person_id == pa.id
     assert profile.region is Region.SG
 
     # A person owns at most one profile: the health graph has exactly one owner.
     with pytest.raises(ProfileAlreadyOwned):
-        await create_own_profile(sg, region=Region.SG, owner=pa)
+        await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
 
     # The owner reads his own graph without a key, and every scope is his.
     owner = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
@@ -67,7 +67,7 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     sg: AsyncSession,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    profile = await create_own_profile(sg, region=Region.SG, owner=pa)
+    profile = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
     await add_note(sg, owner, scope=Scope.MEDICINES, body="The water pill is at 8 in the morning.")
     await add_note(sg, owner, scope=Scope.NOTES, body="Pa keeps this one to himself.")
@@ -82,6 +82,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
             sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id
         )
 
+    # Pa agrees to share with his daughter (E00-02); her key rests on that and names it.
+    hers = await agree_to_family_sharing(sg, owner, daughter)
+
     key = await grant_key(
         sg,
         context=owner,
@@ -89,9 +92,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.VISITS],
         window=KeyWindow.THIRTY_DAYS,
-        basis="owner_consent",
     )
     assert key.profile_id == profile.id
+    assert key.consent_id == hers.id
     assert key.granted_by_person_id == pa.id
     assert key.expires_at is not None
 
@@ -111,25 +114,26 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     siti = await register_person(
         sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
     )
+    await agree_to_family_sharing(sg, owner, siti)
     with pytest.raises(OutOfScope):
-        await grant_key(sg, context=held, holder=siti, role=KeyRole.HELPER, basis="owner_consent")
+        await grant_key(sg, context=held, holder=siti, role=KeyRole.HELPER)
 
     # A chief may cut one, but never wider than the key he holds.
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
+    await agree_to_family_sharing(sg, owner, son)
     chief_key = await grant_key(
         sg,
         context=owner,
         holder=son,
         role=KeyRole.CHIEF,
         scopes=[Scope.MEDICINES, Scope.FAMILY],
-        basis="owner_consent",
     )
     assert chief_key.expires_at is None
     chief = await resolve_key_context(
         sg, region=Region.SG, person_id=son.id, profile_id=profile.id
     )
     helper_key = await grant_key(
-        sg, context=chief, holder=siti, role=KeyRole.HELPER, basis="owner_consent"
+        sg, context=chief, holder=siti, role=KeyRole.HELPER
     )
     assert helper_key.scopes_held == frozenset({Scope.MEDICINES})
 
@@ -162,7 +166,7 @@ async def test_health_data_is_written_and_read_only_in_its_own_region(
     sg: AsyncSession, my: AsyncSession
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    profile = await create_own_profile(sg, region=Region.SG, owner=pa)
+    profile = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
     await add_note(sg, owner, scope=Scope.MEDICINES, body="The water pill is at 8 in the morning.")
 
@@ -172,7 +176,7 @@ async def test_health_data_is_written_and_read_only_in_its_own_region(
 
     # It will not open a health graph for a person pinned to Singapore either.
     with pytest.raises(OutOfRegion):
-        await create_own_profile(my, region=Region.MY, owner=pa)
+        await create_own_profile(my, region=Region.MY, owner=pa, consent=OPENING_CONSENT)
 
     # And it refuses to read an out-of-region profile, however that row arrived.
     ash = await register_person(my, region=Region.MY, display_name="Ash", phone_e164="+60121110001")

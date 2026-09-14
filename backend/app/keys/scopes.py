@@ -19,6 +19,9 @@ class Scope(StrEnum):
     EMERGENCY = "emergency"
     ASK = "ask"
     SEND = "send"
+    PROFILE = "profile"
+    """The profile row itself: whose graph this is, its name and language. Every key holds
+    it, because holding any key means you may see whose graph it opens."""
 
 
 ALL_SCOPES = frozenset(Scope)
@@ -39,6 +42,7 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
     KeyRole.CHIEF: ALL_SCOPES,
     KeyRole.CAREGIVER: frozenset(
         {
+            Scope.PROFILE,
             Scope.MEDICINES,
             Scope.VISITS,
             Scope.READINGS,
@@ -49,15 +53,16 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
         }
     ),
     KeyRole.VIEWER: frozenset(
-        {Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.EMERGENCY}
+        {Scope.PROFILE, Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.EMERGENCY}
     ),
-    KeyRole.HELPER: frozenset({Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}),
-    KeyRole.EMERGENCY: frozenset({Scope.EMERGENCY}),
+    KeyRole.HELPER: frozenset({Scope.PROFILE, Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}),
+    KeyRole.EMERGENCY: frozenset({Scope.PROFILE, Scope.EMERGENCY}),
     KeyRole.CLINIC: frozenset(
-        {Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.RECORDS}
+        {Scope.PROFILE, Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.RECORDS}
     ),
 }
-"""Private notes and money are the patient's own: only a chief is ever preset to them."""
+"""Private notes and money are the patient's own: only a chief is ever preset to them.
+Every role holds PROFILE: a key that opens nothing of whose graph it is opens nothing."""
 
 
 class KeyWindow(StrEnum):

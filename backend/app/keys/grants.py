@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write, record_share
 from app.audit.models import Action, Channel
 from app.audit.trail import record
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person
@@ -44,7 +46,6 @@ async def grant_key(
     context: KeyContext,
     holder: Person,
     role: KeyRole,
-    basis: str,
     scopes: Iterable[Scope] | None = None,
     window: KeyWindow | None = None,
     now: datetime | None = None,
@@ -52,15 +53,32 @@ async def grant_key(
     """Cut a key for one person on the profile in the context.
 
     `scopes` narrows the role's preset; it can never widen past what the granter holds.
-    `basis` is what the grant rests on — the owner's recorded consent, an LPA, a letter.
-    Consent itself is recorded by the consent service (E00-02); this only names the basis.
+    The basis of the key is the consent it is cut under (E00-02): no key is cut, whatever
+    its role, unless a `SHARE_WITH_PERSON` consent naming this holder is in force, given by
+    the owner or by someone acting for him on a recorded proxy basis, to the current
+    wording, and the key records which consent that was. The words the patient read named
+    the parts this person may see, so the key is never wider than those either. New
+    wording therefore stops the cutting of keys until the patient agrees again; that is
+    what versioned consent means, and shipping new words is paired with asking. The
+    emergency role is not exempt: the emergency card is health data too.
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     _may_cut_keys(context)
     moment = now or utcnow()
+    consent = await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
+        scope=Scope.FAMILY,
+        holder_person_id=holder.id,
+        now=moment,
+    )
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     granted = asked & context.scopes
+    if consent.scopes is not None:
+        # Whose record it is (PROFILE) is not a part of it; the rest is what the words named.
+        granted &= consent.scopes | {Scope.PROFILE}
 
     # One person holds one key on one profile: a new key replaces the one before it.
     for existing in await audited_read(session, Key, context, Scope.FAMILY, now=moment):
@@ -76,7 +94,7 @@ async def grant_key(
         holder_person_id=holder.id,
         role=role,
         scopes=sorted(scope.value for scope in granted),
-        basis=basis,
+        consent_id=consent.consent_id,
         granted_by_person_id=context.person_id,
         granted_at=moment,
         expires_at=window_ends_at(window or DEFAULT_WINDOW[role], moment),
