@@ -57,6 +57,7 @@ from app.channels.api import (
     medicines,
     onboarding,
     profiles,
+    review,
     routine,
     safety,
     timeline,
@@ -104,6 +105,7 @@ def _api() -> APIRouter:
     api.include_router(trends.router)
     api.include_router(routine.router)
     api.include_router(connectors.router)
+    api.include_router(review.router)
     api.include_router(dev_clock.router)
 
     @api.get("/health")

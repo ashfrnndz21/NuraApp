@@ -82,6 +82,6 @@ LINE: Mapping[str, Mapping[str, str]] = {
 MORNING_CARD: Mapping[str, str] = {
     "en": "Nura sends your Today page at {clock}.",
     "ms": "Nura hantar halaman Hari Ini anda {clock}.",
-    "zh": "Nura {clock}发您的今日页面。",
+    "zh": "Nura {clock}发您的“今天”页面。",
 }
 """When his Today page comes, and who sends it."""

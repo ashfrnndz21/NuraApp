@@ -68,6 +68,8 @@ WHATSAPP_SECRET = "nura-test-webhook-secret"
 WHATSAPP_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "whatsapp"
 FEED = Path(__file__).resolve().parent / "fixtures" / "feed"
 """Where the feed's fixture searcher and compressor answer from (E21)."""
+STAFF_TOKEN = "nura-test-pharmacist-token-0001"
+"""The one staff token the served test deployment knows (`/review/*`, E22-04); nothing real."""
 
 
 TEST_DATABASE_URL: str | None = (
@@ -83,11 +85,13 @@ POSTGRES_TEST_SETTINGS = {"lock_timeout": "10s", "statement_timeout": "60s"}
 statement in the message, instead of hanging the CI job."""
 
 LEFT_OPEN = (
-    "SELECT pid, left(query, 200) FROM pg_stat_activity "
-    "WHERE datname = current_database() AND pid <> pg_backend_pid() "
+    "SELECT pid, state || ': ' || left(query, 200) FROM pg_stat_activity "
+    "WHERE backend_type = 'client backend' AND application_name = :schema "
     "AND state IN ('active', 'idle in transaction', 'idle in transaction (aborted)')"
 )
-"""Another connection to the test database still mid-transaction or mid-statement."""
+"""A connection of this test's own engine — it names itself after the schema — still
+mid-transaction or mid-statement. Postgres's own workers (autovacuum) and a second database
+the same test holds (`sg` and `my` are two schemas on one server) are not this engine's."""
 
 
 def _enforce_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
@@ -122,7 +126,13 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         TEST_DATABASE_URL,
-        connect_args={"server_settings": {"search_path": schema, **POSTGRES_TEST_SETTINGS}},
+        connect_args={
+            "server_settings": {
+                "search_path": schema,
+                "application_name": schema,
+                **POSTGRES_TEST_SETTINGS,
+            }
+        },
     )
     try:
         yield engine
@@ -132,7 +142,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
             # Tests run one at a time, so any other connection still inside a transaction or
             # a statement here is one this test left open. It would hold the locks the drop
             # needs: end it, drop the schema, and name what it last ran.
-            left_open = (await connection.execute(text(LEFT_OPEN))).all()
+            left_open = (await connection.execute(text(LEFT_OPEN), {"schema": schema})).all()
             for pid, _query in left_open:
                 await connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
             await connection.execute(text("SET LOCAL lock_timeout = '10s'"))
@@ -232,6 +242,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
+        review_staff=(("pharmacist", STAFF_TOKEN),),
     )
     # The object store is a fresh directory per served deployment, one region under it,
     # gone at the end: what the local store does under backend/var/objects on a laptop.

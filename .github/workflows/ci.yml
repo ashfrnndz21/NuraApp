@@ -14,6 +14,7 @@ jobs:
       - run: make test
       - run: make lint
       - run: make plain-words
+      - run: make language
   backend-postgres:
     # The whole suite and the migrations on Postgres, the database every deployment runs on
     # (docs/deploy.md). A candidate for a required check. The laptop never needs a Postgres:

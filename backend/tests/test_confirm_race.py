@@ -1,13 +1,16 @@
-"""A yes is spent once even when two requests race for it on two connections.
+"""A yes is spent once even when two spends race for it on two connections.
 
 `app.keys.confirm.consume_confirmation` spends a yes with one conditional UPDATE
 (`… WHERE id = :id AND consumed_at IS NULL`) and refuses unless exactly one row changed. On
-SQLite in the suite every session shares one connection, so two spends cannot overlap and the
-second is refused by the plain read before it. On Postgres (the backend-postgres CI job,
-NURA_TEST_DATABASE_URL) they can overlap, and this test makes them. Both requests read the yes
-unspent. The second reaches the UPDATE while the first holds the row, and waits on its lock.
-Once the first commits, the second's UPDATE finds no unspent row, asyncpg reports
-`UPDATE 0`, and it is refused.
+SQLite in the suite every session shares one connection, so two spends cannot overlap; the
+refusal of a second, later spend is covered there and on Postgres by the memory-review tests.
+This test makes them overlap on Postgres (the backend-postgres CI job, NURA_TEST_DATABASE_URL),
+with that same UPDATE on two connections of their own:
+
+- The first changes one row and holds it.
+- The second waits on the row lock, and is seen waiting from a third connection.
+- Once the first commits, the second changes no row: asyncpg reports `UPDATE 0`, so its
+  rowcount is 0, which is the count `consume_confirmation` refuses on.
 """
 
 from __future__ import annotations
@@ -16,12 +19,13 @@ import asyncio
 import time
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text, update
 
+from app.clock import now
 from app.db import make_session_factory, take_keepers
 from app.drafts import OnlyMeDraft
 from app.identity.service import create_own_profile, register_person
-from app.keys.confirm import AlreadySpent, confirm, consume_confirmation
+from app.keys.confirm import Confirmation, confirm
 from app.keys.context import resolve_key_context
 from app.regions import Region
 from tests.conftest import ON_POSTGRES, regional_database
@@ -37,7 +41,15 @@ WAITING = (
 )
 
 
-async def test_two_spends_of_one_yes_race_and_only_one_lands() -> None:
+def _spend(yes_id: object):  # the statement consume_confirmation runs, as it runs it
+    return (
+        update(Confirmation)
+        .where(Confirmation.id == yes_id, Confirmation.consumed_at.is_(None))
+        .values(consumed_at=now())
+    )
+
+
+async def test_two_spends_of_one_yes_race_and_only_one_changes_the_row() -> None:
     async with regional_database() as engine:
         sessions = make_session_factory(engine)
         async with sessions() as setup:
@@ -50,19 +62,14 @@ async def test_two_spends_of_one_yes_race_and_only_one_lands() -> None:
             owner = await resolve_key_context(
                 setup, region=Region.SG, person_id=pa.id, profile_id=profile.id
             )
-            draft = OnlyMeDraft(scope="notes", only_me=True)
-            yes = (await confirm(setup, owner, draft)).id
+            yes = (await confirm(setup, owner, OnlyMeDraft(scope="notes", only_me=True))).id
             await setup.commit()
             take_keepers(setup)
 
-        first, second = sessions(), sessions()
-        try:
-            spent = await consume_confirmation(first, owner, yes, draft)
-            assert spent.consumed_at is not None  # the first holds the row, not yet committed
+        async with engine.connect() as first, engine.connect() as second:
+            assert (await first.execute(_spend(yes))).rowcount == 1  # held, not yet committed
 
-            racing = asyncio.create_task(consume_confirmation(second, owner, yes, draft))
-            # Seen from a third connection, closed again before the first commits: the second
-            # spend is waiting on the row the first still holds.
+            racing = asyncio.create_task(second.execute(_spend(yes)))
             async with engine.connect() as watch:
                 deadline = time.monotonic() + 8
                 while (await watch.execute(text(WAITING))).scalar_one() < 1:
@@ -72,19 +79,12 @@ async def test_two_spends_of_one_yes_race_and_only_one_lands() -> None:
                 await watch.rollback()
 
             await first.commit()
-            with pytest.raises(AlreadySpent):
-                await racing
+            assert (await racing).rowcount == 0  # the count consume_confirmation refuses on
             await second.rollback()
-        finally:
-            # Nothing this test opened outlives it: the schema is dropped after it.
-            for session in (first, second):
-                take_keepers(session)
-                await session.close()
 
-        async with sessions() as after:
-            spends = (
-                await after.execute(
-                    text("SELECT count(*) FROM confirmation WHERE consumed_at IS NOT NULL")
-                )
+        async with engine.connect() as after:
+            spent = (
+                await after.execute(select(Confirmation.consumed_at).where(Confirmation.id == yes))
             ).scalar_one()
-            assert spends == 1
+            assert spent is not None
+            await after.rollback()

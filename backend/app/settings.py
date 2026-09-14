@@ -15,6 +15,10 @@ from datetime import datetime
 from app.clock import FrozenClockOutsideDev
 from app.regions import Region
 
+STAFF_HANDLE = re.compile(r"^[a-z0-9_-]{1,32}$")
+STAFF_TOKEN_MIN = 24
+DEV_STAFF_TOKEN_PREFIX = "nura-dev-"
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:
@@ -68,6 +72,12 @@ class Settings:
     reference_ranges: str = "fixture"
     """NURA_REFERENCE_RANGES: which reference-range table the lab trend reads (E09-01,
     `app.reasoning.ranges`). Only the fixture is built; any other name refuses to start."""
+    review_staff: tuple[tuple[str, str], ...] = ()
+    """NURA_REVIEW_STAFF_TOKENS: who may work the pharmacist's review queue (`/review/*`,
+    E22-04, ADR 0007), as `handle:token` pairs separated by commas. Staff are not people on
+    anyone's record and hold no patient key; the handle is what a decision is signed with.
+    Unset, the queue answers nobody. A token is at least 24 characters, a handle is lowercase
+    letters, digits, `-` and `_`; a laptop's token (`nura-dev-…`) only runs on a dev run."""
     frozen_clock: datetime | None = None
     """NURA_FROZEN_CLOCK: an instant with its offset (`2026-09-14T10:00:00+08:00`) the
     process's clock stands at from startup (`app.clock.install_frozen`), moved only by
@@ -134,6 +144,11 @@ def database_url_for(url: str) -> str:
     return url
 
 
+class BadStaffTokens(RuntimeError):
+    """The review queue's staff list is malformed, or carries a laptop's token outside a dev
+    run. The process must not start on it."""
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Read NURA_REGION and NURA_DATABASE_URL. Both are required: neither has a safe default.
 
@@ -182,7 +197,30 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_bucket_region=source.get("NURA_OBJECT_BUCKET_REGION") or None,
         object_access_key_id=source.get("NURA_OBJECT_ACCESS_KEY_ID") or None,
         object_secret_access_key=source.get("NURA_OBJECT_SECRET_ACCESS_KEY") or None,
+        review_staff=_staff_tokens(
+            source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
+        ),
     )
+
+
+def _staff_tokens(value: str | None, *, dev_run: bool) -> tuple[tuple[str, str], ...]:
+    """NURA_REVIEW_STAFF_TOKENS, read strictly: `handle:token` pairs, each handle once."""
+    if value is None:
+        return ()
+    staff: list[tuple[str, str]] = []
+    for pair in (part.strip() for part in value.split(",") if part.strip()):
+        handle, sep, token = pair.partition(":")
+        handle, token = handle.strip(), token.strip()
+        if not sep or not STAFF_HANDLE.match(handle):
+            raise BadStaffTokens("each staff entry is handle:token, the handle lowercase")
+        if len(token) < STAFF_TOKEN_MIN:
+            raise BadStaffTokens(f"the token for {handle} is shorter than {STAFF_TOKEN_MIN}")
+        if token.startswith(DEV_STAFF_TOKEN_PREFIX) and not dev_run:
+            raise BadStaffTokens(f"the token for {handle} is a laptop's token; dev runs only")
+        if any(handle == known for known, _ in staff):
+            raise BadStaffTokens(f"{handle} is on the staff list twice")
+        staff.append((handle, token))
+    return tuple(staff)
 
 
 def _frozen_clock(value: str | None, *, dev_run: bool) -> datetime | None:
