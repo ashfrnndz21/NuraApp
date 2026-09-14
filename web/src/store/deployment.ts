@@ -7,7 +7,10 @@ import { kvGet, kvSet } from "./kv";
  *  banner is there on every screen even when the home-screen app opens offline. */
 export const demo = signal(false);
 
-const KEY = "deployment.demo";
+/** A `device.` key, like the language and the density: what this phone remembers about the
+ *  server it talks to, never anything about the person (the onboarding spec holds the phone
+ *  to that list of prefixes). */
+const KEY = "device.demo";
 
 export async function learnDeployment(): Promise<void> {
   try {

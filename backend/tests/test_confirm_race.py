@@ -55,23 +55,31 @@ async def test_two_spends_of_one_yes_race_and_only_one_lands() -> None:
             await setup.commit()
             take_keepers(setup)
 
-        async with sessions() as first, sessions() as second, engine.connect() as watch:
+        first, second = sessions(), sessions()
+        try:
             spent = await consume_confirmation(first, owner, yes, draft)
             assert spent.consumed_at is not None  # the first holds the row, not yet committed
 
             racing = asyncio.create_task(consume_confirmation(second, owner, yes, draft))
-            deadline = time.monotonic() + 8
-            while (await watch.execute(text(WAITING))).scalar_one() < 1:
-                assert not racing.done(), "the second spend finished without waiting"
-                assert time.monotonic() < deadline, "the second spend never waited on the row"
-                await asyncio.sleep(0.05)
+            # Seen from a third connection, closed again before the first commits: the second
+            # spend is waiting on the row the first still holds.
+            async with engine.connect() as watch:
+                deadline = time.monotonic() + 8
+                while (await watch.execute(text(WAITING))).scalar_one() < 1:
+                    assert not racing.done(), "the second spend finished without waiting"
+                    assert time.monotonic() < deadline, "the second spend never waited on the row"
+                    await asyncio.sleep(0.05)
+                await watch.rollback()
 
             await first.commit()
             with pytest.raises(AlreadySpent):
                 await racing
             await second.rollback()
-            take_keepers(first)
-            take_keepers(second)
+        finally:
+            # Nothing this test opened outlives it: the schema is dropped after it.
+            for session in (first, second):
+                take_keepers(session)
+                await session.close()
 
         async with sessions() as after:
             spends = (

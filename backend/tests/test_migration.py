@@ -17,6 +17,7 @@ rewrites SQLite needs and the plain ALTERs Postgres gets are both held to the mo
 from __future__ import annotations
 
 import importlib.util
+import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -445,12 +446,15 @@ async def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_dow
                 "SELECT kind, code, subject, fact_ids, payload, feeling, resolved_at FROM red_flag"
             )
         ).one()
-        assert tuple(row) == (
+        kind, code, subject, fact_ids, payload, feeling, resolved_at = row
+        # A raw read of a json column: SQLite hands back its text, Postgres the value decoded.
+        lists = [json.loads(v) if isinstance(v, str) else v for v in (fact_ids, payload)]
+        assert (kind, code, subject, *lists, feeling, resolved_at) == (
             "red_flag",
             "chest_pain",
             "symptom",
-            "[]",
-            "{}",
+            [],
+            {},
             "chest_tightness",
             None,
         )

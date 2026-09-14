@@ -82,6 +82,13 @@ POSTGRES_TEST_SETTINGS = {"lock_timeout": "10s", "statement_timeout": "60s"}
 """A test that waits on a lock another of its own sessions holds fails in seconds, with the
 statement in the message, instead of hanging the CI job."""
 
+LEFT_OPEN = (
+    "SELECT pid, left(query, 200) FROM pg_stat_activity "
+    "WHERE datname = current_database() AND pid <> pg_backend_pid() "
+    "AND state IN ('active', 'idle in transaction', 'idle in transaction (aborted)')"
+)
+"""Another connection to the test database still mid-transaction or mid-statement."""
+
 
 def _enforce_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
     # SQLite ignores foreign keys unless told otherwise. Postgres does not, and the ties
@@ -122,9 +129,19 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
     finally:
         await engine.dispose()
         async with admin.begin() as connection:
+            # Tests run one at a time, so any other connection still inside a transaction or
+            # a statement here is one this test left open. It would hold the locks the drop
+            # needs: end it, drop the schema, and name what it last ran.
+            left_open = (await connection.execute(text(LEFT_OPEN))).all()
+            for pid, _query in left_open:
+                await connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
             await connection.execute(text("SET LOCAL lock_timeout = '10s'"))
             await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
         await admin.dispose()
+        if left_open:
+            raise AssertionError(
+                "the test left a connection open: " + "; ".join(q for _, q in left_open)
+            )
 
 
 @asynccontextmanager
