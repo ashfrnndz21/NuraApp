@@ -210,7 +210,7 @@ async def test_the_trail_in_his_words_never_renders_a_class_name_a_table_or_an_i
         "Only you can.",
     ] in kit_lines
     assert [
-        "Kit tried to open your record on Monday 14 September.",
+        "Kit tried to open your papers on Monday 14 September.",
         "That key is closed, so nothing was shown.",
     ] in kit_lines
     # A repeated reach on one day is one sentence, not one per try.

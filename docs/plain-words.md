@@ -81,3 +81,39 @@ Every card is spoken, so every line is also a script. Short sentences with a pau
 ## 5. Where this has been applied
 
 All patient-facing text in the prototypes: Today, medicines, records, visits, the questions card, the not-feeling-well flow, the food photo, the three clips, the emergency card, the feeling cloud and its replies, the appointment planner's card, the Doctor Memo's patient cards and memo. The caregiver's screens keep their fuller wording, with sources.
+
+---
+
+## 6. The same words in Malay and Chinese
+
+His words for things, in the three languages Nura speaks, so a line says the same thing on the card, in the voice note and on WhatsApp. The Malay and Chinese here are the words the catalogues already use, chosen where they disagreed; they are a first translation awaiting a native speaker's pass, like the lines themselves. A line whose English says the phrase in the first column says the Malay and the Chinese beside it (a longer phrase that holds them passes: "ubat tekanan darah anda"). The last column is the words never said for the same thing. `make language` checks every catalogue against this table (`backend/app/language/`).
+
+| English | Malay | Chinese | Never |
+|---|---|---|---|
+| water pill | pil air | 去水药 | |
+| blood pressure tablet | ubat tekanan darah | 血压药 | |
+| cholesterol tablet | ubat kolesterol | 降胆固醇药 | |
+| sugar tablet | ubat gula | 降糖药 | |
+| blood pressure book | buku tekanan darah | 血压本 | |
+| blood test | ujian darah | 验血 | zh "血检" |
+| kidney test | ujian buah pinggang | 肾检查 | zh "肾脏检查" |
+| sugar test | ujian gula | 血糖检查 | zh "糖化血检" |
+| kidney number | nombor buah pinggang | 肾指数 | |
+| body salt | garam badan | 身体的盐 | |
+| swollen legs | kaki bengkak | 腿肿 | |
+| how you feel | apa yang anda rasa | 感觉 | |
+| This one we do not wait for | yang ini kita tidak tunggu | 这个我们不等 | zh "这个不能等"; zh "这个我们不能等" |
+| hospital letter | surat hospital | 出院信 | zh "医院信" |
+| insurance letter | surat insurans | 保险信 | |
+| your papers | surat-surat anda | 文件 | en "your record"; en "'s record"; ms "rekod" |
+| Today page | halaman Hari Ini | “今天”页面 | zh "今日页面" |
+| In simple words | kata-kata mudah | 简单的话 | |
+| not a doctor's advice | bukan nasihat doktor | 不是医生的意见 | zh "医生的建议" |
+| medicine label | label ubat | 药盒标签 | zh "药的标签" |
+| shaky and sweaty | menggigil dan berpeluh | 发抖又出汗 | zh "发抖出汗" |
+| emergency card | kad kecemasan | 紧急卡 | |
+| private notes | nota peribadi | 私人笔记 | |
+| the pharmacist | ahli farmasi | 药剂师 | |
+| I wrote it down | Saya sudah tulis | 我记下了 | ms "sudah tuliskannya"; zh "我已经记下了" |
+| Water is OK | Air kosong boleh | 喝水没问题 | ms "Air tidak mengapa" |
+| knows now | sudah tahu | 已经知道了 | |
