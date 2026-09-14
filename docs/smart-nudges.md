@@ -17,7 +17,7 @@ Reminders are scheduled. Gap nudges ask for facts. Smart nudges are different: t
 | **Curiosity** | A twenty-second explainer tied to this week | Self-search, compression | "Why the water pill makes you pass water." |
 | **Context** | The world outside, only when it touches his conditions | Environmental jobs, calendar | "Haze in Air Itam. Walk indoors today." |
 
-Rules: at most two smart nudges a day for the patient, none in quiet hours, none on a day that already carries an alert or a red flag. Ranked by State: after a change (new medicine, discharge, drift) check-in and pattern come first; in a steady week presence and recognition come first. Every nudge carries "why you're seeing this". Dismissals feed ranking.
+Rules: at most one smart nudge a day for the patient (one, not two: a nudge must never read as nagging, and the pilot's nudge metrics decide whether a second is ever earned), none in quiet hours, none on a day that already carries an alert or a red flag. Ranked by State: after a change (new medicine, discharge, drift) check-in and pattern come first; in a steady week presence and recognition come first. Every nudge carries "why you're seeing this". Dismissals feed ranking.
 
 ---
 

@@ -33,7 +33,14 @@ from app.reasoning.feelings.words import (
 from app.safety.plain_words import verify
 from app.safety.red_flags import Feeling
 from tests.family_support import household
-from tests.feelings_support import REGISTRY, blood_pressure, happened, new_medicine
+from tests.feelings_support import (
+    REGISTRY,
+    STORE,
+    TRANSCRIBER,
+    blood_pressure,
+    happened,
+    new_medicine,
+)
 from tests.medicines_support import pa
 
 
@@ -153,7 +160,14 @@ async def test_the_first_week_home_from_hospital_comes_forward_every_day(
         Feeling.CONFUSION,
     ]
     assert cloud.show is True and cloud.because == "after_discharge"
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     assert (await _cloud(sg, owner)).because == "tapped_today"
     clock.step(timedelta(days=1))
     assert (await _cloud(sg, owner)).show is True, "day one to seven after a discharge"
@@ -161,7 +175,14 @@ async def test_the_first_week_home_from_hospital_comes_forward_every_day(
 
 async def test_his_own_words_from_the_last_month_come_back(sg: AsyncSession) -> None:
     owner = await _owner(sg)
-    await record_tap(sg, context=owner, word=Feeling.CRAMPS, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.CRAMPS,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     cloud = await _cloud(sg, owner)
     cramps = next(word for word in cloud.words if word.word is Feeling.CRAMPS)
     assert cramps.weight == Weight.ADDED
@@ -174,7 +195,14 @@ async def test_the_strip_goes_after_a_tap_or_fine_today_and_comes_back_after_a_c
     owner = await _owner(sg)
     await new_medicine(sg, owner)
     assert (await _cloud(sg, owner)).show is True
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     gone = await _cloud(sg, owner)
     assert gone.show is False and gone.because == "tapped_today"
     clock.step(timedelta(days=1))

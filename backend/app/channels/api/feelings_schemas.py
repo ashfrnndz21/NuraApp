@@ -10,6 +10,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.channels.api.safety_schemas import WhatToDoOut
 from app.db import as_utc
 from app.delivery.nudges.handoff import Held, NudgeDraft, NudgePlan
 from app.delivery.nudges.metrics import Metrics
@@ -95,12 +96,14 @@ def _red(red: RedPath | None) -> dict[str, Any]:
         "suppressed_because": None if flag is None else flag.suppressed_because,
         "escalation_id": None if red is None or red.escalation is None else red.escalation.id,
         "opens": None if red is None else red.opens,
+        "card": None if red is None else WhatToDoOut.of(red.card),
     }
 
 
 class FeelingOut(BaseModel):
     """What a tap did. A red word: the flag, who was told, the ladder written for delivery,
-    and the not-feeling-well card's words with the flow to open — no question, no note. Any
+    and the not-feeling-well button's what-to-do card (`card`, E13's, urgent) — no question,
+    no note. Any
     other word: its one question, or, for "Fine today", what it says back."""
 
     event_id: uuid.UUID
@@ -113,6 +116,7 @@ class FeelingOut(BaseModel):
     suppressed_because: str | None
     escalation_id: uuid.UUID | None
     opens: str | None
+    card: WhatToDoOut | None
     question: QuestionOut | None
     lines: list[str]
 
@@ -193,6 +197,7 @@ class AnsweredOut(BaseModel):
     suppressed_because: str | None
     escalation_id: uuid.UUID | None
     opens: str | None
+    card: WhatToDoOut | None
     lines: list[str]
     note: NoteOut | None
     note_withheld_because: str | None

@@ -1,16 +1,16 @@
 """The door for the feelings: a tap on the cloud, its one answer, and the notes (E17-02).
 
 **A red word goes first.** A tap on a red word — or a yes to the question that tells a red
-variant apart — takes the not-feeling-well button's own red-flag path (E13/E14,
-`app.safety.not_feeling_well.escalate`), unchanged: the moment it was said
+variant apart — presses the not-feeling-well button for him, server-side (E13/E14,
+`app.safety.not_feeling_well.not_feeling_well`, with his word as the words and the tapped red
+word named so nothing is guessed back from them): the moment it was said
 (`record_the_moment`, under the emergency scope, so any key holding that scope can start it),
 the flag on it, kept so a later refusal cannot take it back (`write_flag_kept`), a notice to
 everyone on his emergency list, and the ladder for delivery to walk (`roster_for`,
 `Escalation`, kept) — before the cloud is read, before anything is ranked, before any note.
-What the tap said is his word, so what the path is given to have "heard" is that word, sure,
-and no artefact. There is no note for a red word: what comes back is the reassurance and
-closing line of the urgent not-feeling-well card (`Surface.NOT_FEELING_WELL`, urgent) and the
-flow to open, where the card with the calls is.
+The button also sets the day's posture to act and renders its what-to-do card — the urgent
+one, with the calls, "Nura does not decide what is wrong." last — and that card is what the
+tap answers with; the client shows it. There is no note for a red word.
 
 **Every other word asks one thing back.** The tap is a SYMPTOM event in his word and a
 `FeelingTap` naming why the word was on the cloud; "Fine today" says thank you and asks
@@ -38,7 +38,8 @@ from app.db import utcnow
 from app.delivery.feed.items import NotPlainWords
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
-from app.ingestion.transcribe import Transcript
+from app.ingestion.objects import ObjectStore
+from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import record_event
@@ -55,9 +56,8 @@ from app.reasoning.feelings.words import (
     follow_up_for,
     red_answer,
 )
-from app.safety.boundary import Surface, boundary_lines
-from app.safety.not_feeling_well import Captured, family_of
-from app.safety.not_feeling_well import escalate as escalate_red_flag
+from app.safety.boundary import Surface
+from app.safety.not_feeling_well import WhatToDoNow, not_feeling_well
 from app.safety.red_flags import Escalation, Feeling, Flag, is_red
 from app.state.service import RECOMPUTE_SCOPES, render_from_state
 
@@ -95,6 +95,7 @@ class RedPath:
     escalation: Escalation | None
     notices: int
     lines: tuple[str, ...]
+    card: WhatToDoNow
     opens: str = NOT_FEELING_WELL
 
 
@@ -122,30 +123,46 @@ async def _language(session: AsyncSession, context: KeyContext, asked: str | Non
 
 
 async def _red_path(
-    session: AsyncSession, *, context: KeyContext, feeling: Feeling, code: str
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    feeling: Feeling,
+    code: str,
+    store: ObjectStore,
+    transcriber: Transcriber,
+    registry: DrugRegistry,
 ) -> tuple[uuid.UUID, RedPath]:
-    """E13's red-flag path, as the button takes it: nothing is read or ranked before it."""
-    profile = await audited_profile_read(session, context)
-    family = await family_of(session, context=context, profile=profile)
-    said = Captured(
-        artifact=None,
-        transcript=Transcript(text=WORDS[code][feeling], confidence=1.0, language=code),
-        by_voice=False,
+    """The not-feeling-well button, pressed with his word: E13's whole flow, server-side.
+
+    His word is the words kept, and the flag is the word he tapped (`feeling`), not one
+    heard back from it. The button writes the moment and the flag first and keeps them, tells
+    everyone on his emergency list, writes the ladder, sets the day's posture, and renders the
+    what-to-do card — the urgent one, "Nura does not decide what is wrong." last. The flag and
+    the ladder are read back by the moment they rest on."""
+    done = await not_feeling_well(
+        session,
+        context=context,
+        store=store,
+        transcriber=transcriber,
+        registry=registry,
+        words=WORDS[code][feeling],
+        language=code,
+        feeling=feeling,
     )
-    escalated = await escalate_red_flag(
-        session, context=context, captured=said, feeling=feeling, family=family
+    assert done.event_id is not None  # the red path always writes the moment
+    flags = await audited_read(
+        session, Flag, context, Scope.EMERGENCY, where=(Flag.event_id == done.event_id,)
     )
-    told = None
-    if not escalated.suppressed and family.chief is not None:
-        told = family.chief.display_name or None
-    lines = boundary_lines(
-        Surface.NOT_FEELING_WELL, code, told=told, urgent=not escalated.suppressed
+    flag = flags[0]
+    ladders = await audited_read(
+        session, Escalation, context, Scope.EMERGENCY, where=(Escalation.flag_id == flag.id,)
     )
-    return escalated.event.id, RedPath(
-        flag=escalated.flag,
-        escalation=escalated.ladder,
-        notices=len(escalated.notices),
-        lines=lines,
+    return done.event_id, RedPath(
+        flag=flag,
+        escalation=ladders[0] if ladders else None,
+        notices=len(done.notified_person_ids),
+        lines=tuple(line.text for line in done.lines),
+        card=done,
     )
 
 
@@ -155,13 +172,23 @@ async def record_tap(
     context: KeyContext,
     word: Feeling,
     registry: DrugRegistry,
+    store: ObjectStore,
+    transcriber: Transcriber,
     language: str | None = None,
 ) -> Tapped:
     """His tap on the cloud. A red word takes the red-flag path first and asks nothing."""
     moment = utcnow()
     if is_red(word):
         code = await _language(session, context, language)
-        event_id, red = await _red_path(session, context=context, feeling=word, code=code)
+        event_id, red = await _red_path(
+            session,
+            context=context,
+            feeling=word,
+            code=code,
+            store=store,
+            transcriber=transcriber,
+            registry=registry,
+        )
         tap = await audited_write(
             session,
             FeelingTap,
@@ -230,6 +257,8 @@ async def answer_tap(
     tap_id: uuid.UUID,
     answer: Answer,
     registry: DrugRegistry,
+    store: ObjectStore,
+    transcriber: Transcriber,
     language: str | None = None,
 ) -> Answered:
     """His one answer. A yes that makes the word red takes the red-flag path, and there is no
@@ -248,7 +277,15 @@ async def answer_tap(
     red_word = red_answer(tap.word, tap.follow_up, answer)
     red: RedPath | None = None
     if red_word is not None:
-        _, red = await _red_path(session, context=context, feeling=red_word, code=code)
+        _, red = await _red_path(
+            session,
+            context=context,
+            feeling=red_word,
+            code=code,
+            store=store,
+            transcriber=transcriber,
+            registry=registry,
+        )
         tap.flag_id = red.flag.id
     tap.answer = answer
     tap.answered_at = utcnow()

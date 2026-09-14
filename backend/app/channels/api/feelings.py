@@ -73,6 +73,8 @@ async def feeling(body: FeelingIn, request: Request, context: Context, session: 
         context=context,
         word=body.word,
         registry=providers_of(request).drug_registry,
+        store=providers_of(request).object_store,
+        transcriber=providers_of(request).transcriber,
         language=body.language,
     )
     return FeelingOut.of(tapped)
@@ -90,6 +92,8 @@ async def answer(
         tap_id=tap_id,
         answer=body.answer,
         registry=providers_of(request).drug_registry,
+        store=providers_of(request).object_store,
+        transcriber=providers_of(request).transcriber,
         language=body.language,
     )
     return AnsweredOut.of(answered)

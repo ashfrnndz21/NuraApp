@@ -29,6 +29,7 @@ from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider, book_appointment
 from app.regions import Region
 from tests.medicines_support import add, label
+from tests.safety_support import TRANSCRIBER
 
 REGISTRY = FixtureRegistry.load()
 
@@ -120,4 +121,60 @@ async def happened(
         occurred_at=at,
         label=what,
         source_channel=SourceChannel.APP,
+    )
+
+
+class Store:
+    """An object store for the service tests: bytes kept in memory, in Singapore."""
+
+    region = Region.SG
+
+    def __init__(self) -> None:
+        self.kept: dict[str, bytes] = {}
+
+    async def put(self, key: str, data: bytes) -> None:
+        self.kept[key] = data
+
+    async def get(self, key: str) -> bytes:
+        return self.kept[key]
+
+
+STORE = Store()
+__all__ = ["REGISTRY", "STORE", "TRANSCRIBER"]
+
+
+async def check_in_setting(session: AsyncSession, owner: KeyContext, value: str) -> Fact:
+    """His check-in time as onboarding (E01) will write it: `setting.checkin_time`, "HH:MM"."""
+    event = await record_event(
+        session,
+        context=owner,
+        kind=EventKind.MESSAGE,
+        occurred_at=utcnow(),
+        label="check-in time",
+        source_channel=SourceChannel.APP,
+    )
+    draft = FactDraft(
+        subject="setting",
+        attribute="checkin_time",
+        value=value,
+        unit=None,
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        artifact_id=None,
+        event_id=event.id,
+        episode_id=None,
+        supersedes_id=None,
+    )
+    yes = await confirm(session, owner, draft)
+    return await assert_fact(
+        session,
+        context=owner,
+        subject=draft.subject,
+        attribute=draft.attribute,
+        value=draft.value,
+        confidence=draft.confidence,
+        confidence_state=draft.confidence_state,
+        confirmation_id=yes.id,
+        event_id=event.id,
+        valid_from=utcnow(),
     )

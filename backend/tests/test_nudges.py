@@ -36,7 +36,15 @@ from app.safety.plain_words import verify
 from app.safety.red_flags import Feeling
 from app.state.service import current_state
 from tests.family_support import Household, household
-from tests.feelings_support import REGISTRY, blood_pressure, new_medicine, visit_with
+from tests.feelings_support import (
+    REGISTRY,
+    STORE,
+    TRANSCRIBER,
+    blood_pressure,
+    check_in_setting,
+    new_medicine,
+    visit_with,
+)
 from tests.support import refused_unit
 from tests.test_boundary import FORBIDDEN
 
@@ -103,7 +111,14 @@ async def test_none_on_a_day_with_a_red_flag(sg: AsyncSession) -> None:
     _, owner = await _home(sg)
     added = await new_medicine(sg, owner)
     await _taken(sg, owner, added.line.id)
-    await record_tap(sg, context=owner, word=Feeling.CHEST_TIGHTNESS, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.CHEST_TIGHTNESS,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     today = await _plan(sg, owner)
     assert today.none_because == "red_flag" and today.drafts == () and today.held == ()
     assert [d.kind for d in (await _plan(sg, owner, TOMORROW)).drafts] == [NudgeKind.RECOGNITION]
@@ -133,12 +148,34 @@ async def test_the_red_flag_day_is_his_day_on_his_wall(
     _, owner = await _home(sg)
     added = await new_medicine(sg, owner)
     await _taken(sg, owner, added.line.id)
-    await record_tap(sg, context=owner, word=Feeling.CHEST_TIGHTNESS, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.CHEST_TIGHTNESS,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     assert (await _plan(sg, owner)).none_because == "red_flag"
     tomorrow = await _plan(sg, owner, TOMORROW)
     assert tomorrow.drafts and tomorrow.drafts[0].expires_at == datetime(
         2026, 9, 5, 0, 0, tzinfo=SG
     )
+
+
+async def test_his_check_in_time_is_his_setting_unless_it_is_night(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    _, owner = await _home(sg)
+    added = await new_medicine(sg, owner)
+    await _taken(sg, owner, added.line.id)
+    await check_in_setting(sg, owner, "08:30")
+    [draft] = (await _plan(sg, owner, TOMORROW)).drafts
+    assert draft.send_after == datetime(2026, 9, 4, 8, 30, tzinfo=SG)
+    clock.step(timedelta(minutes=1))  # he changes it later
+    await check_in_setting(sg, owner, "22:30")  # inside the quiet hours: not a time to send
+    [draft] = (await _plan(sg, owner, TOMORROW)).drafts
+    assert draft.send_after == datetime(2026, 9, 4, 10, 0, tzinfo=SG)
 
 
 async def test_one_a_day_counts_the_one_already_handed_over(
@@ -198,7 +235,14 @@ async def test_a_check_in_follows_a_change_he_has_not_answered(sg: AsyncSession)
         "How are you feeling today?",
     )
     assert draft.reason["code"] == "state_change" and draft.reason["line_id"] == str(added.line.id)
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     assert NudgeKind.CHECK_IN not in {d.kind for d in (await _plan(sg, owner)).drafts}
 
 
@@ -206,9 +250,17 @@ async def test_a_watched_feeling_is_asked_about_again_a_week_later(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
     _, owner = await _home(sg)
-    tapped = await record_tap(sg, context=owner, word=Feeling.LOW, registry=REGISTRY)
+    tapped = await record_tap(
+        sg, context=owner, word=Feeling.LOW, registry=REGISTRY, store=STORE, transcriber=TRANSCRIBER
+    )
     answered = await answer_tap(
-        sg, context=owner, tap_id=tapped.tap.id, answer=Answer.TODAY, registry=REGISTRY
+        sg,
+        context=owner,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
     )
     assert answered.note is not None
     clock.step(timedelta(days=7))
@@ -260,7 +312,14 @@ async def test_a_commitment_quotes_his_own_words_and_adds_no_target(
 ) -> None:
     _, owner = await _home(sg)
     await new_medicine(sg, owner)
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     [draft] = (await _plan(sg, owner)).drafts
     assert draft.kind is NudgeKind.COMMITMENT
     assert draft.lines == (
@@ -277,7 +336,14 @@ async def test_a_memo_from_the_visit_loop_is_quoted_once_exactly_as_it_was_filed
 ) -> None:
     _, owner = await _home(sg)
     await new_medicine(sg, owner)
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     memo = await write_memo(
         sg,
         context=owner,
@@ -292,7 +358,14 @@ async def test_a_memo_from_the_visit_loop_is_quoted_once_exactly_as_it_was_filed
     assert draft.lines == ("You said you would do this:", memo.text, "How did it go today?")
     await hand_over(sg, context=owner, registry=REGISTRY)
     clock.step(timedelta(days=9))
-    await record_tap(sg, context=owner, word=Feeling.FINE, registry=REGISTRY)
+    await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.FINE,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+    )
     again = await _plan(sg, owner)
     assert NudgeKind.COMMITMENT not in {d.kind for d in again.drafts} | {
         h.kind for h in again.held

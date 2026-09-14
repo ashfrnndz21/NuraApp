@@ -40,6 +40,7 @@ what he did with one.
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -80,6 +81,7 @@ from app.medicines.service import proud_days
 from app.medicines.strings import say_date
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
+from app.memory.semantic import current_facts
 from app.reasoning.feelings.cloud import lead_for, weigh
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.record import Situation, read_situation
@@ -472,9 +474,34 @@ async def _presence(p: _Planner, session: AsyncSession, *, steady: bool) -> Nudg
     return None
 
 
-def _send_after(day: date, today: date, now: datetime, context: KeyContext) -> datetime | None:
+CHECK_IN_SUBJECT = "setting"
+CHECK_IN_ATTRIBUTE = "checkin_time"
+"""His check-in time, when he has said one: a Fact `setting.checkin_time`, "HH:MM" on his
+region's clock (written by onboarding, E01)."""
+_HH_MM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
+
+
+async def check_in_time(session: AsyncSession, *, context: KeyContext) -> time:
+    """His check-in time from his latest setting, or `CHECK_IN_AT`. A setting that is not a
+    time, or one inside the quiet hours, is not one a nudge may go at: the default stands,
+    never an older setting he has since changed."""
+    facts = await current_facts(
+        session, context=context, subject=CHECK_IN_SUBJECT, attribute=CHECK_IN_ATTRIBUTE
+    )
+    latest = max(facts, key=lambda one: as_utc(one.asserted_at), default=None)
+    value = latest.value if latest is not None else None
+    found = _HH_MM.match(value.strip()) if isinstance(value, str) else None
+    if found is None:
+        return CHECK_IN_AT
+    at = time(int(found.group(1)), int(found.group(2)))
+    return at if QUIET_UNTIL <= at < QUIET_FROM else CHECK_IN_AT
+
+
+def _send_after(
+    day: date, today: date, now: datetime, context: KeyContext, at: time = CHECK_IN_AT
+) -> datetime | None:
     """The earliest a nudge may go that day, or None when what is left of the day is night."""
-    earliest = _at(day, CHECK_IN_AT, context)
+    earliest = _at(day, at, context)
     if day == today:
         earliest = max(earliest, _local(now, context))
     local = _local(earliest, context)
@@ -514,7 +541,9 @@ async def plan_nudges(
     )
     if any(flag.suppressed_because is None for flag in flags):
         return NudgePlan(day=day, drafts=(), held=(), none_because="red_flag")
-    send_after = _send_after(day, today, now, context)
+    send_after = _send_after(
+        day, today, now, context, await check_in_time(session, context=context)
+    )
     if send_after is None:
         return NudgePlan(day=day, drafts=(), held=(), none_because="night")
 

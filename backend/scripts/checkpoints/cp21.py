@@ -389,16 +389,25 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or mei.person_id not in red["told"]
         or not red["escalation_id"]
         or red["lines"][-1] != "Nura tidak menentukan apa masalahnya."
+        or red["card"] is None
+        or red["card"]["kind"] != "red_flag"
+        or red["card"]["posture"] != "act"
+        or not red["card"]["card_id"]
     ):
         raise fail("chest pain takes the red-flag path", why=f"got {short(str(red))}")
+    state = w.get(pa, f"{base}/state", "Pa's State")
+    if state["posture"] != "act":
+        raise fail("the red tap sets the day's posture to act", why=f"got {state['posture']}")
     notes = w.get(pa, f"{base}/feelings/notes", "Pa's notes")
     if [n["note_id"] for n in notes] != [note["note_id"]]:
         raise fail("no note for a red word", why=f"{len(notes)} notes")
     ok(
         f"Pa tapped Sakit dada: the red-flag path before anything else — the moment, the flag "
         f"({red['flag_id'][:8]}…, kept), Mei told, a notice to his emergency list and the ladder "
-        f"({red['escalation_id'][:8]}…) for delivery — the not-feeling-well flow opens, no question, "
-        "and no note (GET /feelings/notes still holds only the one for dizzy); what it says to him:"
+        f"({red['escalation_id'][:8]}…) for delivery — then the not-feeling-well button's whole flow, "
+        f"server-side: the what-to-do card (urgent, card {red['card']['card_id'][:8]}…) and the day's "
+        "posture act (GET /state); no question, and no note (GET /feelings/notes still holds only the "
+        "one for dizzy); the card he is shown:"
     )
     show(red["lines"])
 
