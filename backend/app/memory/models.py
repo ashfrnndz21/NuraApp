@@ -78,12 +78,16 @@ def _frozen(model: type[Any], *, except_for: frozenset[str] = frozenset()) -> No
     @event.listens_for(model, "before_update")
     def _refuse(mapper: Any, connection: Any, target: Any) -> None:
         changed = {
-            attribute.key
+            attribute.key: attribute.history
             for attribute in inspect(target).attrs
             if attribute.history.has_changes()
         }
-        if changed - except_for:
+        if changed.keys() - except_for:
             raise ImmutableRow(f"{model.__tablename__} rows are not edited")
+        # A column that may be set may not be unset: a superseded fact is not resurrected, a
+        # closed episode is not reopened, by writing None over the moment it happened.
+        if any(history.added == [None] for history in changed.values()):
+            raise ImmutableRow(f"{model.__tablename__} rows are not un-done")
 
 
 # --- episodic ------------------------------------------------------------------------------
@@ -164,9 +168,7 @@ class Event(ProfileScoped, Base):
         enum_column(SourceChannel, "source_channel")
     )
     label: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
-    )
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     recorded_at: Mapped[datetime] = mapped_column(default=utcnow)
 
@@ -222,9 +224,7 @@ class Fact(ProfileScoped, Base):
     confidence_state: Mapped[ConfidenceState] = mapped_column(
         enum_column(ConfidenceState, "confidence_state")
     )
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("artifact.id"), default=None
-    )
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     event_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     valid_from: Mapped[datetime] = mapped_column()
@@ -318,11 +318,13 @@ class Appointment(ProfileScoped, Base):
 
     Nothing is booked without a person's explicit confirm. The surface owes that confirm; the
     row carries who gave it, in `confirmed_by_person_id`. The one change the row takes after
-    it is written is its status.
+    it is written is its status, along one path (`spine.STATUS_GOES_TO`), each step confirmed
+    by a person named in `status_changed_by_person_id`.
     """
 
     __tablename__ = "appointment"
     __table_args__ = (
+        _row_of_profile("appointment"),
         _tied_to_profile("appointment", "provider_id", "provider"),
         _tied_to_profile("appointment", "episode_id", "episode"),
     )
@@ -336,6 +338,11 @@ class Appointment(ProfileScoped, Base):
     purpose: Mapped[str] = mapped_column(String(LABEL_LENGTH))
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     confirmed_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    # Who confirmed the last change of status. The booking confirmer above is never
+    # overwritten; a cancellation names its own person here.
+    status_changed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
     booked_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
@@ -347,4 +354,4 @@ _frozen(Fact, except_for=frozenset({"superseded_at"}))
 # go through a service that writes the change down (`working.close_episode`,
 # `spine.change_appointment_status`). Providers are a directory and are corrected in place.
 _frozen(Episode, except_for=frozenset({"closed_at"}))
-_frozen(Appointment, except_for=frozenset({"status"}))
+_frozen(Appointment, except_for=frozenset({"status", "status_changed_by_person_id"}))

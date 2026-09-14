@@ -7,16 +7,20 @@ then no way to read, write or share a person's data and leave no trace of it.
 A refusal goes through the same door. The scope check is what raises, and the line is written
 before the refusal is passed on, so the owner sees the reaching as well as the reads. The same
 holds for any other refusal raised while the profile is known — the region pin, a rule about
-what may replace what: `audited_guard` wraps the check so the refusal leaves a line too.
+what may replace what, a reach at a row on another profile: every service function stands
+behind `audited`, one door for the whole call, so whatever it refuses leaves a line. A refusal
+that has already been written down (`Refusal.written_down`) passes through the outer doors
+without a second line.
 """
 
 from __future__ import annotations
 
+import functools
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -166,6 +170,30 @@ async def audited_guard(
         raise
 
 
+def audited[**P, R](
+    action: Action, scope: Scope, target: str, /
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """The door on a service function: one `audited_guard` around the whole call.
+
+    The function takes the session first and `context` and `now` by keyword, as every service
+    here does. Whatever it refuses — a reach at another profile's row, a rule, a format — is
+    written down against the profile in the context before it is passed on.
+    """
+
+    def door(service: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        @functools.wraps(service)
+        async def guarded(*args: P.args, **kwargs: P.kwargs) -> R:
+            session = cast(AsyncSession, args[0])
+            context = cast(KeyContext, kwargs["context"])
+            now = cast("datetime | None", kwargs.get("now"))
+            async with audited_guard(session, context, action, scope, target, now=now):
+                return await service(*args, **kwargs)
+
+        return guarded
+
+    return door
+
+
 async def _refused(
     session: AsyncSession,
     context: KeyContext,
@@ -177,6 +205,9 @@ async def _refused(
     now: datetime | None,
 ) -> None:
     """One line for a reach that did not land. The name of the refusal, never what it held."""
+    if refusal.written_down:
+        return
+    refusal.written_down = True
     await record(
         session,
         context=context,

@@ -13,13 +13,15 @@ revision. What is not allowed is a revision that names a parent the directory do
 from __future__ import annotations
 
 import importlib.util
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Inspector, Table, create_engine, inspect
+from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
@@ -147,4 +149,95 @@ def test_the_migrations_build_the_tables_the_models_declare(
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
         assert inspect(connection).get_table_names() == []
+    engine.dispose()
+
+
+def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
+    with Operations.context(MigrationContext.configure(connection)):
+        getattr(migration, step)()
+
+
+def test_0004_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
+    revisions: dict[str, ModuleType],
+) -> None:
+    """Upgrade, populate, downgrade (refused), clear, downgrade, upgrade again."""
+    ordered = _in_order(revisions)
+    review = revisions["0004_memory_review"]
+    engine = create_engine("sqlite+pysqlite://")
+    with engine.begin() as connection:
+        for migration in ordered:
+            _apply(connection, migration, "upgrade")
+
+        pa, profile, photo = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        when = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
+        connection.execute(
+            Person.__table__.insert().values(
+                id=pa, region="SG", display_name="Pa", language="en", created_at=when
+            )
+        )
+        connection.execute(
+            Profile.__table__.insert().values(
+                id=profile,
+                region="SG",
+                display_name="Pa",
+                language="en",
+                owner_person_id=pa,
+                created_at=when,
+            )
+        )
+        connection.execute(
+            Artifact.__table__.insert().values(
+                id=photo,
+                profile_id=profile,
+                kind="photo",
+                storage_key="sg/x.jpg",
+                content_type="image/jpeg",
+                sha256="a" * 64,
+                captured_at=when,
+                source_channel="app",
+                region="SG",
+                stored_at=when,
+            )
+        )
+        confirmed = uuid.uuid4()
+        connection.execute(
+            Fact.__table__.insert().values(
+                id=confirmed,
+                profile_id=profile,
+                subject="medication",
+                attribute="dose",
+                value=136,
+                confidence=1.0,
+                confidence_state="confirmed_by_person",
+                artifact_id=photo,
+                valid_from=when,
+                asserted_at=when,
+                confirmed_by_person_id=pa,
+            )
+        )
+        told = uuid.uuid4()
+        connection.execute(
+            Event.__table__.insert().values(
+                id=told,
+                profile_id=profile,
+                kind="visit",
+                occurred_at=when,
+                source_channel="app",
+                label="saw Dr Tan",
+                recorded_at=when,
+            )
+        )
+
+        with pytest.raises(RuntimeError, match="person's word"):
+            _apply(connection, review, "downgrade")
+        connection.execute(Fact.__table__.delete().where(Fact.__table__.c.id == confirmed))
+        with pytest.raises(RuntimeError, match="event's source"):
+            _apply(connection, review, "downgrade")
+        connection.execute(Event.__table__.delete().where(Event.__table__.c.id == told))
+
+        # With nothing to drop, the way down and back up is open, and the rows are kept.
+        _apply(connection, review, "downgrade")
+        assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
+        _apply(connection, review, "upgrade")
+        assert connection.execute(Artifact.__table__.select()).one().id == photo
     engine.dispose()

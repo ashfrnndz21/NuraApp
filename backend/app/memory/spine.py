@@ -15,7 +15,7 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_guard, audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -35,7 +35,28 @@ from app.regions import Region
 
 UPCOMING = frozenset({AppointmentStatus.PLANNED, AppointmentStatus.CONFIRMED})
 
-__all__ = ["NoSuchAppointment", "NoSuchProvider", "NobodyConfirmed"]
+STATUS_GOES_TO: dict[AppointmentStatus, frozenset[AppointmentStatus]] = {
+    AppointmentStatus.PLANNED: frozenset(
+        {AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED}
+    ),
+    AppointmentStatus.CONFIRMED: frozenset(
+        {AppointmentStatus.CANCELLED, AppointmentStatus.ATTENDED, AppointmentStatus.NOT_ATTENDED}
+    ),
+    AppointmentStatus.CANCELLED: frozenset(),
+    AppointmentStatus.ATTENDED: frozenset(),
+    AppointmentStatus.NOT_ATTENDED: frozenset(),
+}
+"""The one path a visit's status takes. Cancelled, attended and not attended are the end of
+it: a cancelled visit is not un-cancelled, a visit that happened did not un-happen. To see the
+doctor again is a new booking, with its own confirm."""
+
+__all__ = [
+    "STATUS_GOES_TO",
+    "NoSuchAppointment",
+    "NoSuchProvider",
+    "NobodyConfirmed",
+    "NotThatStatusChange",
+]
 
 
 class NoSuchProvider(Refusal):
@@ -46,6 +67,11 @@ class NoSuchAppointment(Refusal):
     """No appointment by that id on this profile."""
 
 
+class NotThatStatusChange(Refusal):
+    """A visit's status goes one way. This was a step it does not take (`STATUS_GOES_TO`)."""
+
+
+@audited(Action.WRITE, Scope.VISITS, Provider.__tablename__)
 async def add_provider(
     session: AsyncSession,
     *,
@@ -75,6 +101,7 @@ async def add_provider(
     )
 
 
+@audited(Action.READ, Scope.VISITS, Provider.__tablename__)
 async def list_providers(
     session: AsyncSession, *, context: KeyContext, now: datetime | None = None
 ) -> Sequence[Provider]:
@@ -83,6 +110,7 @@ async def list_providers(
     return sorted(found, key=lambda provider: provider.name)
 
 
+@audited(Action.WRITE, Scope.VISITS, Appointment.__tablename__)
 async def book_appointment(
     session: AsyncSession,
     *,
@@ -103,10 +131,7 @@ async def book_appointment(
     asking, the owner, or a key holder on this profile, in its region. The row carries who.
     """
     named = short_label(purpose)
-    async with audited_guard(
-        session, context, Action.WRITE, Scope.VISITS, Appointment.__tablename__, now=now
-    ):
-        await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
+    await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
     found = await audited_read(
         session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,), now=now
     )
@@ -130,15 +155,23 @@ async def book_appointment(
     )
 
 
+@audited(Action.WRITE, Scope.VISITS, Appointment.__tablename__)
 async def change_appointment_status(
     session: AsyncSession,
     *,
     context: KeyContext,
     appointment_id: uuid.UUID,
     status: AppointmentStatus,
+    confirmed_by_person_id: uuid.UUID,
     now: datetime | None = None,
 ) -> Appointment:
-    """Mark a visit confirmed, attended, not attended or cancelled. Its one change after booking."""
+    """Move a visit one step along `STATUS_GOES_TO`, on a person's confirm.
+
+    Cancelling a booked visit changes a booking, and confirming one is a person's word too,
+    so every step names who gave it, in `status_changed_by_person_id`; the person who
+    confirmed the booking stays where they were. Who may confirm is `require_confirmer`.
+    """
+    await require_confirmer(session, context=context, person_id=confirmed_by_person_id, now=now)
     found = await audited_read(
         session,
         Appointment,
@@ -150,7 +183,10 @@ async def change_appointment_status(
     if not found:
         raise NoSuchAppointment(f"no appointment {appointment_id} on profile {context.profile_id}")
     appointment = found[0]
+    if status not in STATUS_GOES_TO[appointment.status]:
+        raise NotThatStatusChange(f"a {appointment.status} visit does not become {status}")
     appointment.status = status
+    appointment.status_changed_by_person_id = confirmed_by_person_id
     await session.flush()
     await record(
         session,
@@ -165,6 +201,7 @@ async def change_appointment_status(
     return appointment
 
 
+@audited(Action.READ, Scope.VISITS, Appointment.__tablename__)
 async def upcoming_appointments(
     session: AsyncSession,
     *,

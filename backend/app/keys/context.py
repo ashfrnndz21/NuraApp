@@ -25,8 +25,9 @@ from app.regions import OutOfRegion, Region, guard_region
 class NoKey(Refusal):
     """This person holds nothing on this profile.
 
-    A profile that does not exist refuses in the same words as one the asker has no key to,
-    so that no profile can be found by asking for it.
+    A profile that does not exist, one the asker has never held a key to, and one pinned to
+    another region all refuse in these same words to a person the profile does not know, so
+    that no profile can be found, or placed, by asking for it.
     """
 
     def __init__(self, *, person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
@@ -86,29 +87,27 @@ async def resolve_key_context(
     moment = now or utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
-        # There is no profile to pin a line to, so a NoKey leaves nothing at this layer: a
-        # stranger cannot put a line into a graph by asking for it, and neither can a guess at
-        # an id that does not exist. The same words, the same silence, either way.
         raise NoKey(person_id=person_id, profile_id=profile_id)
 
     # Every key ever cut for this person on this profile, closed ones included. A person the
-    # profile knows — its owner, or someone who held a key once — is written down when
-    # refused; a person it has never known is not, or a known profile id would be a way to
-    # fill someone's trail from outside.
+    # profile knows — its owner, or someone who held a key once — is told the real reason
+    # and is written down when refused. A person it has never known gets NoKey and silence,
+    # whether the profile is missing, here, or pinned elsewhere: no profile can be found, or
+    # placed in a region, by asking for it, and no known id is a way to fill a trail.
     keys = list(
         await session.scalars(
             select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
         )
     )
-    known = profile.owner_person_id == person_id or bool(keys)
+    if profile.owner_person_id != person_id and not keys:
+        raise NoKey(person_id=person_id, profile_id=profile_id)
 
     try:
         guard_region(held_in=profile.region, asked_from=region)
     except OutOfRegion as refusal:
-        if known:
-            await _record_refused(
-                session, profile=profile, person_id=person_id, refusal=refusal, now=moment
-            )
+        await _record_refused(
+            session, profile=profile, person_id=person_id, refusal=refusal, now=moment
+        )
         raise
 
     if profile.owner_person_id == person_id:
@@ -129,13 +128,11 @@ async def resolve_key_context(
                 role=key.role,
                 key_id=key.id,
             )
+    # The revoked-helper case: she held a key once, it is closed, and she is reaching again.
     refused = NoKey(person_id=person_id, profile_id=profile_id)
-    if keys:
-        # The revoked-helper case: she held a key once, it is closed, and she is reaching
-        # again. The owner sees that. See the note above for why a stranger leaves nothing.
-        await _record_refused(
-            session, profile=profile, person_id=person_id, refusal=refused, now=moment
-        )
+    await _record_refused(
+        session, profile=profile, person_id=person_id, refusal=refused, now=moment
+    )
     raise refused
 
 

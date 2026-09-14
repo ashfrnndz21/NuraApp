@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
+from app.db import as_utc
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
@@ -55,6 +56,7 @@ from app.memory.working import (
     open_episodes,
 )
 from app.regions import OutOfRegion, Region
+from tests.support import refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -117,6 +119,7 @@ async def test_an_artefact_is_a_reference_to_bytes_kept_in_the_profiles_region(
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
     assert photo.profile_id == owner.profile_id
+    await sg.refresh(photo)
     assert photo.storage_key == "sg/profiles/pa/bp-book.jpg"
     assert photo.region is Region.SG
 
@@ -149,20 +152,20 @@ async def test_an_artefact_is_a_reference_to_bytes_kept_in_the_profiles_region(
 async def test_an_artefact_and_an_event_cannot_be_changed_once_stored(sg: AsyncSession) -> None:
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
-    photo.storage_key = "somewhere/else.jpg"
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        photo.storage_key = "somewhere/else.jpg"
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(photo)
+    assert photo.storage_key == "sg/profiles/pa/bp-book.jpg"
 
-    owner = await _pa(sg)
-    photo = await _photo(sg, owner)
     reading = await record_event(
         sg, context=owner, kind=EventKind.READING, occurred_at=SEPT_3, artifact_id=photo.id
     )
-    reading.occurred_at = SEPT_10
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        reading.occurred_at = SEPT_10
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(reading)
+    assert as_utc(reading.occurred_at) == SEPT_3
 
 
 async def test_an_event_carries_a_short_label_and_never_the_raw_content(
@@ -245,10 +248,11 @@ async def test_a_fact_cannot_be_edited_only_superseded(sg: AsyncSession) -> None
     owner = await _pa(sg)
     photo = await _photo(sg, owner)
     fact = await _systolic(sg, owner, photo, 138)
-    fact.value = 120
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        fact.value = 120
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(fact)
+    assert fact.value == 138
 
 
 async def test_current_facts_honours_the_validity_window(sg: AsyncSession) -> None:

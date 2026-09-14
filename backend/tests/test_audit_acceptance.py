@@ -9,6 +9,7 @@ the other half of the promise: the trail says what was touched and never what it
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -18,14 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import record_share
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import NotTheirsToRead, read_audit
-from app.db import utcnow
+from app.db import take_keepers, utcnow
 from app.identity.models import Person, Profile
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key, revoke_key
 from app.keys.scopes import KeyRole, Scope
 from app.regions import OutOfRegion, Region
-from tests.support import Note, add_note, read_notes
+from tests.support import Note, add_note, read_notes, refused_unit
 
 PRIVATE = "Pa keeps this one to himself."
 WATER_PILL = "The water pill is at 8 in the morning."
@@ -249,20 +250,55 @@ async def test_a_helper_whose_key_was_closed_is_refused_and_the_patient_sees_it(
     ]
 
 
-async def test_a_stranger_reaching_across_the_region_pin_leaves_no_line_either(
+async def test_a_stranger_cannot_learn_that_a_profile_exists_or_where_it_is_pinned(
     sg: AsyncSession,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    astray = Profile(region=Region.MY, display_name="Pa", owner_person_id=pa.id)
+    here = await create_own_profile(sg, region=Region.SG, owner=pa)
+    ma = await register_person(sg, region=Region.SG, display_name="Ma", phone_e164="+6591110002")
+    astray = Profile(region=Region.MY, display_name="Ma", owner_person_id=ma.id)
     sg.add(astray)
     await sg.flush()
     stranger = await register_person(
         sg, region=Region.SG, display_name="Someone", phone_e164="+6591110099"
     )
 
-    with pytest.raises(OutOfRegion):
-        await resolve_key_context(sg, region=Region.SG, person_id=stranger.id, profile_id=astray.id)
-    # Nobody the profile knows asked, so nothing is written: a known id is not a way to fill
-    # someone's trail. (The owner asking is written down: test_memory_review.)
-    lines = (await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id == astray.id))).all()
+    # Missing, here, or pinned elsewhere: the same refusal, in the same words, and no line.
+    for profile_id in (uuid.uuid4(), here.id, astray.id):
+        with pytest.raises(NoKey) as refused:
+            await resolve_key_context(
+                sg, region=Region.SG, person_id=stranger.id, profile_id=profile_id
+            )
+        assert "MY" not in str(refused.value) and "held in" not in str(refused.value)
+    lines = (
+        await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id.in_([here.id, astray.id])))
+    ).all()
     assert lines == []
+
+    # The owner, whom the profile knows, is told the real reason and is written down.
+    with pytest.raises(OutOfRegion):
+        await resolve_key_context(sg, region=Region.SG, person_id=ma.id, profile_id=astray.id)
+    lines = (await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id == astray.id))).all()
+    assert [(e.refused_because, e.actor_person_id) for e in lines] == [("OutOfRegion", ma.id)]
+
+
+# --- a refused line outlives the unit of work that was refused ------------------------------
+
+
+async def test_a_refused_line_survives_the_rollback_the_refusal_causes(sg: AsyncSession) -> None:
+    _, owner, _, held = await _pa_and_his_daughter(sg)
+    before = len(await read_audit(sg, context=owner))
+
+    async with refused_unit(sg, OutOfScope):
+        # An allowed write in the same unit, and its line, go down with the refusal.
+        await add_note(sg, owner, scope=Scope.NOTES, body=PRIVATE)
+        await read_notes(sg, held, scope=Scope.NOTES)
+
+    assert await read_notes(sg, owner, scope=Scope.NOTES) == []
+    after = await read_audit(sg, context=owner)
+    assert [e.refused_because for e in after if e.outcome is Outcome.REFUSED] == ["OutOfScope"]
+    # ...the refusal, the owner's read of his own empty notes, and this read of the trail.
+    assert len(after) == before + 3
+    assert not any(e.action is Action.WRITE and e.target == Note.__tablename__ for e in after)
+    # The keepers were replayed and dropped; a unit that succeeds has none to replay.
+    assert take_keepers(sg) == []

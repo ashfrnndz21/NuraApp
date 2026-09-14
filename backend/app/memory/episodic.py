@@ -13,13 +13,15 @@ import re
 import uuid
 from datetime import datetime
 
+from sqlalchemy import ColumnElement, SQLColumnExpression, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_guard, audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.db import utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
+from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
 from app.memory.models import Artifact, ArtifactKind, Event, EventKind, SourceChannel, short_label
 from app.memory.working import require_open_episode
@@ -44,6 +46,32 @@ class NotTheArtefactsChannel(Refusal):
     """An event read from an artefact came in the way the artefact did, not some other way."""
 
 
+def held_here(context: KeyContext) -> ColumnElement[bool]:
+    """The artefacts this deployment may serve: the ones whose bytes are in its region.
+
+    Part of every query that returns an artefact, so a row that entered out of band naming
+    bytes held elsewhere is never read, by any reader.
+    """
+    return Artifact.region == context.region
+
+
+def cites_only_what_is_held_here(
+    artifact_id: SQLColumnExpression[uuid.UUID | None], context: KeyContext
+) -> ColumnElement[bool]:
+    """For a table that names an artefact: the rows naming none, or one held here.
+
+    Part of every query that returns an event or a fact, so nothing citing bytes held
+    elsewhere is served either, and a cite always leads to an artefact that can be read.
+    """
+    here = (
+        scoped_select(Artifact, context, Scope.RECORDS)
+        .with_only_columns(Artifact.id)
+        .where(held_here(context))
+    )
+    return or_(artifact_id.is_(None), artifact_id.in_(here))
+
+
+@audited(Action.WRITE, Scope.RECORDS, Artifact.__tablename__)
 async def store_artifact(
     session: AsyncSession,
     *,
@@ -62,10 +90,7 @@ async def store_artifact(
     The region must be the profile's own: health data never leaves it, and a reference to
     bytes held elsewhere would be exactly that. The refusal is in the trail like any other.
     """
-    async with audited_guard(
-        session, context, Action.WRITE, Scope.RECORDS, Artifact.__tablename__, now=now
-    ):
-        guard_region(held_in=region, asked_from=context.region)
+    guard_region(held_in=region, asked_from=context.region)
     digest = sha256.strip().lower()
     if not _DIGEST.match(digest):
         raise NotADigest("sha256 is sixty-four hex characters")
@@ -88,6 +113,7 @@ async def store_artifact(
     )
 
 
+@audited(Action.READ, Scope.RECORDS, Artifact.__tablename__)
 async def require_artifact(
     session: AsyncSession,
     *,
@@ -97,26 +123,24 @@ async def require_artifact(
 ) -> Artifact:
     """The artefact by that id on this profile, in this region, or a refusal saying no more.
 
-    The region is part of the query, not a check after it: a row that entered out of band
-    naming bytes held elsewhere is never read, so no reader of this table can serve it. To
-    this deployment such a row is not there, and the refusal is written down as that.
+    The region is part of the query (`held_here`), not a check after it: a row that entered
+    out of band naming bytes held elsewhere is never read. To this deployment such a row is
+    not there, and the refusal is written down as that.
     """
     found = await audited_read(
         session,
         Artifact,
         context,
         Scope.RECORDS,
-        where=(Artifact.id == artifact_id, Artifact.region == context.region),
+        where=(Artifact.id == artifact_id, held_here(context)),
         now=now,
     )
-    async with audited_guard(
-        session, context, Action.READ, Scope.RECORDS, Artifact.__tablename__, now=now
-    ):
-        if not found:
-            raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
+    if not found:
+        raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
     return found[0]
 
 
+@audited(Action.WRITE, Scope.RECORDS, Event.__tablename__)
 async def record_event(
     session: AsyncSession,
     *,
@@ -137,17 +161,14 @@ async def record_event(
     moment, one short line. What was said or shown is in the artefact, and only there.
     """
     named = short_label(label) if label is not None else None
-    async with audited_guard(
-        session, context, Action.WRITE, Scope.RECORDS, Event.__tablename__, now=now
-    ):
-        came_in_by = await _where_it_came_from(
-            session,
-            context=context,
-            artifact_id=artifact_id,
-            source_channel=source_channel,
-            label=named,
-            now=now,
-        )
+    came_in_by = await _where_it_came_from(
+        session,
+        context=context,
+        artifact_id=artifact_id,
+        source_channel=source_channel,
+        label=named,
+        now=now,
+    )
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id, now=now)
     return await audited_write(
@@ -188,6 +209,7 @@ async def _where_it_came_from(
     return artifact.source_channel
 
 
+@audited(Action.READ, Scope.RECORDS, Event.__tablename__)
 async def require_event(
     session: AsyncSession,
     *,
@@ -195,9 +217,14 @@ async def require_event(
     event_id: uuid.UUID,
     now: datetime | None = None,
 ) -> Event:
-    """The event by that id on this profile, or a refusal."""
+    """The event by that id on this profile, citing nothing held elsewhere, or a refusal."""
     found = await audited_read(
-        session, Event, context, Scope.RECORDS, where=(Event.id == event_id,), now=now
+        session,
+        Event,
+        context,
+        Scope.RECORDS,
+        where=(Event.id == event_id, cites_only_what_is_held_here(Event.artifact_id, context)),
+        now=now,
     )
     if not found:
         raise NoSuchEvent(f"no event {event_id} on profile {context.profile_id}")

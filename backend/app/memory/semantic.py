@@ -23,7 +23,7 @@ from typing import Any
 from sqlalchemy import ColumnElement, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_guard, audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -31,7 +31,13 @@ from app.errors import Refusal
 from app.keys.confirm import NobodyConfirmed, require_confirmer
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
-from app.memory.episodic import NoSuchArtifact, NoSuchEvent, require_artifact, require_event
+from app.memory.episodic import (
+    NoSuchArtifact,
+    NoSuchEvent,
+    cites_only_what_is_held_here,
+    require_artifact,
+    require_event,
+)
 from app.memory.models import ConfidenceState, Fact
 from app.memory.working import require_open_episode
 
@@ -167,7 +173,12 @@ async def _current_fact(
 ) -> Fact:
     """The fact by that id on this profile, still current — the only kind that can be replaced."""
     found = await audited_read(
-        session, Fact, context, Scope.RECORDS, where=(Fact.id == fact_id,), now=now
+        session,
+        Fact,
+        context,
+        Scope.RECORDS,
+        where=(Fact.id == fact_id, cites_only_what_is_held_here(Fact.artifact_id, context)),
+        now=now,
     )
     if not found:
         raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
@@ -206,20 +217,17 @@ async def _write_fact(
     )
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id, now=now)
-    async with audited_guard(
-        session, context, Action.WRITE, Scope.RECORDS, Fact.__tablename__, now=now
-    ):
-        await _check_who_said_so(
-            session,
-            context=context,
-            state=confidence_state,
-            confirmed_by_person_id=confirmed_by_person_id,
-            now=now,
-        )
-        disputes: Sequence[Fact] = ()
-        if supersedes is not None:
-            disputes = await open_disputes(session, context=context, fact_id=supersedes.id, now=now)
-            _check_supersession(supersedes, disputes, subject, attribute, confidence_state)
+    await _check_who_said_so(
+        session,
+        context=context,
+        state=confidence_state,
+        confirmed_by_person_id=confirmed_by_person_id,
+        now=now,
+    )
+    disputes: Sequence[Fact] = ()
+    if supersedes is not None:
+        disputes = await open_disputes(session, context=context, fact_id=supersedes.id, now=now)
+        _check_supersession(supersedes, disputes, subject, attribute, confidence_state)
     new = await audited_write(
         session,
         Fact,
@@ -261,6 +269,7 @@ async def _write_fact(
     return new
 
 
+@audited(Action.WRITE, Scope.RECORDS, Fact.__tablename__)
 async def assert_fact(
     session: AsyncSession,
     *,
@@ -311,6 +320,7 @@ async def assert_fact(
     )
 
 
+@audited(Action.WRITE, Scope.RECORDS, Fact.__tablename__)
 async def supersede_fact(
     session: AsyncSession,
     *,
@@ -357,6 +367,7 @@ async def supersede_fact(
     )
 
 
+@audited(Action.READ, Scope.RECORDS, Fact.__tablename__)
 async def current_facts(
     session: AsyncSession,
     *,
@@ -378,6 +389,7 @@ async def current_facts(
         Fact.confidence_state != ConfidenceState.DISPUTED,
         Fact.valid_from <= moment,
         or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
+        cites_only_what_is_held_here(Fact.artifact_id, context),
     ]
     if subject is not None:
         where.append(Fact.subject == subject)
@@ -387,6 +399,7 @@ async def current_facts(
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))
 
 
+@audited(Action.READ, Scope.RECORDS, Fact.__tablename__)
 async def open_disputes(
     session: AsyncSession,
     *,
@@ -404,6 +417,7 @@ async def open_disputes(
             Fact.supersedes_id == fact_id,
             Fact.confidence_state == ConfidenceState.DISPUTED,
             Fact.superseded_at.is_(None),
+            cites_only_what_is_held_here(Fact.artifact_id, context),
         ),
         now=now,
     )

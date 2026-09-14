@@ -14,14 +14,14 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import read_audit
 from app.db import as_utc
-from app.identity.models import Profile
+from app.identity.models import Person, Profile
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
@@ -29,9 +29,11 @@ from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import (
     EventFromNowhere,
     NoSuchArtifact,
+    NoSuchEvent,
     NotTheArtefactsChannel,
     record_event,
     require_artifact,
+    require_event,
     store_artifact,
 )
 from app.memory.models import (
@@ -40,6 +42,7 @@ from app.memory.models import (
     Artifact,
     ArtifactKind,
     ConfidenceState,
+    Episode,
     EpisodeKind,
     Event,
     EventKind,
@@ -62,14 +65,17 @@ from app.memory.semantic import (
     supersede_fact,
 )
 from app.memory.spine import (
+    STATUS_GOES_TO,
     NobodyConfirmed,
     NoSuchAppointment,
+    NotThatStatusChange,
     add_provider,
     book_appointment,
     change_appointment_status,
 )
-from app.memory.working import open_episode
+from app.memory.working import close_episode, open_episode
 from app.regions import OutOfRegion, Region
+from tests.support import refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -627,29 +633,12 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
 ) -> None:
     owner = await _pa(sg)
     episode = await open_episode(sg, context=owner, kind=EpisodeKind.ILLNESS, label="a cold")
-    episode.label = "the flu"
-    with pytest.raises(ImmutableRow):
+    async with refused_unit(sg, ImmutableRow):
+        episode.label = "the flu"
         await sg.flush()
-    await sg.rollback()
+    await sg.refresh(episode)
+    assert episode.label == "a cold"
 
-    owner = await _pa(sg)
-    dr_tan = await add_provider(
-        sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
-    )
-    visit = await book_appointment(
-        sg,
-        context=owner,
-        provider_id=dr_tan.id,
-        scheduled_at=SEPT_10,
-        purpose="see Dr Tan again",
-        confirmed_by_person_id=owner.person_id,
-    )
-    visit.scheduled_at = SEPT_10 + timedelta(days=1)
-    with pytest.raises(ImmutableRow):
-        await sg.flush()
-    await sg.rollback()
-
-    owner = await _pa(sg)
     dr_tan = await add_provider(
         sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
     )
@@ -662,27 +651,130 @@ async def test_an_episode_only_closes_and_an_appointment_only_changes_status(
         confirmed_by_person_id=owner.person_id,
         now=SEPT_3,
     )
+    neighbour = await _pa(sg, phone="+6591110002")
+    async with refused_unit(sg, ImmutableRow):
+        # A refused reach earlier in the same unit of work is not lost with it.
+        with pytest.raises(NoSuchAppointment):
+            await change_appointment_status(
+                sg,
+                context=neighbour,
+                appointment_id=visit.id,
+                status=AppointmentStatus.CANCELLED,
+                confirmed_by_person_id=neighbour.person_id,
+            )
+        visit.scheduled_at = SEPT_10 + timedelta(days=1)
+        await sg.flush()
+    await sg.refresh(visit)
+    assert as_utc(visit.scheduled_at) == SEPT_10
+    assert _refusals(list(await read_audit(sg, context=neighbour))) == {
+        (Action.WRITE, "appointment", "NoSuchAppointment")
+    }
+
+    # Status goes one way, each step on a person's confirm, naming who gave it.
     before = len(await read_audit(sg, context=owner))
-    changed = await change_appointment_status(
+    confirmed = await change_appointment_status(
         sg,
         context=owner,
         appointment_id=visit.id,
-        status=AppointmentStatus.ATTENDED,
+        status=AppointmentStatus.CONFIRMED,
+        confirmed_by_person_id=owner.person_id,
         now=SEPT_10,
     )
-    assert changed.id == visit.id and changed.status is AppointmentStatus.ATTENDED
+    assert confirmed.status is AppointmentStatus.CONFIRMED
+    assert confirmed.status_changed_by_person_id == owner.person_id
+    assert confirmed.confirmed_by_person_id == owner.person_id
     trail = await read_audit(sg, context=owner)
     # One read to find it, one write to change it, then the owner's own read of the trail.
     assert len(trail) == before + 3
     assert (Action.WRITE, "appointment", visit.id) in {
         (e.action, e.target, e.target_id) for e in trail if as_utc(e.at) == SEPT_10
     }
-
-    neighbour = await _pa(sg, phone="+6591110002")
-    with pytest.raises(NoSuchAppointment):
+    with pytest.raises(NobodyConfirmed):
         await change_appointment_status(
-            sg, context=neighbour, appointment_id=visit.id, status=AppointmentStatus.CANCELLED
+            sg,
+            context=owner,
+            appointment_id=visit.id,
+            status=AppointmentStatus.CANCELLED,
+            confirmed_by_person_id=neighbour.person_id,
         )
+    with pytest.raises(NotThatStatusChange):
+        await change_appointment_status(
+            sg,
+            context=owner,
+            appointment_id=visit.id,
+            status=AppointmentStatus.PLANNED,
+            confirmed_by_person_id=owner.person_id,
+        )
+    cancelled = await change_appointment_status(
+        sg,
+        context=owner,
+        appointment_id=visit.id,
+        status=AppointmentStatus.CANCELLED,
+        confirmed_by_person_id=owner.person_id,
+    )
+    assert cancelled.status is AppointmentStatus.CANCELLED
+    # Nothing leaves cancelled, attended or not attended: no way back to planned.
+    for status in AppointmentStatus:
+        with pytest.raises(NotThatStatusChange):
+            await change_appointment_status(
+                sg,
+                context=owner,
+                appointment_id=visit.id,
+                status=status,
+                confirmed_by_person_id=owner.person_id,
+            )
+    assert all(AppointmentStatus.PLANNED not in goes_to for goes_to in STATUS_GOES_TO.values())
+
+
+async def test_what_was_done_is_not_undone_by_writing_none_over_it(sg: AsyncSession) -> None:
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner)
+    old = await _systolic(sg, owner, photo, 138)
+    await supersede_fact(sg, context=owner, fact_id=old.id, value=136, confidence=0.9)
+    async with refused_unit(sg, ImmutableRow):
+        old.superseded_at = None
+        await sg.flush()
+    await sg.refresh(old)
+    assert old.superseded_at is not None
+
+    episode = await open_episode(sg, context=owner, kind=EpisodeKind.ILLNESS, label="a cold")
+    await close_episode(sg, context=owner, episode_id=episode.id, closed_at=SEPT_10)
+    async with refused_unit(sg, ImmutableRow):
+        episode.closed_at = None
+        await sg.flush()
+    await sg.refresh(episode)
+    assert episode.closed_at is not None
+
+
+async def test_deleting_a_profile_takes_every_row_of_it_with_it(sg: AsyncSession) -> None:
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner)
+    reading = await record_event(
+        sg, context=owner, kind=EventKind.READING, occurred_at=SEPT_3, artifact_id=photo.id
+    )
+    first = await _systolic(sg, owner, photo, 138)
+    await supersede_fact(sg, context=owner, fact_id=first.id, value=136, confidence=0.9)
+    episode = await open_episode(sg, context=owner, kind=EpisodeKind.ILLNESS, label="a cold")
+    dr_tan = await add_provider(
+        sg, context=owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG
+    )
+    await book_appointment(
+        sg,
+        context=owner,
+        provider_id=dr_tan.id,
+        scheduled_at=SEPT_10,
+        purpose="see Dr Tan again",
+        confirmed_by_person_id=owner.person_id,
+        episode_id=episode.id,
+    )
+    assert reading.artifact_id == photo.id
+
+    # The profile goes (PDPA), and the ties cascade past every composite key.
+    await sg.execute(delete(Profile).where(Profile.id == owner.profile_id))
+    for table in (Artifact, Event, Fact, Episode, Appointment, AuditEntry):
+        rows = (await sg.scalars(select(table).where(table.profile_id == owner.profile_id))).all()
+        assert rows == [], table.__tablename__
+    assert await sg.get(Person, owner.person_id) is not None
 
 
 # --- 7. an artefact's region is checked on read ---------------------------------------------
@@ -728,6 +820,36 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
             confidence=0.8,
             artifact_id=astray.id,
         )
+
+    # Rows that entered out of band citing it are not served either, by any reader.
+    stray_event = Event(
+        profile_id=owner.profile_id,
+        kind=EventKind.READING,
+        occurred_at=SEPT_3,
+        source_channel=SourceChannel.CLINIC,
+        artifact_id=astray.id,
+    )
+    stray_fact = Fact(
+        profile_id=owner.profile_id,
+        subject="weight",
+        attribute="kg",
+        value=70,
+        confidence=0.8,
+        confidence_state=ConfidenceState.EXTRACTED,
+        artifact_id=astray.id,
+        valid_from=SEPT_3,
+    )
+    sg.add_all([stray_event, stray_fact])
+    await sg.flush()
+    with pytest.raises(NoSuchEvent):
+        await require_event(sg, context=owner, event_id=stray_event.id)
+    assert await current_facts(sg, context=owner, subject="weight") == []
+    with pytest.raises(NoSuchFact):
+        await supersede_fact(sg, context=owner, fact_id=stray_fact.id, value=71, confidence=0.8)
+    # ...while the same rows citing an artefact held here are.
+    photo = await _photo(sg, owner)
+    here = await _systolic(sg, owner, photo, 138)
+    assert [f.id for f in await current_facts(sg, context=owner, now=SEPT_10)] == [here.id]
 
 
 # --- 8. an appointment carries who confirmed it --------------------------------------------

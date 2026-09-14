@@ -14,7 +14,7 @@ from datetime import datetime
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -36,6 +36,7 @@ class NoSuchEpisode(Refusal):
     """No open episode by that id on this profile."""
 
 
+@audited(Action.READ, Scope.RECORDS, Episode.__tablename__)
 async def open_episodes(
     session: AsyncSession,
     *,
@@ -51,6 +52,7 @@ async def open_episodes(
     return sorted(found, key=lambda episode: as_utc(episode.opened_at))
 
 
+@audited(Action.WRITE, Scope.RECORDS, Episode.__tablename__)
 async def open_episode(
     session: AsyncSession,
     *,
@@ -76,6 +78,7 @@ async def open_episode(
     )
 
 
+@audited(Action.READ, Scope.RECORDS, Episode.__tablename__)
 async def require_open_episode(
     session: AsyncSession,
     *,
@@ -97,6 +100,7 @@ async def require_open_episode(
     return found[0]
 
 
+@audited(Action.WRITE, Scope.RECORDS, Episode.__tablename__)
 async def close_episode(
     session: AsyncSession,
     *,

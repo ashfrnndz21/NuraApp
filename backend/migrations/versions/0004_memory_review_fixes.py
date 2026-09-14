@@ -6,7 +6,8 @@ artifact_id)` on event and fact points at `artifact(profile_id, id)`, and the sa
 uniques those keys need. The single-column keys 0003 shipped stay; these are added beside
 them. An event says where it came in from (`source_channel`), an appointment says who
 confirmed it (`confirmed_by_person_id`), and a fact says who confirmed or disputed it
-(`confirmed_by_person_id`, nullable: an extraction names nobody).
+(`confirmed_by_person_id`, nullable: an extraction names nobody); a change of an
+appointment's status names who confirmed the step (`status_changed_by_person_id`).
 
 The event and appointment columns are NOT NULL and neither has a default, because a default
 would invent a source or a confirmer. `source_channel` is filled from the artefact where an
@@ -33,15 +34,23 @@ branch_labels = None
 depends_on = None
 
 SOURCE_CHANNEL = sa.Enum(
-    "app", "whatsapp", "connector", "device", "clinic",
-    name="source_channel", native_enum=False, length=32
+    "app",
+    "whatsapp",
+    "connector",
+    "device",
+    "clinic",
+    name="source_channel",
+    native_enum=False,
+    length=32,
 )
 
 CONFIRMED_BY = "fk_appointment_confirmed_by_person"
+STATUS_CHANGED_BY = "fk_appointment_status_changed_by_person"
 FACT_CONFIRMED_BY = "fk_fact_confirmed_by_person"
 
-_ROW_OF_PROFILE = ("artifact", "event", "episode", "fact", "provider")
-"""The tables another row may be tied to: each gets a unique on (profile_id, id)."""
+_ROW_OF_PROFILE = ("artifact", "event", "episode", "fact", "provider", "appointment")
+"""The tables another row may be tied to, or will be (E05 hangs off appointment): each gets a
+unique on (profile_id, id)."""
 
 _TIED = (
     ("event", "artifact_id", "artifact"),
@@ -71,6 +80,17 @@ def _refuse_if_any(table: str, column: str) -> None:
         raise RuntimeError(
             f"{left} row(s) in {table} have no {column} and there is no honest value to give "
             "them; sort them out by hand before upgrading"
+        )
+
+
+def _refuse_if_kept(table: str, column: str) -> None:
+    """Stop rather than drop a person's word, or where an event came from, on the way down."""
+    held = op.get_bind().scalar(sa.text(f"SELECT count(*) FROM {table} WHERE {column} IS NOT NULL"))
+    if held:
+        raise RuntimeError(
+            f"{held} row(s) in {table} carry a {column} that this downgrade would drop; "
+            "that is a person's word or an event's source, and it is not thrown away by a "
+            "migration — move it out by hand first"
         )
 
 
@@ -104,22 +124,33 @@ def upgrade() -> None:
     _refuse_if_any("appointment", "confirmed_by_person_id")
     with op.batch_alter_table("appointment") as batch:
         batch.alter_column("confirmed_by_person_id", existing_type=sa.Uuid(), nullable=False)
+        batch.create_foreign_key(CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"])
+
+    with op.batch_alter_table("appointment") as batch:
+        batch.add_column(sa.Column("status_changed_by_person_id", sa.Uuid(), nullable=True))
         batch.create_foreign_key(
-            CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"]
+            STATUS_CHANGED_BY, "person", ["status_changed_by_person_id"], ["id"]
         )
 
     with op.batch_alter_table("fact") as batch:
         batch.add_column(sa.Column("confirmed_by_person_id", sa.Uuid(), nullable=True))
-        batch.create_foreign_key(
-            FACT_CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"]
-        )
+        batch.create_foreign_key(FACT_CONFIRMED_BY, "person", ["confirmed_by_person_id"], ["id"])
 
 
 def downgrade() -> None:
+    # The mirror of the upgrade: as it will not invent a source or a confirmer, this will not
+    # drop one. On a database holding any of them, the downgrade stops.
+    _refuse_if_kept("fact", "confirmed_by_person_id")
+    _refuse_if_kept("appointment", "status_changed_by_person_id")
+    _refuse_if_kept("appointment", "confirmed_by_person_id")
+    _refuse_if_kept("event", "source_channel")
+
     with op.batch_alter_table("fact") as batch:
         batch.drop_constraint(FACT_CONFIRMED_BY, type_="foreignkey")
         batch.drop_column("confirmed_by_person_id")
     with op.batch_alter_table("appointment") as batch:
+        batch.drop_constraint(STATUS_CHANGED_BY, type_="foreignkey")
+        batch.drop_column("status_changed_by_person_id")
         batch.drop_constraint(CONFIRMED_BY, type_="foreignkey")
         batch.drop_column("confirmed_by_person_id")
     with op.batch_alter_table("event") as batch:
