@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { go, reloadDoors, signOutEverywhere } from "../flow";
+import { go, reloadDoors, signOutEverywhere, openTab } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { density, densityChosen, me, profile, setDensity, setLanguage } from "../store/session";
@@ -63,7 +63,7 @@ export function MeScreen(): JSX.Element {
           {s.me.signOut}
         </Pill>
       </Tile>
-      <TabBar current="me" onSelect={(tab) => go(tab === "today" ? { name: "today" } : { name: "me" })} />
+      <TabBar current="me" onSelect={openTab} />
     </main>
   );
 }

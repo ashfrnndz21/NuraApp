@@ -47,6 +47,8 @@ sw.addEventListener("fetch", (event) => {
   if (url.origin !== sw.location.origin) return;
   if (url.pathname.startsWith("/api/")) return; // health data: network only, never cached here
   if (!url.pathname.startsWith(BASE)) return;
+  // The pharmacist's page (E22-04) is not the patient's shell: network only, never kept.
+  if (url.pathname.startsWith(`${BASE}review`)) return;
 
   if (request.mode === "navigate") {
     // The page itself: the network when it is there, the cached shell when it is not.

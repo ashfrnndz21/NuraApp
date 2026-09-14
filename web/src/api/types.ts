@@ -695,8 +695,15 @@ export interface SharingPreviewOut {
 
 export interface ConsentOut {
   consent_id: string;
+  /** What the agreement is for, by the backend's code (`share_with_family` lets one person in). */
+  purpose?: string;
+  person_id?: string;
   holder_person_id: string | null;
   scopes: string[] | null;
   text_version: string;
+  language?: string;
+  /** The words as he read them and agreed to, one idea per line. */
   wording_text: string;
+  granted_at?: string;
+  revoked_at?: string | null;
 }

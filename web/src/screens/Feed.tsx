@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
 import type { JSX } from "preact";
 import type { FeedItemOut } from "../api/types";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { cardView, speechLanguage, statusLine, type CardView, type SideAction } from "../feed/model";
 import type { Playback } from "../feed/playback";
 import { feedFor } from "../feed/session";
@@ -195,7 +195,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         </div>
       )}
 
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" onSelect={openTab} />
     </main>
   );
 }

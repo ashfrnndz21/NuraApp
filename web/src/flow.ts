@@ -28,7 +28,31 @@ export type Screen =
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   | { name: "me" }
-  | { name: "onboarding" };
+  | { name: "onboarding" }
+  /** Family (E12, E00-02, E00-07, E17-05, E18-02): his circle and his trail first, then the
+   *  parts the backend lets each person reach. */
+  | { name: "family"; part?: FamilyPart };
+
+/** One part of Family at a time. */
+export type FamilyPart =
+  | "home"
+  | "keys"
+  | "trail"
+  | "onlyMe"
+  | "consents"
+  | "record"
+  | "thread"
+  | "roster"
+  | "messages"
+  | "metrics"
+  | "calendar";
+
+export type Tab = "today" | "family" | "me";
+
+/** The tab bar's three places. */
+export function openTab(tab: Tab): void {
+  go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
+}
 
 export const screen = signal<Screen>({ name: "loading" });
 

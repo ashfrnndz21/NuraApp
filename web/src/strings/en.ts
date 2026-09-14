@@ -9,6 +9,8 @@ export const en = {
     today: "Today",
     // @patient headline
     me: "Me",
+    // @patient headline
+    family: "Family",
   },
   signIn: {
     // @patient headline
@@ -716,6 +718,263 @@ export const en = {
       },
     },
   },
+  family: {
+    // @patient headline
+    title: "Family",
+    // @patient headline
+    circleSelf: "Who can see your papers",
+    // @patient headline
+    circleOther: "Who can see {name}'s papers",
+    // @patient headline
+    trailSelf: "Who looked at your papers",
+    // @patient headline
+    trailOther: "Who looked at {name}'s papers",
+    // @patient headline
+    onlyMe: "Keep a part to yourself",
+    // @patient
+    onlyMeLead: "Tap a part to keep it to yourself.",
+    // @patient phrase
+    onlyMeYes: "Yes, only me",
+    // @patient phrase
+    onlyMeLift: "Let them see it again",
+    // @patient phrase
+    onlyMeMarked: "Only you",
+    // @patient headline
+    consentsSelf: "What you said yes to",
+    // @patient headline
+    consentsOther: "What {name} said yes to",
+    // @patient phrase
+    stop: "Stop this",
+    // @patient phrase
+    stopYes: "Yes, stop it",
+    // @patient phrase
+    keepCopy: "Keep a copy to print",
+    // @patient phrase
+    savePage: "Save the page",
+    // @patient headline
+    thread: "Family messages",
+    // @patient phrase
+    threadEarlier: "Show the day before",
+    // @patient phrase
+    messageLabel: "Your message to the family",
+    // @patient phrase
+    sendMessage: "Send to the family",
+    // @patient headline
+    keys: "Change who can see what",
+    // @patient headline
+    newKey: "Give someone a key",
+    // @patient phrase
+    holderName: "Their name",
+    // @patient phrase
+    holderPhone: "Their phone number",
+    // @patient phrase
+    roleLabel: "Who they are",
+    // @patient phrase
+    partsLabel: "What they can see",
+    // @patient phrase
+    windowLabel: "For how long",
+    // @patient phrase
+    makeKey: "Make the key",
+    // @patient phrase
+    narrow: "Make it smaller",
+    // @patient phrase
+    narrowYes: "Yes, make it smaller",
+    // @patient phrase
+    closeKey: "Close this key",
+    // @patient phrase
+    closeYes: "Yes, close it now",
+    // @patient phrase
+    notNow: "Not now",
+    // @patient phrase
+    roles: {
+      chief: "Looks after everything",
+      caregiver: "Carer",
+      viewer: "Can only look",
+      helper: "Helper",
+      emergency: "Emergency only",
+      clinic: "Clinic",
+    },
+    // @patient phrase
+    windows: {
+      always: "Until stopped",
+      thirty_days: "30 days",
+      seventy_two_hours: "3 days",
+      one_day: "1 day",
+    },
+    // @patient phrase
+    parts: {
+      medicines: "Medicines",
+      visits: "Visits to the doctor",
+      readings: "Blood pressure book and sugar numbers",
+      records: "Papers",
+      notes: "Private notes",
+      money: "Insurance letters",
+      emergency: "Emergency card",
+      family: "Family list",
+      ask: "Questions to Nura",
+      send: "Messages Nura sends",
+    },
+    // @patient headline
+    roster: "Who is on duty, and tasks",
+    // @patient headline
+    rosterTitle: "Who is on duty",
+    // @patient phrase
+    who: "Who",
+    // @patient phrase
+    days: "Days",
+    // @patient phrase
+    from: "From",
+    // @patient phrase
+    to: "To",
+    // @patient phrase
+    onDutyNow: "On duty now",
+    // @patient phrase
+    takeOff: "Take off the list",
+    // @patient phrase
+    addSlot: "Put on duty",
+    // @patient headline
+    tasksTitle: "Tasks",
+    // @patient phrase
+    taskWhat: "What to do",
+    // @patient phrase
+    taskDue: "By when",
+    // @patient phrase
+    addTask: "Give the task",
+    // @patient phrase
+    done: "It is done",
+    // @patient phrase
+    doneChip: "Done",
+    // @patient phrase
+    nextVisit: "See the next visit and who drives",
+    // @patient headline
+    messagesTitle: "Messages for {name}",
+    // @patient phrase
+    templates: {
+      pickup: "A pick-up time",
+      call_you: "A time to call",
+      see_doctor: "A visit to the doctor",
+      thinking_of_you: "Thinking of you",
+      weigh_tomorrow: "Stand on the scale tomorrow",
+      drink_water: "Drink a glass of water",
+      water_pill_morning: "The water pill at 8",
+    },
+    // @patient phrase
+    ownWords: "My own words",
+    // @patient phrase
+    slots: {
+      who: "Who",
+      when: "When",
+      doctor: "Which doctor",
+      day: "Which day",
+    },
+    // @patient phrase
+    memoLabel: "One line each",
+    // @patient phrase
+    languageLabel: "In which language",
+    // @patient phrase
+    preview: "See it as it will look",
+    // @patient phrase
+    sendAt: "Send from",
+    // @patient phrase
+    until: "Until",
+    // @patient phrase
+    channelApp: "In the app",
+    // @patient phrase
+    channelWhatsapp: "On WhatsApp",
+    // @patient phrase
+    schedule: "Schedule it",
+    // @patient phrase
+    states: {
+      scheduled: "Waiting to send",
+      sent: "Sent",
+      not_sent: "Not sent in time",
+    },
+    // @patient headline
+    metrics: "The week in numbers",
+    // @patient phrase
+    weekOf: "Week of {date}",
+    // @patient phrase
+    taps: "Taps",
+    // @patient phrase
+    fineToday: "Fine today",
+    // @patient phrase
+    fineShare: "Fine today, out of 100",
+    // @patient phrase
+    kind: "Kind",
+    // @patient phrase
+    handedOver: "Given",
+    // @patient phrase
+    accepted: "Taken up",
+    // @patient phrase
+    dismissed: "Put aside",
+    // @patient phrase
+    kinds: {
+      anticipation: "Getting ready",
+      check_in: "Checking in",
+      pattern: "A pattern",
+      commitment: "A promise",
+      recognition: "Well done",
+      presence: "Thinking of you",
+    },
+    // @patient headline
+    calendar: "Visits from a calendar",
+    // @patient phrase
+    chooseFile: "Choose a calendar file",
+    // @patient phrase
+    agree: "I agree",
+    // @patient phrase
+    bookYes: "Yes, book this visit",
+    // @patient phrase
+    notThis: "Not this one",
+  },
+  review: {
+    // @patient headline
+    title: "Pharmacist's queue",
+    // @patient phrase
+    tokenLabel: "Staff token",
+    // @patient phrase
+    open: "Open the queue",
+    // @patient headline
+    statusTitle: "The first 50 of each card",
+    // @patient phrase
+    cardType: "Card",
+    // @patient phrase
+    sampled: "Kept",
+    // @patient phrase
+    pending: "Waiting",
+    // @patient phrase
+    stillToCheck: "Still to check",
+    // @patient phrase
+    sourcesWaiting: "Sources waiting: {count}",
+    // @patient headline
+    queueTitle: "Waiting for a decision",
+    // @patient phrase
+    showPending: "Only waiting",
+    // @patient phrase
+    showAll: "Everything",
+    // @patient phrase
+    approve: "Approve",
+    // @patient phrase
+    reject: "Reject",
+    // @patient phrase
+    reasonLabel: "Why",
+    // @patient phrase
+    rewrite: "Rewrite the lines",
+    // @patient phrase
+    headline: "Headline",
+    // @patient phrase
+    body: "Lines",
+    // @patient phrase
+    voice: "Spoken lines",
+    // @patient phrase
+    why: "Why this card",
+    // @patient phrase
+    saveRewrite: "Keep as a proposal",
+    // @patient phrase
+    decided: "Decided",
+    // @patient phrase
+    leave: "Close the queue",
+  },
   errors: {
     // @patient
     network: "Nura cannot reach the internet right now.",
@@ -797,5 +1056,36 @@ export const en = {
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",
+    WouldWiden: ["Nura cannot make this wider.", "The owner must agree to more first."],
+    NothingToNarrow: "That would change nothing.",
+    NotTheDoer: "Only the person it is for can say it is done.",
+    AlreadyDone: "This is already done.",
+    NotTheOwner: "Only the owner can do this.",
+    AlreadyMarked: "This part is already kept to the owner.",
+    NotMarked: "This part is already open.",
+    NotAPartToMark: "The emergency card is always open to the family.",
+    NotOwnerOrChief: ["Only the owner can see this.", "The one who looks after these papers can too."],
+    NotStaff: "Only Nura's pharmacist can open this.",
+    NoSuchSlot: "That turn is not on the list any more.",
+    NoSuchTask: "That task is not here any more.",
+    NotADuty: "Please choose the days and the times.",
+    NotOnThisProfile: "That person cannot see these papers.",
+    NoSuchTemplate: "Nura does not have that message.",
+    MissingSlot: "Please fill in every part of the message.",
+    NotAMemo: "Please write 1 to 6 short lines.",
+    BadWindow: "Please choose a time that has not passed.",
+    NotPlainWords: "Please use plainer words.",
+    NotAMessage: "Please write a short message.",
+    NotTheirsToConnect: ["Only the owner can add a calendar.", "The one who looks after these papers can too."],
+    NotTheirsToDecide: "You can see these visits but not decide them.",
+    AlreadyDecided: "Someone already answered this one.",
+    NoSuchConnector: "Please add the calendar file again.",
+    NoSuchProposal: "That visit is not here any more.",
+    NotACalendar: "Nura cannot read that calendar file.",
+    ConsentRevoked: "The owner stopped this.",
+    ConsentOutOfDate: "The owner must agree to the new words first.",
+    AlreadyReviewed: "Someone already decided this one.",
+    NoSuchReviewItem: "That item is not in the queue any more.",
+    NotWellFormed: "Nura did not understand that.",
   },
 } satisfies Strings;

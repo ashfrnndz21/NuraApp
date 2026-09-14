@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import { Refused } from "../api/client";
 import * as nura from "../api/nura";
 import type { ConsultOut, LogisticsOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
 import { fill, isLanguage, language, t } from "../strings";
@@ -414,7 +414,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       {stage.kind === "notes" && summaryCard(stage.summary, "summary")}
 
       {!listening && stage.kind !== "saving" && stage.kind !== "held" && (
-        <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+        <TabBar current="today" onSelect={openTab} />
       )}
     </main>
   );
