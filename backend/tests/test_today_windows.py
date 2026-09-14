@@ -13,10 +13,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import FrozenClock
+from app.delivery.triggers.preferences import current
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Anchor
 from app.medicines.service import active_lines, proud_days, record_dose_taken, today
-from app.delivery.triggers.preferences import current
 from app.medicines.windows import window_status
 from app.onboarding.settings import SettingsValues, save_settings
 from app.routines.service import day_of

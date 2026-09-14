@@ -18,8 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.printable import emergency_card_html
 from app.clock import FrozenClock
-from app.keys.confirm import NotWhatWasConfirmed, confirm
-from app.keys.scopes import KeyRole
 from app.insurance.insurer import (
     NotAPolicyReference,
     NotTheirsToSetInsurer,
@@ -27,6 +25,8 @@ from app.insurance.insurer import (
     insurer_draft,
     set_insurer,
 )
+from app.keys.confirm import NotWhatWasConfirmed, confirm
+from app.keys.scopes import KeyRole
 from app.safety.emergency_card import emergency_card
 from tests.safety_support import REGISTRY, assert_plain, clinic, let_in, pa, water_pill
 
