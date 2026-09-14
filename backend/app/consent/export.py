@@ -103,6 +103,11 @@ def basis_lines(
             if recording_kept:
                 lines.append("Nura kept the recording.")
             return lines
+        case ConsentBasis.PATIENT_ASKED:
+            return [
+                f"{patient} asked {giver} to set this up.",
+                f"{giver} kept {patients} papers until {patient} said it was his.",
+            ]
 
 
 @dataclass(frozen=True, slots=True)

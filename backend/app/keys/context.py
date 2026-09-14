@@ -11,13 +11,14 @@ import uuid
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import utcnow
 from app.errors import Refusal
-from app.identity.models import Profile
+from app.identity.models import Person, Profile
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.regions import Region, guard_region
@@ -49,7 +50,9 @@ class NoKey(Refusal):
 
     A profile that does not exist, one the asker has never held a key to, and one pinned to
     another region all refuse in these same words to a person the profile does not know, so
-    that no profile can be found, or placed, by asking for it.
+    that no profile can be found, or placed, by asking for it. The one person a profile
+    knows without a key or ownership is the one it was set up for, by his number, before
+    he claims it (`Standing.CLAIMANT`).
     """
 
     def __init__(self, *, person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
@@ -67,6 +70,28 @@ class OutOfScope(Refusal):
         self.context = context
 
 
+class Standing(StrEnum):
+    """On what footing the person reaches the profile.
+
+    `OWNER`: the graph is his, and he needs no key. `HOLDER`: a key someone cut him on a
+    graph that has an owner. `STEWARD`: the chief key he holds on a graph nobody owns yet,
+    because he set it up for the patient (E01). `CLAIMANT`: the person the graph was set up
+    for, reaching it by the number it was set up against, before he has said it is his: he
+    sees whose graph it is and nothing else until he claims it. `NONE`: nothing resolved —
+    the footing a refusal is written under.
+    """
+
+    OWNER = "owner"
+    HOLDER = "holder"
+    STEWARD = "steward"
+    CLAIMANT = "claimant"
+    NONE = "none"
+
+
+CLAIMANT_SCOPES = frozenset({Scope.PROFILE})
+"""What the person a graph was set up for may see of it before he claims it: whose it is."""
+
+
 @dataclass(frozen=True, slots=True)
 class KeyContext:
     """The resolved answer to "may this person see this, and which parts"."""
@@ -77,11 +102,23 @@ class KeyContext:
     scopes: frozenset[Scope]
     role: KeyRole | None = None
     key_id: uuid.UUID | None = None
+    standing: Standing = Standing.OWNER
 
     @property
     def is_owner(self) -> bool:
-        """The owner reads his own graph without a key, so there is no key to name."""
-        return self.key_id is None
+        """The owner reads his own graph without a key, so there is no key to name. The
+        person a graph was set up for reads it without a key too, and is not its owner yet."""
+        return self.standing is Standing.OWNER
+
+    @property
+    def is_steward(self) -> bool:
+        """Holding the graph for the patient until he claims it."""
+        return self.standing is Standing.STEWARD
+
+    @property
+    def is_claimant(self) -> bool:
+        """The patient, before he has said the graph set up for him is his."""
+        return self.standing is Standing.CLAIMANT
 
     def allows(self, scope: Scope) -> bool:
         return scope in self.scopes
@@ -117,6 +154,19 @@ async def owned_profile(
     )
 
 
+async def profile_for_number(
+    session: AsyncSession, *, region: Region, phone_e164: str
+) -> Profile | None:
+    """The profile set up against this phone number here, owned or still stewarded, or None.
+
+    Like `owned_profile`: a row lookup for the code about to make a context or refuse to,
+    never a read of what the graph holds. One graph per number is the rule (E01).
+    """
+    return await session.scalar(
+        select(Profile).where(Profile.patient_phone_e164 == phone_e164, Profile.region == region)
+    )
+
+
 async def resolve_key_context(
     session: AsyncSession,
     *,
@@ -133,7 +183,7 @@ async def resolve_key_context(
     moment = utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
-        _unknown_reach(person_id, profile_id)
+        unknown_reach(person_id, profile_id)
         raise NoKey(person_id=person_id, profile_id=profile_id)
 
     # Every key ever cut for this person on this profile, closed ones included. A person the
@@ -147,7 +197,18 @@ async def resolve_key_context(
         )
     )
     if profile.owner_person_id != person_id and not keys:
-        _unknown_reach(person_id, profile_id)
+        if await is_claimant_of(session, profile=profile, person_id=person_id):
+            # The graph was set up against his number and nobody owns it yet: he may see
+            # whose it is, and claim it; the rest waits for his OK (`app.identity.doors`).
+            guard_region(held_in=profile.region, asked_from=region)
+            return KeyContext(
+                profile_id=profile.id,
+                region=profile.region,
+                person_id=person_id,
+                scopes=CLAIMANT_SCOPES,
+                standing=Standing.CLAIMANT,
+            )
+        unknown_reach(person_id, profile_id)
         raise NoKey(person_id=person_id, profile_id=profile_id)
 
     # A caller the profile knows is told the real reason; but nothing about another region's
@@ -171,6 +232,8 @@ async def resolve_key_context(
                 scopes=key.scopes_held,
                 role=key.role,
                 key_id=key.id,
+                # A key on a graph nobody owns is the steward's: he holds it for the patient.
+                standing=(Standing.STEWARD if profile.owner_person_id is None else Standing.HOLDER),
             )
     # The revoked-helper case: she held a key once, it is closed, and she is reaching again.
     refused = NoKey(person_id=person_id, profile_id=profile_id)
@@ -178,9 +241,20 @@ async def resolve_key_context(
     raise refused
 
 
-def _unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+def unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+    """Count a reach by a person the profile has never known. No line is written; see
+    `on_unknown_reach`. Public for the doors that refuse a stranger by a phone number."""
     if on_unknown_reach is not None:
         on_unknown_reach(person_id, profile_id)
+
+
+async def is_claimant_of(session: AsyncSession, *, profile: Profile, person_id: uuid.UUID) -> bool:
+    """Whether this person is the one the profile was set up for and has not claimed it yet:
+    it has no owner, and his number is the number it was set up against."""
+    if profile.owner_person_id is not None or profile.patient_phone_e164 is None:
+        return False
+    person = await session.get(Person, person_id)
+    return person is not None and person.phone_e164 == profile.patient_phone_e164
 
 
 async def holds_the_profile(
@@ -202,7 +276,9 @@ async def holds_the_profile(
         select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
     )
     moment = utcnow()
-    return any(key.is_active(moment) for key in keys)
+    if any(key.is_active(moment) for key in keys):
+        return True
+    return await is_claimant_of(session, profile=profile, person_id=person_id)
 
 
 async def _record_refused(
@@ -229,6 +305,7 @@ async def _record_refused(
             region=profile.region,
             person_id=person_id,
             scopes=frozenset(),
+            standing=Standing.NONE,
         ),
         action=Action.READ,
         # Resolving a key is a reach at the face of the graph, which every key opens.

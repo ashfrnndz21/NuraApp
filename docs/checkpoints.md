@@ -9,7 +9,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 1 | Heartbeat | `make dev`, open http://127.0.0.1:8000/docs, call `GET /health` | scaffold | **ready** |
 | 2 | Accounts, keys, consent, audit | Register by phone code (the code prints in the server log, no SMS), create a profile, issue a caregiver key scoped to `medicines, visits`, watch it read medicines and get refused on notes, then list the refusal in the audit trail | E00-01, E00-02, E00-07 | **ready** |
 | 3 | Memory and State | Add a blood-pressure reading as a Fact with provenance, watch State recompute and record the trigger; a Fact without provenance is rejected; a key without the record cannot read State | E00-03, E00-04 | **ready** |
-| 4 | Three doors, proxy, claim | Set up a profile *for someone* by phone number, try to create a second one for the same number (refused), then claim it as the patient and see the steward key become the chief key with consent recorded | E01-01, E01-02 | planned |
+| 4 | Three doors, proxy, claim | Set up a profile *for someone* by phone number, try to create a second one for the same number (refused, in words that name nobody), then claim it as the patient and see the steward key become the chief key with consent recorded | E01-01, E01-02 | **ready** |
 | 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence, confirm it, and see Facts with provenance appear on the timeline | E02-01, E02-07 | planned |
 | 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | planned |
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
@@ -123,6 +123,71 @@ checkpoint 3 passed: every step did what docs/checkpoints.md says
 2. **Read State with Mei's key.** As Mei (her token), call `GET /profiles/{profile_id}/state`: `dimensions.situational`, `.preference` and `.family` are `null`, `withheld` names them and the scopes she does not hold, and `stale` is `null` — her key cannot check the record against the snapshot, so she is told so rather than shown a freshness she could not verify. Then, as Pa, `GET /profiles/{profile_id}/audit?actor_person_id=<Mei's person_id>` shows her reads of `state_snapshot` as `allowed` under `records`, and the one with the readings-only key as `refused`.
 
 The fact without provenance is refused at the service, not over HTTP: the readings route always writes the event before the fact and has no field that could leave the fact resting on nothing, so there is no "deliberately bad request" to send. The refusal (`NoProvenance`, which the API would answer with 400) and the table's own check constraint are both proven in `backend/tests/test_memory_acceptance.py`.
+
+## How to run checkpoint 4
+
+The same two terminals as checkpoint 2; it does not depend on checkpoint 3 having been run.
+
+```sh
+make setup              # once, if you have not
+make dev                # terminal 1: migrates dev.db (0007 adds the stewardship), serves on http://127.0.0.1:8000
+make checkpoint N=4     # terminal 2: walks the whole scenario, about two seconds
+```
+
+Three fresh phone numbers every run — Mei, Pa's son Kit, and Pa — so it can be run again on the same `dev.db`. Nothing is sent anywhere: the "SMS" is a line in the server log, and the claim message Pa would get on WhatsApp is not sent yet (E19); here Pa registers with his number and finds the profile waiting.
+
+What you will see (the numbers and times change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Mei (+6594441735) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Mei set up a profile for Pa (+6593339435) on the basis that he asked: she is its steward, holding a chief key over everything but his private notes
+✓ Mei's doors (GET /doors): no profile of her own, one she is stewarding — Pa's
+✓ Kit (+6595557844) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Kit (+6595557844) tried the same number and was refused: AlreadySetUp (409), the answer naming nobody — {"refusal":"AlreadySetUp"}; Mei trying again got the very same words
+✓ as steward Mei reads the medicines (none yet), records a blood-pressure reading for Pa, 138/84 (one event, one fact resting on it, under the agreement she gave for him), reads the stewardship (open, basis patient_asked) and the trail (26 lines); the private notes refuse her: OutOfScope notes (403)
+✓ Pa (+6593339435) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa registered; opening his own profile beside the one waiting was refused: WaitingToBeClaimed (409)
+✓ Pa sees the profile waiting for him (GET /profiles/mine/claimable): set up by Mei, daughter, who would keep seeing 9 parts; the words he reads, in Malay:
+    Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.
+    Semuanya kekal di Singapura.
+    Anda boleh minta Nura berhenti pada bila-bila masa.
+    Selepas itu, Nura tidak menyimpan apa-apa yang baru.
+    Apa yang sudah disimpan kekal dalam rekod anda.
+    Anda membenarkan Mei, daughter, melihat sebahagian daripada rekod anda.
+    Mei boleh melihat bahagian ini:
+    - ubat anda
+    - lawatan anda ke doktor
+    - buku tekanan darah dan bacaan gula anda
+    - surat-surat anda
+    - surat insurans anda
+    - kad kecemasan anda
+    - senarai keluarga anda
+    - soalan anda kepada Nura
+    - mesej yang Nura hantar
+    Mei boleh melihatnya sehingga anda minta ia dihentikan.
+    Anda boleh berhenti pada bila-bila masa.
+✓ Pa minted his OK (a confirmation for subject claim, good for ten minutes, used once) and claimed the profile: he is its owner
+✓ claiming again is refused: NotTheClaimant (403); there is nothing left to claim
+✓ Pa reads his consents: Mei's agreement for him (patient_asked) withdrawn by him at the claim; his own agreement to Nura keeping his record, in Malay; and his agreement to let Mei, his daughter, see the parts she held — on his own basis
+✓ Pa reads his keys: the steward key is closed; Mei now holds a chief key, cut by Pa, resting on that consent
+✓ the stewardship is closed, naming Pa as the person who claimed
+✓ Pa reads his trail (50 lines): the claim is on it in his name — the transfer, the consents, the key, the closed stewardship — and the refusals:
+    2026-09-14T08:36:01   Pa  write profile profile  refused NotTheClaimant
+    2026-09-14T08:36:01  Mei  read notes note  refused OutOfScope
+    2026-09-14T08:36:01  Mei  write profile profile  refused AlreadySetUp
+✓ Kit's try is not on the trail: a stranger's reach is counted out of band, never written in, so nobody can fill a trail by repeating a number
+✓ Mei opens Pa's profile as his chief on his consent, reads his medicines, and cannot read his private notes: OutOfScope notes (403); her doors now list Pa's profile as one she was let in to
+✓ Kit trying the number once more, now that Pa owns the profile, gets the same words as before: nothing says which case it is
+checkpoint 4 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 4 passed`. The criteria: a person can set up a profile for someone else by that person's number and hold it as its steward — a chief key over everything but the private notes, and the agreement to keeping the record given on the patient's behalf on a declared basis; one profile per number, ever — a second person is refused in the same words whoever holds the first, and the answer names nobody; the patient, registering with that number, is shown who set it up, what they would keep seeing and the words in his language, and only his own OK (a confirmation he minted, used once) claims it; the claim transfers ownership, withdraws the steward's agreement and records his own, records his agreement to let the steward in, cuts the steward a chief key resting on it and closes the stewardship, every step on the trail he can read; and the steward, now his chief, still cannot read his private notes. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run:
+
+1. **The claimant's view.** Register a fourth number (`POST /auth/phone/start`, read the code from the `make dev` terminal, `POST /auth/phone/verify`), then as Mei call `POST /profiles/for-someone` with that number and `"basis": "patient_asked"`. As the new person, `GET /doors`: the profile is under `claimable`, with `set_up_by`, `parts` and the words. `GET /profiles/{profile_id}` answers with `standing: claimant` and `scopes: ["profile"]`; `GET /profiles/{profile_id}/medicines` is `403 {"refusal": "OutOfScope", "scope": "medicines"}` — until he claims, he sees whose profile it is and nothing else.
+2. **A yes for other words.** As that person, `POST /profiles/{profile_id}/confirmations` with `{"subject": "claim", "language": "en"}`, then `POST /profiles/{profile_id}/claim` with that `confirmation_id` and `"language": "ms"`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for the English words, not the Malay ones. Claim again with `"language": "en"` and it goes through; the refusal is on the trail (`GET /profiles/{profile_id}/audit`) as `refused_because: NotWhatWasConfirmed`.
 
 ## Rules the operator follows between checkpoints
 

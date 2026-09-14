@@ -55,16 +55,28 @@ class ConsentBasis(StrEnum):
     someone else agrees for him, and each has something behind it: the lasting power of
     attorney or the doctor's letter as an artefact on the profile, or his own spoken
     agreement with the person who heard it named and, where there is one, the recording.
+
+    `PATIENT_ASKED` is narrower than the rest: the patient has a phone and asked for the
+    record to be set up, and the proof is his claim, still to come. It carries a steward's
+    agreement to Nura keeping the record until then (E01) and nothing else — not a key for
+    anyone, not a recording, not sending: those wait for his OK or for a document.
     """
 
     OWNER = "owner"
     LPA = "lpa"
     MEDICAL_LETTER = "medical_letter"
     VERBAL_RECORDED = "verbal_recorded"
+    PATIENT_ASKED = "patient_asked"
 
 
-PROXY_BASES = frozenset(ConsentBasis) - {ConsentBasis.OWNER}
-"""The bases on which someone other than the owner may agree on his behalf."""
+PROXY_BASES = frozenset(ConsentBasis) - {ConsentBasis.OWNER, ConsentBasis.PATIENT_ASKED}
+"""The bases on which someone other than the owner may agree on his behalf to anything."""
+
+STEWARDSHIP_BASES = frozenset(
+    {ConsentBasis.PATIENT_ASKED, ConsentBasis.LPA, ConsentBasis.MEDICAL_LETTER}
+)
+"""The bases a graph may be set up for someone on. A spoken agreement is not among them:
+its witness must hold a key on the graph, and a graph being set up has no keys yet."""
 
 DOCUMENTED_BASES = frozenset({ConsentBasis.LPA, ConsentBasis.MEDICAL_LETTER})
 """The bases that are a document: the artefact of it is required."""

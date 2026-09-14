@@ -1,8 +1,8 @@
 """Registering a person and opening their health graph.
 
 Both pin to the region the deployment serves, because health data never leaves its region.
-The proxy doors — setting up a profile for someone else and the claim that transfers it —
-belong to E01; this story covers only a person opening his own graph.
+The other doors — setting up a graph for someone else, and the claim that transfers it —
+are `app.identity.doors`; this is a person opening his own.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from app.consent.service import RecordConsent, check_opening_words, grant_consen
 from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person, Profile
-from app.keys.context import owned_profile, resolve_key_context
+from app.keys.context import owned_profile, profile_for_number, resolve_key_context
 from app.keys.scopes import Scope
 from app.regions import Region, guard_region
 
@@ -28,6 +28,11 @@ class ProfileAlreadyOwned(Refusal):
 
 class AlreadyRegistered(Refusal):
     """This phone number or email is already an account somewhere else."""
+
+
+class WaitingToBeClaimed(Refusal):
+    """A graph was set up for this person's number by someone else, and it is his to claim
+    (`app.identity.doors`), not to open again beside."""
 
 
 async def find_person_by_phone(session: AsyncSession, phone_e164: str) -> Person | None:
@@ -95,6 +100,11 @@ async def create_own_profile(
     # to pin a trail line to, so the channel logs them at the account, not the trail.
     if await owned_profile(session, region=region, owner_person_id=owner.id) is not None:
         raise ProfileAlreadyOwned(f"person {owner.id} already owns a profile")
+    if owner.phone_e164 is not None:
+        # One graph per number: a graph set up for his number by someone else is his to claim.
+        waiting = await profile_for_number(session, region=region, phone_e164=owner.phone_e164)
+        if waiting is not None:
+            raise WaitingToBeClaimed(f"a graph set up for person {owner.id} waits for his claim")
 
     moment = utcnow()
     profile = Profile(
@@ -102,6 +112,7 @@ async def create_own_profile(
         display_name=display_name or owner.display_name,
         language=language or owner.language,
         owner_person_id=owner.id,
+        patient_phone_e164=owner.phone_e164,
         created_at=moment,
     )
     session.add(profile)

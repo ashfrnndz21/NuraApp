@@ -1,7 +1,9 @@
 """The profile routes. Every one of them takes a key context; none can be reached without one.
 
-`/profiles/mine` is the "for me" door: it opens the caller's own graph. The other two doors,
-for someone I care for and I was invited, are E01. Notes and medicines are here so that
+`/profiles/mine` is the "for me" door: it opens the caller's own graph. `/profiles/for-someone`
+is the second door: a graph set up for someone by his number, held until he claims it, and
+`/profiles/mine/claimable` and `/profiles/{id}/claim` are that claim (E01, `app.identity.doors`).
+The third door, I was invited, is `GET /doors`. Notes and medicines are here so that
 checkpoint 2 has a scoped thing to read and a scoped thing to be refused; the real medicines
 module arrives with E04 and will replace the placeholder read. Readings and State are here
 so that checkpoint 3 has a fact to add and a State to watch recompute; the real capture is
@@ -17,12 +19,16 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
 
-from app.audit.access import audited_profile_read
+from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.deps import Context, CurrentPerson, Db, settings_of
 from app.channels.api.schemas import (
     AuditOut,
+    ClaimableOut,
+    ClaimIn,
+    ConfirmationOut,
+    ConfirmIn,
     ConsentOut,
     KeyGrant,
     KeyOut,
@@ -30,17 +36,26 @@ from app.channels.api.schemas import (
     NoteIn,
     NoteOut,
     ProfileCreate,
+    ProfileForSomeone,
     ProfileOut,
     ReadingIn,
     ReadingOut,
     SharingConsentIn,
     StateOut,
+    StewardshipOut,
 )
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
 from app.db import utcnow
 from app.drafts import FactDraft
 from app.errors import Refusal
+from app.identity.doors import (
+    claim_draft_for,
+    claim_profile,
+    claimable_for,
+    require_stewardship,
+    set_up_for_someone,
+)
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
 from app.keys.confirm import confirm
@@ -97,6 +112,109 @@ async def create_mine(
         session, region=region, person_id=person.id, profile_id=profile.id
     )
     return ProfileOut.of(profile, context)
+
+
+def _account_handle(person: Person) -> str:
+    return hashlib.sha256(str(person.id).encode()).hexdigest()[:8]
+
+
+@router.post("/for-someone", status_code=status.HTTP_201_CREATED)
+async def create_for_someone(
+    body: ProfileForSomeone, request: Request, person: CurrentPerson, session: Db
+) -> ProfileOut:
+    """Set up a graph for someone by his phone number; the caller holds it until he claims it.
+
+    One graph per number, ever: a second setup for the same number is refused as
+    `AlreadySetUp` (409) in the same words whoever holds the first, naming nobody.
+    Refusals before there is a graph are logged at the account, by a handle, like the
+    for-me door's.
+    """
+    region = settings_of(request).region
+    try:
+        profile, _ = await set_up_for_someone(
+            session,
+            region=region,
+            steward=person,
+            patient_phone_e164=body.patient_phone_e164,
+            display_name=body.display_name,
+            language=body.language,
+            consent=body.consent.as_record(),
+            basis=body.basis,
+            relationship=body.relationship,
+            evidence=None if body.evidence is None else body.evidence.as_evidence(),
+        )
+    except Refusal as refusal:
+        log.info(
+            "profile door refused: refusal=%s account=%s",
+            type(refusal).__name__,
+            _account_handle(person),
+        )
+        raise
+    context = await resolve_key_context(
+        session, region=region, person_id=person.id, profile_id=profile.id
+    )
+    return ProfileOut.of(profile, context)
+
+
+@router.get("/mine/claimable")
+async def claimable(
+    request: Request,
+    person: CurrentPerson,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> list[ClaimableOut]:
+    """The graphs set up for the caller's number that wait for his OK, with who set each up,
+    what they keep seeing, and the words he is agreeing to — in `language`, or his own."""
+    found = await claimable_for(
+        session, region=settings_of(request).region, person=person, language=language
+    )
+    return [ClaimableOut.of(each) for each in found]
+
+
+@router.post("/{profile_id}/confirmations", status_code=status.HTTP_201_CREATED)
+async def mint_confirmation(body: ConfirmIn, context: Context, session: Db) -> ConfirmationOut:
+    """Write down that the caller said yes to a draft on this profile, and hand him the yes.
+
+    The caller confirms only as himself. For a claim, the draft is recomputed from the
+    graph — the stewardship, the steward, the parts, today's words in `language` — so
+    the yes binds to what he was shown by `GET /profiles/mine/claimable`.
+    """
+    draft = await claim_draft_for(session, context=context, language=body.language)
+    return ConfirmationOut.of(await confirm(session, context, draft))
+
+
+@router.post("/{profile_id}/claim")
+async def claim(body: ClaimIn, context: Context, session: Db) -> ProfileOut:
+    """The patient claims the graph set up for him, with the yes he minted for it.
+
+    Ownership passes to him; his agreement to Nura keeping the record is recorded in his
+    words and the steward's withdrawn; he lets the steward in as a chief on a per-person
+    consent; the steward's key is cut again resting on it; the stewardship closes. All on
+    the trail. Anyone but the claimant is refused `NotTheClaimant` (403), and that is on
+    the trail too.
+    """
+    profile = await claim_profile(
+        session,
+        context=context,
+        confirmation_id=body.confirmation_id,
+        language=body.language,
+        captured_via=body.captured_via,
+    )
+    owner = await resolve_key_context(
+        session, region=context.region, person_id=context.person_id, profile_id=profile.id
+    )
+    return ProfileOut.of(profile, owner)
+
+
+@router.get("/{profile_id}/stewardship")
+async def stewardship(context: Context, session: Db) -> StewardshipOut:
+    """Who holds this graph for the patient and on what footing, or held it until he claimed
+    it. Read under the profile scope, which every key holds: who holds a graph is part of
+    whose graph it is. `NoStewardshipHere` (404) if it was never set up for someone."""
+    found = await require_stewardship(session, context=context)
+    return StewardshipOut.of(
+        found, await person_display_name(session, context, found.steward_person_id)
+    )
 
 
 @router.get("/{profile_id}")

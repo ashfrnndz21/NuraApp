@@ -178,6 +178,7 @@ def check_opening_words(consent: RecordConsent, region: Region) -> None:
 async def _check_basis(
     session: AsyncSession,
     context: KeyContext,
+    purpose: ConsentPurpose,
     basis: ConsentBasis,
     basis_artifact_id: uuid.UUID | None,
     witness_person_id: uuid.UUID | None,
@@ -186,6 +187,14 @@ async def _check_basis(
     """What has to be behind a proxy basis. Reads go through the doors like any other."""
     if context.is_owner and basis is not ConsentBasis.OWNER:
         return NotTheirConsentToGive(f"the owner agrees on his own basis, not {basis}")
+    if basis is ConsentBasis.PATIENT_ASKED:
+        # The patient asked, and his claim is the proof to come: until then this basis
+        # carries the steward's agreement to Nura keeping the record, and nothing else.
+        if not context.is_steward or purpose is not ConsentPurpose.HOLD_HEALTH_RECORD:
+            return NotTheirConsentToGive(
+                f"{basis} carries only a steward's agreement to keeping the record"
+            )
+        return None
     if not context.is_owner and basis not in PROXY_BASES:
         return NotTheirConsentToGive(f"a {context.role} needs a recorded proxy basis, not {basis}")
     if basis in DOCUMENTED_BASES and basis_artifact_id is None:
@@ -238,10 +247,11 @@ async def grant_consent(
     """Record that the person in the context agreed to `purpose`, in the words at `text_version`.
 
     The owner agrees for himself and only on `ConsentBasis.OWNER`. Someone acting for him —
-    a chief, or later a steward — must hold the family scope, name a proxy basis, and have
+    a chief, or a steward — must hold the family scope, name a proxy basis, and have
     something behind it: the document as an artefact on the profile for `LPA` and
     `MEDICAL_LETTER`, the witness (and the recording, if there is one) for
-    `VERBAL_RECORDED`. `SHARE_WITH_PERSON` takes `sharing`: who, to which parts, and the
+    `VERBAL_RECORDED`. `PATIENT_ASKED` is a steward's alone, and only for keeping the
+    record until the patient's claim (E01). `SHARE_WITH_PERSON` takes `sharing`: who, to which parts, and the
     words are rendered with that name and those parts before they are kept.
 
     `language` is the language the words were shown in; it is stated, never inferred.
@@ -267,7 +277,7 @@ async def grant_consent(
             refusal = WordingNotOnFile(f"{purpose} version {version} was never shown in {language}")
         else:
             refusal = await _check_basis(
-                session, context, basis, basis_artifact_id, witness_person_id, moment
+                session, context, purpose, basis, basis_artifact_id, witness_person_id, moment
             )
         if refusal is not None:
             await _refused_write(session, context, refusal, channel, moment)

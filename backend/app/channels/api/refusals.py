@@ -20,8 +20,9 @@ from app.consent.service import (
     NotTheirConsentToWithdraw,
 )
 from app.errors import Refusal
+from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
-from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned
+from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
 from app.regions import OutOfRegion
@@ -39,11 +40,17 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    (NotTheClaimant, 403),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
+    (NoStewardshipHere, 404),
     (NoState, 404),
     (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),
+    # One graph per number: the second setup, and the for-me door on a number already set
+    # up for, are answered by name and nothing else.
+    (AlreadySetUp, 409),
+    (WaitingToBeClaimed, 409),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no."""
 

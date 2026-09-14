@@ -30,7 +30,7 @@ from app.audit.trail import record
 from app.consent.models import Consent
 from app.db import ProfileScoped
 from app.errors import Refusal
-from app.identity.models import Person, Profile
+from app.identity.models import Person, Profile, Stewardship
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.models import Key
 from app.keys.repository import scoped_new, scoped_select
@@ -295,17 +295,32 @@ async def person_display_name(
     *,
     channel: Channel = Channel.APP,
 ) -> str:
-    """The display name of someone on this profile: its owner, a holder of a key to it, or
-    someone a consent on it names — the person let in, the person who agreed, the witness.
+    """The display name of someone on this profile: its owner, the steward holding it for him
+    until he claims it, a holder of a key to it, or someone a consent on it names — the
+    person let in, the person who agreed, the witness.
 
     A Person row is an account, not profile data, so `scoped_select` cannot reach it; this
     is the one read that does, and only for people the profile already names. Whether the
-    person is on the profile is itself read through the doors, under `Scope.FAMILY`: the
-    key table and the consent table are the family list, and a helper or a clinic holding
-    a key to the medicines holds no key to who else is on the record.
+    person is on the profile is itself read through the doors: the steward under
+    `Scope.PROFILE`, because who holds the graph is part of whose graph it is, like the
+    owner; everyone else under `Scope.FAMILY`, because the key table and the consent
+    table are the family list, and a helper or a clinic holding a key to the medicines
+    holds no key to who else is on the record.
     """
     profile = await audited_profile_read(session, context, channel=channel)
-    if person_id != profile.owner_person_id:
+    stewarded_by = (
+        await audited_read(
+            session,
+            Stewardship,
+            context,
+            Scope.PROFILE,
+            where=(Stewardship.steward_person_id == person_id,),
+            channel=channel,
+        )
+        if person_id != profile.owner_person_id
+        else ()
+    )
+    if person_id != profile.owner_person_id and not stewarded_by:
         held = await audited_read(
             session,
             Key,

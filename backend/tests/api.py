@@ -16,12 +16,17 @@ def bearer(token: str) -> dict[str, str]:
 
 
 async def register_by_phone(
-    deployment: Deployment, phone_e164: str, display_name: str | None = None
+    deployment: Deployment,
+    phone_e164: str,
+    display_name: str | None = None,
+    language: str | None = None,
 ) -> dict[str, str]:
     """Start and verify a phone login; the session the API issued, as a JSON object."""
     body: dict[str, str] = {"phone_e164": phone_e164}
     if display_name is not None:
         body["display_name"] = display_name
+    if language is not None:
+        body["language"] = language
     started = await deployment.client.post("/auth/phone/start", json=body)
     assert started.status_code == 202, started.text
     verified = await deployment.client.post(
