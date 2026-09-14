@@ -29,7 +29,7 @@ from app.channels.api.safety_schemas import (
     WhatToDoOut,
 )
 from app.channels.printable import emergency_card_html
-from app.channels.safety_strings import SEVERITY_WORDS, language_of
+from app.channels.safety_strings import severity_said
 from app.safety.emergency_card import emergency_card
 from app.safety.models import CardFormat
 from app.safety.not_feeling_well import not_feeling_well
@@ -84,8 +84,10 @@ async def printable(
 @router.post("/{profile_id}/not-feeling-well", status_code=status.HTTP_201_CREATED)
 async def button(body: SaidIn, request: Request, context: Context, session: Db) -> WhatToDoOut:
     """"I'm not feeling well." His words are kept, heard, read for red flags first, and the
-    family is told; the card's first line is what to do now. A red flag's first line is the
-    call line. Nothing here starts, stops or changes a medicine."""
+    family is told; the lines say what to do now. Anyone with a key may press it for him —
+    a helper, a caregiver — and a red flag escalates whoever pressed; a voice note pressed
+    by someone else needs the RECORDING consent. Nothing here starts, stops or changes a
+    medicine."""
     providers = providers_of(request)
     done = await not_feeling_well(
         session,
@@ -102,10 +104,7 @@ async def button(body: SaidIn, request: Request, context: Context, session: Db) 
 
 
 def _severity_words(entry: Entry) -> str | None:
-    if entry.severity is None:
-        return None
-    by_level = SEVERITY_WORDS.get(language_of(entry.language)) or SEVERITY_WORDS["en"]
-    return by_level.get(entry.severity)
+    return None if entry.severity is None else severity_said(entry.severity, entry.language)
 
 
 @router.post("/{profile_id}/symptoms", status_code=status.HTTP_201_CREATED)

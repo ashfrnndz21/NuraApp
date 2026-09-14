@@ -11,16 +11,20 @@ Singapore says 995 and Malaysia 999.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Outcome
+from app.clock import FrozenClock
 from app.db import utcnow
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
-from app.memory.models import EventKind, SourceChannel
+from app.memory.models import EventKind, ProviderKind, SourceChannel
+from app.memory.spine import add_provider
 from app.regions import Region
 from app.safety.emergency_card import CARD_TARGET, emergency_card
 from app.safety.models import CardFormat, EmergencyCard
@@ -90,11 +94,13 @@ async def test_the_card_holds_what_a_stranger_needs_and_every_line_is_verified(
     texts = [line.text for line in card.lines]
     assert texts[0] == "This is Pa's emergency card."
     assert "Pa takes the water pill (frusemide)." in texts
-    assert "That is 1 tablet every morning." in texts
+    assert "Pa takes 1 tablet every morning." in texts
+    assert "The ambulance number is 995." in texts
+    assert "Pa's blood pressure was last written down on Thursday 3 September." in texts
     assert "Pa has a weak heart." in texts
     assert "Pa is allergic to Penicillin." in texts
     assert "Pa's blood type is O positive." in texts
-    assert "Call Mei first." in texts
+    assert "Mei looks after Pa." in texts and "Call Mei first." in texts
     assert "Pa sees Dr Tan." in texts
     assert texts[-1] == "This card is not a doctor's advice."
     _clean(card.lines)
@@ -144,6 +150,14 @@ async def test_an_emergency_only_key_reads_the_card_from_the_last_snapshot(
     assert theirs.state_id == mine.state_id
     assert [line.text for line in theirs.lines] == [line.text for line in mine.lines]
     assert theirs.contacts[0].phone_e164 == "+6592220031"
+    # The chief's account was read for her name and number, and the trail says so: a READ
+    # of `person` under EMERGENCY by Lin's key (ADR 0002).
+    reads = [
+        line
+        for line in await trail(sg, owner.profile_id)
+        if line.actor_person_id == lin.person_id and line.target == "person"
+    ]
+    assert reads and all(line.scope is Scope.EMERGENCY for line in reads)
     rows = (
         await sg.scalars(select(EmergencyCard).where(EmergencyCard.profile_id == owner.profile_id))
     ).all()
@@ -192,7 +206,39 @@ async def test_a_bare_profile_still_has_a_card(sg: AsyncSession) -> None:
     owner = await pa(sg, phone="+6591110039")
     card = await emergency_card(sg, context=owner, registry=REGISTRY)
     texts = [line.text for line in card.lines]
-    assert "No medicine is written down for Pa." in texts
-    assert "No condition is written down for Pa." in texts
-    assert "No family contact is written down yet." in texts
+    assert "Nura has no note of a medicine for Pa." in texts
+    assert "Nura has no note of a condition for Pa." in texts
+    assert "No family number is written down yet." in texts
+    assert "The ambulance number is 995." in texts
     assert card.medicines == [] and card.contacts == [] and card.age_band is None
+
+
+async def test_a_clinic_is_a_place_he_goes_to_and_an_old_reading_is_not_the_last(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    owner = await pa(sg, phone="+6591110038")
+    await add_provider(
+        sg, context=owner, name="Bedok Clinic", kind=ProviderKind.CLINIC, region=Region.SG
+    )
+    long_ago = utcnow() - timedelta(days=400)
+    await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.READING,
+        occurred_at=long_ago,
+        label="blood pressure",
+        source_channel=SourceChannel.APP,
+    )
+    await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.READING,
+        occurred_at=utcnow(),
+        label="weight",
+        source_channel=SourceChannel.APP,
+    )
+    card = await emergency_card(sg, context=owner, registry=REGISTRY)
+    texts = [line.text for line in card.lines]
+    assert "Pa goes to Bedok Clinic." in texts
+    assert card.last_reading_at is None
+    assert not any("blood pressure was last" in text for text in texts)

@@ -29,7 +29,11 @@ from tests.support import OPENING_CONSENT, agree_to_family_sharing
 from tests.voice import VOICE
 
 REGISTRY = FixtureRegistry.load()
-TRANSCRIBER = FixtureTranscriber(VOICE)
+TRANSCRIBER = FixtureTranscriber(VOICE, Region.SG)
+
+
+def transcriber_for(region: Region) -> FixtureTranscriber:
+    return FixtureTranscriber(VOICE, region)
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SHA = "a" * 64
 

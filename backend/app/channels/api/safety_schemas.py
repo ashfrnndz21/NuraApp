@@ -166,17 +166,20 @@ class EmergencyCardOut(BaseModel):
 
 class WhatToDoOut(BaseModel):
     """The what-to-do-now card and what was written on the way to it. `lines[0]` is the
-    first thing he reads or hears; for a red flag it is the call line."""
+    first thing he reads or hears. `card_id`/`state_id` are null when the key could not
+    compute State (no card row was written); `artifact_id`/`event_id`/`fact_id` are null
+    when the key holds no record to write the moment into. The flag and the notices are
+    there whoever pressed."""
 
-    card_id: uuid.UUID
-    state_id: uuid.UUID
+    card_id: uuid.UUID | None
+    state_id: uuid.UUID | None
     kind: WhatToDoKind
-    posture: Posture
+    posture: Posture | None
     language: str
     lines: list[LineOut]
-    artifact_id: uuid.UUID
-    event_id: uuid.UUID
-    fact_id: uuid.UUID
+    artifact_id: uuid.UUID | None
+    event_id: uuid.UUID | None
+    fact_id: uuid.UUID | None
     heard: bool
     by_voice: bool
     transcript_confidence: float

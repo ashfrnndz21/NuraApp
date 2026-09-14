@@ -13,10 +13,18 @@ that hears it (`app.safety.not_feeling_well`) writes the flag down before anythi
 tells the family.
 
 Two rows are conditional. `shaky_sweaty` is a flag only for someone on a sugar medicine; the
-caller says whether he is, and when it cannot tell, the flag is *suppressed and named* so the
-caregiver sees that it was (the rule "flags that depend on a missing fact are suppressed,
-with the suppression visible"). `weight_gain_after_discharge` is read from the scales, not
-from words, and has no words here; it is listed so the table is the whole rule.
+caller says whether he is. Whenever the row does not fire — the medicines are not known, or
+none of them is in `SUGAR_MEDICINE_CLASSES` — the flag is *suppressed and named*, never
+dropped, so the caregiver sees that the words were said and why nothing was raised (the rule
+"flags that depend on a missing fact are suppressed, with the suppression visible"; a class
+the list does not know is a missing fact too). `weight_gain_after_discharge` is read from the
+scales, not from words, and has no words here; it is listed so the table is the whole rule.
+
+`write_flag_kept` is how a flag is written: through the audited door, with a keeper on the
+session (`app.db.keep_on_refusal`) so that the flag — and the artefact it names — land even
+if something later in the same request is refused and the unit of work is rolled back. "This
+one we do not wait for" has to survive a template that fails, a State that is stale, or a
+door that refuses further on. E05 writes its flags through the same helper.
 
 Nothing here is model output. The words are a fixed list, and a word that is not in it is
 not a flag — a person's words that match nothing go to the ordinary path, where the family
@@ -27,9 +35,23 @@ from __future__ import annotations
 
 import re
 import unicodedata
+import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit.access import audited_write
+from app.audit.models import Action
+from app.audit.trail import record
+from app.db import keep_on_refusal, utcnow
+from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.memory.models import Artifact
+from app.safety.models import Flag, FlagKind
+from app.state.models import Posture
 
 
 class RedFlag(StrEnum):
@@ -141,10 +163,25 @@ RED_FLAGS: tuple[Rule, ...] = (
     Rule(RedFlag.WEIGHT_GAIN_AFTER_DISCHARGE, {}, from_readings=True),
 )
 
-SUGAR_MEDICINE_CLASSES = frozenset({"biguanide", "sulfonylurea", "insulin", "dpp4_inhibitor",
-                                    "sglt2_inhibitor", "meglitinide", "thiazolidinedione"})
+SUGAR_MEDICINE_CLASSES = frozenset(
+    {
+        "biguanide",
+        "sulfonylurea",
+        "insulin",
+        "dpp4_inhibitor",
+        "sglt2_inhibitor",
+        "glp1_agonist",
+        "glp1_receptor_agonist",
+        "alpha_glucosidase_inhibitor",
+        "meglitinide",
+        "thiazolidinedione",
+        "antidiabetic",
+    }
+)
 """The registry classes that make `shaky_sweaty` a flag. A product rule, not pharmacology:
-whether a medicine is one of these is the licensed registry's word (`drug_class`)."""
+whether a medicine is one of these is the licensed registry's word (`drug_class`). The list
+is under pharmacist review; a class it does not know suppresses the flag *visibly*, so a
+gap here shows on the caregiver's side rather than dropping a word he said."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,8 +225,9 @@ def match_red_flags(
     Every language's words are tried whatever language the profile is set to: a Malay
     speaker says "chest pain" to his daughter in English, and the flag does not care.
     `on_sugar_medicine` is True or False when the medicines are known, None when they are
-    not; the shaky-and-sweaty row is a flag only on True and is *suppressed and named* on
-    None, so nothing about a missing fact is silent.
+    not; the shaky-and-sweaty row is a flag only on True and is *suppressed and named*
+    otherwise, so nothing about a missing fact — or a class the list does not know — is
+    silent.
     """
     words = normalise(text)
     if not words:
@@ -206,12 +244,11 @@ def match_red_flags(
         )
         if not said:
             continue
-        if rule.needs_sugar_medicine:
-            if on_sugar_medicine is None:
-                suppressed.append(rule.flag)
-                continue
-            if not on_sugar_medicine:
-                continue
+        if rule.needs_sugar_medicine and not on_sugar_medicine:
+            # Not known to be on a sugar medicine — no medicines on record, or none the list
+            # knows. The words were said; the caregiver sees the flag was held back.
+            suppressed.append(rule.flag)
+            continue
         heard.append(rule.flag)
     return Heard(flags=tuple(heard), suppressed=tuple(suppressed))
 
@@ -227,3 +264,107 @@ def words_for(flag: RedFlag, language: str) -> str:
             options: Sequence[str] = rule.words.get(language) or rule.words.get("en") or ()
             return options[0] if options else flag.value.replace("_", " ")
     return flag.value.replace("_", " ")
+
+
+# --- writing a flag so that it stays written -----------------------------------------------
+
+FLAG_SCOPE = Scope.EMERGENCY
+"""The door a flag is written through: the one every role holds, because the person who
+hears the words — a helper, a neighbour — must be able to raise the flag whoever he is."""
+
+
+def _columns(row: Any) -> dict[str, Any]:
+    """The column values of a row, for writing the same row again after a rollback."""
+    return {column.key: getattr(row, column.key) for column in row.__table__.columns}
+
+
+async def write_flag_kept(
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    code: str,
+    posture: Posture = Posture.ACT,
+    artifact: Artifact | None = None,
+    suppressed: Sequence[str] = (),
+    kind: FlagKind = FlagKind.RED_FLAG,
+) -> Flag:
+    """Write a flag through the audited door, and keep it whatever happens next.
+
+    The row lands now, under `FLAG_SCOPE`, with a WRITE line. A keeper is registered on the
+    session (`app.db.keep_on_refusal`): if the unit of work this flag was written in is
+    rolled back on a later refusal, the channel replays the keeper, which writes the same
+    flag again — the same id, the same moment — and, if the artefact the flag names went
+    down with the rollback, that artefact row first (its bytes are in the object store and
+    were never lost). The audit lines are written again too. On success the keeper is
+    dropped: the rows are already there.
+    """
+    moment = utcnow()
+    flag = await audited_write(
+        session,
+        Flag,
+        context,
+        FLAG_SCOPE,
+        kind=kind,
+        code=code,
+        posture=posture,
+        artifact_id=None if artifact is None else artifact.id,
+        raised_at=moment,
+        raised_by_person_id=context.person_id,
+        suppressed=list(suppressed),
+    )
+    flag_values = _columns(flag)
+    artifact_values = None if artifact is None else _columns(artifact)
+    artifact_id: uuid.UUID | None = None if artifact is None else artifact.id
+
+    async def keep(again: AsyncSession) -> None:
+        if artifact_values is not None and await again.get(Artifact, artifact_id) is None:
+            again.add(Artifact(**artifact_values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=Scope.RECORDS,
+                target=Artifact.__tablename__,
+                target_id=artifact_id,
+                rows=1,
+            )
+        if await again.get(Flag, flag_values["id"]) is None:
+            again.add(Flag(**flag_values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=FLAG_SCOPE,
+                target=Flag.__tablename__,
+                target_id=flag_values["id"],
+                rows=1,
+            )
+
+    keep_on_refusal(session, keep)
+    return flag
+
+
+def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Scope) -> None:
+    """Keep one already-written row of profile data the way `write_flag_kept` keeps the flag:
+    written again, with its WRITE line, if the unit it was written in is rolled back. For
+    the notices that go with a flag."""
+    values = _columns(row)
+    model = type(row)
+
+    async def keep(again: AsyncSession) -> None:
+        if await again.get(model, values["id"]) is None:
+            again.add(model(**values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=scope,
+                target=model.__tablename__,
+                target_id=values["id"],
+                rows=1,
+            )
+
+    keep_on_refusal(session, keep)

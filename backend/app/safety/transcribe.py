@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.errors import Refusal
+from app.regions import Region, guard_region
 
 VOICE_CONTENT_TYPES = frozenset(
     {"audio/m4a", "audio/mp4", "audio/aac", "audio/mpeg", "audio/wav", "audio/webm", "audio/ogg"}
@@ -58,28 +59,48 @@ NOTHING_HEARD = Transcript(text="", confidence=0.0)
 
 
 class Transcriber(Protocol):
-    """Speech to words, in the profile's language. One per deployment, in its region."""
+    """Speech to words, in the profile's language. One per deployment, pinned to its region.
 
-    async def transcribe(self, data: bytes, content_type: str, language: str) -> Transcript: ...
+    `region` is where the adapter runs; a caller checks it against the profile's region
+    before a byte is handed over (`guard_region`), and `transcribe` takes the profile's
+    region so the adapter refuses too — the same discipline as the object store. Health
+    data never leaves its region, and a voice note is health data the moment he speaks.
+    """
+
+    @property
+    def region(self) -> Region: ...
+
+    async def transcribe(
+        self, data: bytes, content_type: str, language: str, region: Region
+    ) -> Transcript: ...
 
 
 class FixtureTranscriber:
     """Answers from `root/<sha256>.json` — `{"text": ..., "confidence": ..., "language": ...}`
     — and with `NOTHING_HEARD` for bytes it has no file for. No audio is committed: the
     placeholders in the tests and at the checkpoint are a few bytes whose digest names a
-    file (`backend/tests/fixtures/voice/README.md`)."""
+    file (`backend/tests/fixtures/voice/README.md`). Declares the region it serves and
+    refuses bytes from another, as a cloud adapter in one region must."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, region: Region) -> None:
         self._root = Path(root)
+        self._region = region
 
     @property
     def root(self) -> Path:
         return self._root
 
+    @property
+    def region(self) -> Region:
+        return self._region
+
     def path_of(self, data: bytes) -> Path:
         return self._root / f"{hashlib.sha256(data).hexdigest()}.json"
 
-    async def transcribe(self, data: bytes, content_type: str, language: str) -> Transcript:
+    async def transcribe(
+        self, data: bytes, content_type: str, language: str, region: Region
+    ) -> Transcript:
+        guard_region(held_in=region, asked_from=self._region)
         found = self.path_of(data)
         if not found.is_file():
             return NOTHING_HEARD

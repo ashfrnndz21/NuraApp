@@ -5,7 +5,8 @@ his wallet and on the fridge, so the page carries everything it needs: the desig
 tokens inline (`docs/design-system.md` §2), no stylesheet, no script, no font file, no
 image — nothing fetched. Paper surface, Ink text, 20px body in Dad mode, 56px-tall contact
 rows, and Coral only where the design system allows it: nowhere on this page, because the
-card is not the not-feeling-well button.
+card is not the not-feeling-well button. The ambulance number sits under its own sentence
+("The ambulance number is 995."), like every other number on the page sits beside a name.
 
 Every sentence on the page is one of the card's verified lines. The two things the standard
 keeps out of sentences and a stranger needs — the chief's phone number, the medicine's
@@ -114,11 +115,11 @@ def emergency_card_html(card: Card) -> str:
             + "</div>"
         )
     ambulance = (
-        '<div class="contact">'
+        f'{section("ec.ambulance")}<div class="contact">'
         f'<span class="number"><a href="{_tel(card.emergency_number)}">{escape(card.emergency_number)}</a></span>'
         "</div>"
     )
-    title = by_id.get("ec.title", [escape(card.name)])[0]
+    title = by_id.get("ec.title", [card.name])[0]
     return (
         "<!doctype html>\n"
         f'<html lang="{escape(card.language)}"><head><meta charset="utf-8">'
@@ -130,7 +131,7 @@ def emergency_card_html(card: Card) -> str:
         + (f"<table><tbody>{medicines}</tbody></table>" if medicines else "")
         + "</section>"
         f'<section class="paper">{section("ec.allergy", "ec.no_allergy", "ec.blood_type")}</section>'
-        f'<section class="paper">{section("ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor")}{clinic}{ambulance}</section>'
+        f'<section class="paper">{section("ec.chief_who", "ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor", "ec.clinic")}{clinic}{ambulance}</section>'
         f'<section class="paper">{section("ec.last_reading", "ec.boundary")}</section>'
         "</main></body></html>"
     )

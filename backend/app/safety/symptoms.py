@@ -136,22 +136,24 @@ his words for the rest stay in the artefact and reach the doctor as his words.""
 
 SEVERITY_WORDS: Mapping[int, Mapping[str, tuple[str, ...]]] = {
     1: {
-        "en": ("a little", "a bit", "slightly", "a little bit", "mild", "not much"),
-        "ms": ("sedikit", "sikit", "sikit-sikit", "sikit saja"),
-        "zh": ("一点", "一点点", "有点", "稍微", "轻微"),
+        "en": ("only a little", "a little", "a bit", "slightly", "a little bit", "mild", "not much"),
+        "ms": ("sedikit saja", "sedikit", "sikit", "sikit-sikit", "sikit saja"),
+        "zh": ("只有一点", "一点", "一点点", "有点", "稍微", "轻微"),
     },
     2: {
-        "en": ("quite a lot", "quite bad", "a lot", "moderate", "quite", "rather"),
-        "ms": ("agak banyak", "agak teruk", "banyak", "sederhana", "agak"),
-        "zh": ("比较多", "比较", "相当", "挺", "蛮", "不少"),
+        "en": ("quite bad", "quite a lot", "a lot", "moderate", "quite", "rather"),
+        "ms": ("agak teruk", "agak banyak", "banyak", "sederhana", "agak"),
+        "zh": ("比较严重", "比较多", "比较", "相当", "挺", "蛮", "不少"),
     },
     3: {
-        "en": ("very", "very bad", "really bad", "severe", "terrible", "so much", "extremely"),
-        "ms": ("sangat", "teruk sangat", "amat", "sangat teruk", "parah"),
+        "en": ("very bad", "very", "really bad", "severe", "terrible", "so much", "extremely"),
+        "ms": ("teruk sangat", "sangat", "amat", "sangat teruk", "parah"),
         "zh": ("很严重", "很", "非常", "厉害", "严重", "太"),
     },
 }
-"""How much, in three steps, in his words. The first entry per language is the one said back."""
+"""How much, in three steps, in his words. The first entry per language is the one said back
+— the same words the catalogue (`app.channels.safety_strings.SEVERITY_WORDS`) shows and
+speaks, so there is one vocabulary for three levels, checked by a test."""
 
 
 class Duration(StrEnum):

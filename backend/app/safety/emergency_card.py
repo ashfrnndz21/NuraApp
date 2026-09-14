@@ -26,10 +26,11 @@ Public share: none. There is no link to this card without a key.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_
@@ -40,9 +41,9 @@ from app.audit.models import Action
 from app.channels.safety_strings import (
     BLOOD_GROUP_WORDS,
     CONDITION_WORDS,
-    HIGH_RISK_WORDS,
     LANGUAGE_NAMES,
     WHEN_WORDS,
+    NotPlainWords,
     language_of,
     phrase,
     render,
@@ -61,6 +62,7 @@ from app.memory.models import ConfidenceState, Event, EventKind, Fact, Provider,
 from app.regions import REGION_TZ, Region
 from app.safety.high_risk import high_risk_class, is_high_risk
 from app.safety.models import CardFormat, EmergencyCard
+from app.safety.people import key_holder
 from app.state.dimensions import ALLERGY, CONTROL, dimension_of
 from app.state.models import Dimension
 from app.state.service import (
@@ -83,6 +85,15 @@ PERSON = "person"
 """The subject his birth year is written under; attribute `birth_year`, value 1952."""
 
 PROVIDER_ORDER = (ProviderKind.DOCTOR, ProviderKind.CLINIC, ProviderKind.HOSPITAL)
+
+BLOOD_PRESSURE_LABEL = "blood pressure"
+"""The label a blood-pressure READING event carries (`app.channels.api.profiles`). The card's
+last-reading line is about his blood pressure and nothing else."""
+
+READING_HORIZON = timedelta(days=365)
+"""A reading older than this is not "last written down" on a card that says no year."""
+
+log = logging.getLogger("nura.safety")
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,10 +257,10 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
     for key in sorted(keys, key=lambda one: as_utc(one.granted_at)):
         if not key.is_active(moment):
             continue
-        # The chief's name and number are what the card is for. The Key row was read under
-        # EMERGENCY above; the account row it names is read here for its display name and
-        # number and nothing else — the one read of a Person this projection makes.
-        person = await session.get(Person, key.holder_person_id)
+        # The chief's name and number are what the card is for (ADR 0002). The Key row was
+        # read under EMERGENCY above; the account it names is read under the same scope,
+        # with its own READ line, for a name and a number and nothing else.
+        person = await key_holder(session, context, key.holder_person_id, scope=EMERGENCY_SCOPE)
         if person is not None:
             chiefs.append((key, person))
     providers = await audited_read(session, Provider, context, EMERGENCY_SCOPE)
@@ -264,7 +275,11 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
         Event,
         context,
         EMERGENCY_SCOPE,
-        where=(Event.kind == EventKind.READING,),
+        where=(
+            Event.kind == EventKind.READING,
+            Event.label == BLOOD_PRESSURE_LABEL,
+            Event.occurred_at > moment - READING_HORIZON,
+        ),
         order_by=(Event.occurred_at.desc(),),
         limit=1,
     )
@@ -345,73 +360,57 @@ def compose_lines(
     """The card as sentences, in order, every one through `render` and so verified."""
     lang = language_of(language)
     zone = REGION_TZ[region]
-    lines: list[Line] = [
-        Line("ec.title", render("ec.title", lang, name=name)),
-        Line("ec.show", render("ec.show", lang)),
-        Line(
-            "ec.language",
-            render("ec.language", lang, name=name, speaks=phrase(LANGUAGE_NAMES, lang, spoken_language)),
-        ),
-    ]
+    lines: list[Line] = []
+
+    def say(template_id: str, **slots: Any) -> None:
+        """One line, or none: a line that fails the standard is withheld and logged, so the
+        card a stranger is holding is never taken away whole for one bad template."""
+        try:
+            lines.append(Line(template_id, render(template_id, lang, **slots)))
+        except NotPlainWords as failed:
+            log.warning("emergency card line withheld: %s", failed)
+
+    say("ec.title", name=name)
+    say("ec.show")
+    say("ec.language", name=name, speaks=phrase(LANGUAGE_NAMES, lang, spoken_language))
     if age is not None:
-        lines.append(Line("ec.age", render("ec.age", lang, name=name, band=age)))
+        say("ec.age", name=name, band=age)
     if conditions:
         for condition in conditions:
-            lines.append(
-                Line("ec.condition", render("ec.condition", lang, name=name, condition=condition.words))
-            )
+            say("ec.condition", name=name, condition=condition.words)
     else:
-        lines.append(Line("ec.no_condition", render("ec.no_condition", lang, name=name)))
+        say("ec.no_condition", name=name)
     if medicines:
         for medicine in medicines:
-            lines.append(
-                Line("ec.medicine", render("ec.medicine", lang, name=name, medicine=medicine.plain_name))
-            )
-            lines.append(
-                Line(
-                    "ec.medicine_when",
-                    render("ec.medicine_when", lang, amount=medicine.amount, when=medicine.when),
-                )
-            )
+            say("ec.medicine", name=name, medicine=medicine.plain_name)
+            say("ec.medicine_when", name=name, amount=medicine.amount, when=medicine.when)
             if medicine.high_risk:
-                lines.append(
-                    Line(
-                        "ec.high_risk",
-                        render(
-                            "ec.high_risk",
-                            lang,
-                            medicine=phrase(HIGH_RISK_WORDS, lang, medicine.high_risk_class or "high_risk"),
-                        ),
-                    )
-                )
+                # The same name as the line above it, so the two are one tablet to him.
+                say("ec.high_risk", name=name, medicine=medicine.plain_name)
     else:
-        lines.append(Line("ec.no_medicine", render("ec.no_medicine", lang, name=name)))
+        say("ec.no_medicine", name=name)
     if allergies:
         for allergy in allergies:
-            lines.append(Line("ec.allergy", render("ec.allergy", lang, name=name, thing=allergy.words)))
+            say("ec.allergy", name=name, thing=allergy.words)
     else:
-        lines.append(Line("ec.no_allergy", render("ec.no_allergy", lang, name=name)))
+        say("ec.no_allergy", name=name)
     if blood_type is not None:
-        lines.append(
-            Line(
-                "ec.blood_type",
-                render("ec.blood_type", lang, name=name, group=phrase(BLOOD_GROUP_WORDS, lang, blood_type)),
-            )
-        )
+        say("ec.blood_type", name=name, group=phrase(BLOOD_GROUP_WORDS, lang, blood_type))
     if contacts:
-        lines.append(Line("ec.chief", render("ec.chief", lang, chief=contacts[0].name)))
+        # A stranger holding the card does not know who Mei is: say it, then say to call her.
+        say("ec.chief_who", chief=contacts[0].name, name=name)
+        say("ec.chief", chief=contacts[0].name)
     else:
-        lines.append(Line("ec.no_chief", render("ec.no_chief", lang)))
+        say("ec.no_chief")
     if clinic is not None:
-        lines.append(Line("ec.doctor", render("ec.doctor", lang, name=name, doctor=clinic.name)))
+        if clinic.kind == ProviderKind.DOCTOR.value:
+            say("ec.doctor", name=name, doctor=clinic.name)
+        else:
+            say("ec.clinic", name=name, clinic=clinic.name)
+    say("ec.ambulance", number=EMERGENCY_NUMBER[region])
     if last_reading_at is not None:
-        lines.append(
-            Line(
-                "ec.last_reading",
-                render("ec.last_reading", lang, date=as_utc(last_reading_at).astimezone(zone).date()),
-            )
-        )
-    lines.append(Line("ec.boundary", render("ec.boundary", lang)))
+        say("ec.last_reading", name=name, date=as_utc(last_reading_at).astimezone(zone).date())
+    say("ec.boundary")
     return lines
 
 

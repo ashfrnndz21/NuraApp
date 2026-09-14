@@ -12,7 +12,7 @@ The story: Pa (Singapore) with Mei as chief, Lin holding an emergency-only key, 
 nothing; the water pill and a blood pressure on the record. Pa's emergency card as JSON and as
 the printable page; Mei and Lin read it. Pa says "tired today" and is told to rest; Pa says
 "chest pain" by voice and the flag is written first, the posture is ACT, Mei is told, and the
-card's first line is the call line. Pa logs "dizzy, quite a lot, since this morning" and Mei
+card says she knows already and to call the ambulance on 995. Pa logs "dizzy, quite a lot, since this morning" and Mei
 reads it back in plain words. Kit is refused.
 """
 
@@ -361,7 +361,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or tired["red_flags"]
         or tired["check_in_at"] is None
         or mei.person_id not in tired["notified_person_ids"]
-        or "Mei will call you." not in lines
+        or "Mei will call you today." not in lines
     ):
         raise fail('Pa says "tired today"', why=f"got {tired}")
     ok(
@@ -394,14 +394,14 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or not chest["flag_id"]
         or not chest["by_voice"]
         or mei.person_id not in chest["notified_person_ids"]
-        or lines[:2] != ["Call Mei now.", "Call 995 now."]
+        or lines[:2] != ["Mei knows already.", "Call the ambulance now on 995."]
     ):
         raise fail('Pa says "chest pain" by voice', why=f"got {chest}")
     ok(
         'Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, '
         f"heard at {chest['transcript_confidence']}): the flag was written first ({chest['flag_id'][:8]}…), "
         f"the posture is ACT, Mei and Lin were told (notices to {len(chest['notified_person_ids'])} people, "
-        "\"Pa said: 'chest pain'. Call Pa now.\"), and the card's first line is the call:"
+        '"Nura heard this: chest pain. Call Pa now."), and the card says who knows and what to do:'
     )
     for line in lines:
         say(line)

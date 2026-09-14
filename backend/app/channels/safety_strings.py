@@ -5,17 +5,22 @@ Each line is a template keyed by an id, tagged `@patient` and written to `docs/p
 whole sentences, one idea per line, his names for things, the day and the date, who does
 the next thing, no red words, nothing to decode. The decision tables in `app.safety` choose
 *which* id; this file holds only the words. `render` fills a template and runs it through
-`app.safety.plain_words.verify` before it leaves, so a line that fails the standard is a
-`NotPlainWords` refusal and not a card.
+`app.safety.plain_words.verify` before it leaves — the what-to-do lines as the `action`
+kind, so a line that does not say who does the next thing and when fails in CI — and a line
+that fails the standard is a `NotPlainWords` refusal and not a card.
 
 No line here tells him to start, stop or change a medicine. The one line about a medicine
-he has not taken says to ask before he takes it, and never says how much. No line is a
-diagnosis: a red flag is "Call Mei now. Call 995 now." and nothing about what it means.
+nobody tapped Taken on says Nura has no note of it and to ask before he takes it, never how
+much. No line is a diagnosis: a red flag is "Mei knows already. Call the ambulance now on
+995. After that, call Mei." and nothing about what it means. No line tells him to drink: fluid is a
+clinical matter for a man with a weak heart, so the rest card says rest and nothing else.
 
 Identifiers never go through a template: the chief's phone number on the emergency card is
 carried beside the sentence as data, for the stranger holding the card, and the medicine's
 strength likewise — the sentence says "the water pill (frusemide)", the table beside it says
 "40 mg", because a paramedic needs the number and the standard forbids it in his sentences.
+The notice to the family quotes the table's word for what Nura heard, never his transcript,
+and says so: "Nura heard this: chest pain."
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from datetime import date
 from app.errors import Refusal
 from app.medicines.strings import say_date
 from app.safety.plain_words import Kind, verify
+from app.safety.symptoms import severity_word
 
 LANGUAGES = ("en", "ms", "zh")
 DEFAULT_LANGUAGE = "en"
@@ -59,8 +65,8 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "这是{name}的紧急卡。",
     },
     "ec.show": {
-        "en": "Show this card to the doctor or the ambulance.",
-        "ms": "Tunjukkan kad ini kepada doktor atau ambulans.",
+        "en": "Show this card to the doctor or the ambulance crew.",
+        "ms": "Tunjukkan kad ini kepada doktor atau krew ambulans.",
         "zh": "请把这张卡给医生或救护人员看。",
     },
     "ec.language": {
@@ -79,9 +85,9 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}有{condition}。",
     },
     "ec.no_condition": {
-        "en": "No condition is written down for {name}.",
-        "ms": "Tiada penyakit ditulis untuk {name}.",
-        "zh": "{name}没有记录的病。",
+        "en": "Nura has no note of a condition for {name}.",
+        "ms": "Nura tiada catatan penyakit untuk {name}.",
+        "zh": "Nura没有{name}的病的记录。",
     },
     "ec.medicine": {
         "en": "{name} takes {medicine}.",
@@ -89,19 +95,19 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}吃{medicine}。",
     },
     "ec.medicine_when": {
-        "en": "That is {amount} {when}.",
-        "ms": "Iaitu {amount} {when}.",
-        "zh": "{when}{amount}。",
+        "en": "{name} takes {amount} {when}.",
+        "ms": "{name} makan {amount} {when}.",
+        "zh": "{name}{when}吃{amount}。",
     },
     "ec.high_risk": {
-        "en": "Doctors watch {medicine} closely.",
-        "ms": "Doktor memantau {medicine} dengan teliti.",
-        "zh": "医生会特别留意{medicine}。",
+        "en": "{name}'s doctor watches {medicine} closely.",
+        "ms": "Doktor {name} memantau {medicine} dengan teliti.",
+        "zh": "{name}的医生会特别留意{medicine}。",
     },
     "ec.no_medicine": {
-        "en": "No medicine is written down for {name}.",
-        "ms": "Tiada ubat ditulis untuk {name}.",
-        "zh": "{name}没有记录的药。",
+        "en": "Nura has no note of a medicine for {name}.",
+        "ms": "Nura tiada catatan ubat untuk {name}.",
+        "zh": "Nura没有{name}的药的记录。",
     },
     "ec.allergy": {
         "en": "{name} is allergic to {thing}.",
@@ -109,14 +115,19 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}对{thing}过敏。",
     },
     "ec.no_allergy": {
-        "en": "{name} has no known allergy.",
-        "ms": "{name} tiada alahan yang diketahui.",
-        "zh": "{name}没有已知的过敏。",
+        "en": "{name} has no allergy that Nura knows of.",
+        "ms": "{name} tiada alahan yang Nura tahu.",
+        "zh": "Nura不知道{name}有什么过敏。",
     },
     "ec.blood_type": {
         "en": "{name}'s blood type is {group}.",
         "ms": "Jenis darah {name} ialah {group}.",
         "zh": "{name}的血型是{group}。",
+    },
+    "ec.chief_who": {
+        "en": "{chief} looks after {name}.",
+        "ms": "{chief} menjaga {name}.",
+        "zh": "{chief}照顾{name}。",
     },
     "ec.chief": {
         "en": "Call {chief} first.",
@@ -124,19 +135,29 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "请先打给{chief}。",
     },
     "ec.no_chief": {
-        "en": "No family contact is written down yet.",
+        "en": "No family number is written down yet.",
         "ms": "Belum ada nombor keluarga ditulis.",
-        "zh": "还没有记录家人的电话。",
+        "zh": "还没有记录家人的电话号码。",
     },
     "ec.doctor": {
         "en": "{name} sees {doctor}.",
         "ms": "{name} berjumpa {doctor}.",
         "zh": "{name}看{doctor}。",
     },
+    "ec.clinic": {
+        "en": "{name} goes to {clinic}.",
+        "ms": "{name} pergi ke {clinic}.",
+        "zh": "{name}去{clinic}看病。",
+    },
+    "ec.ambulance": {
+        "en": "The ambulance number is {number}.",
+        "ms": "Nombor ambulans ialah {number}.",
+        "zh": "救护车的号码是{number}。",
+    },
     "ec.last_reading": {
-        "en": "The last blood pressure was on {date}.",
-        "ms": "Tekanan darah terakhir diambil pada {date}.",
-        "zh": "最近一次量血压是在{date}那天。",
+        "en": "{name}'s blood pressure was last written down on {date}.",
+        "ms": "Tekanan darah {name} terakhir ditulis pada {date}.",
+        "zh": "{name}最近一次记录血压是在{date}那天。",
     },
     "ec.boundary": {
         "en": "This card is not a doctor's advice.",
@@ -147,87 +168,72 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
 
 # --- the what-to-do-now card -----------------------------------------------------------------
 
-# @patient
+# @patient action
 WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
-    "nfw.call_chief": {
-        "en": "Call {chief} now.",
-        "ms": "Hubungi {chief} sekarang.",
-        "zh": "现在就打给{chief}。",
-    },
-    "nfw.call_995": {
-        "en": "Call 995 now.",
-        "ms": "Hubungi 995 sekarang.",
-        "zh": "现在就打995。",
-    },
-    "nfw.call_999": {
-        "en": "Call 999 now.",
-        "ms": "Hubungi 999 sekarang.",
-        "zh": "现在就打999。",
-    },
-    "nfw.if_no_answer_995": {
-        "en": "If you cannot reach {chief}, call 995 now.",
-        "ms": "Jika {chief} tidak menjawab, hubungi 995 sekarang.",
-        "zh": "如果找不到{chief}，现在就打995。",
-    },
-    "nfw.if_no_answer_999": {
-        "en": "If you cannot reach {chief}, call 999 now.",
-        "ms": "Jika {chief} tidak menjawab, hubungi 999 sekarang.",
-        "zh": "如果找不到{chief}，现在就打999。",
-    },
     "nfw.chief_knows": {
-        "en": "{chief} knows.",
+        "en": "{chief} knows already.",
         "ms": "{chief} sudah tahu.",
         "zh": "{chief}已经知道了。",
     },
     "nfw.family_knows": {
-        "en": "Your family knows.",
-        "ms": "Keluarga anda sudah tahu.",
-        "zh": "您的家人已经知道了。",
+        "en": "Your family knows already and will call you.",
+        "ms": "Keluarga anda sudah tahu dan akan telefon anda.",
+        "zh": "您的家人已经知道了，会打给您。",
+    },
+    "nfw.call_995": {
+        "en": "Call the ambulance now on 995.",
+        "ms": "Hubungi ambulans sekarang di talian 995.",
+        "zh": "现在就打995叫救护车。",
+    },
+    "nfw.call_999": {
+        "en": "Call the ambulance now on 999.",
+        "ms": "Hubungi ambulans sekarang di talian 999.",
+        "zh": "现在就打999叫救护车。",
+    },
+    "nfw.then_call_chief": {
+        "en": "After that, call {chief}.",
+        "ms": "Selepas itu, hubungi {chief}.",
+        "zh": "然后再打给{chief}。",
     },
     "nfw.not_taken": {
-        "en": "You have not taken {medicine} today.",
-        "ms": "Anda belum makan {medicine} hari ini.",
-        "zh": "您今天还没吃{medicine}。",
+        "en": "Nura has no note that you took {medicine} today.",
+        "ms": "Nura tiada catatan yang anda makan {medicine} hari ini.",
+        "zh": "Nura没有您今天吃了{medicine}的记录。",
     },
     "nfw.ask_before": {
-        "en": "Ask {who} before you take it.",
-        "ms": "Tanya {who} dahulu sebelum anda makan.",
-        "zh": "吃之前先问{who}。",
+        "en": "Ask {who} before you take {medicine}.",
+        "ms": "Tanya {who} dahulu sebelum anda makan {medicine}.",
+        "zh": "吃{medicine}之前先问{who}。",
     },
     "nfw.rest": {
-        "en": "Sit down and rest.",
-        "ms": "Duduk dan berehat.",
-        "zh": "请坐下休息。",
-    },
-    "nfw.water": {
-        "en": "Drink water.",
-        "ms": "Minum air.",
-        "zh": "请喝点水。",
+        "en": "Sit down and rest now.",
+        "ms": "Duduk dan berehat sekarang.",
+        "zh": "现在请坐下休息。",
     },
     "nfw.will_call": {
-        "en": "{chief} will call you.",
-        "ms": "{chief} akan telefon anda.",
-        "zh": "{chief}会打给您。",
+        "en": "{chief} will call you today.",
+        "ms": "{chief} akan telefon anda hari ini.",
+        "zh": "{chief}今天会打给您。",
     },
     "nfw.check_in": {
         "en": "Nura will ask you again in 2 hours.",
         "ms": "Nura akan tanya anda lagi dalam 2 jam.",
         "zh": "Nura会在2小时后再问您。",
     },
-    "nfw.wrote": {
-        "en": "Nura wrote it down.",
-        "ms": "Nura sudah catat.",
-        "zh": "Nura已经记下了。",
-    },
     "nfw.not_heard": {
         "en": "Nura could not hear you.",
         "ms": "Nura tidak dapat mendengar anda.",
-        "zh": "Nura没有听清楚。",
+        "zh": "Nura没有听清楚您说的话。",
     },
     "nfw.say_again": {
-        "en": "Please say it again, or type it.",
-        "ms": "Sila cakap sekali lagi, atau taip.",
-        "zh": "请再说一次，或者打字。",
+        "en": "Please tell Nura again.",
+        "ms": "Sila beritahu Nura sekali lagi.",
+        "zh": "请再告诉Nura一次。",
+    },
+    "nfw.type_instead": {
+        "en": "You can type it to Nura instead.",
+        "ms": "Anda boleh taip kepada Nura pula.",
+        "zh": "您也可以打字告诉Nura。",
     },
 }
 
@@ -240,15 +246,15 @@ NOTICE: Mapping[str, Mapping[str, str]] = {
         "ms": "{patient} rasa tidak sihat.",
         "zh": "{patient}不舒服。",
     },
-    "notice.said": {
-        "en": "{patient} said: '{words}'.",
-        "ms": "{patient} kata: '{words}'.",
-        "zh": "{patient}说：“{words}”。",
+    "notice.heard": {
+        "en": "Nura heard this: {words}.",
+        "ms": "Nura dengar ini: {words}.",
+        "zh": "Nura听到的是：{words}。",
     },
     "notice.not_heard": {
-        "en": "Nura could not hear the words.",
-        "ms": "Nura tidak dapat mendengar kata-katanya.",
-        "zh": "Nura没有听清楚。",
+        "en": "Nura could not hear what {patient} said.",
+        "ms": "Nura tidak dapat mendengar apa yang {patient} kata.",
+        "zh": "Nura没有听清楚{patient}说的话。",
     },
     "notice.call_now": {
         "en": "Call {patient} now.",
@@ -266,9 +272,9 @@ NOTICE: Mapping[str, Mapping[str, str]] = {
         "zh": "请今天打给{patient}。",
     },
     "notice.not_taken": {
-        "en": "{patient} has not taken {medicine} today.",
-        "ms": "{patient} belum makan {medicine} hari ini.",
-        "zh": "{patient}今天还没吃{medicine}。",
+        "en": "Nura has no note that {patient} took {medicine} today.",
+        "ms": "Nura tiada catatan yang {patient} makan {medicine} hari ini.",
+        "zh": "Nura没有{patient}今天吃了{medicine}的记录。",
     },
     "notice.check_in": {
         "en": "How do you feel now?",
@@ -281,11 +287,6 @@ NOTICE: Mapping[str, Mapping[str, str]] = {
 
 # @patient
 SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
-    "sym.felt": {
-        "en": "{name} felt {symptom} on {date}.",
-        "ms": "{name} rasa {symptom} pada {date}.",
-        "zh": "{name}在{date}感到{symptom}。",
-    },
     "sym.not_well": {
         "en": "{name} was not feeling well on {date}.",
         "ms": "{name} rasa tidak sihat pada {date}.",
@@ -294,7 +295,7 @@ SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
     "sym.severity": {
         "en": "It was {severity}.",
         "ms": "Rasanya {severity}.",
-        "zh": "程度{severity}。",
+        "zh": "感觉{severity}。",
     },
     "sym.since": {
         "en": "It started {since}.",
@@ -302,26 +303,148 @@ SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
         "zh": "从{since}开始。",
     },
     "sym.by_voice": {
-        "en": "{name} said this by voice.",
+        "en": "{name} said this out loud.",
         "ms": "{name} cakap ini dengan suara.",
         "zh": "{name}是用语音说的。",
     },
     "sym.typed": {
-        "en": "{name} typed this.",
-        "ms": "{name} taip ini.",
-        "zh": "{name}是打字说的。",
+        "en": "{name} wrote this down.",
+        "ms": "{name} tulis ini sendiri.",
+        "zh": "{name}是打字写的。",
     },
     "sym.none": {
-        "en": "Nothing was written down since {date}.",
-        "ms": "Tiada apa-apa ditulis sejak {date}.",
-        "zh": "从{date}起没有记录。",
-    },
-    "sym.wrote": {
-        "en": "Nura wrote it down.",
-        "ms": "Nura sudah catat.",
-        "zh": "Nura已经记下了。",
+        "en": "Nobody wrote anything down since {date}.",
+        "ms": "Tiada sesiapa menulis apa-apa sejak {date}.",
+        "zh": "从{date}起没有人记下什么。",
     },
 }
+
+# @patient
+SYMPTOM_LINES: Mapping[str, Mapping[str, str]] = {
+    "tired": {
+        "en": "{name} felt tired on {date}.",
+        "ms": "{name} rasa letih pada {date}.",
+        "zh": "{name}在{date}感到累。",
+    },
+    "dizzy": {
+        "en": "{name} felt dizzy on {date}.",
+        "ms": "{name} rasa pening pada {date}.",
+        "zh": "{name}在{date}感到头晕。",
+    },
+    "headache": {
+        "en": "{name} had a headache on {date}.",
+        "ms": "{name} sakit kepala pada {date}.",
+        "zh": "{name}在{date}头痛。",
+    },
+    "nausea": {
+        "en": "{name} felt sick in the stomach on {date}.",
+        "ms": "{name} rasa loya pada {date}.",
+        "zh": "{name}在{date}感到恶心。",
+    },
+    "vomiting": {
+        "en": "{name} vomited on {date}.",
+        "ms": "{name} muntah pada {date}.",
+        "zh": "{name}在{date}吐了。",
+    },
+    "cough": {
+        "en": "{name} had a cough on {date}.",
+        "ms": "{name} batuk pada {date}.",
+        "zh": "{name}在{date}咳嗽。",
+    },
+    "fever": {
+        "en": "{name} had a fever on {date}.",
+        "ms": "{name} demam pada {date}.",
+        "zh": "{name}在{date}发烧。",
+    },
+    "stomach_pain": {
+        "en": "{name} had a stomach pain on {date}.",
+        "ms": "{name} sakit perut pada {date}.",
+        "zh": "{name}在{date}肚子痛。",
+    },
+    "poor_appetite": {
+        "en": "{name} had no appetite on {date}.",
+        "ms": "{name} tak selera makan pada {date}.",
+        "zh": "{name}在{date}没胃口。",
+    },
+    "cannot_sleep": {
+        "en": "{name} could not sleep on {date}.",
+        "ms": "{name} susah tidur pada {date}.",
+        "zh": "{name}在{date}睡不着。",
+    },
+    "leg_swelling": {
+        "en": "{name}'s legs were swollen on {date}.",
+        "ms": "Kaki {name} bengkak pada {date}.",
+        "zh": "{name}在{date}腿肿。",
+    },
+    "weak": {
+        "en": "{name} felt weak on {date}.",
+        "ms": "{name} rasa lemah pada {date}.",
+        "zh": "{name}在{date}感到无力。",
+    },
+    "joint_pain": {
+        "en": "{name} had pain in the joints on {date}.",
+        "ms": "{name} sakit sendi pada {date}.",
+        "zh": "{name}在{date}关节痛。",
+    },
+    "diarrhoea": {
+        "en": "{name} had a runny stomach on {date}.",
+        "ms": "{name} cirit-birit pada {date}.",
+        "zh": "{name}在{date}拉肚子。",
+    },
+    "constipation": {
+        "en": "{name} could not pass motion on {date}.",
+        "ms": "{name} sembelit pada {date}.",
+        "zh": "{name}在{date}便秘。",
+    },
+    "itch": {
+        "en": "{name} felt itchy on {date}.",
+        "ms": "{name} rasa gatal pada {date}.",
+        "zh": "{name}在{date}感到痒。",
+    },
+    "chest_pain": {
+        "en": "{name} felt chest pain on {date}.",
+        "ms": "{name} rasa sakit dada pada {date}.",
+        "zh": "{name}在{date}感到胸痛。",
+    },
+    "breathless_at_rest": {
+        "en": "{name} felt short of breath on {date}.",
+        "ms": "{name} rasa sesak nafas pada {date}.",
+        "zh": "{name}在{date}感到喘不过气。",
+    },
+    "one_sided_swelling": {
+        "en": "{name} had swelling on one side on {date}.",
+        "ms": "{name} bengkak sebelah pada {date}.",
+        "zh": "{name}在{date}一边肿了。",
+    },
+    "worst_headache": {
+        "en": "{name} had the worst headache ever on {date}.",
+        "ms": "{name} sakit kepala paling teruk pada {date}.",
+        "zh": "{name}在{date}头痛得最厉害。",
+    },
+    "sudden_blurring": {
+        "en": "{name}'s eyes went blurry all of a sudden on {date}.",
+        "ms": "Mata {name} kabur tiba-tiba pada {date}.",
+        "zh": "{name}在{date}眼睛突然看不清。",
+    },
+    "fall": {
+        "en": "{name} had a fall on {date}.",
+        "ms": "{name} jatuh pada {date}.",
+        "zh": "{name}在{date}跌倒了。",
+    },
+    "confusion": {
+        "en": "{name} felt confused on {date}.",
+        "ms": "{name} rasa keliru pada {date}.",
+        "zh": "{name}在{date}感到糊涂。",
+    },
+    "shaky_sweaty": {
+        "en": "{name} felt shaky and sweaty on {date}.",
+        "ms": "{name} rasa menggigil dan berpeluh pada {date}.",
+        "zh": "{name}在{date}又发抖又出汗。",
+    },
+}
+"""One whole sentence per symptom or red-flag code: "had a cough", "vomited", "could not
+sleep" — a shared "felt {word}" fits only the adjectives, and "felt like vomiting" for a man
+who vomited changes what his daughter is told."""
 
 # --- his words for things that fill the slots ---------------------------------------------
 
@@ -332,7 +455,7 @@ SYMPTOM_WORDS: Mapping[str, Mapping[str, str]] = {
         "dizzy": "dizzy",
         "headache": "a headache",
         "nausea": "sick in the stomach",
-        "vomiting": "like vomiting",
+        "vomiting": "vomiting",
         "cough": "a cough",
         "fever": "a fever",
         "stomach_pain": "a stomach pain",
@@ -359,7 +482,7 @@ SYMPTOM_WORDS: Mapping[str, Mapping[str, str]] = {
         "dizzy": "pening",
         "headache": "sakit kepala",
         "nausea": "loya",
-        "vomiting": "nak muntah",
+        "vomiting": "muntah",
         "cough": "batuk",
         "fever": "demam",
         "stomach_pain": "sakit perut",
@@ -386,7 +509,7 @@ SYMPTOM_WORDS: Mapping[str, Mapping[str, str]] = {
         "dizzy": "头晕",
         "headache": "头痛",
         "nausea": "恶心",
-        "vomiting": "想吐",
+        "vomiting": "呕吐",
         "cough": "咳嗽",
         "fever": "发烧",
         "stomach_pain": "肚子痛",
@@ -409,14 +532,17 @@ SYMPTOM_WORDS: Mapping[str, Mapping[str, str]] = {
         "shaky_sweaty": "发抖出汗",
     },
 }
-"""How each symptom or red-flag code is said back, by code. The same words every time."""
+"""What Nura heard, by code, for the notice ("Nura heard this: a fall."). The same words
+every time; never the transcript."""
 
 # @patient phrase
 SEVERITY_WORDS: Mapping[str, Mapping[int, str]] = {
-    "en": {1: "a little", 2: "quite a lot", 3: "very bad"},
-    "ms": {1: "sedikit", 2: "agak banyak", 3: "teruk sangat"},
-    "zh": {1: "一点点", 2: "比较多", 3: "很严重"},
+    "en": {1: "only a little", 2: "quite bad", 3: "very bad"},
+    "ms": {1: "sedikit saja", 2: "agak teruk", 3: "teruk sangat"},
+    "zh": {1: "只有一点", 2: "比较严重", 3: "很严重"},
 }
+"""The three levels said back. One vocabulary: `app.safety.symptoms.severity_word` hears and
+says the same words, and a test holds the two tables together."""
 
 # @patient phrase
 SINCE_WORDS: Mapping[str, Mapping[str, str]] = {
@@ -539,34 +665,6 @@ CONDITION_WORDS: Mapping[str, Mapping[str, str]] = {
 A code not here is said as it is written, with its underscores taken out."""
 
 # @patient phrase
-HIGH_RISK_WORDS: Mapping[str, Mapping[str, str]] = {
-    "en": {
-        "anticoagulant": "the blood thinner",
-        "insulin": "the insulin",
-        "cardiac_glycoside": "the heart tablet",
-        "antimetabolite": "the joint medicine",
-        "opioid": "the strong pain medicine",
-        "high_risk": "this medicine",
-    },
-    "ms": {
-        "anticoagulant": "ubat cair darah",
-        "insulin": "insulin",
-        "cardiac_glycoside": "ubat jantung",
-        "antimetabolite": "ubat sendi",
-        "opioid": "ubat sakit yang kuat",
-        "high_risk": "ubat ini",
-    },
-    "zh": {
-        "anticoagulant": "薄血药",
-        "insulin": "胰岛素",
-        "cardiac_glycoside": "心脏药",
-        "antimetabolite": "关节药",
-        "opioid": "强效止痛药",
-        "high_risk": "这个药",
-    },
-}
-
-# @patient phrase
 BLOOD_GROUP_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "O+": "O positive", "O-": "O negative", "A+": "A positive", "A-": "A negative",
@@ -594,10 +692,16 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     **WHAT_TO_DO,
     **NOTICE,
     **SYMPTOM_LOG,
+    **{f"sym.{code}": by_language for code, by_language in SYMPTOM_LINES.items()},
 }
 
-KIND_OF: Mapping[str, Kind] = {"ec.title": "headline"}
-"""How the verifier reads a line, where it is not a whole line he hears."""
+KIND_OF: Mapping[str, Kind] = {
+    "ec.title": "headline",
+    **{template_id: "action" for template_id in WHAT_TO_DO},
+}
+"""How the verifier reads a line, where it is not a whole line he hears: the title is a
+headline, and every what-to-do line is an action — it must say who does the next thing and
+when, or it fails in CI."""
 
 
 def template(template_id: str, language: str) -> str:
@@ -636,6 +740,11 @@ def phrase(table: Mapping[str, Mapping[str, str]], language: str, code: str) -> 
     with its underscores taken out — a name is never dropped for want of a translation."""
     by_code = table.get(language_of(language)) or table[DEFAULT_LANGUAGE]
     return by_code.get(code) or table[DEFAULT_LANGUAGE].get(code) or code.replace("_", " ")
+
+
+def severity_said(level: int, language: str) -> str:
+    """The word for a level, from the one vocabulary."""
+    return severity_word(level, language_of(language))
 
 
 def catalogue() -> Iterator[tuple[str, str, str]]:

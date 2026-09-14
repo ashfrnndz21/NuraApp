@@ -134,7 +134,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         object_store=objects,
         extractor=FixtureExtractor(PAPER),
         drug_registry=FixtureRegistry.load(),
-        transcriber=FixtureTranscriber(VOICE),
+        transcriber=FixtureTranscriber(VOICE, region),
     )
     app = create_app(settings, sessions, providers)
     try:

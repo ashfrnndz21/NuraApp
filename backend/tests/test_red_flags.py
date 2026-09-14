@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from app.channels import safety_strings as strings
+from app.regions import OutOfRegion, Region
 from app.safety.plain_words import verify
 from app.safety.red_flags import RED_FLAGS, RedFlag, match_red_flags, words_for
 from app.safety.symptoms import (
@@ -67,8 +68,9 @@ def test_ordinary_words_are_not_flags(said: str) -> None:
 def test_shaky_and_sweaty_is_a_flag_only_on_a_sugar_medicine_and_named_when_unknown() -> None:
     on = match_red_flags("shaky and sweaty", on_sugar_medicine=True)
     assert on.flags == (RedFlag.SHAKY_SWEATY,)
+    # Known medicines, none a sugar one — or one the list does not know: held back, visibly.
     off = match_red_flags("shaky and sweaty", on_sugar_medicine=False)
-    assert off.flags == () and off.suppressed == ()
+    assert off.flags == () and off.suppressed == (RedFlag.SHAKY_SWEATY,)
     unknown = match_red_flags("shaky and sweaty", on_sugar_medicine=None)
     assert unknown.flags == ()
     assert unknown.suppressed == (RedFlag.SHAKY_SWEATY,)
@@ -122,14 +124,22 @@ def test_malay_and_chinese_words_are_read_too() -> None:
 
 
 async def test_the_fixture_transcriber_answers_by_digest_and_hears_nothing_otherwise() -> None:
-    transcriber = FixtureTranscriber(VOICE)
+    transcriber = FixtureTranscriber(VOICE, Region.SG)
     note = placeholder_voice(CHEST_PAIN)
     assert transcriber.path_of(note).name == f"{digest_of(CHEST_PAIN)}.json"
-    heard = await transcriber.transcribe(note, "audio/m4a", "en")
+    heard = await transcriber.transcribe(note, "audio/m4a", "en", Region.SG)
     assert heard.text == fixture(CHEST_PAIN)["text"] == "I have chest pain"
     assert heard.confidence == 0.94 and heard.heard
-    silent = await transcriber.transcribe(placeholder_voice(UNHEARD), "audio/m4a", "en")
+    silent = await transcriber.transcribe(placeholder_voice(UNHEARD), "audio/m4a", "en", Region.SG)
     assert silent == NOTHING_HEARD and not silent.heard
+
+
+async def test_the_transcriber_is_pinned_to_its_region() -> None:
+    """A voice note is health data: a Singapore note never reaches a Malaysian transcriber."""
+    transcriber = FixtureTranscriber(VOICE, Region.MY)
+    assert transcriber.region is Region.MY
+    with pytest.raises(OutOfRegion):
+        await transcriber.transcribe(placeholder_voice(CHEST_PAIN), "audio/m4a", "en", Region.SG)
 
 
 def test_a_voice_note_is_audio_and_not_a_recording_of_a_whole_visit() -> None:
@@ -158,10 +168,12 @@ FILLERS = {
     "thing": "Penicillin",
     "group": "O positive",
     "doctor": "Dr Tan",
+    "clinic": "Bedok Clinic",
+    "number": "995",
     "date": "Monday 14 September",
     "words": "chest pain",
     "symptom": "dizzy",
-    "severity": "quite a lot",
+    "severity": "quite bad",
     "since": "this morning",
 }
 
@@ -188,3 +200,18 @@ def test_no_template_tells_him_to_start_stop_or_change_a_medicine() -> None:
         low = text.lower()
         for word in forbidden:
             assert word not in low, (template_id, language, text)
+
+
+def test_one_vocabulary_for_the_three_levels() -> None:
+    """What the table hears first for a level is what the catalogue says back."""
+    for language in ("en", "ms", "zh"):
+        for level in (1, 2, 3):
+            assert severity_word(level, language) == strings.SEVERITY_WORDS[language][level]
+            assert strings.severity_said(level, language) == severity_word(level, language)
+
+
+def test_every_what_to_do_line_is_checked_as_an_action() -> None:
+    """Rules 6 and 7 — what to do and when, who does the next thing — run on the one card
+    whose whole job is what happens next."""
+    for template_id in strings.WHAT_TO_DO:
+        assert strings.KIND_OF[template_id] == "action", template_id

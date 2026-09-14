@@ -1,31 +1,41 @@
 """The not-feeling-well flow (E13-02): one button, three steps, the family told.
 
     Voice-captures what is wrong, checks his recent readings and medicines, tells him what
-    to do now (rest / call clinic / go to A&E) and tells Ash. Turns fear into a plan. The
-    most valuable single button in the product.
+    to do now (rest / call clinic / go now) and tells Ash. Turns fear into a plan. The most
+    valuable single button in the product.
 
 What happens, in order, and the order is the point:
 
 1. **Capture.** His words are kept as an artefact — the voice note, or the text he typed —
-   before anything is read from them. The words live there and nowhere else.
+   before anything is read from them, when the key holds the record. A voice note is handed
+   only to a transcriber in the profile's region, and a voice note of him pressed by someone
+   else rests on the RECORDING consent.
 2. **Hear.** A voice note goes through the `Transcriber` port; typed words are heard as
    typed. Nothing heard is still a press of the button: the family is told and he is asked
    to say it again.
 3. **Red flags first.** The words are read against `app.safety.red_flags`. A flag is written
-   down (`Flag`) before the event, the fact, the notices and the card — "this one we do not
-   wait for" is a property of the write order, not of the ranking. Every key holder with the
-   EMERGENCY scope (the roster, when E12 lands) gets a `Notice` to be delivered by E11/E19.
-4. **State.** The moment becomes a SYMPTOM event and a `symptom.reported` fact resting on
-   the artefact, and a `feeling.control` fact — `act` for a red flag, `watch` otherwise, for
-   the next 24 hours — which is how the safety layer sets the day's posture: through a fact
-   State folds in, never by writing a snapshot itself.
-5. **The card.** One row of a fixed decision table (`DECISION_TABLE`), rendered from the
-   State those facts produced, every line from `app.channels.safety_strings` and verified.
+   down (`write_flag_kept`) before the event, the fact and the card — and kept: if anything
+   later in the same request is refused, the flag and the notices land anyway. Every key
+   holder with the EMERGENCY scope (the roster, when E12 lands) gets a `Notice` to be
+   delivered by E11/E19. This whole step runs under `Scope.EMERGENCY`, which every role
+   holds, so a helper or a caregiver pressing the button for him escalates exactly as he
+   would (docs/00-MASTER-BUILD-SPEC.md §8: red flags escalate immediately).
+4. **State.** When the key holds the record, the moment becomes a SYMPTOM event and a
+   `symptom.reported` fact resting on the artefact, and a `feeling.control` fact — `act`
+   for a red flag, `watch` otherwise, for the next 24 hours — which is how the safety layer
+   sets the day's posture: through a fact State folds in, never by writing a snapshot itself.
+5. **The card.** One row of a fixed decision table (`DECISION_TABLE`), every line from
+   `app.channels.safety_strings` and verified as an action. A key that can compute State
+   (the owner, the chief) has the card rendered from the State those facts produced and
+   written down as a `WhatToDoCard`; a narrower key gets the same lines to show him and no
+   card row, since nothing rendered is stored without the State it came from.
 
 The boundary holds throughout. No line says what is wrong with him; no line tells him to
-start, stop or change a medicine — a medicine he has not taken today gets "Ask Mei before
-you take it", never an amount; a red flag gets "Call Mei now. Call 995 now." and nothing
-about what it might mean. The check-in two hours on is a question, not a judgement.
+start, stop or change a medicine — a medicine nobody tapped Taken on gets "Nura has no note
+that you took the water pill today. Ask Dr Tan before you take the water pill.", never an
+amount; a red flag gets "Mei knows already. Call the ambulance now on 995. After that, call Mei." and
+nothing about what it might mean. Nothing tells him to drink. The check-in two hours on is a
+question, not a judgement.
 """
 
 from __future__ import annotations
@@ -47,6 +57,8 @@ from app.channels.safety_strings import (
     phrase,
     render,
 )
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
@@ -63,16 +75,25 @@ from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.service import Slot, today
 from app.medicines.strings import PLAIN_NAME
 from app.memory.episodic import record_event
-from app.memory.models import Artifact, ConfidenceState, EventKind, SourceChannel
+from app.memory.models import Artifact, ConfidenceState, Event, EventKind, Fact, SourceChannel
 from app.memory.semantic import assert_fact
-from app.regions import REGION_TZ, Region
+from app.regions import REGION_TZ, Region, guard_region
 from app.safety.emergency_card import EMERGENCY_NUMBER
-from app.safety.models import Flag, FlagKind, Notice, NoticeKind, WhatToDoCard, WhatToDoKind
-from app.safety.red_flags import Heard, RedFlag, is_sugar_medicine, match_red_flags
+from app.safety.models import Flag, Notice, NoticeKind, WhatToDoCard, WhatToDoKind
+from app.safety.people import key_holder, owner_of
+from app.safety.red_flags import (
+    FLAG_SCOPE,
+    Heard,
+    RedFlag,
+    is_sugar_medicine,
+    keep_row,
+    match_red_flags,
+    write_flag_kept,
+)
 from app.safety.symptoms import Parsed, Symptom, parse_symptoms
-from app.safety.transcribe import Transcriber, Transcript
+from app.safety.transcribe import NOTHING_HEARD, Transcriber, Transcript, check_voice_note
 from app.state.models import Posture
-from app.state.service import current_state, render_from_state
+from app.state.service import RECOMPUTE_SCOPES, StateView, current_state, render_from_state
 
 SYMPTOM = "symptom"
 """The subject his words about how he feels are written under; attribute `reported`."""
@@ -84,6 +105,12 @@ FEELING = "feeling"
 situational dimension); attribute `control`, value a posture word."""
 
 CONTROL = "control"
+
+BUTTON_SCOPE = Scope.EMERGENCY
+"""The door on the button: the scope every role holds, so anyone with him can press it."""
+
+NOTICE_SCOPE = Scope.EMERGENCY
+"""Notices are written under the same door: telling the family is the emergency act."""
 
 FLAG_TARGET = Flag.__tablename__
 NOTICE_TARGET = Notice.__tablename__
@@ -103,7 +130,7 @@ ANCHOR_HOURS: dict[Anchor, int] = {
     Anchor.DINNER: 20,
     Anchor.BED: 22,
 }
-"""The hour of his day after which a dose at that anchor counts as not taken yet."""
+"""The hour of his day after which a dose at that anchor counts as not tapped yet."""
 
 NOT_FEELING_WELL_LABEL = "not feeling well"
 
@@ -124,9 +151,10 @@ class Line:
 
 @dataclass(frozen=True, slots=True)
 class Captured:
-    """What was kept and heard: the artefact, the transcript, how it came in."""
+    """What was kept and heard: the artefact (None when the key cannot keep one), the
+    transcript, how it came in."""
 
-    artifact: Artifact
+    artifact: Artifact | None
     transcript: Transcript
     by_voice: bool
 
@@ -180,17 +208,17 @@ class Decision:
 
 @dataclass(frozen=True, slots=True)
 class WhatToDoNow:
-    """The answer to the button: the card, and everything written on the way to it."""
+    """The answer to the button: the card, and everything written on the way to it.
 
-    card_id: uuid.UUID
-    state_id: uuid.UUID
+    `card_id` and `state_id` are None when the key could not compute State and so no card
+    row was written; `event_id` and `fact_id` are None when the key holds no record to
+    write the moment into. The lines are always there, and so is the flag when one was heard.
+    """
+
     kind: WhatToDoKind
-    posture: Posture
+    posture: Posture | None
     language: str
     lines: list[Line]
-    artifact_id: uuid.UUID
-    event_id: uuid.UUID
-    fact_id: uuid.UUID
     heard: bool
     by_voice: bool
     transcript_confidence: float
@@ -200,6 +228,11 @@ class WhatToDoNow:
     flag_id: uuid.UUID | None
     notified_person_ids: list[uuid.UUID]
     check_in_at: datetime | None
+    card_id: uuid.UUID | None = None
+    state_id: uuid.UUID | None = None
+    artifact_id: uuid.UUID | None = None
+    event_id: uuid.UUID | None = None
+    fact_id: uuid.UUID | None = None
     missed_medicine: str | None = None
     notices: list[Notice] = field(default_factory=list)
 
@@ -208,19 +241,21 @@ class WhatToDoNow:
 
 
 def _red_flag_lines(s: Situation) -> tuple[str, ...]:
+    """The chief knows already, call the ambulance now, after that call the chief: one order,
+    the reassurance first, and nothing that contradicts the notice she was sent."""
     number = EMERGENCY_NUMBER[s.region]
     if s.chief is None:
         lines: tuple[str, ...] = (f"nfw.call_{number}",)
         if s.others_told:
             lines += ("nfw.family_knows",)
         return lines
-    return ("nfw.call_chief", f"nfw.call_{number}", "nfw.chief_knows")
+    return ("nfw.chief_knows", f"nfw.call_{number}", "nfw.then_call_chief")
 
 
 def _not_heard(s: Situation) -> tuple[str, ...]:
     """When nothing was heard the card says so first, whichever row it is: he pressed the
     button, and a card that pretends to have understood him would be the wrong card."""
-    return () if s.heard else ("nfw.not_heard", "nfw.say_again")
+    return () if s.heard else ("nfw.not_heard", "nfw.say_again", "nfw.type_instead")
 
 
 def _missed_dose_lines(s: Situation) -> tuple[str, ...]:
@@ -230,21 +265,24 @@ def _missed_dose_lines(s: Situation) -> tuple[str, ...]:
 
 
 def _rest_lines(s: Situation) -> tuple[str, ...]:
-    lines: tuple[str, ...] = _not_heard(s) + ("nfw.rest", "nfw.water")
+    lines: tuple[str, ...] = _not_heard(s) + ("nfw.rest",)
     lines += ("nfw.will_call",) if s.chief is not None else ()
     return lines + ("nfw.check_in",)
 
 
-DECISION_TABLE: tuple[tuple[WhatToDoKind, Callable[[Situation], bool], Callable[[Situation], tuple[str, ...]], bool], ...] = (
+Row = tuple[WhatToDoKind, Callable[[Situation], bool], Callable[[Situation], tuple[str, ...]], bool]
+
+DECISION_TABLE: tuple[Row, ...] = (
     (WhatToDoKind.RED_FLAG, lambda s: s.red_flag, _red_flag_lines, False),
     (WhatToDoKind.MISSED_DOSE, lambda s: s.missed is not None, _missed_dose_lines, True),
     (WhatToDoKind.REST, lambda s: True, _rest_lines, True),
 )
 """The whole of what the button can say, top row wins. (kind, applies, lines, check-in.)
 
-Red flag: call the chief, call the ambulance, the chief knows. A dose not taken: you have
-not taken it, ask before you take it, rest, the chief will call, a check-in in two hours.
-Otherwise: rest, water, the chief will call, a check-in in two hours. Nothing else exists.
+Red flag: the chief knows already, call the ambulance now, after that call the chief.
+A dose nobody tapped Taken on: Nura has no note you took it, ask the doctor before you take
+it, rest, the chief will call today, a check-in in two hours. Otherwise: rest, the chief will
+call today, a check-in in two hours. Nothing else exists, and nothing says what is wrong.
 """
 
 
@@ -270,30 +308,58 @@ async def capture(
     content_type: str | None,
     source_channel: SourceChannel = SourceChannel.APP,
 ) -> Captured:
-    """Step 1 and 2: keep what he said, then hear it. Exactly one of voice or words."""
+    """Step 1 and 2: keep what he said, then hear it. Exactly one of voice or words.
+
+    The artefact is written when the key holds the record; a key that does not (a helper's)
+    still has the words heard, in memory, so the flag can be raised — the words themselves
+    are then not kept, and the flag names no artefact. A voice note is handed to the
+    transcriber only if the transcriber is in the profile's region, and only on the RECORDING
+    consent when the person pressing is not the person recorded.
+    """
     if audio is not None and words is not None:
         raise SaidTwice("a voice note or typed words, not both")
     moment = utcnow()
+    can_keep = context.allows(Scope.RECORDS)
     if audio is not None:
-        artifact = await store_voice(
-            session,
-            context=context,
-            store=store,
-            data=audio,
-            content_type=content_type or "",
-            captured_at=moment,
-            source_channel=source_channel,
+        kind = check_voice_note(audio, content_type or "")
+        guard_region(held_in=context.region, asked_from=transcriber.region)
+        if not context.is_owner:
+            # His voice, recorded by someone else: the recording consent, not the record's.
+            await require_consent(
+                session,
+                context=context,
+                purpose=ConsentPurpose.RECORDING,
+                scope=BUTTON_SCOPE,
+            )
+        artifact = (
+            await store_voice(
+                session,
+                context=context,
+                store=store,
+                data=audio,
+                content_type=kind,
+                captured_at=moment,
+                source_channel=source_channel,
+            )
+            if can_keep
+            else None
         )
-        transcript = await transcriber.transcribe(audio, artifact.content_type, language)
-        return Captured(artifact=artifact, transcript=transcript, by_voice=True)
+        transcript = await transcriber.transcribe(audio, kind, language, context.region)
+        return Captured(artifact=artifact, transcript=transcript or NOTHING_HEARD, by_voice=True)
     if words is not None:
-        artifact = await store_words(
-            session,
-            context=context,
-            store=store,
-            text=words,
-            captured_at=moment,
-            source_channel=source_channel,
+        if not words.strip():
+            raise NothingSaid("say it or type it")
+        artifact = (
+            await store_words(
+                session,
+                context=context,
+                store=store,
+                text=words,
+                captured_at=moment,
+                source_channel=source_channel,
+            )
+            if can_keep
+            else None
         )
         return Captured(
             artifact=artifact,
@@ -306,7 +372,10 @@ async def capture(
 async def sugar_medicine(
     session: AsyncSession, *, context: KeyContext
 ) -> tuple[bool | None, Sequence[MedicationLine]]:
-    """Whether he is on a sugar medicine: True, False, or None when no medicine is known."""
+    """Whether he is on a sugar medicine: True, False, or None when the medicines are not
+    known — because none is on record, or because this key does not open them."""
+    if not context.allows(Scope.MEDICINES):
+        return None, ()
     lines = await audited_read(
         session,
         MedicationLine,
@@ -327,11 +396,13 @@ async def family_of(
 ) -> Family:
     """Who is told: every active key holder with EMERGENCY, the chief named first.
 
-    The roster (E12) will decide who is on duty; until it lands, everyone the patient let
-    in to his emergency card is the roster. The person pressing the button is not told.
+    Read under EMERGENCY, not FAMILY: who the patient let in to his emergency card is part
+    of the emergency card (ADR 0002), and a caregiver or a helper pressing the button holds
+    no FAMILY key. The roster (E12) will decide who is on duty; until it lands, everyone the
+    patient let in to his emergency card is the roster. The person pressing is not told.
     """
     moment = utcnow()
-    keys = await audited_read(session, Key, context, Scope.FAMILY)
+    keys = await audited_read(session, Key, context, BUTTON_SCOPE)
     chief: Person | None = None
     to_tell: list[Person] = []
     for key in sorted(keys, key=lambda one: (as_utc(one.granted_at), str(one.id))):
@@ -339,8 +410,10 @@ async def family_of(
             continue
         if key.holder_person_id == context.person_id:
             continue
-        person = await session.get(Person, key.holder_person_id)
-        if person is None or any(one.id == person.id for one in to_tell):
+        if any(one.id == key.holder_person_id for one in to_tell):
+            continue
+        person = await key_holder(session, context, key.holder_person_id, scope=BUTTON_SCOPE)
+        if person is None:
             continue
         to_tell.append(person)
         if chief is None and key.role is KeyRole.CHIEF:
@@ -368,43 +441,40 @@ async def escalate(
 ) -> Escalated:
     """Step 3, when a red flag was heard: the flags, then a notice to each person.
 
-    Written before the event, the fact and the card. The notice is a template id and codes:
-    "{patient} is not feeling well. {patient} said: 'chest pain'. Call {patient} now. This
-    one we do not wait for." — the words quoted are the table's words for the code, in the
+    Written before the event, the fact and the card, and kept (`write_flag_kept`, `keep_row`)
+    so a refusal further on cannot take them back. The notice is a template id and codes:
+    "{patient} is not feeling well. Nura heard this: chest pain. Call {patient} now. This one
+    we do not wait for." — the words quoted are the table's words for the code, in the
     reader's language, never the transcript.
     """
     moment = utcnow()
     flags: list[Flag] = []
     for code in heard.flags:
         flags.append(
-            await audited_write(
+            await write_flag_kept(
                 session,
-                Flag,
                 context,
-                Scope.RECORDS,
-                kind=FlagKind.RED_FLAG,
                 code=code.value,
                 posture=Posture.ACT,
-                artifact_id=captured.artifact.id,
-                raised_at=moment,
-                raised_by_person_id=context.person_id,
+                artifact=captured.artifact,
                 suppressed=[one.value for one in heard.suppressed],
             )
         )
-    first = flags[0]
-    notices = [
-        await _notice(
+    first = flags[0] if flags else None
+    notices: list[Notice] = []
+    for person in family.to_tell:
+        notice = await _notice(
             session,
             context=context,
             to=person,
             kind=NoticeKind.FAMILY_ALERT,
             template="family_alert.red_flag",
             slots={"words": _words_code(heard, parsed), "heard": captured.heard},
-            flag_id=first.id,
+            flag_id=None if first is None else first.id,
             deliver_after=moment,
         )
-        for person in family.to_tell
-    ]
+        keep_row(session, context, notice, scope=NOTICE_SCOPE)
+        notices.append(notice)
     return Escalated(flags=flags, notices=notices)
 
 
@@ -418,7 +488,7 @@ async def tell_family(
     family: Family,
     missed: str | None,
 ) -> list[Notice]:
-    """The ordinary path's notice: he is not feeling well, this is what he said, call today."""
+    """The ordinary path's notice: he is not feeling well, this is what Nura heard, call today."""
     moment = utcnow()
     return [
         await _notice(
@@ -451,7 +521,7 @@ async def _notice(
         session,
         Notice,
         context,
-        Scope.RECORDS,
+        NOTICE_SCOPE,
         kind=kind,
         to_person_id=to.id,
         template=template,
@@ -469,17 +539,17 @@ def notice_lines(notice: Notice, *, patient: str, language: str | None = None) -
     and for the tests. Every line verified."""
     lang = language_of(language or notice.language)
     slots = notice.slots
+    if notice.kind is NoticeKind.CHECK_IN:
+        return [render("notice.check_in", lang)]
     lines = [render("notice.not_well", lang, patient=patient)]
     code = slots.get("words")
     if isinstance(code, str):
-        lines.append(render("notice.said", lang, patient=patient, words=phrase(SYMPTOM_WORDS, lang, code)))
+        lines.append(render("notice.heard", lang, words=phrase(SYMPTOM_WORDS, lang, code)))
     elif slots.get("heard") is False:
-        lines.append(render("notice.not_heard", lang))
+        lines.append(render("notice.not_heard", lang, patient=patient))
     if notice.template == "family_alert.red_flag":
         lines.append(render("notice.call_now", lang, patient=patient))
         lines.append(render("notice.do_not_wait", lang))
-    elif notice.kind is NoticeKind.CHECK_IN:
-        return [render("notice.check_in", lang)]
     else:
         missed = slots.get("missed")
         if isinstance(missed, str):
@@ -497,18 +567,20 @@ async def write_the_moment(
     parsed: Parsed,
     label: str,
     posture: Posture | None,
-) -> tuple[uuid.UUID, uuid.UUID]:
+) -> tuple[Event, Fact]:
     """Step 4: the SYMPTOM event, the `symptom.reported` fact on the artefact and the event,
     and — when the button was pressed — the `feeling.control` fact that sets the posture.
-    State recomputes as each fact lands. Returns (event id, symptom fact id)."""
+    State recomputes as each fact lands. Needs the record: the caller checks."""
     moment = utcnow()
+    artifact_id = None if captured.artifact is None else captured.artifact.id
     event = await record_event(
         session,
         context=context,
         kind=EventKind.SYMPTOM,
         occurred_at=moment,
         label=label,
-        artifact_id=captured.artifact.id,
+        artifact_id=artifact_id,
+        source_channel=None if artifact_id is not None else SourceChannel.APP,
     )
     # "Not well" is what is written when the button was pressed and nothing the tables know
     # was said — neither a symptom nor a red flag. A red flag is already the word for it.
@@ -532,7 +604,7 @@ async def write_the_moment(
             value=value,
             confidence=captured.transcript.confidence,
             confidence_state=ConfidenceState.EXTRACTED,
-            artifact_id=captured.artifact.id,
+            artifact_id=artifact_id,
             event_id=event.id,
             valid_from=moment,
             valid_to=moment + SYMPTOM_WINDOW,
@@ -547,7 +619,7 @@ async def write_the_moment(
             unit=None,
             confidence=1.0,
             confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-            artifact_id=captured.artifact.id,
+            artifact_id=artifact_id,
             event_id=event.id,
             episode_id=None,
             supersedes_id=None,
@@ -562,7 +634,7 @@ async def write_the_moment(
             confidence=1.0,
             confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
             confirmation_id=yes.id,
-            artifact_id=captured.artifact.id,
+            artifact_id=artifact_id,
             event_id=event.id,
             valid_from=moment,
             valid_to=moment + SYMPTOM_WINDOW,
@@ -580,7 +652,7 @@ async def write_the_moment(
             valid_from=moment,
             valid_to=moment + POSTURE_WINDOW,
         )
-    return event.id, fact.id
+    return event, fact
 
 
 async def _missed_dose(
@@ -612,9 +684,13 @@ def compose(
     missed_medicine: str | None,
     doctor: str | None,
 ) -> list[Line]:
-    """The card's lines, filled and verified, in the table's order."""
+    """The card's lines, filled and verified, in the table's order.
+
+    The one who is asked before a dose is the doctor on the label first, then the chief,
+    then "your doctor": a question about a medicine is rerouted to the doctor, not the family.
+    """
     lang = language_of(language)
-    who = chief.display_name if chief is not None else (doctor or YOUR_DOCTOR[lang])
+    who = doctor or (chief.display_name if chief is not None else YOUR_DOCTOR[lang])
     slots = {
         "chief": chief.display_name if chief is not None else "",
         "medicine": missed_medicine or YOUR_MEDICINE[lang],
@@ -623,7 +699,7 @@ def compose(
     return [Line(line_id, render(line_id, lang, **slots)) for line_id in decision.line_ids]
 
 
-@audited(Action.WRITE, Scope.RECORDS, CARD_TARGET)
+@audited(Action.WRITE, BUTTON_SCOPE, CARD_TARGET)
 async def not_feeling_well(
     session: AsyncSession,
     *,
@@ -639,6 +715,7 @@ async def not_feeling_well(
     """The button. See the module doc for the five steps and their order."""
     profile = await audited_profile_read(session, context)
     lang = language_of(language or profile.language)
+    can_record = context.allows(Scope.RECORDS)
 
     captured = await capture(
         session,
@@ -657,8 +734,7 @@ async def not_feeling_well(
 
     escalated: Escalated | None = None
     if heard.any:
-        # Before the event, before the fact, before the card. The flag is on the record
-        # whatever happens next, and so is the notice to each person.
+        # Before the event, before the fact, before the card — and kept whatever follows.
         escalated = await escalate(
             session, context=context, captured=captured, heard=heard, parsed=parsed, family=family
         )
@@ -666,9 +742,7 @@ async def not_feeling_well(
     missed = None if heard.any else await _missed_dose(
         session, context=context, registry=registry, language=lang
     )
-    missed_name = (
-        None if missed is None else _plain_name(registry, missed.line.generic, lang)
-    )
+    missed_name = None if missed is None else _plain_name(registry, missed.line.generic, lang)
     notices: list[Notice] = list(escalated.notices) if escalated is not None else []
     if escalated is None:
         notices = await tell_family(
@@ -681,15 +755,18 @@ async def not_feeling_well(
             missed=missed_name,
         )
 
-    event_id, fact_id = await write_the_moment(
-        session,
-        context=context,
-        captured=captured,
-        heard=heard,
-        parsed=parsed,
-        label=NOT_FEELING_WELL_LABEL,
-        posture=Posture.ACT if heard.any else Posture.WATCH,
-    )
+    event: Event | None = None
+    fact: Fact | None = None
+    if can_record:
+        event, fact = await write_the_moment(
+            session,
+            context=context,
+            captured=captured,
+            heard=heard,
+            parsed=parsed,
+            label=NOT_FEELING_WELL_LABEL,
+            posture=Posture.ACT if heard.any else Posture.WATCH,
+        )
 
     situation = Situation(
         red_flag=heard.any,
@@ -709,10 +786,10 @@ async def not_feeling_well(
     )
 
     check_in_at: datetime | None = None
-    if decision.check_in and profile.owner_person_id is not None:
-        check_in_at = utcnow() + CHECK_IN_AFTER
-        owner = await session.get(Person, profile.owner_person_id)
+    if decision.check_in:
+        owner = await owner_of(session, context, profile)
         if owner is not None:
+            check_in_at = utcnow() + CHECK_IN_AFTER
             notices.append(
                 await _notice(
                     session,
@@ -723,46 +800,55 @@ async def not_feeling_well(
                     slots={},
                     flag_id=None,
                     deliver_after=check_in_at,
-                    event_id=event_id,
+                    event_id=None if event is None else event.id,
                 )
             )
 
-    # Step 5: the card, from the State the facts above produced. `current_state` sees the
-    # recompute the hooks made and answers stale=False; a snapshot the record has moved
-    # past would be refused here rather than shown.
-    state = await current_state(session, context=context)
-    card = await render_from_state(
-        session,
-        WhatToDoCard,
-        context,
-        Scope.RECORDS,
-        state=state,
-        kind=decision.kind,
-        language=lang,
-        line_ids=[line.id for line in lines],
-        flag_id=None if escalated is None else escalated.flags[0].id,
-        event_id=event_id,
-        check_in_at=check_in_at,
-        rendered_at=utcnow(),
-        rendered_for_person_id=context.person_id,
-    )
+    # Step 5: the card, from the State the facts above produced, for a key that can compute
+    # it. `current_state` sees the recompute the hooks made and answers stale=False; a
+    # snapshot the record has moved past would be refused here rather than shown. A key
+    # that cannot compute State shows him the same lines and writes no card row.
+    card: WhatToDoCard | None = None
+    state: StateView | None = None
+    if can_record and RECOMPUTE_SCOPES <= context.scopes and event is not None:
+        state = await current_state(session, context=context)
+        card = await render_from_state(
+            session,
+            WhatToDoCard,
+            context,
+            Scope.RECORDS,
+            state=state,
+            kind=decision.kind,
+            language=lang,
+            line_ids=[line.id for line in lines],
+            flag_id=None if escalated is None or escalated.first is None else escalated.first.id,
+            event_id=event.id,
+            check_in_at=check_in_at,
+            rendered_at=utcnow(),
+            rendered_for_person_id=context.person_id,
+        )
+    posture: Posture | None
+    if state is not None:
+        posture = state.posture
+    else:
+        posture = Posture.ACT if heard.any else None
     return WhatToDoNow(
-        card_id=card.id,
-        state_id=card.state_id,
+        card_id=None if card is None else card.id,
+        state_id=None if card is None else card.state_id,
         kind=decision.kind,
-        posture=state.posture,
+        posture=posture,
         language=lang,
         lines=lines,
-        artifact_id=captured.artifact.id,
-        event_id=event_id,
-        fact_id=fact_id,
+        artifact_id=None if captured.artifact is None else captured.artifact.id,
+        event_id=None if event is None else event.id,
+        fact_id=None if fact is None else fact.id,
         heard=captured.heard,
         by_voice=captured.by_voice,
         transcript_confidence=captured.transcript.confidence,
         red_flags=list(heard.flags),
         suppressed=list(heard.suppressed),
         symptoms=list(parsed.symptoms),
-        flag_id=None if escalated is None else escalated.flags[0].id,
+        flag_id=None if escalated is None or escalated.first is None else escalated.first.id,
         notified_person_ids=[
             n.to_person_id for n in notices if n.kind is NoticeKind.FAMILY_ALERT
         ],
@@ -774,7 +860,9 @@ async def not_feeling_well(
 
 __all__ = [
     "ANCHOR_HOURS",
+    "BUTTON_SCOPE",
     "DECISION_TABLE",
+    "FLAG_SCOPE",
     "Captured",
     "Decision",
     "Escalated",
@@ -793,4 +881,3 @@ __all__ = [
     "sugar_medicine",
     "write_the_moment",
 ]
-

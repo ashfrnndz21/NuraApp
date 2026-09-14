@@ -16,7 +16,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.models import Outcome
+from app.audit.models import Action, Outcome
 from app.clock import FrozenClock
 from app.db import as_utc, utcnow
 from app.keys.context import OutOfScope
@@ -68,9 +68,9 @@ async def test_a_symptom_by_voice_is_logged_in_his_words_with_how_much_and_since
     # Thursday 3 September 2026, 16:00 in Singapore.
     assert [line.text for line in entry.lines] == [
         "Pa felt dizzy on Thursday 3 September.",
-        "It was quite a lot.",
+        "It was quite bad.",
         "It started this morning.",
-        "Pa said this by voice.",
+        "Pa said this out loud.",
     ]
     _verified(entry.lines)
     assert logged.flag_id is None and logged.posture is None and logged.notified_person_ids == []
@@ -106,14 +106,21 @@ async def test_typed_words_are_his_own_word_and_severity_maps_both_ways(sg: Asyn
         "Pa felt tired on Thursday 3 September.",
         "It was very bad.",
         "It started yesterday.",
-        "Pa typed this.",
+        "Pa wrote this down.",
     ]
     fact = await sg.get(Fact, entry.fact_id)
     assert fact is not None and fact.confidence_state is ConfidenceState.CONFIRMED_BY_PERSON
     assert fact.confirmed_by_person_id == owner.person_id
     little = await _log(sg, owner, words="a little dizzy")
     assert little.entry.severity == 1
-    assert little.entry.lines[1].text == "It was a little."
+    assert little.entry.lines[1].text == "It was only a little."
+    # One whole sentence per code: a man who vomited is not told he felt like it.
+    sick = await _log(sg, owner, words="I vomited twice since last night")
+    assert sick.entry.symptoms == [Symptom.VOMITING]
+    assert sick.entry.lines[0].text == "Pa vomited on Thursday 3 September."
+    assert (await _log(sg, owner, words="cannot sleep")).entry.lines[0].text == (
+        "Pa could not sleep on Thursday 3 September."
+    )
 
 
 async def test_the_chief_reads_the_log_in_plain_words_and_a_viewer_is_refused(
@@ -127,14 +134,14 @@ async def test_the_chief_reads_the_log_in_plain_words_and_a_viewer_is_refused(
     before = await symptoms_since(sg, context=mei)
     assert before.entries == []
     empty = nothing_since_line(before.since, language="en", region=Region.SG)
-    assert empty == "Nothing was written down since Thursday 27 August."
+    assert empty == "Nobody wrote anything down since Thursday 27 August."
 
     await _log(sg, owner, audio=placeholder_voice(DIZZY), content_type=CONTENT_TYPE)
     clock.step(timedelta(minutes=5))
     await _log(sg, owner, words="no appetite")
     log = await symptoms_since(sg, context=mei, since=utcnow() - timedelta(days=1))
     assert [e.symptoms for e in log.entries] == [[Symptom.DIZZY], [Symptom.POOR_APPETITE]]
-    assert log.entries[1].lines[0].text == "Pa felt no appetite on Thursday 3 September."
+    assert log.entries[1].lines[0].text == "Pa had no appetite on Thursday 3 September."
     for entry in log.entries:
         _verified(entry.lines)
     malay = await symptoms_since(sg, context=mei, language="ms")
@@ -164,3 +171,60 @@ async def test_a_red_flag_word_in_a_symptom_escalates_like_the_button(sg: AsyncS
     assert (await current_state(sg, context=owner)).posture is Posture.ACT
     flags = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
     assert len(flags) == 1
+
+
+async def test_the_entry_said_back_is_read_through_the_door_and_written_down(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fact just written is read back under its own scope with a READ line — never a raw
+    `session.get` that reaches profile content with nothing on the trail."""
+    from app.safety import symptom_log
+
+    owner = await pa(sg, phone="+6591110056")
+    raw: list[object] = []
+    written = False
+    real_get = sg.get
+    real_write = symptom_log.write_the_moment
+
+    async def get(model, ident, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if model is Fact and written:
+            raw.append(ident)
+        return await real_get(model, ident, *args, **kwargs)
+
+    async def write(*args, **kwargs):  # type: ignore[no-untyped-def]
+        nonlocal written
+        done = await real_write(*args, **kwargs)
+        written = True  # from here on, the log reads what it wrote; the memory layer is done
+        return done
+
+    monkeypatch.setattr(sg, "get", get)
+    monkeypatch.setattr(symptom_log, "write_the_moment", write)
+    logged = await _log(sg, owner, words="a little dizzy")
+    monkeypatch.undo()
+    assert written and raw == []
+    fact_reads = [
+        line
+        for line in await trail(sg, owner.profile_id)
+        if line.action is Action.READ and line.target == "fact"
+    ]
+    assert fact_reads[-1].scope is Scope.RECORDS and fact_reads[-1].rows == 1
+    assert fact_reads[-1].actor_person_id == owner.person_id
+    assert logged.entry.lines[0].text == "Pa felt dizzy on Thursday 3 September."
+
+
+async def test_a_caregiver_logging_a_red_flag_escalates_without_the_family_scope(
+    sg: AsyncSession,
+) -> None:
+    """A caregiver holds the record but not FAMILY. The red-flag path no longer asks for it:
+    the flag is raised, the family is told, and the symptom is on the record."""
+    owner = await pa(sg, phone="+6591110057")
+    mei = await let_in(sg, owner, phone="+6592220057", name="Mei", role=KeyRole.CHIEF)
+    ana = await let_in(sg, owner, phone="+6595550057", name="Ana", role=KeyRole.CAREGIVER)
+    assert Scope.RECORDS in ana.scopes and Scope.FAMILY not in ana.scopes
+    logged = await _log(sg, ana, words="Pa has chest pain")
+    assert logged.entry.red_flags == [RedFlag.CHEST_PAIN]
+    assert logged.flag_id is not None and logged.posture is Posture.ACT
+    assert logged.notified_person_ids == [mei.person_id]
+    flag = await sg.get(Flag, logged.flag_id)
+    assert flag is not None and flag.raised_by_person_id == ana.person_id
+    assert (await current_state(sg, context=owner)).posture is Posture.ACT

@@ -3,10 +3,12 @@
     Symptom log by voice, with severity and duration, in his words. Logged in his words;
     appears in the pre-visit brief.
 
-A symptom comes in the way the button's words do (`app.safety.not_feeling_well.capture`):
+A symptom comes in the way the button's words do (`app.safety.not_feeling_well.capture`),
+through the record's door — logging a symptom is writing the record, so the owner, the
+chief and a caregiver log; a helper's word goes through the button instead —
 the voice note or the typed text is kept as an artefact, then heard, then read against the
 fixed tables — the red flags first, then `app.safety.symptoms` for the symptom, the severity
-("a little / quite a lot / very") and the duration ("since this morning"). It is stored as a
+("only a little / quite bad / very bad") and the duration ("since this morning"). It is stored as a
 SYMPTOM event and a `symptom.reported` fact with a seven-day window, resting on the artefact,
 which is where "in his words" lives. A red flag in a symptom log is the same red flag as
 anywhere else: the flag is written first, the family is told, the day's posture is set.
@@ -16,7 +18,7 @@ under (`scope_for_subject("symptom")`). The owner, the chief, a caregiver read i
 or a helper — whose presets stop at medicines and readings — do not see how he feels,
 because a symptom is closer to a note about himself than to a number from a machine. Each
 entry is rendered in plain words with the day's name ("Pa felt dizzy on Monday 14 September.
-It was quite a lot. It started this morning.") — the same words every time.
+It was quite bad. It started this morning.") — the same words every time.
 """
 
 from __future__ import annotations
@@ -32,18 +34,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited, audited_profile_read, audited_read
 from app.audit.models import Action
 from app.channels.safety_strings import (
-    SEVERITY_WORDS,
     SINCE_WORDS,
-    SYMPTOM_WORDS,
+    SYMPTOM_LINES,
     language_of,
     phrase,
     render,
+    severity_said,
 )
 from app.db import as_utc, utcnow
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
+from app.keys.scopes import scope_for_subject
 from app.memory.episodic import fact_cites_only_what_is_held_here
 from app.memory.models import ConfidenceState, Fact
 from app.regions import REGION_TZ, Region
@@ -66,8 +68,8 @@ from app.state.models import Posture
 SYMPTOM_LABEL = "symptom"
 DEFAULT_LOOKBACK = timedelta(days=7)
 """How far back the log reads when nobody says: the week before a visit."""
-SYMPTOM_SCOPE = Scope.RECORDS
-"""What reading the log costs: the record's scope, which is the fact's own."""
+SYMPTOM_SCOPE = scope_for_subject(SYMPTOM)
+"""What reading the log costs: the fact's own scope, decided in `app.keys.scopes` (RECORDS)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,20 +127,22 @@ def _lines(
     lang = language_of(language)
     day = as_utc(at).astimezone(region_tz).date()
     lines: list[Line] = []
-    codes = [*(flag.value for flag in red_flags), *(one.value for one in symptoms)]
+    # One whole sentence per code ("had a cough", "vomited"); "not well" — the button pressed
+    # with nothing the tables know said — is its own sentence, never "felt not well".
+    codes = [
+        *(flag.value for flag in red_flags),
+        *(one.value for one in symptoms if one is not Symptom.NOT_WELL),
+    ]
     if codes:
         for code in codes:
-            lines.append(
-                Line(
-                    "sym.felt",
-                    render("sym.felt", lang, name=name, symptom=phrase(SYMPTOM_WORDS, lang, code), date=day),
-                )
-            )
+            template_id = f"sym.{code}" if code in SYMPTOM_LINES else "sym.not_well"
+            lines.append(Line(template_id, render(template_id, lang, name=name, date=day)))
     else:
         lines.append(Line("sym.not_well", render("sym.not_well", lang, name=name, date=day)))
     if severity is not None:
-        by_level = SEVERITY_WORDS.get(lang) or SEVERITY_WORDS["en"]
-        lines.append(Line("sym.severity", render("sym.severity", lang, severity=by_level[severity])))
+        lines.append(
+            Line("sym.severity", render("sym.severity", lang, severity=severity_said(severity, lang)))
+        )
     if duration is not None:
         lines.append(
             Line("sym.since", render("sym.since", lang, since=phrase(SINCE_WORDS, lang, duration.value)))
@@ -229,11 +233,11 @@ async def log_symptom(
         escalated = await escalate(
             session, context=context, captured=captured, heard=heard, parsed=parsed, family=family
         )
-        flag_id = escalated.flags[0].id
+        flag_id = None if escalated.first is None else escalated.first.id
         notices = escalated.notices
         posture = Posture.ACT
 
-    _event_id, fact_id = await write_the_moment(
+    _event, written = await write_the_moment(
         session,
         context=context,
         captured=captured,
@@ -242,8 +246,19 @@ async def log_symptom(
         label=SYMPTOM_LABEL,
         posture=posture,
     )
-    fact = await session.get(Fact, fact_id)
-    assert fact is not None  # written a moment ago in this session
+    # The entry said back is read back through the door, under the fact's own scope and with
+    # a READ line, like every other read of the record — never a raw `session.get`.
+    found = await audited_read(
+        session,
+        Fact,
+        context,
+        SYMPTOM_SCOPE,
+        where=(
+            Fact.id == written.id,
+            fact_cites_only_what_is_held_here(context, SYMPTOM_SCOPE),
+        ),
+    )
+    fact = found[0]  # written a moment ago under this scope by this key
     entry = _entry(
         fact, name=profile.display_name, language=lang, region_tz=REGION_TZ[context.region]
     )
@@ -298,7 +313,7 @@ async def symptoms_since(
 
 
 def nothing_since_line(since: datetime, *, language: str, region: Region) -> str:
-    """The one line for an empty log, verified: "Nothing was written down since {date}"."""
+    """The one line for an empty log, verified: "Nobody wrote anything down since {date}"."""
     lang = language_of(language)
     day = as_utc(since).astimezone(REGION_TZ[region]).date()
     return render("sym.none", lang, date=day)

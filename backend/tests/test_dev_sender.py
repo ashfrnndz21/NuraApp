@@ -40,7 +40,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
         drug_registry=FixtureRegistry.load(),
-        transcriber=FixtureTranscriber(VOICE),
+        transcriber=FixtureTranscriber(VOICE, Region.SG),
     )
 
 

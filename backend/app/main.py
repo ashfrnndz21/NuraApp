@@ -43,7 +43,7 @@ def providers_for(settings: Settings) -> Providers:
         object_store=LocalObjectStore(Path(settings.object_store_root), settings.region),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
         drug_registry=drug_registry_for(settings),
-        transcriber=FixtureTranscriber(Path(settings.voice_fixtures)),
+        transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
     )
 
 

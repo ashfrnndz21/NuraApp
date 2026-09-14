@@ -132,6 +132,7 @@ async def test_the_emergency_card_and_the_printable_page(deployment: Deployment)
     assert "40 mg" in html and MEI in html and "tel:995" in html
     assert "Pa takes the water pill (frusemide)." in html
     assert "This card is not a doctor's advice." in html
+    assert "The ambulance number is 995." in html
 
     # Mei with her chief key, and a Malay page.
     hers = await deployment.client.get(
@@ -202,8 +203,8 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert tired.status_code == 201, tired.text
     body = tired.json()
     assert body["kind"] == "missed_dose" and body["posture"] == "watch"
-    assert body["lines"][0]["text"] == "You have not taken the water pill today."
-    assert body["lines"][1]["text"] == "Ask Mei before you take it."
+    assert body["lines"][0]["text"] == "Nura has no note that you took the water pill today."
+    assert body["lines"][1]["text"] == "Ask Dr Tan before you take the water pill."
     assert body["check_in_at"] is not None and body["notified_person_ids"] == [mei["person_id"]]
     assert body["symptoms"] == ["tired"] and body["red_flags"] == []
 
@@ -215,7 +216,11 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert chest.status_code == 201, chest.text
     body = chest.json()
     assert body["kind"] == "red_flag" and body["posture"] == "act" and body["flag_id"]
-    assert [line["text"] for line in body["lines"]] == ["Call Mei now.", "Call 995 now.", "Mei knows."]
+    assert [line["text"] for line in body["lines"]] == [
+        "Mei knows already.",
+        "Call the ambulance now on 995.",
+        "After that, call Mei.",
+    ]
     assert body["by_voice"] and body["transcript_confidence"] == 0.94
 
     both = await deployment.client.post(
@@ -233,7 +238,7 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert dizzy.status_code == 201, dizzy.text
     entry = dizzy.json()["entry"]
     assert entry["symptoms"] == ["dizzy"] and entry["severity"] == 2
-    assert entry["severity_words"] == "quite a lot" and entry["duration"] == "this_morning"
+    assert entry["severity_words"] == "quite bad" and entry["duration"] == "this_morning"
     assert entry["lines"][0]["text"] == "Pa felt dizzy on Thursday 3 September."
 
     log = await deployment.client.get(
@@ -242,7 +247,7 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert log.status_code == 200, log.text
     texts = [line["text"] for line in log.json()["lines"]]
     assert "Pa felt dizzy on Thursday 3 September." in texts
-    assert "It was quite a lot." in texts and "It started this morning." in texts
+    assert "It was quite bad." in texts and "It started this morning." in texts
     # The button's words are in the log too, as the codes they mapped to.
     assert "Pa felt tired on Thursday 3 September." in texts
     assert "Pa felt chest pain on Thursday 3 September." in texts
@@ -251,4 +256,4 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
         f"/profiles/{profile_id}/symptoms?since=2026-09-04T00:00:00Z", headers=his
     )
     assert empty.json()["entries"] == []
-    assert re.fullmatch(r"Nothing was written down since \w+ \d+ September\.", empty.json()["lines"][0]["text"])
+    assert re.fullmatch(r"Nobody wrote anything down since \w+ \d+ September\.", empty.json()["lines"][0]["text"])

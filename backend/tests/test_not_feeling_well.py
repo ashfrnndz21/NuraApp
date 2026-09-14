@@ -17,14 +17,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.models import Outcome
 from app.clock import FrozenClock
+from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.service import NoConsent, grant_consent
 from app.db import utcnow
-from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import record_dose_taken
 from app.memory.models import Artifact, ArtifactKind, Fact
-from app.regions import Region
+from app.regions import OutOfRegion, Region
 from app.safety.models import Flag, Notice, NoticeKind, WhatToDoCard, WhatToDoKind
 from app.safety.not_feeling_well import (
     ANCHOR_HOURS,
@@ -36,21 +36,22 @@ from app.safety.not_feeling_well import (
 from app.safety.red_flags import RedFlag
 from app.safety.symptoms import Symptom
 from app.state.models import Posture
-from app.state.service import current_state
+from app.state.service import StaleState, current_state
 from tests.safety_support import (
     REGISTRY,
-    TRANSCRIBER,
     assert_plain,
     first_write_of,
     let_in,
     pa,
     sugar_tablet,
     trail,
+    transcriber_for,
     water_pill,
 )
+from tests.support import refused_unit
 from tests.voice import CHEST_PAIN, CONTENT_TYPE, TIRED_TODAY, UNHEARD, placeholder_voice
 
-FORBIDDEN = ("mg", "tablet", "stop", "start", "double", "half", "skip")
+FORBIDDEN = ("mg", "tablet", "stop", "start", "double", "half", "skip", "drink")
 """Words no what-to-do card may carry: a dose, or advice about a medicine."""
 
 
@@ -88,7 +89,7 @@ async def _press(session: AsyncSession, context, **said):
         session,
         context=context,
         store=_Store(),
-        transcriber=TRANSCRIBER,
+        transcriber=transcriber_for(context.region),
         registry=REGISTRY,
         **said,
     )
@@ -117,7 +118,11 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
 
     assert done.kind is WhatToDoKind.RED_FLAG
     assert done.red_flags == [RedFlag.CHEST_PAIN] and done.posture is Posture.ACT
-    assert [line.text for line in done.lines] == ["Call Mei now.", "Call 995 now.", "Mei knows."]
+    assert [line.text for line in done.lines] == [
+        "Mei knows already.",
+        "Call the ambulance now on 995.",
+        "After that, call Mei.",
+    ]
     _verified(done.lines)
 
     # The flag is the first thing written after the artefact that holds his words: between
@@ -145,13 +150,13 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     notices = {n.to_person_id: n for n in done.notices if n.kind is NoticeKind.FAMILY_ALERT}
     assert notice_lines(notices[mei.person_id], patient="Pa") == [
         "Pa is not feeling well.",
-        "Pa said: 'chest pain'.",
+        "Nura heard this: chest pain.",
         "Call Pa now.",
         "This one we do not wait for.",
     ]
     # Siti reads Malay: the same notice in her words, the code said in her language.
     malay = notice_lines(notices[siti.person_id], patient="Pa")
-    assert malay[1] == "Pa kata: 'sakit dada'."
+    assert malay[1] == "Nura dengar ini: sakit dada."
     _verified(malay, "ms")
     assert all(n.flag_id == done.flag_id and n.slots == {"words": "chest_pain", "heard": True} for n in notices.values())
     assert done.check_in_at is None  # a red flag is the call, not a check-in later
@@ -174,7 +179,7 @@ async def test_a_red_flag_by_voice_goes_through_the_transcriber(sg: AsyncSession
     owner, *_ = await _household(sg)
     done = await _press(sg, owner, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
     assert done.by_voice and done.heard and done.transcript_confidence == 0.94
-    assert done.kind is WhatToDoKind.RED_FLAG and done.lines[0].text == "Call Mei now."
+    assert done.kind is WhatToDoKind.RED_FLAG and done.lines[1].text == "Call the ambulance now on 995."
     artifact = await sg.get(Artifact, done.artifact_id)
     assert artifact is not None and artifact.kind is ArtifactKind.VOICE
     assert artifact.content_type == "audio/m4a"
@@ -193,7 +198,11 @@ async def test_a_dose_not_taken_says_ask_before_you_take_it_and_never_how_much(
     assert done.kind is WhatToDoKind.MISSED_DOSE and done.missed_medicine == "the water pill"
     assert done.red_flags == [] and done.symptoms == [Symptom.TIRED]
     texts = [line.text for line in done.lines]
-    assert texts[:2] == ["You have not taken the water pill today.", "Ask Mei before you take it."]
+    # The doctor on the label is asked, not the family: a medicine question goes to the doctor.
+    assert texts[:2] == [
+        "Nura has no note that you took the water pill today.",
+        "Ask Dr Tan before you take the water pill.",
+    ]
     assert texts[-1] == "Nura will ask you again in 2 hours."
     for text in texts:
         assert not any(word in text.lower() for word in FORBIDDEN), text
@@ -207,8 +216,8 @@ async def test_a_dose_not_taken_says_ask_before_you_take_it_and_never_how_much(
     told = {n.to_person_id: n for n in done.notices if n.kind is NoticeKind.FAMILY_ALERT}
     assert notice_lines(told[mei.person_id], patient="Pa") == [
         "Pa is not feeling well.",
-        "Pa said: 'tired'.",
-        "Pa has not taken the water pill today.",
+        "Nura heard this: tired.",
+        "Nura has no note that Pa took the water pill today.",
         "Please call Pa today.",
     ]
     assert done.flag_id is None
@@ -225,9 +234,8 @@ async def test_when_every_dose_is_taken_the_card_says_rest(sg: AsyncSession) -> 
     done = await _press(sg, owner, words="tired today")
     assert done.kind is WhatToDoKind.REST
     assert [line.text for line in done.lines] == [
-        "Sit down and rest.",
-        "Drink water.",
-        "Mei will call you.",
+        "Sit down and rest now.",
+        "Mei will call you today.",
         "Nura will ask you again in 2 hours.",
     ]
     _verified(done.lines)
@@ -238,15 +246,19 @@ async def test_a_voice_note_nobody_could_hear_still_tells_the_family(sg: AsyncSe
     done = await _press(sg, owner, audio=placeholder_voice(UNHEARD), content_type=CONTENT_TYPE)
     assert not done.heard and done.transcript_confidence == 0.0
     texts = [line.text for line in done.lines]
-    assert texts[:2] == ["Nura could not hear you.", "Please say it again, or type it."]
+    assert texts[:3] == [
+        "Nura could not hear you.",
+        "Please tell Nura again.",
+        "You can type it to Nura instead.",
+    ]
     # The water pill was not tapped, so the row is still the dose not taken — after saying so.
     assert done.kind is WhatToDoKind.MISSED_DOSE
-    assert texts[2:4] == ["You have not taken the water pill today.", "Ask Mei before you take it."]
+    assert texts[3] == "Nura has no note that you took the water pill today."
     assert mei.person_id in done.notified_person_ids
     told = next(n for n in done.notices if n.to_person_id == mei.person_id)
     assert notice_lines(told, patient="Pa")[:2] == [
         "Pa is not feeling well.",
-        "Nura could not hear the words.",
+        "Nura could not hear what Pa said.",
     ]
     fact = await sg.get(Fact, done.fact_id)
     assert fact is not None and fact.value["heard"] is False
@@ -263,22 +275,21 @@ async def test_malaysia_is_told_999(my: AsyncSession) -> None:
         my,
         context=owner,
         store=Store(),
-        transcriber=TRANSCRIBER,
+        transcriber=transcriber_for(Region.MY),
         registry=REGISTRY,
         words="dada saya sakit",
     )
-    assert [line.text for line in done.lines][:2] == ["Call Mei now.", "Call 999 now."]
+    assert [line.text for line in done.lines][:2] == ["Mei knows already.", "Call the ambulance now on 999."]
 
 
 async def test_with_nobody_to_call_the_first_line_is_the_ambulance(sg: AsyncSession) -> None:
     owner = await pa(sg, phone="+6591110049")
     done = await _press(sg, owner, words="chest pain")
-    assert [line.text for line in done.lines] == ["Call 995 now."]
+    assert [line.text for line in done.lines] == ["Call the ambulance now on 995."]
     assert done.notified_person_ids == []
     rest = await _press(sg, owner, words="tired")
     assert [line.text for line in rest.lines] == [
-        "Sit down and rest.",
-        "Drink water.",
+        "Sit down and rest now.",
         "Nura will ask you again in 2 hours.",
     ]
 
@@ -292,6 +303,10 @@ async def test_shaky_and_sweaty_is_suppressed_and_named_until_the_medicines_are_
     assert unknown.kind is WhatToDoKind.REST
     fact = await sg.get(Fact, unknown.fact_id)
     assert fact is not None and fact.value["suppressed"] == ["shaky_sweaty"]
+    # Medicines known and none a sugar one: still held back, still named.
+    await water_pill(sg, owner)
+    held = await _press(sg, owner, words="shaky and sweaty")
+    assert held.red_flags == [] and held.suppressed == [RedFlag.SHAKY_SWEATY]
     await sugar_tablet(sg, owner)
     known = await _press(sg, owner, words="shaky and sweaty")
     assert known.red_flags == [RedFlag.SHAKY_SWEATY] and known.kind is WhatToDoKind.RED_FLAG
@@ -305,16 +320,120 @@ async def test_the_button_takes_one_of_voice_or_words(sg: AsyncSession) -> None:
         await _press(sg, owner, words="tired", audio=placeholder_voice(TIRED_TODAY), content_type=CONTENT_TYPE)
 
 
-async def test_a_key_without_the_record_cannot_press_it_and_is_written_down(
+async def test_a_helper_pressing_for_him_escalates_without_the_record(
     sg: AsyncSession,
 ) -> None:
-    owner, _mei, _lin, siti, _kit = await _household(sg)
-    with pytest.raises(OutOfScope):
-        await _press(sg, siti, words="Pa says chest pain")
-    refused = [
+    """Spec section 8: the helper's word about him is a red flag that escalates immediately.
+    Her key holds no record, so nothing is written to it — no artefact, no event, no fact,
+    no card — but the flag is raised, the family is told, and she is shown what to do."""
+    owner, mei, lin, siti, _kit = await _household(sg)
+    done = await _press(sg, siti, words="Pa says chest pain")
+    assert done.kind is WhatToDoKind.RED_FLAG and done.posture is Posture.ACT
+    assert done.flag_id is not None
+    assert [line.text for line in done.lines] == [
+        "Mei knows already.",
+        "Call the ambulance now on 995.",
+        "After that, call Mei.",
+    ]
+    assert set(done.notified_person_ids) == {mei.person_id, lin.person_id}
+    assert done.artifact_id is None and done.event_id is None and done.fact_id is None
+    assert done.card_id is None and done.state_id is None
+    flag = await sg.get(Flag, done.flag_id)
+    assert flag is not None and flag.artifact_id is None
+    assert flag.raised_by_person_id == siti.person_id
+    assert (await sg.scalars(select(Fact).where(Fact.subject == "symptom"))).all() == []
+    # Every write is on the trail under the emergency scope, in her name.
+    hers = [
         line
         for line in await trail(sg, owner.profile_id)
-        if line.outcome is Outcome.REFUSED and line.actor_person_id == siti.person_id
+        if line.actor_person_id == siti.person_id and line.action.value == "write"
     ]
-    assert refused and refused[-1].target == WhatToDoCard.__tablename__
-    assert (await sg.scalars(select(Notice).where(Notice.profile_id == owner.profile_id))).all() == []
+    assert {line.target for line in hers} == {"flag", "notice"}
+    assert all(line.scope is Scope.EMERGENCY for line in hers)
+
+
+async def test_a_caregiver_pressing_for_him_escalates_and_writes_the_record(
+    sg: AsyncSession,
+) -> None:
+    """A caregiver holds the record but not FAMILY: the flag and the notices no longer need
+    it. She writes the moment to the record; she cannot compute State, so no card row."""
+    owner, mei, lin, siti, _kit = await _household(sg)
+    ana = await let_in(sg, owner, phone="+6595550041", name="Ana", role=KeyRole.CAREGIVER)
+    assert Scope.RECORDS in ana.scopes and Scope.FAMILY not in ana.scopes
+    done = await _press(sg, ana, words="Pa has chest pain")
+    assert done.kind is WhatToDoKind.RED_FLAG and done.flag_id is not None
+    # Everyone let in to his emergency card is told, the helper too; the caregiver pressed.
+    assert set(done.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}
+    assert done.artifact_id is not None and done.event_id is not None and done.fact_id is not None
+    assert done.card_id is None and done.posture is Posture.ACT
+    # The owner, who can compute State, sees the day as ACT from the fact she wrote.
+    assert (await current_state(sg, context=owner)).posture is Posture.ACT
+
+
+async def test_the_flag_and_the_notices_survive_a_refusal_later_in_the_same_request(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A template that fails, a State that is stale, a door that refuses further on: the
+    unit of work is rolled back, and the flag, the artefact it names and the notices are
+    written again by their keepers. Nothing else of the press survives."""
+    owner, mei, *_ = await _household(sg)
+
+    async def stale(*args: object, **kwargs: object) -> object:
+        raise StaleState("the record moved")
+
+    monkeypatch.setattr("app.safety.not_feeling_well.render_from_state", stale)
+    async with refused_unit(sg, StaleState):
+        await _press(sg, owner, words="chest pain")
+
+    flags = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
+    assert len(flags) == 1 and flags[0].code == "chest_pain"
+    artifact = await sg.get(Artifact, flags[0].artifact_id)
+    assert artifact is not None and artifact.kind is ArtifactKind.MESSAGE
+    notices = (await sg.scalars(select(Notice).where(Notice.profile_id == owner.profile_id))).all()
+    assert {n.to_person_id for n in notices if n.kind is NoticeKind.FAMILY_ALERT} >= {mei.person_id}
+    assert all(n.flag_id == flags[0].id for n in notices)
+    assert (await sg.scalars(select(Fact).where(Fact.subject == "symptom"))).all() == []
+    lines = await trail(sg, owner.profile_id)
+    assert any(line.target == "flag" and line.action.value == "write" for line in lines)
+
+
+async def test_a_voice_note_of_him_pressed_by_someone_else_needs_the_recording_consent(
+    sg: AsyncSession,
+) -> None:
+    owner, mei, *_ = await _household(sg)
+    with pytest.raises(NoConsent):
+        await _press(sg, mei, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
+    assert (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all() == []
+    # Typed words are hers to type; no recording is made.
+    typed = await _press(sg, mei, words="Pa says he is tired")
+    assert typed.kind in (WhatToDoKind.MISSED_DOSE, WhatToDoKind.REST)
+    await grant_consent(
+        sg,
+        context=owner,
+        purpose=ConsentPurpose.RECORDING,
+        captured_via=ConsentChannel.APP,
+        basis=ConsentBasis.OWNER,
+        language="en",
+    )
+    heard = await _press(sg, mei, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
+    assert heard.by_voice and heard.kind is WhatToDoKind.RED_FLAG
+
+
+async def test_a_voice_note_never_reaches_a_transcriber_in_another_region(
+    sg: AsyncSession,
+) -> None:
+    owner, *_ = await _household(sg)
+    with pytest.raises(OutOfRegion):
+        await not_feeling_well(
+            sg,
+            context=owner,
+            store=_Store(),
+            transcriber=transcriber_for(Region.MY),
+            registry=REGISTRY,
+            audio=placeholder_voice(CHEST_PAIN),
+            content_type=CONTENT_TYPE,
+        )
+    voice_notes = select(Artifact).where(
+        Artifact.profile_id == owner.profile_id, Artifact.kind == ArtifactKind.VOICE
+    )
+    assert (await sg.scalars(voice_notes)).all() == []

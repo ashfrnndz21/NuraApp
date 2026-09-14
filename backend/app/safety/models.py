@@ -48,8 +48,10 @@ class Flag(ProfileScoped, Base):
     """One red flag heard in a person's words: which one, when, from which artefact.
 
     "This one we do not wait for." The row is the first thing written when a red flag is
-    heard, before the event, the fact, the notices and the card, so that whatever else fails
-    the flag is on the record. `posture` is what the flag asks of the day: always ACT for a
+    heard, before the event, the fact, the notices and the card, and it is written through
+    `app.safety.red_flags.write_flag_kept`, whose keeper writes it again if a refusal later in
+    the same request rolls the unit of work back: whatever else fails, the flag is on the
+    record. `posture` is what the flag asks of the day: always ACT for a
     red flag. Nothing here is a diagnosis; the code names the words in the table.
     """
 
