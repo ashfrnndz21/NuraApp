@@ -27,13 +27,26 @@ from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
 from app.errors import Refusal
+from app.family.common import NotAChief, NotPlainWords
+from app.family.documents import NotADocument
+from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
+from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
+from app.family.roster import (
+    AlreadyDone,
+    NoSuchSlot,
+    NoSuchTask,
+    NotADuty,
+    NotOnThisProfile,
+    NotTheDoer,
+)
+from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
-from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
+from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
@@ -58,6 +71,21 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheClaimant, 403),
     # A key to read the medicines is not a key to change them.
     (NotTheirsToChange, 403),
+    # The family's arrangements (E12): the owner's and his chief's; a key is never widened
+    # in place; a task is done by the person it names; only me is the owner's alone.
+    (NotAChief, 403),
+    (NotTheOwner, 403),
+    (NotTheDoer, 403),
+    (WouldWiden, 403),
+    (NotOnThisProfile, 403),
+    (NoSuchSlot, 404),
+    (NoSuchTask, 404),
+    (NoSuchTaskForCard, 404),
+    (NoSuchTemplate, 404),
+    (NotMarked, 404),
+    (NothingToNarrow, 409),
+    (AlreadyMarked, 409),
+    (AlreadyDone, 409),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
@@ -84,7 +112,20 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (WaitingToBeClaimed, 409),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no. The
-high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class."""
+high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class — and so
+are the family's shape refusals (`NotADuty`, `NotAPartToMark`, `NotAMemo`, `MissingSlot`,
+`BadWindow`, `NotADocument`) and `NotPlainWords`, which carries its findings so the composer
+can fix the line."""
+
+_SHAPE: tuple[type[Refusal], ...] = (
+    NotADuty,
+    NotAPartToMark,
+    NotAMemo,
+    MissingSlot,
+    BadWindow,
+    NotADocument,
+)
+"""Named so that a reader of this file sees every family refusal; each is a 400."""
 
 
 def status_of(refusal: Refusal) -> int:
@@ -101,4 +142,10 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
         body["scope"] = refusal.scope.value
     if isinstance(refusal, HighRiskNeedsLabelPhoto):
         body["drug_class"] = refusal.drug_class
+    if isinstance(refusal, NotPlainWords):
+        # The verifier's findings — rule, problem, rewrite — so the composer can fix the
+        # line. They are about the words offered, never about the record.
+        return JSONResponse(
+            status_code=status_of(refusal), content={**body, "findings": refusal.findings}
+        )
     return JSONResponse(status_code=status_of(refusal), content=body)

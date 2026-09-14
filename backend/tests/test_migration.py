@@ -27,10 +27,12 @@ from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
+from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.models import ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
+from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
@@ -74,6 +76,12 @@ TABLES: tuple[Table, ...] = (
     WhatsAppMessage.__table__,
     Proposal.__table__,
     Escalation.__table__,
+    Privacy.__table__,
+    RosterSlot.__table__,
+    Task.__table__,
+    ThreadMessage.__table__,
+    ScheduledPush.__table__,
+    Document.__table__,
 )
 
 
@@ -195,6 +203,9 @@ def test_the_migrations_build_the_tables_the_models_declare(
             Supply,
             DoseTaken,
             InteractionFlag,
+            ThreadMessage,
+            ScheduledPush,
+            Document,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

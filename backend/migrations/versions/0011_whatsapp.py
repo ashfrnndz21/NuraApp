@@ -1,16 +1,18 @@
 """E19: WhatsApp — the thread, the message by reference, the proposal, the ladder.
 
 Four tables of profile data, every row tied to its profile the way the memory tables are
-(0005): a message names its thread, its artefact, its flag (E21's `red_flag`, 0010_feed) and its State on the
-same profile; a proposal names its thread, its message, and the fact and event it became; an
-escalation names its flag. No column holds what anyone wrote: the words are artefacts in
+(0005): a message names its thread, its artefact, its flag (E21's `red_flag`, 0010_feed)
+and its State on the same profile; a proposal names its thread, its message, and the fact
+and event it became; an escalation names its flag. No column holds what anyone wrote: the words are artefacts in
 the region's object store, and the rows point at them.
 
-Follows E21's feed revision (0010_feed), whose `red_flag` table the message and the ladder
-point at. E05 (visits) lands beside this one; the operator repoints the last.
+Follows E12's family revision (0013_family), main's head when this story merged main back;
+the `red_flag` table the message and the ladder point at is E21's (0010_feed), underneath
+both. The number stays this story's own; the operator repoints `down_revision` again if
+another story lands first.
 
 Revision ID: 0011_whatsapp
-Revises: 0010_feed
+Revises: 0013_family
 Create Date: 2026-09-14
 """
 
@@ -20,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0011_whatsapp"
-down_revision = "0010_feed"
+down_revision = "0013_family"
 branch_labels = None
 depends_on = None
 
