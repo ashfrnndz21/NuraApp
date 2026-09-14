@@ -247,7 +247,12 @@ async def test_a_flag_heard_on_whatsapp_that_depends_on_a_missing_fact_is_kept_n
     flag = await sg.get(Flag, handled.flag_id)
     assert flag is not None and flag.suppressed_because == "no_sugar_condition_on_record"
     assert list(await sg.scalars(select(Escalation))) == []
-    assert handled.replies[0].text.splitlines()[-1] == "I wrote it down."
+    # Not escalated, and still a next step for the poster: who to call if it gets worse.
+    assert len(handled.replies) == 1
+    assert handled.replies[0].text.splitlines() == [
+        "I wrote it down.",
+        "If it gets worse, call your doctor today.",
+    ]
 
 
 async def test_a_red_flag_from_a_key_without_the_emergency_scope_is_refused_and_written_down(

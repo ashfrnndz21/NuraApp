@@ -164,6 +164,13 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
         "zh": ("这个不能等。", "今天就打电话给{doctor}。"),
     },
+    # A flag written but held back (it depends on a fact not on his papers): no alarm, and
+    # still the next step for a worried family member.
+    "red_flag_held": {
+        "en": ("I wrote it down.", "If it gets worse, call {doctor} today."),
+        "ms": ("Saya sudah tulis.", "Kalau jadi lebih teruk, telefon {doctor} hari ini."),
+        "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
+    },
     "not_understood": {
         "en": ("I did not understand that.", "Send a photo, or your blood pressure as 2 numbers."),
         "ms": ("Saya tidak faham.", "Hantar gambar, atau tekanan darah anda sebagai 2 nombor."),

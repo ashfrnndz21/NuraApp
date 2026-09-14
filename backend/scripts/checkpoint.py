@@ -2519,7 +2519,15 @@ def checkpoint_9(client: httpx.Client) -> None:
         200,
         "Pa reads the thread",
     )
-    if any(word in str(thread) for word in ("150", "fell", "tired")):
+    # Every field but the ids and the times: a uuid is hex and a time is digits, so "150" can
+    # turn up in one by chance. The words could only be in one of the other fields.
+    fields = [
+        str(value)
+        for message in thread
+        for key, value in message.items()
+        if not key.endswith("_id") and key != "at"
+    ]
+    if any(word in field for field in fields for word in ("150", "fell", "tired")):
         raise fail("Pa reads the thread", why="the words are on the thread; it is by reference")
     kinds = sorted({(m["direction"], m["kind"]) for m in thread})
     wanted_kinds = {

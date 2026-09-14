@@ -333,7 +333,8 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         session, work=work, kind=MessageKind.RED_FLAG, artifact=artifact, flag_id=flag.id
     )
     if flag.suppressed_because is not None:
-        await _say(session, work, "written_down")
+        # Held back, not escalated — but the poster still hears who to call if it gets worse.
+        await _say(session, work, "red_flag_held", doctor=await _doctor(session, work))
         return Handled(
             outcome="red_flag_suppressed",
             replies=tuple(work.replies),
