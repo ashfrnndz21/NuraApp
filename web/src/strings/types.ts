@@ -212,6 +212,63 @@ export interface Strings {
     noMic: string;
     noMicSub: string;
   };
+  /** The patient's day (W7): the not-feeling-well button, the symptom log, the nudge's two
+   *  buttons, the brief, the questions and the post-visit card's yes. Every card's own lines
+   *  are the backend's; `fallback` is the backend's offline card, word for word, for a phone
+   *  that kept no copy of it (app/channels/safety_strings.py). */
+  day: {
+    topThree: string;
+    notWell: string;
+    notWellTitle: string;
+    notWellLead: string;
+    wordsLabel: string;
+    send: string;
+    sayIt: string;
+    stopAndSend: string;
+    sending: string;
+    whatToDo: string;
+    backToday: string;
+    symptomsOpen: string;
+    symptomsTitleSelf: string;
+    symptomsTitleOther: string;
+    symptomsLead: string;
+    symptomsKeep: string;
+    sendAgain: string;
+    symptomsSaved: string;
+    nudgeOk: string;
+    nudgeWentWell: string;
+    nudgeNotToday: string;
+    briefOpen: string;
+    briefTitle: string;
+    questionsOpen: string;
+    questionsTitle: string;
+    questionLabel: string;
+    questionAdd: string;
+    questionCheck: string;
+    questionYes: string;
+    questionRemove: string;
+    questionRemoveCheck: string;
+    questionRemoveYes: string;
+    questionKept: string;
+    questionRemoved: string;
+    summaryLead: string;
+    summaryLeaveOut: string;
+    summaryLeftOut: string;
+    summaryFromNotes: string;
+    summaryYes: string;
+    summaryKept: string;
+    summaryWaiting: string;
+    fallback: {
+      youDidRight: string;
+      notSent: string;
+      call995: string;
+      call999: string;
+      callFamily: string;
+      bad995: string;
+      bad999: string;
+      closing: string;
+    };
+  };
   onboarding: {
     next: string;
     notNow: string;

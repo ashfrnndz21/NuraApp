@@ -333,7 +333,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   });
   expect(stored.local).toBe(0);
   expect(stored.session).toBe(0);
-  for (const key of stored.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.|feed\.)/);
+  for (const key of stored.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.|feed\.|nfw\.)/);
 });
 
 test("the caregiver density, for a chief setting up her father", async ({ page }) => {

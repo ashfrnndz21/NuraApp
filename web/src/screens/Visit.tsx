@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { Refused } from "../api/client";
 import * as nura from "../api/nura";
-import type { ConsultOut, LogisticsOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
+import type { ConsultOut, LogisticsOut, MemoCardOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
+import { decisionsFor, waitingSummary } from "../day/model";
 import { go, openTab } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
@@ -35,7 +36,9 @@ type Stage =
   | { kind: "saving"; notice: NoticeOut }
   | { kind: "done"; notice: NoticeOut; outcome: ConsultOut }
   | { kind: "no"; notice: NoticeOut }
-  | { kind: "notes"; notice: NoticeOut; summary: VisitSummaryOut };
+  | { kind: "notes"; notice: NoticeOut; summary: VisitSummaryOut }
+  /** A post-visit card from before, still waiting for his yes (E05-05). */
+  | { kind: "waiting"; summary: VisitSummaryOut };
 
 export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.Element {
   const s = t();
@@ -48,6 +51,9 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   const [said, setSaid] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  // His yes to the post-visit card (E05-05): the items he leaves out, and the memo card after.
+  const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
+  const [memos, setMemos] = useState<MemoCardOut | null>(null);
   const recorder = useMemo(() => new ConsultRecorder(browserRecorderDeps()), []);
   const clips = useMemo(
     () =>
@@ -71,6 +77,19 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
 
   useEffect(() => {
     void loadCard();
+  }, [bearer, papers?.profile_id, appointmentId]);
+
+  // A card from this visit still waiting for his yes opens first (E05-05): confirming it on the
+  // web is what makes the memos, the planned follow-up and the facts.
+  useEffect(() => {
+    if (!bearer || !papers) return;
+    nura.summaries(bearer, papers.profile_id, appointmentId).then(
+      (found) => {
+        const waiting = waitingSummary(found);
+        if (waiting) setStage((now) => (now.kind === "card" ? { kind: "waiting", summary: waiting } : now));
+      },
+      () => undefined, // a key without the visits' cards sees the logistics card only
+    );
   }, [bearer, papers?.profile_id, appointmentId]);
 
   // Leaving the screen: anything not sent is let go, and a clip stops.
@@ -218,36 +237,107 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     }
   };
 
+  /** His one yes to the whole card as shown: every item kept, but those he left out. The
+   *  backend makes the memos, the planned follow-up and the facts; a medicine change is a
+   *  question for the doctor and a flag, never a change. Then the memo card, in its words. */
+  const confirm = async (summary: VisitSummaryOut) => {
+    if (!bearer || !papers || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const decisions = decisionsFor(summary, leftOut);
+      const yes = await nura.mintSummaryYes(bearer, papers.profile_id, summary.summary_id, decisions);
+      await nura.confirmSummary(bearer, papers.profile_id, appointmentId, summary.summary_id, decisions, yes.confirmation_id);
+      setMemos(await nura.memoCard(bearer, papers.profile_id));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggle = (itemId: string) => {
+    const next = new Set(leftOut);
+    if (!next.delete(itemId)) next.add(itemId);
+    setLeftOut(next);
+  };
+
   const listening = stage.kind === "asking" || stage.kind === "recording";
-  const doctor = card?.doctor ?? (stage.kind !== "card" && stage.kind !== "gating" && stage.kind !== "consent" ? stage.notice.doctor : "");
+  const doctor = card?.doctor ?? ("notice" in stage ? stage.notice.doctor : "");
   const view = card ? logisticsView(card) : null;
   const elapsed = timer(recorder.elapsed.value);
 
+  /** The post-visit card (E05-05): each line in the backend's order with where it was said —
+   *  the stretch of the recording, or the notes he wrote — and, until his yes, "Leave this out"
+   *  under each thing heard and one yes for the whole card. */
   const summaryCard = (summary: VisitSummaryOut, testId: string) => {
     const shown = summaryView(summary);
+    const open = !summary.confirmed_at && memos === null;
     return (
-      <Tile paper testId={testId}>
-        <div class="lines" data-testid="summary-lines">
-          {shown.lines.map((line, at) => (
-            <div key={at} class="clip-line" data-testid="summary-line">
-              <p>{line.text}</p>
-              {line.clip && (
-                <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
-                  {fill(s.visit.hearClip, { doctor })}
-                </Pill>
-              )}
-            </div>
-          ))}
-        </div>
-        {shown.boundary.length > 0 && (
-          <div class="lines boundary" data-testid="boundary">
-            {shown.boundary.map((line, at) => (
-              <p key={at}>{line}</p>
-            ))}
+      <>
+        <Tile paper testId={testId}>
+          {open && <p data-testid="summary-lead">{s.day.summaryLead}</p>}
+          <div class="lines" data-testid="summary-lines">
+            {shown.lines.map((line, at) => {
+              const out = line.itemId !== null && leftOut.has(line.itemId);
+              return (
+                <div key={at} class="clip-line" data-testid="summary-line" data-item-id={line.itemId ?? undefined} data-left-out={out ? "yes" : undefined}>
+                  <p>{line.text}</p>
+                  {line.clip && (
+                    <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
+                      {fill(s.visit.hearClip, { doctor })}
+                    </Pill>
+                  )}
+                  {open && line.itemId && (
+                    <Pill quiet pressed={out} onClick={() => toggle(line.itemId!)} testId="leave-out">
+                      {s.day.summaryLeaveOut}
+                    </Pill>
+                  )}
+                  {out && (
+                    <p class="caption" data-testid="left-out">
+                      {s.day.summaryLeftOut}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
+          {shown.boundary.length > 0 && (
+            <div class="lines boundary" data-testid="boundary">
+              {shown.boundary.map((line, at) => (
+                <p key={at}>{line}</p>
+              ))}
+            </div>
+          )}
+          {!summary.recording_artifact_id && (
+            <p class="provenance" data-testid="from-notes">
+              {s.day.summaryFromNotes}
+            </p>
+          )}
+          <Hear lines={shown.spoken} />
+          {open && (
+            <Pill plum onClick={() => void confirm(summary)} disabled={busy} testId="summary-yes">
+              {s.day.summaryYes}
+            </Pill>
+          )}
+        </Tile>
+        {memos && (
+          <>
+            {doctor && (
+              <Tile paper role="status" testId="summary-kept">
+                <p>{fill(s.day.summaryKept, { doctor })}</p>
+              </Tile>
+            )}
+            <Tile paper testId="memo-card">
+              <div class="lines" data-testid="memo-lines">
+                {memos.card.map((line, at) => (
+                  <p key={at}>{line}</p>
+                ))}
+              </div>
+              <Hear lines={memos.spoken_card} />
+            </Tile>
+          </>
         )}
-        <Hear lines={shown.spoken} />
-      </Tile>
+      </>
     );
   };
 
@@ -289,6 +379,12 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
               </Pill>
             </Tile>
           )}
+          <Pill onClick={() => go({ name: "brief", appointmentId })} testId="open-brief">
+            {s.day.briefOpen}
+          </Pill>
+          <Pill onClick={() => go({ name: "questions", appointmentId })} testId="open-questions">
+            {s.day.questionsOpen}
+          </Pill>
           <Pill onClick={() => void begin()} disabled={busy || stage.kind === "gating"} testId="start-recording">
             <span class="start-label">{s.visit.start}</span>
           </Pill>
@@ -412,6 +508,17 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       )}
 
       {stage.kind === "notes" && summaryCard(stage.summary, "summary")}
+
+      {stage.kind === "waiting" && (
+        <>
+          {!memos && (
+            <Tile paper role="status" testId="summary-waiting">
+              <p>{s.day.summaryWaiting}</p>
+            </Tile>
+          )}
+          {summaryCard(stage.summary, "summary")}
+        </>
+      )}
 
       {!listening && stage.kind !== "saving" && stage.kind !== "held" && (
         <TabBar current="today" onSelect={openTab} />

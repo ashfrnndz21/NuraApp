@@ -1,4 +1,9 @@
-import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "preact/hooks";
+import * as nura from "../api/nura";
+import type { CardClipOut } from "../api/types";
+import { ClipButton } from "../day/components";
+import { clipsOf } from "../day/model";
+import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import type { JSX } from "preact";
 import type { FeedItemOut } from "../api/types";
 import { go, openTab } from "../flow";
@@ -30,6 +35,12 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const notes = store.notes.value;
   const audience = store.audience.value;
   const patient = density() === "patient";
+  // "Hear what Dr Tan said" under a line said at a recorded visit (E21-03): on a tap only.
+  const clipPlayer = useMemo(
+    () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(token.value ?? "", profile.value?.profile_id ?? "", artifactId, start, end))),
+    [],
+  );
+  useEffect(() => () => clipPlayer.forget(), [clipPlayer]);
 
   const cards = (): HTMLElement[] => [...(pager.current?.querySelectorAll<HTMLElement>("article.feed-card") ?? [])];
 
@@ -157,6 +168,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               entry={entry}
               index={index}
               view={cardView(entry.item)}
+              clips={clipsOf(entry.item)}
+              player={clipPlayer}
               note={notes.get(entry.item.item_id) ?? null}
               status={statusLine(entry.item, audience)}
               patient={patient}
@@ -204,6 +217,9 @@ interface FeedCardProps {
   entry: Entry;
   index: number;
   view: CardView;
+  /** Where each line was said at a recorded visit, by the line's words (E21-03). */
+  clips: Map<string, CardClipOut>;
+  player: ClipPlayer;
   note: Note | null;
   status: ReturnType<typeof statusLine>;
   patient: boolean;
@@ -224,7 +240,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -256,9 +272,16 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
         {!declined && (
           <>
             <div class="lines" data-testid="lines">
-              {view.lines.map((line, at) => (
-                <p key={at}>{line}</p>
-              ))}
+              {view.lines.map((line, at) => {
+                const clip = clips.get(line);
+                if (!clip) return <p key={at}>{line}</p>;
+                return (
+                  <div key={at} class="clip-line" data-testid="card-line">
+                    <p>{line}</p>
+                    <ClipButton clip={clip} player={player} playKey={`${entry.key}:${at}`} />
+                  </div>
+                );
+              })}
             </div>
             {view.boundary.length > 0 && (
               <div class="lines boundary" data-testid="boundary">

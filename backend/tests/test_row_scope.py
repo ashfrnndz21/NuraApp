@@ -803,6 +803,8 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/nudges/plan"),
     Walk("GET", f"{P}/nudge-metrics"),
     Walk("GET", f"{P}/me-summary"),
+    Walk("GET", f"{P}/nudges"),
+    Walk("GET", f"{P}/not-feeling-well/offline"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
