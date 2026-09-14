@@ -11,6 +11,12 @@
     GET  /profiles/{id}/appointments/{appt}/summaries            the cards for this visit
     POST /profiles/{id}/appointments/{appt}/summary/{card}/confirm  the yes: memos, visits, facts, flags
     GET  /profiles/{id}/memos                                    the memo card
+    GET  /profiles/{id}/appointments/{appt}/logistics            time, place, parking, driver, bring (E05-03)
+    POST /profiles/{id}/appointments/{appt}/driver               the chief's yes: who drives him
+    GET  /profiles/{id}/appointments/{appt}/recording/notice     the gate, then the notice (E16-02)
+    POST /profiles/{id}/appointments/{appt}/recording            the recording's bytes, on Stop (E02-05)
+    GET  /profiles/{id}/appointments/{appt}/recordings           the recordings kept, who spoke when
+    GET  /profiles/{id}/artifacts/{artifact}/clip?start=&end=    a stretch of one (E03-05)
 
 Every route takes the key context like every other profile route. Briefs, questions, cards
 and memos are under the visits scope; the transcript is an artefact under the record's; a
@@ -22,28 +28,48 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import AwareDatetime
 
+from app.audit.access import audited_guard
+from app.audit.models import Action
 from app.channels.api.delivery import via_of
-from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     AppointmentOut,
     BriefOut,
+    ConsultOut,
+    DriverIn,
     FactOut,
+    LogisticsOut,
     MemoCardOut,
     MemoOut,
+    NoticeOut,
     QuestionChangeIn,
     QuestionOut,
     QuestionsOut,
+    RecordingOut,
     SummaryConfirmBodyIn,
     SummaryConfirmedOut,
     SummaryOut,
+    TaskOut,
     TranscriptIn,
 )
 from app.db import utcnow
+from app.ingestion.consult import (
+    CONSULT,
+    MAX_CONSULT_BYTES,
+    ConsultTooLong,
+    consult_clip,
+    notice_for,
+    record_consult,
+    recordings_for,
+)
+from app.keys.scopes import Scope
 from app.memory.spine import upcoming_appointments
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.guard import can_change_visits
+from app.reasoning.visits.logistics import assign_driver, logistics_for
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card
 from app.reasoning.visits.questions import (
     change_questions,
@@ -205,4 +231,150 @@ async def memos(context: Context, session: Db) -> MemoCardOut:
     card = await memo_card(session, context=context)
     return MemoCardOut(
         memos=[MemoOut.of(one) for one in current], card=card, spoken_card=spoken_card(card)
+    )
+
+
+# --- the visit day (E05-03, E05-04, E02-05, E03-05) ------------------------------------------
+
+
+@router.get("/{profile_id}/appointments/{appointment_id}/logistics")
+async def logistics(
+    appointment_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> LogisticsOut:
+    """The logistics card: when (his day, his clock), where (the doctor's address), the
+    chief's note about the place under her name, who drives him — the task given, or the
+    roster's person on duty then as a suggestion waiting for the chief's yes — and what to
+    bring. Every line he reads passed the verifier; the card names the State it came from."""
+    return LogisticsOut.of(
+        await logistics_for(
+            session,
+            context=context,
+            appointment_id=appointment_id,
+            registry=providers_of(request).drug_registry,
+        )
+    )
+
+
+@router.post(
+    "/{profile_id}/appointments/{appointment_id}/driver", status_code=status.HTTP_201_CREATED
+)
+async def driver(
+    appointment_id: uuid.UUID, body: DriverIn, context: Context, session: Db
+) -> TaskOut:
+    """On the chief's yes (subject `drive`), the family task "drive Pa to Dr Tan", given to
+    that person and naming the visit. Refused to anyone but the owner and his chief."""
+    return TaskOut.of(
+        await assign_driver(
+            session,
+            context=context,
+            appointment_id=appointment_id,
+            person_id=body.person_id,
+            confirmation_id=body.confirmation_id,
+        )
+    )
+
+
+@router.get("/{profile_id}/appointments/{appointment_id}/recording/notice")
+async def recording_notice(
+    appointment_id: uuid.UUID, person: CurrentPerson, context: Context, session: Db
+) -> NoticeOut:
+    """What the Start button asks first. A key that does not change the visits is refused;
+    then the gate — the RECORDING consent in force, the records scope held — refuses on the
+    trail (`ConsentWithheld`, 403) before the room is told anything; only then the notice,
+    to the doctor by name, the printed card, and the words for a no."""
+    writer = None if context.is_owner else person.display_name
+    return NoticeOut.of(
+        await notice_for(session, context=context, appointment_id=appointment_id, writer=writer)
+    )
+
+
+@router.post(
+    "/{profile_id}/appointments/{appointment_id}/recording", status_code=status.HTTP_201_CREATED
+)
+async def recording(
+    appointment_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    duration_s: float = Query(),
+    started_at: AwareDatetime | None = None,
+) -> ConsultOut:
+    """The recording, sent once on Stop: the body is the recorder's own bytes (`audio/webm`,
+    `audio/ogg` or `audio/mp4`), `duration_s` how long the phone listened, `started_at` when it
+    began, with its offset (a time without one is a 422, ADR 0009). Kept as a consult
+    VOICE artefact in the region, heard, separated by speaker, and read into the post-visit
+    card with each line's place in the recording. A body declared bigger than a visit is
+    refused before it is read, on the trail."""
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_CONSULT_BYTES:
+        # Refused on the trail where the recording would have been kept: a visit's (ADR 0004).
+        async with audited_guard(session, context, Action.WRITE, Scope.VISITS, CONSULT):
+            raise ConsultTooLong(f"a recording is at most {MAX_CONSULT_BYTES} bytes")
+    served = providers_of(request)
+    outcome = await record_consult(
+        session,
+        context=context,
+        appointment_id=appointment_id,
+        data=await request.body(),
+        content_type=request.headers.get("content-type", ""),
+        duration_s=duration_s,
+        started_at=started_at,
+        store=served.object_store,
+        transcriber=served.transcriber,
+        separator=served.speaker_separator,
+        summariser=served.summariser,
+        registry=served.drug_registry,
+    )
+    return ConsultOut(
+        recording=RecordingOut.of(outcome.recording, outcome.segments),
+        summary=None
+        if outcome.summary is None
+        else SummaryOut.of(outcome.summary, outcome.items),
+        summary_refused=outcome.summary_refused,
+    )
+
+
+@router.get("/{profile_id}/appointments/{appointment_id}/recordings")
+async def recordings(
+    appointment_id: uuid.UUID, context: Context, session: Db
+) -> list[RecordingOut]:
+    """Every recording of this visit, newest first, with who spoke when. No words."""
+    found = await recordings_for(session, context=context, appointment_id=appointment_id)
+    return [RecordingOut.of(recording, segments) for recording, segments in found]
+
+
+@router.get("/{profile_id}/artifacts/{artifact_id}/clip")
+async def clip(
+    artifact_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    start: float = Query(ge=0),
+    end: float = Query(gt=0),
+) -> Response:
+    """The stretch `start`–`end` of a consult recording that a summary line or an answer
+    cites. The whole recording comes back — a phone's webm or mp4 is not cut at a byte offset
+    without a demuxer — with the stretch in `X-Clip-Start`/`X-Clip-End` and as the media
+    fragment the phone plays (`#t=start,end`, `X-Media-Fragment`); the phone stops at the end.
+    Under the visits scope, where a consult recording and its bytes are written (ADR 0004):
+    a key that reads the visits hears it; any other is refused at the door, on the trail."""
+    found = await consult_clip(
+        session,
+        context=context,
+        store=providers_of(request).object_store,
+        artifact_id=artifact_id,
+        start_s=start,
+        end_s=end,
+    )
+    fragment = f"t={found.start_s:g},{found.end_s:g}"
+    return Response(
+        content=found.data,
+        media_type=found.artifact.content_type,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": "inline",
+            "X-Clip-Start": f"{found.start_s:g}",
+            "X-Clip-End": f"{found.end_s:g}",
+            "X-Media-Fragment": fragment,
+        },
     )

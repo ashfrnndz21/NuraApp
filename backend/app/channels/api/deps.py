@@ -30,6 +30,7 @@ from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
+from app.ingestion.speakers import SpeakerSeparator
 from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.ranges import FixtureRanges, ReferenceRanges
@@ -77,6 +78,10 @@ class Providers:
     push: PushSender = field(default_factory=NoDevices)
     """What reaches a person's app with a content-free push (`app.delivery.push`); nobody
     until the app registers devices, so the app channel falls through."""
+    speaker_separator: SpeakerSeparator | None = None
+    """Who spoke when in a consult recording, in this deployment's region (E02-05): the
+    fixture one on a laptop; None where no separator is configured, and then a recording is
+    kept as one stretch by an unknown speaker (`app.ingestion.speakers.Unseparated`)."""
     retriever: Retriever = field(default_factory=KeywordRetriever)
     """Which things on the record a question is about, for Ask (E03-05): keywords until a
     model-backed retriever exists behind the same port; the tests pass a fixture one."""

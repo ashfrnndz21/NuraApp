@@ -3145,6 +3145,7 @@ CHECKPOINTS = {
     18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
     20: lambda client: checkpoints.cp20.run(BASE_URL, DEV_LOG) and sys.exit(1),
     21: lambda client: checkpoints.cp21.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    22: lambda client: checkpoints.cp22.run(BASE_URL, DEV_LOG) and sys.exit(1),
     23: lambda client: checkpoints.cp23.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }
 

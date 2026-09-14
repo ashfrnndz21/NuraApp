@@ -213,13 +213,29 @@ test("the pager: one card a screen, in the backend's order, the gate, endless pa
 
 test("a learning card: its lines, its boundary, its why, four side actions; Hear on tap only, stopped when it leaves; Not for me holds the kind", async ({ page, request }) => {
   await captureSpeech(page);
+  // The backend's own voice of a card (E11, GET …/feed/{item}/voice) plays through an audio
+  // element: count what is played, and play nothing aloud here.
+  await page.addInitScript(() => {
+    const played: string[] = [];
+    (window as unknown as { __played: string[] }).__played = played;
+    class Heard extends window.Audio {
+      play(): Promise<void> {
+        played.push(this.src);
+        return Promise.resolve();
+      }
+      pause(): void {}
+    }
+    Object.defineProperty(window, "Audio", { value: Heard, configurable: true });
+  });
+  const played = () => page.evaluate(() => (window as unknown as { __played: string[] }).__played);
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await expect(page.getByTestId("proud")).toBeVisible();
   const pages = recordPages(page);
-  const voiceAsks: number[] = [];
+  const voiceAsks: [string, number][] = [];
   page.on("response", (response) => {
-    if (/\/feed\/[^/]+\/voice$/.test(new URL(response.url()).pathname)) voiceAsks.push(response.status());
+    const path = new URL(response.url()).pathname;
+    if (/\/feed\/[^/]+\/voice$/.test(path)) voiceAsks.push([path, response.status()]);
   });
   await openPager(page);
   await pageUntil(page, "learning");
@@ -246,13 +262,17 @@ test("a learning card: its lines, its boundary, its why, four side actions; Hear
   }
   await shotAs(page, "w2-feed-learning-card-side-actions");
 
-  // No voice before the tap. The backend has no voice route yet (E11): the warm-up met a 404,
-  // so Hear reads the card's own spoken twin through the phone's voice, once.
+  // No voice before the tap. The warm-up fetched this card's own voice from the backend (E11):
+  // bytes only, 200, and nothing played or said.
+  await expect.poll(() => voiceAsks.filter(([path, status]) => path.endsWith(`/feed/${itemId}/voice`) && status === 200).length).toBeGreaterThan(0);
+  await settled(page);
   expect(await spoken(page)).toEqual([]);
-  expect(voiceAsks).toContain(404);
+  expect(await played()).toEqual([]);
   const engaged = page.waitForRequest((req) => req.method() === "POST" && req.url().includes(`/feed/${itemId}/engagement`));
   await card.getByTestId("action-hear").click();
-  expect(await spoken(page)).toEqual(item.voice);
+  // Hear plays the backend's voice of this card, once; the phone's voice says nothing.
+  await expect.poll(() => played().then((each) => each.length)).toBe(1);
+  expect(await spoken(page)).toEqual([]);
   expect((await engaged).postDataJSON()).toEqual({ event: "heard", channel: "app" });
 
   // It stops when the card leaves the screen, and the next card does not start.
@@ -260,7 +280,8 @@ test("a learning card: its lines, its boundary, its why, four side actions; Hear
   await card.focus();
   await pageDown(page);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __cancels: number }).__cancels)).toBeGreaterThan(cancels);
-  expect(await spoken(page)).toEqual(item.voice);
+  expect(await played()).toHaveLength(1);
+  expect(await spoken(page)).toEqual([]);
 
   // Back to the learning card: Not for me posts `dismissed`, the card says so.
   await page.keyboard.press("PageUp");

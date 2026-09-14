@@ -49,6 +49,7 @@ from app.keys.scopes import ALL_SCOPES, ROLE_SCOPES, KeyRole, Scope, scope_for_s
 from app.memory.episodic import (
     NoSuchArtifact,
     NoSuchEvent,
+    OnlyTheFamilyHears,
     record_event,
     require_artifact,
     require_event,
@@ -74,6 +75,7 @@ from app.search.ask import Mode, recall
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import agree_to_recording, b64, confirm, decide, photo
 from tests.conftest import Deployment
+from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, placeholder_consult
 from tests.medicines_support import add, label
 from tests.medicines_support import let_in as cut_key
 from tests.paper import LIPID_PANEL
@@ -266,6 +268,9 @@ def expected_artifact_scope(artifact: Artifact, whatsapp: dict[uuid.UUID, Messag
             return Scope.EMERGENCY
         return Scope.RECORDS if kind is not None else Scope.FAMILY
     if artifact.kind is ArtifactKind.TRANSCRIPT:
+        return Scope.VISITS
+    if artifact.kind is ArtifactKind.VOICE and artifact.storage_key.startswith("consults/"):
+        # A consult recording (E02-05): the visits' part, like its transcript.
         return Scope.VISITS
     return Scope.RECORDS
 
@@ -575,6 +580,15 @@ async def _seed(deployment: Deployment) -> Seeded:
         headers=his,
     )
     assert kept_transcript.status_code in (200, 201), kept_transcript.text
+    # A consult recording (E02-05): its voice and its transcript, under the visits scope.
+    recorded = await client.post(
+        f"/profiles/{profile_id}/appointments/{next_visit.id}/recording",
+        content=placeholder_consult(CONSULT),
+        params={"duration_s": DURATION_S},
+        headers={**his, "Content-Type": CONTENT_TYPE},
+    )
+    assert recorded.status_code == 201, recorded.text
+    consult_voice = recorded.json()["recording"]["artifact_id"]
 
     # Today's top three (E11-02), composed as he opens it: the cards the voice route plays.
     today = await client.get(f"/profiles/{profile_id}/feed/today", headers=his)
@@ -631,6 +645,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "note_id": [str(uuid.uuid4())],
             "job_id": [str(uuid.uuid4())],
             "item_id": feed_items or [str(uuid.uuid4())],
+            "artifact_id": [consult_voice],
         }
     return seeded
 
@@ -766,6 +781,10 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/appointments/{{appointment_id}}/brief"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/questions"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/summaries"),
+    Walk("GET", f"{P}/appointments/{{appointment_id}}/logistics"),
+    Walk("GET", f"{P}/appointments/{{appointment_id}}/recording/notice"),
+    Walk("GET", f"{P}/appointments/{{appointment_id}}/recordings"),
+    Walk("GET", f"{P}/artifacts/{{artifact_id}}/clip", params={"start": "19.8", "end": "28.9"}),
     Walk("GET", f"{P}/memos"),
     Walk("GET", f"{P}/proposals"),
     Walk("GET", f"{P}/routine"),
@@ -839,6 +858,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
         "POST",
         f"{P}/appointments/{{appointment_id}}/transcript",
     ): "keeps a transcript; returns its card",
+    ("POST", f"{P}/appointments/{{appointment_id}}/recording"): (
+        "keeps a consult recording; returns what it kept and its card"
+    ),
+    ("POST", f"{P}/appointments/{{appointment_id}}/driver"): "gives the drive on a yes; returns the task",
     ("POST", f"{P}/appointments/{{appointment_id}}/summary/{{summary_id}}/confirm"): (
         "writes what the summary card says; returns what it wrote"
     ),
@@ -1074,7 +1097,8 @@ async def _walk(
                     problems.append(f"{holder.name} {where}: {response.status_code}")
                 elif response.status_code < 300 and response.content:
                     kind = response.headers.get("content-type", "")
-                    # A spoken twin is audio and names nothing: it answers for the card it speaks.
+                    # Audio names nothing: a spoken twin answers for the card it speaks, a clip
+                    # (E03-05) for the recording it is cut from.
                     body = (
                         {"spoken": list(combo.values())}
                         if kind.startswith("audio/")
@@ -1120,7 +1144,7 @@ async def _services(
                     await require_event(session, context=context, event_id=uuid.UUID(ident))
                 else:
                     continue
-            except (NoSuchArtifact, NoSuchEvent, OutOfScope):
+            except (NoSuchArtifact, NoSuchEvent, OutOfScope, OnlyTheFamilyHears):
                 continue
             if scope not in held:
                 problems.append(f"{holder.name} require: {kind} {ident} under {scope}")

@@ -332,6 +332,61 @@ export const ms = {
     // @patient phrase
     signOut: "Daftar keluar",
   },
+  // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
+  visit: {
+    // @patient headline
+    title: "Lawatan anda",
+    // @patient phrase
+    open: "Lihat lawatan anda yang seterusnya",
+    // @patient
+    none: "Nura tiada lawatan yang ditulis untuk anda.",
+    // @patient
+    fromVisit: "Ini datang dari lawatan anda ke doktor.",
+    // @patient
+    onDuty: "Hari itu giliran {name}.",
+    // @patient phrase
+    driveYes: "Ya, {name} akan hantar",
+    // @patient phrase
+    start: "Mula merakam",
+    // @patient
+    keepOpen: "Biarkan halaman ini terbuka semasa Nura mendengar.",
+    // @patient
+    consentLead: "Nura perlukan persetujuan anda sebelum mendengar.",
+    // @patient phrase
+    saidYes: "{doctor} kata boleh",
+    // @patient phrase
+    saidNo: "{doctor} kata tidak",
+    // @patient
+    listening: "Nura sedang mendengar.",
+    // @patient phrase
+    stop: "Berhenti",
+    // @patient
+    saving: "Nura sedang menyimpan rakaman.",
+    // @patient
+    saved: "Nura sudah menyimpan rakaman.",
+    // @patient
+    notHeard: "Nura tidak dapat mendengar kata-katanya.",
+    // @patient
+    notHeardSub: "Anda boleh dengar semula dalam surat-surat anda.",
+    // @patient
+    cardLater: "Nura belum dapat membuat kad itu.",
+    // @patient
+    stoppedAway: "Nura berhenti mendengar apabila anda meninggalkan halaman ini.",
+    // @patient phrase
+    keepHeard: "Simpan apa yang Nura dengar",
+    // @patient phrase
+    hearClip: "Dengar apa yang {doctor} kata",
+    // @patient headline
+    byHandTitle: "Tulis apa yang {doctor} kata",
+    // @patient phrase
+    byHandLabel: "Apa yang {doctor} kata",
+    // @patient phrase
+    byHandSave: "Simpan nota",
+    // @patient
+    noMic: "Nura tidak boleh guna mikrofon telefon ini.",
+    // @patient
+    noMicSub: "Anda boleh tulis nota dengan tangan.",
+  },
   onboarding: {
     // @patient phrase
     next: "Seterusnya",
@@ -730,5 +785,13 @@ export const ms = {
     NoSuchItem: "Kad itu sudah tiada di sini.",
     NoCachedPage: "Nura belum simpan halaman untuk anda.",
     NotACursor: "Nura tidak jumpa kad seterusnya.",
+    NotAConsultRecording: "Nura tidak dapat menyimpan rakaman itu.",
+    ConsultTooLong: "Rakaman itu terlalu panjang untuk Nura.",
+    NoSuchRecording: "Rakaman itu sudah tiada di sini.",
+    NotAClip: "Nura tidak dapat mencari bahagian rakaman itu.",
+    OnlyTheFamilyHears: "Hanya pemilik dan keluarga yang dia benarkan boleh mendengar ini.",
+    NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
+    NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
+    NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
   },
 } satisfies Strings;

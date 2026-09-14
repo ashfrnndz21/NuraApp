@@ -42,6 +42,9 @@ class CardType(StrEnum):
     """His own number back to him: one number, one direction, one sentence."""
     VISIT = "visit"
     """A visit inside the week: who, which day, what to bring."""
+    VISIT_LOGISTICS = "visit_logistics"
+    """The day before a visit and on the day: the time, the place, who drives him, what to
+    bring (E05-03). Its lines are the logistics card's (`app.reasoning.visits.logistics`)."""
     MEMO = "memo"
     """What was agreed at the last visit (E05 writes the memo; the card repeats it)."""
     REORDER = "reorder"
@@ -80,6 +83,7 @@ SUPPLY_OF: dict[CardType, Supply] = {
     CardType.NOW: Supply.NOW,
     CardType.READING: Supply.TODAY,
     CardType.VISIT: Supply.TODAY,
+    CardType.VISIT_LOGISTICS: Supply.TODAY,
     CardType.MEMO: Supply.TODAY,
     CardType.REORDER: Supply.TODAY,
     CardType.NOTICE: Supply.TODAY,
@@ -119,6 +123,9 @@ CAPS_OF: dict[CardType, CapsClass] = {
     CardType.NOW: CapsClass.SUPPLY,
     CardType.READING: CapsClass.ONE,
     CardType.VISIT: CapsClass.ONE,
+    # Not capped: the acceptance is that it is sent the day before and on the day (E05-03),
+    # and the daily cap would hold it behind a reading. One a day, by its dedupe key.
+    CardType.VISIT_LOGISTICS: CapsClass.SUPPLY,
     CardType.MEMO: CapsClass.ONE,
     CardType.REORDER: CapsClass.ONE,
     CardType.NOTICE: CapsClass.ONE,

@@ -31,7 +31,8 @@ from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_car
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
-from app.delivery.nudges.models import Nudge
+from app.delivery.feed.models import CardType, FeedItem
+from app.delivery.nudges.models import Nudge, NudgeKind
 from app.delivery.strings import theirs
 from app.delivery.triggers.deliver import (
     Firing,
@@ -375,11 +376,24 @@ async def _visit_tomorrow(run: Run) -> None:
     zone = REGION_TZ[run.acting.region]
     if as_utc(visit.scheduled_at).astimezone(zone).date() != run.local.date() + timedelta(days=1):
         return
-    firing = Firing(
-        type=TriggerType.VISIT_TOMORROW,
-        dedupe_key=f"visit:{visit.id}",
-        why={"appointment_id": str(visit.id)},
+    # One reminder of a visit a day (E05-03): the logistics card on his feed today is that
+    # reminder, and this message carries it, named, rather than being a second one.
+    cards = await audited_read(
+        run.session,
+        FeedItem,
+        run.acting,
+        Scope.VISITS,
+        where=(
+            FeedItem.type == CardType.VISIT_LOGISTICS,
+            FeedItem.day == run.day,
+            FeedItem.dedupe_key.startswith(f"logistics:{visit.id}:"),
+        ),
+        channel=Channel.SYSTEM,
     )
+    why = {"appointment_id": str(visit.id)}
+    if cards:
+        why["feed_item_id"] = str(cards[0].id)
+    firing = Firing(type=TriggerType.VISIT_TOMORROW, dedupe_key=f"visit:{visit.id}", why=why)
 
     async def say(person: object) -> Delivered:
         sent = await run_visit_card(
@@ -491,7 +505,9 @@ async def _nudges(run: Run) -> None:
     """The day's smart nudge (E17-03), handed over by its planner: the `nudge` row is the
     queue (`app.delivery.nudges.handoff`). It goes to him from its `send_after` until it
     expires, never in the quiet hours, under the cap on nudges a day — the same cap the
-    planner hands over by (`preferences.daily_cap`). Its lines are exactly the planner's."""
+    planner hands over by (`preferences.daily_cap`). Its lines are exactly the planner's. A
+    visit's anticipation nudge is skipped on a day the visit reminder reached him: one
+    reminder of a visit a day."""
     if run.patient is None:
         return
     nudges = await audited_read(
@@ -502,6 +518,14 @@ async def _nudges(run: Run) -> None:
         where=(Nudge.day == run.day, Nudge.send_after <= run.at, Nudge.expires_at > run.at),
         channel=Channel.SYSTEM,
     )
+    rows = [*await run.deliveries(), *(sent.delivery for sent in run.report)]
+    reminded = {
+        str(row.why.get("appointment_id"))
+        for row in rows
+        if row.trigger_type is TriggerType.VISIT_TOMORROW
+        and row.outcome is DeliveryOutcome.SENT
+        and row.day == run.day
+    }
     for nudge in sorted(nudges, key=lambda n: (-n.priority, as_utc(n.handed_over_at))):
         firing = Firing(
             type=TriggerType.NUDGE,
@@ -526,6 +550,18 @@ async def _nudges(run: Run) -> None:
                 state=await run.state(),
             )
 
+        visit = str((nudge.reason or {}).get("appointment_id"))
+        if nudge.kind is NudgeKind.ANTICIPATION and visit in reminded:
+            # The visit reminder reached him today: the nudge would say it a second time.
+            if not any(row.dedupe_key == firing.dedupe_key for row in rows):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason="the visit reminder said it",
+                )
+            continue
         await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
 
 

@@ -33,6 +33,8 @@ const VARIANTS: Record<string, Variant> = {
   memo: "memo",
   reorder: "reorder",
   visit: "visit",
+  // The logistics card, the day before a visit and on the day (E05-03): a visit card.
+  visit_logistics: "visit",
   notice: "notice",
 };
 
