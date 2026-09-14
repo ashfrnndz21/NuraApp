@@ -6,7 +6,7 @@ import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
 import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
-import { biography, lastPaper, returnTo, say, to } from "../../onboarding/state";
+import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
 import { Hear, Notice, Pill } from "../../ui/components";
@@ -53,7 +53,8 @@ export function RecordsStep(): JSX.Element {
     }
   };
 
-  const inPapers = bio?.step === "papers";
+  // The sitting's own words for the step address him; a chief reads the app's.
+  const inPapers = whose().self && bio?.step === "papers";
   return (
     <main class="screen onboarding" data-stage="records">
       <StepTitle title={inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther)} />

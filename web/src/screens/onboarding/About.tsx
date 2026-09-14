@@ -4,7 +4,7 @@ import * as nura from "../../api/nura";
 import type { SettingsIn } from "../../api/types";
 import { openSitting, refreshPlan, saveSettings } from "../../onboarding/actions";
 import { ABOUT_ITEMS, BREAKFAST_TIMES, DECADES, isSwitch, startingSettings, type AboutItem } from "../../onboarding/about";
-import { biography, draft, finish, picked, say, settings, to } from "../../onboarding/state";
+import { biography, draft, finish, picked, say, settings, to, whose } from "../../onboarding/state";
 import { density, profile, setLanguage, token } from "../../store/session";
 import { fill, isLanguage, LANGUAGES, language, t, type Language } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
@@ -46,7 +46,9 @@ export function AboutStep({ only }: { only?: AboutItem } = {}): JSX.Element {
 
   const current = draft.value;
   const bio = biography.value;
-  const title = bio?.step === "about_you" ? bio.prompt.headline : say(a.titleSelf, a.titleOther);
+  // The sitting's own words for the step address him; a chief reads the app's.
+  const own = whose().self && bio?.step === "about_you";
+  const title = own ? bio.prompt.headline : say(a.titleSelf, a.titleOther);
   if (!current) {
     return (
       <main class="screen onboarding" data-stage="about">
@@ -74,7 +76,7 @@ export function AboutStep({ only }: { only?: AboutItem } = {}): JSX.Element {
   };
 
   const items = only ? [only] : patient ? [ABOUT_ITEMS[index]!] : [...ABOUT_ITEMS];
-  const lead = bio?.step === "about_you" && bio.prompt.lines.length > 0 ? bio.prompt.lines : [say(a.leadSelf, a.leadOther)];
+  const lead = own && bio.prompt.lines.length > 0 ? bio.prompt.lines : [say(a.leadSelf, a.leadOther)];
   const typed = ABOUT_ITEMS[index] === "name" || ABOUT_ITEMS[index] === "doctor";
 
   return (

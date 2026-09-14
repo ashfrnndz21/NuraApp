@@ -2,8 +2,8 @@ import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { ReadBackLineOut } from "../../api/types";
-import { closeSitting, who } from "../../onboarding/actions";
-import { biography, to } from "../../onboarding/state";
+import { closeSitting, inMyLanguage, who } from "../../onboarding/actions";
+import { biography, to, whose } from "../../onboarding/state";
 import { density } from "../../store/session";
 import { fill, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
@@ -19,6 +19,8 @@ export function ReadBackStep(): JSX.Element {
   const patient = density() === "patient";
   const bio = biography.value;
   const lines = bio?.read_back ?? [];
+  // The sitting's own words address him; a chief reads the app's.
+  const own = whose().self && bio?.step === "read_back";
   const [ack, setAck] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export function ReadBackStep(): JSX.Element {
   const answer = (line: ReadBackLineOut, said: "yes" | "no") =>
     act(async () => {
       const { bearer, profileId } = who();
-      const updated = await nura.answerReadBack(bearer, profileId, line.fact_id, said);
+      const updated = await inMyLanguage(await nura.answerReadBack(bearer, profileId, line.fact_id, said));
       biography.value = updated;
       setAck(said === "yes" ? r.agreed : (updated.after_no ?? r.disputed));
       if (patient && !updated.read_back.some((each) => each.answer === null)) to({ name: "questions" });
@@ -54,7 +56,7 @@ export function ReadBackStep(): JSX.Element {
   if (lines.length === 0) {
     return (
       <main class="screen onboarding" data-stage="readBack">
-        <StepTitle title={bio?.prompt.headline ?? r.title} />
+        <StepTitle title={own ? bio.prompt.headline : r.title} />
         <Sheet lines={[r.nothing, r.nothingFine, r.nothingSub]} testId="readback-nothing" />
         <Notice error={error} />
         {next}
@@ -66,8 +68,8 @@ export function ReadBackStep(): JSX.Element {
   const shown = patient ? (current ? [current] : []) : lines;
   return (
     <main class="screen onboarding" data-stage="readBack">
-      <StepTitle title={bio?.prompt.headline ?? r.title} />
-      {(bio?.prompt.lines.length ? bio.prompt.lines : [r.lead]).map((line, position) => (
+      <StepTitle title={own ? bio.prompt.headline : r.title} />
+      {(own && bio.prompt.lines.length ? bio.prompt.lines : [r.lead]).map((line, position) => (
         <p key={position} class="lead">
           {line}
         </p>

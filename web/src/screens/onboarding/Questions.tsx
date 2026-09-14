@@ -2,8 +2,8 @@ import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { QuestionOut } from "../../api/types";
-import { closeSitting, who } from "../../onboarding/actions";
-import { biography, say } from "../../onboarding/state";
+import { closeSitting, inMyLanguage, who } from "../../onboarding/actions";
+import { biography, say, whose } from "../../onboarding/state";
 import { density } from "../../store/session";
 import { fill, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
@@ -41,13 +41,13 @@ export function QuestionsStep(): JSX.Element {
       const { bearer, profileId } = who();
       // His keep is the one call: the sitting puts a kept question on the next visit's list
       // itself (E05), and with no visit booked it waits and moves when one is.
-      const updated = await nura.answerQuestion(bearer, profileId, question.question_id, keep);
+      const updated = await inMyLanguage(await nura.answerQuestion(bearer, profileId, question.question_id, keep));
       biography.value = updated;
       setAck(keep ? q.kept : q.dropped);
       if (patient && !updated.questions.some((each) => each.kept === null)) await closeSitting();
     });
 
-  const title = bio?.step === "questions" ? bio.prompt.headline : say(q.titleSelf, q.titleOther);
+  const title = whose().self && bio?.step === "questions" ? bio.prompt.headline : say(q.titleSelf, q.titleOther);
   const next = (
     <Pill plum onClick={() => void act(closeSitting)} disabled={busy} testId="questions-next">
       {s.onboarding.next}

@@ -1,13 +1,15 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { en } from "../../src/strings/en";
-import { API, apiToken, captureSpeech, freshPhone, signInThroughTheApp } from "./helpers";
+import { API, apiToken, backendClock, captureSpeech, fixClock, freshPhone, nothingDrawnOverLines, seedVisit, signInThroughTheApp } from "./helpers";
 
-/** Checkpoint 11 on a phone-sized screen: onboarding end to end. The E01 routes (settings,
- *  the condition graph, the biography, the plan) are answered by `src/api/mock/` when the
- *  app runs under VITE_API_MOCK=1 (`make web-mock`), or by the backend once E01 merges; the
- *  photo, the review card, the yes and the facts are the live E02 API either way. */
+/** Checkpoint 11 on a phone-sized screen: onboarding end to end against the real backend —
+ *  E01's sitting, settings, word cloud and first week (#117), E02's photos, imports and review
+ *  cards, E05's visit list and E12's sharing — with nothing mocked. Both clocks stand at 10 in
+ *  the morning in Singapore on Monday 14 September: the phone's by `fixClock`, the backend's
+ *  by NURA_FROZEN_CLOCK (playwright.config.ts), so "tomorrow at breakfast" is always Tuesday.
+ *  Every line checked is the backend's or the app's own string table. */
 
 const SHOTS = process.env.W3_SHOTS ?? join(process.cwd(), "test-results", "w3-shots");
 const stamp = Date.now();
@@ -20,59 +22,106 @@ function shot(name: string): string {
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const placeholder = (label: string) => Buffer.concat([PNG, Buffer.from(`nura-paper-placeholder:${label}\n`, "ascii")]);
 const placeholderPdf = (label: string) => Buffer.from(`%PDF-1.4\nnura-paper-placeholder:${label}\n`, "ascii");
-const SKIP = "needs E01's routes: run the app with VITE_API_MOCK=1 (make web-mock) until E01 merges";
+const photo = (label: string) => ({ name: `${label}.png`, mimeType: "image/png", buffer: placeholder(label) });
 
-/** About you, answered quickly, in his own papers' patient density. */
-async function throughAbout(page: Page): Promise<void> {
+const SWITCHES = ["large_text", "high_contrast", "voice_on", "big_targets", "one_thing_per_screen", "read_back", "repeat_prompts"] as const;
+const p = en.onboarding.plan;
+
+test.beforeEach(async ({ page, request }) => {
+  const clock = await backendClock(request);
+  expect(clock.frozen, "start the backend with NURA_FROZEN_CLOCK (see playwright.config.ts)").toBe(true);
+  await fixClock(page);
+});
+
+/** About you, answered quickly, in his own papers' patient density: one question a screen. */
+async function throughAbout(page: Page, { breakfast = true } = {}): Promise<void> {
   await page.getByLabel("The name Nura uses").fill("Pa");
   await page.getByTestId("about-next").click();
   await page.getByTestId("about-lang-en").click();
   await page.getByTestId("decade-1950").click();
   await page.getByLabel("The doctor's name").fill("Dr Tan");
   await page.getByTestId("about-next").click();
-  await page.getByTestId("breakfast-07:30").click();
-  for (const item of ["sight", "hearing", "hands", "memory"]) await page.getByTestId(`${item}-no`).click();
+  await page.getByTestId(breakfast ? "breakfast-07:30" : "breakfast-not-now").click();
+  for (const item of SWITCHES) await page.getByTestId(`${item}-no`).click();
+  await page.getByTestId("density-simple").click();
 }
 
-async function signedInToOnboarding(page: Page, request: APIRequestContext, prefix: string): Promise<string> {
+async function signedInToOnboarding(page: Page, prefix: string, options: { breakfast?: boolean } = {}): Promise<string> {
   const phone = freshPhone(prefix);
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
-  test.skip(!(await e01Answers(page, request)), SKIP);
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
-  await throughAbout(page);
+  await throughAbout(page, options);
   return phone;
 }
 
-async function profileOf(request: APIRequestContext, phone: string): Promise<{ auth: { Authorization: string }; id: string }> {
+interface Api {
+  auth: { Authorization: string };
+  id: string;
+  token: string;
+}
+async function profileOf(request: APIRequestContext, phone: string): Promise<Api> {
   const token = await apiToken(request, phone);
   const auth = { Authorization: `Bearer ${token}` };
   const me = (await (await request.get(`${API}/me`, { headers: auth })).json()) as { profile_id: string };
-  return { auth, id: me.profile_id };
+  return { auth, id: me.profile_id, token };
 }
 
-async function e01Answers(page: Page, request: APIRequestContext): Promise<boolean> {
-  const mocked = await page.evaluate(() => Boolean((window as unknown as { __NURA_API_MOCK__?: boolean }).__NURA_API_MOCK__));
-  if (mocked) return true;
-  return (await request.get(`${API}/onboarding/conditions?language=en`)).status() !== 404;
+interface Sitting {
+  step: string;
+  more: string | null;
+  questions: { question_id: string; line: string; kept: boolean | null; state_id: string | null; source: string | null; handed_over_to: string | null }[];
+}
+const sitting = async (request: APIRequestContext, who: Api): Promise<Sitting> =>
+  (await (await request.get(`${API}/profiles/${who.id}/biography?language=en`, { headers: who.auth })).json()) as Sitting;
+
+interface Week {
+  prompts: { prompt: string; status: string; headline: string | null; line: string | null; capture: string }[];
+}
+const week = async (request: APIRequestContext, who: Api): Promise<Week> =>
+  (await (await request.get(`${API}/profiles/${who.id}/plan?language=en`, { headers: who.auth })).json()) as Week;
+
+/** What a visit's list holds (E05), in the words each question was kept in. */
+async function visitList(request: APIRequestContext, who: Api): Promise<{ appointment: string; questions: { text: string; added_by_person_id: string | null }[] }> {
+  const visits = (await (await request.get(`${API}/profiles/${who.id}/appointments`, { headers: who.auth })).json()) as { appointment_id: string }[];
+  expect(visits.length).toBeGreaterThan(0);
+  const appointment = visits[0]!.appointment_id;
+  const listed = (await (await request.get(`${API}/profiles/${who.id}/appointments/${appointment}/questions`, { headers: who.auth })).json()) as {
+    questions: { text: string; added_by_person_id: string | null }[];
+  };
+  return { appointment, questions: listed.questions };
+}
+
+/** Later on each card until the one wanted is up (each Later waits for the next card: a
+ *  second Later on the same gap would retire it). */
+async function laterUntil(gap: Locator, wanted: string): Promise<void> {
+  for (let n = 0; n < 8; n++) {
+    const current = await gap.getAttribute("data-gap");
+    if (current === wanted) return;
+    await gap.getByTestId("later").click();
+    await expect(gap).not.toHaveAttribute("data-gap", current!);
+  }
+  await expect(gap).toHaveAttribute("data-gap", wanted);
 }
 
 const spoken = (page: Page) => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.splice(0));
 
-test("the patient's own onboarding: about you, the cloud, read-back, a paper, questions, gaps", async ({ page, request }) => {
+test("the patient's own onboarding: about you, the cloud, a paper, the read-back, questions, the first week", async ({ page, request }) => {
   const phone = freshPhone("+659888");
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
-  test.skip(!(await e01Answers(page, request)), "needs E01's routes: run the app with VITE_API_MOCK=1 (make web-mock) until E01 merges");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
 
-  // About you: one question per screen, patient density, 56px targets.
+  // About you: the sitting's own words lead; one question per screen, patient density, 56px.
   const main = page.locator("main.onboarding");
   await expect(main).toHaveAttribute("data-item", "name");
   await expect(page.locator("html")).toHaveAttribute("data-density", "patient");
+  await expect(page.getByRole("heading", { name: "A few things about you" })).toBeVisible();
+  await expect(page.getByTestId("about-lead").first()).toHaveText("Tell us which language you like best.");
   await expect(page.getByRole("heading", { name: "What should Nura call you?" })).toBeVisible();
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await page.getByLabel("The name Nura uses").fill("Pa");
   await page.getByTestId("about-next").click();
   await expect(main).toHaveAttribute("data-item", "language");
@@ -83,81 +132,56 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   await page.getByTestId("about-next").click();
   await expect(page.getByTestId("about-breakfast")).toContainText("Nura ties morning tablets to breakfast.");
   await page.getByTestId("breakfast-07:30").click();
-  await page.getByTestId("sight-yes").click();
-  await page.getByTestId("hearing-no").click();
-  await page.getByTestId("hands-no").click();
-  await page.getByTestId("memory-no").click();
+  await expect(page.getByRole("heading", { name: "Would bigger writing help you?" })).toBeVisible();
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
+  for (const item of SWITCHES) await page.getByTestId(`${item}-${item === "read_back" ? "yes" : "no"}`).click();
+  await page.getByTestId("density-simple").click();
 
-  // The word cloud: the common words big and on the first screen, no scrolling.
+  // The word cloud (#117's graph): the common words big and on the first screen, no scrolling.
   await expect(main).toHaveAttribute("data-stage", "cloud");
   await expect(page.getByRole("heading", { name: "What is part of your health?" })).toBeVisible();
   const viewport = page.viewportSize()!;
-  for (const id of ["bp", "chol", "sugar", "heart"]) {
-    const word = page.getByTestId(`word-${id}`);
+  for (const code of ["high_blood_pressure", "cholesterol", "diabetes", "heart"]) {
+    const word = page.getByTestId(`word-${code}`);
     await expect(word).toHaveAttribute("data-size", "3");
     const box = (await word.boundingBox())!;
-    expect(box.y + box.height, id).toBeLessThanOrEqual(viewport.height);
+    expect(box.y + box.height, code).toBeLessThanOrEqual(viewport.height);
     expect(box.height).toBeGreaterThanOrEqual(56);
   }
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
-  await expect(page.getByTestId("word-thyroid")).toHaveCount(0);
+  await expect(page.getByTestId("word-cataract")).toHaveCount(0);
 
-  // A tap picks the plain word, shows the clinic's term in brackets, and speaks — only now.
+  // A tap picks the plain word and speaks it — only now; what goes with it comes in right
+  // after it, and a word two picks point at grows.
   expect(await spoken(page)).toEqual([]);
-  await page.getByTestId("word-bp").click();
-  await expect(page.getByTestId("word-bp")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("word-bp").getByTestId("term")).toHaveText(" (hypertension)");
-  expect(await spoken(page)).toEqual(["High blood pressure", "Doctors call it hypertension."]);
+  await page.getByTestId("word-high_blood_pressure").click();
+  await expect(page.getByTestId("word-high_blood_pressure")).toHaveAttribute("aria-pressed", "true");
+  expect(await spoken(page)).toEqual(["High blood pressure"]);
   await expect(page.getByTestId("cloud-status")).toHaveText("Nura noted that.");
-  // What goes with it comes in right after it; a word two picks point at grows.
   const order = await page.getByTestId("cloud").locator("button").evaluateAll((all) => all.map((each) => each.getAttribute("data-testid")));
-  expect(order.indexOf("word-bp_meds")).toBe(order.indexOf("word-bp") + 1);
-  await expect(page.getByTestId("word-heart_doc")).toHaveAttribute("data-size", "2");
-  await page.getByTestId("word-chol").click();
-  await expect(page.getByTestId("word-heart_doc")).toHaveAttribute("data-size", "3");
-  await page.getByTestId("word-bp_meds").click();
-  await page.getByTestId("word-statin").click();
+  expect(order.indexOf("word-bp_tablets")).toBe(order.indexOf("word-high_blood_pressure") + 1);
+  await expect(page.getByTestId("word-heart_doctor")).toHaveAttribute("data-size", "2");
+  await page.getByTestId("word-cholesterol").click();
+  await expect(page.getByTestId("word-heart_doctor")).toHaveAttribute("data-size", "3");
+  await page.getByTestId("word-bp_tablets").click();
   await spoken(page);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: shot("word-cloud") });
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await page.getByTestId("cloud-done").click();
 
-  // The follow-up questions, one per screen, the backend's words and options.
-  await expect(page.getByTestId("ask-bp_meds")).toContainText("How long have you taken them?");
-  await page.getByTestId("option-1to5").click();
-  await expect(page.getByTestId("ask-statin")).toContainText("Does the tablet trouble you?");
-  await page.getByTestId("option-none").click();
-
-  // Read-back: one backend line per screen, Yes / No on paper, its source and its State.
-  const line = page.getByTestId("readback-line");
-  await expect(line).toHaveCount(1);
-  await expect(line).toContainText("You have high blood pressure.");
-  await expect(line).toContainText("This is 1 of 6.");
-  await expect(line.getByTestId("source")).toContainText("From what you told Nura on");
-  await expect(line).toHaveAttribute("data-state-id", /.+/);
-  await line.getByTestId("hear").click();
-  expect(await spoken(page)).toEqual(["You have high blood pressure."]);
-  await line.getByTestId("readback-yes").click();
-  await expect(line).toContainText("Your cholesterol is high.");
-  await line.getByTestId("readback-no").click();
-  await expect(page.getByTestId("readback-ack")).toHaveText("Nura will not build on that one.");
-  for (let n = 3; n <= 6; n++) {
-    await expect(line).toContainText(`This is ${n} of 6.`);
-    await line.getByTestId("readback-yes").click();
-  }
-
-  // The records step: the server's prompt, shown and spoken on Hear.
+  // The papers step: the sitting's words; the settings and the words saved in one PUT.
   await expect(main).toHaveAttribute("data-stage", "records");
-  const prompt = page.getByTestId("prompt");
-  await expect(prompt).toContainText("Next, Nura would like to see your papers.");
-  await expect(prompt).toHaveAttribute("data-state-id", /.+/);
-  await prompt.getByTestId("hear").click();
-  expect((await spoken(page))[0]).toBe("Thank you for telling Nura.");
-  await expect(page.getByTestId("photo-input")).toHaveAttribute("accept", "image/*,application/pdf");
+  await expect(page.getByRole("heading", { name: "Now, your papers" })).toBeVisible();
+  await expect(page.getByTestId("prompt")).toContainText("Take a photo of each paper you have.");
   await expect(page.getByTestId("photo-input")).toHaveAttribute("capture", "environment");
+  const pa = await profileOf(request, phone);
+  const saved = (await (await request.get(`${API}/profiles/${pa.id}/settings`, { headers: pa.auth })).json()) as Record<string, unknown>;
+  expect(saved.conditions).toEqual(expect.arrayContaining(["high_blood_pressure", "cholesterol", "bp_tablets"]));
+  expect(saved).toMatchObject({ preferred_name: "Pa", doctor_name: "Dr Tan", breakfast_time: "07:30", birth_decade: 1950, read_back: true, large_text: false });
 
   // A photo of the lipid report: the live E02 review card.
-  await page.getByTestId("photo-input").setInputFiles({ name: "lipids.png", mimeType: "image/png", buffer: placeholder("lipid-panel-2023-09-07") });
+  await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
   const card = page.getByTestId("review-card");
   await expect(card).toContainText("This is a blood test.");
   await expect(card).toContainText(/The paper is dated Thursday,? 7 September 2023\./);
@@ -168,6 +192,7 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   await expect(page.getByTestId("field-triglycerides")).toContainText("The blood fats");
   await expect(page.getByTestId("field-triglycerides").locator("input")).toHaveValue("64");
   await page.screenshot({ path: shot("review-card"), fullPage: true });
+  expect(await nothingDrawnOverLines(page.locator("main.onboarding"), { minTarget: 56 })).toEqual([]);
   // In the patient density every line has its spoken twin.
   await page.getByTestId("field-triglycerides").getByTestId("hear").click();
   expect(await spoken(page)).toEqual(["The blood fats", "64 mg/dL", "Please check this one."]);
@@ -181,16 +206,11 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   await page.getByTestId("field-vldl").getByTestId("leave-out").click();
   await expect(page.getByTestId("field-vldl")).toContainText("Nura will leave this one out.");
   await page.getByTestId("looks-right").click();
-
-  // What Nura learned, and the next prompt.
-  await expect(page.getByTestId("learned")).toContainText("Your blood test is in your papers now.");
-  await expect(page.getByTestId("prompt")).toContainText("Do you have another paper to hand?");
+  await expect(main).toHaveAttribute("data-stage", "records");
+  await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 
   // On the record: the correction as typed, the line left out absent, provenance kept.
-  const token = await apiToken(request, phone);
-  const auth = { Authorization: `Bearer ${token}` };
-  const me = (await (await request.get(`${API}/me`, { headers: auth })).json()) as { profile_id: string };
-  const facts = (await (await request.get(`${API}/profiles/${me.profile_id}/facts?subject=lipid_panel`, { headers: auth })).json()) as {
+  const facts = (await (await request.get(`${API}/profiles/${pa.id}/facts?subject=lipid_panel`, { headers: pa.auth })).json()) as {
     attribute: string;
     value: unknown;
     artifact_id: string | null;
@@ -201,45 +221,92 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   expect(byName.has("vldl")).toBe(false);
   for (const fact of facts) expect(fact.artifact_id).toBeTruthy();
 
-  // "That is all for today" closes; the questions the paper raised, one per screen.
+  // "That is all my papers": the read-back, one backend line per screen, Yes / No on paper.
   await page.getByTestId("all-done").click();
+  await expect(main).toHaveAttribute("data-stage", "readBack");
+  await expect(page.getByRole("heading", { name: "Here is what Nura understood" })).toBeVisible();
+  const line = page.getByTestId("readback-line");
+  await expect(line).toHaveCount(1);
+  await expect(line).toContainText("You told us: High blood pressure.");
+  await expect(line).toContainText(/This is 1 of \d+\./);
+  const total = Number(/This is 1 of (\d+)\./.exec((await line.textContent()) ?? "")![1]);
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
+  await line.getByTestId("readback-yes").click();
+  await expect(line).toContainText("You told us: High cholesterol.");
+  await line.getByTestId("readback-no").click();
+  await expect(page.getByTestId("readback-ack")).toHaveText(/\S/);
+  const read: string[] = [];
+  for (let n = 3; n <= total; n++) {
+    await expect(line).toContainText(`This is ${n} of ${total}.`);
+    read.push((await line.textContent()) ?? "");
+    await line.getByTestId("readback-yes").click();
+  }
+  expect(read.join("\n")).toContain("Your doctor is Dr Tan.");
+  expect(read.join("\n")).toContain("Your cholesterol was 230 on");
+
+  // The questions the papers raised: one per screen, each with its State and its source line.
+  await expect(main).toHaveAttribute("data-stage", "questions");
+  await expect(page.getByRole("heading", { name: "A few questions about your papers" })).toBeVisible();
+  const asked = await sitting(request, pa);
+  expect(asked.questions.length).toBeGreaterThan(1);
   const question = page.getByTestId("question");
   await expect(question).toHaveCount(1);
-  await expect(question).toContainText("Ask Dr Tan for a newer blood test.");
-  await expect(question).toHaveAttribute("data-state-id", /.+/);
-  await question.getByTestId("hear").click();
-  expect(await spoken(page)).toEqual(["Ask Dr Tan for a newer blood test."]);
+  await expect(question).toContainText(asked.questions[0]!.line);
+  await expect(question).toHaveAttribute("data-state-id", asked.questions[0]!.state_id!);
+  await expect(question.getByTestId("source")).toHaveText(asked.questions[0]!.source!);
+  if (asked.more) await expect(page.getByTestId("questions-more")).toHaveText(asked.more);
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await question.getByTestId("keep").click();
   await expect(page.getByTestId("question-ack")).toHaveText("Nura will keep this one for the visit.");
-  await expect(question).toContainText("Ask Dr Tan if the cholesterol tablet is working.");
+  await expect(question).toContainText(asked.questions[1]!.line);
   await question.getByTestId("not-this").click();
-  await expect(question).toContainText("Ask Dr Tan if you should check at home.");
-  await question.getByTestId("keep").click();
+  while ((await main.getAttribute("data-stage")) === "questions" && (await question.count()) > 0) {
+    const before = await question.textContent();
+    await question.getByTestId("keep").click();
+    await expect.poll(async () => ((await main.getAttribute("data-stage")) === "questions" ? await question.textContent() : "")).not.toBe(before);
+  }
+  // No visit is booked: the kept question waits on the sitting.
+  const kept = (await sitting(request, pa)).questions[0]!;
+  expect(kept).toMatchObject({ kept: true, handed_over_to: null });
 
-  // Gaps and unlocks: one card for the patient, with how many follow.
+  // The first week: the sitting's close, then one card for the patient, and how many follow.
   await expect(main).toHaveAttribute("data-stage", "plan");
-  await expect(page.getByTestId("done-prompt")).toContainText("That is all for now.");
+  await expect(page.getByRole("heading", { name: "Your app is ready" })).toBeVisible();
+  await expect(page.getByTestId("done-prompt")).toContainText("Your Today page comes from what you told us.");
+  await expect(page.getByTestId("summary")).toContainText("Nura saved one of your papers.");
+  await expect(page.getByTestId("summary")).toContainText("You said one line was not right.");
+  const plan = await week(request, pa);
+  const pendingCodes = plan.prompts.filter((each) => each.status === "pending").map((each) => each.prompt);
+  expect(pendingCodes).toContain("medicines");
+  const first = plan.prompts.find((each) => each.prompt === pendingCodes[0])!;
   const gap = page.getByTestId("gap-card");
   await expect(gap).toHaveCount(1);
-  await expect(gap).toHaveAttribute("data-gap", "meds");
-  await expect(gap).toContainText("Which tablets you take, and how much");
-  await expect(gap).toContainText("With it Nura can check each new medicine against the rest.");
-  await expect(gap).toContainText(/Nura will ask for this on \w+day/);
-  await expect(gap).toHaveAttribute("data-state-id", /.+/);
+  await expect(gap).toHaveAttribute("data-gap", first.prompt);
+  await expect(gap).toContainText(first.headline!);
+  await expect(gap).toContainText(first.line!);
+  await expect(gap).toContainText(/Nura will ask for this on Tuesday/);
   await expect(page.getByTestId("more-after")).toHaveText(/There (is 1 more|are \d+ more) after that\./);
-  // Later sends it back; the next one comes.
+  await page.screenshot({ path: shot("first-week"), fullPage: true });
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
+  // Later sends it to the back of the week; the next one comes.
   await gap.getByTestId("later").click();
-  await expect(page.getByTestId("plan-status")).toHaveText("Nura will ask once more in a few days.");
-  await expect(gap).not.toHaveAttribute("data-gap", "meds");
-  const next = await gap.getAttribute("data-gap");
-  // Do it now: the camera, the card, the yes, and back here with that gap closed.
-  await gap.getByTestId("photo-input").setInputFiles({ name: "label.png", mimeType: "image/png", buffer: placeholder("warfarin-label-2024-03-12") });
+  await expect(page.getByTestId("plan-status")).toHaveText(p.laterSaid);
+  await expect(gap).not.toHaveAttribute("data-gap", first.prompt);
+  // Do it now on the tablets: the camera, the card, the yes, and back here with that gap closed.
+  await laterUntil(gap, "medicines");
+  await gap.getByTestId("photo-input").setInputFiles(photo("warfarin-label-2024-03-12"));
   await expect(page.getByTestId("review-card")).toContainText("This is a medicine label.");
   await expect(page.getByTestId("field-dose")).toContainText("If this one is wrong, leave it out.");
   await page.getByTestId("looks-right").click();
   await expect(main).toHaveAttribute("data-stage", "plan");
-  await expect(gap).toHaveCount(1);
-  expect(await gap.getAttribute("data-gap")).toBe(next);
+  await expect(gap).not.toHaveAttribute("data-gap", "medicines");
+  expect((await week(request, pa)).prompts.find((each) => each.prompt === "medicines")?.status).toBe("done");
+
+  // A visit booked now: the question he kept moves onto its list (E05), in his words.
+  await seedVisit(request, pa.token, pa.id);
+  const list = await visitList(request, pa);
+  expect(list.questions.map((each) => each.text)).toContain(kept.line);
+  expect((await sitting(request, pa)).questions[0]!.handed_over_to).toBe(list.appointment);
 
   // Nothing sideways, anywhere on the way.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -247,7 +314,7 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
   // Today, and nothing of onboarding kept on the phone.
   await page.getByTestId("open-nura").click();
   await expect(page.locator("nav.tabbar")).toBeVisible();
-  const kept = await page.evaluate(async () => {
+  const stored = await page.evaluate(async () => {
     const keys = await new Promise<string[]>((resolve) => {
       const open = indexedDB.open("nura");
       open.onsuccess = () => {
@@ -260,16 +327,15 @@ test("the patient's own onboarding: about you, the cloud, read-back, a paper, qu
     });
     return { keys, local: localStorage.length, session: sessionStorage.length };
   });
-  expect(kept.local).toBe(0);
-  expect(kept.session).toBe(0);
-  for (const key of kept.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.)/);
+  expect(stored.local).toBe(0);
+  expect(stored.session).toBe(0);
+  for (const key of stored.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.|feed\.)/);
 });
 
-test("the caregiver density, for a chief setting up her father", async ({ page, request }) => {
+test("the caregiver density, for a chief setting up her father", async ({ page }) => {
   const phone = freshPhone("+659889");
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Ash");
-  test.skip(!(await e01Answers(page, request)), "needs E01's routes: run the app with VITE_API_MOCK=1 (make web-mock) until E01 merges");
   await page.getByTestId("door-for-someone").click();
   await page.getByLabel("Their name").fill("Pa");
   await page.getByLabel("Their phone number").fill(freshPhone("+659887"));
@@ -278,60 +344,65 @@ test("the caregiver density, for a chief setting up her father", async ({ page, 
   await page.getByRole("button", { name: "Set it up" }).click();
 
   // Caregiver density: every question on one page, in his name; her phone keeps her language.
+  const main = page.locator("main.onboarding");
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
   await expect(page.getByRole("heading", { name: "A few things about Pa" })).toBeVisible();
   await expect(page.getByTestId("about-name")).toBeVisible();
-  await expect(page.getByTestId("about-memory")).toContainText("Does Pa forget things more than before?");
+  await expect(page.getByTestId("about-large_text")).toContainText("Would bigger writing help Pa?");
   await page.getByTestId("about-lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.getByTestId("about-lang-ms")).toHaveAttribute("aria-pressed", "true");
   await page.getByTestId("decade-1940").click();
   await page.getByLabel("The doctor's name").fill("Dr Lim");
   await page.getByTestId("breakfast-07:00").click();
-  await page.getByTestId("sight-yes").click();
+  await page.getByTestId("large_text-yes").click();
+  expect(await nothingDrawnOverLines(main)).toEqual([]);
   await page.getByTestId("about-next").click();
 
   await expect(page.getByRole("heading", { name: "What is part of Pa's health?" })).toBeVisible();
-  await page.getByTestId("word-bp").click();
-  await page.getByTestId("word-bp_home").click();
+  await page.getByTestId("word-high_blood_pressure").click();
+  await page.getByTestId("word-bp_at_home").click();
   await page.screenshot({ path: shot("word-cloud-caregiver") });
   await page.getByTestId("cloud-done").click();
-  await expect(page.getByTestId("ask-bp_home")).toBeVisible();
-  await page.getByTestId("option-130to150").click();
-  await page.getByTestId("asks-next").click();
-
-  // The read-back as a list, each line with its own Yes and No.
-  const lines = page.getByTestId("readback-line");
-  await expect(lines).toHaveCount(3);
-  await lines.nth(1).getByTestId("readback-no").click();
-  await expect(lines.nth(1)).toContainText("Nura will not build on that one.");
-  await expect(lines.nth(1).getByTestId("readback-no")).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("readback-next").click();
+  await expect(page.getByRole("heading", { name: "Now, Pa's papers" })).toBeVisible();
 
   // A paper in the caregiver density: the card's header speaks, its lines do not each.
-  await page.getByTestId("photo-input").setInputFiles({ name: "lipids.png", mimeType: "image/png", buffer: placeholder("lipid-panel-2023-09-07") });
+  await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
   await expect(page.getByTestId("review-card").getByTestId("hear")).toHaveCount(1);
   await expect(page.getByTestId("field-triglycerides").getByTestId("hear")).toHaveCount(0);
+  expect(await nothingDrawnOverLines(main)).toEqual([]);
   await page.getByTestId("looks-right").click();
-  await expect(page.getByTestId("learned")).toBeVisible();
+  await expect(page.getByTestId("saved")).toBeVisible();
 
-  // The questions and the whole gap list, then Today.
+  // The read-back as a list, each line with its own Yes and No — in her language, not his.
   await page.getByTestId("all-done").click();
-  await expect(page.getByTestId("question").first()).toContainText("Ask Dr Lim");
+  const lines = page.getByTestId("readback-line");
+  await expect(lines.first()).toContainText("You told us: High blood pressure.");
+  expect(await lines.count()).toBeGreaterThan(2);
+  await lines.nth(1).getByTestId("readback-no").click();
+  await expect(lines.nth(1).getByTestId("readback-no")).toHaveAttribute("aria-pressed", "true");
+  await expect(lines.first()).toContainText("You told us: High blood pressure.");
+  for (const each of await lines.getByTestId("readback-yes").all()) if (await each.isEnabled()) await each.click();
+  await page.getByTestId("readback-next").click();
+
+  // The questions as a list, then the whole first week, then Today.
+  await expect(page.getByRole("heading", { name: "Pa's papers raised a few questions" })).toBeVisible();
+  await expect(page.getByTestId("question").first()).toContainText("?");
   await page.getByTestId("questions-next").click();
+  await expect(page.getByRole("heading", { name: p.title })).toBeVisible();
   const gaps = page.getByTestId("gap-card");
-  await expect(gaps.first()).toBeVisible();
+  await expect(gaps.first()).toContainText(/With (it|them), Nura/);
   expect(await gaps.count()).toBeGreaterThan(1);
   await expect(page.getByTestId("more-after")).toHaveCount(0);
+  expect(await nothingDrawnOverLines(main)).toEqual([]);
   await page.getByTestId("open-nura").click();
   await expect(page.locator("nav.tabbar")).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 });
 
-test("his language takes effect the moment he picks it", async ({ page, request }) => {
+test("his language takes effect the moment he picks it", async ({ page }) => {
   const phone = freshPhone("+659886");
   await signInThroughTheApp(page, phone, "Pa");
-  test.skip(!(await e01Answers(page, request)), "needs E01's routes: run the app with VITE_API_MOCK=1 (make web-mock) until E01 merges");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("about-next").click();
@@ -341,10 +412,9 @@ test("his language takes effect the moment he picks it", async ({ page, request 
 });
 
 test("papers of every kind: a hospital letter as a PDF, a page that is not a health paper, a line Nura could not read", async ({ page, request }) => {
-  const phone = await signedInToOnboarding(page, request, "+659885");
-  await page.getByTestId("word-hosp").click();
+  const phone = await signedInToOnboarding(page, "+659885");
+  await page.getByTestId("word-hospital_last_year").click();
   await page.getByTestId("cloud-done").click();
-  await page.getByTestId("readback-line").getByTestId("readback-yes").click();
   const main = page.locator("main.onboarding");
   await expect(main).toHaveAttribute("data-stage", "records");
 
@@ -360,62 +430,61 @@ test("papers of every kind: a hospital letter as a PDF, a page that is not a hea
   await expect(page.getByTestId("field-reason")).toContainText("Why you were in hospital");
   await spoken(page); // what the cloud's tap said earlier
   await page.getByTestId("field-reason").getByTestId("hear").click();
-  const reason = await spoken(page);
-  expect(reason.slice(0, 2)).toEqual(["Why you were in hospital", "heart failure"]);
+  expect((await spoken(page)).slice(0, 2)).toEqual(["Why you were in hospital", "heart failure"]);
   await page.getByTestId("looks-right").click();
-  await expect(page.getByTestId("learned")).toContainText("Your hospital letter is in your papers now.");
+  await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 
   // A clinic slip with a line Nura could not read: never confirmed as read; he types it.
-  await page.getByTestId("photo-input").setInputFiles({ name: "slip.png", mimeType: "image/png", buffer: placeholder("clinic-slip-2026-09-10") });
+  await page.getByTestId("photo-input").setInputFiles(photo("clinic-slip-2026-09-10"));
   const frequency = page.getByTestId("field-frequency");
   await expect(frequency.getByTestId("confidence")).toHaveText("Nura could not read this one.");
   await expect(frequency.locator("input")).toHaveValue("");
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await page.getByTestId("looks-right").click();
   await expect(frequency.getByTestId("not-a-number")).toHaveText("Please type what the paper says.");
   await frequency.locator("input").fill("twice a day");
   await page.getByTestId("looks-right").click();
-  await expect(page.getByTestId("learned")).toContainText("The appointment card is in your papers now.");
+  await expect(main).toHaveAttribute("data-stage", "records");
 
-  // On the record: the letter's reason, and the frequency exactly as he typed it.
-  const { auth, id } = await profileOf(request, phone);
-  const facts = (await (await request.get(`${API}/profiles/${id}/facts`, { headers: auth })).json()) as { subject: string; attribute: string; value: unknown }[];
+  // On the record: the letter's reason, and the frequency exactly as he typed it; both papers
+  // are the sitting's.
+  const pa = await profileOf(request, phone);
+  const facts = (await (await request.get(`${API}/profiles/${pa.id}/facts`, { headers: pa.auth })).json()) as { subject: string; attribute: string; value: unknown }[];
   expect(facts.find((fact) => fact.subject === "discharge" && fact.attribute === "reason")?.value).toBe("heart failure");
   expect(facts.find((fact) => fact.attribute === "frequency")?.value).toBe("twice a day");
+  const papers = (await (await request.get(`${API}/profiles/${pa.id}/biography?language=en`, { headers: pa.auth })).json()) as { papers: unknown[]; open_cards: number };
+  expect(papers.papers).toHaveLength(2);
+  expect(papers.open_cards).toBe(0);
 });
 
-test("the Ready screen's other actions: a follow-up reopened, and one person let in", async ({ page, request }) => {
-  const phone = await signedInToOnboarding(page, request, "+659884");
-  await page.getByTestId("word-allergy").click();
-  await page.getByTestId("word-drug_all").click();
+test("the Ready screen's other actions: breakfast from its card, and one person let in", async ({ page, request }) => {
+  const phone = await signedInToOnboarding(page, "+659884", { breakfast: false });
+  await page.getByTestId("word-allergies").click();
+  await page.getByTestId("word-medicine_allergy").click();
   await page.getByTestId("cloud-done").click();
-  await page.getByTestId("ask-not-now").click();
-  const line = page.getByTestId("readback-line");
-  await line.getByTestId("readback-yes").click();
-  await line.getByTestId("readback-yes").click();
+  // No papers today: the sitting closes straight away, and says so.
   await page.getByTestId("all-done").click();
-  await page.getByTestId("question").getByTestId("keep").click();
-
-  // A tap gap reopens its follow-up question, and the answer closes it.
   const main = page.locator("main.onboarding");
-  const gap = page.getByTestId("gap-card");
   await expect(main).toHaveAttribute("data-stage", "plan");
-  await expect(gap).toHaveAttribute("data-gap", "all");
-  await gap.getByTestId("do-it-now").click();
-  await expect(page.getByTestId("ask-drug_all")).toContainText("Which medicine is it?");
-  await page.getByTestId("option-aspirin").click();
-  await expect(main).toHaveAttribute("data-stage", "plan");
-  await expect(gap).not.toHaveAttribute("data-gap", "all");
+  await expect(page.getByTestId("summary")).toContainText("No papers were added this time.");
 
-  // Later, until the invite gap comes up; then E12's flow.
-  // Each Later waits for the next card: a second Later on the same gap would retire it.
-  for (let n = 0; n < 4; n++) {
-    const current = await gap.getAttribute("data-gap");
-    if (current === "fam") break;
-    await gap.getByTestId("later").click();
-    await expect(gap).not.toHaveAttribute("data-gap", current!);
-  }
-  await expect(gap).toHaveAttribute("data-gap", "fam");
-  await expect(gap.getByTestId("do-it-now")).toBeEnabled();
+  // Which medicine he is allergic to has no way in yet: Later only, never a dead button.
+  const gap = page.getByTestId("gap-card");
+  await laterUntil(gap, "allergy_which");
+  await expect(gap.getByTestId("do-it-now")).toHaveCount(0);
+  // His breakfast time: the one question, then back here with that gap closed.
+  await laterUntil(gap, "meal_times");
+  await expect(gap.getByTestId("do-it-now")).toHaveText("Today, tap the time you have breakfast.");
+  await gap.getByTestId("do-it-now").click();
+  await expect(main).toHaveAttribute("data-stage", "about");
+  await page.getByTestId("breakfast-08:00").click();
+  await expect(main).toHaveAttribute("data-stage", "plan");
+  await expect(gap).not.toHaveAttribute("data-gap", "meal_times");
+  const pa = await profileOf(request, phone);
+  expect((await week(request, pa)).prompts.find((each) => each.prompt === "meal_times")?.status).toBe("done");
+
+  // Someone to see his papers: E12's flow, the backend's words, his one yes.
+  await laterUntil(gap, "someone_to_see");
   await gap.getByTestId("do-it-now").click();
   const mei = freshPhone("+659883");
   await page.getByLabel("Their name").fill("Mei");
@@ -429,64 +498,59 @@ test("the Ready screen's other actions: a follow-up reopened, and one person let
   await expect(words).toContainText("- your medicines");
   await expect(words).toContainText("- your visits to the doctor");
   await expect(words).not.toContainText("blood pressure book");
-  // The backend's words name the person by the name he typed; how they put it is theirs.
+  // The backend's words name the person by the name he typed.
   await expect(words).toContainText("Mei");
+  expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   const previewed = await words.locator(".lines p").allTextContents();
   await page.getByTestId("invite-agree").click();
   await expect(main).toHaveAttribute("data-stage", "plan");
   await expect(page.getByTestId("plan-status")).toHaveText("They can see those parts now.");
-  await expect(gap.first()).not.toHaveAttribute("data-gap", "fam");
+  await expect(gap.first()).not.toHaveAttribute("data-gap", "someone_to_see");
 
-  // On the record: his consent in words naming the parts, and a caregiver key no wider.
-  const { auth, id } = await profileOf(request, phone);
-  const consents = (await (await request.get(`${API}/profiles/${id}/consents`, { headers: auth })).json()) as { purpose: string; wording_text: string }[];
+  // On the record: his consent in exactly the words he read, and a caregiver key no wider.
+  const consents = (await (await request.get(`${API}/profiles/${pa.id}/consents`, { headers: pa.auth })).json()) as { purpose: string; wording_text: string }[];
   const sharing = consents.find((each) => each.purpose === "share_with_family");
-  // What he read before agreeing is exactly what was kept.
   expect(sharing?.wording_text.split("\n")).toEqual(previewed);
-  const keys = (await (await request.get(`${API}/profiles/${id}/keys`, { headers: auth })).json()) as { role: string; scopes: string[]; revoked_at: string | null }[];
+  const keys = (await (await request.get(`${API}/profiles/${pa.id}/keys`, { headers: pa.auth })).json()) as { role: string; scopes: string[]; revoked_at: string | null }[];
   const key = keys.find((each) => each.role === "caregiver" && each.revoked_at === null);
   expect(key?.scopes).toEqual(expect.arrayContaining(["medicines", "visits"]));
   expect(key?.scopes).not.toContain("readings");
   expect(key?.scopes).not.toContain("records");
 });
 
-test("a question kept from the papers goes on the next visit's list (E05)", async ({ page, request }) => {
-  const phone = await signedInToOnboarding(page, request, "+659882");
-  await page.getByTestId("word-hosp").click();
+test("a question kept with a visit booked goes on that visit's list at once (E05)", async ({ page, request }) => {
+  const phone = await signedInToOnboarding(page, "+659882");
+  await page.getByTestId("word-hospital_last_year").click();
   await page.getByTestId("cloud-done").click();
-  await page.getByTestId("readback-line").getByTestId("readback-yes").click();
   const main = page.locator("main.onboarding");
   await expect(main).toHaveAttribute("data-stage", "records");
 
-  // A visit is booked, the way the family would: the doctor, then the visit, each with its yes.
-  const { auth, id } = await profileOf(request, phone);
-  const doctor = await request.post(`${API}/profiles/${id}/providers`, { headers: auth, data: { name: "Dr Tan", kind: "clinic" } });
-  expect(doctor.status(), await doctor.text()).toBe(201);
-  const providerId = ((await doctor.json()) as { provider_id: string }).provider_id;
-  const when = new Date(Date.now() + 14 * 86_400_000).toISOString();
-  const visit = { provider_id: providerId, scheduled_at: when, purpose: "Blood pressure check" };
-  const yes = await request.post(`${API}/profiles/${id}/confirmations`, { headers: auth, data: { subject: "appointment", ...visit } });
-  expect(yes.status(), await yes.text()).toBe(201);
-  const booked = await request.post(`${API}/profiles/${id}/appointments`, {
-    headers: auth,
-    data: { ...visit, confirmation_id: ((await yes.json()) as { confirmation_id: string }).confirmation_id },
-  });
-  expect(booked.status(), await booked.text()).toBe(201);
-  const appointmentId = ((await booked.json()) as { appointment_id: string }).appointment_id;
+  // A visit is booked the way the family would: the doctor, then the visit, each with its yes.
+  const pa = await profileOf(request, phone);
+  await seedVisit(request, pa.token, pa.id);
 
-  // No papers today; he keeps the one question the sitting raised.
+  // One paper, the read-back, then he keeps the first question the sitting raised.
+  await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
+  await page.getByTestId("looks-right").click();
+  await expect(page.getByTestId("saved")).toBeVisible();
   await page.getByTestId("all-done").click();
+  const line = page.getByTestId("readback-line");
+  while ((await main.getAttribute("data-stage")) === "readBack") {
+    const before = await line.textContent();
+    await line.getByTestId("readback-yes").click();
+    await expect.poll(async () => ((await main.getAttribute("data-stage")) === "readBack" ? await line.textContent() : "")).not.toBe(before);
+  }
+  await expect(main).toHaveAttribute("data-stage", "questions");
+  const asked = await sitting(request, pa);
   const question = page.getByTestId("question");
-  const line = "Ask Dr Tan for a copy of your last blood test.";
-  await expect(question).toContainText(line);
+  await expect(question).toContainText(asked.questions[0]!.line);
   await question.getByTestId("keep").click();
-  await expect(main).toHaveAttribute("data-stage", "plan");
+  await expect(page.getByTestId("question-ack")).toHaveText("Nura will keep this one for the visit.");
 
   // On the visit's list, in exactly the words he kept, added by him — never composed here.
-  const listed = (await (await request.get(`${API}/profiles/${id}/appointments/${appointmentId}/questions`, { headers: auth })).json()) as {
-    questions: { text: string; added_by_person_id: string | null }[];
-  };
-  const kept = listed.questions.find((each) => each.text === line);
-  expect(kept, JSON.stringify(listed.questions)).toBeTruthy();
+  const list = await visitList(request, pa);
+  const kept = list.questions.find((each) => each.text === asked.questions[0]!.line);
+  expect(kept, JSON.stringify(list.questions)).toBeTruthy();
   expect(kept!.added_by_person_id).toBeTruthy();
+  expect((await sitting(request, pa)).questions[0]!.handed_over_to).toBe(list.appointment);
 });

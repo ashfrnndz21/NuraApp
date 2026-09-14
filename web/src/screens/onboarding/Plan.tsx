@@ -2,10 +2,10 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { PromptOut } from "../../api/types";
-import { refreshPlan, sendPaper, who } from "../../onboarding/actions";
+import { planInMyLanguage, refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { dayLine } from "../../onboarding/dates";
-import { cardsToShow, invites, opensCamera, opensFile, tapsCloud, tapsSetting } from "../../onboarding/plan";
-import { closed, finish, plan, planNote, returnTo, to } from "../../onboarding/state";
+import { cardsToShow, invites, opensCamera, opensFile, tapsSetting } from "../../onboarding/plan";
+import { closed, finish, plan, planNote, returnTo, to, whose } from "../../onboarding/state";
 import { density, profile } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
 import { Hear, Notice, Pill } from "../../ui/components";
@@ -14,7 +14,8 @@ import { Capture, Sheet, Status, StepTitle } from "./parts";
 /** The Ready screen (#117's close and first week, docs/gaps-and-unlocks.md): the sitting's own
  *  closing words and summary, then the prompts still to do — one for the patient (the next, and
  *  how many follow), every one for the caregiver. "Do it now" opens what the backend says fills
- *  the gap: the camera, a file (a PDF), the cloud (a tap), or the invite (on his own papers).
+ *  the gap: the camera, a file (a PDF), the one question (his breakfast), or the invite (on
+ *  his own papers). The sitting's closing words address him, so a chief reads the app's own.
  *  "Later" sends it to the back of the week. Then Today. */
 export function PlanStep(): JSX.Element {
   const s = t();
@@ -44,7 +45,7 @@ export function PlanStep(): JSX.Element {
   const later = (prompt: PromptOut) =>
     act(async () => {
       const { bearer, profileId } = who();
-      plan.value = await nura.laterOnPlan(bearer, profileId, prompt.prompt);
+      plan.value = await planInMyLanguage(await nura.laterOnPlan(bearer, profileId, prompt.prompt));
       setStatus(p.laterSaid);
     });
 
@@ -55,12 +56,13 @@ export function PlanStep(): JSX.Element {
     });
 
   const done = closed.value;
+  const own = whose().self;
   const { shown, after } = cardsToShow(plan.value, density());
   const locale = LOCALE[language.value];
   return (
     <main class="screen onboarding" data-stage="plan">
-      <StepTitle title={done?.biography.prompt.headline ?? p.title} />
-      {done && done.biography.prompt.lines.length > 0 && <Sheet lines={done.biography.prompt.lines} testId="done-prompt" />}
+      <StepTitle title={(own && done?.biography.prompt.headline) || p.title} />
+      {own && done && done.biography.prompt.lines.length > 0 && <Sheet lines={done.biography.prompt.lines} testId="done-prompt" />}
       {done && done.summary.lines.length > 0 && <Sheet lines={done.summary.lines} testId="summary" />}
       <Sheet glass lines={[p.lead, p.cadence1, p.cadence2]} testId="cadence" />
       {shown.map((prompt) => {
@@ -73,25 +75,12 @@ export function PlanStep(): JSX.Element {
             <p class="caption">{when}</p>
             {opensCamera(prompt) && <Capture onFile={(file) => void doItNow(file)} busy={busy} photoLabel={prompt.action ?? r.photo} plum={patient} withFile={false} />}
             {opensFile(prompt) && <Capture onFile={(file) => void doItNow(file)} busy={busy} photoLabel={prompt.action ?? r.file} plum={patient} fileOnly />}
-            {tapsCloud(prompt) && (
-              <Pill
-                plum={patient}
-                onClick={() => {
-                  returnTo.value = "plan";
-                  to({ name: "cloud" });
-                }}
-                disabled={busy}
-                testId="do-it-now"
-              >
-                {prompt.action ?? p.later}
-              </Pill>
-            )}
             {tapsSetting(prompt) && (
               <Pill
                 plum={patient}
                 onClick={() => {
                   returnTo.value = "plan";
-                  to({ name: "about", only: "breakfast" });
+                  to({ name: "about", only: tapsSetting(prompt)! });
                 }}
                 disabled={busy}
                 testId="do-it-now"

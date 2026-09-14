@@ -1,10 +1,10 @@
 import { Refused } from "../api/client";
 import * as nura from "../api/nura";
-import type { ReviewCardOut } from "../api/types";
+import type { BiographyOut, PlanOut, ReviewCardOut } from "../api/types";
 import { profile, setDensity, token } from "../store/session";
 import { language } from "../strings";
 import { deviceEffects, startingSettings, tidy } from "./about";
-import { biography, closed, draft, picked, plan, returnTo, settings, to } from "./state";
+import { biography, closed, draft, picked, plan, settings, to, whose } from "./state";
 
 /** The calls more than one step makes, on #117's routes. Each throws what the API threw; the
  *  screen that called it shows it (`Notice`) — a refusal is never swallowed here. */
@@ -50,16 +50,24 @@ export async function saveSettings(): Promise<void> {
   if (biography.value && !biography.value.closed_at) await refreshBiography();
 }
 
-/** After the cloud (or its follow-ups): save the words, then on to the papers — or back to the
- *  Ready screen when a tap gap sent him to the cloud. */
+/** After the cloud (or its follow-ups): save the words, then on to the papers. */
 export async function saveWordsAndGoOn(): Promise<void> {
   await saveSettings();
-  if (returnTo.value === "plan") {
-    await refreshPlan();
-    to({ name: "plan" });
-  } else {
-    to({ name: "records" });
-  }
+  to({ name: "records" });
+}
+
+/** E01's writes answer in the language on his settings. A chief reads in her own phone's
+ *  (`?language=`), so for her the sitting and the week are read again after each write. */
+export async function inMyLanguage(view: BiographyOut): Promise<BiographyOut> {
+  if (whose().self) return view;
+  const { bearer, profileId } = who();
+  return nura.biography(bearer, profileId, language.value);
+}
+
+export async function planInMyLanguage(view: PlanOut): Promise<PlanOut> {
+  if (whose().self) return view;
+  const { bearer, profileId } = who();
+  return nura.plan(bearer, profileId, language.value);
 }
 
 /** Close the sitting: its summary and the first week come back with it. */
@@ -67,8 +75,8 @@ export async function closeSitting(): Promise<void> {
   const { bearer, profileId } = who();
   const done = await nura.closeBiography(bearer, profileId);
   closed.value = done;
-  biography.value = done.biography;
-  plan.value = done.plan;
+  biography.value = await inMyLanguage(done.biography);
+  plan.value = await planInMyLanguage(done.plan);
   to({ name: "plan" });
 }
 
