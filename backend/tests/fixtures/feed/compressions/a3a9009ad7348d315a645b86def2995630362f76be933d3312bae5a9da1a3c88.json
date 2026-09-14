@@ -1,0 +1,32 @@
+{
+  "en": {
+    "headline": "About your blood sugar",
+    "body": [
+      "Diabetes means your blood has too much sugar in it.",
+      "A walk after meals helps your body use sugar.",
+      "Your doctor checks your sugar with a blood test."
+    ],
+    "why_topic": "your blood sugar",
+    "passage": "Diabetes is a condition where there is too much sugar (glucose) in the blood."
+  },
+  "ms": {
+    "headline": "Tentang gula dalam darah anda",
+    "body": [
+      "Kencing manis bermakna darah anda ada terlalu banyak gula.",
+      "Berjalan selepas makan membantu badan anda guna gula.",
+      "Doktor anda periksa gula anda dengan ujian darah."
+    ],
+    "why_topic": "gula dalam darah anda",
+    "passage": "Diabetes is a condition where there is too much sugar (glucose) in the blood."
+  },
+  "zh": {
+    "headline": "关于您的血糖",
+    "body": [
+      "糖尿病就是您血里的糖太多。",
+      "饭后散步能帮身体用掉糖。",
+      "医生会用验血来查您的血糖。"
+    ],
+    "why_topic": "您的血糖",
+    "passage": "Diabetes is a condition where there is too much sugar (glucose) in the blood."
+  }
+}

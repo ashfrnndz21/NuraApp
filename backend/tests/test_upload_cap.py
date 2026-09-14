@@ -178,5 +178,6 @@ def test_every_route_that_takes_bytes_in_json_is_capped_with_a_413(deployment: D
             assert cap is not None, f"{method} {route.path} takes bytes and has no cap"
             assert status_of(cap.refused()) == 413, route.path
             found.append(sample)
-    # Photos, screens, papers, imports, notes, documents, the two voices, transcripts, calendars.
-    assert len({re.sub(rf"^{API_PREFIX}", "", p) for p in found}) == 10
+    # Photos, screens, papers, imports, notes, documents, the two voices, transcripts, calendars,
+    # and a photo shared with the family (E12-02, E21-05).
+    assert len({re.sub(rf"^{API_PREFIX}", "", p) for p in found}) == 11

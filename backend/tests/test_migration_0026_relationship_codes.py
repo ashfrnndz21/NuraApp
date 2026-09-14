@@ -1,4 +1,4 @@
-"""Revision 0025 names every stewardship's relationship by its code (#137's review)."""
+"""Revision 0026 names every stewardship's relationship by its code (#137's review)."""
 
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ KEPT = {
 }
 
 
-async def test_0025_maps_the_phrases_it_knows_and_the_rest_to_other() -> None:
-    migration = _load(VERSIONS / "0025_relationship_codes.py")
+async def test_0026_maps_the_phrases_it_knows_and_the_rest_to_other() -> None:
+    migration = _load(VERSIONS / "0026_relationship_codes.py")
 
     def walk(connection: sa.Connection) -> None:
         # The two columns the revision reads and writes, as 0023 left them.

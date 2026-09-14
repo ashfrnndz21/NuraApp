@@ -5,7 +5,7 @@ typed or tapped, so it can be said to whoever reads it in their own language —
 daughter", "anak perempuan anda", "您的女儿" — wherever it appears: the words of an agreement
 to let someone in (`app.consent.texts.named_words`), the claim ("Mei, your daughter, made
 this for you."), the stewardship. Rows written before the codes were named by revision
-0025, which maps the phrases it knows and sets anything else to `other`.
+0026, which maps the phrases it knows and sets anything else to `other`.
 """
 
 from __future__ import annotations

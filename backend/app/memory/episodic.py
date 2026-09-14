@@ -223,6 +223,53 @@ async def store_artifact(
     )
 
 
+@audited(Action.WRITE, Scope.FAMILY, Artifact.__tablename__)
+async def store_family_photo(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    storage_key: str,
+    content_type: str,
+    sha256: str,
+    captured_at: datetime,
+    region: Region,
+    source_channel: SourceChannel = SourceChannel.APP,
+) -> Artifact:
+    """Write down a photo one of the family shares in the thread (E12-02, E21-05).
+
+    It is the family's, like the words of the thread: written under the family scope, so a
+    key that does not hold the family's part never reads it (row scope), and never one of his
+    papers — nothing is read off it and no fact rests on it. The same checks as any artefact:
+    the region is the profile's own, the agreement to hold the record stands (asked under the
+    family's part, as the family's messages are), and the digest is a digest."""
+    guard_region(held_in=region, asked_from=context.region)
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.FAMILY,
+    )
+    digest = sha256.strip().lower()
+    if not _DIGEST.match(digest):
+        raise NotADigest("sha256 is sixty-four hex characters")
+    if not storage_key.strip():
+        raise NoSuchArtifact("an artefact needs a storage key")
+    return await audited_write(
+        session,
+        Artifact,
+        context,
+        Scope.FAMILY,
+        kind=ArtifactKind.PHOTO,
+        storage_key=storage_key.strip(),
+        content_type=content_type,
+        sha256=digest,
+        captured_at=captured_at,
+        source_channel=source_channel,
+        region=region,
+        stored_at=utcnow(),
+    )
+
+
 CONSULT_HEARERS: frozenset[KeyRole] = frozenset({KeyRole.CHIEF, KeyRole.CAREGIVER})
 """Who hears a visit's recording besides the patient himself: the family he let in, his chief
 and his caregivers. It is what the room was told ("Only you and the family you let in can
@@ -320,6 +367,7 @@ async def record_event(
     artifact_id: uuid.UUID | None = None,
     source_channel: SourceChannel | None = None,
     episode_id: uuid.UUID | None = None,
+    scope: Scope | None = None,
 ) -> Event:
     """Record that something happened, naming the artefact and the episode it belongs to.
 
@@ -330,6 +378,8 @@ async def record_event(
 
     The door is the record's; the row is written under its kind's part (`scope_for_event`),
     so a reading taken is the readings' and a key must hold that part to write or read it.
+    `scope` names another part for a moment that belongs to one: a private note's own moment
+    is the notes' (`app.ingestion.notes.keep_voice_message`), so no other key sees it.
     """
     await require_consent(
         session,
@@ -351,7 +401,7 @@ async def record_event(
         session,
         Event,
         context,
-        scope_for_event(kind),
+        scope_for_event(kind) if scope is None else scope,
         kind=kind,
         occurred_at=occurred_at,
         source_channel=came_in_by,
@@ -405,6 +455,27 @@ async def require_event(
 
 class NoSuchEvent(Refusal):
     """No event by that id on this profile."""
+
+
+@audited(Action.READ, Scope.RECORDS, Event.__tablename__)
+async def readable_event_ids(
+    session: AsyncSession, *, context: KeyContext, event_ids: Sequence[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Of these events, the ids this key reads — each row under the scope it was written
+    under, citing nothing held elsewhere — as a set of ids, never the rows. For a reader that
+    finds a thing through the moment it hangs off (a note on an event, E02-06): a note whose
+    event the key does not reach is not shown, the way `notes_for` reads the event first."""
+    wanted = sorted(set(event_ids), key=str)
+    if not wanted:
+        return set()
+    found = await audited_read(
+        session,
+        Event,
+        context,
+        Scope.RECORDS,
+        where=(Event.id.in_(wanted), event_cites_only_what_is_held_here(context, Scope.RECORDS)),
+    )
+    return {event.id for event in found}
 
 
 WITHHELD_ARTIFACT = "artifact"
