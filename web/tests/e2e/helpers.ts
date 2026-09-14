@@ -96,14 +96,19 @@ export async function signInThroughTheApp(page: Page, phone: string, name: strin
 export async function captureSpeech(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const spoken: string[] = [];
+    const rates: number[] = [];
     (window as unknown as { __spoken: string[] }).__spoken = spoken;
+    (window as unknown as { __rates: number[] }).__rates = rates;
     (window as unknown as { __cancels: number }).__cancels = 0;
     const synth = {
       // Every stop is counted, so a test can see a voice stop when its card leaves the screen.
       cancel: () => {
         (window as unknown as { __cancels: number }).__cancels += 1;
       },
-      speak: (u: { text: string }) => spoken.push(u.text),
+      speak: (u: { text: string; rate: number }) => {
+        spoken.push(u.text);
+        rates.push(u.rate);
+      },
       speaking: false,
       pending: false,
       paused: false,
@@ -134,20 +139,119 @@ export async function captureSpeech(page: Page): Promise<void> {
   });
 }
 
-/** The phone's copy of anyone's papers in IndexedDB: every stored value that names a medicine. */
-export async function medicinesInIndexedDb(page: Page): Promise<string[]> {
+/** The phone's copy of anyone's papers in IndexedDB: every stored value that names a medicine.
+ *  The emergency card is left out unless `card` is asked for: it is the one copy the phone keeps
+ *  past midnight (docs/adr/0010-offline-taps-and-the-emergency-card.md), checked on its own. */
+export async function medicinesInIndexedDb(page: Page, { card = false }: { card?: boolean } = {}): Promise<string[]> {
+  return page.evaluate(
+    (withCard) =>
+      new Promise<string[]>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const found: string[] = [];
+          const cursor = opened.result.transaction("kv", "readonly").objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return resolve(found);
+            const text = JSON.stringify(at.value);
+            const isCard = String(at.key).startsWith("emergency.");
+            if ((withCard || !isCard) && /amlodipine|blood pressure/.test(text)) found.push(text);
+            at.continue();
+          };
+          cursor.onerror = () => resolve(["error"]);
+        };
+        opened.onerror = () => resolve(["error"]);
+      }),
+    card,
+  );
+}
+
+/** Every key the phone keeps in IndexedDB. */
+export async function keptKeys(page: Page): Promise<string[]> {
   return page.evaluate(
     () =>
       new Promise<string[]>((resolve) => {
         const opened = indexedDB.open("nura", 1);
         opened.onsuccess = () => {
-          const all = opened.result.transaction("kv", "readonly").objectStore("kv").getAll();
-          all.onsuccess = () =>
-            resolve(all.result.map((value: unknown) => JSON.stringify(value)).filter((value: string) => /amlodipine|blood pressure/.test(value)));
+          const all = opened.result.transaction("kv", "readonly").objectStore("kv").getAllKeys();
+          all.onsuccess = () => resolve(all.result.map(String));
         };
-        opened.onerror = () => resolve(["error"]);
+        opened.onerror = () => resolve([]);
       }),
   );
+}
+
+/** Wait until the service worker controls the page, so a reload with no network opens the shell. */
+export async function waitForWorker(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((done) => navigator.serviceWorker.addEventListener("controllerchange", () => done(), { once: true }));
+    }
+  });
+}
+
+/** Slow the phone's processor by `rate` (Chromium only): 4 is Lighthouse's mid-tier phone, the
+ *  reference for a five-year-old Android. Returns a function that puts it back. */
+export async function throttleCpu(page: Page, rate: number): Promise<() => Promise<void>> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+  return async () => {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    await cdp.detach();
+  };
+}
+
+/** A redacted paper the fixture extractor knows, as the bytes it knows it by (backend/tests/paper.py). */
+export const paperPhoto = (label: string) => ({ name: `${label}.png`, mimeType: "image/png", buffer: Buffer.concat([PNG, Buffer.from(`nura-paper-placeholder:${label}\n`, "ascii")]) });
+export const paperPdf = (label: string) => ({ name: `${label}.pdf`, mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4\nnura-paper-placeholder:${label}\n`, "ascii") });
+
+export interface Owner {
+  phone: string;
+  token: string;
+  profileId: string;
+}
+
+/** A person with his own papers (today's words agreed over the API) and these medicines, each
+ *  written by the label → OK → write flow. */
+export async function seedOwner(
+  request: APIRequestContext,
+  name = "Pa",
+  medicines: { generic: string; strength: string; dose_text: string; quantity: number }[] = [{ generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 }],
+): Promise<Owner> {
+  const phone = freshPhone("+659666");
+  const token = await apiToken(request, phone);
+  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const opened = await request.post(`${API}/profiles/mine`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: name, language: "en" },
+  });
+  if (opened.status() !== 201) throw new Error(`profile: ${opened.status()} ${await opened.text()}`);
+  const profileId = ((await opened.json()) as { profile_id: string }).profile_id;
+  for (const label of medicines) await seedMedicine(request, token, profileId, label);
+  return { phone, token, profileId };
+}
+
+/** Let one person in on the owner's own yes (E12) and cut them a key with this role and these
+ *  parts: their phone, their token and the key's id. */
+export async function cutKey(
+  request: APIRequestContext,
+  owner: Owner,
+  holder: { name: string; prefix: string },
+  role: string,
+  scopes: string[],
+): Promise<{ phone: string; token: string; keyId: string }> {
+  const phone = freshPhone(holder.prefix);
+  const token = await namedToken(request, phone, holder.name);
+  const his = { Authorization: `Bearer ${owner.token}` };
+  const letIn = await request.post(`${API}/profiles/${owner.profileId}/consents/sharing`, {
+    headers: his,
+    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, relationship: "neighbour", language: "en", captured_via: "app" },
+  });
+  if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
+  const key = await request.post(`${API}/profiles/${owner.profileId}/keys`, { headers: his, data: { holder_phone_e164: phone, role, scopes } });
+  if (key.status() !== 201) throw new Error(`key: ${key.status()} ${await key.text()}`);
+  return { phone, token, keyId: ((await key.json()) as { key_id: string }).key_id };
 }
 
 /** Move every kept Today page past its midnight, the way the next morning finds it. */
@@ -260,6 +364,11 @@ export async function seedFeed(request: APIRequestContext, name = "Pa"): Promise
   await request.post(`${API}/profiles/${profileId}/readings`, { headers, data: { systolic: 138, diastolic: 84 } });
   await seedMedicine(request, token, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
   return { phone, token, profileId };
+}
+
+/** Record every utterance's speed too: the rate the phone's voice was asked to speak at. */
+export async function speechRates(page: Page): Promise<number[]> {
+  return page.evaluate(() => (window as unknown as { __rates: number[] }).__rates);
 }
 
 /** The warfarin label photo from the paper fixtures, read and confirmed (checkpoint 5): its

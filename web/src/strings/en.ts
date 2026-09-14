@@ -225,6 +225,8 @@ export const en = {
     fromState: "Nura worked this out on {date}.",
     // @patient
     fromDays: "Nura counted the days you took your tablets.",
+    // @patient phrase
+    emergencyOpen: "Your emergency card",
   },
   feed: {
     // @patient headline
@@ -386,6 +388,90 @@ export const en = {
     noMic: "Nura cannot use the microphone on this phone.",
     // @patient
     noMicSub: "You can write it down yourself instead.",
+  },
+  // Taps made while the phone could not reach Nura (E00-08).
+  held: {
+    // @patient
+    held: "Nura will send it when the internet is back.",
+    // @patient
+    tapped: "You tapped this at {time}.",
+    // @patient
+    sent: "Nura sent what you tapped.",
+  },
+  // The emergency card on the phone (E00-08). The card's own lines are the backend's.
+  emergency: {
+    // @patient
+    asOf: "Nura read this card on {date} at {time}.",
+    // @patient
+    none: "Nura has not kept your emergency card on this phone yet.",
+    // @patient
+    noneSub: "Open it once while the internet is on.",
+    // @patient phrase
+    callChief: "Call {name}",
+    // @patient phrase
+    callAmbulance: "Call the ambulance on {number}",
+    // @patient phrase
+    print: "Print this card",
+  },
+  // Papers from the photos (E18-01, the web's multi-pick in place of the photo library scan).
+  papers: {
+    // @patient phrase
+    open: "Add papers from your photos",
+    // @patient phrase
+    chooseMany: "Choose many photos",
+    // @patient headline
+    title: "Papers from your photos",
+    // @patient
+    lead: "Choose every photo of a paper at once.",
+    // @patient
+    lead2: "Nura sends nothing until you say yes.",
+    // @patient phrase
+    pick: "Choose photos",
+    // @patient
+    gridLead: "Tap a photo to leave it out.",
+    // @patient phrase
+    picture: "Picture {count}",
+    // @patient
+    tileIn: "Nura will send this one.",
+    // @patient
+    tileOut: "Nura will not send this one.",
+    // @patient phrase
+    sendOne: "Send 1 paper",
+    // @patient phrase
+    send: "Send {count} papers",
+    // @patient
+    sending: "Nura is sending paper {n} of {total}.",
+    // @patient headline
+    found: "What Nura found",
+    // @patient
+    read: "Nura read this paper.",
+    // @patient phrase
+    check: "Check this paper",
+    // @patient
+    notHealth: "This is not a health paper.",
+    // @patient
+    notSent: "Nura could not send this one.",
+    // @patient phrase
+    sendRest: "Send the rest",
+    // @patient
+    nothingKept: "Nura kept no photo on this phone.",
+    // @patient phrase
+    backToday: "Back to Today",
+  },
+  // The one player (E15-07): under anything Nura says out loud.
+  player: {
+    // @patient phrase
+    play: "Play",
+    // @patient phrase
+    pause: "Pause",
+    // @patient phrase
+    speed: "How fast Nura speaks",
+    // @patient phrase
+    slower: "Slower",
+    // @patient phrase
+    usual: "Usual speed",
+    // @patient phrase
+    faster: "Faster",
   },
   onboarding: {
     // @patient phrase
@@ -797,5 +883,6 @@ export const en = {
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",
+    TapNotToday: "Nura writes down only what you tapped today.",
   },
 } satisfies Strings;

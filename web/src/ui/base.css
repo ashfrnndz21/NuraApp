@@ -507,3 +507,121 @@ textarea.field {
 .clip-line + .clip-line {
   margin-top: var(--space-1);
 }
+
+/* The one player (E15-07): under whatever is being heard, in normal flow — nothing is drawn
+   over a line. One big Play / Pause (half as tall again as a target), his speed as three
+   plain choices that wrap rather than shrink, and the line being said in his body size. */
+.player {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.pill.player-toggle {
+  min-height: calc(var(--target) * 1.5);
+  font-size: var(--text-title);
+  border: 2px solid var(--plum);
+  color: var(--plum);
+}
+.pill.player-toggle svg {
+  width: calc(var(--icon-size) * 1.25);
+  height: calc(var(--icon-size) * 1.25);
+  fill: currentColor;
+  stroke: none;
+}
+.player-speeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.player-speeds .pill {
+  flex: 1 1 6em;
+  width: auto;
+  min-width: var(--target);
+  padding: 0 var(--space-1);
+}
+.player-line {
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+  color: var(--ink);
+}
+
+/* His large-text setting (E15-04): one step bigger than his density, from his State. Every
+   size is rem, so everything grows together; the targets never shrink. */
+html[data-text="large"] {
+  font-size: 125%;
+}
+/* A heading that takes focus when a screen opens does so without a ring. */
+h1[tabindex="-1"]:focus {
+  outline: none;
+}
+/* A link that is a button (a phone number to call) looks like one. */
+a.pill {
+  text-decoration: none;
+}
+
+/* Papers from his photos (E18-01): the grid he confirms before anything is sent. Two across
+   in his density, three in hers; a paper left out is dimmed and says so in words, never by
+   colour alone. */
+.paper-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+:root[data-density="caregiver"] .paper-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.paper-tile {
+  font: inherit;
+  width: 100%;
+  min-height: var(--target);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-1);
+  border-radius: var(--radius-chip);
+  border: 1px solid rgba(78, 58, 120, 0.35);
+  background: var(--paper-bg);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: anywhere;
+}
+.paper-tile.chosen {
+  border: 3px solid var(--plum);
+}
+.paper-tile img,
+.paper-doc {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.paper-tile:not(.chosen) img,
+.paper-tile:not(.chosen) .paper-doc {
+  opacity: 0.45;
+}
+.paper-doc svg {
+  width: 40%;
+  height: 40%;
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+.paper-name {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.paper-state {
+  font-size: var(--text-body);
+}
+.paper-tile:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}

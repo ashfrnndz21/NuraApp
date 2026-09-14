@@ -1211,6 +1211,10 @@ class ReconciledOut(BaseModel):
 class TakenIn(BaseModel):
     anchor: Anchor | None = None
     amount: float | None = Field(default=None, gt=0)
+    taken_at: AwareDatetime | None = None
+    """When he tapped, for a tap the phone held while it could not reach Nura (E00-08): today on
+    the region's clock and not later than now (`TapNotToday` otherwise). The same tap sent twice
+    — a replay whose answer was lost — is written once. Absent, the tap is now."""
 
 
 class TakenOut(BaseModel):
@@ -1230,7 +1234,7 @@ class TakenOut(BaseModel):
             event_id=taken.event_id,
             anchor=taken.anchor,
             amount=taken.amount,
-            taken_at=taken.taken_at,
+            taken_at=as_utc(taken.taken_at),
             by_person_id=taken.by_person_id,
         )
 

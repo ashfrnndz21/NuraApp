@@ -1,7 +1,9 @@
 import type { ComponentChildren, JSX } from "preact";
-import { speak, type SpokenCard } from "../speech/speak";
+import { useEffect, useId } from "preact/hooks";
+import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
+import { PlayerControls } from "./Player";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
 
@@ -81,18 +83,30 @@ export function Pill({ onClick, children, plum, coral, done, quiet, disabled, la
   );
 }
 
-/** The spoken twin of a card. Audio starts here and nowhere else. */
+/** The spoken twin of a card. Audio starts here and nowhere else: the tap opens the one
+ *  player (E15-07) under the button — Play / Pause, his speed, the line being said — and
+ *  leaving the screen stops it. */
 export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
-  const card: SpokenCard = { lines, language: language.value };
+  const key = `hear:${useId()}`;
+  const open = voice.key.value === key;
+  useEffect(() => () => voice.leave(key), [key]);
   return (
-    <Pill quiet onClick={() => speak(card)} label={`${t().today.hear}: ${lines[0] ?? ""}`} testId="hear">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 10v4h3l4 4V6L7 10H4z" />
-        <path d="M15 9a4 4 0 0 1 0 6" />
-        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-      </svg>
-      {t().today.hear}
-    </Pill>
+    <>
+      <Pill
+        quiet
+        onClick={() => void voice.play({ kind: "speech", key, lines, language: language.value }).catch(() => undefined)}
+        label={`${t().today.hear}: ${lines[0] ?? ""}`}
+        testId="hear"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 10v4h3l4 4V6L7 10H4z" />
+          <path d="M15 9a4 4 0 0 1 0 6" />
+          <path d="M17.5 6.5a8 8 0 0 1 0 11" />
+        </svg>
+        {t().today.hear}
+      </Pill>
+      {open && <PlayerControls />}
+    </>
   );
 }
 

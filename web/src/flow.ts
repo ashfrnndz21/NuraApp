@@ -3,6 +3,7 @@ import * as nura from "./api/nura";
 import type { ClaimableOut, DoorsOut, FeedItemOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
+import { voice } from "./player/voice";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
 
@@ -28,7 +29,11 @@ export type Screen =
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   | { name: "me" }
-  | { name: "onboarding" };
+  | { name: "onboarding" }
+  /** His emergency card, one tap from Today, readable with no network (E00-08, E13-01). */
+  | { name: "emergency" }
+  /** Papers from his photos: many picked at once, one yes, one review card each (E18-01). */
+  | { name: "papers" };
 
 export const screen = signal<Screen>({ name: "loading" });
 
@@ -71,6 +76,7 @@ export async function openProfile(chosen: ProfileOut): Promise<void> {
   if (before && before.profile_id !== chosen.profile_id) {
     await clearProfileData(before.profile_id);
     forgetFeed();
+    voice.forget();
   }
   await chooseProfile(chosen);
   go({ name: "today" });
@@ -89,6 +95,7 @@ export async function signOutEverywhere(): Promise<void> {
   // profile and every cached Today page go.
   await clearAllProfileData();
   forgetFeed();
+  voice.forget();
   await setToken(null);
   await chooseProfile(null);
   me.value = null;

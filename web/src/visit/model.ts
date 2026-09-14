@@ -1,5 +1,5 @@
 import type { LogisticsOut, VisitSummaryOut } from "../api/types";
-import type { ClipRef } from "./clip";
+import type { ClipRef } from "../player/player";
 
 /** The visit day as the Visit screen shows it, from the backend's answers alone: the phone
  *  writes no sentence of the logistics card, the notice or the post-visit card. */

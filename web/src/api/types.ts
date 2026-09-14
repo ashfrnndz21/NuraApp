@@ -255,6 +255,44 @@ export interface StateOut {
   stale_after: string | null;
   /** The line the posture is shown under (E16-01), one idea per line, joined by newlines. */
   boundary: string;
+  /** Each dimension as the snapshot keeps it, or null where the key does not cover it. The
+   *  client reads one thing here: his large-text setting (`functional.facts.vision`). */
+  dimensions?: Record<string, { facts?: Record<string, Record<string, { value?: unknown }>> } | null>;
+}
+
+/** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
+ *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
+export interface EmergencyCardOut {
+  card_id: string;
+  profile_id: string;
+  state_id: string;
+  rendered_at: string;
+  name: string;
+  language: string;
+  spoken_language: string;
+  age_band: string | null;
+  conditions: { code: string; words: string; fact_id: string }[];
+  medicines: {
+    line_id: string;
+    generic: string;
+    brand: string | null;
+    strength: string;
+    form: string;
+    plain_name: string;
+    amount: string;
+    when: string;
+    high_risk: boolean;
+    high_risk_class: string | null;
+  }[];
+  allergies: { code: string; words: string; fact_id: string }[];
+  blood_type: string | null;
+  high_risk: string[];
+  contacts: { person_id: string; name: string; phone_e164: string | null; role: string }[];
+  clinic: { provider_id: string; name: string; kind: string; phone_e164: string | null } | null;
+  last_reading_at: string | null;
+  /** The ambulance, by region: 995 in Singapore, 999 in Malaysia. */
+  emergency_number: string;
+  lines: { id: string; text: string }[];
 }
 
 export interface ProudOut {

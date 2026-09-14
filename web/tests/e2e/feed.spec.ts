@@ -462,7 +462,7 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   await page.reload();
   // Today, past midnight: the emergency card rule, and no way into a page the phone no longer holds.
   await expect(page.getByTestId("cannot-reach")).toContainText("Nura cannot reach your papers right now.");
-  await expect(page.getByTestId("emergency-placeholder")).toContainText("Emergency card");
+  await expect(page.getByTestId("emergency-card")).toContainText("Emergency card");
   await expect(page.getByTestId("open-feed")).toHaveCount(0);
   expect(await medicinesInIndexedDb(page)).toEqual([]);
   await context.setOffline(false);

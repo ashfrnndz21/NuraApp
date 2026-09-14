@@ -73,7 +73,7 @@ from app.language.review import (
     NotStaff,
     SourceAlreadyListed,
 )
-from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
@@ -266,6 +266,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAConsultRecording,
     NotAClip,
     NotOnThisVisit,
+    # A tap the phone held while offline (E00-08) is written only as today's.
+    TapNotToday,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""

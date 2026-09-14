@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { batch } from "../../capture/session";
+import { PaperBatchView } from "../PaperBatch";
 import { Refused } from "../../api/client";
 import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
@@ -63,8 +65,37 @@ export function RecordsStep(): JSX.Element {
       {busy && <Status text={r.looking} testId="looking" />}
       <Notice error={error} />
       <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
+      <Pill onClick={() => to({ name: "batch" })} disabled={busy} testId="choose-many">
+        {s.papers.chooseMany}
+      </Pill>
       <Pill onClick={() => void enough()} disabled={busy} testId="all-done">
         {r.allPapers}
+      </Pill>
+    </main>
+  );
+}
+
+/** Many photos at once, in the sitting (E18-01): the grid he confirms, then a review card for
+ *  each paper; each one he checks joins the sitting like a single photo does. */
+export function BatchStep(): JSX.Element {
+  const s = t();
+  return (
+    <main class="screen onboarding" data-stage="batch">
+      <StepTitle title={s.papers.title} />
+      <PaperBatchView
+        onReview={(card) => {
+          returnTo.value = "batch";
+          to({ name: "review", card });
+        }}
+      />
+      <Pill
+        onClick={() => {
+          batch.forget();
+          to({ name: "records" });
+        }}
+        testId="batch-done"
+      >
+        {s.onboarding.back}
       </Pill>
     </main>
   );
@@ -73,8 +104,11 @@ export function RecordsStep(): JSX.Element {
 /** The capture review card (E02-07): each line of the paper as it was read, how sure Nura
  *  is in words (solid underline, or dotted and "Please check this one."), a box to correct
  *  it, "Leave this one out", and one "Looks right" that mints the yes for exactly these
- *  decisions and spends it. Then the biography takes the paper in and says what it learned. */
-export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
+ *  decisions and spends it. Then the biography takes the paper in and says what it learned.
+ *
+ *  Outside the sitting (papers from his photos, E18-01) `onDone` takes over after the yes and
+ *  `onBack` goes back to the list: the card's facts are written, and nothing joins a sitting. */
+export function ReviewStep({ card, onDone, onBack }: { card: ReviewCardOut; onDone?: () => void; onBack?: () => void }): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const locale = LOCALE[language.value];
@@ -83,7 +117,7 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const back = () => to({ name: returnTo.value });
+  const back = onBack ?? (() => to({ name: returnTo.value }));
 
   const upload = async (file: File) => {
     setBusy(true);
@@ -130,7 +164,11 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
         await nura.confirmReviewCard(bearer, profileId, card.card_id, decisions, yes.confirmation_id);
         setConfirmed(true);
       }
-      if (returnTo.value === "records") {
+      if (onDone) {
+        onDone();
+        return;
+      }
+      if (returnTo.value === "records" || returnTo.value === "batch") {
         // The sitting takes the paper in; its read-back will read the card's facts back to him.
         await nura.attachPaper(bearer, profileId, card.card_id);
         await refreshBiography();
@@ -138,6 +176,7 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
         // From the Ready screen the sitting is closed: the gap closes as the fact arrives.
         await refreshPlan();
       }
+      if (returnTo.value === "batch") batch.checked(card.card_id);
       lastPaper.value = card.card_id;
       to({ name: returnTo.value });
     } catch (failure) {

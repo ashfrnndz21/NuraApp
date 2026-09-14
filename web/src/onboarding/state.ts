@@ -24,7 +24,9 @@ export type Stage =
   | { name: "review"; card: ReviewCardOut }
   | { name: "questions" }
   | { name: "plan" }
-  | { name: "invite" };
+  | { name: "invite" }
+  /** Many photos at once (E18-01): the grid, one yes, a review card each. */
+  | { name: "batch" };
 
 export const stage = signal<Stage>({ name: "about" });
 export const settings = signal<SettingsOut | null>(null);
@@ -41,7 +43,7 @@ export const biography = signal<BiographyOut | null>(null);
 export const plan = signal<PlanOut | null>(null);
 /** Where a paper goes back to once he has said yes to its card: the records step, or the
  *  Ready screen's "Do it now". */
-export const returnTo = signal<"records" | "plan">("records");
+export const returnTo = signal<"records" | "plan" | "batch">("records");
 /** The paper he last added, for the "What Nura learned" card. */
 export const lastPaper = signal<string | null>(null);
 /** One line the Ready screen says when it comes back from an action ("They can see those parts now."). */

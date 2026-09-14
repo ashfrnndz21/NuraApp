@@ -1,4 +1,4 @@
-import type { FeedItemOut, LineOut, Posture, SlotOut } from "../api/types";
+import type { FeedItemOut, LineOut, Posture, SlotOut, StateOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
@@ -174,6 +174,15 @@ export function medicinesCard(lines: readonly LineOut[], withSupply: boolean): {
   if (body.length === 0) return null;
   const about = nearest ?? lines.find((line) => line.doctor_question.length > 0 || line.flags.length > 0) ?? null;
   return { lines: body, provenance: about?.source ?? "" };
+}
+
+/** His large-text setting as his State holds it (the `vision` subject of the functional
+ *  dimension, E01's settings): true or false, or null when this key does not read that part of
+ *  the State and the phone keeps what it has. */
+export function largeTextOf(state: Pick<StateOut, "dimensions"> | null): boolean | null {
+  const functional = state?.dimensions?.functional;
+  if (!functional) return null;
+  return functional.facts?.vision?.large_text?.value === true;
 }
 
 export function dayKey(date: Date): string {

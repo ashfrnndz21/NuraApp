@@ -88,6 +88,36 @@ async function sendBlob(path: string, call: Call): Promise<Blob> {
   return response.blob();
 }
 
+/** The same queue, for a page of HTML: the emergency card's printable page (E13-01), kept on
+ *  the phone for printing with no network. A refusal is `Refused`, as everywhere. */
+export function apiText(path: string, call: Call = {}): Promise<string> {
+  const next = queue.then(() => sendText(path, call));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+async function sendText(path: string, call: Call): Promise<string> {
+  const headers: Record<string, string> = { Accept: "text/html" };
+  if (call.token) headers.Authorization = `Bearer ${call.token}`;
+  let response: Response;
+  try {
+    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit" });
+  } catch {
+    throw new Unreachable();
+  }
+  if (!response.ok) {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(await response.text());
+    } catch {
+      /* not JSON: not a refusal */
+    }
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    throw new Refused("HttpError", response.status);
+  }
+  return response.text();
+}
+
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
   const next = queue.then(() => sendBytes<T>(path, body, contentType, call));

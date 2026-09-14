@@ -15,12 +15,16 @@ export const profile = signal<ProfileOut | null>(null);
 export const densityChosen = signal<Density | null>(null);
 export const posture = signal<Posture>("stable");
 export const restored = signal(false);
+/** His large-text setting (E15-04), taken from his State on his own phone: one step bigger
+ *  than his density, on top of whatever text size the phone itself is set to. */
+export const largeText = signal(false);
 
 const KEYS = {
   token: "session.token",
   profile: "session.profile",
   language: "device.language",
   density: "device.density",
+  text: "device.text",
 } as const;
 
 /** Patient density for the owner of the papers; caregiver density for anyone holding a key. */
@@ -44,15 +48,19 @@ effect(() => {
   html.dataset.density = densityFor(profile.value?.standing, densityChosen.value);
   html.dataset.posture = posture.value;
   html.lang = language.value;
+  if (largeText.value) html.dataset.text = "large";
+  else delete html.dataset.text;
 });
 
 export async function restoreSession(): Promise<void> {
-  const [savedToken, savedProfile, savedLanguage, savedDensity] = await Promise.all([
+  const [savedToken, savedProfile, savedLanguage, savedDensity, savedText] = await Promise.all([
     kvGet<string>(KEYS.token),
     kvGet<ProfileOut>(KEYS.profile),
     kvGet<string>(KEYS.language),
     kvGet<Density>(KEYS.density),
+    kvGet<string>(KEYS.text),
   ]);
+  largeText.value = savedText === "large";
   language.value = isLanguage(savedLanguage)
     ? savedLanguage
     : deviceLanguage(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
@@ -76,6 +84,13 @@ export async function chooseProfile(value: ProfileOut | null): Promise<void> {
 export async function setLanguage(code: Language): Promise<void> {
   await kvSet(KEYS.language, code);
   language.value = code;
+}
+
+/** His large-text setting, as his State says it: kept on the phone so it opens that way offline. */
+export async function setLargeText(value: boolean): Promise<void> {
+  if (largeText.peek() === value) return;
+  await (value ? kvSet(KEYS.text, "large") : kvDel(KEYS.text));
+  largeText.value = value;
 }
 
 export async function setDensity(value: Density | null): Promise<void> {

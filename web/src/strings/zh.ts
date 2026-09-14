@@ -225,6 +225,8 @@ export const zh = {
     fromState: "Nura 在 {date} 算出了这个。",
     // @patient
     fromDays: "Nura 数了您吃药的天数。",
+    // @patient phrase
+    emergencyOpen: "您的紧急卡",
   },
   feed: {
     // @patient headline
@@ -386,6 +388,90 @@ export const zh = {
     noMic: "Nura不能使用这部手机的麦克风。",
     // @patient
     noMicSub: "您可以自己写下来。",
+  },
+  // 离线时点的（E00-08）。
+  held: {
+    // @patient
+    held: "网络恢复后，Nura 会把它发出去。",
+    // @patient
+    tapped: "您在 {time} 点了这个。",
+    // @patient
+    sent: "Nura 已经把您点的发出去了。",
+  },
+  // 手机上的紧急卡（E00-08）。
+  emergency: {
+    // @patient
+    asOf: "Nura 在 {date} {time} 读了这张卡。",
+    // @patient
+    none: "Nura 还没有把您的紧急卡存在这部手机上。",
+    // @patient
+    noneSub: "请在有网络的时候打开一次。",
+    // @patient phrase
+    callChief: "打给{name}",
+    // @patient phrase
+    callAmbulance: "打 {number} 叫救护车",
+    // @patient phrase
+    print: "打印这张卡",
+  },
+  // 照片里的文件（E18-01）。
+  papers: {
+    // @patient phrase
+    open: "从照片里加文件",
+    // @patient phrase
+    chooseMany: "选多张照片",
+    // @patient headline
+    title: "照片里的文件",
+    // @patient
+    lead: "一次选好所有文件的照片。",
+    // @patient
+    lead2: "您说好之前，Nura 什么都不发。",
+    // @patient phrase
+    pick: "选照片",
+    // @patient
+    gridLead: "点一张照片就不发它。",
+    // @patient phrase
+    picture: "第 {count} 张",
+    // @patient
+    tileIn: "Nura 会发这张。",
+    // @patient
+    tileOut: "Nura 不发这张。",
+    // @patient phrase
+    sendOne: "发 1 份文件",
+    // @patient phrase
+    send: "发 {count} 份文件",
+    // @patient
+    sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient headline
+    found: "Nura 找到的",
+    // @patient
+    read: "Nura 读了这份文件。",
+    // @patient phrase
+    check: "看看这份文件",
+    // @patient
+    notHealth: "这不是看病的文件。",
+    // @patient
+    notSent: "Nura 没能发这张。",
+    // @patient phrase
+    sendRest: "发剩下的",
+    // @patient
+    nothingKept: "Nura 没有把照片存在这部手机上。",
+    // @patient phrase
+    backToday: "回到“今天”",
+  },
+  // 播放器（E15-07）。
+  player: {
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    speed: "Nura 说话的快慢",
+    // @patient phrase
+    slower: "慢一点",
+    // @patient phrase
+    usual: "平常的速度",
+    // @patient phrase
+    faster: "快一点",
   },
   onboarding: {
     // @patient phrase
@@ -793,5 +879,6 @@ export const zh = {
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
+    TapNotToday: "Nura 只记下您今天点的。",
   },
 } satisfies Strings;

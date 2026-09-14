@@ -10,6 +10,7 @@ import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, TabBar, Tile } from "../ui/components";
+import { PlayerControls } from "../ui/Player";
 import "../ui/feed.css";
 
 /** The vertical feed (E21-01): one card fills the screen; up for the next. The backend's
@@ -163,6 +164,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               owner={profile.value?.standing === "owner"}
               name={name}
               s={s}
+              playing={playback.playing.value === entry.key}
               onHear={(view) => {
                 playback.hear({ key: entry.key, itemId: view.itemId, lines: view.spoken, language: speechLanguage(view.language, language.value) });
                 store.record(entry.item, "heard");
@@ -215,6 +217,8 @@ interface FeedCardProps {
   onFamily: () => void;
   onNotForMe: () => void;
   onKeepGoing: () => void;
+  /** This card's voice is open in the player: its controls show above the side actions. */
+  playing: boolean;
 }
 
 /** One card: the section it came from, the backend's headline and lines, its boundary, its
@@ -224,7 +228,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, playing }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -303,6 +307,7 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
             {s.feed.toTablets}
           </button>
         )}
+        {playing && <PlayerControls />}
         <div class={actions.length === 1 ? "feed-actions one" : "feed-actions"} role="group" aria-label={view.headline}>
           {actions.map((action) => (
             <SideButton key={action} action={action} s={s} onClick={{ hear: () => onHear(view), ask: onAsk, family: onFamily, notForMe: onNotForMe }[action]} />

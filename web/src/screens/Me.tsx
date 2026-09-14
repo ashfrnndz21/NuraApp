@@ -1,5 +1,6 @@
 import type { JSX } from "preact";
 import { go, reloadDoors, signOutEverywhere } from "../flow";
+import { emergencyOnly } from "../offline/emergencyCache";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { density, densityChosen, me, profile, setDensity, setLanguage } from "../store/session";
@@ -9,6 +10,8 @@ import { Header, Pill, TabBar, Tile } from "../ui/components";
 /** Me: who is signed in, the language, how Nura looks, whose papers, sign out. */
 export function MeScreen(): JSX.Element {
   const s = t();
+  // A key to the emergency card alone: nothing here opens more of the papers than that.
+  const only = profile.value ? emergencyOnly(profile.value) : false;
   const names: Record<Language, string> = { en: s.me.en, ms: s.me.ms, zh: s.me.zh };
   return (
     <main class="screen">
@@ -47,8 +50,18 @@ export function MeScreen(): JSX.Element {
           {s.me.switchProfile}
         </Pill>
         {profile.value && (
+          <Pill onClick={() => go({ name: "emergency" })} testId="me-emergency">
+            {s.today.emergencyOpen}
+          </Pill>
+        )}
+        {profile.value && !only && (
           <Pill onClick={() => void startOnboarding(profile.value!)} testId="set-up">
             {s.me.setUp}
+          </Pill>
+        )}
+        {profile.value && (profile.value.standing === "owner" || profile.value.scopes.includes("records")) && (
+          <Pill onClick={() => go({ name: "papers" })} testId="open-papers">
+            {s.papers.open}
           </Pill>
         )}
       </Tile>
