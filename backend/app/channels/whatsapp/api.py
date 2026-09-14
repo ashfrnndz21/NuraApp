@@ -16,6 +16,7 @@ they are not there at all. The webhook carries no bearer token — the provider 
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
@@ -28,6 +29,7 @@ from app.audit.models import Channel
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.channels.api.schemas import PHONE, utc
+from app.channels.api.uploads import Cap, read_capped
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.config import BusinessNumber, business_number_for
 from app.channels.whatsapp.group import (
@@ -43,6 +45,7 @@ from app.channels.whatsapp.outbound.level0 import run_feeling_check_in, run_morn
 from app.channels.whatsapp.outbound.send import Delivered, thread_messages
 from app.channels.whatsapp.provider import DevInbound, FixtureProvider, NotAWebhook
 from app.db import utcnow
+from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import WITHHELD_ARTIFACT, withheld_references
@@ -167,19 +170,39 @@ async def verify(
     return Response(content=challenge, media_type="text/plain")
 
 
+WEBHOOK_BYTES = 1024 * 1024
+"""The most one webhook delivery may carry: a megabyte. A delivery is text and handles — a
+photo, a PDF or a voice note comes as the provider's id and is fetched by it, against its
+own cap — so a megabyte holds a long batch; a body past it is not a delivery (#136)."""
+
+
+class WebhookTooLarge(Refusal):
+    """A webhook delivery is at most a megabyte; this one was longer, or said it would be."""
+
+
 @router.post("/whatsapp/webhook")
 async def webhook(request: Request, session: Db) -> dict[str, int]:
-    """Inbound messages. The signature is checked over the raw body before anything is read
-    from it; then each message walks `handle_inbound`. The provider gets a 200 and a count;
-    what each message became is on the profile's trail, not on the wire."""
-    body = await request.body()
+    """Inbound messages. The body is read against its cap as it arrives (`read_capped`):
+    one declared longer is refused before a byte is read, and one that runs longer is refused
+    at the first chunk past the cap, both with a 413, before anything is parsed (#136). The
+    signature is then checked over exactly the bytes read, and only a signed body is read as
+    JSON; each message walks `handle_inbound`, where a red flag is looked for before the ignore
+    and the consent checks. The provider gets a 200 and a count; what each message became is
+    on the profile's trail, not on the wire."""
+    body = await read_capped(
+        request.stream(),
+        Cap(WEBHOOK_BYTES, WebhookTooLarge),
+        declared=request.headers.get("content-length"),
+    )
     providers = providers_of(request)
     if not providers.whatsapp.verify_webhook(request.headers.get("X-Hub-Signature-256"), body):
         raise NotAWebhook("the webhook body was not signed by the provider")
     try:
-        payload = await request.json()
+        payload = json.loads(body)
     except ValueError as not_json:
         raise NotAWebhook("the webhook body is not JSON") from not_json
+    if not isinstance(payload, dict):
+        raise NotAWebhook("the webhook body is not a delivery")
     settings = settings_of(request)
     handled = 0
     for message in providers.whatsapp.parse_inbound(payload):

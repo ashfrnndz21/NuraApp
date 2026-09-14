@@ -46,6 +46,10 @@ class NotADocument(Refusal):
     """A document is a PDF or a photo of a page, with bytes in it, and not too big."""
 
 
+class DocumentTooLarge(NotADocument):
+    """A document bigger than one a person keeps on paper: refused as it arrives (#133)."""
+
+
 TAG_OF_BASIS: dict[ConsentBasis, DocumentTag] = {
     ConsentBasis.LPA: DocumentTag.LPA,
     ConsentBasis.MEDICAL_LETTER: DocumentTag.MEDICAL_LETTER,

@@ -54,7 +54,7 @@ from app.channels.whatsapp.proposals import (
     answer,
     propose,
 )
-from app.channels.whatsapp.provider import InboundMessage, Media, NoSuchMedia
+from app.channels.whatsapp.provider import InboundMessage, Media, MediaTooLarge, NoSuchMedia
 from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_names, reply
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
@@ -76,7 +76,7 @@ from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
-from app.ingestion.notes import NoteView, keep_voice_message
+from app.ingestion.notes import MAX_VOICE_BYTES, NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
 from app.ingestion.photos import store_photo
 from app.ingestion.review import review_photo
@@ -1021,6 +1021,11 @@ async def _other(session: AsyncSession, work: _Work) -> Handled:
 # --- voice notes and the family's group (E11-01) -------------------------------------------------
 
 
+VOICE_DOWNLOAD_BYTES = MAX_VOICE_BYTES
+"""The most of a voice note fetched from the provider: a note on an event's own cap, a minute
+or two of speech (`app.ingestion.notes`). Past it, nothing is fetched on, heard or kept."""
+
+
 def _is_voice(message: InboundMessage) -> bool:
     return message.media_id is not None and (message.content_type or "").strip().lower().startswith(
         "audio/"
@@ -1036,8 +1041,11 @@ async def _hear(
     any message's, and only then kept as his own note, or not at all."""
     assert message.media_id is not None
     try:
-        media = await providers.whatsapp.fetch_media(message.media_id)
-    except NoSuchMedia:
+        media = await providers.whatsapp.fetch_media(
+            message.media_id, max_bytes=VOICE_DOWNLOAD_BYTES
+        )
+    except (NoSuchMedia, MediaTooLarge) as unheard:
+        log.info("whatsapp: a voice note not fetched: %s", type(unheard).__name__)
         return None, NOTHING_HEARD
     kind = media.content_type.split(";", 1)[0].strip().lower()
     guard_region(held_in=providers.transcriber.region, asked_from=region)

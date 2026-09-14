@@ -90,7 +90,10 @@ class WhatsAppProvider(Protocol):
         """A voice note, inside the 24-hour window only. The provider's message id."""
         ...
 
-    async def fetch_media(self, media_id: str) -> Media: ...
+    async def fetch_media(self, media_id: str, *, max_bytes: int | None = None) -> Media:
+        """The media under the provider's handle. With `max_bytes`, read against it as it
+        arrives and refused (`MediaTooLarge`) the moment it runs past: never held whole first."""
+        ...
 
     async def open_group(self, subject: str) -> str:
         """A new group on the business number (E11-01). The provider's handle for it."""
@@ -119,6 +122,10 @@ class WhatsAppProvider(Protocol):
 
 class NoSuchMedia(Refusal):
     """The provider has nothing under that media id, or it has expired."""
+
+
+class MediaTooLarge(Refusal):
+    """The media under that id runs past what it may be here (a voice note's cap, #136)."""
 
 
 class NotAWebhook(Refusal):
@@ -205,7 +212,13 @@ class FixtureProvider:
         self.sent.append(Sent("", "group", text, None, "", {}, message_id, group_id=group_id))
         return message_id
 
-    async def fetch_media(self, media_id: str) -> Media:
+    async def fetch_media(self, media_id: str, *, max_bytes: int | None = None) -> Media:
+        media = await self._fetch(media_id)
+        if max_bytes is not None and len(media.data) > max_bytes:
+            raise MediaTooLarge(f"the media is past {max_bytes} bytes")
+        return media
+
+    async def _fetch(self, media_id: str) -> Media:
         entry = self._index().get(media_id)
         if entry is None:
             raise NoSuchMedia(f"no media {media_id} in the fixtures")

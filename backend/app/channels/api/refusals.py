@@ -15,6 +15,7 @@ from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
+from app.channels.whatsapp.api import WebhookTooLarge
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
@@ -39,7 +40,7 @@ from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
-from app.family.documents import NotADocument
+from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
@@ -55,6 +56,7 @@ from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.connectors.calendar import CalendarTooLarge
 from app.ingestion.connectors.service import (
     AlreadyDecided,
     NoSuchConnector,
@@ -225,6 +227,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A visit's recording is heard by him and the family he let in, and nobody else.
     (OnlyTheFamilyHears, 403),
     (NoSuchPhoto, 404),
+    (WebhookTooLarge, 413),
     (NoFamilyGroup, 404),
     (NotTheirsToOpen, 403),
     (NotTheirsToTakeBack, 403),
@@ -241,6 +244,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (OutsideTheWindow, 409),
     # A PDF or a note on an event is not this big (E02-03, E02-06).
     (PdfTooLarge, 413),
+    (DocumentTooLarge, 413),
+    (CalendarTooLarge, 413),
     (NoteTooLarge, 413),
     (NoSuchEventNote, 404),
     (ProfileAlreadyOwned, 409),
