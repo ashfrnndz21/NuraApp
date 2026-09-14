@@ -111,6 +111,7 @@ CLASSES: dict[str, str] = {
     "person.phone_e164": IDENTIFIER,
     "person.email": IDENTIFIER,
     "person.created_at": OPERATIONAL,
+    "person.named_by_person_id": IDENTIFIER,
     "profile.display_name": IDENTIFIER,
     "profile.language": OPERATIONAL,
     "profile.owner_person_id": IDENTIFIER,

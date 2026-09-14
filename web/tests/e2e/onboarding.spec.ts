@@ -418,6 +418,7 @@ test("the Ready screen's other actions: a follow-up reopened, and one person let
   await expect(gap.getByTestId("do-it-now")).toBeEnabled();
   await gap.getByTestId("do-it-now").click();
   const mei = freshPhone("+659883");
+  await page.getByLabel("Their name").fill("Mei");
   await page.getByLabel("Their phone number").fill(mei);
   await page.getByLabel("Who they are to you").fill("daughter");
   await page.getByTestId("invite-next").click();
@@ -428,6 +429,9 @@ test("the Ready screen's other actions: a follow-up reopened, and one person let
   await expect(words).toContainText("- your medicines");
   await expect(words).toContainText("- your visits to the doctor");
   await expect(words).not.toContainText("blood pressure book");
+  // The backend's words name the person by the name he typed; how they put it is theirs.
+  await expect(words).toContainText("Mei");
+  const previewed = await words.locator(".lines p").allTextContents();
   await page.getByTestId("invite-agree").click();
   await expect(main).toHaveAttribute("data-stage", "plan");
   await expect(page.getByTestId("plan-status")).toHaveText("They can see those parts now.");
@@ -437,8 +441,8 @@ test("the Ready screen's other actions: a follow-up reopened, and one person let
   const { auth, id } = await profileOf(request, phone);
   const consents = (await (await request.get(`${API}/profiles/${id}/consents`, { headers: auth })).json()) as { purpose: string; wording_text: string }[];
   const sharing = consents.find((each) => each.purpose === "share_with_family");
-  expect(sharing?.wording_text).toContain("your medicines");
-  expect(sharing?.wording_text).toContain("your visits to the doctor");
+  // What he read before agreeing is exactly what was kept.
+  expect(sharing?.wording_text.split("\n")).toEqual(previewed);
   const keys = (await (await request.get(`${API}/profiles/${id}/keys`, { headers: auth })).json()) as { role: string; scopes: string[]; revoked_at: string | null }[];
   const key = keys.find((each) => each.role === "caregiver" && each.revoked_at === null);
   expect(key?.scopes).toEqual(expect.arrayContaining(["medicines", "visits"]));

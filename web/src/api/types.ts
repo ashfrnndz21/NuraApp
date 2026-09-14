@@ -437,15 +437,16 @@ export type Part = "medicines" | "visits" | "readings" | "records";
 
 export interface SharingIn {
   holder_phone_e164: string;
+  /** The name the words use for the person, as he calls them (`HolderNeedsAName` without it). */
+  holder_display_name: string;
   scopes: Part[];
   relationship: string | null;
   language: string;
 }
 
 /** The words he agrees to, rendered by the backend for this person and these parts before
- *  he says yes. `POST /profiles/{id}/consents/sharing/preview` is **proposed** (not on main):
- *  the consent route renders the words only at the moment of agreement, and the client may
- *  not compose them. The mock answers it until the backend has it. */
+ *  he says yes (`POST /profiles/{id}/consents/sharing/preview`), by the same function the
+ *  consent keeps them with. The client never composes them. */
 export interface SharingPreviewOut {
   wording_version: string;
   language: string;

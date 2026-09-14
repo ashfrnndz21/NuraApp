@@ -498,6 +498,8 @@ export const ms = {
       // @patient
       lead: "Nura akan membenarkan seorang ini sahaja.",
       // @patient phrase
+      nameLabel: "Nama mereka",
+      // @patient phrase
       phoneLabel: "Nombor telefon mereka",
       // @patient phrase
       relationshipLabel: "Siapa mereka kepada anda",
@@ -588,6 +590,7 @@ export const ms = {
   // @patient
   refusals: {
     default: "Nura tidak dapat buat itu sekarang.",
+    HolderNeedsAName: "Sila taip nama orang yang anda benarkan.",
     NotAPdf: "Nura tidak dapat membaca dokumen itu.",
     PdfTooLarge: "Dokumen itu terlalu besar untuk Nura.",
     UnreadableField: "Sila taip baris yang Nura tidak dapat baca.",

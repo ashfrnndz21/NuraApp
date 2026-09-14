@@ -498,6 +498,8 @@ export const en = {
       // @patient
       lead: "Nura will let this one person in.",
       // @patient phrase
+      nameLabel: "Their name",
+      // @patient phrase
       phoneLabel: "Their phone number",
       // @patient phrase
       relationshipLabel: "Who they are to you",
@@ -592,6 +594,7 @@ export const en = {
   // @patient
   refusals: {
     default: "Nura could not do that right now.",
+    HolderNeedsAName: "Please type the name of the person you are letting in.",
     NotAPdf: "That file is not one Nura can read.",
     PdfTooLarge: "That file is too big for Nura.",
     UnreadableField: "Please type the line Nura could not read.",

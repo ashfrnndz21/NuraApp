@@ -257,6 +257,7 @@ export interface Strings {
     invite: {
       title: string;
       lead: string;
+      nameLabel: string;
       phoneLabel: string;
       relationshipLabel: string;
       partsLead: string;

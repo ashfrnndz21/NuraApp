@@ -239,7 +239,7 @@ export const addImport = (
 
 // --- E12: letting one person in ------------------------------------------------------
 
-/** Proposed route (see `SharingPreviewOut`): the words for this person and these parts. */
+/** The words for this person and these parts, exactly as the consent will keep them. */
 export const previewSharing = (token: string, profileId: string, body: SharingIn) =>
   api<SharingPreviewOut>(`/profiles/${profileId}/consents/sharing/preview`, { method: "POST", token, body });
 

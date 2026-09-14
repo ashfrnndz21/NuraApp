@@ -48,6 +48,8 @@ from app.channels.api.schemas import (
     ReadingIn,
     ReadingOut,
     SharingConsentIn,
+    SharingPreviewIn,
+    SharingPreviewOut,
     StateOut,
     StatusConfirmIn,
     StewardshipOut,
@@ -55,7 +57,14 @@ from app.channels.api.schemas import (
     WhatsAppConsentIn,
 )
 from app.consent.models import ConsentBasis, ConsentPurpose
-from app.consent.service import Sharing, all_consents, grant_consent
+from app.consent.service import (
+    HolderNeedsAName,
+    Sharing,
+    SharingWords,
+    all_consents,
+    grant_consent,
+    preview_sharing,
+)
 from app.db import utcnow
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
@@ -70,7 +79,7 @@ from app.identity.doors import (
     set_up_for_someone,
 )
 from app.identity.models import Person
-from app.identity.service import create_own_profile, register_person
+from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
@@ -323,12 +332,20 @@ async def get_profile(context: Context, session: Db) -> ProfileOut:
 # --- keys --------------------------------------------------------------------------------
 
 
-async def _holder(session: Db, *, request: Request, body: KeyGrant | SharingConsentIn) -> Person:
+async def _holder(
+    session: Db,
+    *,
+    request: Request,
+    body: KeyGrant | SharingConsentIn,
+    name: str = "",
+    named_by: uuid.UUID | None = None,
+) -> Person:
     """The person the key is for.
 
-    By phone, a number that is not an account yet becomes one — a name-less account the
-    invite will land on when the person proves the number, as the invited door does in
-    E01. Whether the number was already known is not something the answer gives away.
+    By phone, a number that is not an account yet becomes one — the account the invite will
+    land on when the person proves the number, as the invited door does in E01 — carrying the
+    name the owner typed and who typed it, until the person gives his own. Whether the number
+    was already known is not something the answer gives away.
     """
     region = settings_of(request).region
     if body.holder_person_id is not None:
@@ -336,8 +353,9 @@ async def _holder(session: Db, *, request: Request, body: KeyGrant | SharingCons
         if found is None or found.region is not region:
             raise NoSuchHolder(f"no person {body.holder_person_id} in {region}")
         return found
-    return await register_person(
-        session, region=region, display_name="", phone_e164=body.holder_phone_e164
+    assert body.holder_phone_e164 is not None
+    return await invitee_by_phone(
+        session, region=region, phone_e164=body.holder_phone_e164, name=name, named_by=named_by
     )
 
 
@@ -393,7 +411,13 @@ async def let_someone_in(
     (`ConsentWithheld`) until it is in force. The owner agrees for himself; anyone else
     needs a recorded proxy basis, which is not on this route.
     """
-    holder = await _holder(session, request=request, body=body)
+    named = (body.holder_display_name or "").strip()
+    if body.holder_phone_e164 is not None and not named:
+        # The words name the person; nothing is made for the number without that name.
+        raise HolderNeedsAName("a person let in by phone is named by the one letting them in")
+    holder = await _holder(
+        session, request=request, body=body, name=named, named_by=context.person_id
+    )
     consent = await grant_consent(
         session,
         context=context,
@@ -405,16 +429,49 @@ async def let_someone_in(
             holder=holder,
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
             relationship=body.relationship,
+            named=named or None,
         ),
         text_version=body.wording_version,
     )
     return ConsentOut.of(consent)
 
 
+@router.post("/{profile_id}/consents/sharing/preview")
+async def preview_letting_in(
+    body: SharingPreviewIn, request: Request, context: Context, session: Db
+) -> SharingPreviewOut:
+    """The words the owner would agree to by `POST /consents/sharing` for this person and these
+    parts, rendered now by the function the consent keeps them with — so what he reads first
+    is what is kept, word for word. Nothing is written but the READ on his trail: no account
+    is made for a number, and by phone the words use only the name he typed, so they never
+    say whether the number is already someone's. The owner's, or the steward's setting up for
+    him; `HolderNeedsAName` (400) without a name."""
+    if body.holder_person_id is not None:
+        found = await session.get(Person, body.holder_person_id)
+        if found is None or found.region is not settings_of(request).region:
+            raise NoSuchHolder(
+                f"no person {body.holder_person_id} in {settings_of(request).region}"
+            )
+        name = found.display_name.strip()
+    else:
+        name = (body.holder_display_name or "").strip()
+    version, words = await preview_sharing(
+        session,
+        context=context,
+        about=SharingWords(
+            name=name,
+            relationship=body.relationship,
+            scopes=frozenset(body.scopes) - {Scope.PROFILE},
+        ),
+        language=body.language,
+    )
+    return SharingPreviewOut(
+        wording_version=version, language=body.language, lines=words.split("\n")
+    )
+
+
 @router.post("/{profile_id}/consents/whatsapp", status_code=status.HTTP_201_CREATED)
-async def agree_to_whatsapp(
-    body: WhatsAppConsentIn, context: Context, session: Db
-) -> ConsentOut:
+async def agree_to_whatsapp(body: WhatsAppConsentIn, context: Context, session: Db) -> ConsentOut:
     """The owner agrees to WhatsApp: the morning card, the thread, every send (E19).
 
     Profile-wide and on his own basis; a chief acting for him needs a recorded proxy basis,

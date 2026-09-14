@@ -7,6 +7,8 @@ are `app.identity.doors`; this is a person opening his own.
 
 from __future__ import annotations
 
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +39,35 @@ class WaitingToBeClaimed(Refusal):
 
 async def find_person_by_phone(session: AsyncSession, phone_e164: str) -> Person | None:
     return await session.scalar(select(Person).where(Person.phone_e164 == phone_e164))
+
+
+async def invitee_by_phone(
+    session: AsyncSession,
+    *,
+    region: Region,
+    phone_e164: str,
+    name: str = "",
+    named_by: uuid.UUID | None = None,
+) -> Person:
+    """The account a number is — or, for a number that is not one yet, a placeholder carrying
+    the name the inviter typed and who typed it, until the person signs in and gives his own.
+
+    An existing account is returned as it is: the answer never says whether the number was
+    already known, and nobody renames someone else's account.
+    """
+    existing = await find_person_by_phone(session, phone_e164)
+    if existing is not None:
+        guard_region(held_in=existing.region, asked_from=region)
+        return existing
+    person = Person(
+        region=region,
+        display_name=name,
+        phone_e164=phone_e164,
+        named_by_person_id=named_by if name else None,
+    )
+    session.add(person)
+    await session.flush()
+    return person
 
 
 async def register_person(

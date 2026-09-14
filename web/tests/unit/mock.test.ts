@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Call, Passthrough } from "../../src/api/client";
 import { Refused } from "../../src/api/client";
-import type { BiographyOut, KeyOut, PlanOut, ReviewCardOut, SettingsOut, SharingPreviewOut, WordingOut } from "../../src/api/types";
+import type { BiographyOut, KeyOut, PlanOut, ReviewCardOut, SettingsOut } from "../../src/api/types";
 import { isPdf } from "../../src/onboarding/actions";
 import { mockTransport, resetMock } from "../../src/api/mock";
 import { READ_BACK } from "../../src/api/mock/words";
@@ -167,33 +167,8 @@ describe("the stand-in for the Ready screen's other actions", () => {
     expect(held.cards.map((each) => each.gap_id)).not.toContain("fam");
   });
 
-  it("previews the sharing words from the live template and version, one line per part", async () => {
-    const template: WordingOut = {
-      purpose: "share_with_family",
-      version: "2",
-      language: "en",
-      region: "SG",
-      lines: ["You are letting {named} see some of your record.", "{name} can see these parts:", "{parts}", "You can stop this at any time."],
-    };
-    let asked = "";
-    const wording = (<T,>(path: string, c: Call) => {
-      asked = `${path}?${new URLSearchParams(c.query as Record<string, string>).toString()}`;
-      return Promise.resolve(template as unknown as T);
-    }) as Passthrough;
-    const out = await call<SharingPreviewOut>(
-      "/profiles/p1/consents/sharing/preview",
-      { method: "POST", body: { holder_phone_e164: "+6591234567", scopes: ["medicines", "visits"], relationship: "daughter", language: "en" } },
-      wording,
-    );
-    expect(asked).toBe("/consent/wording?purpose=share_with_family&language=en");
-    expect(out.wording_version).toBe("2");
-    expect(out.lines).toEqual([
-      "You are letting +6591234567, your daughter, see some of your record.",
-      "+6591234567 can see these parts:",
-      "- your medicines",
-      "- your visits to the doctor",
-      "You can stop this at any time.",
-    ]);
+  it("leaves the sharing preview to the real API, which renders it as the consent will keep it", () => {
+    expect(mockTransport("/profiles/p1/consents/sharing/preview", { method: "POST", body: {} }, liveKeys([]))).toBeUndefined();
   });
 });
 

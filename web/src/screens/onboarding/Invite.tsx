@@ -12,7 +12,8 @@ import { Sheet, Status, StepTitle } from "./parts";
 const PARTS: readonly Part[] = ["medicines", "visits", "readings", "records"];
 
 /** The invite gap (E12): who, which parts, then the words — rendered by the backend for this
- *  person and these parts — and his one "I agree". Then the sharing consent, and the key
+ *  person and these parts by `POST /consents/sharing/preview`, the function the consent keeps
+ *  them with — and his one "I agree". Then the sharing consent, and the key
  *  that rests on it, to the same parts and no wider. Only his own papers come here: the
  *  consent route takes the owner's own yes (`Plan.tsx`, `invites`). Changing the person or
  *  the parts after reading takes the words away, so the yes is for exactly what was shown. */
@@ -22,6 +23,7 @@ export function InviteStep(): JSX.Element {
   const patient = density() === "patient";
   const [screen, setScreen] = useState<0 | 1 | 2>(0);
   const [phone, setPhone] = useState("+65");
+  const [name, setName] = useState("");
   const [relationship, setRelationship] = useState("");
   const [parts, setParts] = useState<Part[]>([]);
   const [words, setWords] = useState<SharingPreviewOut | null>(null);
@@ -30,6 +32,7 @@ export function InviteStep(): JSX.Element {
 
   const asked = (): SharingIn => ({
     holder_phone_e164: phone.replace(/\s+/g, ""),
+    holder_display_name: name.trim(),
     scopes: PARTS.filter((part) => parts.includes(part)),
     relationship: relationship.trim() || null,
     language: language.value,
@@ -39,7 +42,7 @@ export function InviteStep(): JSX.Element {
     setWords(null);
   };
   const toggle = (part: Part) => changed(setParts)(parts.includes(part) ? parts.filter((each) => each !== part) : [...parts, part]);
-  const phoneOk = phone.replace(/\D/g, "").length >= 8;
+  const phoneOk = phone.replace(/\D/g, "").length >= 8 && name.trim().length > 0;
 
   const act = async (work: () => Promise<void>) => {
     setBusy(true);
@@ -74,6 +77,7 @@ export function InviteStep(): JSX.Element {
 
   const whoSheet = (
     <Sheet lines={[i.lead]} testId="invite-who">
+      <Field name="holder-name" label={i.nameLabel} value={name} onInput={changed(setName)} autoComplete="off" />
       <Field name="holder-phone" label={i.phoneLabel} value={phone} onInput={changed(setPhone)} type="tel" inputMode="tel" />
       <Field name="relationship" label={i.relationshipLabel} value={relationship} onInput={changed(setRelationship)} />
     </Sheet>

@@ -498,6 +498,8 @@ export const zh = {
       // @patient
       lead: "Nura 只会让这一个人看。",
       // @patient phrase
+      nameLabel: "他们的名字",
+      // @patient phrase
       phoneLabel: "他们的手机号码",
       // @patient phrase
       relationshipLabel: "他们是您的什么人",
@@ -588,6 +590,7 @@ export const zh = {
   // @patient
   refusals: {
     default: "Nura 现在做不了这件事。",
+    HolderNeedsAName: "请输入您要让他看的那个人的名字。",
     NotAPdf: "Nura 看不懂那个文件。",
     PdfTooLarge: "那个文件太大了，Nura 打不开。",
     UnreadableField: "请输入 Nura 看不清的那一行。",

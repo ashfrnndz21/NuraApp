@@ -149,13 +149,13 @@ for the tab, and a build without the flag has none of it (Vite drops the import)
 | Route | State |
 |---|---|
 | `POST /profiles/{id}/photos`, `POST /profiles/{id}/imports` (a PDF), `POST /profiles/{id}/confirmations` (`review_card`), `POST /profiles/{id}/review-cards/{card}/confirm`, `GET /profiles/{id}/review-cards/{card}` | live (E02) |
-| `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys`, `GET /profiles/{id}/keys`, `GET /consent/wording?purpose=share_with_family` | live (E12, W1) |
+| `POST /profiles/{id}/consents/sharing/preview`, `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys`, `GET /profiles/{id}/keys` | live (E12; the preview is this PR's backend seam) |
 | `GET /onboarding/conditions?language=` | mocked until E01 |
 | `GET` / `PUT /profiles/{id}/settings` | mocked until E01 |
 | `POST /profiles/{id}/biography`, `/biography/read-back`, `/biography/papers`, `/biography/close` | mocked until E01 |
 | `GET /profiles/{id}/plan?language=` | mocked until E01 |
 | `POST /profiles/{id}/biography/questions` (Keep / Not this one), `POST /profiles/{id}/plan/later` | mocked; **assumed** paths — aligned to E01's names when its branch lands; Keep goes to E05's `POST /profiles/{id}/appointments/{appt}/questions` once #105 is on main |
-| `POST /profiles/{id}/consents/sharing/preview`; `word` and `capture: "invite"` on a gap card | mocked; **proposed** — not on any branch yet (see below) |
+| `word` and `capture: "invite"` on a gap card | mocked; agreed with E01, which will include them |
 
 **Papers of every kind.** A PDF goes to `POST /imports` (sent as a `share`), anything else
 to `POST /photos`; both answer with the same review card. A line Nura could not read shows
@@ -169,10 +169,11 @@ the caregiver density keeps the header's.
 word's follow-up question and comes back with the gap closed; the invite gap goes to E12's
 flow — who, which parts, the words, one *I agree*, then `POST /consents/sharing` and a
 caregiver key to the same parts (`POST /keys`). Only on his own papers: the consent route
-takes the owner's own yes. The words are never composed here: the consent route renders them
-only at the moment of agreement, so the client asks a proposed
-`POST /consents/sharing/preview` for exactly the lines he will agree to, and sends back
-their version (the mock renders the live template for now).
+takes the owner's own yes. The words are never composed here: the client asks
+`POST /consents/sharing/preview`, which renders them with the same function the consent keeps
+them with — so what he reads is what is kept, word for word — and sends back their version.
+He names the person he lets in (*Their name*); the words use only that name, never the account
+the number may already be, and it gives way to the person's own when they sign in.
 
 **Nothing kept on the phone.** Settings, words, the biography, review cards and the plan live
 in memory (`src/onboarding/state.ts`) and on the backend, never in IndexedDB or web storage:

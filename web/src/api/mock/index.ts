@@ -4,9 +4,6 @@ import type {
   BiographyIn,
   BiographyOut,
   KeyOut,
-  SharingIn,
-  SharingPreviewOut,
-  WordingOut,
   ConditionsOut,
   PaperOut,
   PlanCardOut,
@@ -31,7 +28,7 @@ import { ANSWERS, GAP_ACTION, GAP_MISSING, GAP_UNLOCK, LEARNED, PROMPTS, QUESTIO
  *    POST /profiles/{id}/biography/questions       keep, or not, one question   (assumed)
  *    POST /profiles/{id}/biography/close           "That is all for today"
  *    GET  /profiles/{id}/plan?language=            the gap cards
- *    POST /profiles/{id}/plan/later                "Later" on one gap card      (assumed)
+ *    POST /profiles/{id}/plan/later                "Later" on one gap card
  *
  *  Installed only under `VITE_API_MOCK=1` (see `main.tsx`). Every other route — sign-in,
  *  doors, photos, review cards, confirmations — goes to the real API, and so does the one
@@ -159,34 +156,6 @@ function gapsFor(bio: BiographyOut | undefined, deferred: Record<string, number>
 }
 
 const PROFILE_ROUTE = /^\/profiles\/([^/]+)\/(settings|biography|plan)(\/[a-z-]+)?$/;
-const PREVIEW_ROUTE = /^\/profiles\/([^/]+)\/consents\/sharing\/preview$/;
-
-/** The backend's words for each part (`app.consent.texts.SCOPE_WORDS`, English), for the
- *  stand-in preview only: the real preview is the backend's, rendered by the same function
- *  the consent itself uses. */
-const PART_WORDS: Record<string, string> = {
-  medicines: "your medicines",
-  visits: "your visits to the doctor",
-  readings: "your blood pressure book and your sugar numbers",
-  records: "your papers",
-};
-
-/** The stand-in for the proposed `POST /consents/sharing/preview`: the live template and its
- *  live version (`GET /consent/wording`), filled the way `render_sharing` fills it. */
-async function preview(call: Call, passthrough: Passthrough): Promise<SharingPreviewOut> {
-  const asked = bodyOf<SharingIn>(call);
-  const words = await passthrough<WordingOut>("/consent/wording", {
-    query: { purpose: "share_with_family", language: asked.language },
-  });
-  const name = asked.holder_phone_e164;
-  const named = asked.relationship ? `${name}, your ${asked.relationship},` : name;
-  const parts = asked.scopes.map((part) => `- ${PART_WORDS[part] ?? part}`);
-  const lines = words.lines.flatMap((line) =>
-    line.includes("{parts}") ? parts : [line.replaceAll("{named}", named).replaceAll("{name}", name)],
-  );
-  return { wording_version: words.version, language: words.language, lines };
-}
-
 const bodyOf = <T>(call: Call): T => (call.body ?? {}) as T;
 const answer = <T>(value: T): Promise<T> => Promise.resolve(clone(value));
 
@@ -219,8 +188,6 @@ export function mockTransport(path: string, call: Call, passthrough: Passthrough
     const conditions: ConditionsOut = { language: call.query?.language ?? "en", version: "mock-1", words: conditionWords() };
     return answer(conditions);
   }
-  const previewing = PREVIEW_ROUTE.exec(path);
-  if (previewing && method === "POST") return preview(call, passthrough);
   const match = PROFILE_ROUTE.exec(path);
   if (!match) return undefined;
   const profileId = match[1]!;
