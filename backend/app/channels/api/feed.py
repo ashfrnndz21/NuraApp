@@ -29,6 +29,7 @@ from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.channels.api.feed_schemas import (
     EngagementIn,
     EngagementOut,
+    FeedItemOut,
     FeedPageOut,
     SearchJobIn,
     SearchJobOut,
@@ -37,10 +38,10 @@ from app.channels.api.feed_schemas import (
 from app.db import utcnow
 from app.delivery.feed.compose import today_for
 from app.delivery.feed.engagement import record_engagement
-from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page, top_three
+from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page, item_json, top_three
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs
 from app.delivery.feed.sources import list_sources
-from app.delivery.feed.twin import spoken_twin
+from app.delivery.feed.twin import one_card, spoken_twin
 from app.delivery.strings import language_for
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
@@ -193,3 +194,11 @@ async def search_jobs(context: Context, session: Db) -> list[SearchJobOut]:
 @router.get("/{profile_id}/search-jobs/{job_id}")
 async def search_job(job_id: uuid.UUID, context: Context, session: Db) -> SearchJobOut:
     return SearchJobOut.of(await get_job(session, context=context, job_id=job_id))
+
+
+@router.get("/{profile_id}/feed/{item_id}")
+async def feed_card(item_id: uuid.UUID, context: Context, session: Db) -> FeedItemOut:
+    """One card by its id, under the card's own scope: what a push opens (`/app/?open=<id>`,
+    #143). Not on this profile, or not for this key: refused, and the app falls back to Today."""
+    item = await one_card(session, context=context, item_id=item_id)
+    return FeedItemOut(**item_json(item, "generated"))

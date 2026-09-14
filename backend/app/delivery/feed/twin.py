@@ -62,3 +62,17 @@ async def spoken_twin(
         language=item.language,
         boundary=item.boundary,
     )
+
+
+async def one_card(session: AsyncSession, *, context: KeyContext, item_id: uuid.UUID) -> FeedItem:
+    """One card by its id, under its own scope: what a push opens (#143). A card that is not
+    on this profile is `NoSuchItem`; one this key may not see is refused, on the trail."""
+    found = await audited_read(
+        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id,)
+    )
+    if not found:
+        raise NoSuchItem(f"no card {item_id} on this profile")
+    item = found[0]
+    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+        context.require(item.scope)
+    return item

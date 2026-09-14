@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import * as nura from "./api/nura";
+import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
@@ -20,6 +21,7 @@ export type Screen =
   | { name: "claim"; offer: ClaimableOut }
   | { name: "forSomeone" }
   | { name: "today"; saved?: boolean }
+  | { name: "card"; item: FeedItemOut }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
   /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
@@ -46,6 +48,7 @@ export function go(next: Screen): void {
 
 /** After a token is in hand: who am I, which doors apply, and where to land. */
 export async function afterSignIn(): Promise<void> {
+  const opening = takeOpen();
   const bearer = token.value;
   if (!bearer) return go({ name: "signin" });
   me.value = await nura.me(bearer);
@@ -55,7 +58,7 @@ export async function afterSignIn(): Promise<void> {
   const still = remembered && known.find((each) => each.profile_id === remembered.profile_id);
   if (still) {
     await chooseProfile(still);
-    return go({ name: "today" });
+    return landOn(opening);
   }
   if (remembered && !still) {
     // The key to the remembered papers was closed since: nothing of them stays on the phone,
@@ -67,9 +70,23 @@ export async function afterSignIn(): Promise<void> {
   }
   if (doors.own && known.length === 1 && doors.claimable.length === 0) {
     await chooseProfile(doors.own);
-    return go({ name: "today" });
+    return landOn(opening);
   }
   go({ name: "doors", doors });
+}
+
+/** Where a restored session lands: the card a push opened (`?open=`, #143), else Today. */
+async function landOn(opening: string | null): Promise<void> {
+  const bearer = token.value;
+  const chosen = profile.value;
+  if (opening && bearer && chosen) {
+    const opened = await resolveOpen(opening, {
+      feedItem: (id) => nura.feedItem(bearer, chosen.profile_id, id),
+      dayNudges: () => nura.dayNudges(bearer, chosen.profile_id),
+    });
+    if (opened.kind === "card") return go({ name: "card", item: opened.item });
+  }
+  go({ name: "today" });
 }
 
 /** Open one profile's papers. Whatever the phone kept of another profile's page is dropped:

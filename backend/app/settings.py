@@ -120,6 +120,10 @@ class Settings:
     """NURA_VAPID_SUBJECT: who a push service may contact about these pushes, `mailto:` or
     `https:`. The three VAPID settings go together; with them the deployment pushes by Web
     Push (`app.delivery.push.WebPush`), without them it has no real push sender."""
+    account_retention_days: int = 30
+    """NURA_ACCOUNT_RETENTION_DAYS: how long a closed account's papers wait before they are
+    deleted, while his yes can still undo the closing (#143). 30 until counsel says otherwise
+    (docs/trust/account-closure.md)."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -199,6 +203,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     subject = vapid["SUBJECT"]
     if subject is not None and not subject.startswith(("mailto:", "https://")):
         raise MissingSetting("NURA_VAPID_SUBJECT is a mailto: address or an https: page")
+    retention = source.get("NURA_ACCOUNT_RETENTION_DAYS") or "30"
+    if not retention.isdigit() or int(retention) < 1:
+        raise MissingSetting("NURA_ACCOUNT_RETENTION_DAYS is a whole number of days, at least 1")
     return Settings(
         region=region,
         database_url=database_url,
@@ -226,6 +233,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         vapid_public_key=vapid["PUBLIC_KEY"],
         vapid_private_key=vapid["PRIVATE_KEY"],
         vapid_subject=subject,
+        account_retention_days=int(retention),
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),

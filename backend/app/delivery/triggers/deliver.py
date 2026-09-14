@@ -269,6 +269,7 @@ class Run:
                     region=self.acting.region,
                     person_id=person.id,
                     profile_id=self.profile.id,
+                    while_closing=True,
                 )
                 self._scopes[person.id] = context.scopes
         return self._scopes[person.id]
@@ -306,7 +307,11 @@ async def open_run(
     # the system's on the trail, never the patient's (`keys.context.as_the_system`).
     acting = as_the_system(
         await resolve_key_context(
-            session, region=via.settings.region, person_id=acting_id, profile_id=profile.id
+            session,
+            region=via.settings.region,
+            person_id=acting_id,
+            profile_id=profile.id,
+            while_closing=True,
         )
     )
     settings = await audited_read(
@@ -366,9 +371,13 @@ async def stand_in_for(
 
 
 async def _no_whatsapp(run: Run, person: Person) -> str | None:
+    """Why this person cannot be sent this on WhatsApp, if they cannot. His WhatsApp agreement
+    is for messages to him (#143); anyone else is told under the key his agreement to let
+    them in rests on, whose scope was checked for this message before any channel."""
     if not person.phone_e164:
         return "no number"
-    if not await run.whatsapp_agreed():
+    to_him = run.patient is not None and person.id == run.patient.id
+    if to_him and not await run.whatsapp_agreed():
         return "not agreed"
     return None
 

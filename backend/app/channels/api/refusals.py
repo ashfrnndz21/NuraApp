@@ -16,7 +16,7 @@ from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
-from app.channels.whatsapp.outbound.send import OutsideTheWindow
+from app.channels.whatsapp.outbound.send import NotLetInHere, OutsideTheWindow
 from app.channels.whatsapp.provider import NotAWebhook
 from app.consent.service import (
     NoConsent,
@@ -50,6 +50,7 @@ from app.family.roster import (
     NotTheDoer,
 )
 from app.family.thread import NoSuchTask as NoSuchTaskForCard
+from app.identity.closing import AlreadyClosing, NothingToUndo, NotTheirsToClose, TooLateToUndo
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
@@ -72,7 +73,7 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
-from app.keys.context import NoKey, OutOfScope
+from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
     AlreadyReviewed,
@@ -124,6 +125,12 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (AlreadyReviewed, 409),
     (SourceAlreadyListed, 409),
     (NoKey, 403),
+    (AccountClosing, 403),
+    (NotTheirsToClose, 403),
+    (AlreadyClosing, 409),
+    (NothingToUndo, 409),
+    (TooLateToUndo, 409),
+    (NotLetInHere, 403),
     (OutOfScope, 403),
     (OutOfRegion, 403),
     (NotTheirsToRead, 403),

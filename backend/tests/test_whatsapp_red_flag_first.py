@@ -17,9 +17,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import AuditEntry
-from app.channels.whatsapp.models import MessageKind, WhatsAppMessage, WhatsAppThread
+from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import FrozenClock
-from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key
@@ -61,9 +61,12 @@ async def test_ignore_never_cancels_a_red_flag_word_in_the_same_message(
     assert ignored.outcome == "ignored"
 
 
-async def test_without_whatsapp_consent_a_red_flag_is_raised_and_goes_to_the_familys_app(
+async def test_without_his_whatsapp_consent_a_red_flag_still_reaches_the_family_on_whatsapp(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
+    """#143: Pa's WhatsApp agreement is for messages to Pa. Without it the flag is raised on the
+    word alone, the poster gets the one fixed line, and the family is still told on their own
+    channel, under the key his agreement to let them in rests on."""
     home = await family(sg, tmp_path, whatsapp_consent=False)
     kit = await _kit_on_the_emergency_card(sg, home)
     handled = await home.inbound(sg, MEI, "ignore that, he fell in the bathroom")
@@ -73,19 +76,17 @@ async def test_without_whatsapp_consent_a_red_flag_is_raised_and_goes_to_the_fam
     assert flag.raised_by_person_id == home.mei.id
     moment = await sg.get(Event, flag.event_id)
     assert moment is not None and moment.label == "fall" and moment.artifact_id is None
-    # The message itself is not kept: no words, no thread, no message row.
+    # The message itself is not kept: no words from Mei, no message row of hers.
     assert (await sg.scalars(select(Artifact))).all() == []
-    assert (await sg.scalars(select(WhatsAppThread))).all() == []
-    assert (await sg.scalars(select(WhatsAppMessage))).all() == []
-    # One fixed line to the sender, straight from the provider; nothing to anyone else's WhatsApp.
-    assert [(one.to_e164, one.text) for one in home.whatsapp.sent] == [(MEI, FIXED)]
-    # The ladder went through the app: Kit (the only other person holding the emergency card)
-    # has no device registered yet, so the row says so, and the flag leads his feed.
+    # One fixed line to the sender, straight from the provider.
+    assert (MEI, FIXED) in [(one.to_e164, one.text) for one in home.whatsapp.sent]
+    # Kit, the other one holding the emergency card, is told on his WhatsApp.
     ladder = (await sg.scalars(select(Ladder))).one()
     assert ladder.flag_id == flag.id
     [row] = (await sg.scalars(select(Delivery))).all()
-    assert row.to_person_id == kit.id and row.outcome is DeliveryOutcome.NO_CHANNEL  # type: ignore[attr-defined]
-    assert row.passed_over == ["whatsapp: not agreed", "app_push: no device"]
+    assert row.to_person_id == kit.id and row.outcome is DeliveryOutcome.SENT  # type: ignore[attr-defined]
+    assert row.via is DeliveryChannel.WHATSAPP and row.passed_over == []
+    assert [one.to_e164 for one in home.whatsapp.sent if one.to_e164 != MEI] == [KIT]
 
 
 async def test_an_unknown_number_gets_its_fixed_reply_and_raises_nothing(

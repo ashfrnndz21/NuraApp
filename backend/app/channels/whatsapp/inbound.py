@@ -72,7 +72,13 @@ from app.ingestion.objects import check_key, sha256_of
 from app.ingestion.photos import store_photo
 from app.ingestion.review import review_photo
 from app.keys.confirm import confirm
-from app.keys.context import KeyContext, OutOfScope, owned_profile, resolve_key_context
+from app.keys.context import (
+    KeyContext,
+    OutOfScope,
+    closing_since,
+    owned_profile,
+    resolve_key_context,
+)
 from app.keys.models import Key
 from app.keys.scopes import Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
@@ -147,9 +153,10 @@ def _handle(person_id: uuid.UUID | None, phone: str) -> str:
 
 
 async def _profiles_reachable(
-    session: AsyncSession, *, region: Region, person: Person
+    session: AsyncSession, *, region: Region, person: Person, closing: bool = False
 ) -> list[uuid.UUID]:
-    """The profiles this person may act on here: their own, then every live key's."""
+    """The profiles this person may act on here: their own, then every live key's. A profile
+    whose account is closing is nobody's to act on (#143); with `closing`, only those."""
     moment = utcnow()
     found: list[uuid.UUID] = []
     own = await owned_profile(session, region=region, owner_person_id=person.id)
@@ -163,7 +170,11 @@ async def _profiles_reachable(
             profile = await session.get(Profile, key.profile_id)
             if profile is not None and profile.region is region:
                 found.append(key.profile_id)
-    return found
+    return [
+        profile_id
+        for profile_id in found
+        if (await closing_since(session, profile_id=profile_id) is not None) is closing
+    ]
 
 
 async def _most_recent_thread(
@@ -190,9 +201,10 @@ async def _stranger(
     *,
     key: str = "unknown_number",
     language: str | None = None,
+    **params: str,
 ) -> Handled:
     """One fixed reply, no health content, nothing stored. Logged by a handle."""
-    text = reply(key, language)
+    text = reply(key, language, **params)
     await providers.whatsapp.send_text(message.from_e164, text)
     log.info("whatsapp: %s reply to %s", key, _handle(None, message.from_e164))
     return Handled(outcome=key, stranger_reply=text)
@@ -1054,6 +1066,16 @@ async def handle_inbound(
 
     reachable = await _profiles_reachable(session, region=region, person=person)
     if not reachable:
+        if await _profiles_reachable(session, region=region, person=person, closing=True):
+            # Every family this number belongs to is closing its account: one fixed line,
+            # with who to call — nothing kept, nothing raised, nobody told through Nura.
+            return await _stranger(
+                providers,
+                message,
+                key="closing",
+                language=person.language,
+                emergency_number=EMERGENCY_NUMBER[region.value],
+            )
         return await _stranger(providers, message)
     profile_id = reachable[0]
     if len(reachable) > 1:
@@ -1073,8 +1095,12 @@ async def handle_inbound(
                 )
                 if flagged
                 else await _which_one(
-                    session, settings=settings, providers=providers, person=person,
-                    profiles=reachable, message=message,
+                    session,
+                    settings=settings,
+                    providers=providers,
+                    person=person,
+                    profiles=reachable,
+                    message=message,
                 )
             )
             if settled is not None:

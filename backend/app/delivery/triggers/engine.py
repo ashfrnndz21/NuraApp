@@ -64,6 +64,7 @@ from app.errors import Refusal
 from app.family.models import PushChannel, ScheduledPush
 from app.identity.models import Person
 from app.ingestion.models import ReviewCard
+from app.keys.context import closing_since
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Dose, Frequency
 from app.medicines.service import LineView, active_lines
@@ -106,6 +107,12 @@ async def run_due(
 ) -> Report:
     """Evaluate every trigger for this profile at `at` (now when not given)."""
     run = await open_run(session, via=via, profile_id=profile_id, at=at or utcnow())
+    closing = await closing_since(session, profile_id=profile_id)
+    if closing is not None:
+        # A closing account (#143): nothing more goes out about him — except a red flag raised
+        # before he closed it, which is never hidden from the day it was raised.
+        await _flags(run, raised_before=closing)
+        return Report(at=run.at, day=run.day, sent=tuple(run.report))
     await _flags(run)
     if run.patient is not None and run.acting.allows(Scope.MEDICINES):
         lines = await active_lines(
@@ -128,10 +135,13 @@ async def run_due(
 # --- alerts first ----------------------------------------------------------------------------------
 
 
-async def _flags(run: Run) -> None:
-    """Every open flag not held back: its ladder, started if it has none, climbed."""
+async def _flags(run: Run, *, raised_before: datetime | None = None) -> None:
+    """Every open flag not held back: its ladder, started if it has none, climbed. On a
+    closing account, only the flags raised before the closing (`raised_before`)."""
     for flag in await open_flags(run.session, context=run.acting):
         if flag.suppressed_because is not None:
+            continue
+        if raised_before is not None and as_utc(flag.raised_at) > as_utc(raised_before):
             continue
         ladder = await flag_ladder(run, flag, exclude=())
         await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)

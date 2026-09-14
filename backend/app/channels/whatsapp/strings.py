@@ -46,6 +46,25 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Nura 不是医生。",
         ),
     },
+    # A number whose only family is closing its account (#143): nothing is kept and nobody is
+    # told through Nura, so the one fixed line always says who to call.
+    "closing": {
+        "en": (
+            "Nura is not keeping these papers any more.",
+            "Nobody is told through Nura now.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak lagi menyimpan surat-surat ini.",
+            "Tiada sesiapa diberitahu melalui Nura sekarang.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": (
+            "Nura 已不再保存这些文件。",
+            "现在不会通过 Nura 通知任何人。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
+    },
     "more_than_one": {
         "en": ("You are on more than one family list.", "Open the app to say who this is about."),
         "ms": (
@@ -209,7 +228,11 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Saya letak ia paling atas dalam aplikasi keluarga.",
             "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
         ),
-        "zh": ("这个我们不等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
+        "zh": (
+            "这个我们不等。",
+            "我把它放在家人应用的最上面。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
     },
     # A red-flag word from someone on more than one family's list: raised on each, then asked.
     "red_flag_which": {
@@ -225,7 +248,12 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Ini tentang siapa?",
             "Hantar nama kepada saya, {either}.",
         ),
-        "zh": ("这个我们不等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
+        "zh": (
+            "这个我们不等。",
+            "我把它放在{both}家人应用的最上面。",
+            "是关于谁的？",
+            "请把名字发给我：{either}。",
+        ),
     },
     "red_flag_which_thanks": {
         "en": ("Thank you, it is about {name}.", "I stopped asking the other family."),

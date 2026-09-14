@@ -36,7 +36,7 @@ from app.delivery.voice import Voice, voiced
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.ingestion.objects import ObjectStore
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope
 from app.safety.plain_words import verify
 from app.state.service import StateView
@@ -130,6 +130,37 @@ async def thread_for(
     )
 
 
+class NotLetInHere(Refusal):
+    """This person holds no key to the profile, so Nura says nothing to them about it."""
+
+
+async def _may_message(session: AsyncSession, *, context: KeyContext, person: Person) -> None:
+    """Whether Nura may message this person about the profile (#143). The patient's WhatsApp
+    agreement is for messages to him; anyone else is told under the key his agreement to let
+    them in rests on — a daughter's red-flag notice never waits on his WhatsApp."""
+    profile = await session.get(Profile, context.profile_id)
+    assert profile is not None  # the context was resolved from this row
+    patient = profile.owner_person_id == person.id or (
+        profile.owner_person_id is None
+        and profile.patient_phone_e164 is not None
+        and profile.patient_phone_e164 == person.phone_e164
+    )
+    if patient:
+        await require_consent(
+            session,
+            context=context,
+            purpose=ConsentPurpose.WHATSAPP,
+            scope=Scope.SEND,
+            channel=Channel.WHATSAPP,
+        )
+        return
+    async with audited_guard(
+        session, context, Action.SHARE, Scope.SEND, "whatsapp_message", channel=Channel.WHATSAPP
+    ):
+        if not await holds_the_profile(session, profile_id=context.profile_id, person_id=person.id):
+            raise NotLetInHere(f"person {person.id} holds no key here")
+
+
 def _render(
     kind: str, language: str, params: Mapping[str, str]
 ) -> tuple[str, str | None, str | None]:
@@ -162,13 +193,7 @@ async def send(
     """
     if not to_person.phone_e164:
         raise NoNumber(f"person {to_person.id} has no phone number")
-    await require_consent(
-        session,
-        context=context,
-        purpose=ConsentPurpose.WHATSAPP,
-        scope=Scope.SEND,
-        channel=Channel.WHATSAPP,
-    )
+    await _may_message(session, context=context, person=to_person)
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)
@@ -262,13 +287,7 @@ async def send_voice_note(
     """
     if not to_person.phone_e164:
         raise NoNumber(f"person {to_person.id} has no phone number")
-    await require_consent(
-        session,
-        context=context,
-        purpose=ConsentPurpose.WHATSAPP,
-        scope=Scope.SEND,
-        channel=Channel.WHATSAPP,
-    )
+    await _may_message(session, context=context, person=to_person)
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)

@@ -18,11 +18,12 @@ import hashlib
 import hmac
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
+from xml.etree import ElementTree
 
 import httpx
 
-from app.ingestion.objects import NoSuchObject, check_key
+from app.ingestion.objects import NoSuchObject, check_key, check_prefix
 from app.regions import Region
 
 ALGORITHM = "AWS4-HMAC-SHA256"
@@ -165,3 +166,44 @@ class S3ObjectStore:
         if response.status_code != 200:
             raise ObjectStoreUnavailable(f"the bucket refused a get ({response.status_code})")
         return response.content
+
+    async def delete(self, key: str) -> None:
+        url = self.url_of(key)
+        response = await self._client.delete(url, headers=self._signed("DELETE", url, EMPTY_SHA256))
+        if response.status_code not in (200, 204, 404):
+            raise ObjectStoreUnavailable(f"the bucket refused a delete ({response.status_code})")
+
+    async def delete_prefix(self, prefix: str) -> int:
+        """List every object under one profile's prefix (ListObjectsV2, page by page), then
+        delete each. The whole listing is taken before the first delete, so no page is walked
+        over a bucket it is changing."""
+        full = f"{self._region.value}/{check_prefix(prefix)}/"
+        keys: list[str] = []
+        token: str | None = None
+        while True:
+            query = {"list-type": "2", "prefix": full}
+            if token:
+                query["continuation-token"] = token
+            url = f"{self._base}/?{urlencode(sorted(query.items()))}"
+            response = await self._client.get(url, headers=self._signed("GET", url, EMPTY_SHA256))
+            if response.status_code != 200:
+                raise ObjectStoreUnavailable(f"the bucket refused a list ({response.status_code})")
+            root = ElementTree.fromstring(response.content)
+            keys += [el.text or "" for el in root.iter() if el.tag.split("}")[-1] == "Key"]
+            truncated = next(
+                (el.text for el in root.iter() if el.tag.split("}")[-1] == "IsTruncated"), "false"
+            )
+            token = next(
+                (el.text for el in root.iter() if el.tag.split("}")[-1] == "NextContinuationToken"),
+                None,
+            )
+            if truncated != "true" or not token:
+                break
+        for key in keys:
+            if not key.startswith(full):
+                raise ObjectStoreUnavailable("the bucket listed a key outside the prefix asked for")
+            url = f"{self._base}/{key}"
+            gone = await self._client.delete(url, headers=self._signed("DELETE", url, EMPTY_SHA256))
+            if gone.status_code not in (200, 204, 404):
+                raise ObjectStoreUnavailable(f"the bucket refused a delete ({gone.status_code})")
+        return len(keys)

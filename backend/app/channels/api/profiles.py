@@ -32,6 +32,7 @@ from app.channels.api.schemas import (
     ClaimableOut,
     ClaimConfirmIn,
     ClaimIn,
+    CloseConfirmIn,
     ConfirmationOut,
     ConfirmIn,
     ConsentIn,
@@ -77,6 +78,7 @@ from app.errors import Refusal
 from app.family.privacy import only_me_draft
 from app.family.pushes import preview_push, push_draft
 from app.family.roster import task_done_draft_for
+from app.identity.closing import close_draft_for
 from app.identity.doors import (
     claim_draft_for,
     claim_profile,
@@ -224,6 +226,14 @@ async def mint_confirmation(
     with whom, when and why; for a question, the words as typed; for a post-visit summary,
     every item as decided (E05).
     """
+    if isinstance(body, CloseConfirmIn):
+        closing = await close_draft_for(
+            session,
+            context=context,
+            language=body.language,
+            retention_days=settings_of(request).account_retention_days,
+        )
+        return ConfirmationOut.of(await confirm(session, context, closing))
     if isinstance(body, ClaimConfirmIn):
         draft = await claim_draft_for(session, context=context, language=body.language)
         return ConfirmationOut.of(await confirm(session, context, draft))

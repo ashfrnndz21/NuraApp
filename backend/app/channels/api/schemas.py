@@ -607,6 +607,14 @@ class OnlyMeConfirmIn(BaseModel):
     only_me: bool = True
 
 
+class CloseConfirmIn(BaseModel):
+    """The owner's yes to closing his account, to the lines shown in `language` (#143). The
+    draft is recomputed from the words and the day, so nothing here can change them."""
+
+    subject: Literal[ConfirmSubject.CLOSE_ACCOUNT]
+    language: str = Field(min_length=2, max_length=16)
+
+
 class DriveConfirmIn(BaseModel):
     """The chief's yes to one person driving him to one visit (E05-03)."""
 
@@ -684,6 +692,7 @@ ConfirmIn = Annotated[
     | SummaryConfirmIn
     | KeyChangeConfirmIn
     | OnlyMeConfirmIn
+    | CloseConfirmIn
     | TaskDoneConfirmIn
     | PushConfirmIn
     | StatusConfirmIn
