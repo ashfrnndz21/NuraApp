@@ -640,8 +640,6 @@ class PushConfirmIn(PushScheduleIn):
     subject: Literal[ConfirmSubject.PUSH]
 
 
-
-
 class StatusConfirmIn(BaseModel):
     """A yes to one step of a visit's status: this visit, to this status."""
 
@@ -666,7 +664,20 @@ class AttachConfirmIn(BaseModel):
 
 
 ConfirmIn = Annotated[
-    ClaimConfirmIn | ReviewCardConfirmIn | MedicineConfirmIn | AppointmentConfirmIn | QuestionConfirmIn | SummaryConfirmIn | KeyChangeConfirmIn | OnlyMeConfirmIn | TaskDoneConfirmIn | PushConfirmIn | StatusConfirmIn | AttachConfirmIn | RoutineConfirmIn | ProposalConfirmIn,
+    ClaimConfirmIn
+    | ReviewCardConfirmIn
+    | MedicineConfirmIn
+    | AppointmentConfirmIn
+    | QuestionConfirmIn
+    | SummaryConfirmIn
+    | KeyChangeConfirmIn
+    | OnlyMeConfirmIn
+    | TaskDoneConfirmIn
+    | PushConfirmIn
+    | StatusConfirmIn
+    | AttachConfirmIn
+    | RoutineConfirmIn
+    | ProposalConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -1690,9 +1701,6 @@ class EventNoteOut(BaseModel):
 
 
 # --- the visit loop (E05) ------------------------------------------------------------------------
-
-
-
 
 
 class AppointmentOut(BaseModel):

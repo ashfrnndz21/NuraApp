@@ -82,7 +82,9 @@ class TrendPointOut(BaseModel):
             lab=point.lab,
             band=point.band.value,
             range=None if point.range is None else RangeOut.of(point.range),
-            no_range_because=None if point.no_range_because is None else point.no_range_because.value,
+            no_range_because=None
+            if point.no_range_because is None
+            else point.no_range_because.value,
         )
 
 

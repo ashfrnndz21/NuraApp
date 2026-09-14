@@ -1,0 +1,356 @@
+"""Every word the feeling cloud, its one question and the note say, in his three languages.
+
+Each template is a whole line, filled and never assembled: `{doctor}` is the doctor's name
+("Dr Tan", or "your doctor"), `{medicine}` his name for the medicine
+(`app.medicines.strings.PLAIN_NAME`), `{date}` "Monday 14 September", `{count}` a digit, and
+`{when}` one of `WHEN`, which completes the line it sits in. Every table is tagged `@patient`
+so `make plain-words` holds it to docs/plain-words.md; the lines the backend fills at run
+time are verified again before they reach him (`app.reasoning.feelings.inference`).
+
+The Malay and Chinese lines are a first translation awaiting a native speaker's pass, as the
+boundary's are (`app.safety.boundary`).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+
+from app.reasoning.feelings.words import Answer, FollowUp
+from app.safety.boundary import language_of
+from app.safety.red_flags import Feeling
+
+__all__ = ["language_of"]
+
+# @patient phrase
+WORDS: Mapping[str, Mapping[Feeling, str]] = {
+    "en": {
+        Feeling.FALL: "Had a fall",
+        Feeling.CHEST_TIGHTNESS: "Chest pain",
+        Feeling.BREATHLESS_AT_REST: "Short of breath sitting still",
+        Feeling.ONE_SIDED_SWELLING: "One leg swollen",
+        Feeling.WORST_HEADACHE: "Worst headache ever",
+        Feeling.SUDDEN_BLURRING: "Suddenly blurry eyes",
+        Feeling.CONFUSION: "Muddled",
+        Feeling.SHAKY_SWEATY: "Shaky and sweaty",
+        Feeling.WEIGHT_GAIN: "Heavier",
+        Feeling.DIZZY: "Dizzy",
+        Feeling.CRAMPS: "Cramps",
+        Feeling.THIRSTY: "Very thirsty",
+        Feeling.TIRED: "Tired",
+        Feeling.ACHES: "Muscle aches",
+        Feeling.HEADACHE: "Headache",
+        Feeling.PAIN: "Pain",
+        Feeling.BREATHLESS: "Short of breath",
+        Feeling.LOW: "Low",
+        Feeling.WORRIED: "Worried",
+        Feeling.CANT_SLEEP: "Poor sleep",
+        Feeling.SWOLLEN_ANKLES: "Swollen ankles",
+        Feeling.STOMACH_UPSET: "Upset stomach",
+        Feeling.FINE: "Fine today",
+    },
+    "ms": {
+        Feeling.FALL: "Terjatuh",
+        Feeling.CHEST_TIGHTNESS: "Sakit dada",
+        Feeling.BREATHLESS_AT_REST: "Sesak nafas semasa duduk",
+        Feeling.ONE_SIDED_SWELLING: "Sebelah kaki bengkak",
+        Feeling.WORST_HEADACHE: "Sakit kepala paling teruk",
+        Feeling.SUDDEN_BLURRING: "Mata tiba-tiba kabur",
+        Feeling.CONFUSION: "Keliru",
+        Feeling.SHAKY_SWEATY: "Menggigil dan berpeluh",
+        Feeling.WEIGHT_GAIN: "Berat naik",
+        Feeling.DIZZY: "Pening",
+        Feeling.CRAMPS: "Kejang otot",
+        Feeling.THIRSTY: "Sangat dahaga",
+        Feeling.TIRED: "Letih",
+        Feeling.ACHES: "Sakit otot",
+        Feeling.HEADACHE: "Sakit kepala",
+        Feeling.PAIN: "Sakit",
+        Feeling.BREATHLESS: "Sesak nafas",
+        Feeling.LOW: "Sedih",
+        Feeling.WORRIED: "Risau",
+        Feeling.CANT_SLEEP: "Susah tidur",
+        Feeling.SWOLLEN_ANKLES: "Buku lali bengkak",
+        Feeling.STOMACH_UPSET: "Perut tidak selesa",
+        Feeling.FINE: "Sihat hari ini",
+    },
+    "zh": {
+        Feeling.FALL: "跌倒了",
+        Feeling.CHEST_TIGHTNESS: "胸口痛",
+        Feeling.BREATHLESS_AT_REST: "坐着也喘",
+        Feeling.ONE_SIDED_SWELLING: "一条腿肿",
+        Feeling.WORST_HEADACHE: "最痛的头痛",
+        Feeling.SUDDEN_BLURRING: "眼睛突然模糊",
+        Feeling.CONFUSION: "糊涂",
+        Feeling.SHAKY_SWEATY: "发抖出汗",
+        Feeling.WEIGHT_GAIN: "体重增加",
+        Feeling.DIZZY: "头晕",
+        Feeling.CRAMPS: "抽筋",
+        Feeling.THIRSTY: "很口渴",
+        Feeling.TIRED: "累",
+        Feeling.ACHES: "肌肉酸痛",
+        Feeling.HEADACHE: "头痛",
+        Feeling.PAIN: "痛",
+        Feeling.BREATHLESS: "气短",
+        Feeling.LOW: "心情低落",
+        Feeling.WORRIED: "担心",
+        Feeling.CANT_SLEEP: "睡不好",
+        Feeling.SWOLLEN_ANKLES: "脚踝肿",
+        Feeling.STOMACH_UPSET: "肚子不舒服",
+        Feeling.FINE: "今天还好",
+    },
+}
+"""The word on the cloud: his word for how he feels, never a condition."""
+
+# @patient
+PROMPT: Mapping[str, str] = {
+    "en": "How are you feeling today?",
+    "ms": "Apa rasa anda hari ini?",
+    "zh": "您今天感觉怎么样？",
+}
+"""The one line above the words. Never a form, never a scale."""
+
+# @patient
+LEADS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "new_medicine": "{medicine} is new since {date}.",
+        "after_discharge": "You came home from hospital on {date}.",
+        "reading_trend": "Your last {count} blood pressure numbers went up each time.",
+    },
+    "ms": {
+        "new_medicine": "{medicine} baru sejak {date}.",
+        "after_discharge": "Anda pulang dari hospital pada {date}.",
+        "reading_trend": "{count} bacaan tekanan darah terakhir anda naik setiap kali.",
+    },
+    "zh": {
+        "new_medicine": "{medicine}从{date}起是新的。",
+        "after_discharge": "您{date}从医院回家。",
+        "reading_trend": "您最近{count}次的血压一次比一次高。",
+    },
+}
+"""What changed, said before the question when the cloud comes forward after a change. The
+same words open the check-in nudge (`app.delivery.nudges.strings`)."""
+
+# @patient
+QUESTIONS: Mapping[str, Mapping[FollowUp, str]] = {
+    "en": {
+        FollowUp.SINCE_WHEN: "When did it begin?",
+        FollowUp.MORE_THAN_YESTERDAY: "Is it more than yesterday?",
+        FollowUp.AT_REST: "Is it there even when you sit still?",
+        FollowUp.ONE_SIDE: "Is only one leg swollen?",
+        FollowUp.WORST_EVER: "Is it the worst headache of your life?",
+    },
+    "ms": {
+        FollowUp.SINCE_WHEN: "Bila ia bermula?",
+        FollowUp.MORE_THAN_YESTERDAY: "Adakah ia lebih teruk daripada semalam?",
+        FollowUp.AT_REST: "Adakah ia berlaku walaupun anda duduk diam?",
+        FollowUp.ONE_SIDE: "Adakah hanya sebelah kaki yang bengkak?",
+        FollowUp.WORST_EVER: "Adakah ini sakit kepala paling teruk dalam hidup anda?",
+    },
+    "zh": {
+        FollowUp.SINCE_WHEN: "什么时候开始的？",
+        FollowUp.MORE_THAN_YESTERDAY: "比昨天更厉害吗？",
+        FollowUp.AT_REST: "坐着不动的时候也会这样吗？",
+        FollowUp.ONE_SIDE: "是不是只有一条腿肿？",
+        FollowUp.WORST_EVER: "这是您这辈子最痛的头痛吗？",
+    },
+}
+"""The one thing a tap asks back (`app.reasoning.feelings.words.FollowUp`)."""
+
+# @patient phrase
+ANSWER_WORDS: Mapping[str, Mapping[Answer, str]] = {
+    "en": {
+        Answer.TODAY: "Today",
+        Answer.YESTERDAY: "Since yesterday",
+        Answer.FEW_DAYS: "A few days",
+        Answer.WEEK_OR_MORE: "A week or more",
+        Answer.MORE: "More",
+        Answer.SAME: "The same",
+        Answer.LESS: "Less",
+        Answer.YES: "Yes",
+        Answer.NO: "No",
+    },
+    "ms": {
+        Answer.TODAY: "Hari ini",
+        Answer.YESTERDAY: "Sejak semalam",
+        Answer.FEW_DAYS: "Beberapa hari",
+        Answer.WEEK_OR_MORE: "Seminggu atau lebih",
+        Answer.MORE: "Lebih teruk",
+        Answer.SAME: "Sama",
+        Answer.LESS: "Kurang",
+        Answer.YES: "Ya",
+        Answer.NO: "Tidak",
+    },
+    "zh": {
+        Answer.TODAY: "今天",
+        Answer.YESTERDAY: "从昨天开始",
+        Answer.FEW_DAYS: "几天了",
+        Answer.WEEK_OR_MORE: "一个星期或更久",
+        Answer.MORE: "更厉害",
+        Answer.SAME: "一样",
+        Answer.LESS: "好一点",
+        Answer.YES: "是",
+        Answer.NO: "不是",
+    },
+}
+"""The buttons under the question."""
+
+# @patient
+FINE_LINES: Mapping[str, tuple[str, str]] = {
+    "en": ("That is good to hear.", "Nura will ask again when something changes."),
+    "ms": ("Baguslah, terima kasih.", "Nura akan tanya lagi bila ada perubahan."),
+    "zh": ("那就好。", "有变化的时候，Nura 会再问您。"),
+}
+"""What "Fine today" says back, and why the cloud goes away."""
+
+# @patient headline
+NOTE_HEADLINE: Mapping[str, str] = {
+    "en": "Things to tell {doctor}",
+    "ms": "Perkara untuk diberitahu kepada {doctor}",
+    "zh": "要告诉{doctor}的事",
+}
+
+# @patient
+TELL: Mapping[str, Mapping[Feeling, str]] = {
+    "en": {
+        Feeling.DIZZY: "Tell {doctor} you feel dizzy {when}.",
+        Feeling.TIRED: "Tell {doctor} you feel tired {when}.",
+        Feeling.PAIN: "Tell {doctor} about the pain {when}.",
+        Feeling.BREATHLESS: "Tell {doctor} you get short of breath {when}.",
+        Feeling.LOW: "Tell {doctor} you feel low {when}.",
+        Feeling.WORRIED: "Tell {doctor} you feel worried {when}.",
+        Feeling.CANT_SLEEP: "Tell {doctor} you are not sleeping well {when}.",
+        Feeling.CRAMPS: "Tell {doctor} about the cramps {when}.",
+        Feeling.THIRSTY: "Tell {doctor} you feel very thirsty {when}.",
+        Feeling.ACHES: "Tell {doctor} about the muscle aches {when}.",
+        Feeling.HEADACHE: "Tell {doctor} about the headache {when}.",
+        Feeling.SWOLLEN_ANKLES: "Tell {doctor} about your swollen ankles {when}.",
+        Feeling.STOMACH_UPSET: "Tell {doctor} about your upset stomach {when}.",
+    },
+    "ms": {
+        Feeling.DIZZY: "Beritahu {doctor} bahawa anda rasa pening {when}.",
+        Feeling.TIRED: "Beritahu {doctor} bahawa anda rasa letih {when}.",
+        Feeling.PAIN: "Beritahu {doctor} tentang rasa sakit itu {when}.",
+        Feeling.BREATHLESS: "Beritahu {doctor} bahawa anda sesak nafas {when}.",
+        Feeling.LOW: "Beritahu {doctor} bahawa anda rasa sedih {when}.",
+        Feeling.WORRIED: "Beritahu {doctor} bahawa anda rasa risau {when}.",
+        Feeling.CANT_SLEEP: "Beritahu {doctor} bahawa anda susah tidur {when}.",
+        Feeling.CRAMPS: "Beritahu {doctor} tentang kejang otot {when}.",
+        Feeling.THIRSTY: "Beritahu {doctor} bahawa anda rasa sangat dahaga {when}.",
+        Feeling.ACHES: "Beritahu {doctor} tentang sakit otot {when}.",
+        Feeling.HEADACHE: "Beritahu {doctor} tentang sakit kepala {when}.",
+        Feeling.SWOLLEN_ANKLES: "Beritahu {doctor} tentang buku lali yang bengkak {when}.",
+        Feeling.STOMACH_UPSET: "Beritahu {doctor} bahawa perut anda tidak selesa {when}.",
+    },
+    "zh": {
+        Feeling.DIZZY: "告诉{doctor}：您头晕，{when}。",
+        Feeling.TIRED: "告诉{doctor}：您觉得累，{when}。",
+        Feeling.PAIN: "告诉{doctor}：您身上痛，{when}。",
+        Feeling.BREATHLESS: "告诉{doctor}：您气短，{when}。",
+        Feeling.LOW: "告诉{doctor}：您心情低落，{when}。",
+        Feeling.WORRIED: "告诉{doctor}：您很担心，{when}。",
+        Feeling.CANT_SLEEP: "告诉{doctor}：您睡不好，{when}。",
+        Feeling.CRAMPS: "告诉{doctor}：您抽筋，{when}。",
+        Feeling.THIRSTY: "告诉{doctor}：您很口渴，{when}。",
+        Feeling.ACHES: "告诉{doctor}：您肌肉酸痛，{when}。",
+        Feeling.HEADACHE: "告诉{doctor}：您头痛，{when}。",
+        Feeling.SWOLLEN_ANKLES: "告诉{doctor}：您脚踝肿，{when}。",
+        Feeling.STOMACH_UPSET: "告诉{doctor}：您肚子不舒服，{when}。",
+    },
+}
+"""The first thing to mention: his own word, and when, as he answered the one question."""
+
+# @patient phrase
+WHEN: Mapping[str, Mapping[Answer, str]] = {
+    "en": {
+        Answer.TODAY: "today",
+        Answer.YESTERDAY: "since yesterday",
+        Answer.FEW_DAYS: "for a few days now",
+        Answer.WEEK_OR_MORE: "for a week or more",
+        Answer.MORE: "and that it is worse than yesterday",
+        Answer.SAME: "and that it is the same as yesterday",
+        Answer.LESS: "and that it is better than yesterday",
+        Answer.NO: "today",
+    },
+    "ms": {
+        Answer.TODAY: "hari ini",
+        Answer.YESTERDAY: "sejak semalam",
+        Answer.FEW_DAYS: "sejak beberapa hari",
+        Answer.WEEK_OR_MORE: "sejak seminggu atau lebih",
+        Answer.MORE: "dan ia lebih teruk daripada semalam",
+        Answer.SAME: "dan ia sama seperti semalam",
+        Answer.LESS: "dan ia lebih baik daripada semalam",
+        Answer.NO: "hari ini",
+    },
+    "zh": {
+        Answer.TODAY: "今天开始的",
+        Answer.YESTERDAY: "从昨天开始",
+        Answer.FEW_DAYS: "已经几天了",
+        Answer.WEEK_OR_MORE: "已经一个星期或更久了",
+        Answer.MORE: "比昨天更厉害",
+        Answer.SAME: "和昨天一样",
+        Answer.LESS: "比昨天好一点",
+        Answer.NO: "今天开始的",
+    },
+}
+"""How the answer completes the line. A no to a question that tells a red variant apart says
+only that it is today."""
+
+# @patient
+REASON: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "new_medicine": "This can come from {medicine}, new since {date}.",
+        "reading_trend": "Your last {count} blood pressure numbers went up each time.",
+        "visit": "You went to see a doctor on {date}.",
+        "discharge": "You came home from hospital on {date}.",
+    },
+    "ms": {
+        "new_medicine": "Ini boleh berlaku kerana {medicine}, yang baru sejak {date}.",
+        "reading_trend": "{count} bacaan tekanan darah terakhir anda naik setiap kali.",
+        "visit": "Anda berjumpa doktor pada {date}.",
+        "discharge": "Anda pulang dari hospital pada {date}.",
+    },
+    "zh": {
+        "new_medicine": "这可能和{medicine}有关，它从{date}起是新的。",
+        "reading_trend": "您最近{count}次的血压一次比一次高。",
+        "visit": "您{date}看过医生。",
+        "discharge": "您{date}从医院回家。",
+    },
+}
+"""The second thing to mention, when the record has one: what the tap was read against. A
+medicine line is said only where its licensed monograph lists this feeling; a direction in
+his blood pressure only where the arithmetic shows one. Never a cause, never a condition."""
+
+# @patient
+THEN: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "for_the_doctor": "Nura will keep this for your visit to {doctor}.",
+        "for_the_next_visit": "Nura will keep this for your next visit.",
+        "watch": "Nura will ask you again in a week.",
+    },
+    "ms": {
+        "for_the_doctor": "Nura akan simpan ini untuk lawatan anda ke {doctor}.",
+        "for_the_next_visit": "Nura akan simpan ini untuk lawatan anda yang akan datang.",
+        "watch": "Nura akan tanya anda lagi dalam seminggu.",
+    },
+    "zh": {
+        "for_the_doctor": "Nura 会把这个留到您看{doctor}的时候。",
+        "for_the_next_visit": "Nura 会把这个留到您下次看医生的时候。",
+        "watch": "一个星期后，Nura 会再问您。",
+    },
+}
+"""Who does the next thing, and when (docs/plain-words.md rule 7)."""
+
+
+def catalogue() -> list[tuple[str, str]]:
+    """Every template here as (language, line), for the tests that hold them to the rules."""
+    found: list[tuple[str, str]] = []
+    for code in ("en", "ms", "zh"):
+        found.append((code, PROMPT[code]))
+        found.extend((code, line) for line in LEADS[code].values())
+        found.extend((code, line) for line in QUESTIONS[code].values())
+        found.extend((code, line) for line in FINE_LINES[code])
+        found.append((code, NOTE_HEADLINE[code]))
+        found.extend((code, line) for line in TELL[code].values())
+        found.extend((code, line) for line in REASON[code].values())
+        found.extend((code, line) for line in THEN[code].values())
+    return found

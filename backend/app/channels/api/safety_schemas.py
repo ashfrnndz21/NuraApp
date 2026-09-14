@@ -127,7 +127,9 @@ class EmergencyCardOut(BaseModel):
             language=card.language,
             spoken_language=card.spoken_language,
             age_band=card.age_band,
-            conditions=[NamedOut(code=c.code, words=c.words, fact_id=c.fact_id) for c in card.conditions],
+            conditions=[
+                NamedOut(code=c.code, words=c.words, fact_id=c.fact_id) for c in card.conditions
+            ],
             medicines=[
                 MedicineOut(
                     line_id=m.line_id,
@@ -143,7 +145,9 @@ class EmergencyCardOut(BaseModel):
                 )
                 for m in card.medicines
             ],
-            allergies=[NamedOut(code=a.code, words=a.words, fact_id=a.fact_id) for a in card.allergies],
+            allergies=[
+                NamedOut(code=a.code, words=a.words, fact_id=a.fact_id) for a in card.allergies
+            ],
             blood_type=card.blood_type,
             high_risk=card.high_risk,
             contacts=[
@@ -275,7 +279,9 @@ class SymptomLogOut(BaseModel):
     """Every entry's lines in order, or the one line for an empty log."""
 
     @classmethod
-    def of(cls, since: datetime, entries: list[SymptomEntryOut], empty_line: str | None) -> SymptomLogOut:
+    def of(
+        cls, since: datetime, entries: list[SymptomEntryOut], empty_line: str | None
+    ) -> SymptomLogOut:
         lines = [line for entry in entries for line in entry.lines]
         if not lines and empty_line is not None:
             lines = [LineOut(id="sym.none", text=empty_line)]

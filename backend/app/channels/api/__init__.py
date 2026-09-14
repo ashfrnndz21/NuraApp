@@ -53,6 +53,7 @@ from app.channels.api import (
     doors,
     family,
     feed,
+    feelings,
     medicines,
     onboarding,
     profiles,
@@ -97,6 +98,7 @@ def _api() -> APIRouter:
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
     api.include_router(family.router)
+    api.include_router(feelings.router)
     api.include_router(onboarding.router)
     api.include_router(consent_words.router)
     api.include_router(trends.router)

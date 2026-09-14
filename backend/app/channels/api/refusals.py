@@ -28,6 +28,8 @@ from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
+from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
+from app.delivery.nudges.metrics import NotOwnerOrChief
 from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
@@ -79,6 +81,7 @@ from app.onboarding.biography import (
 from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
+from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.reasoning.trends import NoSuchAnalyte
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
@@ -207,6 +210,13 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # up for, are answered by name and nothing else.
     (AlreadySetUp, 409),
     (WaitingToBeClaimed, 409),
+    # The feeling cloud and the nudges (E17): the metrics are the owner's and his chief's; a
+    # tap asks one thing once; a day with nothing to hand over says so by name.
+    (NotOwnerOrChief, 403),
+    (NoSuchTap, 404),
+    (NoSuchNudge, 404),
+    (AlreadyAnswered, 409),
+    (NothingToHandOver, 409),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no. The
 high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class — and so
@@ -221,6 +231,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    NotAnAnswer,
+    NotAPlanDay,
     # The timeline's (E03): a place note that is not one line, or that names a medicine or a
     # condition; a cursor that is not the last page's; a question that is not one line.
     NotAPlaceNote,

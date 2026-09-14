@@ -288,7 +288,9 @@ class ItemOut(BaseModel):
             episode=None if item.episode is None else EpisodeOut.of(item.episode),
             visits=list(item.visits),
             artifacts=[ArtifactOut.of(a) for a in item.hanging.artifacts],
-            events=[EventOut.of(e, item.hanging.withheld.get(e.id, ())) for e in item.hanging.events],
+            events=[
+                EventOut.of(e, item.hanging.withheld.get(e.id, ())) for e in item.hanging.events
+            ],
             facts=[FactOut.of(f, item.hanging.withheld.get(f.id, ())) for f in item.hanging.facts],
             notes=[NoteRefOut.of(n) for n in item.hanging.notes],
         )

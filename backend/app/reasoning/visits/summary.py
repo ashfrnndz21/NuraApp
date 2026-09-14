@@ -811,7 +811,9 @@ async def post_visit_summary(
     # What the doctor said, as Nura wrote it down, is an inferring surface (E16-01): the card
     # ends on its boundary line and the row carries it.
     boundary = boundary_line(Surface.SUMMARY, lang, doctor=visit.doctor)
-    lines.extend({"key": "boundary", "text": text, "spoken": text} for text in boundary.splitlines())
+    lines.extend(
+        {"key": "boundary", "text": text, "spoken": text} for text in boundary.splitlines()
+    )
     summary = await render_from_state(
         session,
         VisitSummary,

@@ -28,6 +28,7 @@ import app.audit.models
 import app.channels.whatsapp.models
 import app.consent.models
 import app.delivery.feed.models
+import app.delivery.nudges.models
 import app.family.models
 import app.identity.models
 import app.ingestion.connectors.models
@@ -39,6 +40,7 @@ import app.medicines.models
 import app.memory.models
 import app.notes.models
 import app.onboarding.models
+import app.reasoning.feelings.models
 import app.reasoning.models
 import app.reasoning.visits.models
 import app.routines.models
@@ -762,6 +764,67 @@ CLASSES: dict[str, str] = {
     "event_note.transcript_language": OPERATIONAL,
     "event_note.written_by_person_id": IDENTIFIER,
     "event_note.written_at": HEALTH,
+    # --- the feeling cloud and smart nudges (E17) ---------------------------------------------
+    # A tap is how he said he feels: his word (a code), its answer, why the word was on the
+    # cloud and the State it was read from are health; who tapped is an identifier. A note is
+    # what the tap was read into, rendered for him: its lines, reasons and the visit it is kept
+    # for are health, like a card's. A nudge's lines and why are health (a visit, a medicine,
+    # his own words); its cap class, timing and ordering are operational, as on a feed card.
+    # A response is what he did with a nudge: which nudge and the event are health, the kind
+    # and the moment operational, like a card's engagement.
+    "feeling_tap.id": HEALTH,
+    "feeling_tap.event_id": HEALTH,
+    "feeling_tap.word": HEALTH,
+    "feeling_tap.red": HEALTH,
+    "feeling_tap.flag_id": HEALTH,
+    "feeling_tap.follow_up": HEALTH,
+    "feeling_tap.answer": HEALTH,
+    "feeling_tap.answered_at": HEALTH,
+    "feeling_tap.emphasised": HEALTH,
+    "feeling_tap.reasons": HEALTH,
+    "feeling_tap.cloud_state_id": HEALTH,
+    "feeling_tap.by_person_id": IDENTIFIER,
+    "feeling_tap.tapped_at": HEALTH,
+    "feeling_note.id": HEALTH,
+    "feeling_note.state_id": HEALTH,
+    "feeling_note.boundary": HEALTH,
+    "feeling_note.tap_id": HEALTH,
+    "feeling_note.word": HEALTH,
+    "feeling_note.answer": HEALTH,
+    "feeling_note.language": OPERATIONAL,
+    "feeling_note.headline": HEALTH,
+    "feeling_note.lines": HEALTH,
+    "feeling_note.then": HEALTH,
+    "feeling_note.voice": HEALTH,
+    "feeling_note.reasons": HEALTH,
+    "feeling_note.outcome": HEALTH,
+    "feeling_note.appointment_id": HEALTH,
+    "feeling_note.created_at": OPERATIONAL,
+    "nudge.id": HEALTH,
+    "nudge.state_id": HEALTH,
+    "nudge.boundary": HEALTH,
+    "nudge.kind": HEALTH,
+    "nudge.scope": OPERATIONAL,
+    "nudge.day": OPERATIONAL,
+    "nudge.language": OPERATIONAL,
+    "nudge.lines": HEALTH,
+    "nudge.voice": HEALTH,
+    "nudge.why": HEALTH,
+    "nudge.reason": HEALTH,
+    "nudge.cap_class": OPERATIONAL,
+    "nudge.priority": OPERATIONAL,
+    "nudge.send_after": OPERATIONAL,
+    "nudge.expires_at": OPERATIONAL,
+    "nudge.dedupe_key": HEALTH,
+    "nudge.memo_id": HEALTH,
+    "nudge.handed_over_at": OPERATIONAL,
+    "nudge.handed_over_by_person_id": IDENTIFIER,
+    "nudge_response.id": HEALTH,
+    "nudge_response.nudge_id": HEALTH,
+    "nudge_response.person_id": IDENTIFIER,
+    "nudge_response.kind": OPERATIONAL,
+    "nudge_response.event_id": HEALTH,
+    "nudge_response.at": OPERATIONAL,
 }
 
 
