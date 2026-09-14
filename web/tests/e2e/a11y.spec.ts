@@ -56,10 +56,11 @@ async function lookOnThePhone(page: Page, look: Look): Promise<void> {
 }
 
 /** No serious or critical axe finding on the page now; the rest go on the report. A demo
- *  deployment's banner (ADR 0008) is its own, and is left out. */
+ *  deployment's banner (ADR 0008) — its pinned headline and its lines — is its own, and is left
+ *  out; the page it sits above is not. */
 async function audit(page: Page, where: string): Promise<void> {
   await expect(page.locator("main").first()).toBeVisible();
-  const results = await new AxeBuilder({ page }).exclude(".demo-banner").analyze();
+  const results = await new AxeBuilder({ page }).exclude(".demo-banner").exclude(".demo-lines").analyze();
   const serious = results.violations.filter((each) => each.impact === "serious" || each.impact === "critical");
   for (const each of results.violations) {
     if (!serious.includes(each)) test.info().annotations.push({ type: "axe (moderate or minor)", description: `${where}: ${each.id} (${each.impact})` });

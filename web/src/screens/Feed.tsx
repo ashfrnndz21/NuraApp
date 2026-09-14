@@ -123,6 +123,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
 
   return (
     <main class="feed-screen" data-density={density()} data-testid="feed-screen">
+      {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
+      <h1 class="sr-only">{s.feed.title}</h1>
       <div class="feed-strip">
         {store.offline.value && keptAt && shown.length > 0 && (
           <Tile glass testId="offline">
