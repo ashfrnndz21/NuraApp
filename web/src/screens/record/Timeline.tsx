@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { ReviewCardOut, TimelineItemOut, TimelineOut } from "../../api/types";
 import { kindLine } from "../../onboarding/review";
-import { artifactLine, hangingLines, itemTitle, kindWord, papersToPut, providerLines, visitStatusLine } from "../../record/model";
+import { artifactLine, hangingLines, itemTitle, kindWord, momentLine, papersToPut, providerLines, visitStatusLine } from "../../record/model";
 import { density, profile } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
@@ -179,7 +179,9 @@ export function EpisodeScreen({ episodeId }: { episodeId: string }): JSX.Element
             <Tile paper testId="episode-moments">
               <h2 class="title">{s.record.illnessMoments}</h2>
               {view.episode.events.map((event) => (
-                <p key={event.event_id}>{fill(s.record.momentOn, { what: event.label ?? "", date: dateOf(event.occurred_at) })}</p>
+                <p key={event.event_id} data-kind={event.kind}>
+                  {momentLine(event.kind, dateOf(event.occurred_at), s)}
+                </p>
               ))}
             </Tile>
           )}
@@ -187,7 +189,10 @@ export function EpisodeScreen({ episodeId }: { episodeId: string }): JSX.Element
             <Tile paper testId="episode-visits">
               <h2 class="title">{s.record.illnessVisits}</h2>
               {view.visits.map((visit) => (
-                <p key={visit.id}>{fill(s.record.momentOn, { what: itemTitle(visit), date: dateOf(visit.at) })}</p>
+                <div class="lines" key={visit.id}>
+                  <p class="label">{itemTitle(visit)}</p>
+                  <p>{dateOf(visit.at)}</p>
+                </div>
               ))}
             </Tile>
           )}
@@ -319,7 +324,8 @@ export function ProviderScreen({ providerId }: { providerId: string }): JSX.Elem
               <h2 class="title">{s.record.timeline}</h2>
               {history.visits.map((visit) => (
                 <div class="lines" key={visit.appointment_id}>
-                  <p>{fill(s.record.momentOn, { what: visit.purpose, date: dateOf(visit.scheduled_at) })}</p>
+                  <p class="label">{dateOf(visit.scheduled_at)}</p>
+                  <p>{visit.purpose}</p>
                   {visitStatusLine(visit.status, s) && <p class="caption">{visitStatusLine(visit.status, s)}</p>}
                 </div>
               ))}

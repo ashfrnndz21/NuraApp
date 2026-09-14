@@ -16,6 +16,8 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
   const s = t();
   const [note] = useState(takeNote);
   const [said, setSaid] = useState<string[] | null>(null);
+  // The line the family was asked about: its button stays down, so one tap is one task.
+  const [askedFor, setAskedFor] = useState<string | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const { data: lines, error } = useRead(() => {
@@ -32,6 +34,7 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
       const { bearer, profileId } = session();
       const asked = await nura.askToOrder(bearer, profileId, line.line_id, language.value);
       setSaid(asked.lines);
+      setAskedFor(line.line_id);
     } catch (refused) {
       setFailure(refused);
     } finally {
@@ -63,7 +66,7 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
         </Tile>
       )}
       {lines && (
-        <Paged items={lines} start={start} render={(line) => <LineCard key={line.line_id} line={line} busy={busy} onAsk={() => void ask(line)} />} />
+        <Paged items={lines} start={start} render={(line) => <LineCard key={line.line_id} line={line} busy={busy || askedFor === line.line_id} onAsk={() => void ask(line)} />} />
       )}
       <Pill onClick={() => toRecord({ name: "add" })} testId="add-medicine">
         {s.record.add}
@@ -265,20 +268,23 @@ export function AddMedicineScreen(): JSX.Element {
             <p class="caption" data-testid="chemical">
               {draft.match.brand} {draft.match.generic} {draft.match.strength}
             </p>
-            {draft.flagged.length === 0 && <p data-testid="no-interactions">{s.record.flaggedNone}</p>}
+            {/* Only a new line is screened against the list (E04-03); a refill or a new amount
+                is not, so "nothing goes badly" is said only where the licensed data was asked. */}
+            {draft.outcome === "new_line" && draft.flagged.length === 0 && <p data-testid="no-interactions">{s.record.flaggedNone}</p>}
           </Tile>
           {draft.flagged.map((flag) => (
             <Tile paper key={flag.other_line_id + flag.text_id} testId="interaction">
-              <p class="label" data-testid="pair">
-                {fill(s.record.pair, { one: draft.match.generic, two: flag.other_generic })}
-              </p>
               <p data-testid="severity">{severityLine(flag.severity, s)}</p>
               <div class="lines">
                 {flag.question.map((line, index) => (
                   <p key={index}>{line}</p>
                 ))}
               </div>
-              <Hear lines={[fill(s.record.pair, { one: draft.match.generic, two: flag.other_generic }), severityLine(flag.severity, s), ...flag.question]} />
+              {/* The two medicines by their chemical names: second and small, under his words. */}
+              <p class="caption" data-testid="pair">
+                {fill(s.record.pair, { one: draft.match.generic, two: flag.other_generic })}
+              </p>
+              <Hear lines={[severityLine(flag.severity, s), ...flag.question]} />
             </Tile>
           ))}
           <Pill plum onClick={() => void save()} disabled={busy} testId="add-it">
@@ -298,6 +304,12 @@ export function AddMedicineScreen(): JSX.Element {
  *  backend's count lines come back. */
 export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
   const s = t();
+  // Which medicine the number is for, in the backend's words, above the question.
+  const { data: lines } = useRead(() => {
+    const { bearer, profileId } = session();
+    return nura.medicines(bearer, profileId, language.value);
+  }, [lineId, language.value]);
+  const line = lines?.find((each) => each.line_id === lineId) ?? null;
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState<MoreOut | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -328,6 +340,16 @@ export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
         </Tile>
       ) : (
         <Tile paper testId="more-form">
+          {line && (
+            <>
+              <h2 class="title" data-testid="more-medicine">
+                {upperFirst(line.name)}
+              </h2>
+              <p class="caption">
+                {line.generic} {line.strength}
+              </p>
+            </>
+          )}
           <p>{s.record.moreLead}</p>
           <Field name="more" label={s.record.moreLabel} value={typed} onInput={setTyped} inputMode="numeric" big maxLength={4} />
           <Pill plum onClick={() => void add()} disabled={busy || count === null} testId="more-yes">

@@ -418,7 +418,7 @@ export interface Strings {
     illnessPapers: string;
     illnessVisits: string;
     illnessMoments: string;
-    momentOn: string;
+    moments: Record<"reading" | "dose_taken" | "symptom" | "discharge" | "visit" | "other", string>;
     photoOn: string;
     letterOn: string;
     paperOn: string;

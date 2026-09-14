@@ -147,6 +147,7 @@ async def test_ask_to_order_gives_the_task_to_whoever_is_on_duty_and_tells_the_c
     assert [(n.kind, str(n.to_person_id)) for n in notices] == [
         (NoticeKind.REORDER, mei["person_id"])
     ]
+    assert notices[0].slots == {"task_id": body["task_id"], "line_id": line_id}
     assert notice_lines(notices[0], patient="Pa") == [
         "Pa asked the family to order more medicine.",
         "It is on the family's list.",

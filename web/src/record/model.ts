@@ -198,6 +198,13 @@ export function artifactLine(artifact: Pick<ArtifactRefOut, "kind">, date: strin
   return fill(template, { date });
 }
 
+/** A moment during an illness as one whole line by its kind, never its label (a label is a
+ *  name for the moment in the backend's own code and can carry a medicine's chemical name). */
+export function momentLine(kind: string, date: string, s: Strings): string {
+  const known = s.record.moments as Record<string, string>;
+  return fill(known[kind] ?? s.record.moments.other, { date });
+}
+
 /** The confirmed papers that are not with this illness yet: what the chief may put with it. */
 export function papersToPut(cards: readonly ReviewCardOut[], view: Pick<EpisodeViewOut, "episode" | "visits">): ReviewCardOut[] {
   const there = new Set([...view.episode.artifacts, ...view.visits.flatMap((visit) => visit.artifacts)].map((each) => each.artifact_id));

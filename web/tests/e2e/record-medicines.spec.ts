@@ -39,12 +39,14 @@ for (const look of LOOKS) {
     // backend's words.
     await card.getByTestId("ask-to-order").click();
     await expect(page.getByTestId("asked")).toHaveText("Nura asked Mei to order more of your blood pressure tablet.");
+    await expect(card.getByTestId("ask-to-order")).toBeDisabled();
     const tasks = (await (await request.get(`${API}/profiles/${pa.profileId}/tasks`, auth(mei.token))).json()) as { what: string; assigned_person_id: string }[];
     expect(tasks.map((task) => [task.what, task.assigned_person_id])).toEqual([["order more of your blood pressure tablet", mei.personId]]);
 
     // I have more at home: how many, his yes for that number, the count as the backend says it.
     await card.getByTestId("i-have-more").click();
     await expect(page.getByTestId("record-more")).toBeVisible();
+    await expect(page.getByTestId("more-medicine")).toHaveText("Your blood pressure tablet");
     await readable(page, look);
     await page.getByLabel("How many more").fill("20");
     await page.getByTestId("more-yes").click();

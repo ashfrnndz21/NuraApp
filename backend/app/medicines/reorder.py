@@ -168,7 +168,7 @@ async def ask_to_order(
                 kind=NoticeKind.REORDER,
                 to_person_id=chief.id,
                 template=NOTICE_TEMPLATE,
-                slots={"task_id": str(task.id)},
+                slots={"task_id": str(task.id), "line_id": str(line.id)},
                 language=language_of(chief.language),
                 flag_id=None,
                 event_id=None,

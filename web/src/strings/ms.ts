@@ -864,8 +864,15 @@ export const ms = {
     illnessVisits: "Lawatan semasa sakit ini",
     // @patient headline
     illnessMoments: "Apa yang ditulis",
-    // @patient phrase
-    momentOn: "{what} pada {date}",
+    // @patient
+    moments: {
+      reading: "Satu nombor baharu ditulis pada {date}.",
+      dose_taken: "Satu ubat diambil pada {date}.",
+      symptom: "Apa yang anda rasa ditulis pada {date}.",
+      discharge: "Anda pulang dari hospital pada {date}.",
+      visit: "Ada lawatan pada {date}.",
+      other: "Sesuatu ditulis pada {date}.",
+    },
     // @patient
     photoOn: "Ini gambar dari {date}.",
     // @patient

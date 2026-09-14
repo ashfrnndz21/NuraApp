@@ -864,8 +864,15 @@ export const zh = {
     illnessVisits: "生病期间的看诊",
     // @patient headline
     illnessMoments: "记下了什么",
-    // @patient phrase
-    momentOn: "{date}的{what}",
+    // @patient
+    moments: {
+      reading: "{date}记下了一个新数字。",
+      dose_taken: "{date}吃了一次药。",
+      symptom: "{date}记下了您的感觉。",
+      discharge: "您{date}从医院回家。",
+      visit: "{date}有一次看诊。",
+      other: "{date}记下了一件事。",
+    },
     // @patient
     photoOn: "这是{date}的一张照片。",
     // @patient

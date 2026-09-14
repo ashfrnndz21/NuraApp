@@ -866,8 +866,15 @@ export const en = {
     illnessVisits: "Visits during this illness",
     // @patient headline
     illnessMoments: "What was written down",
-    // @patient phrase
-    momentOn: "{what} on {date}",
+    // @patient
+    moments: {
+      reading: "A new number was written down on {date}.",
+      dose_taken: "A tablet was taken on {date}.",
+      symptom: "How you felt was written down on {date}.",
+      discharge: "You came home from hospital on {date}.",
+      visit: "There was a visit on {date}.",
+      other: "Something was written down on {date}.",
+    },
     // @patient
     photoOn: "This is a photo from {date}.",
     // @patient
