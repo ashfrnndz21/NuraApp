@@ -746,3 +746,41 @@ async def test_one_reminder_of_a_visit_a_day_the_logistics_card_holds_the_antici
     assert held["because"] == "logistics_card_says_it"
     assert held["reason"]["appointment_id"] == house.appointment_id
     assert held["reason"]["feed_item_id"] == card["item_id"]
+
+
+async def test_the_memo_card_on_his_feed_says_where_each_line_was_said(deployment: Deployment) -> None:
+    """E21-03 (W7): once the card is confirmed, the memo card on his feed carries, for each of
+    its lines heard in the recording, the stretch it was said in — for the phone to play that
+    stretch alone, on a tap, under its own line."""
+    house = await household(deployment)
+    client = deployment.client
+    await agree_to_recording(deployment, house.pa, house.profile_id)
+    kept = await _ok(await _upload(house, house.mei, placeholder_consult(CONSULT)), 201)
+    artifact_id = kept["recording"]["artifact_id"]
+    summary = kept["summary"]
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    yes = await _ok(
+        await client.post(
+            house.at("/confirmations"),
+            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            headers=house.his,
+        ),
+        201,
+    )
+    await _ok(
+        await client.post(
+            f"{house.visit}/summary/{summary['summary_id']}/confirm",
+            json={"decisions": decisions, "confirmation_id": yes["confirmation_id"]},
+            headers=house.his,
+        )
+    )
+    feed = await _ok(await client.get(house.at("/feed"), headers=house.his))
+    (card,) = [item for item in feed["items"] if item["type"] == "memo"]
+    clips = card["cite"]["clips"]
+    assert clips, card
+    for clip in clips:
+        assert clip["line"] in card["body"], clip
+        assert clip["artifact_id"] == artifact_id and clip["doctor"] == "Dr Tan"
+        assert 0 <= clip["start_s"] < clip["end_s"] <= DURATION_S
+    weigh = [clip for clip in clips if (clip["start_s"], clip["end_s"]) == (28.9, 36.2)]
+    assert len(weigh) == 1, clips

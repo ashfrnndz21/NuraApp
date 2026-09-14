@@ -110,9 +110,25 @@
 }
 
 /* --- The wash is the status ------------------------------------------------------------- */
-:root[data-posture="stable"] { --wash: var(--wash-stable); }
-:root[data-posture="watch"] { --wash: var(--wash-watch); }
-:root[data-posture="act"] { --wash: var(--wash-act); }
+/* A browser does not interpolate one gradient into another, so the wash is drawn from three
+   typed colour stops and a typed middle (`@property`): a State change moves each stop, and the
+   gradient drawn from them cross-fades over --wash-fade (E15-01). Reduce Motion makes the fade
+   0ms: the new wash is simply there. A browser without @property swaps it at once. */
+@property --wash-a { syntax: "<color>"; inherits: true; initial-value: #dcd5ee; }
+@property --wash-b { syntax: "<color>"; inherits: true; initial-value: #f1dce6; }
+@property --wash-c { syntax: "<color>"; inherits: true; initial-value: #dce8df; }
+@property --wash-at { syntax: "<percentage>"; inherits: true; initial-value: 45%; }
+:root,
+:root[data-posture="stable"] { --wash: var(--wash-stable); --wash-a: var(--lavender); --wash-b: var(--blush); --wash-c: var(--sage); --wash-at: 45%; }
+:root[data-posture="watch"] { --wash: var(--wash-watch); --wash-a: var(--blush); --wash-b: var(--cream); --wash-c: var(--lavender); --wash-at: 50%; }
+:root[data-posture="act"] { --wash: var(--wash-act); --wash-a: var(--coral-wash); --wash-b: var(--coral-mid); --wash-c: var(--lavender); --wash-at: 50%; }
+:root {
+  transition:
+    --wash-a var(--wash-fade),
+    --wash-b var(--wash-fade),
+    --wash-c var(--wash-fade),
+    --wash-at var(--wash-fade);
+}
 
 @media (prefers-reduced-motion: reduce) {
   :root {
