@@ -1094,7 +1094,8 @@ def _check_numbers(line: _Line) -> None:
                     f'a number in words: "{match.group()}"',
                     _substitute(line.text, match, digits),
                 )
-    if len(_NUMBER.findall(line.text)) > 3:
+    # A Chinese date is one number, the way "14 September" is: "9月14日" says one day.
+    if len(_NUMBER.findall(_ZH_DATE.sub("1", line.text))) > 3:
         line.add(
             10,
             "more than three numbers on one line",

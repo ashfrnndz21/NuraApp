@@ -42,8 +42,6 @@ from app.reasoning.visits.gaps import GapKind, find_gaps
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card, write_memo
 from app.reasoning.visits.models import (
     Brief,
-    Flag,
-    FlagKind,
     ItemState,
     Memo,
     MemoKind,
@@ -89,7 +87,9 @@ from app.reasoning.visits.summary import (
     summary_items,
 )
 from app.regions import Region
+from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.plain_words import verify
+from app.safety.red_flags import Flag, FlagKind
 from app.state.service import current_state
 from tests.medicines_support import REGISTRY
 from tests.support import agree_to_family_sharing, refused_unit
@@ -375,6 +375,7 @@ async def test_questions_carry_their_source_and_a_flag_becomes_a_question_not_ad
         subject="frusemide",
         fact_ids=[str(line.fact_id)],
         payload={"generic": "frusemide", "change": "dose", "line_id": str(line.id)},
+        raised_by_person_id=context.person_id,
         raised_at=SEPT_3,
     )
     found = await questions_for(
@@ -506,8 +507,10 @@ async def test_his_card_is_the_first_three_by_priority_and_one_screen(sg: AsyncS
     assert len(found) >= 3
     card = await patient_card(sg, context=context, appointment_id=appointment.id)
     assert card[:CARD_SIZE] == [q.text for q in found[:CARD_SIZE]]
-    assert card[-1] == "Nura simpan soalan-soalan ini untuk anda."
-    assert len(card) == CARD_SIZE + 1
+    assert card[CARD_SIZE] == "Nura simpan soalan-soalan ini untuk anda."
+    # The card ends on the boundary line the questions carry (E16-01).
+    assert card[CARD_SIZE + 1 :] == list(boundary_lines(Surface.QUESTIONS, "ms", doctor="Dr Tan"))
+    assert len(card) == CARD_SIZE + 1 + 3
     _clean(card, "ms")
 
 
@@ -556,6 +559,7 @@ async def test_memos_are_verified_consolidated_and_read_back_as_the_card(
     assert card == [
         "Every evening, eat a lighter dinner.",
         "Ask Dr Tan about the new amount of the water pill (frusemide).",
+        *boundary_lines(Surface.SUMMARY, "en", doctor="Dr Tan"),
     ]
     _clean(card, "en")
     assert [
@@ -778,8 +782,10 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
         await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions)
     # The memo card, consolidated, in card order: what to do, then what to ask.
     card = await memo_card(sg, context=context)
-    assert card[-1] == "Ask Dr Tan about the new amount of the water pill (frusemide)."
-    assert len(card) == len(outcome.memos)
+    memo_lines, closing = card[:-3], card[-3:]
+    assert memo_lines[-1] == "Ask Dr Tan about the new amount of the water pill (frusemide)."
+    assert len(memo_lines) == len(outcome.memos)
+    assert closing == list(boundary_lines(Surface.SUMMARY, "en", doctor="Dr Tan"))
     _clean(card, "en")
 
 
@@ -875,7 +881,7 @@ async def test_a_red_flag_word_writes_a_flag_first_and_the_card_says_call_today(
     assert flags_when_card_written == [1]
     # And the flag's write is on the trail beside the card's.
     trail = [e for e in await read_audit(sg, context=context) if e.action is Action.WRITE]
-    assert {"flag", "visit_summary"} <= {e.target for e in trail}
+    assert {"red_flag", "visit_summary"} <= {e.target for e in trail}
     # And on the next visit's questions, first.
     _p, next_visit = await visit(sg, context, when=VISIT_AT + timedelta(days=30), doctor="Dr Tan")
     found = await questions_for(
@@ -919,8 +925,10 @@ async def test_a_photo_is_not_a_transcript_and_an_unknown_transcript_hears_nothi
     )
     assert await summary_items(sg, context=context, summary_id=summary.id) == []
     assert [str(line["text"]) for line in summary.lines] == [
-        "Dr Tan said this on Thursday 10 September."
+        "Dr Tan said this on Thursday 10 September.",
+        *boundary_lines(Surface.SUMMARY, "en", doctor="Dr Tan"),
     ]
+    assert summary.boundary == boundary_line(Surface.SUMMARY, "en", doctor="Dr Tan")
     rows = (await sg.scalars(select(VisitSummary))).all()
     assert len(rows) == 1 and (await sg.scalars(select(Artifact))).all()
 
@@ -1288,7 +1296,7 @@ async def test_a_red_flag_outlives_a_refusal_later_in_the_same_request(
     assert flag.kind is FlagKind.RED_FLAG and flag.code == "chest_pain"
     assert flag.artifact_id == artifact.id and flag.appointment_id == appointment.id
     trail = await read_audit(sg, context=context)
-    assert any(e.target == "flag" and e.action is Action.WRITE for e in trail)
+    assert any(e.target == "red_flag" and e.action is Action.WRITE for e in trail)
     assert {e.refused_because for e in trail if e.outcome is Outcome.REFUSED} >= {"NotASlotValue"}
 
 

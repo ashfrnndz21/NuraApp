@@ -37,8 +37,6 @@ from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import (
     LINE_LENGTH,
-    Flag,
-    FlagKind,
     Memo,
     MemoKind,
     Question,
@@ -55,6 +53,8 @@ from app.reasoning.visits.strings import (
     subject_words,
     verified,
 )
+from app.safety.boundary import Surface, boundary_line, boundary_lines
+from app.safety.red_flags import Flag, FlagKind
 from app.state.service import StateView, current_state, render_from_state
 
 QUESTION = Question.__tablename__
@@ -259,8 +259,15 @@ async def propose_questions(
     Flags first — a red flag before anything else, then a medicine change heard — then the
     gaps, then the memos that ask the doctor something.
     """
+    # The flags a visit wrote — a red-flag word heard, a medicine change heard. A flag from
+    # the feeling cloud (no transcript, a feeling) is the feed's to escalate (E21), not a
+    # question here.
     flags = await audited_read(
-        session, Flag, context, Scope.RECORDS, where=(Flag.resolved_at.is_(None),)
+        session,
+        Flag,
+        context,
+        Scope.RECORDS,
+        where=(Flag.resolved_at.is_(None), Flag.feeling.is_(None)),
     )
     if visit.registry is None:
         raise NoRegistry("proposing questions needs the licensed drug data for his names")
@@ -381,12 +388,21 @@ async def _write(
     removed: bool = False,
 ) -> Question:
     line = text if text is not None else render_proposed(proposed, visit.language)
+    # A question about two medicines together is the interaction surface; every other one
+    # is the questions surface (E16-01). Each row carries its line.
+    surface = (
+        Surface.INTERACTION_FLAG
+        if proposed.source_kind == GapKind.INTERACTION_FLAGGED.value
+        else Surface.QUESTIONS
+    )
     return await render_from_state(
         session,
         Question,
         context,
         Scope.VISITS,
         state=state,
+        surface=surface,
+        boundary=boundary_line(surface, visit.language, doctor=visit.doctor),
         appointment_id=visit.appointment.id,
         language=visit.language,
         source=proposed.source,
@@ -519,12 +535,14 @@ async def change_questions(
 async def patient_card(
     session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
 ) -> list[str]:
-    """One card for him: the first three questions by priority, and the line that says he
-    need not remember them. Every line verified again on the way out."""
+    """One card for him: the first three questions by priority, the line that says he need
+    not remember them, and the boundary line the questions carry (E16-01). Every line
+    verified again on the way out."""
     visit = await require_visit(session, context=context, appointment_id=appointment_id)
     current = _current(await _rows(session, context=context, appointment_id=appointment_id))
     lines = [verified(q.text, q.language) for q in current[:CARD_SIZE]]
     lines.append(say("no_need_to_remember", visit.language))
+    lines.extend(boundary_lines(Surface.QUESTIONS, visit.language, doctor=visit.doctor))
     return lines
 
 

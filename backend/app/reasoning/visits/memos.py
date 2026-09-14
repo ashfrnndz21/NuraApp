@@ -28,6 +28,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.reasoning.visits.models import MEMO_LENGTH, Memo, MemoKind, MemoSource
 from app.reasoning.visits.strings import language_for, say, verified
+from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.state.service import StateView, render_from_state
 
 MEMO = Memo.__tablename__
@@ -38,6 +39,11 @@ KIND_ORDER: tuple[MemoKind, ...] = (MemoKind.TELL, MemoKind.ACTION, MemoKind.BRI
 
 class NotAMemo(Refusal):
     """A memo is one line of at most eighty characters. This rendered longer than that."""
+
+
+def _doctor_in(slots: Mapping[str, Any]) -> str | None:
+    doctor = slots.get("doctor")
+    return doctor if isinstance(doctor, str) and doctor else None
 
 
 def _same(memo: Memo) -> tuple[str, str, str, str]:
@@ -82,6 +88,9 @@ async def write_memo(
         context,
         Scope.VISITS,
         state=state,
+        # A memo is the post-visit summary's words (E16-01: the summary and memo surface).
+        surface=Surface.SUMMARY,
+        boundary=boundary_line(Surface.SUMMARY, lang, doctor=_doctor_in(slots)),
         appointment_id=appointment_id,
         kind=kind,
         source=source,
@@ -139,6 +148,10 @@ async def consolidate_memos(session: AsyncSession, *, context: KeyContext) -> Se
 @audited(Action.READ, Scope.VISITS, MEMO)
 async def memo_card(session: AsyncSession, *, context: KeyContext) -> list[str]:
     """The memo card at the end of every conversation: the current memos, each line verified
-    again on the way out, in card order."""
+    again on the way out, in card order, ending on the summary's boundary line (E16-01)."""
     memos = await consolidate_memos(session, context=context)
-    return [verified(memo.text, memo.language) for memo in memos]
+    card = [verified(memo.text, memo.language) for memo in memos]
+    if memos:
+        doctor = next((d for d in (_doctor_in(m.slots) for m in memos) if d), None)
+        card.extend(boundary_lines(Surface.SUMMARY, memos[0].language, doctor=doctor))
+    return card

@@ -14,8 +14,11 @@ Every route sits behind the same key-context dependency as every other profile r
 from __future__ import annotations
 
 import base64
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.clock import FrozenClock
+from app.safety.boundary import Surface, boundary_lines
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
@@ -107,6 +110,9 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     assert body["language"] == "ms" and body["state_id"]
     assert lines[0] == "Anda berjumpa Dr Tan pada Khamis 10 September pukul 10 pagi."
     assert all(line["spoken"] for line in body["lines"])
+    # The brief ends on its boundary line (E16-01), and the answer carries it whole.
+    assert lines[-3:] == body["boundary"].splitlines()
+    assert lines[-3:] == list(boundary_lines(Surface.BRIEF, "ms", doctor="Dr Tan"))
     assert {line["section"] for line in body["lines"]} >= {"purpose", "changed", "bring"}
     again = await deployment.client.get(
         f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
@@ -119,7 +125,8 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     )
     assert asked.status_code == 200, asked.text
     card = asked.json()["card"]
-    assert card[-1] == "Nura simpan soalan-soalan ini untuk anda." and len(card) <= 4
+    assert card[-4] == "Nura simpan soalan-soalan ini untuk anda." and len(card) <= 4 + 3
+    assert card[-3:] == list(boundary_lines(Surface.QUESTIONS, "ms", doctor="Dr Tan"))
     assert asked.json()["spoken_card"] == card
     _clean(card, "ms")
     text = "Adakah pil air ini buruk untuk buah pinggang saya?"
@@ -156,6 +163,7 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     assert "Anda berjumpa Dr Tan lagi pada Khamis 15 Oktober pukul 10 pagi." in summary["lines"]
     assert "Anda akan tempahkannya." in summary["lines"]
     assert len(summary["spoken"]) == len(summary["lines"])
+    assert summary["lines"][-3:] == summary["boundary"].splitlines()
     kinds = {item["kind"] for item in summary["items"]}
     assert kinds == {"action", "medication_change", "follow_up", "follow_up_who", "fact_heard"}
     assert all(item["span"] and item["confidence"] > 0 for item in summary["items"])
@@ -200,7 +208,10 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     memo_card = await deployment.client.get(f"/profiles/{profile_id}/memos", headers=his)
     assert memo_card.status_code == 200
     _clean(memo_card.json()["card"], "ms")
-    assert set(memo_card.json()["card"]) == memos
+    assert set(memo_card.json()["card"][:-3]) == memos
+    assert memo_card.json()["card"][-3:] == list(
+        boundary_lines(Surface.SUMMARY, "ms", doctor="Dr Tan")
+    )
 
     # Confirming again is refused by name.
     spent = await deployment.client.post(
@@ -235,7 +246,7 @@ async def test_a_red_flag_transcript_marks_the_card_and_says_call_today(
     trail = await deployment.client.get(
         f"/profiles/{profile_id}/audit", params={"scope": "records", "limit": 500}, headers=his
     )
-    assert ("write", "flag") in {(e["action"], e["target"]) for e in trail.json()}
+    assert ("write", "red_flag") in {(e["action"], e["target"]) for e in trail.json()}
 
 
 async def test_a_fragment_is_refused_and_a_narrow_key_cannot_read_the_brief(
@@ -291,7 +302,7 @@ async def test_a_red_flag_row_survives_a_refused_request(deployment: Deployment)
     record afterwards, replayed like a refused audit line."""
     from sqlalchemy import select
 
-    from app.reasoning.visits.models import Flag
+    from app.safety.red_flags import Flag
 
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa, language="en")
@@ -330,7 +341,7 @@ async def test_a_red_flag_row_survives_a_refused_request(deployment: Deployment)
     trail = await deployment.client.get(
         f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his
     )
-    assert ("write", "flag", "allowed") in {
+    assert ("write", "red_flag", "allowed") in {
         (e["action"], e["target"], e["outcome"]) for e in trail.json()
     }
 
@@ -371,3 +382,95 @@ async def test_a_clinic_key_reads_the_visits_and_cannot_write_them(deployment: D
         headers=his,
     )
     assert other.status_code == 404 and other.json() == {"refusal": "NoSuchSummary"}
+
+
+# --- the visit loop on his feed (E05 × E21) -------------------------------------------------
+
+
+async def _feed(deployment: Deployment, profile_id: str, his: dict[str, str]) -> dict[str, Any]:
+    answer = await deployment.client.get(f"/profiles/{profile_id}/feed", headers=his)
+    assert answer.status_code == 200, answer.text
+    page: dict[str, Any] = answer.json()
+    return page
+
+
+async def test_inside_the_week_the_visit_card_on_his_feed_is_the_brief(
+    deployment: Deployment,
+) -> None:
+    """The feed is what asks for the brief inside the week before a visit (E05-01), and the
+    visit card carries the brief's own words — who and when, what it is about, what to bring —
+    ending on the brief's boundary line (E16-01); why names the brief."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    appointment_id = await _visit(deployment, his, profile_id)
+
+    page = await _feed(deployment, profile_id, his)
+    [card] = [item for item in page["items"] if item["type"] == "visit"]
+    brief = (
+        await deployment.client.get(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
+        )
+    ).json()
+    carried = [line for line in brief["lines"] if line["section"] in ("purpose", "bring")]
+    closing = brief["boundary"].splitlines()
+    assert carried and closing == list(boundary_lines(Surface.BRIEF, "en", doctor="Dr Tan"))
+    assert card["why"]["brief_id"] == brief["brief_id"]
+    assert card["why"]["visit_id"] == appointment_id
+    assert card["headline"] == "Dr Tan on Thursday 10 September"
+    assert card["body"] == [*(line["text"] for line in carried), *closing]
+    assert card["voice"] == [*(line["spoken"] for line in carried), *closing]
+    _clean(card["body"], "en")
+
+
+async def test_after_the_visit_the_memo_card_on_his_feed_repeats_what_was_agreed(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """The memos heard at the visit (E05-06), consolidated, on one card in his words, ending on
+    the summary's boundary line — until the follow-up they are filed against has passed."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _recording(deployment, his, profile_id)
+    appointment_id = await _visit(deployment, his, profile_id)
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json=_transcript(ROUTINE),
+        headers=his,
+    )
+    assert posted.status_code == 201, posted.text
+    summary = posted.json()
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+        headers=his,
+    )
+    assert minted.status_code == 201, minted.text
+    confirmed = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/summary/{summary['summary_id']}/confirm",
+        json={"decisions": decisions, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=his,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    [follow_up] = confirmed.json()["appointments"]
+
+    clock.set(datetime(2026, 9, 11, 2, 0, tzinfo=UTC))  # the morning after the visit
+    page = await _feed(deployment, profile_id, his)
+    [card] = [item for item in page["items"] if item["type"] == "memo"]
+    memo_card = (await deployment.client.get(f"/profiles/{profile_id}/memos", headers=his)).json()
+    assert card["headline"] == "What Dr Tan said"
+    assert card["body"][0] == "At your last visit Dr Tan said this:"
+    assert card["body"][1:] == memo_card["card"]
+    assert card["body"][-3:] == list(boundary_lines(Surface.SUMMARY, "en", doctor="Dr Tan"))
+    assert any("(frusemide)" in line for line in card["body"])
+    assert not any("(" in line for line in card["voice"])  # the chemical name is not read aloud
+    assert card["why"]["memo_ids"] == [memo["memo_id"] for memo in memo_card["memos"]]
+    assert card["why"]["visit_id"] == appointment_id
+    _clean(card["body"], "en")
+
+    # The follow-up they were filed against passes, and the card goes with it.
+    clock.set(datetime.fromisoformat(follow_up["scheduled_at"]) + timedelta(days=1))
+    again = bearer((await register_by_phone(deployment, PA))["token"])  # a month on: sign in again
+    later = await _feed(deployment, profile_id, again)
+    assert "memo" not in [item["type"] for item in later["items"]]

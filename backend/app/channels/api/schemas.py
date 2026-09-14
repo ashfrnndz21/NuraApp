@@ -7,7 +7,7 @@ import binascii
 import uuid
 from collections.abc import Sequence
 from dataclasses import asdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -23,6 +23,21 @@ from app.consent.models import (
 from app.consent.service import RecordConsent
 from app.db import as_utc
 from app.drafts import ConfirmSubject
+from app.family.documents import Backing, DocumentView
+from app.family.grants import Grant, Helper, RolePreset
+from app.family.models import (
+    CardKind,
+    DocumentTag,
+    PushChannel,
+    RosterSlot,
+    ScheduledPush,
+    Task,
+    ThreadMessage,
+)
+from app.family.pushes import Preview
+from app.family.roster import OnDuty
+from app.family.thread import Digest, DigestEntry
+from app.family.trail import TrailDay, TrailLine
 from app.identity.doors import Claimable, Doors, Evidence
 from app.identity.models import Person, Profile, Stewardship
 from app.ingestion.extract import DocumentKind
@@ -32,6 +47,7 @@ from app.ingestion.review import Decision
 from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
+from app.keys.privacy import Privacy
 from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.medicines.dose import Anchor, Dose, Frequency, parse_dose_text
 from app.medicines.models import (
@@ -210,6 +226,18 @@ class RecordingConsentIn(BaseModel):
     which words, in which language, captured how. Profile-wide, his own basis, and what
     every transcript stored on this profile rests on. The same shape as E19's WhatsApp
     agreement."""
+
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: ConsentChannel
+    wording_version: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._-]+$"
+    )
+
+
+class WhatsAppConsentIn(BaseModel):
+    """The owner agrees to Nura sending him his Today page on WhatsApp (E19): which words,
+    in which language, captured how. Profile-wide, his own basis, and what every WhatsApp
+    thread and every send on this profile rests on."""
 
     language: str = Field(min_length=2, max_length=16)
     captured_via: ConsentChannel
@@ -507,18 +535,78 @@ class SummaryConfirmIn(BaseModel):
     decisions: list[ItemDecisionIn]
 
 
+class KeyChangeConfirmIn(BaseModel):
+    """A yes to narrowing one key to these parts and this window (E12-01). The draft is
+    recomputed from the key, so a yes cannot be minted for anything wider than it opens."""
+
+    subject: Literal[ConfirmSubject.KEY_CHANGE]
+    key_id: uuid.UUID
+    scopes: list[Scope] | None = None
+    window: KeyWindow | None = None
+
+
+class OnlyMeConfirmIn(BaseModel):
+    """The owner's yes to keeping one part of his record to himself, or opening it again."""
+
+    subject: Literal[ConfirmSubject.ONLY_ME]
+    scope: Scope
+    only_me: bool = True
+
+
+class TaskDoneConfirmIn(BaseModel):
+    """The doer's yes to her own task being done. Anyone else's finds no task."""
+
+    subject: Literal[ConfirmSubject.TASK_DONE]
+    task_id: uuid.UUID
+
+
+class PushComposeIn(BaseModel):
+    """What a chief composes: a template with its slots, or a memo of a few lines, in a
+    language (his, unless another is asked for)."""
+
+    template_id: str | None = Field(default=None, min_length=1, max_length=48)
+    slots: dict[str, str] = Field(default_factory=dict)
+    memo_lines: list[str] | None = Field(default=None, max_length=6)
+    language: str | None = Field(default=None, min_length=2, max_length=16)
+
+    @model_validator(mode="after")
+    def _a_template_or_a_memo(self) -> PushComposeIn:
+        if (self.template_id is None) == (self.memo_lines is None):
+            raise ValueError("a message is a template or a memo, one of the two")
+        return self
+
+
+class PushScheduleIn(PushComposeIn):
+    """When, on which channel, and until when a composed message is worth sending."""
+
+    send_at: datetime
+    channel: PushChannel = PushChannel.APP
+    expires_at: datetime
+
+
+class PushConfirmIn(PushScheduleIn):
+    """A yes to exactly the previewed lines, then, there, until (E12-06)."""
+
+    subject: Literal[ConfirmSubject.PUSH]
+
+
 ConfirmIn = Annotated[
     ClaimConfirmIn
     | ReviewCardConfirmIn
     | MedicineConfirmIn
     | AppointmentConfirmIn
     | QuestionConfirmIn
-    | SummaryConfirmIn,
+    | SummaryConfirmIn
+    | KeyChangeConfirmIn
+    | OnlyMeConfirmIn
+    | TaskDoneConfirmIn
+    | PushConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
-for a visit and a post-visit summary (E05)."""
+for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
+marking a part only me, a task done, a message to him."""
 
 
 class ConfirmationOut(BaseModel):
@@ -1139,7 +1227,9 @@ class StateOut(BaseModel):
     Each dimension is the snapshot's own JSON — short codes, ids and the values of the facts
     folded in — or null where the key does not cover it. `stale` is false when the record
     was checked against this snapshot, true when it has moved on, null when the key was too
-    narrow to check. `state_id` is what every card names.
+    narrow to check. `state_id` is what every card names. `boundary` is the line the
+    posture is shown under (E16-01, `app.safety.boundary`): what Nura did, that it is not
+    a doctor's advice, and whom to ask — in the profile's language, or the one asked for.
     """
 
     state_id: uuid.UUID
@@ -1153,10 +1243,12 @@ class StateOut(BaseModel):
     stale_after: datetime | None
     dimensions: dict[Dimension, dict[str, Any] | None]
     withheld: WithheldOut
+    boundary: str
 
     @classmethod
-    def of(cls, view: StateView) -> StateOut:
+    def of(cls, view: StateView, *, boundary: str) -> StateOut:
         return cls(
+            boundary=boundary,
             state_id=view.id,
             profile_id=view.profile_id,
             sequence=view.sequence,
@@ -1393,6 +1485,8 @@ class BriefOut(BaseModel):
     since_state_id: uuid.UUID | None
     built_at: datetime
     lines: list[BriefLineOut]
+    boundary: str | None
+    """The boundary line the brief ends on (E16-01), whole, as the row records it."""
 
     @classmethod
     def of(cls, brief: Brief) -> BriefOut:
@@ -1404,6 +1498,7 @@ class BriefOut(BaseModel):
             since_state_id=brief.since_state_id,
             built_at=utc(brief.built_at),
             lines=[BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines],
+            boundary=brief.boundary,
         )
 
 
@@ -1529,6 +1624,8 @@ class SummaryOut(BaseModel):
     state_id: uuid.UUID
     lines: list[str]
     spoken: list[str]
+    boundary: str | None
+    """The boundary line the card ends on (E16-01), whole, as the row records it."""
     items: list[SummaryItemOut]
     created_at: datetime
     confirmed_at: datetime | None
@@ -1545,6 +1642,7 @@ class SummaryOut(BaseModel):
             state_id=summary.state_id,
             lines=[str(line["text"]) for line in summary.lines],
             spoken=[str(line.get("spoken", line["text"])) for line in summary.lines],
+            boundary=summary.boundary,
             items=[SummaryItemOut.of(item) for item in items],
             created_at=utc(summary.created_at),
             confirmed_at=None if summary.confirmed_at is None else utc(summary.confirmed_at),
@@ -1600,3 +1698,430 @@ class MemoCardOut(BaseModel):
     memos: list[MemoOut]
     card: list[str]
     spoken_card: list[str]
+
+
+# --- family (E12) --------------------------------------------------------------------------
+
+
+class KeyNarrowIn(BaseModel):
+    """Narrow a key: fewer parts, a shorter window, or both, with the yes minted for it."""
+
+    scopes: list[Scope] | None = None
+    window: KeyWindow | None = None
+    confirmation_id: uuid.UUID
+
+
+class RolePresetOut(BaseModel):
+    role: KeyRole
+    scopes: list[Scope]
+    window: KeyWindow
+    lines: list[str]
+
+    @classmethod
+    def of(cls, preset: RolePreset) -> RolePresetOut:
+        return cls(
+            role=preset.role,
+            scopes=sorted(preset.scopes),
+            window=preset.window,
+            lines=preset.lines,
+        )
+
+
+class GrantOut(BaseModel):
+    """One live key as the chief manages it, with the lines the family screen shows."""
+
+    key_id: uuid.UUID
+    holder_person_id: uuid.UUID
+    holder_name: str
+    role: KeyRole
+    scopes: list[Scope]
+    window: KeyWindow | None
+    granted_at: datetime
+    expires_at: datetime | None
+    lines: list[str]
+
+    @classmethod
+    def of(cls, grant: Grant) -> GrantOut:
+        return cls(
+            key_id=grant.key.id,
+            holder_person_id=grant.key.holder_person_id,
+            holder_name=grant.holder_name,
+            role=grant.role,
+            scopes=sorted(grant.scopes),
+            window=grant.window,
+            granted_at=utc(grant.key.granted_at),
+            expires_at=grant.expires_at,
+            lines=grant.lines,
+        )
+
+
+class HelperOut(BaseModel):
+    key_id: uuid.UUID
+    person_id: uuid.UUID
+    name: str
+    scopes: list[Scope]
+    lines: list[str]
+
+    @classmethod
+    def of(cls, helper: Helper) -> HelperOut:
+        return cls(
+            key_id=helper.key_id,
+            person_id=helper.person_id,
+            name=helper.name,
+            scopes=sorted(helper.scopes),
+            lines=helper.lines,
+        )
+
+
+class HelpersOut(BaseModel):
+    helpers: list[HelperOut]
+    lines: list[str]
+    """What to show when there is no helper; empty otherwise."""
+
+
+class ThreadMessageIn(BaseModel):
+    """A short message to the family: the one free text here, at most 280 characters."""
+
+    text: str = Field(min_length=1, max_length=280)
+
+
+class ThreadCardIn(BaseModel):
+    """A card into the thread: which kind, and for a task card which task."""
+
+    card_kind: CardKind
+    task_id: uuid.UUID | None = None
+
+
+ThreadPostIn = ThreadMessageIn | ThreadCardIn
+
+
+class ThreadEntryOut(BaseModel):
+    message_id: uuid.UUID
+    author_person_id: uuid.UUID
+    posted_at: datetime
+    text: str | None
+    card_kind: CardKind | None
+    state_id: uuid.UUID | None
+    task_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, entry: ThreadMessage) -> ThreadEntryOut:
+        return cls(
+            message_id=entry.id,
+            author_person_id=entry.author_person_id,
+            posted_at=utc(entry.posted_at),
+            text=entry.text,
+            card_kind=entry.card_kind,
+            state_id=entry.state_id,
+            task_id=entry.task_id,
+        )
+
+
+class ThreadPageOut(BaseModel):
+    """A page of the thread, newest first, and the cursor for the page before it."""
+
+    entries: list[ThreadEntryOut]
+    next_cursor: datetime | None
+
+
+class DigestEntryOut(BaseModel):
+    kind: str
+    at: datetime
+    lines: list[str]
+    text: str | None
+    message_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, entry: DigestEntry) -> DigestEntryOut:
+        return cls(
+            kind=entry.kind,
+            at=entry.at,
+            lines=entry.lines,
+            text=entry.text,
+            message_id=entry.message_id,
+        )
+
+
+class DigestOut(BaseModel):
+    language: str
+    since: datetime
+    headline: str
+    entries: list[DigestEntryOut]
+    on_duty: list[str]
+    lines: list[str]
+
+    @classmethod
+    def of(cls, digest: Digest) -> DigestOut:
+        return cls(
+            language=digest.language,
+            since=digest.since,
+            headline=digest.headline,
+            entries=[DigestEntryOut.of(entry) for entry in digest.entries],
+            on_duty=digest.on_duty,
+            lines=digest.lines,
+        )
+
+
+class RosterSlotIn(BaseModel):
+    """Put one person on duty: weekdays (0 Monday to 6 Sunday) or a date range, between two
+    times on the patient's clock. An end at or before the start runs past midnight."""
+
+    person_id: uuid.UUID
+    role: KeyRole
+    weekdays: list[int] | None = None
+    starts_on: date | None = None
+    ends_on: date | None = None
+    from_time: time
+    to_time: time
+
+
+class RosterSlotOut(BaseModel):
+    slot_id: uuid.UUID
+    person_id: uuid.UUID
+    role: KeyRole
+    weekdays: list[int] | None
+    starts_on: date | None
+    ends_on: date | None
+    from_time: time
+    to_time: time
+    added_by_person_id: uuid.UUID
+    added_at: datetime
+    ended_at: datetime | None
+
+    @classmethod
+    def of(cls, slot: RosterSlot) -> RosterSlotOut:
+        return cls(
+            slot_id=slot.id,
+            person_id=slot.person_id,
+            role=slot.role,
+            weekdays=slot.weekdays,
+            starts_on=slot.starts_on,
+            ends_on=slot.ends_on,
+            from_time=slot.from_time,
+            to_time=slot.to_time,
+            added_by_person_id=slot.added_by_person_id,
+            added_at=utc(slot.added_at),
+            ended_at=None if slot.ended_at is None else utc(slot.ended_at),
+        )
+
+
+class OnDutyOut(BaseModel):
+    slot_id: uuid.UUID
+    person_id: uuid.UUID
+    role: KeyRole
+
+    @classmethod
+    def of(cls, duty: OnDuty) -> OnDutyOut:
+        return cls(slot_id=duty.slot_id, person_id=duty.person_id, role=duty.role)
+
+
+class TaskIn(BaseModel):
+    """One thing for one person to do: a label in plain words, who, by when."""
+
+    what: str = Field(min_length=1, max_length=80)
+    assigned_person_id: uuid.UUID
+    due_at: datetime | None = None
+
+
+class TaskDoneIn(BaseModel):
+    confirmation_id: uuid.UUID
+
+
+class TaskOut(BaseModel):
+    task_id: uuid.UUID
+    what: str
+    assigned_person_id: uuid.UUID
+    due_at: datetime | None
+    created_by_person_id: uuid.UUID
+    created_at: datetime
+    done_at: datetime | None
+    done_by_person_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, task: Task) -> TaskOut:
+        return cls(
+            task_id=task.id,
+            what=task.what,
+            assigned_person_id=task.assigned_person_id,
+            due_at=None if task.due_at is None else utc(task.due_at),
+            created_by_person_id=task.created_by_person_id,
+            created_at=utc(task.created_at),
+            done_at=None if task.done_at is None else utc(task.done_at),
+            done_by_person_id=task.done_by_person_id,
+        )
+
+
+class TrailLineOut(BaseModel):
+    at: datetime
+    who: str
+    sentences: list[str]
+    outcome: Outcome
+
+    @classmethod
+    def of(cls, line: TrailLine) -> TrailLineOut:
+        return cls(at=line.at, who=line.who, sentences=line.sentences, outcome=line.outcome)
+
+
+class TrailDayOut(BaseModel):
+    """One day of the trail as he reads it: the day in words, and what happened on it."""
+
+    day: date
+    day_words: str
+    lines: list[TrailLineOut]
+
+    @classmethod
+    def of(cls, day: TrailDay) -> TrailDayOut:
+        return cls(
+            day=day.day, day_words=day.day_words, lines=[TrailLineOut.of(l) for l in day.lines]
+        )
+
+
+class OnlyMeIn(BaseModel):
+    """Mark one part of the record only me, with the owner's yes for exactly that."""
+
+    scope: Scope
+    confirmation_id: uuid.UUID
+
+
+class LiftOnlyMeIn(BaseModel):
+    confirmation_id: uuid.UUID
+
+
+class PrivacyOut(BaseModel):
+    privacy_id: uuid.UUID
+    scope: Scope
+    marked_by_person_id: uuid.UUID
+    marked_at: datetime
+    lifted_at: datetime | None
+    lifted_by_person_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, row: Privacy) -> PrivacyOut:
+        return cls(
+            privacy_id=row.id,
+            scope=row.scope,
+            marked_by_person_id=row.marked_by_person_id,
+            marked_at=utc(row.marked_at),
+            lifted_at=None if row.lifted_at is None else utc(row.lifted_at),
+            lifted_by_person_id=row.lifted_by_person_id,
+        )
+
+
+class PushPreviewOut(BaseModel):
+    """Exactly what he will see, and the verifier's notes on it."""
+
+    language: str
+    template_id: str | None
+    lines: list[str]
+    notes: list[str]
+
+    @classmethod
+    def of(cls, preview: Preview) -> PushPreviewOut:
+        return cls(
+            language=preview.language,
+            template_id=preview.template_id,
+            lines=preview.lines,
+            notes=preview.notes,
+        )
+
+
+class PushIn(PushScheduleIn):
+    """Schedule the previewed message with the yes minted for exactly it."""
+
+    confirmation_id: uuid.UUID
+
+
+class PushOut(BaseModel):
+    push_id: uuid.UUID
+    state_id: uuid.UUID
+    composed_by_person_id: uuid.UUID
+    composed_at: datetime
+    language: str
+    template_id: str | None
+    lines: list[str]
+    send_at: datetime
+    channel: PushChannel
+    expires_at: datetime
+
+    @classmethod
+    def of(cls, push: ScheduledPush) -> PushOut:
+        return cls(
+            push_id=push.id,
+            state_id=push.state_id,
+            composed_by_person_id=push.composed_by_person_id,
+            composed_at=utc(push.composed_at),
+            language=push.language,
+            template_id=push.template_id,
+            lines=push.lines,
+            send_at=utc(push.send_at),
+            channel=push.via_channel,
+            expires_at=utc(push.expires_at),
+        )
+
+
+class DocumentIn(BaseModel):
+    """A document as the app sends it: the bytes in base64, a PDF or a photo, when it was
+    captured, and what kind of paper it is."""
+
+    data: str = Field(min_length=1, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
+    content_type: str = Field(min_length=1, max_length=128)
+    captured_at: datetime
+    tag: DocumentTag
+
+    @field_validator("data")
+    @classmethod
+    def _base64(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as not_base64:
+            raise ValueError("data is base64") from not_base64
+        return value
+
+    def as_bytes(self) -> bytes:
+        return base64.b64decode(self.data, validate=True)
+
+
+class BackingOut(BaseModel):
+    kind: str
+    id: uuid.UUID
+    basis: ConsentBasis
+    purpose: str | None
+    active: bool
+
+    @classmethod
+    def of(cls, backing: Backing) -> BackingOut:
+        return cls(
+            kind=backing.kind,
+            id=backing.id,
+            basis=backing.basis,
+            purpose=backing.purpose,
+            active=backing.active,
+        )
+
+
+class DocumentOut(BaseModel):
+    """A paper kept by reference: the artefact, its tag, and what it backs."""
+
+    artifact_id: uuid.UUID
+    kind: ArtifactKind
+    content_type: str
+    sha256: str
+    captured_at: datetime
+    tag: DocumentTag | None
+    added_by_person_id: uuid.UUID | None
+    added_at: datetime | None
+    backs: list[BackingOut]
+
+    @classmethod
+    def of(cls, view: DocumentView) -> DocumentOut:
+        return cls(
+            artifact_id=view.artifact.id,
+            kind=view.artifact.kind,
+            content_type=view.artifact.content_type,
+            sha256=view.artifact.sha256,
+            captured_at=utc(view.artifact.captured_at),
+            tag=view.tag,
+            added_by_person_id=view.added_by_person_id,
+            added_at=view.added_at,
+            backs=[BackingOut.of(backing) for backing in view.backs],
+        )

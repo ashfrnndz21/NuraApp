@@ -64,8 +64,6 @@ from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import write_memo
 from app.reasoning.visits.models import (
     SUMMARY_IN_PROGRESS,
-    Flag,
-    FlagKind,
     ItemState,
     Memo,
     MemoKind,
@@ -86,8 +84,9 @@ from app.reasoning.visits.strings import (
     time_of_day,
 )
 from app.regions import REGION_TZ, Region, guard_region
+from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import DOSE_ATTRIBUTES, as_words, names_high_risk
-from app.safety.red_flags import RedFlagHit, find_red_flags, red_flags_in
+from app.safety.red_flags import Flag, FlagKind, red_flags_heard, write_red_flag
 from app.state.service import StateView, current_state, render_from_state
 
 SUMMARY = VisitSummary.__tablename__
@@ -717,52 +716,6 @@ def compose_items(
     return items
 
 
-async def write_red_flag(session: AsyncSession, *, context: KeyContext, **values: Any) -> Flag:
-    """A red-flag Flag that outlives the request it was written in.
-
-    The request is one savepoint (`app.db.unit_of_work`): a refusal later in the same
-    request — a line the verifier will not pass, a slot value that is not one — rolls the
-    savepoint back. A red flag must not go with it, so the write also registers a keeper
-    (`app.db.keep_on_refusal`), the mechanism the refused audit lines use: after the
-    rollback the channel replays it and the same row, with the same id, lands and is
-    written down again. On success the keeper is dropped, the row already there.
-    """
-    flag_id = uuid.uuid4()
-
-    async def keep(again: AsyncSession) -> None:
-        if await again.get(Flag, flag_id) is None:  # only if the rollback took it
-            await audited_write(again, Flag, context, Scope.RECORDS, id=flag_id, **values)
-
-    flag = await audited_write(session, Flag, context, Scope.RECORDS, id=flag_id, **values)
-    keep_on_refusal(session, keep)
-    return flag
-
-
-def red_flags_heard(
-    text: str, draft: SummaryDraft, *, medicine_names: tuple[str, ...]
-) -> dict[str, tuple[str, Span, str]]:
-    """Every red-flag word, wherever it was heard: the raw transcript first (with the word's
-    own span in it), then every fact's subject, attribute and value, then every action's
-    slots. One entry per code, the transcript's span winning (B2)."""
-    found: dict[str, tuple[str, Span, str]] = {}
-    hit: RedFlagHit
-    for hit in find_red_flags(text, medicine_names=medicine_names):
-        found.setdefault(hit.code, (hit.word, Span(hit.start, hit.end), "transcript"))
-    for fact in draft.facts_heard:
-        # A subject or attribute is an underscore-joined code ("black_stool"); read as words.
-        for hit in red_flags_in(
-            fact.subject.replace("_", " "),
-            fact.attribute.replace("_", " "),
-            fact.value,
-            medicine_names=medicine_names,
-        ):
-            found.setdefault(hit.code, (hit.word, fact.span, "fact"))
-    for action in draft.actions:
-        for hit in red_flags_in(action.slots, medicine_names=medicine_names):
-            found.setdefault(hit.code, (hit.word, action.span, "action"))
-    return found
-
-
 @audited(Action.WRITE, Scope.VISITS, SUMMARY)
 async def post_visit_summary(
     session: AsyncSession,
@@ -819,7 +772,7 @@ async def post_visit_summary(
     found = red_flags_heard(text, heard, medicine_names=generics)
     red_flag = bool(found)
     flags: list[Flag] = []
-    for code, (word, span, found_in) in found.items():
+    for code, heard_it in found.items():
         flags.append(
             await write_red_flag(
                 session,
@@ -828,7 +781,11 @@ async def post_visit_summary(
                 code=code,
                 subject="symptom",
                 fact_ids=[],
-                payload={"word": word, "span": span.as_json(), "found_in": found_in},
+                payload={
+                    "word": heard_it.word,
+                    "span": heard_it.span,
+                    "found_in": heard_it.found_in,
+                },
                 artifact_id=artifact.id,
                 appointment_id=appointment_id,
                 raised_at=utcnow(),
@@ -850,12 +807,18 @@ async def post_visit_summary(
         {"key": item.key, "text": item.text, "spoken": spoken(item.text)} for item in items
     )
 
+    # What the doctor said, as Nura wrote it down, is an inferring surface (E16-01): the card
+    # ends on its boundary line and the row carries it.
+    boundary = boundary_line(Surface.SUMMARY, lang, doctor=visit.doctor)
+    lines.extend({"key": "boundary", "text": text, "spoken": text} for text in boundary.splitlines())
     summary = await render_from_state(
         session,
         VisitSummary,
         context,
         Scope.VISITS,
         state=state,
+        surface=Surface.SUMMARY,
+        boundary=boundary,
         appointment_id=appointment_id,
         artifact_id=artifact.id,
         language=lang,
@@ -1178,6 +1141,7 @@ async def confirm_summary(
                     ),
                     artifact_id=summary.artifact_id,
                     appointment_id=summary.appointment_id,
+                    raised_by_person_id=context.person_id,
                     raised_at=moment,
                 )
                 memo = await write_memo(

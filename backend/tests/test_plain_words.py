@@ -514,11 +514,15 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         (ROOT / ".claude" / "rules" / "patient-strings.md").read_text(encoding="utf-8")
     )
     assert paths == [
+        "backend/app/audit/**",
         "backend/app/delivery/**",
         "backend/app/channels/**",
         "backend/app/consent/**",
+        "backend/app/family/**",
         "backend/app/medicines/**",
         "backend/app/reasoning/visits/strings.py",
+        "backend/app/safety/boundary.py",
+        "backend/app/safety/recording.py",
         "ios/Nura/**",
     ]
     assert patient_paths("no front matter") == []
@@ -609,6 +613,15 @@ def test_rule_5_is_keyed_by_the_lines_language() -> None:
     assert rules("您在9月29日星期一见陈医生。", "zh") == []
     assert rules("您在星期一9月29日见陈医生。", "zh") == []
     assert rules("您在9月29日见陈医生。", "zh") == [5]
+
+
+def test_rule_10_counts_a_chinese_date_as_one_number() -> None:
+    """"9月14日" is one day, as "14 September" is: the Chinese twin of "On Monday 14 September
+    your blood pressure was 138 over 84." has three numbers too, not four."""
+    story = "9月14日星期一您的血压是138比84。"
+    assert [f for f in verify(story, "zh") if f.rule == 10] == []
+    crowded = "9月14日星期一您的血压是138比84，心跳72。"
+    assert [f.rule for f in verify(crowded, "zh") if f.severity == "fail"] == [10]
 
 
 def test_the_fillers_speak_the_lines_language() -> None:

@@ -30,7 +30,18 @@ from app.audit.access import audited_read, audited_write
 from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
-from app.drafts import ClaimDraft, ConfirmSubject, Draft, FactDraft, ReviewDraft, digest_of
+from app.drafts import (
+    ClaimDraft,
+    ConfirmSubject,
+    Draft,
+    FactDraft,
+    KeyChangeDraft,
+    OnlyMeDraft,
+    PushDraft,
+    ReviewDraft,
+    TaskDoneDraft,
+    digest_of,
+)
 from app.errors import Refusal
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope, scope_for_subject
@@ -46,13 +57,21 @@ def scope_of(draft: Draft) -> Scope:
     claim's is the face of the graph — whose it is — which is all a claimant holds, and a
     review card's is the record, where the card and the photo it came from are kept (the
     facts it then writes each check their own subject's scope). A question and a post-visit
-    summary hang off a visit, so theirs is the visits scope too."""
+    summary hang off a visit, so theirs is the visits scope too. Narrowing a key and marking
+    a part "only me" are the family list's (E12); a task's done is the doer's own footing on
+    the graph, which every key holds; a message to the patient is a send."""
     if isinstance(draft, FactDraft):
         return scope_for_subject(draft.subject)
     if isinstance(draft, ClaimDraft):
         return Scope.PROFILE
     if isinstance(draft, ReviewDraft):
         return Scope.RECORDS
+    if isinstance(draft, KeyChangeDraft | OnlyMeDraft):
+        return Scope.FAMILY
+    if isinstance(draft, TaskDoneDraft):
+        return Scope.PROFILE
+    if isinstance(draft, PushDraft):
+        return Scope.SEND
     # A visit's booking, its status, a question for it and its summary are all the visits'.
     return Scope.VISITS
 

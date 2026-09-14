@@ -32,10 +32,28 @@ class Settings:
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
     without it the process refuses to start."""
+    feed_fixtures: str | None = None
+    """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
+    (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
+    call are later adapters behind the same two ports, and without either the process
+    refuses to start."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
     to start."""
+    whatsapp_provider: str = "fixture"
+    """NURA_WHATSAPP_PROVIDER: which business solution provider carries WhatsApp
+    (`app.channels.whatsapp.provider`). Only the fixture is built, and it runs only on a
+    declared dev run; a name this build does not have refuses to start."""
+    whatsapp_number: str | None = None
+    """NURA_WHATSAPP_NUMBER: the business number for this region, E.164. Unset on a dev run
+    means the sandbox placeholder for the region (`app.channels.whatsapp.config`)."""
+    whatsapp_dev_secret: str | None = None
+    """NURA_WHATSAPP_DEV_SECRET: the fixed secret the fixture provider signs webhooks with and
+    accepts as the verify token. A laptop's secret, from the environment; never in the repo."""
+    whatsapp_fixtures: str | None = None
+    """NURA_WHATSAPP_FIXTURES: the directory the fixture provider serves media from
+    (`backend/tests/fixtures/whatsapp/`), until a real provider fetches it."""
 
 
 class MissingSetting(RuntimeError):
@@ -63,5 +81,10 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
+        feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
+        whatsapp_provider=source.get("NURA_WHATSAPP_PROVIDER", "fixture"),
+        whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
+        whatsapp_dev_secret=source.get("NURA_WHATSAPP_DEV_SECRET") or None,
+        whatsapp_fixtures=source.get("NURA_WHATSAPP_FIXTURES") or None,
     )

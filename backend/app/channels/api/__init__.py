@@ -15,9 +15,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 import app.ingestion  # wires the label-photo rule onto the memory store
 import app.medicines
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
-from app.channels.api import auth, capture, doors, medicines, profiles, visits
+from app.channels.api import auth, capture, doors, family, feed, medicines, profiles, visits
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused
+from app.channels.whatsapp import api as whatsapp
+from app.channels.whatsapp.provider import check_whatsapp_provider
 from app.db import KeptSession
 from app.errors import Refusal
 from app.identity.providers import check_sender
@@ -32,6 +34,7 @@ def create_app(
     providers: Providers,
 ) -> FastAPI:
     check_sender(settings, providers.code_sender)
+    check_whatsapp_provider(settings, providers.whatsapp)
     app = FastAPI(title="Nura", version="0.1.0")
     app.state.settings = settings
     app.state.session_factory = session_factory
@@ -41,8 +44,11 @@ def create_app(
     app.include_router(doors.router)
     app.include_router(profiles.router)
     app.include_router(capture.router)
+    app.include_router(feed.router)
     app.include_router(medicines.router)
     app.include_router(visits.router)
+    app.include_router(whatsapp.router)
+    app.include_router(family.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

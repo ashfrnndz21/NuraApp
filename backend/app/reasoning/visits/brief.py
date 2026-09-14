@@ -47,6 +47,7 @@ from app.reasoning.visits.strings import (
     time_of_day,
     visit_subject_words,
 )
+from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import MEDICINE_SUBJECTS
 from app.state.dimensions import VISIT_LENGTH
 from app.state.models import Dimension, StateSnapshot
@@ -268,6 +269,10 @@ async def build_brief(
         has_medicines=has_medicines,
         context=context,
     )
+    # The brief infers — what changed, what to ask — so it ends on its boundary line
+    # (E16-01), in his language, naming his doctor; the row carries the same words.
+    boundary = boundary_line(Surface.BRIEF, visit.language, doctor=visit.doctor)
+    lines = [*lines, *(Line("boundary", "boundary", text) for text in boundary.splitlines())]
     gaps = await find_gaps(
         session, context=context, registry=registry, appointment_id=appointment_id
     )
@@ -280,6 +285,8 @@ async def build_brief(
         context,
         Scope.VISITS,
         state=state,
+        surface=Surface.BRIEF,
+        boundary=boundary,
         appointment_id=appointment_id,
         language=visit.language,
         since_state_id=None if since is None else since.id,

@@ -7,9 +7,10 @@ row carries the profile with it (`_tied_to_profile`), the way memory's do.
 
 Text here is rendered from a template in `strings.py` and checked by the plain-words verifier
 before the row is written; the columns are short — a line, never a page. The transcript a
-summary was read from is an artefact in the object store, never a column. A `Flag` is not
-shown to anyone as it stands: it is a safety row the sentences are rendered from, written
-before anything is ranked.
+summary was read from is an artefact in the object store, never a column. The `Flag` a visit
+writes is the safety module's row (`app.safety.red_flags`), shared with the feed's feeling
+cloud: never shown as it stands, a row the sentences are rendered from, written before
+anything is ranked.
 """
 
 from __future__ import annotations
@@ -34,50 +35,9 @@ MEMO_LENGTH = 80
 
 
 # --- flags -----------------------------------------------------------------------------------
-
-
-class FlagKind(StrEnum):
-    """What a flag is. None of these is a diagnosis; each is a thing that bypasses planning
-    (a red flag) or becomes a question for the doctor (a change heard, an interaction)."""
-
-    RED_FLAG = "red_flag"
-    MEDICINE_CHANGE_HEARD = "medicine_change_heard"
-    """A change to a medicine the doctor said at a visit (E05-05). Never applied here: the
-    row is what E04's reconcile picks up, with the person's OK on a plan. Its `subject` is
-    the generic, `code` the kind of change (`summary.ChangeHeard`), and `payload` carries
-    `generic`, `change`, `line_id` (the active line of that generic, when there is one),
-    `span` in the transcript and `ask_the_doctor: true` — and never an amount. Interactions
-    are E04's own `InteractionFlag` rows, not a kind here."""
-
-
-class Flag(ProfileScoped, Base):
-    """A safety row: what was found, in which facts or artefact, and when.
-
-    `code` is the entry in the red-flag table (`app.safety.red_flags`) or the kind of change
-    heard. `payload` is structured — a generic name, a span in the transcript — never a
-    sentence and never an amount. A flag takes one change: it is
-    resolved, by a person, when the doctor has been asked.
-    """
-
-    __tablename__ = "flag"
-    __table_args__ = (
-        _row_of_profile("flag"),
-        _tied_to_profile("flag", "artifact_id", "artifact"),
-        _tied_to_profile("flag", "appointment_id", "appointment"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    kind: Mapped[FlagKind] = mapped_column(enum_column(FlagKind, "flag_kind"))
-    code: Mapped[str] = mapped_column(String(64))
-    subject: Mapped[str] = mapped_column(String(64))
-    fact_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
-    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("appointment.id"), default=None
-    )
-    raised_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
-    resolved_at: Mapped[datetime | None] = mapped_column(default=None)
+# `Flag` and `FlagKind` are the safety module's (`app.safety.red_flags`): one table for a red
+# flag raised from the feeling cloud (E21), one heard at a visit, and a medicine change heard
+# (E05). The visit loop imports them from there.
 
 
 # --- the brief -------------------------------------------------------------------------------
@@ -279,7 +239,7 @@ class SummaryItem(ProfileScoped, Base):
         _tied_to_profile("summary_item", "memo_id", "memo"),
         _tied_to_profile("summary_item", "appointment_id", "appointment"),
         _tied_to_profile("summary_item", "fact_id", "fact"),
-        _tied_to_profile("summary_item", "flag_id", "flag"),
+        _tied_to_profile("summary_item", "flag_id", "red_flag"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -300,13 +260,11 @@ class SummaryItem(ProfileScoped, Base):
         ForeignKey("appointment.id"), default=None
     )
     fact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
-    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flag.id"), default=None)
+    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
 
 
-# A flag takes one change, being resolved. A brief takes none. A question and a memo take one,
-# being superseded. A summary takes its close, an item its decision, and only while the
+# A brief takes no change. A question and a memo take one, being superseded. A summary takes its close, an item its decision, and only while the
 # summary service is making it.
-frozen(Flag, except_for=frozenset({"resolved_at"}))
 frozen(Brief)
 frozen(Question, except_for=frozenset({"superseded_at"}))
 frozen(Memo, except_for=frozenset({"superseded_at"}))

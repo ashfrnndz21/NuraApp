@@ -31,7 +31,9 @@ from app.memory import semantic
 from app.memory.models import Artifact, ArtifactKind
 
 HIGH_RISK_CLASSES: Mapping[str, frozenset[str]] = {
-    "anticoagulant": frozenset({"warfarin"}),
+    "anticoagulant": frozenset(
+        {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban"}
+    ),
     "insulin": frozenset(
         {
             "insulin",
@@ -56,10 +58,18 @@ HIGH_RISK_CLASSES: Mapping[str, frozenset[str]] = {
             "buprenorphine",
             "pethidine",
             "hydromorphone",
+            "methadone",
+            "hydrocodone",
+            "tapentadol",
+            "oxymorphone",
         }
     ),
 }
-"""The five classes of docs/medications-module.md §9 and the generic names under each."""
+"""The five classes of docs/medications-module.md §9 and the generic names under each. The
+document names warfarin; the class is anticoagulant, so the oral anticoagulants that share
+its risk are here too. The opioid list has no catch-all word the way insulin does, so every
+generic dispensed in Singapore or Malaysia must be named: a name missing here is a dose
+saved from words alone (`tests/test_high_risk_conformance.py` walks every one)."""
 
 MEDICINE_SUBJECTS = frozenset({"medicine", "medication"})
 """The subjects a medicine fact is written under (`app.keys.scopes.scope_for_subject`)."""

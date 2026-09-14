@@ -13,20 +13,40 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.profiles import NoSuchHolder
+from app.channels.whatsapp.outbound.level0 import NoPatientYet
+from app.channels.whatsapp.outbound.send import OutsideTheWindow
+from app.channels.whatsapp.provider import NotAWebhook
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
+from app.delivery.feed.engagement import NoSuchItem
+from app.delivery.feed.rank import NoCachedPage
+from app.delivery.feed.search import NoSuchSearchJob
+from app.delivery.feed.sources import NotTheirsToManage
 from app.errors import Refusal
+from app.family.common import NotAChief, NotPlainWords
+from app.family.documents import NotADocument
+from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
+from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
+from app.family.roster import (
+    AlreadyDone,
+    NoSuchSlot,
+    NoSuchTask,
+    NotADuty,
+    NotOnThisProfile,
+    NotTheDoer,
+)
+from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
-from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
+from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.memory.spine import NoSuchAppointment as NoSuchVisit
 from app.memory.spine import NoSuchProvider
@@ -49,17 +69,38 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchHolder, 403),
     # A key that reads the visits does not write them; same footing as the medicines.
     (NotTheirsToChangeVisits, 403),
+    # A webhook body not signed by the provider, or a verify token that is not ours.
+    (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # The engine's sources and jobs are the owner's and his chief's to see (E21).
+    (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
     # A key to read the medicines is not a key to change them.
     (NotTheirsToChange, 403),
+    # The family's arrangements (E12): the owner's and his chief's; a key is never widened
+    # in place; a task is done by the person it names; only me is the owner's alone.
+    (NotAChief, 403),
+    (NotTheOwner, 403),
+    (NotTheDoer, 403),
+    (WouldWiden, 403),
+    (NotOnThisProfile, 403),
+    (NoSuchSlot, 404),
+    (NoSuchTask, 404),
+    (NoSuchTaskForCard, 404),
+    (NoSuchTemplate, 404),
+    (NotMarked, 404),
+    (NothingToNarrow, 409),
+    (AlreadyMarked, 409),
+    (AlreadyDone, 409),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    # A stewarded profile has no patient to send the morning card to yet.
+    (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
     (NoSuchAppointment, 404),
     (NoSuchVisit, 404),
@@ -68,9 +109,14 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchSummary, 404),
     # A fact heard at a visit that names a drug is never written; the answer names the rule.
     (DrugNamedInAFact, 400),
+    (NoSuchItem, 404),
+    (NoSuchSearchJob, 404),
+    (NoCachedPage, 404),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
     (TranscriptTooLarge, 413),
+    # Free text needs the 24-hour window; outside it only a template goes.
+    (OutsideTheWindow, 409),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
@@ -84,7 +130,20 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (WaitingToBeClaimed, 409),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no. The
-high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class."""
+high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class — and so
+are the family's shape refusals (`NotADuty`, `NotAPartToMark`, `NotAMemo`, `MissingSlot`,
+`BadWindow`, `NotADocument`) and `NotPlainWords`, which carries its findings so the composer
+can fix the line."""
+
+_SHAPE: tuple[type[Refusal], ...] = (
+    NotADuty,
+    NotAPartToMark,
+    NotAMemo,
+    MissingSlot,
+    BadWindow,
+    NotADocument,
+)
+"""Named so that a reader of this file sees every family refusal; each is a 400."""
 
 
 def status_of(refusal: Refusal) -> int:
@@ -101,4 +160,10 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
         body["scope"] = refusal.scope.value
     if isinstance(refusal, HighRiskNeedsLabelPhoto):
         body["drug_class"] = refusal.drug_class
+    if isinstance(refusal, NotPlainWords):
+        # The verifier's findings — rule, problem, rewrite — so the composer can fix the
+        # line. They are about the words offered, never about the record.
+        return JSONResponse(
+            status_code=status_of(refusal), content={**body, "findings": refusal.findings}
+        )
     return JSONResponse(status_code=status_of(refusal), content=body)
