@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, String, select
+from sqlalchemy import JSON, ForeignKey, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -53,14 +53,16 @@ from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.models import (
+    ConfidenceState,
     Event,
     EventKind,
+    Fact,
     SourceChannel,
     _row_of_profile,
     _tied_to_profile,
 )
-from app.memory.semantic import current_facts
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 
@@ -101,7 +103,15 @@ RED_FLAGS: frozenset[Feeling] = frozenset(
 
 SUGAR_CONDITIONS = frozenset({"diabetes", "type_2_diabetes", "type2_diabetes", "blood_sugar"})
 """Subjects a clinician's control word about sugar is recorded under. Shaky-and-sweaty is a
-red flag on sugar medicines; without one of these on the record it is suppressed, visibly."""
+red flag on one of these, or on an active medicine that can drop his sugar
+(`HYPOGLYCAEMIC_CLASSES`); with neither on the record it is written suppressed, visibly, and
+`suppressed_because` stays "no_sugar_condition_on_record" for both."""
+
+HYPOGLYCAEMIC_CLASSES = frozenset({"insulin", "sulfonylurea"})
+"""The licensed register's classes (`drug_class`, carried on the medication line from the
+register) whose medicines can drop his sugar: insulin, and the sulfonylureas — gliclazide,
+glibenclamide. On one of them shaky-and-sweaty escalates whether or not a sugar condition is
+written down. A class, never a list of names; widening it (meglitinides) is the pharmacist's."""
 
 FLAG_TARGET = "red_flag"
 
@@ -265,30 +275,82 @@ def is_red(feeling: Feeling) -> bool:
     return feeling in RED_FLAGS
 
 
+async def _system_read(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    model: Any,
+    scope: Scope,
+    where: Sequence[Any],
+) -> Sequence[Any]:
+    """A safety rule's own read of the record: the system's view, not the key of whoever raised
+    the flag. A helper who saw him shaking must start the ladder when the record says he is on
+    a sugar medicine, though her key opens neither his conditions nor his medicines. The rows
+    are for the rule alone — nothing read reaches the caller, only whether the flag was held
+    back — and the read is written down as the system's (`Channel.SYSTEM`), in the raiser's
+    name, under the scope the rows sit in."""
+    rows = list(
+        await session.scalars(select(model).where(model.profile_id == context.profile_id, *where))
+    )
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=scope,
+        target=model.__tablename__,
+        rows=len(rows),
+        channel=Channel.SYSTEM,
+    )
+    return rows
+
+
 async def _missing_fact(
     session: AsyncSession, *, context: KeyContext, feeling: Feeling
 ) -> str | None:
-    """For the two flags that depend on the record: what is missing, or None."""
-    if not context.allows(Scope.RECORDS):
-        # The fact is the record's and this key does not open it (a helper, a neighbour): to
-        # this key it is missing, so the flag is written suppressed and named rather than
-        # refused, and the caregiver sees it was considered (safety.md).
-        if feeling is Feeling.SHAKY_SWEATY:
-            return "no_sugar_condition_on_record"
-        if feeling is Feeling.WEIGHT_GAIN:
-            return "no_recent_discharge_on_record"
-        return None
+    """For the two flags that depend on the record: what is missing, or None.
+
+    The record is read as the system (`_system_read`), whoever raised the flag: a safety rule
+    is evaluated on what the record holds, not on what the raiser's key opens. Shaky-and-sweaty
+    stands on a sugar condition or an active medicine the register classes as lowering sugar;
+    a kilo in two days on a recent discharge."""
+    moment = utcnow()
     if feeling is Feeling.SHAKY_SWEATY:
-        facts = await current_facts(session, context=context, attribute=CONTROL)
-        if not any(fact.subject in SUGAR_CONDITIONS for fact in facts):
-            return "no_sugar_condition_on_record"
-    if feeling is Feeling.WEIGHT_GAIN:
-        moment = utcnow()
-        discharges = await audited_read(
+        conditions = await _system_read(
             session,
-            Event,
-            context,
-            Scope.RECORDS,
+            context=context,
+            model=Fact,
+            scope=Scope.RECORDS,
+            where=(
+                Fact.attribute == CONTROL,
+                Fact.subject.in_(SUGAR_CONDITIONS),
+                Fact.superseded_at.is_(None),
+                Fact.confidence_state != ConfidenceState.DISPUTED,
+                Fact.valid_from <= moment,
+                or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
+            ),
+        )
+        if conditions:
+            return None
+        medicines = await _system_read(
+            session,
+            context=context,
+            model=MedicationLine,
+            scope=Scope.MEDICINES,
+            where=(
+                MedicationLine.superseded_at.is_(None),
+                MedicationLine.status == LineStatus.ACTIVE,
+                MedicationLine.drug_class.in_(HYPOGLYCAEMIC_CLASSES),
+            ),
+        )
+        if medicines:
+            return None
+        return "no_sugar_condition_on_record"
+    if feeling is Feeling.WEIGHT_GAIN:
+        discharges = await _system_read(
+            session,
+            context=context,
+            model=Event,
+            scope=Scope.RECORDS,
             where=(
                 Event.kind == EventKind.DISCHARGE,
                 Event.occurred_at > moment - AFTER_DISCHARGE_WINDOW,

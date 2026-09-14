@@ -223,9 +223,7 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
         "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
-        "Nura wrote down how you feel.",
-        "This is not a doctor's advice.",
-        "Ask your doctor.",
+        "Nura does not decide what is wrong.",
     ]
     assert body["by_voice"] and body["transcript_confidence"] == 0.94
 

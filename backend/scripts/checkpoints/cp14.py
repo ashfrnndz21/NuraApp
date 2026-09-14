@@ -396,7 +396,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or not chest["by_voice"]
         or mei.person_id not in chest["notified_person_ids"]
         or lines[:3] != ["Mei knows now.", "Call the ambulance now on 995.", "After that, call Mei."]
-        or lines[-2:] != ["This is not a doctor's advice.", "Ask your doctor."]
+        or lines[-1] != "Nura does not decide what is wrong."
+        or any(line.startswith("Ask ") for line in lines)
     ):
         raise fail('Pa says "chest pain" by voice', why=f"got {chest}")
     ok(
@@ -404,7 +405,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"heard at {chest['transcript_confidence']}, kept as his own note): the flag was written first "
         f"({chest['flag_id'][:8]}…), "
         f"the posture is ACT, Mei and Lin were told (notices to {len(chest['notified_person_ids'])} people, "
-        '"Nura heard this: chest pain. Call Pa now."), and the card says who knows and what to do:'
+        '"Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, '
+        'and one closing line, never "Ask your doctor." after 995:'
     )
     for line in lines:
         say(line)

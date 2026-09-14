@@ -131,6 +131,12 @@ async def water_pill(session: AsyncSession, context: KeyContext, dose: str = "1 
     return await add(session, context, label("frusemide", "40 mg", dose), photo)
 
 
+async def gliclazide(session: AsyncSession, context: KeyContext):
+    """Gliclazide 30 mg from a label photo: the register's class for it is a sulfonylurea."""
+    photo = await label_photo(session, context)
+    return await add(session, context, label("gliclazide", "30 mg", "1 tab OD morning"), photo)
+
+
 async def sugar_tablet(session: AsyncSession, context: KeyContext):
     photo = await label_photo(session, context)
     return await add(session, context, label("metformin", "500 mg", "1 tab BD"), photo)

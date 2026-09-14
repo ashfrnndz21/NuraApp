@@ -17,10 +17,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import Action, Channel
+from app.channels.api.safety_schemas import WhatToDoOut
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.family.roster import add_slot
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import MedicationLine
 from app.medicines.service import record_dose_taken
 from app.memory.models import Artifact, ArtifactKind, Event, EventKind, Fact
 from app.regions import OutOfRegion, Region
@@ -41,6 +44,7 @@ from tests.safety_support import (
     assert_plain,
     fact,
     first_write_of,
+    gliclazide,
     let_in,
     pa,
     trail,
@@ -52,6 +56,9 @@ from tests.voice import CHEST_PAIN, CONTENT_TYPE, TIRED_TODAY, UNHEARD, placehol
 
 CLOSING = ("Nura wrote down how you feel.", "This is not a doctor's advice.", "Ask your doctor.")
 """The not-feeling-well boundary's last three lines (`app.safety.boundary`), no doctor named."""
+
+URGENT = ("Nura does not decide what is wrong.",)
+"""The one closing line of a red flag's urgent card: never "Ask your doctor." after 995."""
 
 FORBIDDEN = ("mg", "tablet", "stop", "start", "double", "half", "skip", "drink")
 """Words no what-to-do card may carry: a dose, or advice about a medicine."""
@@ -124,7 +131,7 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
         "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
-        *CLOSING,
+        *URGENT,
     ]
     _verified(done.lines)
 
@@ -297,7 +304,7 @@ async def test_with_nobody_to_call_the_first_line_is_the_ambulance(sg: AsyncSess
     assert [line.text for line in done.lines] == [
         "You did right to say so.",
         "Call the ambulance now on 995.",
-        *CLOSING,
+        *URGENT,
     ]
     assert done.notified_person_ids == []
     rest = await _press(sg, owner, words="tired")
@@ -352,7 +359,7 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
         "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
-        *CLOSING,
+        *URGENT,
     ]
     assert set(done.notified_person_ids) == {mei.person_id, lin.person_id}
     assert done.artifact_id is None and done.fact_id is None and done.event_id is not None
@@ -484,9 +491,66 @@ async def test_the_roster_names_who_is_on_duty_and_a_red_flag_still_tells_everyo
         "Lin knows now.",
         "Call the ambulance now on 995.",
         "After that, call Lin.",
-        *CLOSING,
+        *URGENT,
     ]
     ana = await let_in(sg, owner, phone="+6595550042", name="Ana", role=KeyRole.CAREGIVER)
     theirs = await _press(sg, ana, words="chest pain")
     assert theirs.lines[0].text == "Mei knows now."
     assert set(theirs.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}
+
+
+async def test_a_red_flag_card_closes_on_one_line_and_never_sends_him_to_his_doctor(
+    sg: AsyncSession,
+) -> None:
+    """After "Call the ambulance now on 995." the card never says "Ask your doctor.": it
+    closes on "Nura does not decide what is wrong.", and the row carries that urgent boundary.
+    An ordinary card keeps the standard closing."""
+    owner, *_ = await _household(sg)
+    done = await _press(sg, owner, words="chest pain")
+    texts = [line.text for line in done.lines]
+    assert texts[0] == "Mei knows now." and texts[-1] == "Nura does not decide what is wrong."
+    assert not any(text.startswith("Ask ") for text in texts)
+    card = await sg.get(WhatToDoCard, done.card_id)
+    assert card is not None
+    assert card.boundary == "Mei knows now.\nNura does not decide what is wrong."
+    ordinary = [line.text for line in (await _press(sg, owner, words="tired today")).lines]
+    assert ordinary[-3:-1] == list(CLOSING[:2]) and ordinary[-1].startswith("Ask ")
+
+
+async def test_the_rule_reads_the_record_as_the_system_whoever_pressed(
+    sg: AsyncSession,
+) -> None:
+    """Shaky-and-sweaty from the helper, whose key does not open the record: the rule reads
+    it as the system. With no sugar condition and nothing that lowers his sugar the flag is
+    written suppressed and she sees the ordinary card; on gliclazide (the register's class, a
+    sulfonylurea) it escalates. What the rule read never reaches her."""
+    owner, mei, lin, siti, _kit = await _household(sg)
+    assert Scope.RECORDS not in siti.scopes
+    held = await _press(sg, siti, words="Pa is shaky and sweaty")
+    assert held.kind is not WhatToDoKind.RED_FLAG and held.flag_id is None
+    assert held.red_flags == [] and held.suppressed == []
+    flags = (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all()
+    assert [one.suppressed_because for one in flags] == ["no_sugar_condition_on_record"]
+
+    await gliclazide(sg, owner)
+    done = await _press(sg, siti, words="Pa is shaky and sweaty")
+    assert done.kind is WhatToDoKind.RED_FLAG and done.flag_id is not None
+    assert set(done.notified_person_ids) == {mei.person_id, lin.person_id}
+    assert done.lines[0].text == "Mei knows now."
+    assert done.lines[-1].text == "Nura does not decide what is wrong."
+
+    # What she is sent back names no condition and no medicine, pressed either way.
+    for answer in (held, done):
+        sent = WhatToDoOut.of(answer).model_dump_json().lower()
+        for word in ("gliclazide", "diamicron", "sulfonylurea", "diabetes", "sugar", "insulin"):
+            assert word not in sent, word
+
+    # The reads were the system's, written down as such, in her name.
+    system = [
+        line
+        for line in await trail(sg, owner.profile_id)
+        if line.actor_person_id == siti.person_id
+        and line.channel is Channel.SYSTEM
+        and line.action is Action.READ
+    ]
+    assert {Fact.__tablename__, MedicationLine.__tablename__} <= {line.target for line in system}

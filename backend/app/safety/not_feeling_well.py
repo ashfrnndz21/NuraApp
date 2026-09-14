@@ -18,7 +18,8 @@ What happens, in order, and the order is the point:
    moment: the SYMPTOM event it was said in (`record_the_moment`), then the flag on it
    (`write_flag_kept`, E21's `red_flag` table) — and kept: if anything later in the same
    request is refused, the event, the flag and the notices land anyway. A flag that depends
-   on a fact not on the record is written suppressed and escalates nobody. Otherwise every
+   on a fact the record does not hold (read as the system, whoever pressed) is written
+   suppressed and escalates nobody. Otherwise every
    key holder on the emergency list gets a `Notice` to be delivered by E11/E19, whoever is
    on duty first (E12's roster), and the ladder (`Escalation`, `roster_for`) is written
    beside the flag. This whole step runs under `Scope.EMERGENCY`, which every role holds, so
@@ -32,7 +33,8 @@ What happens, in order, and the order is the point:
    `app.channels.safety_strings` and verified as an action, inside the not-feeling-well
    boundary (`app.safety.boundary`, `Surface.NOT_FEELING_WELL`): the reassurance first —
    "Mei knows now." — then the row, then "Nura wrote down how you feel." and the two closing
-   lines. The card row carries that boundary, as every inferring surface's row must (E16). A key that can compute State
+   lines — or, on a red flag's urgent card, the one line "Nura does not decide what is wrong.",
+   never "Ask your doctor." after an emergency number. The card row carries that boundary, as every inferring surface's row must (E16). A key that can compute State
    (the owner, the chief) has the card rendered from the State those facts produced and
    written down as a `WhatToDoCard`; a narrower key gets the same lines to show him and no
    card row, since nothing rendered is stored without the State it came from.
@@ -749,19 +751,30 @@ def compose(
 BOUNDARY_PREFIX = "boundary."
 BOUNDARY_IDS = ("boundary.opening", "boundary.did", "boundary.not_advice", "boundary.ask")
 """The not-feeling-well boundary's four lines as he sees them (no letter is carried yet)."""
+URGENT_BOUNDARY_IDS = ("boundary.opening", "boundary.urgent")
+"""The urgent card's two: the reassurance first, "Nura does not decide what is wrong." last."""
 
 
 def within_the_boundary(
-    lines: list[Line], *, language: str, doctor: str | None, told: str | None
+    lines: list[Line],
+    *,
+    language: str,
+    doctor: str | None,
+    told: str | None,
+    urgent: bool = False,
 ) -> list[Line]:
     """The row's lines inside the not-feeling-well boundary (E16-01): the reassurance first
     ("Mei knows now." — or "You did right to say so." when nobody was named), then the row,
-    then what Nura did and the two closing lines. The words are `app.safety.boundary`'s; the
-    card row keeps the same text in its `boundary` column and the row's ids in `line_ids`."""
-    said = boundary_lines(Surface.NOT_FEELING_WELL, language, doctor=doctor, told=told)
-    opening, *closing = (
-        Line(line_id, text) for line_id, text in zip(BOUNDARY_IDS, said, strict=True)
+    then — on an ordinary card — what Nura did and the two closing lines, or — on the urgent
+    card of a red flag — the one closing line "Nura does not decide what is wrong.", so that
+    nothing after "Call the ambulance now on 995." sends him anywhere else. The words are
+    `app.safety.boundary`'s; the card row keeps the same text in its `boundary` column and the
+    row's ids in `line_ids`."""
+    said = boundary_lines(
+        Surface.NOT_FEELING_WELL, language, doctor=doctor, told=told, urgent=urgent
     )
+    ids = URGENT_BOUNDARY_IDS if urgent else BOUNDARY_IDS
+    opening, *closing = (Line(line_id, text) for line_id, text in zip(ids, said, strict=True))
     return [opening, *lines, *closing]
 
 
@@ -844,6 +857,7 @@ async def not_feeling_well(
         region=context.region,
     )
     decision = decide(situation)
+    urgent = decision.kind is WhatToDoKind.RED_FLAG
     doctor = None if missed is None else missed.line.prescriber
     told = None if family.chief is None else family.chief.display_name
     lines = within_the_boundary(
@@ -857,6 +871,7 @@ async def not_feeling_well(
         language=lang,
         doctor=doctor,
         told=told,
+        urgent=urgent,
     )
 
     check_in_at: datetime | None = None
@@ -893,7 +908,9 @@ async def not_feeling_well(
             Scope.RECORDS,
             state=state,
             surface=Surface.NOT_FEELING_WELL,
-            boundary=boundary_line(Surface.NOT_FEELING_WELL, lang, doctor=doctor, told=told),
+            boundary=boundary_line(
+                Surface.NOT_FEELING_WELL, lang, doctor=doctor, told=told, urgent=urgent
+            ),
             kind=decision.kind,
             language=lang,
             line_ids=[line.id for line in lines if not line.id.startswith(BOUNDARY_PREFIX)],
@@ -922,7 +939,8 @@ async def not_feeling_well(
         by_voice=captured.by_voice,
         transcript_confidence=captured.transcript.confidence,
         red_flags=list(heard.flags),
-        suppressed=list(heard.suppressed),
+        # A key that does not open the record is not told what the rule found in it.
+        suppressed=list(heard.suppressed) if can_record else [],
         symptoms=list(parsed.symptoms),
         flag_id=None if escalated is None or escalated.first is None else escalated.first.id,
         notified_person_ids=[

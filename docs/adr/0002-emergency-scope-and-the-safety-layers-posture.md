@@ -131,6 +131,10 @@ durable when something later in the same request is refused.
     its own disclaimer line ("This card is not a doctor's advice."). It names no `Surface` and
     its `boundary` column stays empty; adding it to the register would put "Ask your doctor."
     on a card handed to a paramedic.
+    A red flag's card is **urgent** (`boundary_lines(…, urgent=True)`, review of #111 at 488d99b):
+    the reassurance, the calls, and one closing line, "Nura does not decide what is wrong." —
+    never "Ask your doctor." after an emergency number. `is_boundary_line` accepts that shape
+    for this surface only; every other not-feeling-well card keeps the standard closing.
 
 13. **One red-flag table and one word table.** E21 (#106) and E19 (#107) landed a `red_flag`
     table and a table of red-flag words for every channel before E13 did. E13's own `flag`
@@ -143,8 +147,12 @@ durable when something later in the same request is refused.
     record is written with `suppressed_because`, tells nobody, and the button takes the
     ordinary path. E13's medicine-class rule for shaky-and-sweaty (the widened class list the
     review asked for) is superseded by E21's condition rule (`SUGAR_CONDITIONS`), one rule for
-    every channel; for a key that cannot read the record the condition is missing to it, so
-    the flag is written suppressed rather than refused (`_missing_fact`).
+    every channel. A safety rule reads the record as the system, not with the key of whoever
+    pressed (`_missing_fact`, `_system_read`: a SYSTEM read, on the trail as such, nothing
+    returned to the caller): shaky-and-sweaty escalates on a sugar condition or an active
+    medicine the register classes as insulin or a sulfonylurea (`HYPOGLYCAEMIC_CLASSES`), and
+    is written suppressed and visible otherwise. A key that does not open the record is sent
+    back no `suppressed` list — nothing of what the rule found.
 
 ## Consequences
 
@@ -155,9 +163,9 @@ durable when something later in the same request is refused.
 - A stale card for an emergency-only key is a 409 until the owner or the chief opens the
   app; the web client's cached last render covers the offline day. The operator may prefer
   a background recompute later; nothing here precludes it.
-- `shaky_sweaty` is written suppressed, and tells nobody, whenever the sugar condition it
-  depends on is not on the record or the key cannot read the record; the caregiver sees the
-  suppression on the flag (`suppressed_because`). Whether a key that cannot see the condition
-  should escalate instead is a clinical call left open for the operator.
+- `shaky_sweaty` is written suppressed, and tells nobody, only when the record — read as the
+  system — holds neither a sugar condition nor an active insulin or sulfonylurea; the caregiver
+  sees the suppression on the flag (`suppressed_because`). Who pressed does not change the
+  answer. Widening the class list (meglitinides) is the pharmacist's.
 - Anyone with a key can raise a red flag about him. That is the point of decision 6; the
   trail names who pressed, and the flag row carries `raised_by_person_id`.

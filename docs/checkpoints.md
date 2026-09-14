@@ -679,16 +679,16 @@ What you will see (the phone numbers, ids and dates change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Pa (+6591116641) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Pa (+6591116946) registered by phone code (no SMS; the six digits read from the server log) and signed in
 ✓ Pa opened his own profile (wording 1, in the app)
-✓ Mei (+6592221925) registered by phone code (no SMS; the six digits read from the server log) and signed in
-✓ Lin (+6594447336) registered by phone code (no SMS; the six digits read from the server log) and signed in
-✓ Kit (+6593338015) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Mei (+6592221831) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Lin (+6594448471) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Kit (+6593339060) registered by phone code (no SMS; the six digits read from the server log) and signed in
 ✓ Pa let Mei, his daughter, in to everything and cut her the chief key
 ✓ Pa let Lin, a neighbour, in to the emergency card only and cut her an emergency key (scopes: emergency, profile)
 ✓ Pa added the water pill (frusemide 40 mg, 1 tablet every morning) from a label photo, with his OK, and tapped Taken
 ✓ Pa typed in a blood pressure (138 over 84): a reading event and a fact resting on it
-✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, the last blood pressure's date, 995 for Singapore, rendered from State 4658a73d… and written down as render e95e8e74…; the lines, every one verified:
+✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, the last blood pressure's date, 995 for Singapore, rendered from State 96032bf8… and written down as render ed18fadb…; the lines, every one verified:
     This is Pa's emergency card.
     Show this card to the doctor or the ambulance crew.
     Pa speaks English.
@@ -699,18 +699,18 @@ What you will see (the phone numbers, ids and dates change each run):
     Mei looks after Pa.
     Call Mei first.
     The ambulance number is 995.
-    Pa's blood pressure was last written down on Monday 14 September.
+    Pa's blood pressure was last written down on Tuesday 15 September.
     This card is not a doctor's advice.
 ✓ Pa opened the printable page (GET /profiles/{id}/emergency-card.html): one self-contained page — no script, no stylesheet, no image fetched — paper surface, Ink #2B2733 on white, 20px body, the strength and the phone number as data beside the sentences; its first lines:
-    http://127.0.0.1:8000/profiles/73d698ea-886b-4aef-815a-a4f391dd339d/emergency-card.html
+    http://127.0.0.1:8000/profiles/4d929951-3433-4bca-84cb-7dc67525d77b/emergency-card.html
     This is Pa's emergency card.
     Show this card to the doctor or the ambulance crew.
     Pa speaks English.
     Nura has no note of a condition for Pa.
     Pa takes the water pill (frusemide).
     Pa takes 1 tablet every morning.
-✓ Mei read the card with her chief key (render c08a562c…), and Lin read it with her emergency-only key — the same lines, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
-✓ Pa pressed the button and typed "tired today" (POST /profiles/{id}/not-feeling-well): his words kept as an artefact, a SYMPTOM event and a symptom fact resting on it, no red flag, the water pill already taken — so the card says rest, Mei is told (notice to 2 people), and a check-in is written for 2026-09-14T17:55:29.589417Z:
+✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
+✓ Pa pressed the button and typed "tired today" (POST /profiles/{id}/not-feeling-well): his words kept as an artefact, a SYMPTOM event and a symptom fact resting on it, no red flag, the water pill already taken — so the card says rest, Mei is told (notice to 2 people), and a check-in is written for 2026-09-14T18:10:36.748662Z:
     Mei knows now.
     Sit down and rest now.
     Mei will call you today.
@@ -718,22 +718,20 @@ What you will see (the phone numbers, ids and dates change each run):
     Nura wrote down how you feel.
     This is not a doctor's advice.
     Ask your doctor.
-✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (1bf702af…), the posture is ACT, Mei and Lin were told (notices to 2 people, "Nura heard this: chest pain. Call Pa now."), and the card says who knows and what to do:
+✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (85280904…), the posture is ACT, Mei and Lin were told (notices to 2 people, "Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, and one closing line, never "Ask your doctor." after 995:
     Mei knows now.
     Call the ambulance now on 995.
     After that, call Mei.
-    Nura wrote down how you feel.
-    This is not a doctor's advice.
-    Ask your doctor.
+    Nura does not decide what is wrong.
 ✓ State's posture is act (GET /profiles/{id}/state): the wash on his screen shifts to coral
 ✓ Pa logged a symptom by voice (POST /profiles/{id}/symptoms): "dizzy, quite a lot, since this morning" heard as dizzy, severity 2 (quite bad), since this morning; a SYMPTOM event and a fact with a seven-day window, his words kept in the voice note
 ✓ Mei read the symptom log (GET /profiles/{id}/symptoms) in plain words, with the day's name:
-    Pa felt tired on Monday 14 September.
+    Pa felt tired on Tuesday 15 September.
     It started this morning.
     Pa wrote this down.
-    Pa felt chest pain on Monday 14 September.
+    Pa felt chest pain on Tuesday 15 September.
     Pa said this out loud.
-    Pa felt dizzy on Monday 14 September.
+    Pa felt dizzy on Tuesday 15 September.
     It was quite bad.
     It started this morning.
     Pa said this out loud.
