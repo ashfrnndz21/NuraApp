@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
-from datetime import datetime
-from typing import Any, Literal
+from collections.abc import Sequence
+from datetime import UTC, date, datetime
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.consent.models import (
@@ -17,9 +20,14 @@ from app.consent.models import (
     ConsentPurpose,
 )
 from app.consent.service import RecordConsent
+from app.db import as_utc
 from app.drafts import ConfirmSubject
 from app.identity.doors import Claimable, Doors, Evidence
 from app.identity.models import Person, Profile, Stewardship
+from app.ingestion.extract import DocumentKind
+from app.ingestion.models import FieldState, ReviewCard, ReviewField
+from app.ingestion.photos import MAX_PHOTO_BYTES
+from app.ingestion.review import Decision
 from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
@@ -29,6 +37,13 @@ from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
 from app.state.service import StateView
+
+
+def utc(moment: datetime) -> datetime:
+    """A stored moment as the wire carries it: UTC, whichever clock it was written on or
+    whichever database dropped the timezone on the way back."""
+    return as_utc(moment).astimezone(UTC)
+
 
 PHONE = r"^\+[1-9][0-9]{7,14}$"
 """E.164: a plus, then eight to fifteen digits. Spaces and dashes are the app's to strip."""
@@ -350,9 +365,44 @@ class ClaimConfirmIn(BaseModel):
     language: str = Field(min_length=2, max_length=16)
 
 
-ConfirmIn = ClaimConfirmIn
-"""What `POST /profiles/{id}/confirmations` takes, by subject. Facts and visits are minted
-by the surfaces that show them once those exist; the claim is the first."""
+class DecisionIn(BaseModel):
+    """What the person said about one field of a review card: confirmed as read, corrected
+    to what the paper says (with the value), or rejected."""
+
+    field_id: uuid.UUID
+    decision: Literal[FieldState.CONFIRMED, FieldState.CORRECTED, FieldState.REJECTED]
+    corrected_value: Any | None = None
+
+    @model_validator(mode="after")
+    def _a_correction_says_what_to(self) -> DecisionIn:
+        corrected = self.decision is FieldState.CORRECTED
+        if corrected and self.corrected_value is None:
+            raise ValueError("a correction says what the value should be")
+        if not corrected and self.corrected_value is not None:
+            raise ValueError("only a correction carries a value")
+        return self
+
+    def as_decision(self) -> Decision:
+        return Decision(
+            field_id=self.field_id,
+            decision=FieldState(self.decision),
+            corrected_value=self.corrected_value,
+        )
+
+
+class ReviewCardConfirmIn(BaseModel):
+    """A yes to closing a review card with exactly these decisions. The draft is recomputed
+    from the card, so the yes binds to every field as shown and every decision as made."""
+
+    subject: Literal[ConfirmSubject.REVIEW_CARD]
+    card_id: uuid.UUID
+    decisions: list[DecisionIn]
+
+
+ConfirmIn = Annotated[ClaimConfirmIn | ReviewCardConfirmIn, Field(discriminator="subject")]
+"""What `POST /profiles/{id}/confirmations` takes, by subject: the claim, or a review card
+with its decisions. Facts and visits are minted by the surfaces that show them once those
+exist."""
 
 
 class ConfirmationOut(BaseModel):
@@ -628,3 +678,144 @@ class StateOut(BaseModel):
                 dimensions=sorted(view.withheld), scopes=sorted(view.withheld_scopes)
             ),
         )
+
+
+# --- capture: photos and review cards ----------------------------------------------------
+
+
+class PhotoIn(BaseModel):
+    """A photo of a page, as the app sends it: the bytes in base64, what kind of image, and
+    when it was taken. The bytes go to the region's object store; nothing of them is kept
+    on any row."""
+
+    data: str = Field(min_length=1, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
+    content_type: str = Field(min_length=1, max_length=128)
+    captured_at: datetime
+
+    @field_validator("data")
+    @classmethod
+    def _base64(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as not_base64:
+            raise ValueError("data is base64") from not_base64
+        return value
+
+    def as_bytes(self) -> bytes:
+        return base64.b64decode(self.data, validate=True)
+
+
+class ReviewFieldOut(BaseModel):
+    """One proposed statement on the card: what was read, how sure, whether it needs the
+    person's eye (`needs_confirm`: shown dotted), and what he said about it."""
+
+    field_id: uuid.UUID
+    position: int
+    subject: str
+    attribute: str
+    value: Any
+    unit: str | None
+    confidence: float
+    needs_confirm: bool
+    span: dict[str, float] | None
+    state: FieldState
+    corrected_value: Any | None
+    fact_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, field: ReviewField) -> ReviewFieldOut:
+        return cls(
+            field_id=field.id,
+            position=field.position,
+            subject=field.subject,
+            attribute=field.attribute,
+            value=field.value,
+            unit=field.unit,
+            confidence=field.confidence,
+            needs_confirm=field.needs_confirm,
+            span=field.span,
+            state=field.state,
+            corrected_value=field.corrected_value,
+            fact_id=field.fact_id,
+        )
+
+
+class ReviewCardOut(BaseModel):
+    """A review card: the photo it came from, what kind of paper and its date, whether the
+    label rule guards the drug it names, its fields, and — once confirmed — by whom."""
+
+    card_id: uuid.UUID
+    profile_id: uuid.UUID
+    artifact_id: uuid.UUID
+    document_kind: DocumentKind
+    document_date: date | None
+    high_risk_class: str | None
+    created_at: datetime
+    confirmed_at: datetime | None
+    confirmed_by_person_id: uuid.UUID | None
+    fields: list[ReviewFieldOut]
+
+    @classmethod
+    def of(cls, card: ReviewCard, fields: Sequence[ReviewField]) -> ReviewCardOut:
+        return cls(
+            card_id=card.id,
+            profile_id=card.profile_id,
+            artifact_id=card.artifact_id,
+            document_kind=card.document_kind,
+            document_date=card.document_date,
+            high_risk_class=card.high_risk_class,
+            created_at=utc(card.created_at),
+            confirmed_at=None if card.confirmed_at is None else utc(card.confirmed_at),
+            confirmed_by_person_id=card.confirmed_by_person_id,
+            fields=[ReviewFieldOut.of(field) for field in fields],
+        )
+
+
+class ReviewConfirmIn(BaseModel):
+    """Close the card: the decisions, and the yes minted for exactly them."""
+
+    decisions: list[DecisionIn]
+    confirmation_id: uuid.UUID
+
+
+class FactOut(BaseModel):
+    """A current fact with its provenance, its confidence and who confirmed it."""
+
+    fact_id: uuid.UUID
+    subject: str
+    attribute: str
+    value: Any
+    unit: str | None
+    confidence: float
+    confidence_state: ConfidenceState
+    confirmed_by_person_id: uuid.UUID | None
+    artifact_id: uuid.UUID | None
+    event_id: uuid.UUID | None
+    valid_from: datetime
+    valid_to: datetime | None
+    asserted_at: datetime
+
+    @classmethod
+    def of(cls, fact: Fact) -> FactOut:
+        return cls(
+            fact_id=fact.id,
+            subject=fact.subject,
+            attribute=fact.attribute,
+            value=fact.value,
+            unit=fact.unit,
+            confidence=fact.confidence,
+            confidence_state=fact.confidence_state,
+            confirmed_by_person_id=fact.confirmed_by_person_id,
+            artifact_id=fact.artifact_id,
+            event_id=fact.event_id,
+            valid_from=utc(fact.valid_from),
+            valid_to=None if fact.valid_to is None else utc(fact.valid_to),
+            asserted_at=utc(fact.asserted_at),
+        )
+
+
+class ReviewConfirmedOut(BaseModel):
+    """What closing the card did: the card as it stands, and the facts it wrote."""
+
+    card: ReviewCardOut
+    facts: list[FactOut]

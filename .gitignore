@@ -10,3 +10,4 @@ backend/*.db
 backend/*.db-journal
 *.egg-info/
 backend/.dev.log
+backend/var/

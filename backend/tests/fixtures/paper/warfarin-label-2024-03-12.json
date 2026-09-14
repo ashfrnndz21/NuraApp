@@ -1,0 +1,91 @@
+{
+  "placeholder": "warfarin-label-2024-03-12",
+  "sha256": "08ecfe31ff39e20016706d5e09e6eba344a25afba02b6f6389575c8be9919c02",
+  "note": "Redacted sample. A pharmacy dispensing label from the first family's shoebox: the patient's name and registration number, the pharmacy's address and the prescriber's full name were removed, and the image is not committed; the bytes the extractor is shown are the placeholder named above. The dose line is in Malay, parsed per docs/medications-module.md section 2, and kept as printed beside the parse. Warfarin is high-risk: the card shows the class, and the dose fact it writes may only ever rest on a label photo (app/safety/high_risk.py).",
+  "document_kind": "medicine_label",
+  "document_date": "2024-03-12",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Warfarin",
+      "unit": null,
+      "confidence": 0.96,
+      "span": {
+        "x0": 0.08,
+        "y0": 0.22,
+        "x1": 0.55,
+        "y1": 0.29
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 5,
+      "unit": "mg",
+      "confidence": 0.93,
+      "span": {
+        "x0": 0.57,
+        "y0": 0.22,
+        "x1": 0.72,
+        "y1": 0.29
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Warfarin",
+        "instruction": "1 tablet once a day at night",
+        "as_printed": "1 biji sekali sehari waktu malam"
+      },
+      "unit": "tablet",
+      "confidence": 0.74,
+      "span": {
+        "x0": 0.08,
+        "y0": 0.34,
+        "x1": 0.9,
+        "y1": 0.41
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 28,
+      "unit": "tablets",
+      "confidence": 0.88,
+      "span": {
+        "x0": 0.08,
+        "y0": 0.46,
+        "x1": 0.3,
+        "y1": 0.52
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dispensed_at",
+      "value": "2024-03-12",
+      "unit": null,
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.55,
+        "y0": 0.46,
+        "x1": 0.9,
+        "y1": 0.52
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "prescriber",
+      "value": "Dr Lim",
+      "unit": null,
+      "confidence": 0.61,
+      "span": {
+        "x0": 0.08,
+        "y0": 0.58,
+        "x1": 0.5,
+        "y1": 0.64
+      }
+    }
+  ]
+}

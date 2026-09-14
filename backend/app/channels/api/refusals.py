@@ -23,6 +23,8 @@ from app.errors import Refusal
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.photos import PhotoTooLarge
+from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
 from app.regions import OutOfRegion
@@ -45,7 +47,11 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoSuchReviewCard, 404),
+    (PhotoTooLarge, 413),
     (ProfileAlreadyOwned, 409),
+    # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
+    (AlreadyConfirmed, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
     # up for, are answered by name and nothing else.

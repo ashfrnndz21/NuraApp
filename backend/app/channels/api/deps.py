@@ -23,6 +23,8 @@ from app.errors import Refusal
 from app.identity.login import resolve_session
 from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
+from app.ingestion.extract import Extractor
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
 from app.settings import Settings
@@ -35,6 +37,10 @@ class Providers:
     """The outside world, as the app sees it. Tests pass fixtures; `main` passes the real ones."""
 
     code_sender: CodeSender
+    object_store: ObjectStore
+    """Where artefact bytes go: one store, pinned to this deployment's region."""
+    extractor: Extractor
+    """What reads a photo into fields with confidence; the fixture one until the real one."""
 
 
 def settings_of(request: Request) -> Settings:

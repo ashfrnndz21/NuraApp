@@ -15,7 +15,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -29,6 +29,7 @@ class ConfirmSubject(StrEnum):
     APPOINTMENT = "appointment"
     APPOINTMENT_STATUS = "appointment_status"
     CLAIM = "claim"
+    REVIEW_CARD = "review_card"
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,13 +142,62 @@ class ClaimDraft:
         }
 
 
-Draft = FactDraft | AppointmentDraft | StatusChange | ClaimDraft
+@dataclass(frozen=True, slots=True)
+class DecidedField:
+    """One field of a review card as the person decided it: which field, what it says once
+    his decision is applied, and what the decision was (`app.ingestion.models.FieldState`)."""
+
+    field_id: uuid.UUID
+    subject: str
+    attribute: str
+    value: Any
+    unit: str | None
+    decision: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewDraft:
+    """A review card about to close: which card, which photo it came from, and every field
+    with the person's decision on it (E02-07). The yes binds to all of them at once — one
+    tap saves the card — so a decision changed after the yes was shown is a different yes."""
+
+    card_id: uuid.UUID
+    artifact_id: uuid.UUID
+    fields: tuple[DecidedField, ...]
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.REVIEW_CARD
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.card_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "card_id": self.card_id,
+            "artifact_id": self.artifact_id,
+            "fields": [
+                {
+                    "field_id": field.field_id,
+                    "subject": field.subject,
+                    "attribute": field.attribute,
+                    "value": field.value,
+                    "unit": field.unit,
+                    "decision": field.decision,
+                }
+                for field in self.fields
+            ],
+        }
+
+
+Draft = FactDraft | AppointmentDraft | StatusChange | ClaimDraft | ReviewDraft
 
 
 def _canonical(value: Any) -> Any:
     if isinstance(value, uuid.UUID):
         return str(value)
-    if isinstance(value, datetime):
+    if isinstance(value, datetime | date):
         return value.isoformat()
     raise TypeError(f"{type(value).__name__} has no canonical form")
 
