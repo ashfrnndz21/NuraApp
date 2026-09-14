@@ -1,6 +1,8 @@
 """The feed over HTTP (E21).
 
     GET  /profiles/{id}/feed?cursor=            one page: now, today, the gate, story, learning
+    GET  /profiles/{id}/feed/today              today's top three: alert, reminder, insight
+    GET  /profiles/{id}/feed/{item}/voice       the card's spoken twin, as audio (E11-04)
     GET  /profiles/{id}/feed/cached             the last first page rendered for this person
     POST /profiles/{id}/feed/{item}/engagement  seen, heard, tapped, not for me, shared
     GET  /profiles/{id}/sources                 the allowlist (owner, chief)
@@ -16,9 +18,10 @@ The feeling cloud's tap is in `app.channels.api.feelings`, with the rest of E17.
 
 from __future__ import annotations
 
+import logging
 import uuid
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
 from app.audit.access import audited_profile_read
@@ -34,12 +37,14 @@ from app.channels.api.feed_schemas import (
 from app.db import utcnow
 from app.delivery.feed.compose import today_for
 from app.delivery.feed.engagement import record_engagement
-from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page
+from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page, top_three
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs
 from app.delivery.feed.sources import list_sources
+from app.delivery.feed.twin import spoken_twin
 from app.delivery.strings import language_for
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
+log = logging.getLogger("nura.channels.feed")
 
 
 def _engine(request: Request) -> Engine:
@@ -71,6 +76,45 @@ async def feed(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
     return FeedPageOut.of(page)
+
+
+@router.get("/{profile_id}/feed/today")
+async def feed_today(request: Request, context: Context, session: Db) -> FeedPageOut:
+    """Today's top three (E11-02): alerts, then reminders, then insights, each with its why."""
+    return FeedPageOut.of(await top_three(session, context=context, engine=_engine(request)))
+
+
+@router.get("/{profile_id}/feed/{item_id}/voice")
+async def feed_voice(
+    item_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, max_length=8),
+) -> Response:
+    """The card's spoken twin as audio (E11-04): the bytes themselves, with their content type,
+    under thirty seconds, from the region's cache when it has been said before. 404 when there
+    is no audio for this card in that language (no voice for it yet, too long to say, or not
+    the card's language): the phone then says it with its own voice. Played on a tap; nothing
+    here plays anything by itself."""
+    providers = providers_of(request)
+    said = await spoken_twin(
+        session,
+        context=context,
+        item_id=item_id,
+        voice=providers.voice,
+        store=providers.object_store,
+        language=language,
+    )
+    return Response(
+        content=said.spoken.audio,
+        media_type=said.spoken.content_type,
+        headers={
+            "X-Duration-Seconds": f"{said.spoken.duration_seconds:.1f}",
+            "X-Voice-Cache": "hit" if said.cached else "miss",
+            "Cache-Control": "private",
+        },
+    )
 
 
 @router.get("/{profile_id}/feed/cached")

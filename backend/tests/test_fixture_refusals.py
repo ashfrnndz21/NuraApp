@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 import app
 from app.channels.api import create_app
 from app.db import make_session_factory
+from app.delivery.push import NoDevices
 from app.drugs.client import drug_registry_for
 from app.fixtures import (
     FixtureOutsideDevOrDemo,
@@ -38,8 +39,9 @@ from app.search.retrieve import KeywordRetriever
 from app.settings import MissingSetting, Settings
 from tests.whatsapp_support import deployment as fixture_deployment
 
-ALSO_FIXTURES = {LoggingCodeSender, LocalObjectStore}
-"""Fixtures whose names do not say so: the laptop's code sender and its directory store."""
+ALSO_FIXTURES = {LoggingCodeSender, LocalObjectStore, NoDevices}
+"""Fixtures whose names do not say so: the laptop's code sender, its directory store, and the
+push sender that reaches nobody (#121) until a real one exists."""
 
 
 def _every_class_under_app() -> set[type]:
@@ -68,6 +70,8 @@ def test_every_fixture_under_app_carries_the_mark() -> None:
         "FixtureRanges",
         "FixtureCalendar",
         "FixtureRetriever",
+        "FixtureVoice",
+        "FixturePush",
     }
     for cls in named | ALSO_FIXTURES:
         assert is_fixture_class(cls), f"{cls.__module__}.{cls.__name__} is not marked @fixture"
@@ -102,6 +106,8 @@ def test_the_test_deployment_is_all_fixtures_but_the_retriever(tmp_path: Path) -
         "drug_registry",
         "whatsapp",
         "reference_ranges",
+        "voice",
+        "push",
     ]
     assert not is_fixture(providers.retriever)
 

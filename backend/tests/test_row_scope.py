@@ -42,6 +42,7 @@ from app.audit.access import audited_read
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import now
 from app.db import take_keepers
+from app.delivery.feed.models import FeedItem
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.repository import scoped_new
 from app.keys.scopes import ALL_SCOPES, ROLE_SCOPES, KeyRole, Scope, scope_for_subject
@@ -589,6 +590,11 @@ async def _seed(deployment: Deployment) -> Seeded:
     assert recorded.status_code == 201, recorded.text
     consult_voice = recorded.json()["recording"]["artifact_id"]
 
+    # Today's top three (E11-02), composed as he opens it: the cards the voice route plays.
+    today = await client.get(f"/profiles/{profile_id}/feed/today", headers=his)
+    assert today.status_code == 200, today.text
+    feed_items = sorted({o["item_id"] for o in _objects(today.json()) if "item_id" in o})
+
     seeded = Seeded(
         profile_id=profile_id,
         owner=Holder("owner", pa["token"], uuid.UUID(pa["person_id"]), frozenset(ALL_SCOPES)),
@@ -617,6 +623,11 @@ async def _seed(deployment: Deployment) -> Seeded:
             seeded.kinds[str(e.id)] = f"event({e.kind.value})"
             seeded.provenance[str(e.id)] = (_str(e.artifact_id), None)
             seeded.written[str(e.id)] = getattr(e, "written_scope", None)
+        # The feed's cards (E11): each is of the scope of what it says, and a card of a scope
+        # the key does not hold is neither listed nor spoken to it.
+        for item in await session.scalars(select(FeedItem).where(FeedItem.profile_id == pid)):
+            seeded.scopes[str(item.id)] = item.scope
+            seeded.kinds[str(item.id)] = f"feed_item({item.type.value})"
         for f in await session.scalars(select(Fact).where(Fact.profile_id == pid)):
             seeded.scopes[str(f.id)] = scope_for_subject(f.subject)
             seeded.kinds[str(f.id)] = f"fact({f.subject})"
@@ -633,6 +644,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "card_id": [card["card_id"]],
             "note_id": [str(uuid.uuid4())],
             "job_id": [str(uuid.uuid4())],
+            "item_id": feed_items or [str(uuid.uuid4())],
             "artifact_id": [consult_voice],
         }
     return seeded
@@ -729,6 +741,10 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/events/{{event_id}}/notes/{{note_id}}/content"),
     Walk("GET", f"{P}/feed"),
     Walk("GET", f"{P}/feed/cached"),
+    Walk("GET", f"{P}/feed/today"),
+    Walk("GET", f"{P}/feed/{{item_id}}/voice"),
+    Walk("GET", f"{P}/delivery-settings"),
+    Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -862,6 +878,8 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/biography/close"): "closes the biography session",
     ("POST", f"{P}/plan/later"): "moves the first-week plan to later",
     ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
+    ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
+    ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
     ("POST", f"{P}/feelings/{{tap_id}}/answer"): "answers a tap; returns the note it wrote",
     ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
     ("POST", f"{P}/nudges/{{nudge_id}}/response"): "writes what he did with a nudge",
@@ -1078,10 +1096,16 @@ async def _walk(
                 if response.status_code >= 500:
                     problems.append(f"{holder.name} {where}: {response.status_code}")
                 elif response.status_code < 300 and response.content:
-                    if response.headers.get("content-type", "").startswith("audio/"):
-                        continue  # a recording's bytes (a clip, E03-05): no rows and no ids
-                    html = response.headers.get("content-type", "").startswith("text/html")
-                    body = response.text if html else response.json()
+                    kind = response.headers.get("content-type", "")
+                    # Audio names nothing: a spoken twin answers for the card it speaks, a clip
+                    # (E03-05) for the recording it is cut from.
+                    body = (
+                        {"spoken": list(combo.values())}
+                        if kind.startswith("audio/")
+                        else response.text
+                        if kind.startswith("text/html")
+                        else response.json()
+                    )
                     _check(where, holder, body, seeded, seen, problems, walk)
 
 
@@ -1184,6 +1208,7 @@ async def test_every_read_returns_rows_of_the_keys_scopes_only_and_names_what_it
         ("fact", Scope.MEDICINES),
     ):
         assert wanted in reached, f"the owner's walk never reached a {wanted[0]} under {wanted[1]}"
+    assert any(kind == "feed_item" for kind, _ in reached), "the owner's walk never reached a card"
     assert problems == [], "\n".join(sorted(set(problems)))
 
 

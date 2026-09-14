@@ -374,10 +374,16 @@ class PromptOut(BaseModel):
 
     @classmethod
     def of(
-        cls, prompt: PlanPrompt, *, region: Region, language: str, doctor: str | None
+        cls,
+        prompt: PlanPrompt,
+        *,
+        region: Region,
+        language: str,
+        doctor: str | None,
+        due: datetime | None = None,
     ) -> PromptOut:
         words = prompt_words(prompt.gap, language, doctor)
-        due = utc(prompt.due_at)
+        due = utc(prompt.due_at) if due is None else utc(due)
         return cls(
             prompt=prompt.gap,
             day=prompt.day,
@@ -433,7 +439,9 @@ class PlanOut(BaseModel):
         plan = view.plan
 
         def out(prompt: PlanPrompt) -> PromptOut:
-            return PromptOut.of(prompt, region=region, language=language, doctor=doctor)
+            return PromptOut.of(
+                prompt, region=region, language=language, doctor=doctor, due=view.due_of(prompt)
+            )
 
         return cls(
             plan_id=plan.id,
@@ -441,7 +449,7 @@ class PlanOut(BaseModel):
             biography_id=plan.session_id,
             created_at=utc(plan.created_at),
             first_day=plan.first_day,
-            breakfast_time=plan.breakfast_time,
+            breakfast_time=view.breakfast.strftime("%H:%M"),
             timezone=str(REGION_TZ[region]),
             stopped=view.stopped,
             stopped_because=list(view.stopped_because),

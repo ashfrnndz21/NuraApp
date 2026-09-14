@@ -60,11 +60,10 @@ from app.ingestion.review import (
     type_field,
 )
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
 from app.memory.episodic import withheld_provenance
 from app.memory.models import SourceChannel
 from app.memory.semantic import current_facts
-from app.onboarding.settings import current_settings, values_of
+from app.onboarding.settings import his_language
 
 router = APIRouter(prefix="/profiles", tags=["capture"])
 
@@ -77,16 +76,11 @@ async def _language(session: AsyncSession, context: KeyContext) -> str:
 
 
 async def capture_language(session: AsyncSession, context: KeyContext) -> str:
-    """The language the capture messages are said in: the one in his settings (E01, in
-    State, as the nudges read his check-in time) where this key opens the record, else the
-    profile's own, which the settings keep in step; English where Nura has no lines in it.
-    A key without the record never reads the settings row, so a notes-only key is not
-    refused for asking."""
-    if Scope.RECORDS in context.scopes:
-        row = await current_settings(session, context=context)
-        if row is not None:
-            return language_of(values_of(row).language)
-    return language_of(await _language(session, context))
+    """The language the capture messages are said in: his (`app.onboarding.settings.his_language`,
+    the one settings read every message to him goes through: his settings' language, else the
+    profile's own); English where Nura has no lines in it. The settings row is read under the
+    face of the graph every key opens, so a notes-only key is not refused for asking."""
+    return language_of(await his_language(session, context=context))
 
 
 async def _card_out(session: AsyncSession, context: KeyContext, card: ReviewCard) -> ReviewCardOut:

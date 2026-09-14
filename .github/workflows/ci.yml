@@ -116,6 +116,41 @@ jobs:
           echo "$out" | tail -5
           test "$status" -ne 0 && test "$status" -ne 124
           echo "$out" | grep -q NoCodeSender
+      - name: Every provider a demo runs on is a fixture production refuses, by name
+        # A start without demo mode stops at the first refusal (the code sender), so this builds
+        # the very providers the demo above deployed, inside the image, and puts them to the
+        # central check (app.fixtures) with production settings: each must be named.
+        run: |
+          docker run --rm -i --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" \
+            -e NURA_DEMO_MODE=1 -e NURA_DEMO_LOGIN_CODE=246810 -e NURA_WHATSAPP_DEV_SECRET=ci-only \
+            $FIXTURES nura:ci python - <<'PY'
+          from app.fixtures import FixtureOutsideDevOrDemo, check_fixtures, fixtures_in
+          from app.identity.providers import DemoSenderOutsideDemo, check_sender
+          from app.main import providers_for, settings as demo
+          from app.settings import load_settings
+
+          providers = providers_for(demo)
+          production = load_settings({"NURA_REGION": "SG", "NURA_DATABASE_URL": "postgresql+asyncpg://u:p@h/db"})
+          try:
+              check_fixtures(production, providers)
+          except FixtureOutsideDevOrDemo as refused:
+              named = str(refused)
+          else:
+              raise SystemExit("production accepted the demo's fixtures")
+          expected = {"object_store", "extractor", "summariser", "transcriber", "searcher",
+                      "compressor", "drug_registry", "whatsapp", "reference_ranges", "voice",
+                      "push", "speaker_separator"}
+          missing = sorted(name for name in expected if name not in named)
+          assert not missing, f"not refused by name: {missing}"
+          # The demo's code sender is not a fixture: it is refused outside a demo on its own.
+          try:
+              check_sender(production, providers.code_sender)
+          except DemoSenderOutsideDemo:
+              pass
+          else:
+              raise SystemExit("production accepted the demo's code sender")
+          print("refused by name:", ", ".join(fixtures_in(providers)), "+ the demo code sender")
+          PY
       - if: failure()
         run: docker logs nura || true
   web:

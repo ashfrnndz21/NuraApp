@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from sqlalchemy import select
@@ -87,6 +87,10 @@ class Standing(StrEnum):
     STEWARD = "steward"
     CLAIMANT = "claimant"
     NONE = "none"
+    SYSTEM = "system"
+    """Nura itself, acting for the profile — the delivery engine's run: the reach of the
+    person it acts for (the owner, or the steward before a claim), and no person as the
+    actor on the trail (`as_the_system`)."""
 
 
 CLAIMANT_SCOPES = frozenset({Scope.PROFILE})
@@ -128,6 +132,14 @@ class KeyContext:
         """Raise unless this context covers the scope. Every read calls this, once."""
         if scope not in self.scopes:
             raise OutOfScope(scope=scope, context=self)
+
+
+def as_the_system(context: KeyContext) -> KeyContext:
+    """The same reach, held by Nura itself rather than by the person: what the delivery
+    engine runs under, so its reads and writes are the system's on the trail (no actor, the
+    system channel), never the patient's own. Only a resolved owner's or steward's context is
+    turned into this, and only by the engine."""
+    return replace(context, role=None, key_id=None, standing=Standing.SYSTEM)
 
 
 async def profile_by_id(

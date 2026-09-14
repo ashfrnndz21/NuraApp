@@ -62,6 +62,8 @@ that is neither a laptop's dev run nor a declared demo (`app/fixtures.py`, ADR 0
 | Visit summariser | Answers only for the fixture transcripts | A model endpoint in the region | yes |
 | Speech (voice notes) | Answers only for the fixture recordings | A speech provider in the region | yes |
 | Speaker separation (who spoke when in a consult recording) | Answers only for the fixture recordings | A diarisation model in the region | yes |
+| Voice (a card said aloud, E11) | Silence as long as the lines | A speech provider in the region | yes |
+| App push (E11) | Reaches nobody (`NoDevices`) | A push sender (APNs / web push) | yes: a demo reaches nobody, and a real deployment refuses to start until one is built |
 | Feed searcher and compressor | Fixture pages and summaries | The allowlisted fetcher and a grounded model call | yes |
 | Calendar | Real: an uploaded `.ics` is read in memory (the fixture calendar is tests-only) | — | yes (for the fixture) |
 | Ask retriever | Real: keyword retrieval (the fixture retriever is tests-only) | — | yes (for the fixture) |
