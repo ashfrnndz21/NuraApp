@@ -30,6 +30,7 @@ from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, 
 from app.delivery.nudges.models import Nudge, NudgeResponse
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
+from app.ingestion.connectors.models import AppointmentProposal, Connector
 from app.ingestion.models import EventNote, ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
@@ -48,6 +49,7 @@ from app.memory.models import (
 )
 from app.notes.models import Note
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
+from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
     Brief,
     Memo,
@@ -55,6 +57,7 @@ from app.reasoning.visits.models import (
     SummaryItem,
     VisitSummary,
 )
+from app.routines.models import Routine
 from app.safety.models import EmergencyCard, Notice, WhatToDoCard
 from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
@@ -105,6 +108,10 @@ TABLES: tuple[Table, ...] = (
     Privacy.__table__,
     RosterSlot.__table__,
     Task.__table__,
+    TrendCard.__table__,
+    Routine.__table__,
+    Connector.__table__,
+    AppointmentProposal.__table__,
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
@@ -252,6 +259,9 @@ def test_the_migrations_build_the_tables_the_models_declare(
             FeelingNote,
             Nudge,
             NudgeResponse,
+            TrendCard,
+            Routine,
+            AppointmentProposal,
             Notice,
             WhatToDoCard,
             EmergencyCard,

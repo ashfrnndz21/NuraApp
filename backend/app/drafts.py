@@ -36,6 +36,8 @@ class ConfirmSubject(StrEnum):
     ONLY_ME = "only_me"
     TASK_DONE = "task_done"
     PUSH = "push"
+    ROUTINE = "routine"
+    PROPOSAL = "appointment_proposal"
     ATTACH = "attach"
 
 
@@ -369,6 +371,66 @@ class PushDraft:
         }
 
 
+
+@dataclass(frozen=True, slots=True)
+class RoutineDraft:
+    """A day about to be set (E10): the clock times of his anchors, the readings he is
+    prompted for and at which anchor, the walks, when the morning card comes, and which
+    routine this one replaces. The dose schedule is not here: it is read off the medicine
+    lines at render time, so setting the day never restates a dose."""
+
+    anchors: dict[str, str]
+    reading_prompts: tuple[tuple[str, str], ...]
+    walks: tuple[str, ...]
+    morning_card_at: str
+    supersedes_id: uuid.UUID | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.ROUTINE
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.supersedes_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "anchors": dict(sorted(self.anchors.items())),
+            "reading_prompts": [list(prompt) for prompt in self.reading_prompts],
+            "walks": list(self.walks),
+            "morning_card_at": self.morning_card_at,
+            "supersedes_id": self.supersedes_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalDraft:
+    """A visit a calendar event suggested, about to be put on the spine (E18-02): which
+    proposal, with whom, when and why — as shown. Accepting it books a PLANNED appointment
+    on the same person's yes; nothing is booked from a calendar without one."""
+
+    proposal_id: uuid.UUID
+    provider_name: str
+    scheduled_at: datetime
+    purpose: str
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.PROPOSAL
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.proposal_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "proposal_id": self.proposal_id,
+            "provider_name": self.provider_name,
+            "scheduled_at": self.scheduled_at,
+            "purpose": self.purpose,
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class AttachDraft:
     """An artefact about to hang off an episode or a visit (E03-01, E03-02): which artefact,
@@ -408,6 +470,8 @@ Draft = (
     | OnlyMeDraft
     | TaskDoneDraft
     | PushDraft
+    | RoutineDraft
+    | ProposalDraft
     | AttachDraft
 )
 

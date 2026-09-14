@@ -1,0 +1,49 @@
+{
+  "placeholder": "lipid-panel-2025-08-29",
+  "note": "What the paper says, labelled by hand: a synthetic second lipid profile from Bukit Lab (fictional), redacted like the others — of its header only the lab, the year of birth and the sex are kept, for the lab trend (E09-01). Every field is printed clearly, so every one should be read right.",
+  "document_kind": "lab_report",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "lab",
+      "value": "bukit_lab",
+      "unit": null
+    },
+    {
+      "subject": "person",
+      "attribute": "birth_year",
+      "value": 1951,
+      "unit": null
+    },
+    {
+      "subject": "person",
+      "attribute": "sex",
+      "value": "male",
+      "unit": null
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 212,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "hdl",
+      "value": 58,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 128,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "triglycerides",
+      "value": 130,
+      "unit": "mg/dL"
+    }
+  ]
+}

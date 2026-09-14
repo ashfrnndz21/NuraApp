@@ -22,7 +22,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice (his own note, ADR 0003) and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
 | 15 | Biography | Written by its story | — | planned |
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
-| 17 | Trends, routine and calendar | Written by its story | — | planned |
+| 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 | 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the red-flag path, the family told, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
@@ -31,7 +31,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13, 14, 16, 18, 21)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13, 14, 16, 17, 18, 21)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -647,6 +647,90 @@ checkpoint 9 passed: every step did what docs/checkpoints.md says
 
 The provider is a port (`backend/app/channels/whatsapp/provider.py`): `send_text`, `send_template`, `fetch_media`, `verify_webhook`, `parse_inbound`. The fixture behind it is the only one built, and the process refuses to start on it outside a declared dev run, the way it refuses the logging code sender. The six templates are in `backend/app/channels/whatsapp/templates.py` as names, slot lists and the words in English, Malay and Chinese; a real number carries them to Meta for approval once, and `app/channels/whatsapp/config.py` says which are approved on this number.
 
+## How to run checkpoint 17
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Two fresh phone numbers every run — Pa and Mei, his daughter — so it can be run again on the same `dev.db`. The two lipid reports are the placeholder bytes of `backend/tests/fixtures/paper/`: the 2023 one from checkpoint 5 and a synthetic 2025 one from Bukit Lab (a fictional lab) whose header names the lab, his year of birth and his sex. The reference ranges are the fixture table `backend/tests/fixtures/labs/ranges.json`, each row named by its published source; no licensed table and no model is called. Mei's calendar is a small .ics the script writes in memory, with three events in the coming fortnight.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0017 adds the trend card, routine, connector and proposal tables), serves on http://127.0.0.1:8000
+make checkpoint N=17    # terminal 2: walks the whole scenario, about three seconds
+```
+
+What you will see (the numbers, ids and days change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591718072) registered by phone code and signed in (the code read from the server log)
+✓ Pa opened his own profile, in Malay
+✓ Pa confirmed two lipid reports through the review card, one yes each: 7 September 2023 (7 facts, triglycerides corrected to 54) and 29 August 2025 from Bukit Lab (7 facts, including the lab, his year of birth 1951 and his sex from the report's header) — every fact names its photo and Pa as confirmer
+✓ Pa's cholesterol trend (GET /trends/total_cholesterol), rendered from State 66f4e9a8… as card 5a75b875… with the boundary line: each result against the range that fits him on the day — his age band read from the 1950s, never the year — the 2025 one against Bukit Lab's own printed range, the 2023 one against the guideline table (ncep-atp3-2001); the direction over the last three, by arithmetic:
+    2023-09-07  230 mg/dL  above  against under 200 mg/dL (ncep-atp3-2001)  ← artefact 6107e3ac…
+    2025-08-29  212 mg/dL  above  against under 200 mg/dL (lab:bukit_lab)  ← artefact 830911c3…
+    In his words, in Malay:
+    Kolesterol anda ialah 212 pada Jumaat 29 Ogos 2025.
+    Julat pada ujian darah anda ialah bawah 200.
+    Ia di atas julat pada ujian darah anda.
+    Ia telah turun sejak Khamis 7 September 2023.
+    Nura menyusun ujian darah anda mengikut tarikh.
+    Ini bukan nasihat doktor.
+    Tanya doktor anda.
+✓ Mei (+6591727578) registered by phone code and signed in (the code read from the server log)
+✓ Pa let Mei in to his medicines, visits and readings, and cut her a caregiver key
+✓ Pa added amlodipine 5 mg from its label, once a day in the morning, on his own yes
+✓ Mei set the day once (PUT /routine) on her own yes for exactly it — the same yes offered for another hour was refused, NotWhatWasConfirmed (400): his anchors, the blood pressure when he wakes, a walk after dinner, the Today page at 7
+✓ Pa reads his day (GET /routine): one line per moment, in Malay, every line verified
+    Nura hantar halaman Hari Ini anda pukul 7 pagi.
+    Apabila anda bangun, periksa tekanan darah anda.
+    Semasa sarapan, ambil 1 biji ubat tekanan darah anda.
+    Semasa makan malam, pergi berjalan kaki.
+✓ Mei reads the same day as a table (the caregiver's persona): times, dose codes, prompts
+    wake      06:30  —                                blood_pressure
+    breakfast 07:30  amlodipine 5 mg ×1 od            
+    lunch     12:30  —                                
+    dinner    18:30  —                                walk
+    bed       22:00  —                                
+✓ connecting before agreeing was refused, ConsentWithheld (403); Pa then agreed to the calendar in Malay and connected it (POST /connectors/calendar). The words he read:
+    Nura membaca kalendar anda untuk mencari lawatan ke doktor.
+    Nura menyimpan lawatan yang dijumpai sahaja.
+    Yang lain dalam kalendar anda tidak disentuh.
+    Tiada apa-apa ditambah sehingga anda kata ya.
+    Nura tidak pernah menulis dalam kalendar anda.
+    Anda boleh berhenti pada bila-bila masa.
+✓ Mei uploaded a .ics with three events (POST /connectors/{c}/scan): 3 read, 2 proposed, 1 dropped — the lunch with Ah Kow matched no provider and no health word, and nothing of it, nor anyone's name in any event, was written anywhere. Candidates, never visits:
+    Dr Tan follow-up   Thu 24 Sep 10:00  matched keyword 'doctor'  → Dr Tan (doctor)  proposed
+    Dialysis SGH       Fri 18 Sep 09:00  matched keyword 'hospital'  → Singapore General Hospital (hospital)  proposed
+✓ Mei dismissed 'Dialysis SGH' (not Pa's): nothing booked
+    What Pa reads, in Malay:
+    Nura jumpa lawatan ke Dr Tan dalam kalendar.
+    Ia pada Khamis 24 September, pukul 10 pagi.
+    Tekan Ya untuk tambah ke lawatan anda.
+✓ Pa said yes (POST /confirmations, subject appointment_proposal) and accepted: Dr Tan added to his directory and the visit booked as PLANNED on his yes, appointment 467c23e5…; accepting again is refused, AlreadyDecided (409)
+    Nura jumpa lawatan ke Dr Tan dalam kalendar.
+    Ia pada Khamis 24 September, pukul 10 pagi.
+    Ia sudah ada dalam lawatan anda.
+✓ with a visit to Dr Tan on the spine, the trend's last line names him:
+    Nura put your blood tests side by side.
+    This is not a doctor's advice.
+    Ask Dr Tan.
+✓ Pa's trail (200 lines) shows every step and every refusal by name:
+    2026-09-14T15:42:55   Pa  write records   trend_card             written
+    2026-09-14T15:42:56  Mei  write medicines routine                NotWhatWasConfirmed
+    2026-09-14T15:42:56  Mei  write medicines routine                written
+    2026-09-14T15:42:56   Pa  read visits    consent                ConsentWithheld
+    2026-09-14T15:42:56   Pa  write visits    connector              ConsentWithheld
+    2026-09-14T15:42:56   Pa  write visits    connector              written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56  Mei  write visits    appointment_proposal   written
+    2026-09-14T15:42:56   Pa  write visits    provider               written
+    2026-09-14T15:42:56   Pa  write visits    appointment            written
+    2026-09-14T15:42:56   Pa  write visits    appointment_proposal   written
+    2026-09-14T15:42:56   Pa  write visits    appointment_proposal   AlreadyDecided
+    2026-09-14T15:42:56   Pa  write records   trend_card             written
+checkpoint 17 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 17 passed`. The criteria: a trend is his confirmed results for one analyte, each with its provenance, each placed against the range that fits him on the day — his age band from the decade he was born in (never the year), his sex when the record holds it, and the lab's own printed range when the paper names the lab, else the published guideline row — with the direction over the last three results in words, by arithmetic; it is rendered from a State checked against the record and written as a card carrying the boundary line, which is last; a word that places his number (above, below, inside) is only ever said beside the lab's own range ("the range on your blood test", his words for it), and no line names a cause or a treatment. The day is set once, on the yes of the person setting it, for exactly those times (another hour is refused, `NotWhatWasConfirmed`); his medicines sit at the anchors their dose codes name; it renders to him as one verified line per moment and to Mei as a table. The calendar is connected only on its own consent, in his language; a scan proposes only events that name a provider or carry a health word, never books one, and keeps nothing of any other event or of anyone's name; a proposal becomes a planned visit only on a person's yes for exactly it, and a second yes is refused (`AlreadyDecided`). Every step and every refusal is on his trail by name. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
 ## How to run checkpoint 10
 
 Three terminals the first time, at the top of the repo. Node 20 or later is needed beside the Python 3.12 the backend uses; `make web` installs the web client's packages the first time it runs (`npm ci`, about ten seconds).

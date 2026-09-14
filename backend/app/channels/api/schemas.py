@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
+from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.strings import (
     COULD_NOT_HEAR,
     COULD_NOT_READ,
@@ -634,13 +635,14 @@ class AttachConfirmIn(BaseModel):
 
 
 ConfirmIn = Annotated[
-    ClaimConfirmIn | ReviewCardConfirmIn | MedicineConfirmIn | AppointmentConfirmIn | QuestionConfirmIn | SummaryConfirmIn | KeyChangeConfirmIn | OnlyMeConfirmIn | TaskDoneConfirmIn | PushConfirmIn | StatusConfirmIn | AttachConfirmIn,
+    ClaimConfirmIn | ReviewCardConfirmIn | MedicineConfirmIn | AppointmentConfirmIn | QuestionConfirmIn | SummaryConfirmIn | KeyChangeConfirmIn | OnlyMeConfirmIn | TaskDoneConfirmIn | PushConfirmIn | StatusConfirmIn | AttachConfirmIn | RoutineConfirmIn | ProposalConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
-marking a part only me, a task done, a message to him."""
+marking a part only me, a task done, a message to him; the day's routine (E10) and a
+visit a calendar proposed (E18)."""
 
 
 class ConfirmationOut(BaseModel):

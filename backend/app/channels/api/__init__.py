@@ -32,6 +32,7 @@ import app.state  # noqa: F401  — wires State's recompute onto the memory stor
 from app.channels.api import (
     auth,
     capture,
+    connectors,
     consent_words,
     doors,
     family,
@@ -39,8 +40,10 @@ from app.channels.api import (
     feelings,
     medicines,
     profiles,
+    routine,
     safety,
     timeline,
+    trends,
     visits,
 )
 from app.channels.api.deps import Providers
@@ -76,6 +79,9 @@ def _api() -> APIRouter:
     api.include_router(family.router)
     api.include_router(feelings.router)
     api.include_router(consent_words.router)
+    api.include_router(trends.router)
+    api.include_router(routine.router)
+    api.include_router(connectors.router)
 
     @api.get("/health")
     async def health() -> dict[str, str]:

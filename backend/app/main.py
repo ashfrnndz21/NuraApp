@@ -28,6 +28,7 @@ from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
+from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
 from app.settings import MissingSetting, Settings, load_settings
 
@@ -58,6 +59,7 @@ def providers_for(settings: Settings) -> Providers:
         drug_registry=drug_registry_for(settings),
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
+        reference_ranges=reference_ranges_for(settings),
     )
 
 
