@@ -15,7 +15,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
 | 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs; a medicine running low makes a reorder card from E04's count | E21 backend (Session 8) | **ready** |
 | 9 | WhatsApp (sandbox) | Mei forwards a photo to the number and it files itself as a review card and replies; she posts "BP 150/90" and gets a read-back that only her own "yes" turns into a Fact; a stranger's number gets one fixed line and nothing is stored; "he fell" writes a Flag first and escalates in-thread; the morning card goes to Pa as an approved template and his "tired" is written down; the thread is by reference and every line is on the trail | E19-01…E19-03, E19-05 | **ready** |
-| 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | planned |
+| 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | **ready** |
 | 11 | Onboarding on your phone (web) | Run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2–W3 (ADR 0001) | planned |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
@@ -31,7 +31,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 ## How a checkpoint is tested
 
 - **Backend checkpoints (1–9, 13, 18)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
-- **Web checkpoints (10–12, ADR 0001)**: the operator opens the app on a phone first and attaches screenshots to the checkpoint note; you then open the URL yourself in Safari.
+- **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
@@ -525,6 +525,41 @@ checkpoint 9 passed: every step did what docs/checkpoints.md says
 2. **The signed webhook.** The dev door walks the webhook's path; the webhook itself checks a signature first. `POST /whatsapp/webhook` with any body and no `X-Hub-Signature-256` header answers `403 {"refusal": "NotAWebhook"}` and nothing happens. `GET /whatsapp/webhook?hub.mode=subscribe&hub.verify_token=nura-dev-webhook-secret&hub.challenge=hello` answers `hello`: the handshake a provider makes once, with the secret `make dev` sets. A wrong token is `403`.
 
 The provider is a port (`backend/app/channels/whatsapp/provider.py`): `send_text`, `send_template`, `fetch_media`, `verify_webhook`, `parse_inbound`. The fixture behind it is the only one built, and the process refuses to start on it outside a declared dev run, the way it refuses the logging code sender. The six templates are in `backend/app/channels/whatsapp/templates.py` as names, slot lists and the words in English, Malay and Chinese; a real number carries them to Meta for approval once, and `app/channels/whatsapp/config.py` says which are approved on this number.
+
+## How to run checkpoint 10
+
+Three terminals the first time, at the top of the repo. Node 20 or later is needed beside the Python 3.12 the backend uses; `make web` installs the web client's packages the first time it runs (`npm ci`, about ten seconds).
+
+```sh
+make setup              # once: the backend
+make dev                # terminal 1: the API on http://127.0.0.1:8000, log to backend/.dev.log
+make web                # terminal 2: the app on http://127.0.0.1:5173/app/, proxying /api to the backend
+make checkpoint N=6     # terminal 3, optional: gives a fresh number three medicines so Today has a Now card
+```
+
+**On the Mac.** Open http://127.0.0.1:5173 (it goes to `/app/`). Type a phone number — any Singapore-shaped one, `+65` and eight digits — and a name, tap *Send me a code*, and read the six digits from the `make dev` terminal (or `backend/.dev.log`), the way checkpoint 2's script does; nothing is sent anywhere. Type them in and tap *Sign in*. A fresh number sees the doors: tap *This is for me*, read the words (the same wording `POST /profiles/mine` records, fetched from `GET /consent/wording`), tap *I agree*. You are on Today.
+
+**A Now card.** A fresh profile has no medicines, and Today says so in one sentence. To see the Now card, add a medicine the way checkpoint 6 does — at http://127.0.0.1:8000/docs with your token (press *Authorize*): `POST /profiles/{id}/photos` with any base64 bytes as a `image/png`, then `POST /profiles/{id}/confirmations` with `{"subject": "medicine", "label": {"generic": "amlodipine", "strength": "5 mg", "dose_text": "1 tab QDS", "quantity": 120, "prescriber": "Dr Tan", "source_kind": "retail"}, "source_artifact_id": …}`, then `POST /profiles/{id}/medicines` with the same label, artefact and the `confirmation_id`. Tap *Today*. Four doses a day hang on breakfast (05:00–11:00), lunch (11:00–15:00), dinner (16:00–21:00) and bed (20:00–24:00): while one of those windows is open the Now card says *Your blood pressure tablet — Take 1 tablet of your blood pressure tablet …* with its source line (*This comes from the label you kept on …*) and one paper button, *Taken*. Once a window has closed untapped, the card is the medicine story's own lines for a forgotten dose (*If you forgot, leave it.* … *Never take 2 at once.*) and there is no *Taken*. Between windows it says *There is nothing to take right now.* The client never works out which dose is due; `GET /profiles/{id}/medicines/today` says `due_now` and `missed` for each.
+
+**On your iPhone, on the same Wi-Fi.** `make web` starts Vite with `--host`, so it also answers on the Mac's address: find it under *System Settings → Wi-Fi → Details*, or run `ipconfig getifaddr en0`, and open `http://<that address>:5173/app/` in Safari. Everything works the same; the code is still in the `make dev` terminal. Over plain http on a LAN address Safari will not offer *Add to Home Screen* as an app and will not install the offline worker — that needs https, which the cloud deployment brings (checkpoint 19's note will say so). On the Mac, `127.0.0.1` counts as secure, so the offline part is checked there.
+
+**Offline, on the Mac.** Build the app and let the backend serve it: `make build-web`, then (with `make dev` running) open http://127.0.0.1:8000/app/, sign in and reach Today once. Turn Wi-Fi off, or in Safari's *Develop → Network Conditions* pick *Offline*, and reload: Today opens on the page the phone kept — *Nura cannot reach the internet right now.*, *Nura last read your papers on Monday 14 September at 8:05 pm.*, and today's list of tablets under *This comes from your Today page.* — with no Now card, no *Taken* and no spinner. The next day, still offline, the kept page is gone from the phone and Today shows only *Nura cannot reach your papers right now.* and the emergency card. Sign out, or a key closed or narrowed since, leaves nothing of the papers on the phone. `make web-e2e` does all of this in Playwright.
+
+What you will see (the operator's walk, `make web-e2e` with `make dev` serving the build):
+
+```
+✓ midnight.spec.ts › crossing midnight in Singapore: Today reads the new day and still says no medicines
+✓ offline.spec.ts › offline: the kept page as a dated list with no Taken; past midnight only the emergency card
+✓ today.spec.ts   › sign in, agree, Today, Taken only when due, Hear, sign out clean
+✓ today.spec.ts   › a refused read clears the phone's copy and is said in one plain sentence
+✓ today.spec.ts   › a key without the records scope opens Today on the medicines and the feed, with no State card
+✓ today.spec.ts   › a server error on reopening keeps him on Today, never back at sign-in
+✓ today.spec.ts   › a wrong code is one plain sentence, never the class name
+✓ today.spec.ts   › the language picker changes every string and persists on the device
+8 passed
+```
+
+**What "passed" means.** You signed in with a code that never travelled over the API; you opened your own papers on today's words; Today shows a Now card only for the dose the backend marks due — one drug in your words, one whole sentence, its source line, one paper button — and *Taken* puts the proud number up by one (the days you took your tablets, whoever tapped *Taken*, counted by the backend); a dose whose moment has passed shows the medicine story's own lines and no *Taken*; *For you today* is the feed's cards for today, or, when it has none, the State card under Nura's own boundary lines and the medicines card with the questions for the doctor; every card has a *Hear* button and nothing speaks until you tap it; a refused read is one plain sentence and leaves nothing behind; a wrong code is refused in one plain sentence; the language picker changes every word and is remembered; and on the Mac, the built app reopens offline on today's list, dated, and past midnight on the emergency card alone. Nothing scrolls sideways, there are no badges or counts, and the text is 20px with 56px buttons in the patient density. If a step does not do that, tell the operator which one and what you saw instead.
 
 ## How to run checkpoint 18
 

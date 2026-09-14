@@ -47,6 +47,11 @@ An f-string or `{slot}` template is checked with representative fillers: a name 
 "Ash", a date slot "Monday 14 September", a number slot "2" (`FILLERS`). A line that begins
 with a slot is not asked to begin with a capital letter: the filled value decides that.
 
+The web client's strings (`web/src/strings/*.ts`) are read too: `// @patient [kind]` on the line
+above a property or statement tags every string literal in it, and at the end of a line tags
+that line; `// plain-words: <reason>` at the end of a line exempts it; the file's name is the
+language (`ms.ts` holds Malay). See `strings_in_typescript`.
+
 The strings catalogue for the iOS app (`ios/Nura/**/*.xcstrings`) is read too: an entry whose
 comment begins with `patient` or contains `@patient` (optionally followed by a kind word) is a
 patient string in every language it is localised in.
@@ -1561,11 +1566,100 @@ def strings_in_xcstrings(path: Path, source: str | None = None) -> list[PatientS
     return found
 
 
+_TS_TAG = re.compile(r"//\s*@patient\b(?:\s+(line|phrase|headline|action)\b)?", re.IGNORECASE)
+_TS_EXEMPT = re.compile(r"//\s*plain-words\s*:", re.IGNORECASE)
+_TS_LITERAL = re.compile(
+    r'"((?:[^"\\\n]|\\.)*)"'  # "double quoted"
+    r"|'((?:[^'\\\n]|\\.)*)'"  # 'single quoted'
+    r"|`((?:[^`\\$]|\\.|\$(?!\{))*)`"  # `template` with no ${…}
+)
+_TS_OPEN = "([{"
+_TS_CLOSE = ")]}"
+
+
+def _ts_code(line: str) -> str:
+    """The line with its trailing `//` comment removed — a `//` inside a string literal stays."""
+    without = _TS_LITERAL.sub(lambda m: " " * len(m.group(0)), line)
+    cut = without.find("//")
+    return line if cut < 0 else line[:cut]
+
+
+def _ts_depth(code: str) -> int:
+    """How many brackets the code opens and does not close, with string literals blanked."""
+    blanked = _TS_LITERAL.sub(lambda m: " " * len(m.group(0)), code)
+    return sum(blanked.count(c) for c in _TS_OPEN) - sum(blanked.count(c) for c in _TS_CLOSE)
+
+
+def _ts_literals(code: str) -> Iterator[str]:
+    for match in _TS_LITERAL.finditer(code):
+        text = next(g for g in match.groups() if g is not None)
+        yield text.encode("utf-8").decode("unicode_escape").encode("latin-1").decode("utf-8")
+
+
+def strings_in_typescript(path: Path, source: str | None = None) -> list[PatientString]:
+    """Every patient string in one TypeScript strings file, one per line of text.
+
+    `// @patient [kind]` on a line of its own tags the statement that starts on the next
+    line — up to and including the line where its brackets close — so one tag over a
+    property covers a string, an array of lines, or a nested object. The same comment at
+    the end of a code line tags that line alone. The language is the file's stem when it is
+    one Nura speaks (`ms.ts`), else English; Chinese is always recognised by its script.
+    """
+    text = source if source is not None else path.read_text(encoding="utf-8")
+    file_language = path.stem if path.stem in LANGUAGE_CODES else "en"
+    lines = text.splitlines()
+    found: list[PatientString] = []
+    seen: set[tuple[int, str]] = set()
+
+    def take(number: int, line: str, kind: Kind) -> None:
+        exempt = _TS_EXEMPT.search(line) is not None
+        for literal in _ts_literals(_ts_code(line)):
+            if not has_letters(literal) or is_code_token(literal):
+                continue
+            for part in literal.replace("\r", "").split("\n"):
+                part = part.strip()
+                if not has_letters(part) or (number, part) in seen:
+                    continue
+                seen.add((number, part))
+                found.append(
+                    PatientString(
+                        path, number, part, language_of(part, file_language), kind, exempt
+                    )
+                )
+
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        tag = _TS_TAG.match(stripped)
+        if tag:  # a tag on its own line: the statement starting on the next line
+            kind = _tag_kind(tag.group(1))
+            index += 1
+            while index < len(lines) and not lines[index].strip():
+                index += 1
+            depth = 0
+            while index < len(lines):
+                depth += _ts_depth(_ts_code(lines[index]))
+                take(index + 1, lines[index], kind)
+                index += 1
+                if depth <= 0:
+                    break
+            continue
+        trailing = _TS_TAG.search(line)
+        in_comment = stripped.startswith(("*", "/*", "//"))
+        if trailing and not in_comment and _ts_code(line).strip():  # a tag ending a code line
+            take(index + 1, line, _tag_kind(trailing.group(1)))
+        index += 1
+    return found
+
+
 def strings_in(path: Path) -> list[PatientString]:
     if path.suffix == ".py":
         return strings_in_python(path)
     if path.suffix == ".xcstrings":
         return strings_in_xcstrings(path)
+    if path.suffix == ".ts":
+        return strings_in_typescript(path)
     text = path.read_text(encoding="utf-8")
     return [
         PatientString(path, number, line, language_of(line), "line")
@@ -1613,7 +1707,9 @@ def patient_files(root: Path) -> list[Path]:
             files.add(base)
         elif base.is_dir():
             files.update(
-                p for p in base.rglob("*") if p.suffix in (".py", ".xcstrings") and p.is_file()
+                p
+                for p in base.rglob("*")
+                if p.suffix in (".py", ".xcstrings", ".ts") and p.is_file()
             )
     return sorted(files)
 
@@ -1687,7 +1783,8 @@ Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), hea
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.
 Tags: `# @patient [kind]` before a statement or at the end of its line; `\"\"\"@patient [kind] ...\"\"\"`
-after an assignment. In an .xcstrings catalogue, a comment beginning `patient [kind]`.
+after an assignment. In an .xcstrings catalogue, a comment beginning `patient [kind]`. In a
+web strings file (.ts), `// @patient [kind]` above a property or at the end of its line.
 `# plain-words: <reason>` on the line a literal starts exempts it: history that is shown no more.
 Fillers: {name} → Ash, {date} → Monday 14 September, {count} → 2.
 """

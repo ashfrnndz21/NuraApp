@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
@@ -98,6 +99,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoWordsInThatLanguage, 404),
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
