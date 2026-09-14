@@ -8,10 +8,10 @@ event it came from, with the same check the fact table has. A line is immutable 
 supersession (`supersedes_id`, `superseded_at`); a supply, a taken dose and a flag are
 moments.
 
-Branches from 0007 beside E02's ingestion revision; the merge revision joins them.
+Follows E02's ingestion revision (0008), which itself follows 0007.
 
-Revision ID: 0008_medicines
-Revises: 0007_doors_and_stewardship
+Revision ID: 0009_medicines
+Revises: 0008_ingestion
 Create Date: 2026-09-14
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0008_medicines"
-down_revision = "0007_doors_and_stewardship"
+revision = "0009_medicines"
+down_revision = "0008_ingestion"
 branch_labels = None
 depends_on = None
 

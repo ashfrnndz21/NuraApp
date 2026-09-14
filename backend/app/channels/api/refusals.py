@@ -12,7 +12,6 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
-from app.channels.api.medicines import NoObjectStore
 from app.channels.api.profiles import NoSuchHolder
 from app.consent.service import (
     NoConsent,
@@ -24,6 +23,8 @@ from app.errors import Refusal
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.photos import PhotoTooLarge
+from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
@@ -50,12 +51,14 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoSuchReviewCard, 404),
     (NoSuchLine, 404),
+    (PhotoTooLarge, 413),
+    (ProfileAlreadyOwned, 409),
+    # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
+    (AlreadyConfirmed, 409),
     # The same label twice, or one that adds nothing, changes nothing.
     (AlreadyRecorded, 409),
-    # No object store on this deployment: the API cannot take the bytes.
-    (NoObjectStore, 503),
-    (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
     # up for, are answered by name and nothing else.

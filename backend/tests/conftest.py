@@ -11,9 +11,12 @@ tests run against the same tables.
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -32,13 +35,15 @@ from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
+from app.ingestion.extract import FixtureExtractor
+from app.ingestion.objects import LocalObjectStore
 from app.keys import confirm  # noqa: F401
-from app.memory.objects import MemoryObjectStore
 from app.regions import Region
 from app.settings import Settings
 
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
+from tests.paper import PAPER
 
 
 async def _engine() -> AsyncEngine:
@@ -110,6 +115,7 @@ class Deployment:
     client: AsyncClient
     sessions: async_sessionmaker[AsyncSession]
     sender: LoggingCodeSender
+    objects: LocalObjectStore
 
 
 async def _serve(region: Region) -> AsyncIterator[Deployment]:
@@ -117,17 +123,26 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
     sender = LoggingCodeSender(reveal=True)
     settings = Settings(region=region, database_url="sqlite+aiosqlite://", dev_code_sender=True)
-    app = create_app(
-        settings,
-        sessions,
-        Providers(
-            code_sender=sender,
-            drug_registry=FixtureRegistry.load(),
-            object_store=MemoryObjectStore(),
-        ),
+    # The object store is a fresh directory per served deployment, one region under it,
+    # gone at the end: what the local store does under backend/var/objects on a laptop.
+    root = Path(tempfile.mkdtemp(prefix="nura-objects-"))
+    objects = LocalObjectStore(root, region)
+    providers = Providers(
+        code_sender=sender,
+        object_store=objects,
+        extractor=FixtureExtractor(PAPER),
+        drug_registry=FixtureRegistry.load(),
     )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://nura.test") as client:
-        yield Deployment(region=region, client=client, sessions=sessions, sender=sender)
+    app = create_app(settings, sessions, providers)
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://nura.test"
+        ) as client:
+            yield Deployment(
+                region=region, client=client, sessions=sessions, sender=sender, objects=objects
+            )
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
     await engine.dispose()
 
 

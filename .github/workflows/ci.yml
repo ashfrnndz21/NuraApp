@@ -32,6 +32,10 @@ jobs:
     needs: [backend]
     if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'risk:low')
     runs-on: ubuntu-latest
+    # Auto-merge is not available on this private repository's plan; the operator merges
+    # risk:low PRs by hand. Keep the step so it starts working if the plan changes, but
+    # never let it redden CI.
+    continue-on-error: true
     permissions: { contents: write, pull-requests: write }
     steps:
       - run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}"

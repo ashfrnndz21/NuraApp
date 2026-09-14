@@ -68,7 +68,7 @@ def test_high_risk_is_a_property_of_the_class_from_the_register() -> None:
         "cardiac_glycoside",
         "antimetabolite",
         "opioid",
-    } <= HIGH_RISK_CLASSES
+    } <= set(HIGH_RISK_CLASSES)
     assert is_high_risk("Opioid") and not is_high_risk(None) and not is_high_risk("statin")
 
 

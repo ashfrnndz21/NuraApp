@@ -37,6 +37,20 @@ HOLD_WORDING = "1"
 STALE_WORDING = "0"
 """A version that was never on file: opening a profile on it must refuse."""
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+LIPID_PANEL = "lipid-panel-2023-09-07"
+WARFARIN_LABEL = "warfarin-label-2024-03-12"
+CONFIDENCE_THRESHOLD = 0.8
+"""Below this a field is shown dotted; `app/ingestion/models.py`. Move this when it moves."""
+
+
+def placeholder_png(label: str) -> bytes:
+    """The bytes that stand in for one redacted paper — the same three lines as
+    `backend/tests/paper.py`, so the fixture extractor recognises the digest. No photo is
+    committed; the JSON beside each in `backend/tests/fixtures/paper/` is what it reads."""
+    return PNG_SIGNATURE + b"nura-paper-placeholder:" + label.encode("ascii") + b"\n"
+
+
 JSON = dict[str, Any]
 
 
@@ -952,27 +966,415 @@ def checkpoint_4(client: httpx.Client) -> None:
     )
 
 
+def _photo(label: str) -> JSON:
+    return {
+        "data": base64.b64encode(placeholder_png(label)).decode(),
+        "content_type": "image/png",
+        "captured_at": "2026-09-14T08:00:00Z",
+    }
+
+
+def print_fields(card: JSON) -> None:
+    """Every field of a review card: value, unit, confidence, and dotted where it needs the eye."""
+    for field in card["fields"]:
+        unit = f" {field['unit']}" if field["unit"] else ""
+        mark = "dotted — needs your eye" if field["needs_confirm"] else "clear"
+        value = field["value"]
+        shown = value if not isinstance(value, dict) else value.get("instruction", value)
+        print(
+            f"    {field['attribute']:<20} {shown!s:<32}{unit:<8} "
+            f"confidence {field['confidence']:.2f}  {mark}"
+        )
+
+
+def decide(
+    card: JSON, *, correct: dict[str, Any] | None = None, reject: set[str] = frozenset()
+) -> list[JSON]:
+    """Confirm every field, except those corrected (to the value given) or rejected."""
+    decisions: list[JSON] = []
+    for field in card["fields"]:
+        if correct and field["attribute"] in correct:
+            decisions.append(
+                {
+                    "field_id": field["field_id"],
+                    "decision": "corrected",
+                    "corrected_value": correct[field["attribute"]],
+                }
+            )
+        elif field["attribute"] in reject:
+            decisions.append({"field_id": field["field_id"], "decision": "rejected"})
+        else:
+            decisions.append({"field_id": field["field_id"], "decision": "confirmed"})
+    return decisions
+
+
+def mint_and_confirm(
+    client: httpx.Client,
+    person: Person,
+    profile_id: str,
+    card: JSON,
+    decisions: list[JSON],
+    what: str,
+) -> JSON:
+    """The person's OK for exactly these decisions, then the confirm that spends it."""
+    minted = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(person.token),
+            json={"subject": "review_card", "card_id": card["card_id"], "decisions": decisions},
+        ),
+        201,
+        f"{what}: {person.name} says OK",
+    )
+    if minted["subject"] != "review_card":
+        raise fail(f"{what}: {person.name} says OK", why=f"minted {minted}")
+    confirmed: JSON = check(
+        client.post(
+            f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+            headers=bearer(person.token),
+            json={"decisions": decisions, "confirmation_id": minted["confirmation_id"]},
+        ),
+        200,
+        f"{what}: {person.name} confirms the card",
+    )
+    return confirmed
+
+
+def checkpoint_5(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+
+    # 1. Pa registers and opens his profile.
+    profile_id = open_own_profile(client, pa, "ms")
+
+    # 2. He uploads the lipid report: the bytes go to the store, a review card comes back.
+    card = check(
+        client.post(
+            f"/profiles/{profile_id}/photos", headers=bearer(pa.token), json=_photo(LIPID_PANEL)
+        ),
+        201,
+        "Pa uploads the lipid report",
+    )
+    if card["document_kind"] != "lab_report" or card["document_date"] != "2023-09-07":
+        raise fail(
+            "Pa uploads the lipid report", why=f"not read as the lab report of 7 Sep 2023: {card}"
+        )
+    if len(card["fields"]) != 7 or card["confirmed_at"] is not None:
+        raise fail("Pa uploads the lipid report", why=f"expected seven open fields: {card}")
+    dotted = {f["attribute"] for f in card["fields"] if f["needs_confirm"]}
+    if dotted != {"ldl", "triglycerides"} or any(
+        (f["confidence"] < CONFIDENCE_THRESHOLD) != f["needs_confirm"] for f in card["fields"]
+    ):
+        raise fail("Pa uploads the lipid report", why=f"dotted fields are {dotted}")
+    ok(
+        "Pa uploaded the lipid report (POST /profiles/{id}/photos, the redacted sample's placeholder "
+        f"bytes): stored in the SG object store as artefact {card['artifact_id'][:8]}…, read as a "
+        "lab_report dated 2023-09-07, and answered with a review card — seven fields, each with its "
+        f"confidence; the two below {CONFIDENCE_THRESHOLD} are dotted:"
+    )
+    print_fields(card)
+    empty = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "lipid_panel"},
+        ),
+        200,
+        "Pa reads his lipid facts before confirming",
+    )
+    if empty != []:
+        raise fail("Pa reads his lipid facts before confirming", why=f"facts before a yes: {empty}")
+    ok("nothing is a fact yet: GET /profiles/{id}/facts?subject=lipid_panel is [] until he says so")
+
+    # 3. He corrects the misread triglycerides, mints his OK for exactly that, and confirms.
+    decisions = decide(card, correct={"triglycerides": 54})
+    other = decide(card, correct={"triglycerides": 45})
+    minted = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(pa.token),
+            json={"subject": "review_card", "card_id": card["card_id"], "decisions": decisions},
+        ),
+        201,
+        "Pa says OK to his decisions",
+    )
+    wrong = client.post(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+        headers=bearer(pa.token),
+        json={"decisions": other, "confirmation_id": minted["confirmation_id"]},
+    )
+    refused(wrong, 400, "NotWhatWasConfirmed", "Pa confirms with decisions he did not OK")
+    ok(
+        "Pa corrected triglycerides from 64 to 54 (the paper says 54) and minted his OK; the same OK "
+        "offered for a different correction (45) was refused: NotWhatWasConfirmed (400) — the yes "
+        "binds to the decisions as shown"
+    )
+    confirmed = check(
+        client.post(
+            f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+            headers=bearer(pa.token),
+            json={"decisions": decisions, "confirmation_id": minted["confirmation_id"]},
+        ),
+        200,
+        "Pa confirms the lipid card",
+    )
+    facts = confirmed["facts"]
+    states = {f["attribute"]: f["state"] for f in confirmed["card"]["fields"]}
+    if (
+        len(facts) != 7
+        or states["triglycerides"] != "corrected"
+        or confirmed["card"]["confirmed_by_person_id"] != pa.person_id
+    ):
+        raise fail("Pa confirms the lipid card", why=f"got {confirmed}")
+    for fact in facts:
+        if (
+            fact["artifact_id"] != card["artifact_id"]
+            or fact["confidence_state"] != "confirmed_by_person"
+            or fact["confirmed_by_person_id"] != pa.person_id
+            or not fact["valid_from"].startswith("2023-09-06T16:00:00")
+        ):
+            raise fail("Pa confirms the lipid card", why=f"a fact without its provenance: {fact}")
+    ok(
+        "one tap saved the card: seven facts, each naming the photo as provenance, confirmed_by_person "
+        "Pa, with unit, valid from 7 September 2023 on his clock (2023-09-06T16:00Z):"
+    )
+    for fact in sorted(facts, key=lambda f: f["attribute"]):
+        unit = f" {fact['unit']}" if fact["unit"] else ""
+        print(
+            f"    {fact['attribute']:<20} {fact['value']}{unit}  ← artefact {fact['artifact_id'][:8]}…  by Pa"
+        )
+    spent = client.post(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+        headers=bearer(pa.token),
+        json={"decisions": decisions, "confirmation_id": minted["confirmation_id"]},
+    )
+    refused(spent, 409, "AlreadyConfirmed", "Pa confirms the same card again")
+    ok("confirming the card again is refused: AlreadyConfirmed (409); its facts are facts now")
+
+    # 4. The facts read back with provenance; State recomputed and names the trigger.
+    held = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "lipid_panel"},
+        ),
+        200,
+        "Pa reads his lipid facts",
+    )
+    if {f["fact_id"] for f in held} != {f["fact_id"] for f in facts}:
+        raise fail("Pa reads his lipid facts", why=f"got {held}")
+    state = read_state(client, pa, profile_id, "Pa reads his State after the card")
+    if state["trigger"]["kind"] != "new_fact" or state["trigger"]["fact_id"] not in {
+        f["fact_id"] for f in facts
+    }:
+        raise fail(
+            "Pa reads his State after the card", why=f"trigger does not name a card fact: {state}"
+        )
+    folded = state["dimensions"]["clinical"]["facts"].get("lipid_panel", {})
+    if (
+        folded.get("triglycerides", {}).get("value") != 54
+        or folded.get("ldl", {}).get("value") != 152
+    ):
+        raise fail("Pa reads his State after the card", why=f"lipids not folded in: {folded}")
+    ok(
+        f"the facts read back (GET /profiles/{{id}}/facts?subject=lipid_panel, 7); State recomputed as "
+        f"each landed — snapshot {state['sequence']}, trigger new_fact naming fact "
+        f"{state['trigger']['fact_id'][:8]}…; the clinical dimension holds the lipid panel with the "
+        "corrected 54"
+    )
+
+    # 5. The medicine label: high-risk shown on the card; confirm writes medicine facts.
+    label = check(
+        client.post(
+            f"/profiles/{profile_id}/photos", headers=bearer(pa.token), json=_photo(WARFARIN_LABEL)
+        ),
+        201,
+        "Pa uploads the warfarin label",
+    )
+    if label["document_kind"] != "medicine_label" or label["high_risk_class"] != "anticoagulant":
+        raise fail("Pa uploads the warfarin label", why=f"got {label}")
+    ok(
+        "Pa uploaded the warfarin label: read as a medicine_label dated 2024-03-12, the dose line "
+        'parsed from Malay ("1 biji sekali sehari waktu malam"), and the card marked high_risk_class '
+        "anticoagulant — looked up from the safety table, not proposed by the extractor and not his to reject:"
+    )
+    print_fields(label)
+    outcome = mint_and_confirm(
+        client, pa, profile_id, label, decide(label, reject={"prescriber"}), "the label"
+    )
+    written = {f["attribute"]: f for f in outcome["facts"]}
+    if set(written) != {"name", "strength", "dose", "quantity", "dispensed_at"}:
+        raise fail("the label: Pa confirms the card", why=f"facts {sorted(written)}")
+    if (
+        written["dose"]["value"].get("drug") != "Warfarin"
+        or written["dose"]["artifact_id"] != label["artifact_id"]
+    ):
+        raise fail("the label: Pa confirms the card", why=f"dose fact {written['dose']}")
+    ok(
+        "Pa rejected the unclear prescriber and confirmed the rest: five medicine facts under the "
+        "medicines scope, the dose naming its drug and resting on the label photo; the rejected field "
+        "wrote nothing"
+    )
+    medicines = check(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(pa.token),
+            params={"subject": "medicine"},
+        ),
+        200,
+        "Pa reads his medicine facts",
+    )
+    if {m["attribute"] for m in medicines} != set(written):
+        raise fail("Pa reads his medicine facts", why=f"got {medicines}")
+    ok(
+        "GET /profiles/{id}/facts?subject=medicine now lists the label's facts (subject medicine → "
+        "scope medicines); the reconciled list at GET /profiles/{id}/medicines is checkpoint 6"
+    )
+    ok(
+        "the high-risk label rule (E16-04): a warfarin dose fact whose provenance is not a PHOTO artefact "
+        "is refused, HighRiskNeedsLabelPhoto (400), and written to the trail. No route can express it — the "
+        "only way to write a medicine dose over HTTP is a card from a photo — so the refusal is held at "
+        "the service (app/safety/high_risk.py, a hook on before_fact_write) and proven in "
+        "backend/tests/test_high_risk.py from a WhatsApp message, a PDF and a screenshot"
+    )
+
+    # 6. Mei: with a key to the record she sees the cards; without it she is refused.
+    register(client, mei, "en")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": ["readings", "records"],
+                "relationship": "daughter",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei see his readings and his record",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": ["readings"]},
+        ),
+        201,
+        "Pa cuts Mei a key to the readings only",
+    )
+    narrow = client.get(f"/profiles/{profile_id}/review-cards", headers=bearer(mei.token))
+    body = refused(narrow, 403, "OutOfScope", "Mei reads the review cards with a readings-only key")
+    if body.get("scope") != "records" or "230" in narrow.text:
+        raise fail(
+            "Mei reads the review cards with a readings-only key", narrow, "expected scope records"
+        )
+    ok(
+        "Pa cut Mei a caregiver key to the readings only; the review cards refuse her: OutOfScope records (403)"
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "role": "caregiver",
+                "scopes": ["readings", "records"],
+            },
+        ),
+        201,
+        "Pa cuts Mei a key to the readings and the record",
+    )
+    hers = check(
+        client.get(f"/profiles/{profile_id}/review-cards", headers=bearer(mei.token)),
+        200,
+        "Mei reads the review cards with a key to the record",
+    )
+    if {c["card_id"] for c in hers} != {card["card_id"], label["card_id"]}:
+        raise fail("Mei reads the review cards with a key to the record", why=f"got {hers}")
+    if any(c["confirmed_at"] is None for c in hers):
+        raise fail(
+            "Mei reads the review cards with a key to the record", why="a card is still open"
+        )
+    ok(
+        "Pa re-cut the key to readings and records; Mei reads both cards, each closed and naming Pa as its confirmer"
+    )
+    refused(
+        client.get(
+            f"/profiles/{profile_id}/facts",
+            headers=bearer(mei.token),
+            params={"subject": "medicine"},
+        ),
+        403,
+        "OutOfScope",
+        "Mei reads the medicine facts with a key to the record",
+    )
+    ok(
+        "the label's facts are under the medicines scope: Mei's key to the record does not open them, OutOfScope medicines (403)"
+    )
+
+    # 7. The trail. Seven facts and their State recomputes make a long trail, so read it at
+    # the widest page the route allows.
+    trail = check(
+        client.get(
+            f"/profiles/{profile_id}/audit", headers=bearer(pa.token), params={"limit": 500}
+        ),
+        200,
+        "Pa reads his audit trail",
+    )
+    steps = {(e["action"], e["scope"], e["target"]) for e in trail if e["outcome"] == "allowed"}
+    wanted = {
+        ("write", "records", "artifact"),
+        ("write", "records", "review_card"),
+        ("write", "records", "review_field"),
+        ("write", "records", "fact"),
+        ("write", "medicines", "fact"),
+        ("write", "records", "confirmation"),
+    }
+    if not wanted <= steps:
+        raise fail("Pa reads his audit trail", why=f"missing {wanted - steps}")
+    refusals = [e for e in trail if e["outcome"] == "refused"]
+    names = {e["refused_because"] for e in refusals}
+    if not {"NotWhatWasConfirmed", "AlreadyConfirmed", "OutOfScope"} <= names:
+        raise fail("Pa reads his audit trail", why=f"refusals on it: {names}")
+    ok(
+        f"Pa reads his audit trail ({len(trail)} lines): the photos, the cards, every field, every fact and "
+        "every yes are on it as writes, and so are the refusals:"
+    )
+    for row in refusals:
+        who = {mei.person_id: "Mei", pa.person_id: "Pa"}.get(row["actor_person_id"], "?")
+        print(
+            f"    {row['at'][:19]}  {who:>3}  {row['action']} {row['scope']} {row['target']}  "
+            f"refused {row['refused_because']}"
+        )
+
+
 # --- checkpoint 6: medicines ----------------------------------------------------------------
 
-LABEL_PHOTO = base64.b64encode(b"\xff\xd8\xff\xe0 the dispensing label, as a photo").decode()
-VOICE_NOTE = base64.b64encode(b"ID3 a voice note: the helper says one tablet at night").decode()
 NO_SUCH_YES = "00000000-0000-0000-0000-000000000001"
 
 
-def artefact(client: httpx.Client, person: Person, profile_id: str, kind: str, what: str) -> str:
+def label_photo(client: httpx.Client, person: Person, profile_id: str, what: str) -> str:
+    """A label photo through E02's photo route: bytes the extractor does not know, so the card
+    is `unknown` with no fields, and the artefact — a PHOTO — is what the label names."""
     made = check(
         client.post(
-            f"/profiles/{profile_id}/artefacts",
+            f"/profiles/{profile_id}/photos",
             headers=bearer(person.token),
             json={
-                "kind": kind,
-                "content_type": "image/jpeg" if kind == "photo" else "audio/mpeg",
-                "content_base64": LABEL_PHOTO if kind == "photo" else VOICE_NOTE,
+                "data": base64.b64encode(
+                    placeholder_png(f"label-{random.randint(0, 10**9)}")
+                ).decode(),
+                "content_type": "image/png",
+                "captured_at": "2026-09-14T08:00:00Z",
             },
         ),
         201,
         what,
     )
+    if made["document_kind"] != "unknown" or made["fields"]:
+        raise fail(what, why=f"the extractor guessed at unknown bytes: {made}")
     artifact_id: str = made["artifact_id"]
     return artifact_id
 
@@ -1038,7 +1440,7 @@ def checkpoint_6(client: httpx.Client) -> None:
     ok("Pa reads his medicines (GET /profiles/{id}/medicines): none yet ([])")
 
     # 2. A label photo, then what the label would mean: a new line, identified in the register.
-    photo = artefact(client, pa, profile_id, "photo", "Pa keeps the label photo")
+    photo = label_photo(client, pa, profile_id, "Pa keeps the label photo")
     amlodipine = medicine_label("amlodipine", "5 mg", "1 biji sekali sehari pagi", 30)
     shown = check(
         client.post(
@@ -1053,7 +1455,8 @@ def checkpoint_6(client: httpx.Client) -> None:
     if shown["outcome"] != "new_line" or match["generic"] != "amlodipine" or match["high_risk"]:
         raise fail("Pa asks what the amlodipine label means", why=f"got {shown}")
     ok(
-        "Pa kept a label photo (POST /profiles/{id}/artefacts, stored in the region) and asked "
+        "Pa kept a label photo (POST /profiles/{id}/photos: stored in the region's object store, "
+        "an artefact of kind photo; the extractor read nothing off it, so no card to confirm) and asked "
         "what the label means (POST /profiles/{id}/medicines/draft): a new line — the fixture "
         f"register identified {match['brand']} {match['strength']} as {match['generic']} "
         f"({match['registration_no']}), the dose read from the label's Malay words, "
@@ -1117,39 +1520,41 @@ def checkpoint_6(client: httpx.Client) -> None:
     for line in count["lines"]:
         print(f"    {line}")
 
-    # 6. Warfarin from a voice note: refused by class. From the label photo: saved, high-risk.
-    voice = artefact(client, pa, profile_id, "voice", "Pa keeps a voice note")
+    # 6. Warfarin: high-risk, so only a label photo will do. Over HTTP every artefact is a
+    # photo (POST /photos takes nothing else), so the refusal is held at the service.
+    label_photo_id = label_photo(client, pa, profile_id, "Pa photographs the warfarin label")
     warfarin = medicine_label("warfarin", "3 mg", "1 tab ON", 28)
-    refused_high_risk = add_medicine(
-        client, pa, profile_id, warfarin, voice, "Pa adds warfarin from a voice note"
-    )
-    body = refused(
-        refused_high_risk, 400, "HighRiskNeedsLabelPhoto", "Pa adds warfarin from a voice note"
-    )
-    if body.get("drug_class") != "anticoagulant":
-        raise fail("Pa adds warfarin from a voice note", refused_high_risk, "expected the class")
-    if "warfarin" in medicines_of(client, pa, profile_id, "Pa reads his medicines again"):
-        raise fail("Pa adds warfarin from a voice note", why="the line was written anyway")
-    ok(
-        "warfarin from a voice note was refused: HighRiskNeedsLabelPhoto (400), by class — "
-        f"{body['drug_class']}; nothing written, and his yes was not spent on it"
-    )
-    label_photo = artefact(client, pa, profile_id, "photo", "Pa photographs the warfarin label")
-    saved = check(
-        add_medicine(
-            client, pa, profile_id, warfarin, label_photo, "Pa adds warfarin from the label"
+    shown = check(
+        client.post(
+            f"/profiles/{profile_id}/medicines/draft",
+            headers=bearer(pa.token),
+            json={"label": warfarin, "source_artifact_id": label_photo_id},
         ),
+        200,
+        "Pa asks what the warfarin label means",
+    )
+    if not shown["match"]["high_risk"] or shown["needs_label_photo"]:
+        raise fail("Pa asks what the warfarin label means", why=f"got {shown}")
+    saved = check(
+        add_medicine(client, pa, profile_id, warfarin, label_photo_id, "Pa adds warfarin"),
         201,
         "Pa adds warfarin from the label",
     )
     if not saved["high_risk"] or saved["generic"] != "warfarin":
         raise fail("Pa adds warfarin from the label", why=f"got {saved}")
     warfarin_id: str = saved["line_id"]
-    ok("from the label photo warfarin was added (201), marked high_risk")
+    ok(
+        "warfarin: the register marks its class, anticoagulant, high-risk; from the label photo it "
+        "was added (201), marked high_risk. Without a label photo it is refused by class — "
+        "HighRiskNeedsLabelPhoto (400, the body names the class) — at the medicines service and "
+        "again as the hook on the memory store; no route can offer a voice note or a PDF as a "
+        "medicine's source (POST /photos takes only photos), so that refusal is proven in "
+        "backend/tests/test_medicines.py and test_medicines_api.py from a voice note and a PDF"
+    )
 
     # 7. Aspirin: screened before it is saved; the flag is a question for the doctor.
     aspirin = medicine_label("aspirin", "100 mg", "1 tab OD", 30)
-    aspirin_photo = artefact(client, pa, profile_id, "photo", "Pa photographs the aspirin box")
+    aspirin_photo = label_photo(client, pa, profile_id, "Pa photographs the aspirin box")
     shown = check(
         client.post(
             f"/profiles/{profile_id}/medicines/draft",
@@ -1192,7 +1597,7 @@ def checkpoint_6(client: httpx.Client) -> None:
         print(f"    {line}")
 
     # 8. A dose change: 10 mg on the new pack. Nothing moves without his OK.
-    new_pack = artefact(client, pa, profile_id, "photo", "Pa photographs the new pack")
+    new_pack = label_photo(client, pa, profile_id, "Pa photographs the new pack")
     ten = medicine_label("amlodipine", "10 mg", "1 biji sekali sehari pagi", 30)
     shown = check(
         client.post(
@@ -1367,7 +1772,6 @@ def checkpoint_6(client: httpx.Client) -> None:
     refusals = [row for row in lines if row["outcome"] == "refused"]
     names = {(row["actor_person_id"], row["refused_because"]) for row in refusals}
     wanted = {
-        (pa.person_id, "HighRiskNeedsLabelPhoto"),
         (pa.person_id, "NotAConfirmerHere"),
         (mei.person_id, "NotTheirsToChange"),
     }
@@ -1392,7 +1796,13 @@ def checkpoint_6(client: httpx.Client) -> None:
         )
 
 
-CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3, 4: checkpoint_4, 6: checkpoint_6}
+CHECKPOINTS = {
+    2: checkpoint_2,
+    3: checkpoint_3,
+    4: checkpoint_4,
+    5: checkpoint_5,
+    6: checkpoint_6,
+}
 
 
 def main(argv: list[str]) -> int:

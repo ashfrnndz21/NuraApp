@@ -5,8 +5,9 @@ is the second door: a graph set up for someone by his number, held until he clai
 `/profiles/mine/claimable` and `/profiles/{id}/claim` are that claim (E01, `app.identity.doors`).
 The third door, I was invited, is `GET /doors`. Notes are here so that checkpoint 2 has a
 scoped thing to read and a scoped thing to be refused; the medicines routes are in
-`app.channels.api.medicines` (E04). Readings and State are here so that checkpoint 3 has a
-fact to add and a State to watch recompute; the real capture is E02.
+`app.channels.api.medicines` (E04). Readings and State are here
+so that checkpoint 3 has a fact to add and a State to watch recompute; the real capture is
+E02.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, sett
 from app.channels.api.schemas import (
     AuditOut,
     ClaimableOut,
+    ClaimConfirmIn,
     ClaimIn,
     ConfirmationOut,
     ConfirmIn,
@@ -57,6 +59,7 @@ from app.identity.doors import (
 )
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
+from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key, list_keys, may_cut_keys, revoke_key
@@ -179,22 +182,33 @@ async def mint_confirmation(
 
     The caller confirms only as himself. For a claim, the draft is recomputed from the
     graph — the stewardship, the steward, the parts, today's words in `language` — so
-    the yes binds to what he was shown by `GET /profiles/mine/claimable`. For a medicine,
-    the draft is recomputed from the label and the list (`app.medicines.service.plan`), so
-    it binds to what `POST /profiles/{id}/medicines/draft` showed him; a label that would
-    write nothing has nothing to say yes to (`AlreadyRecorded`, 409).
+    the yes binds to what he was shown by `GET /profiles/mine/claimable`. For a review
+    card, it is recomputed from the card and his decisions, so the yes binds to every field
+    as shown and every decision as made (E02-07: one tap saves the card).
     """
+    if isinstance(body, ClaimConfirmIn):
+        draft = await claim_draft_for(session, context=context, language=body.language)
+        return ConfirmationOut.of(await confirm(session, context, draft))
     if isinstance(body, MedicineConfirmIn):
-        draft = await draft_for(
+        # For a medicine, the draft is recomputed from the label and the list
+        # (`app.medicines.service.plan`), so the yes binds to what `POST
+        # /profiles/{id}/medicines/draft` showed; a label that would write nothing has
+        # nothing to say yes to (`AlreadyRecorded`, 409).
+        medicine = await draft_for(
             session,
             context=context,
             registry=providers_of(request).drug_registry,
             label=body.label.as_label(),
             source_artifact_id=body.source_artifact_id,
         )
-        return ConfirmationOut.of(await confirm(session, context, draft))
-    claim = await claim_draft_for(session, context=context, language=body.language)
-    return ConfirmationOut.of(await confirm(session, context, claim))
+        return ConfirmationOut.of(await confirm(session, context, medicine))
+    review = await review_draft_for(
+        session,
+        context=context,
+        card_id=body.card_id,
+        decisions=[decision.as_decision() for decision in body.decisions],
+    )
+    return ConfirmationOut.of(await confirm(session, context, review))
 
 
 @router.post("/{profile_id}/claim")

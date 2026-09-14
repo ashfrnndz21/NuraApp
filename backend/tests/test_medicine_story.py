@@ -70,7 +70,7 @@ def test_the_story_has_every_section_in_his_words_with_the_chemical_name_kept_sm
     assert told.if_forgotten == [
         "If you forgot, take it when you remember.",
         "If the next one is soon, wait for the next one.",
-        "Never take two at once.",
+        "Never take 2 at once.",
     ]
     assert told.boundary == [
         "This helps you take what Dr Tan prescribed.",
@@ -100,8 +100,8 @@ def test_the_story_renders_in_malay_and_chinese_from_the_same_rule_ids() -> None
     assert chinese.language == "zh"
     assert chinese.purpose == ["这是降糖药。", "它让您的血糖不会太高。"]
     assert chinese.how_to_take == [
-        "每天吃两次，每次1 片。",
-        "早餐时、晚餐时各一次。",
+        "每天吃 2 次，每次1 片。",
+        "早餐时吃一次，晚餐时吃一次。",
         "和食物一起吃。",
     ]
     # An unknown language falls back to English rather than to nothing.
@@ -111,8 +111,8 @@ def test_the_story_renders_in_malay_and_chinese_from_the_same_rule_ids() -> None
 def test_the_dose_is_told_from_the_label_with_his_anchors_never_a_bare_code() -> None:
     twice = _story("metformin", "1 tab BD")
     assert twice.how_to_take[:2] == [
-        "Take 1 tablet twice a day.",
-        "Once with breakfast and once with dinner.",
+        "Take 1 tablet 2 times a day.",
+        "Take one with breakfast and one with dinner.",
     ]
     half = _story("warfarin", "½ tab ON")
     assert half.how_to_take[:2] == ["Take half a tablet once a day.", "Take it before bed."]
@@ -144,7 +144,7 @@ def test_the_missed_dose_guidance_is_per_drug_from_the_monograph() -> None:
     assert _story("warfarin").if_forgotten == [
         "If you forgot and it is still the same day, take it now.",
         "If the day has passed, leave it and tell Dr Tan.",
-        "Never take two at once.",
+        "Never take 2 at once.",
     ]
     assert _story("insulin glargine", "10 units ON").if_forgotten == [
         "If you forgot your insulin, call Dr Tan before you take any.",

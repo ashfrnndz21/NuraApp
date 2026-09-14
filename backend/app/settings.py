@@ -20,13 +20,18 @@ class Settings:
     dev_code_sender: bool = False
     """Only with NURA_DEV_CODE_SENDER=1 may the logging code sender run. It prints login
     codes to the server log, which is fine on a laptop and account takeover anywhere else."""
+    object_store_root: str | None = None
+    """NURA_OBJECT_STORE: the directory the local object store keeps artefact bytes under,
+    one subdirectory per region (`app.ingestion.objects.LocalObjectStore`). No default: a
+    deployment that cannot say where health data goes must not start."""
+    paper_fixtures: str | None = None
+    """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
+    from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
+    a later adapter, and without either the process refuses to start."""
     drug_registry: str = "fixture"
-    """Which licensed drug registry the deployment runs on (`app.drugs.client`). Only the
-    fixture is built; a name this build does not have refuses to start."""
-    object_store_dir: str | None = None
-    """Where a local run keeps artefact bytes (NURA_OBJECT_STORE_DIR). Unset, artefacts
-    cannot be uploaded through the API; the regional object store replaces this in a
-    deployment."""
+    """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
+    (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
+    to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -36,7 +41,9 @@ class MissingSetting(RuntimeError):
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Read NURA_REGION and NURA_DATABASE_URL. Both are required: neither has a safe default.
 
-    NURA_DEV_CODE_SENDER is the one optional setting, and its only safe default is off.
+    NURA_DEV_CODE_SENDER is optional and its only safe default is off. NURA_OBJECT_STORE and
+    NURA_PAPER_FIXTURES are optional here and checked by `main`, which refuses to serve
+    without a store for the bytes or an extractor to read them.
     """
     source = os.environ if env is None else env
     try:
@@ -49,6 +56,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         region=region,
         database_url=database_url,
         dev_code_sender=dev_code_sender,
+        object_store_root=source.get("NURA_OBJECT_STORE") or None,
+        paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
-        object_store_dir=source.get("NURA_OBJECT_STORE_DIR") or None,
     )

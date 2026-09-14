@@ -1,7 +1,7 @@
 """Medicines over HTTP: the routes checkpoint 6 walks, behind the same key-context dependency
 as every other profile route.
 
-    POST /profiles/{id}/artefacts                a label photo, stored in the region
+    POST /profiles/{id}/photos                   a label photo, stored in the region (E02)
     POST /profiles/{id}/medicines/draft          what the label means, before the yes
     POST /profiles/{id}/confirmations            the yes, subject medicine
     POST /profiles/{id}/medicines                write it
@@ -16,44 +16,75 @@ as every other profile route.
 from __future__ import annotations
 
 import base64
+import uuid
 from datetime import timedelta
 from typing import Any
 
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from app.channels.api import Providers, create_app
 from app.clock import FrozenClock
-from app.db import make_session_factory
-from app.drugs.fixture import FixtureRegistry
-from app.identity.providers import LoggingCodeSender
+from app.db import utcnow
+from app.keys.context import resolve_key_context
+from app.memory.episodic import store_artifact
+from app.memory.models import ArtifactKind, SourceChannel
 from app.regions import Region
-from app.settings import Settings
 from tests.api import bearer, let_in, own_profile, register_by_phone
-from tests.conftest import Deployment, _engine
+from tests.conftest import Deployment
 
 PA = "+6591110001"
 MEI = "+6591110002"
 ASH = "+6591110003"
 
-PHOTO = base64.b64encode(b"\xff\xd8\xff\xe0 a label photo, as bytes").decode()
-VOICE = base64.b64encode(b"ID3 a voice note saying half a tablet").decode()
+PHOTO = base64.b64encode(b"\x89PNG\r\n\x1a\n a label photo the extractor does not know").decode()
 
 
 async def _artefact(
-    client: AsyncClient, profile_id: str, who: dict[str, str], kind: str = "photo"
+    client: AsyncClient, profile_id: str, who: dict[str, str], salt: str = ""
 ) -> str:
+    """A label photo through E02's photo route: an artefact of kind PHOTO, and a review card
+    with nothing on it, since the extractor knows nothing about these bytes."""
     made = await client.post(
-        f"/profiles/{profile_id}/artefacts",
+        f"/profiles/{profile_id}/photos",
         json={
-            "kind": kind,
-            "content_type": "image/jpeg" if kind == "photo" else "audio/mpeg",
-            "content_base64": PHOTO if kind == "photo" else VOICE,
+            "data": base64.b64encode(base64.b64decode(PHOTO) + salt.encode()).decode(),
+            "content_type": "image/png",
+            "captured_at": "2026-09-03T08:00:00Z",
         },
         headers=bearer(who["token"]),
     )
     assert made.status_code == 201, made.text
+    assert made.json()["document_kind"] == "unknown" and made.json()["fields"] == []
     artifact_id: str = made.json()["artifact_id"]
     return artifact_id
+
+
+async def _not_a_photo(
+    deployment: Deployment, profile_id: str, who: dict[str, str], kind: ArtifactKind
+) -> str:
+    """An artefact that is not a photo — a voice note, a PDF. No route makes one yet (POST
+    /photos takes only photos), so it is written the way ingestion will write it, through
+    `store_artifact` under the owner's context."""
+    async with deployment.sessions() as session:
+        context = await resolve_key_context(
+            session,
+            region=Region.SG,
+            person_id=uuid.UUID(who["person_id"]),
+            profile_id=uuid.UUID(profile_id),
+        )
+        digest = uuid.uuid4().hex + uuid.uuid4().hex
+        artifact = await store_artifact(
+            session,
+            context=context,
+            kind=kind,
+            storage_key=f"sg/{profile_id}/{digest}",
+            content_type="audio/mpeg" if kind is ArtifactKind.VOICE else "application/pdf",
+            sha256=digest,
+            captured_at=utcnow(),
+            source_channel=SourceChannel.APP,
+            region=Region.SG,
+        )
+        await session.commit()
+        return str(artifact.id)
 
 
 def _label(
@@ -107,7 +138,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     assert empty.status_code == 200 and empty.json() == []
 
     # A label photo, then what the label would mean.
-    photo = await _artefact(client, profile_id, pa)
+    photo = await _artefact(client, profile_id, pa, "one")
     amlodipine = _label("amlodipine", "5 mg", "1 tab OD", 30)
     shown = await client.post(
         f"/profiles/{profile_id}/medicines/draft",
@@ -191,7 +222,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     ]
 
     # Warfarin from a voice note: refused by class, nothing written, the refusal on the trail.
-    voice = await _artefact(client, profile_id, pa, kind="voice")
+    voice = await _not_a_photo(deployment, profile_id, pa, ArtifactKind.VOICE)
     warfarin = _label("warfarin", "3 mg", "1 tab ON", 28)
     told_first = await client.post(
         f"/profiles/{profile_id}/medicines/draft",
@@ -207,14 +238,14 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     assert refused.json() == {"refusal": "HighRiskNeedsLabelPhoto", "drug_class": "anticoagulant"}
     assert len((await client.get(f"/profiles/{profile_id}/medicines", headers=his)).json()) == 1
     # From the label photo it is saved, and marked high-risk.
-    label_photo = await _artefact(client, profile_id, pa)
+    label_photo = await _artefact(client, profile_id, pa, "two")
     saved = await _add(client, profile_id, pa, warfarin, label_photo)
     assert saved.status_code == 201, saved.text
     assert saved.json()["high_risk"] is True and saved.json()["generic"] == "warfarin"
 
     # Aspirin: screened before save, the flag names both drugs and reads as a question.
     aspirin = _label("aspirin", "100 mg", "1 tab OD", 30)
-    aspirin_photo = await _artefact(client, profile_id, pa)
+    aspirin_photo = await _artefact(client, profile_id, pa, "three")
     shown = await client.post(
         f"/profiles/{profile_id}/medicines/draft",
         json={"label": aspirin, "source_artifact_id": aspirin_photo},
@@ -243,7 +274,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
 
     # A dose change: 10 mg on the new pack. Nothing moves without his yes; with it, the old
     # line is superseded and kept, and the story asks the doctor.
-    new_pack = await _artefact(client, profile_id, pa)
+    new_pack = await _artefact(client, profile_id, pa, "four")
     ten = _label("amlodipine", "10 mg", "1 tab OD", 30)
     shown = await client.post(
         f"/profiles/{profile_id}/medicines/draft",
@@ -327,11 +358,11 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     )
     assert read.status_code == 200 and read.json()["language"] == "ms"
     her_photo = await client.post(
-        f"/profiles/{profile_id}/artefacts",
-        json={"kind": "photo", "content_type": "image/jpeg", "content_base64": PHOTO},
+        f"/profiles/{profile_id}/photos",
+        json={"data": PHOTO, "content_type": "image/png", "captured_at": "2026-09-03T08:00:00Z"},
         headers=hers,
     )
-    assert her_photo.status_code == 403  # records scope: an artefact is a paper
+    assert her_photo.status_code == 403  # records scope: a photo is a paper
     her_draft = await client.post(
         f"/profiles/{profile_id}/medicines/draft",
         json={
@@ -444,49 +475,13 @@ async def test_the_label_must_name_a_medicine_and_say_the_dose_one_way(
 async def test_a_dose_from_a_pdf_is_not_a_label_photo_either(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)
-    made = await deployment.client.post(
-        f"/profiles/{profile_id}/artefacts",
-        json={"kind": "pdf", "content_type": "application/pdf", "content_base64": PHOTO},
-        headers=bearer(pa["token"]),
-    )
-    assert made.status_code == 201
+    pdf = await _not_a_photo(deployment, profile_id, pa, ArtifactKind.PDF)
     refused = await _add(
         deployment.client,
         profile_id,
         pa,
         _label("insulin glargine", "100 units/ml", "10 units ON", 900),
-        made.json()["artifact_id"],
+        pdf,
     )
-    assert refused.status_code == 400 and refused.json() == {
-        "refusal": "HighRiskNeedsLabelPhoto",
-        "drug_class": "insulin",
-    }
-
-
-async def test_without_an_object_store_the_api_cannot_take_an_artefact() -> None:
-    engine = await _engine()
-    sender = LoggingCodeSender(reveal=True)
-    app = create_app(
-        Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True),
-        make_session_factory(engine),
-        Providers(code_sender=sender, drug_registry=FixtureRegistry.load(), object_store=None),
-    )
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://nura.test") as client:
-        deployment = Deployment(
-            region=Region.SG, client=client, sessions=make_session_factory(engine), sender=sender
-        )
-        pa = await register_by_phone(deployment, PA, "Pa")
-        profile_id = await own_profile(deployment, pa)
-        refused = await client.post(
-            f"/profiles/{profile_id}/artefacts",
-            json={"kind": "photo", "content_type": "image/jpeg", "content_base64": PHOTO},
-            headers=bearer(pa["token"]),
-        )
-        assert refused.status_code == 503 and refused.json() == {"refusal": "NoObjectStore"}
-        bad = await client.post(
-            f"/profiles/{profile_id}/artefacts",
-            json={"kind": "photo", "content_type": "image/jpeg", "content_base64": "not base64!!"},
-            headers=bearer(pa["token"]),
-        )
-        assert bad.status_code == 503  # the store is checked first; nothing is decoded for nowhere
-    await engine.dispose()
+    assert refused.status_code == 400
+    assert refused.json() == {"refusal": "HighRiskNeedsLabelPhoto", "drug_class": "insulin"}

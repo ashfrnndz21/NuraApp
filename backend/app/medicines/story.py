@@ -60,10 +60,8 @@ def how_to_take(dose: Dose, monograph: Monograph, language: str) -> list[str]:
     tablet is always "once with breakfast and once with dinner", never a bare "twice".
     """
     amount = strings.say_amount(dose.amount, dose.unit, language)
-    anchors = strings.say_anchors([a.value for a in dose.scheduled_anchors], language)
-    lines = strings.fill(
-        strings.HOW_OFTEN[language][dose.frequency.value], amount=amount, anchors=anchors
-    )
+    slots = strings.anchor_slots([a.value for a in dose.scheduled_anchors], language)
+    lines = strings.fill(strings.HOW_OFTEN[language][dose.frequency.value], amount=amount, **slots)
     if dose.frequency is not Frequency.PRN:
         lines.extend(strings.fill(strings.FOOD[language][monograph.food_rule_id]))
     return lines

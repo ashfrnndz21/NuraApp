@@ -10,7 +10,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 2 | Accounts, keys, consent, audit | Register by phone code (the code prints in the server log, no SMS), create a profile, issue a caregiver key scoped to `medicines, visits`, watch it read medicines and get refused on notes, then list the refusal in the audit trail | E00-01, E00-02, E00-07 | **ready** |
 | 3 | Memory and State | Add a blood-pressure reading as a Fact with provenance, watch State recompute and record the trigger; a Fact without provenance is rejected; a key without the record cannot read State | E00-03, E00-04 | **ready** |
 | 4 | Three doors, proxy, claim | Set up a profile *for someone* by phone number, try to create a second one for the same number (refused, in words that name nobody), then claim it as the patient and see the steward key become the chief key with consent recorded | E01-01, E01-02 | **ready** |
-| 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence, confirm it, and see Facts with provenance appear on the timeline | E02-01, E02-07 | planned |
+| 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence (the unsure fields dotted), correct one value, confirm with one OK, and see Facts with provenance appear; upload the warfarin label and see the high-risk class on the card; a key without the record cannot see a card | E02-01, E02-07, E16-04 | **ready** |
 | 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | **ready** |
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
 | 8 | Feed and WhatsApp (sandbox) | Call the feed endpoint and see the supply order (now, today, gate, story, learning); send a photo to the WhatsApp sandbox number and watch it file itself and reply | E21 backend, E19-01…E19-03 | planned |
@@ -189,26 +189,95 @@ checkpoint 4 passed: every step did what docs/checkpoints.md says
 1. **The claimant's view.** Register a fourth number (`POST /auth/phone/start`, read the code from the `make dev` terminal, `POST /auth/phone/verify`), then as Mei call `POST /profiles/for-someone` with that number and `"basis": "patient_asked"`. As the new person, `GET /doors`: the profile is under `claimable`, with `set_up_by`, `parts` and the words. `GET /profiles/{profile_id}` answers with `standing: claimant` and `scopes: ["profile"]`; `GET /profiles/{profile_id}/medicines` is `403 {"refusal": "OutOfScope", "scope": "medicines"}` — until he claims, he sees whose profile it is and nothing else.
 2. **A yes for other words.** As that person, `POST /profiles/{profile_id}/confirmations` with `{"subject": "claim", "language": "en"}`, then `POST /profiles/{profile_id}/claim` with that `confirmation_id` and `"language": "ms"`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for the English words, not the Malay ones. Claim again with `"language": "en"` and it goes through; the refusal is on the trail (`GET /profiles/{profile_id}/audit`) as `refused_because: NotWhatWasConfirmed`.
 
+## How to run checkpoint 5
+
+The same two terminals as checkpoint 2; it does not depend on any earlier checkpoint having been run.
+
+```sh
+make setup              # once, if you have not
+make dev                # terminal 1: migrates dev.db (0008 adds the review card), serves on http://127.0.0.1:8000
+make checkpoint N=5     # terminal 2: walks the whole scenario, about three seconds
+```
+
+Two fresh phone numbers every run, Pa and Mei, so it can be run again on the same `dev.db`. No photo is sent: the two papers in `backend/tests/fixtures/paper/` are redacted samples whose image is not committed — each is a small placeholder byte string the script generates, and a JSON file that says what the extractor reads off it. The bytes go to the local object store under `backend/var/objects/SG/` (ignored by git); the real OCR and vision extractor is a later adapter behind the same interface, and the fixture one answers by the digest of the bytes it is shown.
+
+What you will see (the numbers, ids and times change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591115168) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
+✓ Pa uploaded the lipid report (POST /profiles/{id}/photos, the redacted sample's placeholder bytes): stored in the SG object store as artefact 00439a69…, read as a lab_report dated 2023-09-07, and answered with a review card — seven fields, each with its confidence; the two below 0.8 are dotted:
+    total_cholesterol    230                              mg/dL   confidence 0.97  clear
+    hdl                  73                               mg/dL   confidence 0.95  clear
+    ldl                  152                              mg/dL   confidence 0.71  dotted — needs your eye
+    triglycerides        64                               mg/dL   confidence 0.52  dotted — needs your eye
+    vldl                 10.78                            mg/dL   confidence 0.90  clear
+    tc_hdl_ratio         3.1                                      confidence 0.93  clear
+    non_hdl_cholesterol  156.3                            mg/dL   confidence 0.88  clear
+✓ nothing is a fact yet: GET /profiles/{id}/facts?subject=lipid_panel is [] until he says so
+✓ Pa corrected triglycerides from 64 to 54 (the paper says 54) and minted his OK; the same OK offered for a different correction (45) was refused: NotWhatWasConfirmed (400) — the yes binds to the decisions as shown
+✓ one tap saved the card: seven facts, each naming the photo as provenance, confirmed_by_person Pa, with unit, valid from 7 September 2023 on his clock (2023-09-06T16:00Z):
+    hdl                  73 mg/dL  ← artefact 00439a69…  by Pa
+    ldl                  152 mg/dL  ← artefact 00439a69…  by Pa
+    non_hdl_cholesterol  156.3 mg/dL  ← artefact 00439a69…  by Pa
+    tc_hdl_ratio         3.1  ← artefact 00439a69…  by Pa
+    total_cholesterol    230 mg/dL  ← artefact 00439a69…  by Pa
+    triglycerides        54 mg/dL  ← artefact 00439a69…  by Pa
+    vldl                 10.78 mg/dL  ← artefact 00439a69…  by Pa
+✓ confirming the card again is refused: AlreadyConfirmed (409); its facts are facts now
+✓ the facts read back (GET /profiles/{id}/facts?subject=lipid_panel, 7); State recomputed as each landed — snapshot 7, trigger new_fact naming fact c60c61f7…; the clinical dimension holds the lipid panel with the corrected 54
+✓ Pa uploaded the warfarin label: read as a medicine_label dated 2024-03-12, the dose line parsed from Malay ("1 biji sekali sehari waktu malam"), and the card marked high_risk_class anticoagulant — looked up from the safety table, not proposed by the extractor and not his to reject:
+    name                 Warfarin                                 confidence 0.96  clear
+    strength             5                                mg      confidence 0.93  clear
+    dose                 1 tablet once a day at night     tablet  confidence 0.74  dotted — needs your eye
+    quantity             28                               tablets confidence 0.88  clear
+    dispensed_at         2024-03-12                               confidence 0.90  clear
+    prescriber           Dr Lim                                   confidence 0.61  dotted — needs your eye
+✓ Pa rejected the unclear prescriber and confirmed the rest: five medicine facts under the medicines scope, the dose naming its drug and resting on the label photo; the rejected field wrote nothing
+✓ GET /profiles/{id}/facts?subject=medicine now lists the label's facts (subject medicine → scope medicines); the reconciled list at GET /profiles/{id}/medicines is checkpoint 6
+✓ the high-risk label rule (E16-04): a warfarin dose fact whose provenance is not a PHOTO artefact is refused, HighRiskNeedsLabelPhoto (400), and written to the trail. No route can express it — the only way to write a medicine dose over HTTP is a card from a photo — so the refusal is held at the service (app/safety/high_risk.py, a hook on before_fact_write) and proven in backend/tests/test_high_risk.py from a WhatsApp message, a PDF and a screenshot
+✓ Mei (+6592220898) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa cut Mei a caregiver key to the readings only; the review cards refuse her: OutOfScope records (403)
+✓ Pa re-cut the key to readings and records; Mei reads both cards, each closed and naming Pa as its confirmer
+✓ the label's facts are under the medicines scope: Mei's key to the record does not open them, OutOfScope medicines (403)
+✓ Pa reads his audit trail (245 lines): the photos, the cards, every field, every fact and every yes are on it as writes, and so are the refusals:
+    2026-09-14T09:25:56  Mei  read medicines fact  refused OutOfScope
+    2026-09-14T09:25:56  Mei  read records review_card  refused OutOfScope
+    2026-09-14T09:25:56   Pa  read records review_card  refused AlreadyConfirmed
+    2026-09-14T09:25:56   Pa  write records review_card  refused NotWhatWasConfirmed
+checkpoint 5 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 5 passed`. The criteria: a photo's bytes go to the object store of the profile's region and the row holds only a key and a digest; the extractor's answer is a review card, never a fact — every field with its confidence, and the ones below the threshold dotted for the person's eye; a correction is kept beside the proposal it does not overwrite; one OK saves the whole card, and it binds to the decisions as shown, so a decision changed after it was minted is refused; every fact the card writes names the photo as its provenance, the person as its confirmer and the unit, and is valid from the date on the paper; a rejected field writes nothing; a card is confirmed once; State recomputes as each fact lands and names its trigger; the label card shows the high-risk class from the safety table, and a high-risk dose can only ever rest on a label photo, whichever surface writes it; the label's facts sit under the medicines scope, the cards under the record's, and a key that covers neither is refused and written down. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it) and the profile id from it:
+
+1. **A page the extractor cannot read.** `POST /profiles/{profile_id}/photos` with `"content_type": "image/png"`, any `captured_at`, and `"data"` set to the base64 of a few bytes of your own (`printf 'hello' | base64`). The answer is `201` with a card whose `document_kind` is `unknown` and whose `fields` are `[]`: nothing was guessed. Try again with `"content_type": "application/pdf"` and the answer is `400 {"refusal": "NotAPhoto"}`.
+2. **The yes is the confirmer's own.** Take an open card's `card_id` (upload the lipid report again: the same bytes make a new card), mint an OK as Pa with `POST /profiles/{profile_id}/confirmations` and `{"subject": "review_card", "card_id": …, "decisions": [{"field_id": …, "decision": "confirmed"}, …]}` naming every field. Then, as Mei (her token, with the key to `readings` and `records` the run cut her), call `POST /profiles/{profile_id}/review-cards/{card_id}/confirm` with those decisions and Pa's `confirmation_id`: `403 {"refusal": "NotAConfirmerHere"}` — a yes is spent only by the person who said it. As Pa, the same call goes through, and `GET /profiles/{profile_id}/audit?scope=records&limit=500` shows Mei's refused write of `review_card` beside it.
+
+The high-risk refusal is at the service, not over HTTP: the only way to write a medicine dose over the API is a card made from a photo, so there is no request that could offer a WhatsApp message or a PDF as the provenance of a warfarin dose. The rule (`HighRiskNeedsLabelPhoto`, which the API would answer with 400) lives in `backend/app/safety/high_risk.py` as a hook the memory store runs before any fact is written, and is proven from a message, a PDF and a screenshot in `backend/tests/test_high_risk.py`.
+
 ## How to run checkpoint 6
 
 The same two terminals as checkpoint 2; it does not depend on any other checkpoint having been run. The drug data is the fixture register in `backend/tests/fixtures/drugs/registry.json` (a dozen medicines common in Malaysia and Singapore, with NPRA- and HSA-shaped numbers that are not real ones); no licensed database is called, and no model writes a sentence.
 
 ```sh
 make setup              # once, if you have not
-make dev                # terminal 1: migrates dev.db (0008 adds the medicine tables), serves on http://127.0.0.1:8000, keeps label photos in backend/.objects
+make dev                # terminal 1: migrates dev.db (0009 adds the medicine tables), serves on http://127.0.0.1:8000
 make checkpoint N=6     # terminal 2: walks the whole scenario, about three seconds
 ```
 
-Two fresh phone numbers every run — Pa and Mei, his helper — so it can be run again on the same `dev.db`. The "label photo" is a few bytes uploaded as one, stored in the region and named by the artefact row; the real photo pipeline is E02.
+Two fresh phone numbers every run — Pa and Mei, his helper — so it can be run again on the same `dev.db`. Each "label photo" is a few placeholder bytes sent through `POST /profiles/{id}/photos` (checkpoint 5's route): the fixture extractor knows nothing about them, so the review card comes back `unknown` with no fields, and the artefact — a photo, stored under `backend/var/objects/SG/` — is what the label names as its source. The label's own fields are typed in this checkpoint; reading them off the photo is the extractor's job (E02) and the two meet at the artefact id.
 
 What you will see (the numbers, ids and dates change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Pa (+6591110146) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa (+6591110353) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
 ✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
 ✓ Pa reads his medicines (GET /profiles/{id}/medicines): none yet ([])
-✓ Pa kept a label photo (POST /profiles/{id}/artefacts, stored in the region) and asked what the label means (POST /profiles/{id}/medicines/draft): a new line — the fixture register identified Norvasc 5 mg as amlodipine (MAL19970001A), the dose read from the label's Malay words, 1 biji sekali sehari pagi; nothing written yet
+✓ Pa kept a label photo (POST /profiles/{id}/photos: stored in the region's object store, an artefact of kind photo; the extractor read nothing off it, so no card to confirm) and asked what the label means (POST /profiles/{id}/medicines/draft): a new line — the fixture register identified Norvasc 5 mg as amlodipine (MAL19970001A), the dose read from the label's Malay words, 1 biji sekali sehari pagi; nothing written yet
 ✓ Pa said OK (POST /profiles/{id}/confirmations, subject medicine: a yes for exactly this label, good for ten minutes, used once) and added it (POST /profiles/{id}/medicines): one medication fact on the photo, confirmed by him, one line, one supply of 30
 ✓ Pa reads the story in Malay (GET .../story; his profile's language): purpose, how to take, what to look out for, what to avoid, if he forgot, and the boundary — from templates keyed by the licensed monograph, no model, the chemical name kept small:
     Ini ubat tekanan darah anda.
@@ -228,8 +297,7 @@ What you will see (the numbers, ids and dates change each run):
 ✓ Pa tapped Taken twice (POST .../taken: his own tap, no confirm, a DOSE_TAKEN event each): 30 dispensed − 2 taken = 28 left, about 28 days; reorder on 2026-10-09 (days left − 3 days lead time for a retail pharmacy); in his words:
     You have 28 tablets of your blood pressure tablet left.
     That is about 28 days.
-✓ warfarin from a voice note was refused: HighRiskNeedsLabelPhoto (400), by class — anticoagulant; nothing written, and his yes was not spent on it
-✓ from the label photo warfarin was added (201), marked high_risk
+✓ warfarin: the register marks its class, anticoagulant, high-risk; from the label photo it was added (201), marked high_risk. Without a label photo it is refused by class — HighRiskNeedsLabelPhoto (400, the body names the class) — at the medicines service and again as the hook on the memory store; no route can offer a voice note or a PDF as a medicine's source (POST /photos takes only photos), so that refusal is proven in backend/tests/test_medicines.py and test_medicines_api.py from a voice note and a PDF
 ✓ aspirin was screened before it was saved: the licensed data flagged aspirin with warfarin, major (bleeding_risk), shown on the draft and written as a flag with the line; GET .../medicines/interactions renders it as a question for the doctor, both medicines named in his words:
     Ask Dr Tan about taking the aspirin and the blood thinner tablet together.
     Together they can make you bleed more easily.
@@ -241,21 +309,20 @@ What you will see (the numbers, ids and dates change each run):
     breakfast  Take 1 tablet of your blood pressure tablet with breakfast.  [Taken: taken]
     breakfast  Take 1 tablet of the aspirin with breakfast.  [Taken: not yet]
           bed  Take 1 tablet of the blood thinner tablet before bed.  [Taken: not yet]
-✓ Mei (+6592222405) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Mei (+6592223326) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
 ✓ Mei (helper key, medicines) reads the list (3 lines) and the warfarin story in Pa's language, and taps Taken for him in her own name; asking what a label means, minting a yes and adding a line are all refused: NotTheirsToChange (403) — a key to read the medicines is not a key to change them
-✓ Pa reads his trail under the medicines scope (131 lines for the two of them); every refusal is on it by name, and no line says which medicine:
-    2026-09-14T09:43:22   Pa  write medicines fact  refused NotAConfirmerHere
-    2026-09-14T09:43:22   Pa  write medicines medication_line  refused HighRiskNeedsLabelPhoto
-    2026-09-14T09:43:22  Mei  write medicines medication_line  refused NotTheirsToChange
-    2026-09-14T09:43:22  Mei  read medicines medication_line  refused NotTheirsToChange
+✓ Pa reads his trail under the medicines scope (125 lines for the two of them); every refusal is on it by name, and no line says which medicine:
+    2026-09-14T09:58:09   Pa  write medicines fact  refused NotAConfirmerHere
+    2026-09-14T09:58:09  Mei  write medicines medication_line  refused NotTheirsToChange
+    2026-09-14T09:58:09  Mei  read medicines medication_line  refused NotTheirsToChange
 checkpoint 6 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 6 passed`. The criteria: a medicine is identified through the licensed data port and never guessed — the register's product, class and registration number, the dose read from the label's own words in Malay or English; nothing is written until the person says yes to exactly that label (a yes for anything else, or no yes, is refused and the list does not move); the story comes from templates keyed by the licensed monograph in his language, with the chemical name kept out of every sentence and no sentence telling him to start, stop or change anything; his taps bring the count down and the reorder date is arithmetic over what was dispensed, what was taken and the lead time of where it came from; a high-risk medicine (warfarin, insulin, digoxin, methotrexate, opioids — by class) is refused from anything but a label photo, by class name, at the service and again as a hook on the memory store; a new medicine is screened against the list before it is saved and every flag names both medicines with a severity and reads as a question for the doctor; a dose change supersedes the old line only with his OK, keeps the old line in the history, and renders as a question for the doctor rather than a new amount; a helper's key reads the list and the story and taps Taken, and cannot add or change a line; every refusal is on the trail by name and nothing on the trail says which medicine. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 6 passed`. The criteria: a medicine is identified through the licensed data port and never guessed — the register's product, class and registration number, the dose read from the label's own words in Malay or English; nothing is written until the person says yes to exactly that label (a yes for anything else, or no yes, is refused and the list does not move); the story comes from templates keyed by the licensed monograph in his language, with the chemical name kept out of every sentence and no sentence telling him to start, stop or change anything; his taps bring the count down and the reorder date is arithmetic over what was dispensed, what was taken and the lead time of where it came from; a high-risk medicine (warfarin, insulin, digoxin, methotrexate, opioids — by class) is refused from anything but a label photo, by class name, at the service and again as the one hook on the memory store (`HighRiskNeedsLabelPhoto`, shared with checkpoint 5's card) — over HTTP every artefact is a photo, so that refusal is proven in the tests from a voice note and a PDF; a new medicine is screened against the list before it is saved and every flag names both medicines with a severity and reads as a question for the doctor; a dose change supersedes the old line only with his OK, keeps the old line in the history, and renders as a question for the doctor rather than a new amount; a helper's key reads the list and the story and taps Taken, and cannot add or change a line; every refusal is on the trail by name and nothing on the trail says which medicine. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it) and the profile id from it:
 
-1. **A refill.** `POST /profiles/{profile_id}/artefacts` with any base64 bytes as a `photo`, then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
+1. **A refill.** `POST /profiles/{profile_id}/photos` with any base64 bytes you like as `data`, `"content_type": "image/png"` and a `captured_at` (the card comes back `unknown`; keep its `artifact_id`), then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
 2. **A yes for other words.** Mint a confirmation for a label of `"quantity": 28` and spend it on a `POST /profiles/{profile_id}/medicines` whose label says `"quantity": 30`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for a different label. Nothing is written, and the refusal is on the trail (`GET /profiles/{profile_id}/audit?scope=medicines`) as `refused_because: NotWhatWasConfirmed`.
 
 ## Rules the operator follows between checkpoints

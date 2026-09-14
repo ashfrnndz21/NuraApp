@@ -8,26 +8,21 @@
     GET  /profiles/{id}/medicines/today            today's dose cards at his anchors
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
-    POST /profiles/{id}/artefacts                  a label photo, stored in the region
 
 The yes for a medicine is minted at `POST /profiles/{id}/confirmations` with subject
-`medicine`, in `app.channels.api.profiles`. The artefacts route is the minimum a label photo
-needs to exist before ingestion (E02) lands its own photo route; it goes through
-`store_artifact` like every artefact will.
+`medicine`, in `app.channels.api.profiles`. A label photo is a photo: it comes in through
+`POST /profiles/{id}/photos` (E02, `app.channels.api.capture`) and its artefact id is what a
+label here names as its source.
 """
 
 from __future__ import annotations
 
-import base64
-import binascii
 import uuid
 
 from fastapi import APIRouter, Query, Request, status
 
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
-    ArtefactIn,
-    ArtefactOut,
     LineOut,
     MedicineDraftIn,
     MedicineDraftOut,
@@ -38,8 +33,6 @@ from app.channels.api.schemas import (
     TakenIn,
     TakenOut,
 )
-from app.db import utcnow
-from app.errors import Refusal
 from app.medicines.service import (
     active_lines,
     history,
@@ -52,20 +45,10 @@ from app.medicines.service import (
 )
 from app.medicines.story import interaction_question
 from app.medicines.strings import PLAIN_NAME, language_of
-from app.memory.episodic import store_artifact
-from app.memory.models import SourceChannel
 
 router = APIRouter(prefix="/profiles", tags=["medicines"])
 
 Language = Query(default=None, min_length=2, max_length=16)
-
-
-class NoObjectStore(Refusal):
-    """This deployment has nowhere to put artefact bytes, so it cannot take an upload."""
-
-
-class NotBase64(Refusal):
-    """The bytes were not base64."""
 
 
 @router.get("/{profile_id}/medicines")
@@ -205,41 +188,3 @@ async def medication_story(
         language=language,
     )
     return StoryOut.of(line_id, told)
-
-
-@router.post("/{profile_id}/artefacts", status_code=status.HTTP_201_CREATED)
-async def upload_artefact(
-    body: ArtefactIn, request: Request, context: Context, session: Db
-) -> ArtefactOut:
-    """Keep a photo or a paper in the profile's region and write it down as an artefact.
-
-    The bytes go to the object store first, keyed by their digest; the row names the key.
-    Refused without an object store (503) and, like every artefact, without the consent to
-    hold the record. The minimum a label photo needs to exist before E02's photo route.
-    """
-    store = providers_of(request).object_store
-    if store is None:
-        raise NoObjectStore("no object store is configured on this deployment")
-    try:
-        content = base64.b64decode(body.content_base64, validate=True)
-    except (binascii.Error, ValueError) as bad:
-        raise NotBase64("content_base64 is not base64") from bad
-    region = settings_of(request).region
-    stored = store.put(
-        region=region,
-        profile_id=context.profile_id,
-        content=content,
-        content_type=body.content_type,
-    )
-    artifact = await store_artifact(
-        session,
-        context=context,
-        kind=body.kind,
-        storage_key=stored.storage_key,
-        content_type=body.content_type,
-        sha256=stored.sha256,
-        captured_at=body.captured_at or utcnow(),
-        source_channel=SourceChannel.APP,
-        region=region,
-    )
-    return ArtefactOut.of(artifact)

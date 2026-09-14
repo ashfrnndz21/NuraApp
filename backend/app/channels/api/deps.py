@@ -24,8 +24,9 @@ from app.errors import Refusal
 from app.identity.login import resolve_session
 from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
+from app.ingestion.extract import Extractor
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, NoKey, resolve_key_context
-from app.memory.objects import ObjectStore
 from app.regions import OutOfRegion
 from app.settings import Settings
 
@@ -34,16 +35,16 @@ log = logging.getLogger("nura.channels.api")
 
 @dataclass(frozen=True, slots=True)
 class Providers:
-    """The outside world, as the app sees it. Tests pass fixtures; `main` passes the real ones.
-
-    `drug_registry` is the licensed drug data behind its port (`app.drugs`): identification,
-    interactions and monographs come from it and from nowhere else. `object_store` is where
-    an artefact's bytes go, in the profile's region; None means the API cannot take uploads.
-    """
+    """The outside world, as the app sees it. Tests pass fixtures; `main` passes the real ones."""
 
     code_sender: CodeSender
+    object_store: ObjectStore
+    """Where artefact bytes go: one store, pinned to this deployment's region."""
+    extractor: Extractor
+    """What reads a photo into fields with confidence; the fixture one until the real one."""
     drug_registry: DrugRegistry
-    object_store: ObjectStore | None = None
+    """The licensed drug data behind its port (`app.drugs`): identification, interactions and
+    monographs come from it and from nowhere else."""
 
 
 def settings_of(request: Request) -> Settings:

@@ -26,6 +26,7 @@ from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 from app.audit.models import AuditEntry
 from app.consent.models import Consent
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
+from app.ingestion.models import ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
@@ -53,6 +54,8 @@ TABLES: tuple[Table, ...] = (
     Note.__table__,
     Stewardship.__table__,
     StateSnapshot.__table__,
+    ReviewCard.__table__,
+    ReviewField.__table__,
     MedicationLine.__table__,
     Supply.__table__,
     DoseTaken.__table__,
@@ -136,9 +139,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    # E04 (0008_medicines) and E02 (0008_ingestion) branch from 0007 side by side; the merge
-    # revision that joins them is the operator's, at merge. On this branch the head is E04's.
-    assert heads == ["0008_medicines"]
+    assert heads == ["0009_medicines"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -162,7 +163,8 @@ def test_the_migrations_build_the_tables_the_models_declare(
             } == {column.name for column in table.columns if column.nullable}, table.name
 
         # The ties that keep provenance on the profile survive the batch rewrite (0004), and
-        # so do the checks 0003 put on the fact table.
+        # so do the checks 0003 put on the fact table. The review card (0008) is tied to its
+        # photo and its facts the same way.
         for table in (
             Artifact,
             Event,
@@ -170,6 +172,8 @@ def test_the_migrations_build_the_tables_the_models_declare(
             Episode,
             Provider,
             Appointment,
+            ReviewCard,
+            ReviewField,
             MedicationLine,
             Supply,
             DoseTaken,

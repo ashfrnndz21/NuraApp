@@ -9,14 +9,11 @@ arithmetic over what was dispensed and what was taken. The story (`story`) is re
 templates in `strings`, keyed by the monograph's rule ids: the model writes no sentence here,
 and no sentence tells him to start, stop or change anything.
 
-Importing this package registers the high-risk label-photo rule on the memory store, so a
+The high-risk label-photo rule is `app.safety.high_risk`, a hook the safety module itself
+registers on the memory store when it is imported; importing this package imports it, so a
 medication fact for a high-risk class cannot land without a label photo by any path.
 """
 
 from __future__ import annotations
 
-from app.memory import semantic
-from app.safety.high_risk import label_photo_rule
-
-if label_photo_rule not in semantic.before_fact_write:
-    semantic.before_fact_write.append(label_photo_rule)
+import app.safety.high_risk  # noqa: F401  — registers the label-photo rule on the memory store

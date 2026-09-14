@@ -20,7 +20,7 @@ DEFAULT_LANGUAGE = "en"
 
 Lines = Sequence[str]
 
-# @patient
+# @patient phrase
 PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
     "en": {
         "blood_pressure_tablet": "your blood pressure tablet",
@@ -99,7 +99,7 @@ PURPOSE: Mapping[str, Mapping[str, Lines]] = {
 }
 """What it is for, tied to the thing he has a word for, by the monograph's `purpose_id`."""
 
-# @patient
+# @patient phrase
 UNIT_WORDS: Mapping[str, Mapping[str, tuple[str, str, str]]] = {
     # (half, one, many) — the amount line is built from these.
     "en": {
@@ -131,7 +131,7 @@ UNIT_WORDS: Mapping[str, Mapping[str, tuple[str, str, str]]] = {
     },
 }
 
-# @patient
+# @patient phrase
 ANCHOR_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "breakfast": "with breakfast",
@@ -151,41 +151,49 @@ ANCHOR_WORDS: Mapping[str, Mapping[str, str]] = {
 # @patient
 HOW_OFTEN: Mapping[str, Mapping[str, Lines]] = {
     "en": {
-        "od": ("Take {amount} once a day.", "Take it {anchors}."),
-        "bd": ("Take {amount} twice a day.", "Once {anchors}."),
-        "tds": ("Take {amount} three times a day.", "Once {anchors}."),
-        "qds": ("Take {amount} four times a day.", "Once {anchors}."),
-        "weekly": ("Take {amount} once a week.", "Take it {anchors}, on the same day each week."),
+        "od": ("Take {amount} once a day.", "Take it {anchor1}."),
+        "bd": ("Take {amount} 2 times a day.", "Take one {anchor1} and one {anchor2}."),
+        "tds": (
+            "Take {amount} 3 times a day.",
+            "Take one {anchor1}, one {anchor2} and one {anchor3}.",
+        ),
+        "qds": (
+            "Take {amount} 4 times a day.",
+            "Take one {anchor1}, one {anchor2}, one {anchor3} and one {anchor4}.",
+        ),
+        "weekly": ("Take {amount} once a week.", "Take it {anchor1}, on the same day each week."),
         "prn": ("Take {amount} only when you need it.",),
     },
     "ms": {
-        "od": ("Ambil {amount} sekali sehari.", "Ambil {anchors}."),
-        "bd": ("Ambil {amount} dua kali sehari.", "Sekali {anchors}."),
-        "tds": ("Ambil {amount} tiga kali sehari.", "Sekali {anchors}."),
-        "qds": ("Ambil {amount} empat kali sehari.", "Sekali {anchors}."),
+        "od": ("Ambil {amount} sekali sehari.", "Ambil {anchor1}."),
+        "bd": ("Ambil {amount} 2 kali sehari.", "Ambil satu {anchor1} dan satu {anchor2}."),
+        "tds": (
+            "Ambil {amount} 3 kali sehari.",
+            "Ambil satu {anchor1}, satu {anchor2} dan satu {anchor3}.",
+        ),
+        "qds": (
+            "Ambil {amount} 4 kali sehari.",
+            "Ambil satu {anchor1}, satu {anchor2}, satu {anchor3} dan satu {anchor4}.",
+        ),
         "weekly": (
             "Ambil {amount} sekali seminggu.",
-            "Ambil {anchors}, pada hari yang sama setiap minggu.",
+            "Ambil {anchor1}, pada hari yang sama setiap minggu.",
         ),
         "prn": ("Ambil {amount} hanya bila anda perlu.",),
     },
     "zh": {
-        "od": ("每天吃一次，{amount}。", "{anchors}吃。"),
-        "bd": ("每天吃两次，每次{amount}。", "{anchors}各一次。"),
-        "tds": ("每天吃三次，每次{amount}。", "{anchors}各一次。"),
-        "qds": ("每天吃四次，每次{amount}。", "{anchors}各一次。"),
-        "weekly": ("每星期吃一次，{amount}。", "{anchors}吃，每星期同一天。"),
+        "od": ("每天吃一次，{amount}。", "{anchor1}吃。"),
+        "bd": ("每天吃 2 次，每次{amount}。", "{anchor1}吃一次，{anchor2}吃一次。"),
+        "tds": ("每天吃 3 次，每次{amount}。", "{anchor1}、{anchor2}、{anchor3}各吃一次。"),
+        "qds": (
+            "每天吃 4 次，每次{amount}。",
+            "{anchor1}、{anchor2}、{anchor3}、{anchor4}各吃一次。",
+        ),
+        "weekly": ("每星期吃一次，{amount}。", "{anchor1}吃，每星期同一天。"),
         "prn": ("需要时才吃，每次{amount}。",),
     },
 }
-
-# @patient
-JOIN_AND: Mapping[str, tuple[str, str]] = {
-    "en": (", once ", " and once "),
-    "ms": (", sekali ", " dan sekali "),
-    "zh": ("、", "、"),
-}
-"""How a list of anchors is joined: between items, and before the last."""
+"""How often, with one slot per moment of his day: whole lines, never joined at run time."""
 
 # @patient
 FOOD: Mapping[str, Mapping[str, Lines]] = {
@@ -193,7 +201,7 @@ FOOD: Mapping[str, Mapping[str, Lines]] = {
         "with_or_without_food": ("Food does not matter for this one.",),
         "with_meals": ("Take it with food.",),
         "with_food": ("Take it with food.",),
-        "before_breakfast": ("Take it before breakfast, on an empty stomach.",),
+        "before_breakfast": ("Take it before breakfast, before any food.",),
         "with_breakfast": ("Take it with breakfast.",),
         "same_time_each_day": ("Take it at the same time every day.",),
         "morning": ("Take it in the morning, so you are not up at night.",),
@@ -289,11 +297,11 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
         "alcohol": ("Alcohol does not go with {name}.",),
         "painkillers_ask": ("Ask the pharmacist before you buy a painkiller.",),
         "leafy_greens_steady": ("Eat about the same amount of green vegetables each week.",),
-        "tcm_supplements_ask": ("Ask {doctor} before you take any herbal medicine or supplement.",),
+        "tcm_supplements_ask": ("Ask {doctor} before you take herbal medicine or supplements.",),
         "skipping_meals": ("Have your meals as usual while you take {name}.",),
         "salt_substitutes": ("Ask the pharmacist before you use a salt substitute.",),
         "other_paracetamol": (
-            "Check other medicines for paracetamol before you take them.",
+            "Ask the pharmacist before you take another pain tablet.",
             "Too much in one day is not safe.",
         ),
         "folic_acid_ask": ("Ask {doctor} which day to take your folic acid.",),
@@ -307,7 +315,7 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
         "skipping_meals": ("Makan seperti biasa semasa anda ambil {name}.",),
         "salt_substitutes": ("Tanya ahli farmasi sebelum anda guna garam ganti.",),
         "other_paracetamol": (
-            "Periksa ubat lain untuk paracetamol sebelum anda ambil.",
+            "Tanya ahli farmasi sebelum anda ambil ubat sakit lain.",
             "Terlalu banyak dalam satu hari tidak selamat.",
         ),
         "folic_acid_ask": ("Tanya {doctor} hari mana untuk ambil asid folik anda.",),
@@ -320,7 +328,7 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
         "tcm_supplements_ask": ("吃中药或补品之前，先问{doctor}。",),
         "skipping_meals": ("吃{name}的时候，三餐照常吃。",),
         "salt_substitutes": ("用代盐之前，先问药剂师。",),
-        "other_paracetamol": ("吃别的药之前，看看里面有没有扑热息痛。", "一天吃太多不安全。"),
+        "other_paracetamol": ("吃别的止痛药之前，先问药剂师。", "一天吃太多不安全。"),
         "folic_acid_ask": ("问{doctor}哪一天吃叶酸。",),
     },
 }
@@ -331,17 +339,17 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
         "take_now_unless_next_is_near": (
             "If you forgot, take it when you remember.",
             "If the next one is soon, wait for the next one.",
-            "Never take two at once.",
+            "Never take 2 at once.",
         ),
         "skip_and_take_next": (
             "If you forgot, leave it.",
             "Take the next one at the usual time.",
-            "Never take two at once.",
+            "Never take 2 at once.",
         ),
         "same_day_or_tell_clinic": (
             "If you forgot and it is still the same day, take it now.",
             "If the day has passed, leave it and tell {doctor}.",
-            "Never take two at once.",
+            "Never take 2 at once.",
         ),
         "ask_before_extra": (
             "If you forgot your insulin, call {doctor} before you take any.",
@@ -352,7 +360,7 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
             "After lunch, leave it until tomorrow.",
         ),
         "weekly_ask_if_late": (
-            "If you forgot your weekly tablet, take it within two days.",
+            "If you forgot your weekly tablet, take it within 2 days.",
             "Later than that, leave it and ask {doctor}.",
         ),
         "when_needed_none": ("This one is only when you need it.", "There is nothing to catch up."),
@@ -527,7 +535,7 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ask_to_order": "请家人订。", "i_have_more": "我家里还有。"},
 }
 
-# @patient
+# @patient headline
 TAKEN: Mapping[str, str] = {"en": "Taken", "ms": "Sudah ambil", "zh": "吃了"}
 """The one button on a dose card (glossary: adherence is "Taken")."""
 
@@ -539,7 +547,7 @@ DOSE_CARD: Mapping[str, str] = {
 }
 """One dose card at one anchor of his day."""
 
-# @patient
+# @patient phrase
 YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh": "您的医生"}
 """When the label named no doctor."""
 
@@ -611,15 +619,12 @@ def say_doctor(prescriber: str | None, language: str) -> str:
     return prescriber if prescriber else YOUR_DOCTOR[language]
 
 
-def say_anchors(anchors: Sequence[str], language: str) -> str:
-    """'with breakfast and once with dinner' — the joiner completes the HOW_OFTEN line."""
-    words = [ANCHOR_WORDS[language][anchor] for anchor in anchors]
-    if not words:
-        return ""
-    if len(words) == 1:
-        return words[0]
-    between, last = JOIN_AND[language]
-    return between.join(words[:-1]) + last + words[-1]
+def anchor_slots(anchors: Sequence[str], language: str) -> dict[str, str]:
+    """`{anchor1}`, `{anchor2}`… for the HOW_OFTEN line: his words for each moment."""
+    return {
+        f"anchor{index}": ANCHOR_WORDS[language][anchor]
+        for index, anchor in enumerate(anchors, start=1)
+    }
 
 
 def fill(lines: Lines, **values: str) -> list[str]:
