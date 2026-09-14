@@ -97,8 +97,12 @@ export async function captureSpeech(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const spoken: string[] = [];
     (window as unknown as { __spoken: string[] }).__spoken = spoken;
+    (window as unknown as { __cancels: number }).__cancels = 0;
     const synth = {
-      cancel: () => undefined,
+      // Every stop is counted, so a test can see a voice stop when its card leaves the screen.
+      cancel: () => {
+        (window as unknown as { __cancels: number }).__cancels += 1;
+      },
       speak: (u: { text: string }) => spoken.push(u.text),
       speaking: false,
       pending: false,
@@ -206,4 +210,114 @@ export async function keptExpiry(page: Page): Promise<string | null> {
         opened.onerror = () => resolve(null);
       }),
   );
+}
+
+/** A screenshot under an exact, unique name into NURA_SHOTS, when it is set. */
+export async function shotAs(page: Page, file: string, fullPage = false): Promise<string | null> {
+  const dir = process.env.NURA_SHOTS;
+  if (!dir) return null;
+  const path = `${dir}/${file}.png`;
+  await page.screenshot({ path, fullPage });
+  return path;
+}
+
+/** What the backend's clock says, and whether it is frozen (a dev run only). */
+export async function backendClock(request: APIRequestContext): Promise<{ now: string; frozen: boolean }> {
+  const answered = await request.get(`${API}/dev/clock`);
+  if (!answered.ok()) throw new Error(`GET /dev/clock: ${answered.status()} — is the backend the dev run Playwright starts?`);
+  return (await answered.json()) as { now: string; frozen: boolean };
+}
+
+/** Stand the backend's frozen clock at this instant (`POST /dev/clock`, a dev run only). */
+export async function setBackendClock(request: APIRequestContext, at: string): Promise<void> {
+  const moved = await request.post(`${API}/dev/clock`, { data: { at } });
+  if (!moved.ok()) throw new Error(`POST /dev/clock: ${moved.status()} ${await moved.text()}`);
+}
+
+/** Pa with his own papers, three blood pressures (two from earlier in the week) and five
+ *  blood pressure tablets: the feed then has a now card, a reorder card, a reading, the gate,
+ *  his story, and a learning card from the allowlisted fixture (checkpoint 8's shape). */
+export async function seedFeed(request: APIRequestContext, name = "Pa"): Promise<{ phone: string; token: string; profileId: string }> {
+  const phone = freshPhone("+659444");
+  const token = await apiToken(request, phone);
+  const headers = { Authorization: `Bearer ${token}` };
+  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const opened = await request.post(`${API}/profiles/mine`, {
+    headers,
+    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: name, language: "en" },
+  });
+  const profileId = ((await opened.json()) as { profile_id: string }).profile_id;
+  // Earlier in the week by the backend's clock, which is frozen for the run.
+  const now = Date.parse((await backendClock(request)).now);
+  for (const [daysAgo, systolic, diastolic] of [
+    [7, 146, 90],
+    [3, 142, 88],
+  ] as const) {
+    const taken_at = new Date(now - daysAgo * 86_400_000).toISOString();
+    const added = await request.post(`${API}/profiles/${profileId}/readings`, { headers, data: { systolic, diastolic, taken_at } });
+    if (added.status() !== 201) throw new Error(`reading: ${added.status()} ${await added.text()}`);
+  }
+  await request.post(`${API}/profiles/${profileId}/readings`, { headers, data: { systolic: 138, diastolic: 84 } });
+  await seedMedicine(request, token, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
+  return { phone, token, profileId };
+}
+
+/** The warfarin label photo from the paper fixtures, read and confirmed (checkpoint 5): its
+ *  safety job finds a recall for a batch that is not his, held for the caregiver. */
+export async function seedWarfarinLabel(request: APIRequestContext, token: string, profileId: string): Promise<void> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const bytes = Buffer.concat([PNG, Buffer.from("nura-paper-placeholder:warfarin-label-2024-03-12\n")]);
+  const photo = await request.post(`${API}/profiles/${profileId}/photos`, {
+    headers,
+    data: { data: bytes.toString("base64"), content_type: "image/png", captured_at: "2026-09-14T08:00:00Z" },
+  });
+  if (photo.status() !== 201) throw new Error(`photo: ${photo.status()} ${await photo.text()}`);
+  const card = (await photo.json()) as { card_id: string; fields: { field_id: string; attribute: string }[] };
+  const decisions = card.fields.map((field) => ({ field_id: field.field_id, decision: field.attribute === "prescriber" ? "rejected" : "confirmed" }));
+  const minted = await request.post(`${API}/profiles/${profileId}/confirmations`, { headers, data: { subject: "review_card", card_id: card.card_id, decisions } });
+  if (minted.status() !== 201) throw new Error(`mint: ${minted.status()} ${await minted.text()}`);
+  const confirmation_id = ((await minted.json()) as { confirmation_id: string }).confirmation_id;
+  const confirmed = await request.post(`${API}/profiles/${profileId}/review-cards/${card.card_id}/confirm`, { headers, data: { decisions, confirmation_id } });
+  if (!confirmed.ok()) throw new Error(`confirm: ${confirmed.status()} ${await confirmed.text()}`);
+}
+
+/** Move every page the phone kept — Today's and the feed's — past its midnight. */
+export async function expireEveryKeptPage(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const tx = opened.result.transaction("kv", "readwrite");
+          let moved = 0;
+          const cursor = tx.objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return;
+            if (typeof at.key === "string" && (at.key.startsWith("today.") || at.key.startsWith("feed."))) {
+              at.update({ ...(at.value as object), expiresAt: "2000-01-01T00:00:00.000Z" });
+              moved += 1;
+            }
+            at.continue();
+          };
+          tx.oncomplete = () => resolve(moved);
+        };
+        opened.onerror = () => resolve(-1);
+      }),
+  );
+}
+
+/** A visit with Dr Tan two days from the frozen Monday, written down on Pa's own yes (E03):
+ *  the feed then has a visit card for the week. */
+export async function seedVisit(request: APIRequestContext, token: string, profileId: string, at = "2026-09-16T09:00:00+08:00"): Promise<void> {
+  const headers = { Authorization: `Bearer ${token}` };
+  const provider = await request.post(`${API}/profiles/${profileId}/providers`, { headers, data: { name: "Dr Tan", kind: "doctor" } });
+  if (provider.status() !== 201) throw new Error(`provider: ${provider.status()} ${await provider.text()}`);
+  const provider_id = ((await provider.json()) as { provider_id: string }).provider_id;
+  const purpose = "blood pressure review";
+  const yes = await request.post(`${API}/profiles/${profileId}/confirmations`, { headers, data: { subject: "appointment", provider_id, scheduled_at: at, purpose } });
+  if (yes.status() !== 201) throw new Error(`yes: ${yes.status()} ${await yes.text()}`);
+  const confirmation_id = ((await yes.json()) as { confirmation_id: string }).confirmation_id;
+  const visit = await request.post(`${API}/profiles/${profileId}/appointments`, { headers, data: { provider_id, scheduled_at: at, purpose, confirmation_id } });
+  if (visit.status() !== 201) throw new Error(`visit: ${visit.status()} ${await visit.text()}`);
 }

@@ -170,6 +170,60 @@ export interface FeedPageOut {
   held_by_caps: Record<string, number>;
 }
 
+/** Recall over his own record, with citations (E03-05, `POST /profiles/{id}/ask`). Voice
+ *  answers in the lines of one thing; text in up to five. */
+export type AskMode = "voice" | "text";
+
+export interface AnswerLineOut {
+  /** One line the backend made from a template and the values it cites. */
+  text: string;
+  /** What the line rests on, by kind (`fact`, `event`, `artifact`, `appointment`, `provider`,
+   *  `medication_line`, `attachment`) and id. */
+  cites: { kind: string; id: string }[];
+}
+
+export interface AnswerOut {
+  question_artifact_id: string;
+  mode: AskMode;
+  language: string;
+  answered: boolean;
+  lines: AnswerLineOut[];
+  /** What is said when the record does not answer, or the question would change treatment. */
+  honest: string[];
+  /** The recall surface's boundary lines: always last. */
+  boundary: string[];
+  /** The whole answer as he hears it, the boundary last. */
+  spoken: string[];
+  /** Parts of the record this key does not reach, so not read. */
+  withheld: string[];
+}
+
+/** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
+ *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
+export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared";
+
+export interface EngagementOut {
+  engagement_id: string;
+  item_id: string;
+  event: EngagementEvent;
+  channel: string;
+  at: string;
+}
+
+/** The kinds of health card the family thread carries by reference (E12's `CardKind`),
+ *  rendered at read time from the State they name — never words copied into the thread. */
+export type ThreadCardKind = "reading" | "taken" | "visit" | "task";
+
+export interface ThreadEntryOut {
+  message_id: string;
+  author_person_id: string;
+  posted_at: string;
+  text: string | null;
+  card_kind: ThreadCardKind | null;
+  state_id: string | null;
+  task_id: string | null;
+}
+
 export interface TakenOut {
   dose_taken_id: string;
   line_id: string;

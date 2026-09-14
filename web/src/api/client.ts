@@ -67,11 +67,47 @@ export function api<T>(path: string, call: Call = {}): Promise<T> {
   return next;
 }
 
-async function send<T>(path: string, call: Call): Promise<T> {
+function urlFor(path: string, call: Call): URL {
   const url = new URL(API_BASE + path, window.location.origin);
   for (const [key, value] of Object.entries(call.query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, value);
   }
+  return url;
+}
+
+/** The same queue, for bytes: a card's pre-rendered voice (E11). A Blob on success; a refusal
+ *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
+ *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
+export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
+  const next = queue.then(() => sendBlob(path, call));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+async function sendBlob(path: string, call: Call): Promise<Blob> {
+  const headers: Record<string, string> = { Accept: "audio/*" };
+  if (call.token) headers.Authorization = `Bearer ${call.token}`;
+  let response: Response;
+  try {
+    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit" });
+  } catch {
+    throw new Unreachable();
+  }
+  if (!response.ok) {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(await response.text());
+    } catch {
+      /* not JSON: not a refusal */
+    }
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
+  }
+  return response.blob();
+}
+
+async function send<T>(path: string, call: Call): Promise<T> {
+  const url = urlFor(path, call);
   const headers: Record<string, string> = { Accept: "application/json" };
   if (call.body !== undefined) headers["Content-Type"] = "application/json";
   if (call.token) headers.Authorization = `Bearer ${call.token}`;

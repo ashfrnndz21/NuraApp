@@ -118,6 +118,40 @@ export interface Strings {
     fromState: string;
     fromDays: string;
   };
+  /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
+   *  lines it says itself. Every card's own words are the backend's. */
+  feed: {
+    title: string;
+    open: string;
+    story: string;
+    learning: string;
+    ask: string;
+    family: string;
+    notForMe: string;
+    keepGoing: string;
+    toTablets: string;
+    declined: string;
+    declinedToday: string;
+    shared: string;
+    cannotShare: string;
+    quiet: string;
+    quietSub: string;
+    nothingMore: string;
+    offlineSub: string;
+    askTitle: string;
+    askAbout: string;
+    askLabel: string;
+    askLead: string;
+    sourcePapers: string;
+    sourceMedicines: string;
+    sourceVisits: string;
+    askWithheld: string;
+    back: string;
+    statusHeld: string;
+    statusSent: string;
+    statusOpened: string;
+    statusDismissed: string;
+  };
   reading: {
     title: string;
     lead: string;

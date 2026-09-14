@@ -7,8 +7,8 @@ for the phone-sized end-to-end flow. No UI framework beyond Preact, no CSS frame
 ```sh
 make web         # dev server on http://127.0.0.1:5173/app/ (proxies /api to make dev); --host for the phone
 make build-web   # web/dist, which make dev then serves at http://127.0.0.1:8000/app/
-make web-test    # Vitest: strings, refusal map, Today model, the kept page, the voice, contrast
-make web-e2e     # Playwright against the built app the backend serves (needs make dev)
+make web-test    # Vitest: strings, refusal map, Today model, the feed's store/cards/playback, the kept pages, the voice, contrast
+make web-e2e     # Playwright against the built app; starts make dev itself, its clock frozen at 10:00 Singapore
 make web-mock    # make web, with E01's onboarding routes answered by src/api/mock/ until E01 merges
 npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 ```
@@ -34,10 +34,63 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 - `src/screens/onboarding/` — one file per step: About, Cloud, Asks, ReadBack, Records (the
   prompt, the capture and the review card), Questions, Plan.
 - `src/api/mock/` — dev only: the stand-in for E01's routes under `VITE_API_MOCK=1`.
+- `src/feed/` — the vertical feed (W2, E21): `store.ts` (pages by cursor, prefetch, the kept
+  first page, the side actions), `model.ts` (a card as the pager shows it, from the backend's
+  item alone), `playback.ts` (Hear on tap: the backend's voice or the spoken twin), `session.ts`
+  (one store per profile and key). The screen is `src/screens/Feed.tsx`; Ask is
+  `src/screens/Ask.tsx`, answered by E03's `POST /profiles/{id}/ask` (`src/feed/ask.ts`).
 - `src/speech/speak.ts` — `speak(card)`: the one seam for the spoken twin.
-- `src/sw/sw.ts` — the service worker; `src/offline/` — its registration and the Today cache.
+- `src/sw/sw.ts` — the service worker; `src/offline/` — its registration, the Today cache and
+  the feed's kept first page (`feedCache.ts`).
 
 ## Design decisions
+
+**The feed (W2).** Today's *See more for you* opens the vertical feed: a CSS scroll-snap
+pager (`scroll-snap-type: y mandatory`, `scroll-snap-stop: always`) that is a size container,
+so each card is the pager's height whatever the phone; up and down only (`touch-action:
+pan-y`, `overscroll-behavior: contain`, no gesture handlers, no pull-to-refresh, no swipe to
+dismiss). The pager is an ARIA `feed` of `article`s, each labelled with its spoken script;
+Page Down / Page Up (and the arrows, Home, End on a focused card) move a whole card; it
+scrolls smoothly unless Reduce Motion is on, and then moves at once. The store asks for the
+next page by the cursor the last page handed back as soon as he is within two cards of the
+end, asks for each cursor once, and never reorders what the backend sent: a red flag first,
+now, today, the gate, his story, learning — and past the gate the backend cycles the story
+and learning cards, so the list pages on. The same item can come round again, so a card is
+keyed by its place, not its id. A fresh first page replaces what is on screen only while he
+is still on the first card; once he is reading on, nothing moves under his finger.
+
+**A card is the backend's.** Headline, body, the boundary an inferring card ends on (shown
+apart, last), the why line, the spoken twin, the State id (`data-state-id`); the catalogue
+only names the section and the buttons. A type the client does not know is shown as its own
+lines. Every card has four visible buttons — *Hear*, *Ask*, *Family*, *Not for me* — 56px and more, below the card's lines in normal flow: a card taller than the space above them scrolls its lines inside the card, under a scroll shadow painted behind the text, so nothing is ever drawn over a line; the gate keeps *Hear* and
+its one action, *Keep going*. The now card's one action goes to Today, where *Taken* is and
+where the backend says which dose is due. *Not for me* posts `dismissed` (E21's engagement
+kind; for the owner the backend then holds that kind of card for the day). *Family* posts a
+card reference to the family thread (E12) for the kinds the thread can carry — a reading, a
+visit — and otherwise says it cannot send the card yet; no card's words are ever posted as a
+message. *Ask* sends his question, word for word, to E03's recall (voice mode in his density, text in hers) and shows the answer's cited lines, each under its source line, then the boundary, last. Heard, tapped and
+shared are written back only by a key that may write events; *Not for me* is always sent,
+and every refusal is said on the screen, never swallowed.
+
+**Voice on tap only.** `feed/playback.ts` is one seam: it warms (fetches, never plays) the
+backend's pre-rendered voice for the card on screen and the two after it
+(`GET …/feed/{item}/voice`, E11), and *Hear* plays it inside the tap; when the route is not
+there (a plain 404 — it stops asking) or has no voice for the card, it reads the card's
+spoken twin through `speak()`, which uses only a voice on the phone. Nothing plays when a
+card arrives or when a voice ends, and a card's voice stops when the card leaves the screen.
+
+**The feed's kept page.** The first page (`GET …/feed/cached` answers the same page) is kept
+as `feed.<profile_id>` under the Today page's rules: bound to the key and scope set that read
+it, good until the region's midnight, deleted on a refusal, a switch of papers or sign-out,
+and swept on every launch once past its midnight. With nothing kept, the pager opens on the
+backend's cached page (cards past their own expiry left out) and then on the fresh one;
+offline it opens on the kept page with the time it was read, and with nothing kept only the
+emergency-card rule applies. `NoCachedPage` means nothing was ever rendered for him, and is
+treated as nothing to show before the fresh page — not as a refusal of access.
+
+**The caregiver's feed.** The same pager in the caregiver density: the backend's caregiver
+supply (no gate; the duty card), and under each card what became of it on his page — kept
+back, on his page, opened, or *Not for me* — from the backend's `status`.
 
 **Token storage.** The bearer token lives in memory and in IndexedDB, never in a cookie.
 The API authenticates by the `Authorization` header alone, so a cookie would add nothing
@@ -47,7 +100,7 @@ the home-screen app being closed, and is not sent anywhere. Sign-out deletes the
 chosen profile and every cached Today page; switching profile deletes the previous
 profile's page. The device's language and look are the only things that stay.
 
-**What the phone keeps of his papers.** One Today page per profile (`today.<profile_id>`
+**What the phone keeps of his papers.** One Today page and one feed page per profile (`feed.<profile_id>`, above), and the Today page (`today.<profile_id>`
 in IndexedDB): the State (id, posture, staleness, boundary), today's dose cards, the
 reconciled list with its counts and questions, the feed's first page, and the proud number
 — bound to the key that read it (or "owner") and to that key's scope set, and good until
@@ -126,6 +179,15 @@ lists the built files into it) and answers navigations from the cache when the n
 gone. It never caches `/api`. The app keeps the last Today page per profile in IndexedDB and
 renders it first (as today's list, dated), then the fresh one if it can — there is no
 spinner either way.
+
+**Two clocks, both fixed, in the end-to-end run.** The phone's clock is Playwright's
+(`fixClock`, 10:00 in Singapore on Monday 14 September) and the backend's is frozen at the same
+instant: `playwright.config.ts` starts `make dev` itself (`webServer`) with
+`NURA_FROZEN_CLOCK=2026-09-14T10:00:00+08:00`, which a dev run installs as `app.clock.FrozenClock`
+(answering in UTC) and which refuses to start anything but a dev run. A test that means to cross
+the quiet hours or midnight moves it with `POST /dev/clock` (dev runs only) and puts it back.
+Locally, a server already on the port is reused; the feed tests check that its clock is frozen
+and say so if it is not.
 
 **Dev vs build.** The worker is only registered from the build (Vite does not build it in
 dev), so `make web` is for working on screens and the offline behaviour is proven against

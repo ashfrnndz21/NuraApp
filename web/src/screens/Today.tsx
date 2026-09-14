@@ -2,7 +2,9 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
+import { forgetFeed } from "../feed/session";
 import { go } from "../flow";
+import { dropStaleFeed } from "../offline/feedCache";
 import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type TodayEntry } from "../offline/todayCache";
 import { readFailure } from "../restore";
 import { wantsHomeScreenHint } from "../offline/register";
@@ -49,6 +51,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
   const forget = async (profileId: string, failure: unknown) => {
     await clearProfileData(profileId);
+    forgetFeed();
     setModel(null);
     setKept(null);
     setError(failure);
@@ -63,6 +66,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     const binding = bindingOf(current);
     if (!sameBinding(binding, bindingOf(papers))) {
       await clearProfileData(id);
+      forgetFeed();
       setModel(null);
       setKept(null);
       await chooseProfile(current);
@@ -104,6 +108,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     if (!bearer || !papers) return;
     setError(null);
     const entry = await loadToday(papers.profile_id, bindingOf(papers), new Date());
+    await dropStaleFeed(papers.profile_id, bindingOf(papers), new Date());
     if (entry) {
       setKept(entry);
       setModel(entry.model);
@@ -285,6 +290,9 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               <h2 class="section">{s.today.forYou}</h2>
               {useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))}
               {stateAt === "forYou" && stateCard}
+              <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
+                {s.feed.open}
+              </Pill>
               {medicines && (
                 <Card
                   title={s.today.supplyTitle}

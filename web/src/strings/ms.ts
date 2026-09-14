@@ -226,6 +226,68 @@ export const ms = {
     // @patient
     fromDays: "Nura mengira hari anda ambil ubat anda.",
   },
+  feed: {
+    // @patient headline
+    title: "Lagi untuk anda",
+    // @patient phrase
+    open: "Lihat lagi untuk anda",
+    // @patient headline
+    story: "Kisah anda",
+    // @patient headline
+    learning: "Dalam kata-kata mudah",
+    // @patient phrase
+    ask: "Tanya",
+    // @patient phrase
+    family: "Keluarga",
+    // @patient phrase
+    notForMe: "Bukan untuk saya",
+    // @patient phrase
+    keepGoing: "Teruskan",
+    // @patient phrase
+    toTablets: "Lihat ubat anda",
+    // @patient
+    declined: "Nura sudah tulis bahawa ini bukan untuk anda.",
+    // @patient
+    declinedToday: "Anda tidak akan lihat kad seperti ini lagi hari ini.",
+    // @patient
+    shared: "Keluarga anda boleh lihat kad ini sekarang.",
+    // @patient
+    cannotShare: "Nura belum boleh hantar kad ini kepada keluarga anda.",
+    // @patient
+    quiet: "Nura senyap pada waktu malam.",
+    // @patient
+    quietSub: "Kad anda kembali pada waktu pagi.",
+    // @patient
+    nothingMore: "Tiada apa-apa lagi untuk anda sekarang.",
+    // @patient
+    offlineSub: "Ini kad anda dari awal hari ini.",
+    // @patient headline
+    askTitle: "Tanya Nura",
+    // @patient phrase
+    askAbout: "Tentang kad ini",
+    // @patient phrase
+    askLabel: "Soalan anda",
+    // @patient
+    askLead: "Taip, atau tekan mikrofon pada papan kekunci.",
+    // @patient
+    sourcePapers: "Ini datang dari surat-surat anda.",
+    // @patient
+    sourceMedicines: "Ini datang dari senarai ubat anda.",
+    // @patient
+    sourceVisits: "Ini datang dari lawatan anda ke doktor.",
+    // @patient
+    askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
+    // @patient phrase
+    back: "Kembali ke kad anda",
+    // @patient
+    statusHeld: "Nura tidak tunjuk kad ini kepada {name}.",
+    // @patient
+    statusSent: "Kad ini ada di halaman yang {name} lihat.",
+    // @patient
+    statusOpened: "{name} sudah buka kad ini.",
+    // @patient
+    statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
+  },
   reading: {
     // @patient headline
     title: "Tekanan darah anda",
@@ -643,5 +705,8 @@ export const ms = {
     NotForYourself: "Guna pintu yang satu lagi untuk menyimpan surat-surat anda sendiri.",
     ConfirmationExpired: ["Ya itu sudah terlalu lama.", "Sila setuju sekali lagi."],
     AlreadySpent: "Anda sudah setuju dengan ini.",
+    NoSuchItem: "Kad itu sudah tiada di sini.",
+    NoCachedPage: "Nura belum simpan halaman untuk anda.",
+    NotACursor: "Nura tidak jumpa kad seterusnya.",
   },
 } satisfies Strings;
