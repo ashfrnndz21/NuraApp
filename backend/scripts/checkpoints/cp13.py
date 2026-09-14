@@ -1,7 +1,7 @@
-"""Checkpoint 10 — Family, roster and Dad's trail (E12), over HTTP only.
+"""Checkpoint 13 — Family, roster and Dad's trail (E12), over HTTP only.
 
     make dev                # one terminal
-    make checkpoint N=10    # another: this module, through scripts/checkpoint.py
+    make checkpoint N=13    # another: this module, through scripts/checkpoint.py
 
 Pa and Mei as in checkpoint 4 — Mei sets the profile up for Pa, this time on a lasting power
 of attorney whose PDF is a redacted placeholder, and Pa claims it — then the family: Siti the
@@ -643,7 +643,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
 
 
 def run(base_url: str, dev_log: Path) -> int:
-    """Walk checkpoint 10 against the server at `base_url`; 0 when every step is a ✓."""
+    """Walk checkpoint 13 against the server at `base_url`; 0 when every step is a ✓."""
     try:
         with httpx.Client(base_url=base_url, timeout=10.0) as client:
             walk(client, Path(dev_log))

@@ -7,11 +7,11 @@ a document's artefact at `artifact(profile_id, id)`, a task card's task at
 (`ck_thread_message_text_or_card`). A scheduled push carries `state_id` like every
 rendered thing. `privacy` is the "only me" mark the key resolver reads.
 
-Branches from E04's medicines revision (0009), main's head when this story was cut; the
-operator repoints `down_revision` at merge if another story lands first.
+Follows E21's feed revision (0010), main's head when this story was merged back; the
+operator repoints `down_revision` again if another story lands first.
 
-Revision ID: 0012_family
-Revises: 0009_medicines
+Revision ID: 0013_family
+Revises: 0010_feed
 Create Date: 2026-09-14
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0012_family"
-down_revision = "0009_medicines"
+revision = "0013_family"
+down_revision = "0010_feed"
 branch_labels = None
 depends_on = None
 
