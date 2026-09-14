@@ -100,6 +100,7 @@ Any of these changes the intended purpose and therefore the classification; the 
 6. Does the T2 pattern-flag story (E09-03: correlation across signals, phrased as things to raise) cross the line as described, and what would keep it on the right side?
 7. Are there labelling, quality-system or post-market obligations that attach even to software the regulator does not classify as a device, that we should meet from T1?
 8. Does a translation of a boundary line count as a change to labelling that needs recording?
+9. Is repeating the lab's own printed flag ('above the range on your blood test') informational?
 
 ## 8. Sign-off
 

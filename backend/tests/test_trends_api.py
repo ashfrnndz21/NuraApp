@@ -52,21 +52,39 @@ async def test_pa_reads_his_cholesterol_trend_in_malay(deployment: Deployment) -
     assert (unknown.status_code, unknown.json()) == (404, {"refusal": "NoSuchAnalyte"})
 
 
-async def test_a_key_that_cannot_check_state_is_refused_and_the_owner_sees_it(
+async def test_a_caregiver_reads_the_trend_until_the_record_moves_past_state(
     deployment: Deployment,
 ) -> None:
+    """Her key cannot recompute State: she reads the trend from the last snapshot, gets 409
+    once a result lands that State has not folded in, and reads it again once the owner's
+    read catches State up. The refusal is on his trail."""
+    client = deployment.client
     pa = await register_by_phone(deployment, PA, "Pa", "en")
     profile_id = await own_profile(deployment, pa, display_name="Pa", language="en")
     await confirm_paper(deployment, pa["token"], profile_id, LIPID_PANEL)
     mei = await register_by_phone(deployment, MEI, "Mei", "en")
-    await caregiver(deployment, pa, profile_id, MEI, ["records"])
+    await caregiver(deployment, pa, profile_id, MEI, ["readings", "records"])
+    route = f"/profiles/{profile_id}/trends/total_cholesterol"
 
-    hers = await deployment.client.get(
-        f"/profiles/{profile_id}/trends/total_cholesterol", headers=bearer(mei["token"])
+    hers = await client.get(route, headers=bearer(mei["token"]))
+    assert hers.status_code == 200, hers.text
+    assert [p["value"] for p in hers.json()["points"]] == [230]
+    assert hers.json()["boundary"] == boundary_line(Surface.TREND, "en")
+
+    await confirm_paper(deployment, mei["token"], profile_id, LIPID_PANEL_2025)
+    behind = await client.get(route, headers=bearer(mei["token"]))
+    assert (behind.status_code, behind.json()) == (409, {"refusal": "StaleState"})
+    # The whole trail: under the frozen clock every line has the same moment, so the refusal is
+    # not guaranteed to be on the first page of 200.
+    trail = await client.get(
+        f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=bearer(pa["token"])
     )
-    assert (hers.status_code, hers.json()) == (409, {"refusal": "StaleState"})
-    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=bearer(pa["token"]))
     assert any(
         row["refused_because"] == "StaleState" and row["actor_person_id"] == mei["person_id"]
         for row in trail.json()
     )
+
+    assert (await client.get(f"/profiles/{profile_id}/state", headers=bearer(pa["token"]))).status_code == 200
+    caught_up = await client.get(route, headers=bearer(mei["token"]))
+    assert caught_up.status_code == 200, caught_up.text
+    assert [p["value"] for p in caught_up.json()["points"]] == [230, 212]

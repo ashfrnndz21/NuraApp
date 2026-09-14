@@ -17,6 +17,9 @@ from published tables, named by source id in the file and cited here:
 - who-2011-haemoglobin: WHO/NMH/NHD/MNM/11.1, Table 1 (haemoglobin).
 - surks-hollowell-2007: J Clin Endocrinol Metab 2007;92:4575-82 (TSH by age).
 
+The fixture needs a clinician's sign-off (LDL target, TSH age bands) before it is used
+for anyone real.
+
 A licensed table arrives as a second class behind the same port, chosen in
 `reference_ranges_for`, and nothing above this module changes.
 """

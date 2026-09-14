@@ -17,7 +17,7 @@ import itertools
 import json
 import re
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import select
@@ -26,6 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.delivery import trend_strings as words
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
+from app.memory.episodic import record_event
+from app.memory.models import EventKind, SourceChannel
+from app.memory.semantic import assert_fact
 from app.reasoning.models import Direction, TrendCard
 from app.reasoning.ranges import (
     FIXTURE_PATH,
@@ -39,8 +42,9 @@ from app.reasoning.ranges import (
 from app.reasoning.trends import NoSuchAnalyte, Point, direction_of, trend, trend_lines
 from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.plain_words import verify
-from app.state.service import StaleState
-from tests.medicines_support import add, label, let_in, pa
+from app.state.service import StaleState, current_state, latest_snapshot
+from tests.conftest import FROZEN_AT
+from tests.medicines_support import add, artefact, label, let_in, pa
 from tests.paper import LIPID_PANEL, LIPID_PANEL_2025
 from tests.trio_support import confirm_paper, refusals
 
@@ -310,18 +314,85 @@ async def test_an_analyte_with_no_result_says_so_and_an_unknown_one_is_refused(
     assert await refusals(sg, owner, "NoSuchAnalyte")
 
 
-async def test_a_state_the_key_cannot_check_is_refused_and_it_is_on_the_trail(
+async def test_a_caregiver_reads_the_trend_from_the_last_snapshot_that_covers_it(
     sg: AsyncSession,
 ) -> None:
+    """A key that cannot recompute State renders from the last snapshot, and is refused only
+    while that snapshot has not folded in every result the trend would show."""
     owner = await pa(sg)
     await confirm_paper(sg, owner, LIPID_PANEL)
     mei = await let_in(
-        sg, owner, phone="+6591110002", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS}
+        sg,
+        owner,
+        phone="+6591110002",
+        name="Mei",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.READINGS, Scope.RECORDS},
     )
+    hers = await trend(sg, context=mei, ranges=RANGES, analyte="total_cholesterol")
+    assert [p.value for p in hers.points] == [230]
+    assert hers.card.boundary == boundary_line(Surface.TREND, "ms")
+    assert hers.card.state_id == (await latest_snapshot(sg, context=owner)).id  # type: ignore[union-attr]
+
+    # A new result lands through her own key, which cannot recompute State: the last snapshot
+    # has not folded it in, so the trend is refused rather than shown on a State behind it.
+    await confirm_paper(sg, mei, LIPID_PANEL_2025)
     with pytest.raises(StaleState):
         await trend(sg, context=mei, ranges=RANGES, analyte="total_cholesterol")
     assert await refusals(sg, owner, "StaleState")
-    assert (await sg.scalars(select(TrendCard))).all() == []
+
+    # The owner reads State, which catches it up; her trend shows both results again.
+    await current_state(sg, context=owner)
+    again = await trend(sg, context=mei, ranges=RANGES, analyte="total_cholesterol")
+    assert [p.value for p in again.points] == [230, 212]
+    assert again.direction is Direction.DOWN
+
+
+async def test_the_birth_decade_is_read_from_the_setting_then_the_lab_header(
+    sg: AsyncSession,
+) -> None:
+    owner = await pa(sg, language="en")
+    await confirm_paper(sg, owner, LIPID_PANEL_2025)  # the header says 1951
+    assert (await trend(sg, context=owner, ranges=RANGES, analyte="hdl")).birth_decade == 1950
+    said = await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.MESSAGE,
+        occurred_at=FROZEN_AT,
+        label="onboarding settings",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=owner,
+        subject="setting",
+        attribute="birth_decade",
+        value=1960,
+        confidence=1.0,
+        event_id=said.id,
+    )
+    shown = await trend(sg, context=owner, ranges=RANGES, analyte="hdl")
+    assert shown.birth_decade == 1960 and shown.points[-1].age == 2025 - 1965
+
+
+async def test_without_a_setting_or_a_year_the_lab_headers_age_gives_the_decade(
+    sg: AsyncSession,
+) -> None:
+    owner = await pa(sg, language="en")
+    await confirm_paper(sg, owner, LIPID_PANEL)
+    paper = await artefact(sg, owner)
+    await assert_fact(
+        sg,
+        context=owner,
+        subject="person",
+        attribute="age",
+        value=72,
+        confidence=0.9,
+        artifact_id=paper.id,
+        valid_from=datetime(2023, 9, 6, 16, 0, tzinfo=UTC),
+    )
+    # 72 on a paper of 2023: born about 1951, in the 1950s.
+    assert (await trend(sg, context=owner, ranges=RANGES, analyte="hdl")).birth_decade == 1950
 
 
 async def test_a_key_without_that_part_of_the_record_is_refused(sg: AsyncSession) -> None:

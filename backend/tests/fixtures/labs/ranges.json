@@ -1,5 +1,5 @@
 {
-  "note": "Fixture reference ranges for the lab trend (E09-01). Small on purpose: each band is one row of a published table, named by source id; the citations are under `sources`. Upper-only ranges read as 'under' (exclusive), lower-only as 'or more' (inclusive), two-sided ranges are inclusive at both ends. Ages are in years; `sex` null means either. A lab's own printed ranges, where a report names the lab, are under `labs` and win over the guideline for that analyte. These numbers stand in until a clinical reviewer signs off a licensed table; nothing here is advice.",
+  "note": "Fixture reference ranges for the lab trend (E09-01). Small on purpose: each band is one row of a published table, named by source id; the citations are under `sources`. Upper-only ranges read as 'under' (exclusive), lower-only as 'or more' (inclusive), two-sided ranges are inclusive at both ends. Ages are in years; `sex` null means either. A lab's own printed ranges, where a report names the lab, are under `labs` and win over the guideline for that analyte. These numbers stand in until a clinical reviewer signs off a licensed table, and the table needs a clinician's sign-off (LDL target, TSH age bands); nothing here is advice.",
   "sources": {
     "ncep-atp3-2001": "NCEP Expert Panel. Third Report of the National Cholesterol Education Program (Adult Treatment Panel III). JAMA 2001;285(19):2486-97, Table 2: total cholesterol <200 mg/dL desirable; LDL <100 optimal; HDL <40 low; triglycerides <150 normal.",
     "ada-soc-2024-s2": "American Diabetes Association. Standards of Care in Diabetes 2024, Section 2 (Diabetes Care 2024;47 Suppl 1:S20), Table 2.5: HbA1c below 5.7% is not in the prediabetes range.",
@@ -13,45 +13,114 @@
       "subject": "lipid_panel",
       "attribute": "total_cholesterol",
       "unit": "mg/dL",
-      "factors": {"mmol/L": 38.67},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 200, "source": "ncep-atp3-2001"}]
+      "factors": {
+        "mmol/L": 38.67
+      },
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": null,
+          "upper": 200,
+          "source": "ncep-atp3-2001"
+        }
+      ]
     },
     "ldl": {
       "subject": "lipid_panel",
       "attribute": "ldl",
       "unit": "mg/dL",
-      "factors": {"mmol/L": 38.67},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 100, "source": "ncep-atp3-2001"}]
+      "factors": {
+        "mmol/L": 38.67
+      },
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": null,
+          "upper": 100,
+          "source": "ncep-atp3-2001"
+        }
+      ]
     },
     "hdl": {
       "subject": "lipid_panel",
       "attribute": "hdl",
       "unit": "mg/dL",
-      "factors": {"mmol/L": 38.67},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": 40, "upper": null, "source": "ncep-atp3-2001"}]
+      "factors": {
+        "mmol/L": 38.67
+      },
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": 40,
+          "upper": null,
+          "source": "ncep-atp3-2001"
+        }
+      ]
     },
     "triglycerides": {
       "subject": "lipid_panel",
       "attribute": "triglycerides",
       "unit": "mg/dL",
-      "factors": {"mmol/L": 88.57},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 150, "source": "ncep-atp3-2001"}]
+      "factors": {
+        "mmol/L": 88.57
+      },
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": null,
+          "upper": 150,
+          "source": "ncep-atp3-2001"
+        }
+      ]
     },
     "hba1c": {
       "subject": "blood_test",
       "attribute": "hba1c",
       "unit": "%",
       "factors": {},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 5.7, "source": "ada-soc-2024-s2"}]
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": null,
+          "upper": 5.7,
+          "source": "ada-soc-2024-s2"
+        }
+      ]
     },
     "creatinine": {
       "subject": "kidney_panel",
       "attribute": "creatinine",
       "unit": "umol/L",
-      "factors": {"mg/dL": 88.4},
+      "factors": {
+        "mg/dL": 88.4
+      },
       "bands": [
-        {"min_age": 18, "max_age": null, "sex": "male", "lower": 60, "upper": 110, "source": "aacb-harmonised-2014"},
-        {"min_age": 18, "max_age": null, "sex": "female", "lower": 45, "upper": 90, "source": "aacb-harmonised-2014"}
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": "male",
+          "lower": 60,
+          "upper": 110,
+          "source": "aacb-harmonised-2014"
+        },
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": "female",
+          "lower": 45,
+          "upper": 90,
+          "source": "aacb-harmonised-2014"
+        }
       ]
     },
     "egfr": {
@@ -59,34 +128,93 @@
       "attribute": "egfr",
       "unit": "mL/min/1.73m2",
       "factors": {},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": 60, "upper": null, "source": "kdigo-2012-ckd"}]
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": 60,
+          "upper": null,
+          "source": "kdigo-2012-ckd"
+        }
+      ]
     },
     "potassium": {
       "subject": "kidney_panel",
       "attribute": "potassium",
       "unit": "mmol/L",
-      "factors": {"mEq/L": 1.0},
-      "bands": [{"min_age": 18, "max_age": null, "sex": null, "lower": 3.5, "upper": 5.2, "source": "aacb-harmonised-2014"}]
+      "factors": {
+        "mEq/L": 1.0
+      },
+      "bands": [
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": null,
+          "lower": 3.5,
+          "upper": 5.2,
+          "source": "aacb-harmonised-2014"
+        }
+      ]
     },
     "haemoglobin": {
       "subject": "blood_test",
       "attribute": "haemoglobin",
       "unit": "g/dL",
-      "factors": {"g/L": 0.1},
+      "factors": {
+        "g/L": 0.1
+      },
       "bands": [
-        {"min_age": 18, "max_age": null, "sex": "male", "lower": 13.0, "upper": null, "source": "who-2011-haemoglobin"},
-        {"min_age": 18, "max_age": null, "sex": "female", "lower": 12.0, "upper": null, "source": "who-2011-haemoglobin"}
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": "male",
+          "lower": 13.0,
+          "upper": null,
+          "source": "who-2011-haemoglobin"
+        },
+        {
+          "min_age": 18,
+          "max_age": null,
+          "sex": "female",
+          "lower": 12.0,
+          "upper": null,
+          "source": "who-2011-haemoglobin"
+        }
       ]
     },
     "tsh": {
       "subject": "blood_test",
       "attribute": "tsh",
       "unit": "mIU/L",
-      "factors": {"uIU/mL": 1.0},
+      "factors": {
+        "uIU/mL": 1.0
+      },
       "bands": [
-        {"min_age": 18, "max_age": 69, "sex": null, "lower": 0.4, "upper": 4.0, "source": "surks-hollowell-2007"},
-        {"min_age": 70, "max_age": 79, "sex": null, "lower": 0.4, "upper": 5.9, "source": "surks-hollowell-2007"},
-        {"min_age": 80, "max_age": null, "sex": null, "lower": 0.4, "upper": 7.5, "source": "surks-hollowell-2007"}
+        {
+          "min_age": 18,
+          "max_age": 69,
+          "sex": null,
+          "lower": 0.4,
+          "upper": 4.0,
+          "source": "surks-hollowell-2007"
+        },
+        {
+          "min_age": 70,
+          "max_age": 79,
+          "sex": null,
+          "lower": 0.4,
+          "upper": 5.9,
+          "source": "surks-hollowell-2007"
+        },
+        {
+          "min_age": 80,
+          "max_age": null,
+          "sex": null,
+          "lower": 0.4,
+          "upper": 7.5,
+          "source": "surks-hollowell-2007"
+        }
       ]
     }
   },
@@ -94,13 +222,49 @@
     "bukit_lab": {
       "note": "A fictional lab for the second sample report; its printed ranges, as on the paper.",
       "analytes": {
-        "total_cholesterol": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 200}],
-        "ldl": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 130}],
-        "hdl": [
-          {"min_age": 18, "max_age": null, "sex": "male", "lower": 40, "upper": null},
-          {"min_age": 18, "max_age": null, "sex": "female", "lower": 50, "upper": null}
+        "total_cholesterol": [
+          {
+            "min_age": 18,
+            "max_age": null,
+            "sex": null,
+            "lower": null,
+            "upper": 200
+          }
         ],
-        "triglycerides": [{"min_age": 18, "max_age": null, "sex": null, "lower": null, "upper": 150}]
+        "ldl": [
+          {
+            "min_age": 18,
+            "max_age": null,
+            "sex": null,
+            "lower": null,
+            "upper": 130
+          }
+        ],
+        "hdl": [
+          {
+            "min_age": 18,
+            "max_age": null,
+            "sex": "male",
+            "lower": 40,
+            "upper": null
+          },
+          {
+            "min_age": 18,
+            "max_age": null,
+            "sex": "female",
+            "lower": 50,
+            "upper": null
+          }
+        ],
+        "triglycerides": [
+          {
+            "min_age": 18,
+            "max_age": null,
+            "sex": null,
+            "lower": null,
+            "upper": 150
+          }
+        ]
       }
     }
   }

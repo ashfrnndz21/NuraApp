@@ -4,9 +4,12 @@
 
 `trend` reads the confirmed facts for one analyte — each with its provenance, the paper it was
 read from — and for each result finds the range that fits him on that day through the
-`ReferenceRanges` port: his age band from the decade he was born in (a `person.birth_year`
-fact), his sex when a `person.sex` fact exists, and the lab when the same paper names one
-(a `lab_report.lab` fact on the same artefact), whose printed range then wins. Each result is
+`ReferenceRanges` port: his age band from the decade he was born in, his sex when a
+`person.sex` fact exists, and the lab when the same paper names one (a `lab_report.lab` fact on
+the same artefact), whose printed range then wins. The decade is read, in this order, from the
+`setting.birth_decade` fact onboarding writes (E01), then a lab header's year of birth
+(`person.birth_year`), then a lab header's age (`person.age`) on that paper's date; only the
+decade ever enters the band. Each result is
 placed in, above or below its range by arithmetic, and the direction over the last three
 results is arithmetic too (`direction_of`). No model is called.
 
@@ -16,10 +19,14 @@ the direction, and the boundary line for `Surface.TREND` last, naming the doctor
 Every line is verified against docs/plain-words.md before it leaves (`NotPlainWords`). A
 trend is a pattern to discuss, never a finding: no line names a cause or a treatment.
 
-It is rendered from State: the State must be current (a snapshot the record has moved past,
-or one the key cannot check, is refused — `StaleState`), every result shown must be one the
-State was computed from, and the trend is written as a `TrendCard` through
-`render_from_state`, which stamps the State and refuses the row without its boundary line.
+It is rendered from State. A key that can recompute State (the owner, a chief) renders from
+the current State — every result shown must be one it was computed from — through
+`render_from_state`, which stamps the State and refuses the row without its boundary line. A
+key that cannot (a caregiver with the analyte's scope) renders from the last snapshot through
+`render_from_last_snapshot`, the emergency card's pattern: refused as stale (`StaleState`,
+409) unless that snapshot's `computed_from` already covers every result the trend shows, so a
+result written since, that nobody who can recompute has caught State up with, is never shown
+on a State that did not fold it in.
 The door's scope is the analyte's subject's (`scope_for_subject`), so a key that does not
 reach that part of the record is refused and the refusal is on the trail.
 """
@@ -60,9 +67,24 @@ from app.reasoning.ranges import (
     age_from_decade,
 )
 from app.regions import REGION_TZ
-from app.safety.boundary import Surface, boundary_line, boundary_lines, language_of
+from app.safety.boundary import (
+    Surface,
+    boundary_line,
+    boundary_lines,
+    is_boundary_line,
+    language_of,
+)
 from app.safety.plain_words import verify
-from app.state.service import StaleState, current_state, render_from_state
+from app.state.service import (
+    RECOMPUTE_SCOPES,
+    NoBoundaryLine,
+    SnapshotBehindTheCard,
+    StaleState,
+    StateView,
+    current_state,
+    render_from_last_snapshot,
+    render_from_state,
+)
 
 LAST = 3
 """The direction is read over the last three results."""
@@ -70,6 +92,8 @@ STEADY_WITHIN = 0.05
 """The last within five per cent of the first of the three reads as about the same."""
 
 PERSON = "person"
+SETTING = ("setting", "birth_decade")
+"""Where onboarding (E01) keeps the decade he was born in, as a Fact: the first place to look."""
 LAB_REPORT = ("lab_report", "lab")
 
 
@@ -239,16 +263,42 @@ def _newest(facts: Sequence[Fact]) -> Fact | None:
     return max(pool, key=lambda f: as_utc(f.asserted_at), default=None)
 
 
+def _decade(value: Any, *, this_year: int) -> int | None:
+    number = _number(value)
+    if number is None or not number.is_integer() or not 1900 <= number <= this_year:
+        return None
+    return int(number) // 10 * 10
+
+
+async def birth_decade(session: AsyncSession, context: KeyContext) -> int | None:
+    """The decade he was born in, in this order: the `setting.birth_decade` fact onboarding
+    writes (E01), a lab header's year of birth (`person.birth_year`), a lab header's age
+    (`person.age`) on the date of that paper. Only the decade is kept; None when the record
+    holds none of the three."""
+    this_year = utcnow().year
+    said = _newest(
+        await current_facts(session, context=context, subject=SETTING[0], attribute=SETTING[1])
+    )
+    if said is not None and (decade := _decade(said.value, this_year=this_year)) is not None:
+        return decade
+    born = _newest(
+        await current_facts(session, context=context, subject=PERSON, attribute="birth_year")
+    )
+    if born is not None and (decade := _decade(born.value, this_year=this_year)) is not None:
+        return decade
+    aged = _newest(await current_facts(session, context=context, subject=PERSON, attribute="age"))
+    years = None if aged is None else _number(aged.value)
+    if aged is not None and years is not None and years.is_integer() and 0 < years < 130:
+        return _decade(as_utc(aged.valid_from).year - int(years), this_year=this_year)
+    return None
+
+
 async def _about_him(
     session: AsyncSession, context: KeyContext
 ) -> tuple[int | None, Sex | None, dict[uuid.UUID, str]]:
-    """His birth year and sex, when the record holds them, and the lab each paper names."""
-    born = _newest(await current_facts(session, context=context, subject=PERSON, attribute="birth_year"))
-    year = None
-    if born is not None:
-        number = _number(born.value)
-        if number is not None and number.is_integer() and 1900 <= number <= utcnow().year:
-            year = int(number)
+    """The decade he was born in and his sex, when the record holds them, and the lab each
+    paper names."""
+    decade = await birth_decade(session, context)
     said = _newest(await current_facts(session, context=context, subject=PERSON, attribute="sex"))
     sex = None
     if said is not None and isinstance(said.value, str) and said.value.lower() in {"male", "female"}:
@@ -259,7 +309,7 @@ async def _about_him(
     ):
         if fact.artifact_id is not None and isinstance(fact.value, str):
             labs[fact.artifact_id] = fact.value
-    return year, sex, labs
+    return decade, sex, labs
 
 
 async def doctor_to_ask(session: AsyncSession, context: KeyContext) -> str | None:
@@ -303,14 +353,18 @@ async def trend(
     found = ranges.analyte(analyte)
     if found is None:
         raise NoSuchAnalyte(f"no analyte {analyte!r} in the range table")
-    state = await current_state(session, context=context)
-    if state.stale is not False:
-        raise StaleState("a trend is rendered from a State checked against the record")
+    # A key that can recompute renders from the current State; one that cannot renders from
+    # the last snapshot, provided it covers every result shown (below).
+    state: StateView | None = None
+    if RECOMPUTE_SCOPES <= context.scopes:
+        state = await current_state(session, context=context)
+        if state.stale is not False:
+            raise StaleState("a trend is rendered from a State checked against the record")
     lang = language_of(
         language if language is not None else (await audited_profile_read(session, context)).language
     )
     zone = REGION_TZ[context.region]
-    birth_year, sex, labs = await _about_him(session, context)
+    decade, sex, labs = await _about_him(session, context)
     facts = await current_facts(
         session, context=context, subject=found.subject, attribute=found.attribute
     )
@@ -323,7 +377,7 @@ async def trend(
             continue
         on = as_utc(fact.valid_from).astimezone(zone).date()
         lab = None if fact.artifact_id is None else labs.get(fact.artifact_id)
-        age = None if birth_year is None else age_from_decade(birth_year, on)
+        age = None if decade is None else age_from_decade(decade, on)
         answer = ranges.range_for(found.id, age=age, sex=sex, lab=lab)
         factor = found.factor_for(fact.unit)
         canonical = None if factor is None else value * factor
@@ -352,14 +406,15 @@ async def trend(
     points.sort(key=lambda point: (point.on, str(point.fact_id)))
 
     # Rendered from State: every result shown is one the snapshot was computed from.
-    held = {
-        fact_id
-        for dimension in state.dimensions.values()
-        if dimension is not None
-        for fact_id in dimension.get("fact_ids", [])
-    }
-    if any(str(point.fact_id) not in held for point in points):
-        raise StaleState("a result on the trend is not in the State it is rendered from")
+    if state is not None:
+        held = {
+            fact_id
+            for dimension in state.dimensions.values()
+            if dimension is not None
+            for fact_id in dimension.get("fact_ids", [])
+        }
+        if any(str(point.fact_id) not in held for point in points):
+            raise StaleState("a result on the trend is not in the State it is rendered from")
 
     comparable = [p for p in points if p.in_analyte_unit is not None]
     values = [p.in_analyte_unit for p in comparable if p.in_analyte_unit is not None]
@@ -370,22 +425,42 @@ async def trend(
     lines = trend_lines(found, points, direction, since, lang, doctor)
     check_lines(lines, lang)
     line = boundary_line(Surface.TREND, lang, doctor=doctor)
-    card = await render_from_state(
-        session,
-        TrendCard,
-        context,
-        scope_for_subject(found.subject),
-        state=state,
-        surface=Surface.TREND,
-        boundary=line,
-        analyte=found.id,
-        language=lang,
-        fact_ids=[str(point.fact_id) for point in points],
-        direction=direction,
-        lines=lines,
-        rendered_for_person_id=context.person_id,
-        rendered_at=utcnow(),
-    )
+    columns: dict[str, Any] = {
+        "analyte": found.id,
+        "language": lang,
+        "fact_ids": [str(point.fact_id) for point in points],
+        "direction": direction,
+        "lines": lines,
+        "rendered_for_person_id": context.person_id,
+        "rendered_at": utcnow(),
+    }
+    scope = scope_for_subject(found.subject)
+    if state is not None:
+        card = await render_from_state(
+            session,
+            TrendCard,
+            context,
+            scope,
+            state=state,
+            surface=Surface.TREND,
+            boundary=line,
+            **columns,
+        )
+    else:
+        if not is_boundary_line(Surface.TREND, line):
+            raise NoBoundaryLine("a trend carries the boundary line for it")
+        try:
+            card = await render_from_last_snapshot(
+                session,
+                TrendCard,
+                context,
+                scope,
+                covering=[point.fact_id for point in points],
+                boundary=line,
+                **columns,
+            )
+        except SnapshotBehindTheCard as behind:
+            raise StaleState("the last State has not folded in every result shown") from behind
     return Trend(
         analyte=found,
         language=lang,
@@ -395,7 +470,7 @@ async def trend(
         lines=tuple(lines),
         boundary=line,
         doctor=doctor,
-        birth_decade=None if birth_year is None else birth_year // 10 * 10,
+        birth_decade=decade,
         sex=sex,
         card=card,
     )
