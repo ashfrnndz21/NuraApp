@@ -61,6 +61,9 @@ class Surface(StrEnum):
     """The not-feeling-well card: the escalation surface — who knows, what the letter said."""
     TREND = "trend"
     """A lab trend: his results side by side, each against a range, and how they moved (E09-01)."""
+    RECALL = "recall"
+    """An answer from Ask: which parts of his record a question is about, said back with
+    their citations (E03-05)."""
 
 
 INFERRING_SURFACES: tuple[Surface, ...] = tuple(Surface)
@@ -89,6 +92,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.FEELING_INFERENCE: "Nura noticed this in how you said you feel.",
         Surface.NOT_FEELING_WELL: "Nura wrote down how you feel.",
         Surface.TREND: "Nura put your blood tests side by side.",
+        Surface.RECALL: "Nura looked in your papers.",
     },
     "ms": {
         Surface.STATE_POSTURE: "Nura menyusun hari anda.",
@@ -100,6 +104,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.FEELING_INFERENCE: "Nura perasan ini daripada apa yang anda rasa.",
         Surface.NOT_FEELING_WELL: "Nura menulis apa yang anda rasa.",
         Surface.TREND: "Nura menyusun ujian darah anda mengikut tarikh.",
+        Surface.RECALL: "Nura melihat dalam surat-surat anda.",
     },
     "zh": {
         Surface.STATE_POSTURE: "Nura 帮您把今天的事整理好了。",
@@ -111,6 +116,7 @@ WHAT_NURA_DID: Mapping[str, Mapping[Surface, str]] = {
         Surface.FEELING_INFERENCE: "Nura 从您说的感觉里注意到这一点。",
         Surface.NOT_FEELING_WELL: "Nura 只是记下您现在的感觉。",
         Surface.TREND: "Nura 把您的验血结果按日期排好了。",
+        Surface.RECALL: "Nura 查看了您的病历文件。",
     },
 }
 """The first line: what Nura did on this surface, and no more than that. The Malay and

@@ -57,10 +57,16 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.memory.attach import AlreadyHangsThere
+from app.memory.providers import NotAPlaceNote, NoteNamesHealth
+from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
+from app.memory.timeline import NotACursor
+from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
 from app.reasoning.trends import NoSuchAnalyte
 from app.regions import OutOfRegion
 from app.routines.service import NotTheirsToSet
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
+from app.search.ask import NotAQuestion
 from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -115,6 +121,15 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchAnalyte, 404),
     (NoSuchConnector, 404),
     (NoSuchProposal, 404),
+    # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
+    # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
+    (NoSuchAppointment, 404),
+    (NoSuchEpisode, 404),
+    (NoSuchProvider, 404),
+    (AlreadyHangsThere, 409),
+    (EpisodeAlreadyOpen, 409),
+    (EpisodeAlreadyClosed, 409),
+    (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
     # Free text needs the 24-hour window; outside it only a template goes.
     (OutsideTheWindow, 409),
@@ -150,8 +165,15 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    # The timeline's (E03): a place note that is not one line, or that names a medicine or a
+    # condition; a cursor that is not the last page's; a question that is not one line.
+    NotAPlaceNote,
+    NoteNamesHealth,
+    NotACursor,
+    NotAQuestion,
 )
-"""Named so that a reader of this file sees every family refusal; each is a 400."""
+"""Named so that a reader of this file sees every family and timeline refusal; each is a
+400."""
 
 
 def status_of(refusal: Refusal) -> int:

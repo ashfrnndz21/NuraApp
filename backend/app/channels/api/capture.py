@@ -218,6 +218,7 @@ async def confirm_card(
         card_id=card_id,
         decisions=[decision.as_decision() for decision in body.decisions],
         confirmation_id=body.confirmation_id,
+        episode_id=body.episode_id,
     )
     return ReviewConfirmedOut(
         card=ReviewCardOut.of(card, fields),

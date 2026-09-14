@@ -25,6 +25,8 @@ from app.audit.trail import read_audit
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
 from app.channels.api.schemas import (
+    AppointmentConfirmIn,
+    AttachConfirmIn,
     AuditOut,
     ClaimableOut,
     ClaimConfirmIn,
@@ -48,6 +50,7 @@ from app.channels.api.schemas import (
     ReadingOut,
     SharingConsentIn,
     StateOut,
+    StatusConfirmIn,
     StewardshipOut,
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
@@ -55,7 +58,7 @@ from app.channels.api.schemas import (
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
 from app.db import utcnow
-from app.drafts import FactDraft
+from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
 from app.family.pushes import preview_push, push_draft
@@ -77,7 +80,7 @@ from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
 from app.memory.episodic import record_event
-from app.memory.models import ConfidenceState, EventKind, SourceChannel
+from app.memory.models import ConfidenceState, EventKind, SourceChannel, short_label
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
 from app.routines.service import routine_draft_for
@@ -261,13 +264,34 @@ async def mint_confirmation(
         return ConfirmationOut.of(await confirm(session, context, day))
     if isinstance(body, ProposalConfirmIn):
         # A visit a calendar proposed (E18-02): the draft is recomputed from the proposal.
-        visit = await proposal_draft_for(session, context=context, proposal_id=body.proposal_id)
+        proposed = await proposal_draft_for(session, context=context, proposal_id=body.proposal_id)
+        return ConfirmationOut.of(await confirm(session, context, proposed))
+    if isinstance(body, AppointmentConfirmIn):
+        # A visit (E03-01): exactly the provider, time and purpose `POST /appointments` will
+        # write, the purpose trimmed the way the booking trims it.
+        visit = AppointmentDraft(
+            provider_id=body.provider_id,
+            scheduled_at=body.scheduled_at,
+            purpose=short_label(body.purpose),
+        )
         return ConfirmationOut.of(await confirm(session, context, visit))
+    if isinstance(body, StatusConfirmIn):
+        step = StatusChange(appointment_id=body.appointment_id, status=body.status)
+        return ConfirmationOut.of(await confirm(session, context, step))
+    if isinstance(body, AttachConfirmIn):
+        # Hanging a paper off an episode or a visit (E03-01, E03-02).
+        hang = AttachDraft(
+            artifact_id=body.artifact_id,
+            episode_id=body.episode_id,
+            appointment_id=body.appointment_id,
+        )
+        return ConfirmationOut.of(await confirm(session, context, hang))
     review = await review_draft_for(
         session,
         context=context,
         card_id=body.card_id,
         decisions=[decision.as_decision() for decision in body.decisions],
+        episode_id=body.episode_id,
     )
     return ConfirmationOut.of(await confirm(session, context, review))
 
@@ -511,6 +535,7 @@ async def add_reading(body: ReadingIn, context: Context, session: Db) -> Reading
         occurred_at=taken_at,
         label="blood pressure",
         source_channel=SourceChannel.APP,
+        episode_id=body.episode_id,
     )
     draft = FactDraft(
         subject=BLOOD_PRESSURE,
@@ -521,7 +546,7 @@ async def add_reading(body: ReadingIn, context: Context, session: Db) -> Reading
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
         artifact_id=None,
         event_id=event.id,
-        episode_id=None,
+        episode_id=body.episode_id,
         supersedes_id=None,
     )
     yes = await confirm(session, context, draft)
@@ -536,6 +561,7 @@ async def add_reading(body: ReadingIn, context: Context, session: Db) -> Reading
         confidence_state=draft.confidence_state,
         confirmation_id=yes.id,
         event_id=event.id,
+        episode_id=body.episode_id,
         valid_from=taken_at,
     )
     return ReadingOut.of(event, fact)

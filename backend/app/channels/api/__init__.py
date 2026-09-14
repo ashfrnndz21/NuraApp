@@ -25,6 +25,7 @@ from app.channels.api import (
     medicines,
     profiles,
     routine,
+    timeline,
     trends,
 )
 from app.channels.api.deps import Providers
@@ -58,6 +59,7 @@ def create_app(
     app.include_router(feed.router)
     app.include_router(medicines.router)
     app.include_router(whatsapp.router)
+    app.include_router(timeline.router)
     app.include_router(family.router)
     app.include_router(trends.router)
     app.include_router(routine.router)

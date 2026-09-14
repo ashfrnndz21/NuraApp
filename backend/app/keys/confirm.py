@@ -31,6 +31,7 @@ from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
 from app.drafts import (
+    AttachDraft,
     ClaimDraft,
     ConfirmSubject,
     Draft,
@@ -60,12 +61,14 @@ def scope_of(draft: Draft) -> Scope:
     review card's is the record, where the card and the photo it came from are kept (the
     facts it then writes each check their own subject's scope). Narrowing a key and marking
     a part "only me" are the family list's (E12); a task's done is the doer's own footing on
-    the graph, which every key holds; a message to the patient is a send."""
+    the graph, which every key holds; a message to the patient is a send. Hanging an
+    artefact off an episode or a visit (E03) is an arrangement of the record, where the
+    artefact is kept."""
     if isinstance(draft, FactDraft):
         return scope_for_subject(draft.subject)
     if isinstance(draft, ClaimDraft):
         return Scope.PROFILE
-    if isinstance(draft, ReviewDraft):
+    if isinstance(draft, ReviewDraft | AttachDraft):
         return Scope.RECORDS
     if isinstance(draft, KeyChangeDraft | OnlyMeDraft):
         return Scope.FAMILY
