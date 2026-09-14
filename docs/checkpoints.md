@@ -1028,7 +1028,7 @@ What you will see (the numbers and ids change each run):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8112 (GET /health)
-✓ Pa (+6591207622), Mei (+6592203169) and Siti (+6597202110) registered by phone code (the codes read from the server log)
+✓ Pa (+6591208246), Mei (+6592203221) and Siti (+6597208472) registered by phone code (the codes read from the server log)
 ✓ Pa opened his profile and agreed to WhatsApp; Mei (his daughter) holds a chief key and is on duty weekdays 6 in the morning to 11 at night; Siti holds a helper key (medicines, emergency, send)
 ✓ Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route), at 06:00 on 2026-09-14 by the dev run's frozen clock
 ✓ 07:20: nothing; 07:31, his breakfast (the one breakfast time, 07:30 until he says — the first week's prompt comes at the same moment): the morning card, the approved template (he has not written in 24 hours), once — 07:45 sends nothing. Pa (patient): sent by whatsapp, template morning_card; rule breakfast_anchor_reached. What he reads:
