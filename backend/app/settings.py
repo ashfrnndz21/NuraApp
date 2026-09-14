@@ -64,6 +64,9 @@ class Settings:
     whatsapp_fixtures: str | None = None
     """NURA_WHATSAPP_FIXTURES: the directory the fixture provider serves media from
     (`backend/tests/fixtures/whatsapp/`), until a real provider fetches it."""
+    reference_ranges: str = "fixture"
+    """NURA_REFERENCE_RANGES: which reference-range table the lab trend reads (E09-01,
+    `app.reasoning.ranges`). Only the fixture is built; any other name refuses to start."""
     frozen_clock: datetime | None = None
     """NURA_FROZEN_CLOCK: an instant with its offset (`2026-09-14T10:00:00+08:00`) the
     process's clock stands at from startup (`app.clock.install_frozen`), moved only by
@@ -105,6 +108,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
         whatsapp_dev_secret=source.get("NURA_WHATSAPP_DEV_SECRET") or None,
         whatsapp_fixtures=source.get("NURA_WHATSAPP_FIXTURES") or None,
+        reference_ranges=source.get("NURA_REFERENCE_RANGES", "fixture"),
         frozen_clock=frozen_clock,
     )
 

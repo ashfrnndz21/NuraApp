@@ -32,6 +32,9 @@ class ConsentPurpose(StrEnum):
     SHARE_WITH_PERSON = "share_with_family"
     RECORDING = "recording"
     WHATSAPP = "whatsapp"
+    CALENDAR = "calendar"
+    """A read-only connector to his calendar (E18-02): events that look like visits become
+    proposals for a person to accept. One consent per connector kind, for the profile."""
 
 
 PER_HOLDER = frozenset({ConsentPurpose.SHARE_WITH_PERSON})
