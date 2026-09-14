@@ -2,6 +2,13 @@ name: Dev agent
 on:
   issues:
     types: [labeled]
+  schedule:
+    - cron: "*/30 * * * *"   # picks up stories the orchestrator promoted (its GITHUB_TOKEN labels do not fire the issues event)
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Issue number to build (defaults to the lowest agent:ready story not already agent:working)"
+        required: false
 permissions:
   contents: write
   pull-requests: write
@@ -12,25 +19,67 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build-story:
-    if: github.event.label.name == 'agent:ready'
+    if: github.event_name != 'issues' || github.event.label.name == 'agent:ready'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: Pick the story
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_ISSUE: ${{ inputs.issue }}
+          EVENT_ISSUE: ${{ github.event.issue.number }}
+        run: |
+          if [ -n "$INPUT_ISSUE" ]; then N="$INPUT_ISSUE"
+          elif [ -n "$EVENT_ISSUE" ]; then N="$EVENT_ISSUE"
+          else N=$(gh issue list --label agent:ready --state open --limit 100 --json number,labels \
+                 -q '[.[] | select(.labels | map(.name) | index("agent:working") | not)] | sort_by(.number) | .[0].number'); fi
+          if [ -z "$N" ] || [ "$N" = "null" ]; then echo "No story ready."; exit 0; fi
+          LABELS=$(gh issue view "$N" --json labels -q '.labels | map(.name) | join(",")')
+          case ",$LABELS," in *,agent:working,*) echo "#$N already in flight."; exit 0;; esac
+          TITLE=$(gh issue view "$N" --json title -q .title)
+          echo "number=$N" >> "$GITHUB_OUTPUT"
+          echo "title=$TITLE" >> "$GITHUB_OUTPUT"
+          case ",$LABELS," in *,risk:high,*) echo "high=1" >> "$GITHUB_OUTPUT";; *) echo "high=0" >> "$GITHUB_OUTPUT";; esac
+          gh issue edit "$N" --add-label agent:working
       - uses: actions/checkout@v4
+        if: steps.pick.outputs.number != ''
         with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
+        if: steps.pick.outputs.number != ''
         with: { python-version: "3.12" }
       - run: pip install -e "backend[dev]"
+        if: steps.pick.outputs.number != ''
       - name: Build the story
+        if: steps.pick.outputs.number != ''
         uses: anthropics/claude-code-action@v1
+        env:
+          # The protect-paths hook lets a risk:high story write under keys/ and safety/; the PR still needs a human.
+          NURA_ALLOW_PROTECTED: ${{ steps.pick.outputs.high }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          show_full_output: true
           prompt: |
-            You are building one backlog story for Nura. The issue is #${{ github.event.issue.number }}: "${{ github.event.issue.title }}".
-            Read CLAUDE.md, the issue body, and the spec section it names. Follow .claude/rules. Work on a new branch named after the story ID.
+            You are building one backlog story for Nura. The issue is #${{ steps.pick.outputs.number }}: "${{ steps.pick.outputs.title }}".
+            Read CLAUDE.md, the issue body (`gh issue view ${{ steps.pick.outputs.number }}`), and the spec section it names. Follow .claude/rules. Work on a new branch named after the story ID.
             Write the acceptance test first, implement, run `make test`, `make lint` and `make plain-words` until green.
-            Do not touch .github/, .claude/, CLAUDE.md or files owned by CODEOWNERS unless the issue is labelled risk:high and says so.
-            Open a pull request that starts with the story ID and includes "Closes #${{ github.event.issue.number }}", the acceptance line, and the plain-words output.
-            If you run out of turns, open a draft PR with what you have and a comment on the issue saying what is left.
-          claude_args: "--max-turns 80 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"
+            Do not touch .github/, .claude/ or CLAUDE.md. Files under backend/app/keys, consent, audit, safety and alembic/versions are owned by CODEOWNERS: only change them when the story requires it, and say so in the PR.
+            Commit, push the branch, and open a pull request with `gh pr create` whose title starts with the story ID and whose body includes "Closes #${{ steps.pick.outputs.number }}", the acceptance line, and the plain-words output.
+            If you run out of turns, push what you have, open a draft PR, and comment on the issue saying what is left.
+          claude_args: "--max-turns 80 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"
+      - name: Record the outcome
+        if: always() && steps.pick.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          N: ${{ steps.pick.outputs.number }}
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            # PR open: agent:working stays on until the PR merges and closes the issue.
+            gh issue edit "$N" --remove-label agent:ready
+          else
+            gh issue edit "$N" --remove-label agent:working --remove-label agent:ready --add-label agent:failed
+            gh issue comment "$N" --body "Dev agent run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. The orchestrator will not retry twice without a human comment."
+          fi
