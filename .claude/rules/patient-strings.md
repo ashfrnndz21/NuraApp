@@ -1,9 +1,13 @@
 ---
 paths:
+  - "backend/app/audit/**"
   - "backend/app/delivery/**"
   - "backend/app/channels/**"
   - "backend/app/consent/**"
+  - "backend/app/family/**"
   - "backend/app/medicines/**"
+  - "backend/app/safety/boundary.py"
+  - "backend/app/safety/recording.py"
   - "ios/Nura/**"
   - "web/src/strings/**"
 ---

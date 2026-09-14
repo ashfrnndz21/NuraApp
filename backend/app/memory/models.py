@@ -119,6 +119,9 @@ class EventKind(StrEnum):
     DOSE_TAKEN = "dose_taken"
     SYMPTOM = "symptom"
     DISCHARGE = "discharge"
+    ENGAGEMENT = "engagement"
+    """What a person did with a card on his feed (E21): seen, heard, tapped, not for me,
+    shared. The moment a preference fact can rest on."""
 
 
 class Event(ProfileScoped, Base):

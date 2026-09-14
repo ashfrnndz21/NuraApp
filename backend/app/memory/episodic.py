@@ -107,6 +107,12 @@ def fact_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> Colu
     )
 
 
+RECORDED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.VOICE})
+"""The artefact kinds that are a recording of people talking, and so rest on the RECORDING
+consent as well as the consent to hold the record. A transcript kind joins this set the day
+it exists (E05)."""
+
+
 @audited(Action.WRITE, Scope.RECORDS, Artifact.__tablename__)
 async def store_artifact(
     session: AsyncSession,
@@ -133,6 +139,16 @@ async def store_artifact(
         purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
         scope=Scope.RECORDS,
     )
+    # Keeping a recording rests on the consent to record (E16-02). Checked here, where the
+    # bytes enter, and not only at the surface's gate (`app.safety.recording.may_record`), so
+    # that no writer — the app, WhatsApp, a connector — can keep a voice without it.
+    if kind in RECORDED_KINDS:
+        await require_consent(
+            session,
+            context=context,
+            purpose=ConsentPurpose.RECORDING,
+            scope=Scope.RECORDS,
+        )
     digest = sha256.strip().lower()
     if not _DIGEST.match(digest):
         raise NotADigest("sha256 is sixty-four hex characters")

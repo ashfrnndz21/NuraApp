@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
+from app.channels.whatsapp.provider import FixtureProvider
 from app.db import make_session_factory
+from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
@@ -27,6 +29,7 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.regions import Region
 from app.settings import Settings, load_settings
+from tests.conftest import FEED
 from tests.paper import PAPER
 
 ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
@@ -37,7 +40,10 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         code_sender=sender,
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        searcher=FixtureSearcher(FEED),
+        compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
+        whatsapp=FixtureProvider(secret="test"),
     )
 
 

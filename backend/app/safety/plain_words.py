@@ -310,7 +310,10 @@ _MONTH_DATE = re.compile(
     r"\b(\d{1,2})(?:st|nd|rd|th)?\s+(" + "|".join(MONTHS) + r")\b"
     r"|\b(" + "|".join(MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
 )
-_WEEKDAY = re.compile(r"\b(?:" + "|".join(WEEKDAYS) + r")\b")
+WEEKDAYS_MS = ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad")
+"""The day in Malay, so "Isnin 14 September" is a date with its day (E12: the family lines
+are rendered and verified in his language at run time, not only as English templates)."""
+_WEEKDAY = re.compile(r"\b(?:" + "|".join(WEEKDAYS + WEEKDAYS_MS) + r")\b")
 
 _UUID = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
