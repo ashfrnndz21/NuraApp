@@ -24,4 +24,4 @@ jobs:
             Review pull request #${{ github.event.pull_request.number }} for Nura (`gh pr diff ${{ github.event.pull_request.number }}`). Run the clinical-safety-reviewer subagent on the diff, and the plain-words-reviewer on every patient-facing string that changed.
             Post one review with `gh pr review ${{ github.event.pull_request.number }}` containing both reports: each check as pass or fail with file and line, and the rewritten lines for any string that failed.
             If any safety check fails, use `--request-changes`; otherwise `--comment`. If the PR touches backend/app/keys, consent, audit, medicines, reasoning, safety, WhatsApp outbound or a migration, add the label risk:high with `gh pr edit` if it is missing.
-          claude_args: "--max-turns 30 --allowedTools Read,Glob,Grep,Bash(git:*),Bash(gh:*)"
+          claude_args: "--max-turns 60 --allowedTools Read,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(make:*),Bash(pytest:*)"
