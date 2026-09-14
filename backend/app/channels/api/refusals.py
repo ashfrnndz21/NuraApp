@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.profiles import ConsentNotRecordedYet, NoSuchHolder
 from app.errors import Refusal
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned
@@ -26,6 +27,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (OutOfRegion, 403),
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
+    (NoSuchHolder, 403),
+    (ConsentNotRecordedYet, 501),
     (NoKeyToClose, 404),
     (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),

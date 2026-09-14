@@ -4,6 +4,10 @@ A login challenge holds the hash of a one-time code, never the code; a session h
 hash of its token, never the token. The note table is the one short text column the graph
 allows, because a note is the patient's own words, chosen, for himself.
 
+This revision also introduces the `profile` scope — the profile row itself, which every key
+holds — and writes it into the scopes of every key cut before it existed, so that no holder
+loses the face of the graph he already opens.
+
 Revision ID: 0004_login_and_sessions
 Revises: 0003_memory
 Create Date: 2026-09-14
@@ -21,6 +25,27 @@ depends_on = None
 
 REGION = sa.Enum("SG", "MY", name="region", native_enum=False, length=32)
 LOGIN_CHANNEL = sa.Enum("phone", "email", name="login_channel", native_enum=False, length=32)
+PROFILE_SCOPE = "profile"
+
+
+def _keys() -> sa.TableClause:
+    return sa.table("key", sa.column("id", sa.Uuid()), sa.column("scopes", sa.JSON()))
+
+
+def _rewrite_scopes(*, add: bool) -> None:
+    """Put `profile` into, or take it out of, every key's scope list. Row by row, in
+    Python, so the same code runs on SQLite and on Postgres."""
+    bind = op.get_bind()
+    keys = _keys()
+    for key_id, scopes in bind.execute(sa.select(keys.c.id, keys.c.scopes)).all():
+        held = list(scopes)
+        if add and PROFILE_SCOPE not in held:
+            held = sorted([*held, PROFILE_SCOPE])
+        elif not add and PROFILE_SCOPE in held:
+            held = [scope for scope in held if scope != PROFILE_SCOPE]
+        else:
+            continue
+        bind.execute(keys.update().where(keys.c.id == key_id).values(scopes=held))
 
 
 def upgrade() -> None:
@@ -73,8 +98,11 @@ def upgrade() -> None:
     op.create_index("ix_note_profile_id", "note", ["profile_id"])
     op.create_index("ix_note_written_at", "note", ["written_at"])
 
+    _rewrite_scopes(add=True)
+
 
 def downgrade() -> None:
+    _rewrite_scopes(add=False)
     op.drop_index("ix_note_written_at", table_name="note")
     op.drop_index("ix_note_profile_id", table_name="note")
     op.drop_table("note")

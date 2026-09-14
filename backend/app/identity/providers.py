@@ -16,26 +16,16 @@ from app.settings import Settings
 
 log = logging.getLogger("nura.identity.sender")
 
-PHONE_CODE_LINES = (
-    "Your Nura number is {code}.",
-    "{who} asked for it just now.",
-    "It works for ten minutes.",
-)
-"""@patient The message that carries the code, so the first real provider sends these words
-and not its own. Three lines, one idea each; no "code", no "OTP", no "expires". `who` is
-"You" when the person asked for it himself, or the name of the person who asked for him."""
-
-
-def phone_code_message(code: str, *, asked_by: str | None = None) -> str:
-    """The text a phone receives with its six digits."""
-    return "\n".join(PHONE_CODE_LINES).format(code=code, who=asked_by or "You")
-
 
 class CodeSender(Protocol):
     """How a one-time secret reaches the person who asked for it."""
 
     async def send_phone_code(self, phone_e164: str, code: str) -> None:
-        """Send `phone_code_message(code)` to a phone, by SMS or by WhatsApp."""
+        """Send the code to a phone, by SMS or by WhatsApp.
+
+        The words are `app.channels.strings.phone_code_message(code)`, and only those: a
+        provider carries the sentence, it does not write one.
+        """
         ...
 
     async def send_email_link(self, email: str, token: str) -> None:

@@ -13,13 +13,13 @@ import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.channels.api import Providers, create_app
+from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.db import make_session_factory
 from app.identity.providers import (
     DevSenderInProduction,
     LoggingCodeSender,
     NoCodeSender,
     code_sender_for,
-    phone_code_message,
 )
 from app.regions import Region
 from app.settings import Settings, load_settings
@@ -73,9 +73,18 @@ async def test_the_sender_never_logs_the_code_beside_the_number_unless_told_to(
 
 
 def test_the_words_the_phone_receives() -> None:
-    assert phone_code_message("419372") == (
-        "Your Nura number is 419372.\nYou asked for it just now.\nIt works for ten minutes."
-    )
-    assert phone_code_message("419372", asked_by="Ash").splitlines()[1] == (
-        "Ash asked for it just now."
-    )
+    assert phone_code_message("481302").splitlines() == [
+        "Your Nura code is 481302.",
+        "Type it into the Nura app to sign in.",
+        "The code works for ten minutes.",
+        "Nura will never call you to ask for it.",
+    ]
+    assert phone_code_message("481302", asked_by="Ash").splitlines() == [
+        "Your Nura code is 481302.",
+        "Ash asked for this code, to sign you in.",
+        "Type it into the Nura app.",
+        "The code works for ten minutes.",
+        "If you did not expect this, call Ash first.",
+    ]
+    assert CODE_WORKS_FOR == "The code works for ten minutes."
+    assert "481302" not in CODE_WORKS_FOR

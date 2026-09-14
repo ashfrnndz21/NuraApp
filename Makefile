@@ -7,7 +7,7 @@ dev migrate: export NURA_DATABASE_URL ?= sqlite+aiosqlite:///./dev.db
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
 migrate: ; cd backend && alembic upgrade heads
-dev: migrate ; cd backend && uvicorn app.main:app --reload
+dev: migrate ; cd backend && uvicorn app.main:app --reload --no-access-log
 test: ; cd backend && pytest -q
 lint: ; cd backend && ruff check . && mypy app
 plain-words: ; cd backend && if [ -f app/safety/plain_words.py ]; then python -m app.safety.plain_words; else echo "plain-words: app/safety/plain_words.py not built yet (Session 6), skipping"; fi

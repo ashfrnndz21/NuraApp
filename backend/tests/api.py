@@ -6,8 +6,10 @@ read the code from: nothing on the wire carries it.
 
 from __future__ import annotations
 
-from httpx import AsyncClient
+import uuid
 
+from app.identity.models import Person
+from app.identity.service import create_own_profile
 from tests.conftest import Deployment
 
 
@@ -37,11 +39,16 @@ CONSENT = {"wording_version": "1", "language": "en", "captured_via": "app"}
 """The agreement every door takes: which words, in which language, captured how."""
 
 
-async def own_profile(client: AsyncClient, token: str, **body: str) -> str:
-    """Open the caller's own health graph; its id."""
-    created = await client.post(
-        "/profiles/mine", json={"consent": CONSENT, **body}, headers=bearer(token)
-    )
-    assert created.status_code == 201, created.text
-    profile_id: str = created.json()["profile_id"]
-    return profile_id
+async def own_profile(deployment: Deployment, session: dict[str, str], **body: str) -> str:
+    """Open this person's own health graph on the deployment; its id.
+
+    `POST /profiles/mine` is shut until the consent service can record the agreement
+    (`ConsentNotRecordedYet`), so the tests open the graph through the service, the way the
+    consent merge will wire the door. Committed, so the app's own sessions see it.
+    """
+    async with deployment.sessions() as db:
+        person = await db.get(Person, uuid.UUID(session["person_id"]))
+        assert person is not None
+        profile = await create_own_profile(db, region=deployment.region, owner=person, **body)
+        await db.commit()
+        return str(profile.id)

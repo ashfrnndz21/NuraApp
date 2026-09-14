@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 from app.channels.api import Providers, create_app
-from app.db import Base, make_session_factory
+from app.db import Base, make_session_factory, take_keepers
 from app.identity.providers import LoggingCodeSender
 from app.regions import Region
 from app.settings import Settings
@@ -45,7 +45,13 @@ async def _engine() -> AsyncEngine:
 async def _deployment() -> AsyncIterator[AsyncSession]:
     engine = await _engine()
     async with make_session_factory(engine)() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            # A test is its own channel: `pytest.raises` is its request boundary, and the
+            # lines a channel would replay after the rollback are simply left standing, since
+            # nothing rolled back. What is dropped here is only the replay.
+            take_keepers(session)
     await engine.dispose()
 
 

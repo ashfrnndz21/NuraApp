@@ -50,8 +50,8 @@ class EmailVerify(BaseModel):
 class Started(BaseModel):
     """The code went out, and for how long it works.
 
-    The number is for the app's own clock; the line the screen shows is written in words:
-    "The code works for ten minutes." Never the seconds.
+    The number is for the app's own clock; the line the screen shows is
+    `app.channels.strings.CODE_WORKS_FOR`, in words. Never the seconds.
     """
 
     expires_in_seconds: int

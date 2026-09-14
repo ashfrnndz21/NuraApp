@@ -8,7 +8,8 @@ and `app.keys.repository` is the only place allowed to fill that column in or fi
 from __future__ import annotations
 
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -21,6 +22,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.errors import Refusal
 
 
 def utcnow() -> datetime:
@@ -72,26 +75,75 @@ class ProfileScoped:
 
 
 Keeper = Callable[[AsyncSession], Awaitable[None]]
+"""Something to re-do in a session after the work it was part of has been rolled back."""
+
 _KEPT = "keep_on_refusal"
 
 
 def keep_on_refusal(session: AsyncSession, keeper: Keeper) -> None:
-    """Register a write that must survive a refusal.
+    """Register work that must land even if the unit of work it was written in is rolled back.
 
-    A channel runs each request inside a savepoint and rolls it back when the request is
-    refused, so a half-done write never lands. The audit line that says the reach was
-    refused, and the wrong try counted against a code, are the exceptions: they are the
-    reason a refusal exists. Whoever writes one registers a keeper here; the channel
-    replays the keepers after the rollback and commits them. On a request that succeeds
-    the keepers are dropped, because the rows they would re-add are already there.
+    A refusal is an exception, and a channel runs each request inside a savepoint that it
+    rolls back on a Refusal — which would take the refused audit line down with it. So the
+    trail registers a keeper here as well as writing the line; the channel rolls the savepoint
+    back, then replays the keepers and commits. On success the keepers are dropped.
     """
     session.info.setdefault(_KEPT, []).append(keeper)
 
 
 def take_keepers(session: AsyncSession) -> list[Keeper]:
-    """The keepers registered so far, removed from the session."""
-    kept: list[Keeper] = session.info.pop(_KEPT, [])
-    return kept
+    """The keepers registered on this session, removed from it. Replay them, or drop them."""
+    return session.info.pop(_KEPT, [])
+
+
+class KeepersNotReplayed(RuntimeError):
+    """A session closed with refused audit lines nobody replayed: a request ran outside
+    `unit_of_work`, and the refusal it carried would have been lost with the rollback."""
+
+
+@asynccontextmanager
+async def unit_of_work(session: AsyncSession) -> AsyncIterator[None]:
+    """The request boundary: one unit of work, in a savepoint, with the keepers handled.
+
+    On a `Refusal` the savepoint is rolled back — nothing the request wrote survives — then
+    the keepers are replayed and flushed, so the refused lines land, and the refusal goes on
+    up to the channel. On any other exception the savepoint is rolled back and the keepers
+    are dropped with it. On success the savepoint is released and the keepers are dropped:
+    the lines they would have re-written are already there.
+
+    A channel wraps every request in this (the API's request dependency calls it), and a
+    session closed with keepers still on it raises `KeepersNotReplayed`, so a path that
+    skips the boundary fails loudly instead of losing a refusal quietly.
+    """
+    savepoint = await session.begin_nested()
+    try:
+        yield
+    except Refusal:
+        await savepoint.rollback()
+        for keeper in take_keepers(session):
+            await keeper(session)
+        await session.flush()
+        raise
+    except BaseException:
+        await savepoint.rollback()
+        take_keepers(session)
+        raise
+    else:
+        await savepoint.commit()
+        take_keepers(session)
+
+
+class KeptSession(AsyncSession):
+    """A session that will not close quietly over refused lines nobody replayed."""
+
+    async def close(self) -> None:
+        kept = take_keepers(self)
+        await super().close()
+        if kept:
+            raise KeepersNotReplayed(
+                f"{len(kept)} refused audit line(s) were registered and never replayed; "
+                "run the request inside app.db.unit_of_work"
+            )
 
 
 def make_engine(url: str) -> AsyncEngine:
@@ -99,5 +151,5 @@ def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url)
 
 
-def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(engine, expire_on_commit=False)
+def make_session_factory(engine: AsyncEngine) -> async_sessionmaker[KeptSession]:
+    return async_sessionmaker(engine, class_=KeptSession, expire_on_commit=False)

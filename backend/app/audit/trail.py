@@ -55,13 +55,14 @@ async def record(
     The entry is pinned to the profile in the context, so a person with no context — nobody
     resolved a key for them — cannot put a line into a graph they hold nothing on.
 
-    It is written in the same transaction as the access it records, so a write that is rolled
-    back leaves behind no claim that it happened. The one rollback it survives is a channel's
-    refusal: the line is registered with `keep_on_refusal`, so that when a refused request is
-    unwound the record of the reaching stays.
+    An ALLOWED line is written in the same transaction as the access it records, so a write
+    that is rolled back leaves behind no claim that it happened. A REFUSED line is the
+    opposite case: the refusal is an exception, the unit of work that carried it is rolled
+    back, and the line must land anyway. So it is flushed now, and a keeper is registered
+    (`app.db.keep_on_refusal`) that writes an equivalent line again once the channel has
+    rolled the unit back — the reaching is seen whether or not anything else survived.
     """
     values: dict[str, Any] = {
-        "id": uuid.uuid4(),
         "profile_id": context.profile_id,
         "at": now or utcnow(),
         "actor_person_id": context.person_id,
@@ -81,12 +82,13 @@ async def record(
     entry = AuditEntry(**values)
     session.add(entry)
     await session.flush()
+    if outcome is Outcome.REFUSED:
 
-    async def again(session: AsyncSession) -> None:
-        session.add(AuditEntry(**values))
-        await session.flush()
+        async def keep(again: AsyncSession) -> None:
+            again.add(AuditEntry(**values))
+            await again.flush()
 
-    keep_on_refusal(session, again)
+        keep_on_refusal(session, keep)
     return entry
 
 

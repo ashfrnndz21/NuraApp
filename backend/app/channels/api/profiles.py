@@ -31,25 +31,44 @@ from app.errors import Refusal
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import resolve_key_context
-from app.keys.grants import grant_key, list_keys, revoke_key
+from app.keys.grants import grant_key, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.memory.semantic import current_facts
 from app.notes.service import list_notes, write_note
-from app.regions import guard_region
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 
 class NoSuchHolder(Refusal):
-    """A key names its holder by a person id this deployment does not hold."""
+    """A key names its holder by a person id this deployment does not hold.
+
+    A person pinned to another region is, to this deployment, no holder either, and is
+    refused in the same words: whether an id is an account somewhere else is not answered.
+    """
+
+
+class ConsentNotRecordedYet(Refusal):
+    """The door takes the owner's agreement but cannot yet write it down, so it stays shut.
+
+    Consent at claim is recorded by the consent service (E00-02). Until that lands, opening
+    a profile here would answer as though the agreement were on file when it is not, so the
+    route refuses instead. Nothing between now and that merge claims a consent it did not
+    record.
+    """
 
 
 @router.post("/mine", status_code=status.HTTP_201_CREATED)
 async def create_mine(
     body: ProfileCreate, request: Request, person: CurrentPerson, session: Db
 ) -> ProfileOut:
-    """Open the caller's own health graph, here, pinned to this region."""
+    """Open the caller's own health graph, here, pinned to this region.
+
+    Shut until the consent service can record the agreement: see `ConsentNotRecordedYet`.
+    """
     region = settings_of(request).region
+    if body.consent is not None:  # always: the door is shut until E00-02 records the agreement
+        raise ConsentNotRecordedYet("consent at claim is not recorded yet (E00-02)")
+    # What the door does once the consent service can record what it was given:
     profile = await create_own_profile(
         session,
         region=region,
@@ -86,9 +105,8 @@ async def _holder(session: Db, *, request: Request, body: KeyGrant) -> Person:
     region = settings_of(request).region
     if body.holder_person_id is not None:
         found = await session.get(Person, body.holder_person_id)
-        if found is None:
-            raise NoSuchHolder(f"no person {body.holder_person_id}")
-        guard_region(held_in=found.region, asked_from=region)
+        if found is None or found.region is not region:
+            raise NoSuchHolder(f"no person {body.holder_person_id} in {region}")
         return found
     return await register_person(
         session, region=region, display_name="", phone_e164=body.holder_phone_e164
@@ -97,6 +115,9 @@ async def _holder(session: Db, *, request: Request, body: KeyGrant) -> Person:
 
 @router.post("/{profile_id}/keys", status_code=status.HTTP_201_CREATED)
 async def grant(body: KeyGrant, request: Request, context: Context, session: Db) -> KeyOut:
+    # Authorise first: nothing is done on the asker's behalf, not even naming the holder,
+    # until the key context says he may cut keys at all.
+    await may_cut_keys(session, context, now=None)
     holder = await _holder(session, request=request, body=body)
     key = await grant_key(
         session,

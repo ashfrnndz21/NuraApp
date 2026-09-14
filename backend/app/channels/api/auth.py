@@ -25,8 +25,7 @@ from app.identity.login import (
     verify_email_link,
     verify_phone_code,
 )
-from app.identity.service import find_own_profile
-from app.keys.context import resolve_key_context
+from app.keys.context import owned_profile, resolve_key_context
 
 router = APIRouter(tags=["auth"])
 
@@ -89,13 +88,11 @@ async def me(
 
     The profile is read the way every profile is read: through a context, written down.
     """
-    found = await find_own_profile(session, signed_in.person)
+    region = settings_of(request).region
+    found = await owned_profile(session, region=region, owner_person_id=signed_in.person.id)
     if found is None:
         return MeOut.of(signed_in.person, None)
     context = await resolve_key_context(
-        session,
-        region=settings_of(request).region,
-        person_id=signed_in.person.id,
-        profile_id=found.id,
+        session, region=region, person_id=signed_in.person.id, profile_id=found.id
     )
     return MeOut.of(signed_in.person, await audited_profile_read(session, context))

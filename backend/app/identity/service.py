@@ -17,7 +17,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.errors import Refusal
 from app.identity.models import Person, Profile
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, owned_profile
 from app.keys.scopes import ALL_SCOPES, Scope
 from app.regions import Region, guard_region
 
@@ -70,12 +70,6 @@ async def register_person(
     return person
 
 
-async def find_own_profile(session: AsyncSession, owner: Person) -> Profile | None:
-    """The graph this person owns, if he has opened one. A lookup, not a read: the caller
-    reads it through `app.audit.access.audited_profile_read` with a context."""
-    return await session.scalar(select(Profile).where(Profile.owner_person_id == owner.id))
-
-
 async def create_own_profile(
     session: AsyncSession,
     *,
@@ -97,9 +91,13 @@ async def create_own_profile(
     lands the values are required and validated at the door, and not yet stored.
     """
     # E00-02 seam: `consent` becomes a typed, required record written by the consent service.
+    # Until then the door (`POST /profiles/mine`) refuses rather than reach here with values
+    # it would have to drop.
     del consent
     guard_region(held_in=owner.region, asked_from=region)
-    if await find_own_profile(session, owner) is not None:
+    # The one context-less look at a profile row: there is no context yet, because there is
+    # no profile yet — this is the check that there is not one already.
+    if await owned_profile(session, region=region, owner_person_id=owner.id) is not None:
         raise ProfileAlreadyOwned(f"person {owner.id} already owns a profile")
 
     profile = Profile(

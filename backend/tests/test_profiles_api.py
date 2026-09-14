@@ -32,7 +32,7 @@ PRIVATE = "I did not tell the children about the fall."
 async def _pa_with_a_note(deployment: Deployment) -> tuple[dict[str, str], str]:
     """Pa registers, opens his graph and writes one private note."""
     pa = await register_by_phone(deployment, PA, "Pa")
-    profile_id = await own_profile(deployment.client, pa["token"], language="ms")
+    profile_id = await own_profile(deployment, pa, language="ms")
     written = await deployment.client.post(
         f"/profiles/{profile_id}/notes", json={"text": PRIVATE}, headers=bearer(pa["token"])
     )
@@ -165,11 +165,16 @@ async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deploymen
     still_listed = await deployment.client.get(f"/profiles/{profile_id}/keys", headers=his)
     assert len(still_listed.json()) == 2
 
+    before = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
     missing = await deployment.client.delete(
         f"/profiles/{profile_id}/keys/{uuid.uuid4()}", headers=his
     )
     assert missing.status_code == 404
     assert missing.json() == {"refusal": "NoKeyToClose"}
+    # The read that found nothing was rolled back with the refusal: the only new line is
+    # the owner's own reading of the trail, above.
+    after = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    assert len(after.json()) == len(before.json()) + 1
 
 
 PROFILE_ROUTES = (
@@ -231,10 +236,15 @@ async def test_no_profile_route_is_reachable_without_a_key_context(
 # --- the owner's own profile -------------------------------------------------------------
 
 
-async def test_a_person_opens_one_profile_and_it_is_his(deployment: Deployment) -> None:
+async def test_the_for_me_door_is_shut_until_consent_can_be_recorded(
+    deployment: Deployment,
+) -> None:
+    """The door takes the agreement and validates it, and then refuses: until the consent
+    service (E00-02) can write it down, answering 201 would claim a consent nobody recorded."""
     pa = await register_by_phone(deployment, PA, "Pa")
     his = bearer(pa["token"])
-    # No agreement, no profile: the door takes the consent from the first day.
+
+    # No agreement, or an agreement in words the door does not know: not even a refusal.
     unsigned = await deployment.client.post(
         "/profiles/mine", json={"display_name": "Pa"}, headers=his
     )
@@ -246,39 +256,51 @@ async def test_a_person_opens_one_profile_and_it_is_his(deployment: Deployment) 
     )
     assert unknown.status_code == 422
 
-    created = await deployment.client.post(
+    # A well-formed agreement: refused by name, because it cannot be recorded yet.
+    shut = await deployment.client.post(
         "/profiles/mine",
         json={"consent": CONSENT, "display_name": "Pa", "language": "ms"},
         headers=his,
     )
-    assert created.status_code == 201
-    profile = created.json()
-    assert profile["region"] == "SG" and profile["language"] == "ms"
+    assert shut.status_code == 501
+    assert shut.json() == {"refusal": "ConsentNotRecordedYet"}
 
-    again = await deployment.client.post("/profiles/mine", json={"consent": CONSENT}, headers=his)
-    assert again.status_code == 409
-    assert again.json() == {"refusal": "ProfileAlreadyOwned"}
+    # And nothing was opened or written down on the way.
+    async with deployment.sessions() as db:
+        assert (await db.scalars(select(Profile))).all() == []
+        assert (await db.scalars(select(AuditEntry))).all() == []
+    me = await deployment.client.get("/me", headers=his)
+    assert me.json()["profile_id"] is None
+
+    assert (await deployment.client.post("/profiles/mine", json={})).status_code == 401
+
+
+async def test_a_person_owns_one_profile_and_reads_its_face_through_the_trail(
+    deployment: Deployment,
+) -> None:
+    pa = await register_by_phone(deployment, PA, "Pa")
+    his = bearer(pa["token"])
+    profile_id = await own_profile(deployment, pa, display_name="Pa", language="ms")
 
     me = await deployment.client.get("/me", headers=his)
-    assert me.json()["profile_id"] == profile["profile_id"]
+    assert me.json()["profile_id"] == profile_id
 
-    summary = await deployment.client.get(f"/profiles/{profile['profile_id']}", headers=his)
+    summary = await deployment.client.get(f"/profiles/{profile_id}", headers=his)
+    assert summary.json()["region"] == "SG" and summary.json()["language"] == "ms"
     assert summary.json()["role"] is None
     assert "profile" in summary.json()["scopes"]
     assert len(summary.json()["scopes"]) == 11
 
     # Opening the graph was written down as a write to it; reading its face, as reads.
-    trail = await deployment.client.get(f"/profiles/{profile['profile_id']}/audit", headers=his)
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
     profile_lines = [(e["action"], e["outcome"]) for e in trail.json() if e["target"] == "profile"]
     assert profile_lines == [("read", "allowed"), ("read", "allowed"), ("write", "allowed")]
     assert all(e["actor_person_id"] == pa["person_id"] for e in trail.json())
 
-    assert (await deployment.client.post("/profiles/mine", json={})).status_code == 401
-
 
 async def test_a_note_is_short_and_the_patients_own_words(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
-    profile_id = await own_profile(deployment.client, pa["token"])
+    profile_id = await own_profile(deployment, pa)
     his = bearer(pa["token"])
     too_long = await deployment.client.post(
         f"/profiles/{profile_id}/notes", json={"text": "x" * 281}, headers=his
@@ -330,8 +352,14 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
         json={"holder_person_id": ash_id, "role": "viewer", "basis": "owner_consent"},
         headers=his,
     )
-    assert elsewhere.status_code == 403
-    assert elsewhere.json() == {"refusal": "OutOfRegion"}
+    nobody = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_person_id": str(uuid.uuid4()), "role": "viewer", "basis": "owner_consent"},
+        headers=his,
+    )
+    # In the same words as an id that is nobody's, so an account elsewhere cannot be probed.
+    assert elsewhere.status_code == nobody.status_code == 403
+    assert elsewhere.json() == nobody.json() == {"refusal": "NoSuchHolder"}
 
     # A caregiver may not cut a key.
     await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
@@ -346,7 +374,7 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
 
 async def test_a_profile_pinned_elsewhere_is_out_of_region(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
-    profile_id = await own_profile(deployment.client, pa["token"])
+    profile_id = await own_profile(deployment, pa)
     async with deployment.sessions() as db:
         profile = await db.get(Profile, uuid.UUID(profile_id))
         assert profile is not None

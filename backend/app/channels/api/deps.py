@@ -21,12 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import PROFILE_TARGET
 from app.audit.models import Action, Outcome
 from app.audit.trail import record
-from app.db import take_keepers
+from app.db import unit_of_work
 from app.errors import Refusal
 from app.identity.login import resolve_session
-from app.identity.models import LoginSession, Person, Profile
+from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
-from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.keys.context import KeyContext, NoKey, profile_by_id, resolve_key_context
 from app.keys.scopes import Scope
 from app.regions import OutOfRegion
 from app.settings import Settings
@@ -54,27 +54,23 @@ def providers_of(request: Request) -> Providers:
 async def db(request: Request) -> AsyncIterator[AsyncSession]:
     """One session for the request, and what becomes of it.
 
-    The request runs inside a savepoint. When it succeeds, the savepoint is released and the
-    transaction committed. When it is refused, the savepoint is rolled back — so nothing a
-    service wrote on the way to its refusal lands half-done — and then the writes a refusal
-    is *for* are put back and committed: the audit lines saying who reached for what, and the
-    wrong try counted against a code. Those were registered with `app.db.keep_on_refusal` by
-    the code that wrote them. Anything else that goes wrong rolls the whole request back.
+    The request is one `app.db.unit_of_work`: a savepoint that is released on success and
+    rolled back on a `Refusal`, after which the boundary replays what a refusal keeps — the
+    refused audit lines, the wrong try counted against a code — and this commits them. So a
+    refused request leaves the record of the reaching and nothing it wrote on the way. Any
+    other failure rolls the whole request back.
     """
     async with request.app.state.session_factory() as session:
         try:
-            async with session.begin_nested():
+            async with unit_of_work(session):
                 yield session
         except Refusal:
-            for keeper in take_keepers(session):
-                await keeper(session)
             await session.commit()
             raise
         except BaseException:
             await session.rollback()
             raise
         else:
-            take_keepers(session)
             await session.commit()
 
 
@@ -155,8 +151,8 @@ async def key_context(
             _route_of(request),
         )
         if isinstance(refusal, NoKey):
-            profile = await session.get(Profile, profile_id)
-            if profile is not None and profile.region is region:
+            profile = await profile_by_id(session, region=region, profile_id=profile_id)
+            if profile is not None:
                 await record(
                     session,
                     context=KeyContext(

@@ -32,10 +32,12 @@ class NoKeyToClose(Refusal):
     """There is no such key on this profile."""
 
 
-async def _may_cut_keys(
-    session: AsyncSession, context: KeyContext, *, now: datetime | None
-) -> None:
-    """Only the owner or a chief holding the family scope. A refusal is written down."""
+async def may_cut_keys(session: AsyncSession, context: KeyContext, *, now: datetime | None) -> None:
+    """Only the owner or a chief holding the family scope. A refusal is written down.
+
+    Public so a channel can ask before it does anything on the asker's behalf — resolving
+    the holder, say — that it would otherwise have to undo.
+    """
     try:
         context.require(Scope.FAMILY)
         if not context.is_owner and context.role is not KeyRole.CHIEF:
@@ -73,7 +75,7 @@ async def grant_key(
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
-    await _may_cut_keys(session, context, now=now)
+    await may_cut_keys(session, context, now=now)
     moment = now or utcnow()
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     # Every key opens the face of the graph it is cut on: narrowing never removes PROFILE.
@@ -124,7 +126,7 @@ async def revoke_key(
     now: datetime | None = None,
 ) -> Key:
     """Close a key. The row stays, so the owner can still read that it was held."""
-    await _may_cut_keys(session, context, now=now)
+    await may_cut_keys(session, context, now=now)
     moment = now or utcnow()
     found = await audited_read(
         session, Key, context, Scope.FAMILY, where=(Key.id == key_id,), now=moment
