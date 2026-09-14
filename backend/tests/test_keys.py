@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import FrozenClock
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import NoKeyToClose, grant_key, list_keys, revoke_key
@@ -58,34 +59,36 @@ def test_a_key_with_no_end_runs_until_it_is_closed() -> None:
     assert not key.is_active(far_off)
 
 
-async def test_a_second_grant_to_one_person_replaces_the_first(sg: AsyncSession) -> None:
+async def test_a_second_grant_to_one_person_replaces_the_first(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
 
+    clock.set(GRANTED_AT)
     first = await grant_key(
         sg,
         context=owner,
         holder=mei,
         role=KeyRole.VIEWER,
         basis="owner_consent",
-        now=GRANTED_AT,
     )
+    clock.set(GRANTED_AT + timedelta(days=1))
     second = await grant_key(
         sg,
         context=owner,
         holder=mei,
         role=KeyRole.CAREGIVER,
         basis="owner_consent",
-        now=GRANTED_AT + timedelta(days=1),
     )
 
     assert first.revoked_at is not None
+    clock.set(GRANTED_AT + timedelta(days=2))
     held = await resolve_key_context(
         sg,
         region=Region.SG,
         person_id=mei.id,
         profile_id=owner.profile_id,
-        now=GRANTED_AT + timedelta(days=2),
     )
     assert held.key_id == second.id
     assert held.role is KeyRole.CAREGIVER

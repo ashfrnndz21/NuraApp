@@ -6,7 +6,8 @@ Malaysian database has found a bug in the thing this story is about.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
 from app.keys import confirm  # noqa: F401
 
@@ -59,3 +61,19 @@ async def my() -> AsyncIterator[AsyncSession]:
     """A session on the Malaysian deployment."""
     async for session in _deployment():
         yield session
+
+
+FROZEN_AT = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def clock() -> Iterator[FrozenClock]:
+    """The one clock, frozen: a test moves it, nothing else does, and no service takes a time.
+
+    Every timestamp and every check against time in the app reads `app.clock`; a caller
+    cannot pass a `now`. So a test that needs time to pass steps this.
+    """
+    frozen = FrozenClock(FROZEN_AT)
+    set_clock(frozen)
+    yield frozen
+    set_clock(SystemClock())

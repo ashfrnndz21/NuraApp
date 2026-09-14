@@ -48,7 +48,6 @@ async def record(
     refused_because: str | None = None,
     shared_with_person_id: uuid.UUID | None = None,
     shared_with_label: str | None = None,
-    now: datetime | None = None,
 ) -> AuditEntry:
     """Write one line of the trail.
 
@@ -64,7 +63,7 @@ async def record(
     """
     values: dict[str, Any] = {
         "profile_id": context.profile_id,
-        "at": now or utcnow(),
+        "at": utcnow(),
         "actor_person_id": context.person_id,
         "actor_role": context.role,
         "key_id": context.key_id,
@@ -112,7 +111,6 @@ async def read_audit(
     since: datetime | None = None,
     limit: int = 200,
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
 ) -> Sequence[AuditEntry]:
     """Every access to this profile, newest first, narrowed by who, what, which part and when.
 
@@ -131,7 +129,6 @@ async def read_audit(
             outcome=Outcome.REFUSED,
             refused_because=type(refusal).__name__,
             channel=channel,
-            now=now,
         )
         raise
 
@@ -155,6 +152,5 @@ async def read_audit(
         target=AUDIT_TARGET,
         rows=len(found),
         channel=channel,
-        now=now,
     )
     return found

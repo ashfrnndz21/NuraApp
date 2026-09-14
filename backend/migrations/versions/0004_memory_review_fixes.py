@@ -9,7 +9,8 @@ confirmed it (`confirmed_by_person_id`), and a fact says who confirmed or disput
 (`confirmed_by_person_id`, nullable: an extraction names nobody); a change of an
 appointment's status names who confirmed the step (`status_changed_by_person_id`). The
 person named is the creator of a `confirmation` row — the new table here: a yes the surface
-wrote down, from the person asking only, for one act, good for ten minutes, used once.
+wrote down, from the person asking only, for one act bound by a digest of its content, good
+for ten minutes, used once — the spend is a conditional UPDATE on `consumed_at IS NULL`.
 
 The event and appointment columns are NOT NULL and neither has a default, because a default
 would invent a source or a confirmer. `source_channel` is filled from the artefact where an
@@ -168,6 +169,8 @@ def upgrade() -> None:
         sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         sa.Column("subject", CONFIRM_SUBJECT, nullable=False),
         sa.Column("subject_id", sa.Uuid(), nullable=True),
+        # sha256 of the canonical JSON of what the person was shown (app.drafts.digest_of).
+        sa.Column("content_digest", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),

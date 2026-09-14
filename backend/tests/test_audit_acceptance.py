@@ -19,7 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.audit.access import record_share
 from app.audit.models import Action, AuditEntry, Channel, Outcome
-from app.audit.trail import NotTheirsToRead, read_audit
+from app.audit.trail import AUDIT_TARGET, NotTheirsToRead, read_audit
+from app.clock import FrozenClock
 from app.db import (
     KeepersNotReplayed,
     keep_on_refusal,
@@ -100,13 +101,22 @@ async def test_every_read_write_and_share_of_patient_data_is_queryable_by_the_pa
 
     # Every entry names the profile it touched and how the person reached it.
     assert {entry.profile_id for entry in trail} == {profile.id}
-    her = next(entry for entry in trail if entry.action is Action.SHARE)
+    # Picked by who and what: with the clock standing still, no line is newer than another.
+    her = next(
+        entry
+        for entry in trail
+        if entry.action is Action.SHARE and entry.actor_person_id == daughter.id
+    )
     assert her.actor_role is KeyRole.CAREGIVER
     assert her.key_id == held.key_id
     assert her.shared_with_label == "Dr Tan's clinic"
     assert her.channel is Channel.SHARE_LINK
 
-    his = next(entry for entry in trail if entry.action is Action.WRITE)
+    his = next(
+        entry
+        for entry in trail
+        if entry.action is Action.WRITE and entry.target == Note.__tablename__
+    )
     assert his.actor_role is None and his.key_id is None  # the owner holds no key: it is his
 
 
@@ -179,13 +189,17 @@ async def test_the_patient_and_his_chief_read_the_trail_and_no_other_holder_can(
 
 async def test_the_patient_narrows_the_trail_by_person_action_scope_and_day(
     sg: AsyncSession,
+    clock: FrozenClock,
 ) -> None:
     _, owner, daughter, held = await _pa_and_his_daughter(sg)
     # Three days after the key was cut, so the entries the grant itself wrote fall before them.
     day_one = utcnow() + timedelta(days=1)
-    await add_note(sg, owner, scope=Scope.MEDICINES, body=WATER_PILL, now=day_one)
-    await read_notes(sg, held, scope=Scope.MEDICINES, now=day_one + timedelta(days=1))
-    await read_notes(sg, held, scope=Scope.VISITS, now=day_one + timedelta(days=2))
+    clock.set(day_one)
+    await add_note(sg, owner, scope=Scope.MEDICINES, body=WATER_PILL)
+    clock.set(day_one + timedelta(days=1))
+    await read_notes(sg, held, scope=Scope.MEDICINES)
+    clock.set(day_one + timedelta(days=2))
+    await read_notes(sg, held, scope=Scope.VISITS)
 
     by_her = await read_audit(sg, context=owner, actor_person_id=daughter.id)
     assert {entry.action for entry in by_her} == {Action.READ}
@@ -194,7 +208,8 @@ async def test_the_patient_narrows_the_trail_by_person_action_scope_and_day(
     assert [entry.actor_person_id for entry in reads] == [daughter.id]
 
     since_day_two = await read_audit(sg, context=owner, since=day_one + timedelta(days=1))
-    assert len(since_day_two) == 2
+    # The two reads she made; the owner's own reads of the trail, stamped now, set aside.
+    assert len([entry for entry in since_day_two if entry.target != AUDIT_TARGET]) == 2
 
     # Newest first, so the owner's screen opens on what just happened.
     newest = await read_audit(sg, context=owner)
@@ -284,9 +299,14 @@ async def test_a_stranger_cannot_learn_that_a_profile_exists_or_where_it_is_pinn
                 )
             assert "MY" not in str(refused.value) and "held in" not in str(refused.value)
     finally:
-        keys_context.on_unknown_reach = None
+        keys_context.on_unknown_reach = keys_context.count_unknown_reach
     assert [person for person, _ in reaches] == [stranger.id] * 3
     assert [profile for _, profile in reaches][1:] == [here.id, astray.id]
+    # The default hook keeps a count per reaching account, for a channel to alarm on.
+    before = keys_context.unknown_reaches[stranger.id]
+    with pytest.raises(NoKey):
+        await resolve_key_context(sg, region=Region.SG, person_id=stranger.id, profile_id=here.id)
+    assert keys_context.unknown_reaches[stranger.id] == before + 1
     lines = (
         await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id.in_([here.id, astray.id])))
     ).all()

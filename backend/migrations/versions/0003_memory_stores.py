@@ -31,7 +31,9 @@ def _enum(name: str, *values: str) -> sa.Enum:
 REGION = _enum("region", "SG", "MY")
 ARTIFACT_KIND = _enum("artifact_kind", "photo", "pdf", "voice", "message", "reading", "screenshot")
 SOURCE_CHANNEL = _enum("source_channel", "app", "whatsapp", "connector", "device", "clinic")
-EVENT_KIND = _enum("event_kind", "reading", "visit", "message", "dose_taken", "symptom", "discharge")
+EVENT_KIND = _enum(
+    "event_kind", "reading", "visit", "message", "dose_taken", "symptom", "discharge"
+)
 CONFIDENCE_STATE = _enum("confidence_state", "extracted", "confirmed_by_person", "disputed")
 EPISODE_KIND = _enum(
     "episode_kind", "illness", "admission", "recovery", "travel", "fasting", "other"
@@ -168,4 +170,3 @@ def downgrade() -> None:
         for index in _INDEXES[table]:
             op.drop_index(index, table_name=table)
         op.drop_table(table)
-

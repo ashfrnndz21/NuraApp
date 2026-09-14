@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -29,10 +28,11 @@ from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
+from app.drafts import FactDraft
 from app.errors import Refusal
-from app.keys.confirm import ConfirmSubject, NotAConfirmerHere, consume_confirmation
+from app.keys.confirm import NotAConfirmerHere, consume_confirmation
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
+from app.keys.scopes import Scope, scope_for_subject
 from app.memory.episodic import (
     NoSuchArtifact,
     NoSuchEvent,
@@ -78,22 +78,6 @@ class NotTheFactInDispute(Refusal):
 
 class NotAPersonsWord(Refusal):
     """An extracted fact is the machine's. It does not come with a person's yes."""
-
-
-@dataclass(frozen=True, slots=True)
-class FactDraft:
-    """A fact about to be written, as the hooks on `before_fact_write` see it."""
-
-    subject: str
-    attribute: str
-    value: Any
-    unit: str | None
-    confidence: float
-    confidence_state: ConfidenceState
-    artifact_id: uuid.UUID | None
-    event_id: uuid.UUID | None
-    episode_id: uuid.UUID | None
-    supersedes_id: uuid.UUID | None
 
 
 FactWriteHook = Callable[[AsyncSession, KeyContext, FactDraft], Awaitable[None]]
@@ -164,15 +148,14 @@ async def _check_provenance(
     context: KeyContext,
     artifact_id: uuid.UUID | None,
     event_id: uuid.UUID | None,
-    now: datetime | None,
 ) -> None:
     if artifact_id is None and event_id is None:
         raise NoProvenance("a fact names the artefact or the event it came from")
     try:
         if artifact_id is not None:
-            await require_artifact(session, context=context, artifact_id=artifact_id, now=now)
+            await require_artifact(session, context=context, artifact_id=artifact_id)
         if event_id is not None:
-            await require_event(session, context=context, event_id=event_id, now=now)
+            await require_event(session, context=context, event_id=event_id)
     except (NoSuchArtifact, NoSuchEvent) as missing:
         raise NoSuchProvenance(str(missing)) from missing
 
@@ -188,9 +171,7 @@ def _check_window(valid_from: datetime, valid_to: datetime | None) -> None:
         raise EmptyWindow("valid_to must come after valid_from")
 
 
-async def _current_fact(
-    session: AsyncSession, *, context: KeyContext, fact_id: uuid.UUID, now: datetime | None
-) -> Fact:
+async def _current_fact(session: AsyncSession, *, context: KeyContext, fact_id: uuid.UUID) -> Fact:
     """The fact by that id on this profile, still current — the only kind that can be replaced."""
     found = await audited_read(
         session,
@@ -198,7 +179,6 @@ async def _current_fact(
         context,
         Scope.RECORDS,
         where=(Fact.id == fact_id, fact_cites_only_what_is_held_here(context)),
-        now=now,
     )
     if not found:
         raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
@@ -225,23 +205,20 @@ async def _write_fact(
     valid_from: datetime | None,
     valid_to: datetime | None,
     supersedes: Fact | None,
-    now: datetime | None,
 ) -> Fact:
     """The one path a fact is written by: every check, then the hooks, then the confirm is
     used, then the write, then the supersession."""
-    moment = now or utcnow()
+    moment = utcnow()
     starts = valid_from or moment
     _check_window(starts, valid_to)
     sure = _check_confidence(confidence)
-    await _check_provenance(
-        session, context=context, artifact_id=artifact_id, event_id=event_id, now=now
-    )
+    await _check_provenance(session, context=context, artifact_id=artifact_id, event_id=event_id)
     if episode_id is not None:
-        await require_open_episode(session, context=context, episode_id=episode_id, now=now)
+        await require_open_episode(session, context=context, episode_id=episode_id)
     _check_state_and_confirm(confidence_state, confirmation_id)
     disputes: Sequence[Fact] = ()
     if supersedes is not None:
-        disputes = await open_disputes(session, context=context, fact_id=supersedes.id, now=now)
+        disputes = await open_disputes(session, context=context, fact_id=supersedes.id)
         _check_supersession(supersedes, disputes, subject, attribute, confidence_state)
     draft = FactDraft(
         subject=subject,
@@ -260,21 +237,13 @@ async def _write_fact(
     # The yes is used last, once everything else has passed, so a refusal never spends it.
     who = None
     if confirmation_id is not None:
-        yes = await consume_confirmation(
-            session,
-            context,
-            confirmation_id,
-            subject=ConfirmSubject.FACT,
-            subject_id=draft.supersedes_id,
-            now=now,
-        )
+        yes = await consume_confirmation(session, context, confirmation_id, draft)
         who = yes.person_id
     new = await audited_write(
         session,
         Fact,
         context,
-        Scope.RECORDS,
-        now=now,
+        scope_for_subject(subject),
         subject=subject,
         attribute=attribute,
         value=value,
@@ -305,12 +274,11 @@ async def _write_fact(
                 target=Fact.__tablename__,
                 target_id=closed.id,
                 rows=1,
-                now=now,
             )
     return new
 
 
-@audited(Action.WRITE, Scope.RECORDS, Fact.__tablename__)
+@audited(Action.WRITE, lambda call: scope_for_subject(call["subject"]), Fact.__tablename__)
 async def assert_fact(
     session: AsyncSession,
     *,
@@ -328,21 +296,21 @@ async def assert_fact(
     valid_from: datetime | None = None,
     valid_to: datetime | None = None,
     supersedes_id: uuid.UUID | None = None,
-    now: datetime | None = None,
 ) -> Fact:
     """Assert a fact about the profile from an artefact or an event on it.
 
     `valid_from` defaults to now; `valid_to` of None means it holds until superseded.
     `supersedes_id` names a current fact on this profile, read under the key context like the
     provenance is; naming it is superseding it, under the rule in `ConfirmedFactStands`.
-    `confirmation_id` is a yes the surface wrote down (`app.keys.confirm.confirm`), for a
-    FACT, naming the fact being superseded when there is one. It is required with
-    CONFIRMED_BY_PERSON or DISPUTED, refused with EXTRACTED, and used once; the fact records
-    the person who gave it.
+    `confirmation_id` is a yes the surface wrote down (`app.keys.confirm.confirm`) for a
+    `FactDraft` of exactly this statement and provenance, naming the fact being superseded
+    when there is one. It is required with CONFIRMED_BY_PERSON or DISPUTED, refused with
+    EXTRACTED, and used once; the fact records the person who gave it. A medicine fact is
+    held under the medicines scope (`scope_for_subject`), a reading under the readings scope.
     """
     old = None
     if supersedes_id is not None:
-        old = await _current_fact(session, context=context, fact_id=supersedes_id, now=now)
+        old = await _current_fact(session, context=context, fact_id=supersedes_id)
     return await _write_fact(
         session,
         context=context,
@@ -359,7 +327,6 @@ async def assert_fact(
         valid_from=valid_from,
         valid_to=valid_to,
         supersedes=old,
-        now=now,
     )
 
 
@@ -378,7 +345,6 @@ async def supersede_fact(
     event_id: uuid.UUID | None = None,
     valid_from: datetime | None = None,
     valid_to: datetime | None = None,
-    now: datetime | None = None,
 ) -> Fact:
     """Replace a fact with a new one that names it. The old row stays.
 
@@ -388,7 +354,9 @@ async def supersede_fact(
     confirmed is not replaced by an extraction, and a DISPUTED supersession is an open dispute
     that leaves the old fact current: see `ConfirmedFactStands`.
     """
-    old = await _current_fact(session, context=context, fact_id=fact_id, now=now)
+    old = await _current_fact(session, context=context, fact_id=fact_id)
+    # The door checked the records scope; the fact's own subject may ask for more.
+    context.require(scope_for_subject(old.subject))
     carried = artifact_id is None and event_id is None
     return await _write_fact(
         session,
@@ -406,11 +374,16 @@ async def supersede_fact(
         valid_from=valid_from,
         valid_to=valid_to,
         supersedes=old,
-        now=now,
     )
 
 
-@audited(Action.READ, Scope.RECORDS, Fact.__tablename__)
+def _scope_of_the_facts_asked_for(call: dict[str, Any]) -> Scope:
+    """A subject names its scope; asking for every subject is asking for the records."""
+    subject = call.get("subject")
+    return scope_for_subject(subject) if subject else Scope.RECORDS
+
+
+@audited(Action.READ, _scope_of_the_facts_asked_for, Fact.__tablename__)
 async def current_facts(
     session: AsyncSession,
     *,
@@ -418,7 +391,6 @@ async def current_facts(
     subject: str | None = None,
     attribute: str | None = None,
     at: datetime | None = None,
-    now: datetime | None = None,
 ) -> Sequence[Fact]:
     """The facts that hold at `at` (default now): unsuperseded, inside their window.
 
@@ -426,7 +398,7 @@ async def current_facts(
     fact's own validity, so a fact asserted later about an earlier time is still found. An
     open dispute is not a fact that holds: the fact it disputes is (`ConfirmedFactStands`).
     """
-    moment = at or now or utcnow()
+    moment = at or utcnow()
     where: list[ColumnElement[bool]] = [
         Fact.superseded_at.is_(None),
         Fact.confidence_state != ConfidenceState.DISPUTED,
@@ -438,7 +410,9 @@ async def current_facts(
         where.append(Fact.subject == subject)
     if attribute is not None:
         where.append(Fact.attribute == attribute)
-    found = await audited_read(session, Fact, context, Scope.RECORDS, where=where, now=now)
+    found = await audited_read(
+        session, Fact, context, _scope_of_the_facts_asked_for({"subject": subject}), where=where
+    )
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))
 
 
@@ -448,7 +422,6 @@ async def open_disputes(
     *,
     context: KeyContext,
     fact_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Sequence[Fact]:
     """The disputes still open against a fact, oldest first. Empty once a person settled it."""
     found = await audited_read(
@@ -462,6 +435,5 @@ async def open_disputes(
             Fact.superseded_at.is_(None),
             fact_cites_only_what_is_held_here(context),
         ),
-        now=now,
     )
     return sorted(found, key=lambda dispute: as_utc(dispute.asserted_at))

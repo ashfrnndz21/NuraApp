@@ -24,6 +24,20 @@ class Scope(StrEnum):
 ALL_SCOPES = frozenset(Scope)
 
 
+def scope_for_subject(subject: str) -> Scope:
+    """The scope a fact is held under, from what it is about.
+
+    A medicine is the medicines scope, a reading the readings scope, everything else the
+    records scope — so a key cut for the visits and the readings reaches no dose.
+    """
+    head = subject.split(".", 1)[0].strip().lower()
+    if head in {"medicine", "medicines", "medication", "medications"}:
+        return Scope.MEDICINES
+    if head in {"reading", "readings"}:
+        return Scope.READINGS
+    return Scope.RECORDS
+
+
 class KeyRole(StrEnum):
     """Who the key holder is to the patient. The role presets the scopes; it does not fix them."""
 

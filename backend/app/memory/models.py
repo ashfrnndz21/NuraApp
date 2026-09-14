@@ -25,12 +25,10 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     String,
     UniqueConstraint,
-    event,
-    inspect,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, utcnow
+from app.db import Base, ImmutableRow, ProfileScoped, enum_column, frozen, utcnow
 from app.errors import Refusal
 from app.regions import Region
 
@@ -40,10 +38,6 @@ LABEL_LENGTH = 80
 
 class NotALabel(Refusal):
     """A label names a thing in a few words. This was empty, or long enough to be the thing."""
-
-
-class ImmutableRow(Refusal):
-    """What came in is what came in. A wrong fact is superseded, never edited."""
 
 
 def short_label(text: str) -> str:
@@ -70,24 +64,6 @@ def _tied_to_profile(table: str, column: str, referred: str) -> ForeignKeyConstr
         [f"{referred}.profile_id", f"{referred}.id"],
         name=f"fk_{table}_{column.removesuffix('_id')}_profile",
     )
-
-
-def _frozen(model: type[Any], *, except_for: frozenset[str] = frozenset()) -> None:
-    """Refuse any update to a row of this table beyond the columns named."""
-
-    @event.listens_for(model, "before_update")
-    def _refuse(mapper: Any, connection: Any, target: Any) -> None:
-        changed = {
-            attribute.key: attribute.history
-            for attribute in inspect(target).attrs
-            if attribute.history.has_changes()
-        }
-        if changed.keys() - except_for:
-            raise ImmutableRow(f"{model.__tablename__} rows are not edited")
-        # A column that may be set may not be unset: a superseded fact is not resurrected, a
-        # closed episode is not reopened, by writing None over the moment it happened.
-        if any(history.added == [None] for history in changed.values()):
-            raise ImmutableRow(f"{model.__tablename__} rows are not un-done")
 
 
 # --- episodic ------------------------------------------------------------------------------
@@ -347,12 +323,28 @@ class Appointment(ProfileScoped, Base):
     booked_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
-_frozen(Artifact)
-_frozen(Event)
+__all__ = ["ImmutableRow"]
+
+STATUS_CHANGE_IN_PROGRESS = "appointment_status_change"
+"""`session.info` key: the id of the one appointment `spine.change_appointment_status` is
+changing right now. The only time an appointment's status may change."""
+
+
+def _status_change_is_in_progress(session: Any, row: Any) -> bool:
+    return session is not None and session.info.get(STATUS_CHANGE_IN_PROGRESS) == row.id
+
+
+frozen(Artifact)
+frozen(Event)
 # Supersession is the one change a fact takes: the moment it stopped being current.
-_frozen(Fact, except_for=frozenset({"superseded_at"}))
-# Closing is the one change an episode takes, and status the one an appointment takes; both
-# go through a service that writes the change down (`working.close_episode`,
-# `spine.change_appointment_status`). Providers are a directory and are corrected in place.
-_frozen(Episode, except_for=frozenset({"closed_at"}))
-_frozen(Appointment, except_for=frozenset({"status", "status_changed_by_person_id"}))
+frozen(Fact, except_for=frozenset({"superseded_at"}))
+# Closing is the one change an episode takes, through `working.close_episode`. Status is the
+# one an appointment takes, and only while `spine.change_appointment_status` is making it —
+# a bare `visit.status = CANCELLED` flushed from anywhere else is refused. Providers are a
+# directory and are corrected in place.
+frozen(Episode, except_for=frozenset({"closed_at"}))
+frozen(
+    Appointment,
+    except_for=frozenset({"status", "status_changed_by_person_id"}),
+    only_when=_status_change_is_in_progress,
+)

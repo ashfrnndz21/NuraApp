@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Sequence
-from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,7 +46,6 @@ async def grant_key(
     basis: str,
     scopes: Iterable[Scope] | None = None,
     window: KeyWindow | None = None,
-    now: datetime | None = None,
 ) -> Key:
     """Cut a key for one person on the profile in the context.
 
@@ -58,12 +56,12 @@ async def grant_key(
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     _may_cut_keys(context)
-    moment = now or utcnow()
+    moment = utcnow()
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     granted = asked & context.scopes
 
     # One person holds one key on one profile: a new key replaces the one before it.
-    for existing in await audited_read(session, Key, context, Scope.FAMILY, now=moment):
+    for existing in await audited_read(session, Key, context, Scope.FAMILY):
         if existing.holder_person_id == holder.id and existing.is_active(moment):
             existing.revoked_at = moment
 
@@ -72,7 +70,6 @@ async def grant_key(
         Key,
         context,
         Scope.FAMILY,
-        now=moment,
         holder_person_id=holder.id,
         role=role,
         scopes=sorted(scope.value for scope in granted),
@@ -89,7 +86,6 @@ async def grant_key(
         channel=Channel.APP,
         shared_with_person_id=holder.id,
         target_id=key.id,
-        now=moment,
     )
     return key
 
@@ -104,14 +100,11 @@ async def revoke_key(
     *,
     context: KeyContext,
     key_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Key:
     """Close a key. The row stays, so the owner can still read that it was held."""
     _may_cut_keys(context)
-    moment = now or utcnow()
-    found = await audited_read(
-        session, Key, context, Scope.FAMILY, where=(Key.id == key_id,), now=moment
-    )
+    moment = utcnow()
+    found = await audited_read(session, Key, context, Scope.FAMILY, where=(Key.id == key_id,))
     if not found:
         raise NoKeyToClose(f"no key {key_id} on profile {context.profile_id}")
     key = found[0]
@@ -126,6 +119,5 @@ async def revoke_key(
         target=Key.__tablename__,
         target_id=key.id,
         rows=1,
-        now=moment,
     )
     return key

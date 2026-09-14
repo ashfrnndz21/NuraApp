@@ -19,11 +19,13 @@ from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
+from app.drafts import AppointmentDraft, StatusChange
 from app.errors import Refusal
-from app.keys.confirm import ConfirmSubject, consume_confirmation
+from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import (
+    STATUS_CHANGE_IN_PROGRESS,
     Appointment,
     AppointmentStatus,
     Provider,
@@ -80,7 +82,6 @@ async def add_provider(
     region: Region,
     phone_e164: str | None = None,
     address: str | None = None,
-    now: datetime | None = None,
 ) -> Provider:
     """Add a doctor, clinic, hospital or pharmacy to this profile's directory."""
     if not name.strip():
@@ -90,13 +91,12 @@ async def add_provider(
         Provider,
         context,
         Scope.VISITS,
-        now=now,
         name=name.strip(),
         kind=kind,
         region=region,
         phone_e164=phone_e164,
         address=address,
-        added_at=now or utcnow(),
+        added_at=utcnow(),
     )
 
 
@@ -105,7 +105,7 @@ async def list_providers(
     session: AsyncSession, *, context: KeyContext, now: datetime | None = None
 ) -> Sequence[Provider]:
     """Every provider this profile has used."""
-    found = await audited_read(session, Provider, context, Scope.VISITS, now=now)
+    found = await audited_read(session, Provider, context, Scope.VISITS)
     return sorted(found, key=lambda provider: provider.name)
 
 
@@ -120,39 +120,40 @@ async def book_appointment(
     confirmation_id: uuid.UUID,
     status: AppointmentStatus = AppointmentStatus.PLANNED,
     episode_id: uuid.UUID | None = None,
-    now: datetime | None = None,
 ) -> Appointment:
     """Write down an appointment a person has arranged with a provider on this profile.
 
-    `confirmation_id` is the yes the surface wrote down (`app.keys.confirm.confirm`, for an
-    APPOINTMENT) when the person confirmed — a tap, a spoken word. Nothing here can supply
-    it and there is no default; it is used once, after every other check, and the row
-    records the person who gave it.
+    `confirmation_id` is the yes the surface wrote down (`app.keys.confirm.confirm`) for an
+    `AppointmentDraft` of exactly this provider, time and purpose — a tap, a spoken word.
+    Nothing here can supply it and there is no default; it is used once, after every other
+    check, and the row records the person who gave it.
     """
     named = short_label(purpose)
     found = await audited_read(
-        session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,), now=now
+        session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,)
     )
     if not found:
         raise NoSuchProvider(f"no provider {provider_id} on profile {context.profile_id}")
     if episode_id is not None:
-        await require_open_episode(session, context=context, episode_id=episode_id, now=now)
+        await require_open_episode(session, context=context, episode_id=episode_id)
     yes = await consume_confirmation(
-        session, context, confirmation_id, subject=ConfirmSubject.APPOINTMENT, now=now
+        session,
+        context,
+        confirmation_id,
+        AppointmentDraft(provider_id=provider_id, scheduled_at=scheduled_at, purpose=named),
     )
     return await audited_write(
         session,
         Appointment,
         context,
         Scope.VISITS,
-        now=now,
         provider_id=provider_id,
         scheduled_at=scheduled_at,
         status=status,
         purpose=named,
         episode_id=episode_id,
         confirmed_by_person_id=yes.person_id,
-        booked_at=now or utcnow(),
+        booked_at=utcnow(),
     )
 
 
@@ -164,13 +165,12 @@ async def change_appointment_status(
     appointment_id: uuid.UUID,
     status: AppointmentStatus,
     confirmation_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Appointment:
     """Move a visit one step along `STATUS_GOES_TO`, on a person's confirm.
 
     Cancelling a booked visit changes a booking, and confirming one is a person's word too,
-    so every step uses a yes written down for this visit (`confirm`, APPOINTMENT_STATUS with
-    the visit's id) and names who gave it in `status_changed_by_person_id`; the person who
+    so every step uses a yes written down for exactly this `StatusChange` — this visit, to
+    this status — and names who gave it in `status_changed_by_person_id`; the person who
     confirmed the booking stays where they were.
     """
     found = await audited_read(
@@ -179,7 +179,6 @@ async def change_appointment_status(
         context,
         Scope.VISITS,
         where=(Appointment.id == appointment_id,),
-        now=now,
     )
     if not found:
         raise NoSuchAppointment(f"no appointment {appointment_id} on profile {context.profile_id}")
@@ -190,13 +189,16 @@ async def change_appointment_status(
         session,
         context,
         confirmation_id,
-        subject=ConfirmSubject.APPOINTMENT_STATUS,
-        subject_id=appointment.id,
-        now=now,
+        StatusChange(appointment_id=appointment.id, status=status),
     )
-    appointment.status = status
-    appointment.status_changed_by_person_id = yes.person_id
-    await session.flush()
+    # The one moment an appointment's status may change: `frozen` in models checks this.
+    session.info[STATUS_CHANGE_IN_PROGRESS] = appointment.id
+    try:
+        appointment.status = status
+        appointment.status_changed_by_person_id = yes.person_id
+        await session.flush()
+    finally:
+        session.info.pop(STATUS_CHANGE_IN_PROGRESS, None)
     await record(
         session,
         context=context,
@@ -205,7 +207,6 @@ async def change_appointment_status(
         target=Appointment.__tablename__,
         target_id=appointment.id,
         rows=1,
-        now=now,
     )
     return appointment
 
@@ -215,17 +216,16 @@ async def upcoming_appointments(
     session: AsyncSession,
     *,
     context: KeyContext,
-    now: datetime | None = None,
+    at: datetime | None = None,
     limit: int = 50,
 ) -> Sequence[Appointment]:
-    """The visits still to come, soonest first."""
-    moment = now or utcnow()
+    """The visits still to come at `at` (default now), soonest first."""
+    moment = at or utcnow()
     found = await audited_read(
         session,
         Appointment,
         context,
         Scope.VISITS,
         where=(Appointment.scheduled_at >= moment, Appointment.status.in_(UPCOMING)),
-        now=now,
     )
     return sorted(found, key=lambda visit: as_utc(visit.scheduled_at))[:limit]

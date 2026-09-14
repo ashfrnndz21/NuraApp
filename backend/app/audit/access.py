@@ -19,7 +19,6 @@ import functools
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
-from datetime import datetime
 from typing import Any, cast
 
 from sqlalchemy import ColumnElement
@@ -43,7 +42,6 @@ async def audited_read[Row: ProfileScoped](
     *,
     where: Sequence[ColumnElement[bool]] = (),
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
 ) -> Sequence[Row]:
     """Read one profile's rows, and write down that they were read.
 
@@ -54,7 +52,7 @@ async def audited_read[Row: ProfileScoped](
         statement = scoped_select(model, context, scope).where(*where)
     except Refusal as refusal:
         await _refused(
-            session, context, Action.READ, scope, model.__tablename__, refusal, channel, now
+            session, context, Action.READ, scope, model.__tablename__, refusal, channel
         )
         raise
     found = (await session.scalars(statement)).all()
@@ -66,7 +64,6 @@ async def audited_read[Row: ProfileScoped](
         target=model.__tablename__,
         rows=len(found),
         channel=channel,
-        now=now,
     )
     return found
 
@@ -79,15 +76,19 @@ async def audited_write[Row: ProfileScoped](
     /,
     *,
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
+    name_the_row: bool = True,
     **values: Any,
 ) -> Row:
-    """Add one row to this profile, and write down that it was added."""
+    """Add one row to this profile, and write down that it was added.
+
+    `name_the_row=False` keeps the new row's id off the line: for a row whose id is itself
+    a thing to be used, a yes, and must not be readable from the trail.
+    """
     try:
         row = scoped_new(model, context, scope, **values)
     except Refusal as refusal:
         await _refused(
-            session, context, Action.WRITE, scope, model.__tablename__, refusal, channel, now
+            session, context, Action.WRITE, scope, model.__tablename__, refusal, channel
         )
         raise
     session.add(row)
@@ -98,10 +99,9 @@ async def audited_write[Row: ProfileScoped](
         action=Action.WRITE,
         scope=scope,
         target=model.__tablename__,
-        target_id=getattr(row, "id", None),
+        target_id=getattr(row, "id", None) if name_the_row else None,
         rows=1,
         channel=channel,
-        now=now,
     )
     return row
 
@@ -116,7 +116,6 @@ async def record_share(
     shared_with_person_id: uuid.UUID | None = None,
     shared_with_label: str | None = None,
     target_id: uuid.UUID | None = None,
-    now: datetime | None = None,
 ) -> AuditEntry:
     """Write down that a copy of something left, and to whom.
 
@@ -127,7 +126,7 @@ async def record_share(
     try:
         context.require(scope)
     except Refusal as refusal:
-        await _refused(session, context, Action.SHARE, scope, target, refusal, channel, now)
+        await _refused(session, context, Action.SHARE, scope, target, refusal, channel)
         raise
     return await record(
         session,
@@ -140,7 +139,6 @@ async def record_share(
         channel=channel,
         shared_with_person_id=shared_with_person_id,
         shared_with_label=shared_with_label,
-        now=now,
     )
 
 
@@ -154,7 +152,6 @@ async def audited_guard(
     /,
     *,
     channel: Channel = Channel.APP,
-    now: datetime | None = None,
 ) -> AsyncIterator[None]:
     """Run a check that may refuse, and if it does, write the refusal down before passing it on.
 
@@ -166,18 +163,22 @@ async def audited_guard(
     try:
         yield
     except Refusal as refusal:
-        await _refused(session, context, action, scope, target, refusal, channel, now)
+        await _refused(session, context, action, scope, target, refusal, channel)
         raise
 
 
+ScopeOf = Scope | Callable[[dict[str, Any]], Scope]
+"""A door's scope: fixed, or worked out from the call's keywords (a fact's subject)."""
+
+
 def audited[**P, R](
-    action: Action, scope: Scope, target: str, /
+    action: Action, scope: ScopeOf, target: str, /
 ) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """The door on a service function: one `audited_guard` around the whole call.
 
-    The function takes the session first and `context` and `now` by keyword, as every service
-    here does. The scope is checked at the door, before the body runs — so nothing in the
-    body, a confirm being used least of all, happens for a caller the scope does not cover.
+    The function takes the session first and `context` by keyword, as every service here
+    does. The scope is checked at the door, before the body runs — so nothing in the body, a
+    confirm being used least of all, happens for a caller the scope does not cover.
     Whatever the body then refuses — a reach at another profile's row, a rule, a format — is
     written down against the profile in the context before it is passed on.
     """
@@ -187,9 +188,9 @@ def audited[**P, R](
         async def guarded(*args: P.args, **kwargs: P.kwargs) -> R:
             session = cast(AsyncSession, args[0])
             context = cast(KeyContext, kwargs["context"])
-            now = cast("datetime | None", kwargs.get("now"))
-            async with audited_guard(session, context, action, scope, target, now=now):
-                context.require(scope)
+            required = scope if isinstance(scope, Scope) else scope(cast(dict[str, Any], kwargs))
+            async with audited_guard(session, context, action, required, target):
+                context.require(required)
                 return await service(*args, **kwargs)
 
         return guarded
@@ -205,7 +206,6 @@ async def _refused(
     target: str,
     refusal: Refusal,
     channel: Channel,
-    now: datetime | None,
 ) -> None:
     """One line for a reach that did not land. The name of the refusal, never what it held."""
     if refusal.written_down:
@@ -220,5 +220,4 @@ async def _refused(
         outcome=Outcome.REFUSED,
         refused_because=type(refusal).__name__,
         channel=channel,
-        now=now,
     )

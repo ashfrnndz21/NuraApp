@@ -14,21 +14,23 @@ from datetime import UTC, datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Uuid
+from sqlalchemy import DateTime, Enum, ForeignKey, Uuid, event, inspect
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, object_session
 
+from app import clock
 from app.errors import Refusal
 
 
 def utcnow() -> datetime:
-    """Now, always with a timezone. Every timestamp Nura stores is UTC."""
-    return datetime.now(UTC)
+    """Now, from the one clock (`app.clock`), always with a timezone. Every timestamp Nura
+    stores is UTC, and none of them comes from a caller."""
+    return clock.now()
 
 
 def as_utc(moment: datetime) -> datetime:
@@ -45,6 +47,46 @@ def enum_column[E: PyEnum](enum_class: type[E], name: str) -> Enum:
         length=32,
         values_callable=lambda members: [member.value for member in members],
     )
+
+
+class ImmutableRow(Refusal):
+    """What came in is what came in. A wrong fact is superseded, never edited."""
+
+
+OnlyWhen = Callable[[Any, Any], bool]
+"""(session, row) -> whether the one change a frozen row takes may happen right now."""
+
+
+def frozen(
+    model: type[Any],
+    *,
+    except_for: frozenset[str] = frozenset(),
+    only_when: OnlyWhen | None = None,
+) -> None:
+    """Refuse any update to a row of this table beyond the columns named.
+
+    The columns in `except_for` may be set, never unset — a superseded fact is not
+    resurrected, a closed episode not reopened, a spent yes not un-spent, by writing None
+    over the moment it happened. With `only_when`, even those columns change only while the
+    service that owns the change says so (through `session.info`), so a bare assignment
+    flushed from anywhere else is refused too.
+    """
+
+    @event.listens_for(model, "before_update")
+    def _refuse(mapper: Any, connection: Any, target: Any) -> None:
+        changed = {
+            attribute.key: attribute.history
+            for attribute in inspect(target).attrs
+            if attribute.history.has_changes()
+        }
+        if not changed:
+            return
+        if changed.keys() - except_for:
+            raise ImmutableRow(f"{model.__tablename__} rows are not edited")
+        if any(history.added == [None] for history in changed.values()):
+            raise ImmutableRow(f"{model.__tablename__} rows are not un-done")
+        if only_when is not None and not only_when(object_session(target), target):
+            raise ImmutableRow(f"{model.__tablename__} rows change only through their service")
 
 
 class Base(DeclarativeBase):
@@ -111,9 +153,11 @@ async def unit_of_work(session: AsyncSession) -> AsyncIterator[None]:
     are dropped with it. On success the savepoint is released and the keepers are dropped:
     the lines they would have re-written are already there.
 
-    A channel wraps every request in this (the API's request dependency calls it), and a
-    session closed with keepers still on it raises `KeepersNotReplayed`, so a path that
-    skips the boundary fails loudly instead of losing a refusal quietly.
+    Channels own the boundary: the API's request dependency wraps each request in this, and
+    nothing in the core calls it — the core raises, the channel decides. The guard against a
+    channel forgetting is `KeptSession`: a session closed with keepers still on it raises
+    `KeepersNotReplayed`, so a path that skips the boundary fails loudly instead of losing a
+    refusal quietly.
     """
     savepoint = await session.begin_nested()
     try:
@@ -134,7 +178,11 @@ async def unit_of_work(session: AsyncSession) -> AsyncIterator[None]:
 
 
 class KeptSession(AsyncSession):
-    """A session that will not close quietly over refused lines nobody replayed."""
+    """A session that will not close quietly over refused lines nobody replayed.
+
+    This is the loud guard behind `unit_of_work`: whatever channel runs a request, if it lets
+    a refusal escape without replaying the keepers, closing the session raises here.
+    """
 
     async def close(self) -> None:
         kept = take_keepers(self)

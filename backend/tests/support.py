@@ -11,7 +11,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from datetime import datetime
 
 from sqlalchemy import String
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,9 +54,8 @@ async def add_note(
     *,
     scope: Scope,
     body: str,
-    now: datetime | None = None,
 ) -> Note:
-    return await audited_write(session, Note, context, scope, now=now, scope=scope, body=body)
+    return await audited_write(session, Note, context, scope, scope=scope, body=body)
 
 
 async def read_notes(
@@ -65,6 +63,5 @@ async def read_notes(
     context: KeyContext,
     *,
     scope: Scope,
-    now: datetime | None = None,
 ) -> Sequence[Note]:
-    return await audited_read(session, Note, context, scope, where=(Note.scope == scope,), now=now)
+    return await audited_read(session, Note, context, scope, where=(Note.scope == scope,))

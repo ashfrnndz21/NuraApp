@@ -108,7 +108,6 @@ async def store_artifact(
     captured_at: datetime,
     source_channel: SourceChannel,
     region: Region,
-    now: datetime | None = None,
 ) -> Artifact:
     """Write down an artefact whose bytes are already at `storage_key` in `region`.
 
@@ -126,7 +125,6 @@ async def store_artifact(
         Artifact,
         context,
         Scope.RECORDS,
-        now=now,
         kind=kind,
         storage_key=storage_key.strip(),
         content_type=content_type,
@@ -134,7 +132,7 @@ async def store_artifact(
         captured_at=captured_at,
         source_channel=source_channel,
         region=region,
-        stored_at=now or utcnow(),
+        stored_at=utcnow(),
     )
 
 
@@ -144,7 +142,6 @@ async def require_artifact(
     *,
     context: KeyContext,
     artifact_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Artifact:
     """The artefact by that id on this profile, in this region, or a refusal saying no more.
 
@@ -158,7 +155,6 @@ async def require_artifact(
         context,
         Scope.RECORDS,
         where=(Artifact.id == artifact_id, held_here(context)),
-        now=now,
     )
     if not found:
         raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
@@ -176,7 +172,6 @@ async def record_event(
     artifact_id: uuid.UUID | None = None,
     source_channel: SourceChannel | None = None,
     episode_id: uuid.UUID | None = None,
-    now: datetime | None = None,
 ) -> Event:
     """Record that something happened, naming the artefact and the episode it belongs to.
 
@@ -192,23 +187,21 @@ async def record_event(
         artifact_id=artifact_id,
         source_channel=source_channel,
         label=named,
-        now=now,
     )
     if episode_id is not None:
-        await require_open_episode(session, context=context, episode_id=episode_id, now=now)
+        await require_open_episode(session, context=context, episode_id=episode_id)
     return await audited_write(
         session,
         Event,
         context,
         Scope.RECORDS,
-        now=now,
         kind=kind,
         occurred_at=occurred_at,
         source_channel=came_in_by,
         label=named,
         artifact_id=artifact_id,
         episode_id=episode_id,
-        recorded_at=now or utcnow(),
+        recorded_at=utcnow(),
     )
 
 
@@ -219,14 +212,13 @@ async def _where_it_came_from(
     artifact_id: uuid.UUID | None,
     source_channel: SourceChannel | None,
     label: str | None,
-    now: datetime | None,
 ) -> SourceChannel:
     """The channel an event came in on: the artefact's, or the one given beside a label."""
     if artifact_id is None:
         if source_channel is None or label is None:
             raise SourceNotNamed("an event names its artefact, or says its channel and label")
         return source_channel
-    artifact = await require_artifact(session, context=context, artifact_id=artifact_id, now=now)
+    artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
     if source_channel is not None and source_channel is not artifact.source_channel:
         raise CameInAnotherWay(
             f"the artefact came in by {artifact.source_channel}, not {source_channel}"
@@ -240,7 +232,6 @@ async def require_event(
     *,
     context: KeyContext,
     event_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> Event:
     """The event by that id on this profile, citing nothing held elsewhere, or a refusal."""
     found = await audited_read(
@@ -249,7 +240,6 @@ async def require_event(
         context,
         Scope.RECORDS,
         where=(Event.id == event_id, event_cites_only_what_is_held_here(context)),
-        now=now,
     )
     if not found:
         raise NoSuchEvent(f"no event {event_id} on profile {context.profile_id}")

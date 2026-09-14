@@ -8,9 +8,9 @@ by any route that goes through a context.
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,16 @@ from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.regions import OutOfRegion, Region, guard_region
 
-on_unknown_reach: Callable[[uuid.UUID, uuid.UUID], None] | None = None
+unknown_reaches: Counter[uuid.UUID] = Counter()
+"""How many times each account has reached for a profile it has never known. In memory, per
+process: enough for a test and a first alarm; a channel replaces the hook with its own."""
+
+
+def count_unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
+    unknown_reaches[person_id] += 1
+
+
+on_unknown_reach: Callable[[uuid.UUID, uuid.UUID], None] | None = count_unknown_reach
 """Called with (person_id, profile_id) each time an unknown account is refused in silence.
 
 Accepted residual risk: a person the profile has never known — no key ever cut, not the
@@ -89,7 +98,6 @@ async def resolve_key_context(
     region: Region,
     person_id: uuid.UUID,
     profile_id: uuid.UUID,
-    now: datetime | None = None,
 ) -> KeyContext:
     """Resolve what this person may see of this profile, in this region, at this moment.
 
@@ -97,7 +105,7 @@ async def resolve_key_context(
     even when its row is present, because a row in the wrong database is the thing we are
     guarding against.
     """
-    moment = now or utcnow()
+    moment = utcnow()
     profile = await session.get(Profile, profile_id)
     if profile is None:
         _unknown_reach(person_id, profile_id)
@@ -120,9 +128,7 @@ async def resolve_key_context(
     try:
         guard_region(held_in=profile.region, asked_from=region)
     except OutOfRegion as refusal:
-        await _record_refused(
-            session, profile=profile, person_id=person_id, refusal=refusal, now=moment
-        )
+        await _record_refused(session, profile=profile, person_id=person_id, refusal=refusal)
         raise
 
     if profile.owner_person_id == person_id:
@@ -145,9 +151,7 @@ async def resolve_key_context(
             )
     # The revoked-helper case: she held a key once, it is closed, and she is reaching again.
     refused = NoKey(person_id=person_id, profile_id=profile_id)
-    await _record_refused(
-        session, profile=profile, person_id=person_id, refusal=refused, now=moment
-    )
+    await _record_refused(session, profile=profile, person_id=person_id, refusal=refused)
     raise refused
 
 
@@ -157,9 +161,10 @@ def _unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:
 
 
 async def holds_the_profile(
-    session: AsyncSession, *, profile_id: uuid.UUID, person_id: uuid.UUID, now: datetime
+    session: AsyncSession, *, profile_id: uuid.UUID, person_id: uuid.UUID
 ) -> bool:
-    """Whether this person could open this profile now: its owner, or a live key on it.
+    """Whether this person could open this profile now — by the clock, not by any caller's
+    account of the time: its owner, or a key on it that is live at this moment.
 
     A yes-or-no with no context resolved and no line written — for checking a person who
     is *named* in a request (the one whose confirm is being used) without ever acting as
@@ -173,7 +178,8 @@ async def holds_the_profile(
     keys = await session.scalars(
         select(Key).where(Key.profile_id == profile_id, Key.holder_person_id == person_id)
     )
-    return any(key.is_active(now) for key in keys)
+    moment = utcnow()
+    return any(key.is_active(moment) for key in keys)
 
 
 async def _record_refused(
@@ -182,7 +188,6 @@ async def _record_refused(
     profile: Profile,
     person_id: uuid.UUID,
     refusal: Refusal,
-    now: datetime,
 ) -> None:
     """One refused line for a reach that resolved nothing, in the name of the refusal only.
 
@@ -209,5 +214,4 @@ async def _record_refused(
         target=profile.__tablename__,
         outcome=Outcome.REFUSED,
         refused_because=type(refusal).__name__,
-        now=now,
     )
