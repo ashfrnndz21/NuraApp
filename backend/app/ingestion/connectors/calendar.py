@@ -52,6 +52,10 @@ class NotACalendar(Refusal):
     """The file is not an iCalendar file this reader can read, or it is too large."""
 
 
+class CalendarTooLarge(NotACalendar):
+    """A calendar file bigger than a year of visits: refused as it arrives (#133)."""
+
+
 class FixtureCalendar:
     """A calendar that answers from the events it was given. For tests."""
 

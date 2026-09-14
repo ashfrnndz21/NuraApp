@@ -37,7 +37,7 @@ from app.delivery.triggers.ladder import NotOnTheLadder
 from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
-from app.family.documents import NotADocument
+from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
 from app.family.roster import (
@@ -52,6 +52,7 @@ from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.connectors.calendar import CalendarTooLarge
 from app.ingestion.connectors.service import (
     AlreadyDecided,
     NoSuchConnector,
@@ -229,6 +230,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (OutsideTheWindow, 409),
     # A PDF or a note on an event is not this big (E02-03, E02-06).
     (PdfTooLarge, 413),
+    (DocumentTooLarge, 413),
+    (CalendarTooLarge, 413),
     (NoteTooLarge, 413),
     (NoSuchEventNote, 404),
     (ProfileAlreadyOwned, 409),
