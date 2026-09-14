@@ -363,13 +363,13 @@ What you will see (the numbers, ids, dates and times change each run; the visit 
 ✓ Pa opened his profile in Malay, added a blood pressure reading (138/84, taken twenty days ago) and three medicines through E04 (POST /profiles/{id}/medicines, each from a label photo with his yes): amlodipine, warfarin and aspirin — the licensed data flagged aspirin against the warfarin already there, and every monograph says what its medicine is for
 ✓ Pa booked a visit with Dr Tan (POST /profiles/{id}/appointments) for 2026-09-17 at 10 in the morning, on a yes minted for exactly that booking (subject appointment): status planned
 ✓ Pa wrote down how he feels (POST /profiles/{id}/symptoms, typed: "pening, agak banyak, sejak pagi"): heard as dizzy, quite a lot, since this morning — his words kept as an artefact, a symptom fact resting on them
-✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed — his symptom on a line of its own, in the symptom log's words with how much and since when, never a count under his papers — the open questions, what to bring — 13 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
+✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed — his symptom on a line of its own, in the symptom log's words said to him, with how much and since when anchored to that day ("pagi itu", that morning), never a count under his papers — the open questions, what to bring — 13 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
     [purpose  ] Anda berjumpa Dr Tan pada Khamis 17 September pukul 10 pagi.
     [purpose  ] Lawatan ini untuk memeriksa tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, ada 1 nombor baru dalam buku tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, 3 perkara berubah tentang ubat anda.
-    [changed  ] Pa rasa pening pada Isnin 14 September.
-    [changed  ] Rasanya agak teruk dan ia bermula pagi ini.
+    [changed  ] Anda rasa pening pada Isnin 14 September.
+    [changed  ] Rasanya agak teruk dan ia bermula pagi itu.
     [questions] Tanya Dr Tan sama ada aspirin dan ubat cair darah boleh dimakan bersama.
     [questions] Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
     [bring    ] Bawa buku tekanan darah anda pada Khamis 17 September.
@@ -1065,7 +1065,10 @@ What you will see (the numbers and ids change each run):
 ✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice_hospital), category alert, never capped and never quiet; not to him. A fall is the same-day tier, and Dr Tan's clinic is closed at 22:30: never "call your doctor today" — the emergency department of the hospital on his insurance, named (E19-05). His reply:
     → This one we do not wait for.
     → Go to the emergency department at Gleneagles now.
+    → Gleneagles is on your insurance.
+    → If you cannot get there safely, call the ambulance now on 995.
     → Mei knows now.
+    → Nura does not decide what is wrong.
 ✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_hospital; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
 ✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
     [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
@@ -1078,14 +1081,13 @@ What you will see (the numbers and ids change each run):
     → You see Dr Tan on Friday 18 September at 10 in the morning.
     → This visit is about your blood pressure.
     → Bring your blood pressure book on Friday 18 September.
-    → Bring your medicines in their boxes on Friday 18 September.
     → Nura prepared this from your papers.
     → This is not a doctor's advice.
     → Ask Dr Tan.
 checkpoint 20 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at his breakfast — the one breakfast time his settings (E01), his routine's anchors (E10) and his first week's prompts all read, 07:30 until the family sets it — as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him — and out of his doctor's hours (the directory's, else 08:00 to 20:00) a same-day flag never says "call your doctor today": it names the emergency department of the hospital marked as on his insurance, or the emergency number if it gets worse, while chest pain and the signs of a stroke are the ambulance at any hour (E19-05); today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds; three days before a visit, after his breakfast, the pre-visit brief is rendered and its card sent once, under the cap on briefs a day (E05-01). Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at his breakfast — the one breakfast time his settings (E01), his routine's anchors (E10) and his first week's prompts all read, 07:30 until the family sets it — as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him — and out of his doctor's hours (the directory's, else 08:00 to 20:00) a same-day flag never says "call your doctor today": it names the emergency department of the hospital marked as on his insurance (and the ambulance if he cannot get there safely), or the ambulance if it gets worse, while chest pain, the signs of a stroke and shaky-and-sweaty on a sugar medicine are the ambulance at any hour, and every reply ends "Nura does not decide what is wrong." (E19-05, ADR 0010); today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds; three days before a visit, after his breakfast, the pre-visit brief is rendered and its card sent once, under the cap on briefs a day (E05-01). Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
 
@@ -1277,7 +1279,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Pa has no allergy that Nura knows of.
     Mei looks after Pa.
     Call Mei first.
-    Pa is insured with Great Eastern.
+    Pa's insurance is with Great Eastern.
     The ambulance number is 995.
     Pa's blood pressure was last written down on Tuesday 15 September.
     This card is not a doctor's advice.
@@ -1289,7 +1291,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Nura has no note of a condition for Pa.
     Pa takes the water pill (frusemide).
     Pa takes 1 tablet every morning.
-✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, the insurer included, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
+✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, the insurer included, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card; the policy reference is his and his chief's in full, and the last four for Lin (••••0932)
 ✓ Lin read the card in Chinese (GET …/emergency-card?language=zh): every line with its English twin under the same id (13 lines), on the JSON and on the printable page (`<p class="twin" lang="en">`), so the ambulance crew reads what he reads; the first three:
     这是Pa的紧急卡。  /  This is Pa's emergency card.
     请把这张卡给医生或救护人员看。  /  Show this card to the doctor or the ambulance crew.

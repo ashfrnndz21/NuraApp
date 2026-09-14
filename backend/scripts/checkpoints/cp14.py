@@ -404,12 +404,16 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     theirs = check(client.get(f"/profiles/{profile_id}/emergency-card", headers=bearer(lin.token)), 200, "Lin reads the card")
     if theirs["state_id"] != card["state_id"] or theirs["lines"] != card["lines"]:
         raise fail("Lin reads the card", why="a different State or different lines from Pa's")
-    if theirs["insurer"] != insurer:
-        raise fail("Lin reads the card", why="the insurer is missing from the emergency-only key's card")
+    if hers["insurer"] != insurer or theirs["insurer"] != {"name": "Great Eastern", "policy_reference": "••••0932"}:
+        raise fail(
+            "Lin reads the card",
+            why=f"expected the insurer in full for Mei and its last four for Lin: {hers['insurer']} / {theirs['insurer']}",
+        )
     ok(
         f"Mei read the card with her chief key (render {hers['card_id'][:8]}…), and Lin read it with "
         "her emergency-only key — the same lines, the insurer included, stamped with the same State: "
-        "an emergency key opens the card's fixed projection and nothing else, and is refused a stale card"
+        "an emergency key opens the card's fixed projection and nothing else, and is refused a stale "
+        "card; the policy reference is his and his chief's in full, and the last four for Lin (••••0932)"
     )
 
     # 4b. Two languages on one card (E13-01): in Chinese, every line with its English twin, for
