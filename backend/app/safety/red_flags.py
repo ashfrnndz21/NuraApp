@@ -57,7 +57,7 @@ import re
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -84,6 +84,8 @@ from app.memory.models import (
     Event,
     EventKind,
     Fact,
+    Provider,
+    ProviderKind,
     SourceChannel,
     _row_of_profile,
     _tied_to_profile,
@@ -564,6 +566,157 @@ FLAG_WINDOW = timedelta(hours=24)
 
 def is_red(feeling: Feeling) -> bool:
     return feeling in RED_FLAGS
+
+
+# --- how soon, and where to (E19-05) ----------------------------------------------------------
+
+
+class Urgency(StrEnum):
+    """How soon a red flag is acted on. Two tiers, and the hour never moves a flag down one."""
+
+    AMBULANCE = "ambulance"
+    """The ambulance now, at any hour."""
+    SAME_DAY = "same_day"
+    """The doctor today; out of the doctor's hours, the hospital or the emergency number."""
+
+
+AMBULANCE_FLAGS: frozenset[Feeling] = frozenset(
+    {
+        Feeling.CHEST_TIGHTNESS,
+        Feeling.BREATHLESS_AT_REST,
+        Feeling.WORST_HEADACHE,
+        Feeling.SUDDEN_BLURRING,
+        Feeling.CONFUSION,
+    }
+)
+"""The red flags that are the ambulance at any hour: chest pain, breathless at rest, and the
+signs of a stroke — the worst headache ever, sudden blurring, confusion. The rest of
+`RED_FLAGS` (a fall, one-sided swelling, shaky and sweaty, the weight after a heart discharge)
+are the same-day tier. A subset of `RED_FLAGS`, never a second list of words: the words are
+`RED_FLAG_WORDS`, above."""
+
+NIGHT_FROM = time(20, 0)
+NIGHT_UNTIL = time(8, 0)
+"""Out of the doctor's hours when the directory does not say them: 20:00 to 08:00 on his
+wall clock."""
+
+
+class Step(StrEnum):
+    """What a red flag's escalation tells the person to do now: one row of `step_for`."""
+
+    AMBULANCE = "ambulance"
+    """Call the ambulance now on 995."""
+    DOCTOR_TODAY = "doctor_today"
+    """Call Dr Tan today."""
+    DOCTOR_TODAY_HOSPITAL = "doctor_today_hospital"
+    """Call Dr Tan today; if it gets worse, go to the hospital on his insurance now."""
+    HOSPITAL_NOW = "hospital_now"
+    """Out of hours: go to the emergency department at the hospital on his insurance now."""
+    NUMBER_IF_WORSE = "number_if_worse"
+    """Out of hours, no hospital marked: if it gets worse, call 995 now."""
+
+
+@dataclass(frozen=True, slots=True)
+class EscalationStep:
+    """The step for one red flag at one moment, and the names it says."""
+
+    step: Step
+    urgency: Urgency
+    after_hours: bool
+    doctor: str | None
+    """The doctor or clinic the directory names first, or None: "your doctor" is said."""
+    hospital: str | None
+    """The hospital marked as on his insurance, or None."""
+    emergency_number: str
+
+
+def urgency_of(feeling: Feeling) -> Urgency:
+    if not is_red(feeling):
+        raise NotAFeeling(f"{feeling} is not a red flag")
+    return Urgency.AMBULANCE if feeling in AMBULANCE_FLAGS else Urgency.SAME_DAY
+
+
+def is_after_hours(local: time, opens: time | None, closes: time | None) -> bool:
+    """Whether this moment on his wall clock is outside the doctor's hours: the directory's
+    when it says both ends, 08:00 to 20:00 otherwise. Hours that cross midnight are read as
+    such."""
+    if opens is None or closes is None or opens == closes:
+        opens, closes = NIGHT_UNTIL, NIGHT_FROM
+    at = local.replace(tzinfo=None)
+    if opens < closes:
+        return not opens <= at < closes
+    return closes <= at < opens
+
+
+def step_for(urgency: Urgency, *, after_hours: bool, hospital: bool) -> Step:
+    """The decision table, top row wins: the ambulance tier is the ambulance whatever the hour
+    or the list; the same-day tier is the doctor today in his hours — with the hospital on his
+    insurance named for if it gets worse — and out of them the hospital's emergency department
+    now, or the emergency number if it gets worse."""
+    if urgency is Urgency.AMBULANCE:
+        return Step.AMBULANCE
+    if after_hours:
+        return Step.HOSPITAL_NOW if hospital else Step.NUMBER_IF_WORSE
+    return Step.DOCTOR_TODAY_HOSPITAL if hospital else Step.DOCTOR_TODAY
+
+
+DOCTOR_FIRST = (ProviderKind.DOCTOR, ProviderKind.CLINIC, ProviderKind.HOSPITAL)
+"""Whose name "call … today" says: the doctor, else the clinic, else the hospital — the order
+every red-flag line has named them in."""
+
+
+def escalation_for(
+    feeling: Feeling, *, providers: Sequence[Provider], local: datetime, emergency_number: str
+) -> EscalationStep:
+    """The step for this flag at this moment on his wall clock, from his directory: the doctor
+    it names, the hours that doctor or clinic keeps, and the hospital marked as on his
+    insurance."""
+    listed = sorted(providers, key=lambda one: (as_utc(one.added_at), one.name))
+    doctor = next((p for kind in DOCTOR_FIRST for p in listed if p.kind is kind), None)
+    hours = next(
+        (
+            p
+            for kind in (ProviderKind.DOCTOR, ProviderKind.CLINIC)
+            for p in listed
+            if p.kind is kind and p.opens_at is not None and p.closes_at is not None
+        ),
+        None,
+    )
+    hospital = next(
+        (p for p in reversed(listed) if p.kind is ProviderKind.HOSPITAL and p.panel), None
+    )
+    urgency = urgency_of(feeling)
+    late = is_after_hours(
+        local.timetz(),
+        None if hours is None else hours.opens_at,
+        None if hours is None else hours.closes_at,
+    )
+    return EscalationStep(
+        step=step_for(urgency, after_hours=late, hospital=hospital is not None),
+        urgency=urgency,
+        after_hours=late,
+        doctor=None if doctor is None else doctor.name,
+        hospital=None if hospital is None else hospital.name,
+        emergency_number=emergency_number,
+    )
+
+
+async def escalation_now(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    feeling: Feeling,
+    local: datetime,
+    emergency_number: str,
+    channel: Channel,
+) -> EscalationStep:
+    """`escalation_for`, with the directory read under the emergency scope — the part of the
+    graph every role holds, and the one the emergency card names his doctor from (ADR 0002) —
+    so a helper's word is answered with the same doctor and the same hospital as a chief's."""
+    providers = await audited_read(session, Provider, context, Scope.EMERGENCY, channel=channel)
+    return escalation_for(
+        feeling, providers=providers, local=local, emergency_number=emergency_number
+    )
 
 
 async def _system_read(

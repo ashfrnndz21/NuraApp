@@ -433,6 +433,22 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Tiada apa yang berubah sejak {day}.",
         "zh": "自{day}以来没有变化。",
     },
+    # What does not fit on the one page (E05-01), said as a count.
+    "symptoms_more": {
+        "en": "Nura has more notes about how you feel.",
+        "ms": "Nura ada lagi nota tentang apa yang anda rasa.",
+        "zh": "Nura还记下了更多您的感觉。",
+    },
+    "questions_more": {
+        "en": "Nura has {count} more questions for {doctor}.",
+        "ms": "Nura ada {count} lagi soalan untuk {doctor}.",
+        "zh": "Nura还有{count}个问题要问{doctor}。",
+    },
+    "bring_more": {
+        "en": "Nura has {count} more things for you to bring on the day.",
+        "ms": "Nura ada {count} lagi barang untuk anda bawa pada hari itu.",
+        "zh": "Nura还有{count}样东西要您那天带去。",
+    },
     # Questions, from gaps.
     "ask_fact_expired": {
         "en": "Ask {doctor} about {thing} again.",

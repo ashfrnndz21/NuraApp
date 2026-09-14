@@ -1,13 +1,14 @@
 """The emergency card (E13-01): what a stranger needs to know, in two languages, offline.
 
-    Conditions, medicines, allergies, blood type, contacts, in two languages. Works
+    Conditions, medicines, allergies, blood type, contacts, insurer in two languages. Works
     offline. Daily-carry trust. The reason he keeps the app installed.
 
 The card is a fixed projection of the record: his name, age band and language; the
 conditions a clinician's control word is recorded against; the active medicines with their
 strength and how much he takes; the allergies; the high-risk medicines by class; his blood
 type if a fact says it; the chief's name and number; the doctor or clinic; the date of the
-last reading. Nothing else, ever — no reading values, no notes, no visits, no history. That
+last reading; his insurer, as he or his chief typed it on a yes (`app.insurance.insurer`).
+Nothing else, ever — no reading values, no notes, no visits, no history. That
 projection is what `Scope.EMERGENCY` opens, and every role preset holds it, so an
 emergency-only key (a neighbour, a helper) reads exactly this and nothing more. Every read
 here is under EMERGENCY and on the trail as such.
@@ -18,9 +19,15 @@ the card unless the last snapshot already folds in every fact the card shows. Ei
 stale card is refused rather than shown, and an `EmergencyCard` row records every render —
 the audit of who was handed the card, and the offline story: the app caches the last render.
 
-Every sentence comes from `app.channels.safety_strings` and is verified. Two things do not
+Every sentence comes from `app.channels.safety_strings` and is verified. Three things do not
 go through a sentence, because the standard forbids them there and the stranger needs them:
-the chief's phone number and the medicine's strength, carried beside the lines as data.
+the chief's phone number, the medicine's strength and the insurer's policy reference, carried
+beside the lines as data.
+
+Two languages on one card: the lines in his language, and — when that is not English — the
+same lines again in English (`english_lines`), line for line, so the ambulance crew and the
+hospital desk can read what he reads. The printable page prints each English line under its
+twin.
 Public share: none. There is no link to this card without a key.
 """
 
@@ -51,6 +58,7 @@ from app.channels.safety_strings import (
 from app.db import as_utc, utcnow
 from app.drugs.registry import DrugRegistry
 from app.identity.models import Person
+from app.insurance.insurer import Insurer
 from app.keys.context import KeyContext
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
@@ -155,6 +163,14 @@ class Clinic:
 
 
 @dataclass(frozen=True, slots=True)
+class InsurerOnCard:
+    """Who insures him: the name, said in a sentence, and the policy reference, as data."""
+
+    name: str
+    policy_reference: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class Card:
     """The emergency card as one value: the data and the verified lines, and the row."""
 
@@ -177,6 +193,10 @@ class Card:
     emergency_number: str
     lines: list[Line]
     fact_ids: list[uuid.UUID] = field(default_factory=list)
+    insurer: InsurerOnCard | None = None
+    english_lines: list[Line] = field(default_factory=list)
+    """The same lines in English when his language is not English, for the ambulance crew;
+    empty when it is."""
 
     @property
     def line_ids(self) -> list[str]:
@@ -195,6 +215,7 @@ class Projection:
     chiefs: Sequence[tuple[Key, Person]]
     clinic: Provider | None
     last_reading: Event | None
+    insurer: Insurer | None = None
 
     def fact_ids(self) -> list[uuid.UUID]:
         ids = [fact.id for fact in (*self.control_facts, *self.allergy_facts)]
@@ -285,7 +306,11 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
         order_by=(Event.occurred_at.desc(),),
         limit=1,
     )
+    # His insurer, as typed on a yes: the newest row in force, under the same scope.
+    typed = await audited_read(session, Insurer, context, EMERGENCY_SCOPE)
+    insurer = max(typed, key=lambda row: (as_utc(row.set_at), str(row.id)), default=None)
     return Projection(
+        insurer=None if insurer is None or insurer.name is None else insurer,
         control_facts=control,
         allergy_facts=allergies,
         blood_type=max(blood, key=_asserted, default=None),
@@ -358,6 +383,7 @@ def compose_lines(
     clinic: Clinic | None,
     last_reading_at: datetime | None,
     region: Region,
+    insurer: str | None = None,
 ) -> list[Line]:
     """The card as sentences, in order, every one through `render` and so verified."""
     lang = language_of(language)
@@ -409,6 +435,8 @@ def compose_lines(
             say("ec.doctor", name=name, doctor=clinic.name)
         else:
             say("ec.clinic", name=name, clinic=clinic.name)
+    if insurer is not None:
+        say("ec.insurer", name=name, insurer=insurer)
     say("ec.ambulance", number=EMERGENCY_NUMBER[region])
     if last_reading_at is not None:
         say("ec.last_reading", name=name, date=as_utc(last_reading_at).astimezone(zone).date())
@@ -437,12 +465,17 @@ async def emergency_card(
     zone = REGION_TZ[context.region]
     today = utcnow().astimezone(zone).date()
 
-    conditions = [
-        Condition(
-            code=fact.subject, words=phrase(CONDITION_WORDS, lang, fact.subject), fact_id=fact.id
-        )
-        for fact in held.control_facts
-    ]
+    def conditions_in(code: str) -> list[Condition]:
+        return [
+            Condition(
+                code=fact.subject,
+                words=phrase(CONDITION_WORDS, code, fact.subject),
+                fact_id=fact.id,
+            )
+            for fact in held.control_facts
+        ]
+
+    conditions = conditions_in(lang)
     allergies = [
         # An allergen is a name — "Penicillin" — and is said as one: the standard leaves
         # names alone, and a stranger needs the exact word.
@@ -480,20 +513,33 @@ async def emergency_card(
     last_reading_at = (
         None if held.last_reading is None else as_utc(held.last_reading.occurred_at)
     )
-    lines = compose_lines(
-        name=profile.display_name,
-        language=lang,
-        spoken_language=profile.language,
-        age=age,
-        conditions=conditions,
-        medicines=medicines,
-        allergies=allergies,
-        blood_type=blood_type,
-        contacts=contacts,
-        clinic=clinic,
-        last_reading_at=last_reading_at,
-        region=context.region,
+    insurer = (
+        None
+        if held.insurer is None or held.insurer.name is None
+        else InsurerOnCard(name=held.insurer.name, policy_reference=held.insurer.policy_reference)
     )
+
+    def lines_in(code: str) -> list[Line]:
+        """The card's sentences in one language, from the same data."""
+        return compose_lines(
+            name=profile.display_name,
+            language=code,
+            spoken_language=profile.language,
+            age=age,
+            conditions=conditions if code == lang else conditions_in(code),
+            medicines=medicines if code == lang else _medicines(registry, held.lines, code),
+            allergies=allergies,
+            blood_type=blood_type,
+            contacts=contacts,
+            clinic=clinic,
+            last_reading_at=last_reading_at,
+            region=context.region,
+            insurer=None if insurer is None else insurer.name,
+        )
+
+    lines = lines_in(lang)
+    # His language and English, on one card (E13-01): the crew reads the English twin.
+    english_lines = [] if lang == "en" else lines_in("en")
     fact_ids = held.fact_ids()
     values: dict[str, Any] = {
         "format": format,
@@ -532,4 +578,6 @@ async def emergency_card(
         emergency_number=EMERGENCY_NUMBER[context.region],
         lines=lines,
         fact_ids=fact_ids,
+        insurer=insurer,
+        english_lines=english_lines,
     )

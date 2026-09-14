@@ -615,6 +615,15 @@ class DriveConfirmIn(BaseModel):
     person_id: uuid.UUID
 
 
+class InsurerConfirmIn(BaseModel):
+    """A yes to his insurer on the emergency card exactly as typed (E13-01); no name takes it
+    off the card. The typer's own yes: his, the steward's or his chief's."""
+
+    subject: Literal[ConfirmSubject.INSURER]
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
+
+
 class TaskDoneConfirmIn(BaseModel):
     """The doer's yes to her own task being done. Anyone else's finds no task."""
 
@@ -690,14 +699,15 @@ ConfirmIn = Annotated[
     | AttachConfirmIn
     | RoutineConfirmIn
     | ProposalConfirmIn
-    | DriveConfirmIn,
+    | DriveConfirmIn
+    | InsurerConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01)."""
 
 
 class ConfirmationOut(BaseModel):

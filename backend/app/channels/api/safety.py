@@ -2,6 +2,7 @@
 
     GET  /profiles/{id}/emergency-card        the card as JSON: data and verified lines
     GET  /profiles/{id}/emergency-card.html   the same card as one printable page
+    PUT  /profiles/{id}/emergency-card/insurer the insurer on the card, on the typer's yes
     POST /profiles/{id}/not-feeling-well      the button: voice or words in, the card out
     POST /profiles/{id}/symptoms              a symptom in his words, with how much and since when
     GET  /profiles/{id}/symptoms?since=       the log, in plain words with the day's name
@@ -22,6 +23,8 @@ from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.safety_schemas import (
     EmergencyCardOut,
+    InsurerIn,
+    InsurerSetOut,
     SaidIn,
     SymptomEntryOut,
     SymptomLoggedOut,
@@ -30,6 +33,7 @@ from app.channels.api.safety_schemas import (
 )
 from app.channels.printable import emergency_card_html
 from app.channels.safety_strings import severity_said
+from app.insurance.insurer import set_insurer
 from app.safety.emergency_card import emergency_card
 from app.safety.models import CardFormat
 from app.safety.not_feeling_well import not_feeling_well
@@ -78,6 +82,28 @@ async def printable(
     return HTMLResponse(
         emergency_card_html(shown),
         headers={"Cache-Control": "private, max-age=0, must-revalidate"},
+    )
+
+
+@router.put("/{profile_id}/emergency-card/insurer")
+async def insurer(body: InsurerIn, context: Context, session: Db) -> InsurerSetOut:
+    """His insurer on the card (E13-01): typed by him or his chief, saved on the typer's own
+    yes for exactly these words; no name takes it off. An emergency-only key reads the card
+    and cannot set it (`NotTheirsToSetInsurer`, 403); an identity-card number is not a policy
+    reference (`NotAPolicyReference`, 400)."""
+    row = await set_insurer(
+        session,
+        context=context,
+        name=body.name,
+        policy_reference=body.policy_reference,
+        confirmation_id=body.confirmation_id,
+    )
+    return InsurerSetOut(
+        insurer_id=row.id,
+        name=row.name,
+        policy_reference=row.policy_reference,
+        set_by_person_id=row.set_by_person_id,
+        set_at=row.set_at,
     )
 
 

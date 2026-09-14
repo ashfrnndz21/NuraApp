@@ -48,7 +48,14 @@ from app.channels.whatsapp.proposals import (
     propose,
 )
 from app.channels.whatsapp.provider import InboundMessage, NoSuchMedia
-from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_names, reply
+from app.channels.whatsapp.strings import (
+    FEELING_WORDS,
+    YOU,
+    YOUR_DOCTOR,
+    join_names,
+    red_flag_reply_key,
+    reply,
+)
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
@@ -89,7 +96,14 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
-from app.safety.red_flags import FLAG_WINDOW, Flag, detect, raise_flag, record_the_moment
+from app.safety.red_flags import (
+    FLAG_WINDOW,
+    Flag,
+    detect,
+    escalation_now,
+    raise_flag,
+    record_the_moment,
+)
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -360,7 +374,6 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             artifact_id=artifact.id,
             flag_id=flag.id,
         )
-    doctor = await _doctor(session, work)
     # The ladder at once (E11-06): straight to the roster, whatever the hour, whatever the
     # caps. The reply names exactly who it reached — nobody is said to know who was not told.
     reached = await _escalate(
@@ -378,11 +391,27 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         person = await session.get(Person, person_id)
         if person is not None and person.display_name and person.display_name not in names:
             names.append(person.display_name)
-    if names:
-        key = "red_flag_one" if len(names) == 1 else "red_flag"
-        await _say(session, work, key, doctor=doctor, names=join_names(names, work.language))
-    else:
-        await _say(session, work, "red_flag_alone", doctor=doctor)
+    # What to do now (E19-05): the flag's tier, the doctor's hours and the hospital marked as
+    # on his insurance, at the moment the words were written — the ambulance at any hour for
+    # chest pain and the signs of a stroke; out of the doctor's hours, never "call the doctor
+    # today". Read under the emergency scope, so a helper's word names the same doctor.
+    step = await escalation_now(
+        session,
+        context=work.context,
+        feeling=feeling,
+        local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
+        emergency_number=EMERGENCY_NUMBER[work.context.region.value],
+        channel=Channel.WHATSAPP,
+    )
+    await _say(
+        session,
+        work,
+        red_flag_reply_key(step.step.value, len(names)),
+        doctor=step.doctor or YOUR_DOCTOR[work.language],
+        hospital=step.hospital or "",
+        emergency_number=step.emergency_number,
+        names=join_names(names, work.language),
+    )
     # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
     # and who is still to be asked; nothing else is written beside it.
     return Handled(

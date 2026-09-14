@@ -149,6 +149,11 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "ms": "{name} pergi ke {clinic}.",
         "zh": "{name}去{clinic}看病。",
     },
+    "ec.insurer": {
+        "en": "{name} is insured with {insurer}.",
+        "ms": "{name} ada insurans dengan {insurer}.",
+        "zh": "{name}的保险公司是{insurer}。",
+    },
     "ec.ambulance": {
         "en": "The ambulance number is {number}.",
         "ms": "Nombor ambulans ialah {number}.",
@@ -194,6 +199,11 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
         "en": "After that, call {chief}.",
         "ms": "Selepas itu, hubungi {chief}.",
         "zh": "然后再打给{chief}。",
+    },
+    "nfw.call_clinic": {
+        "en": "Call {who}'s clinic today.",
+        "ms": "Telefon klinik {who} hari ini.",
+        "zh": "今天就打电话给{who}的诊所。",
     },
     "nfw.not_taken": {
         "en": "Nura has no note that you took {medicine} today.",
@@ -301,6 +311,11 @@ SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
         "en": "It started {since}.",
         "ms": "Ia bermula {since}.",
         "zh": "从{since}开始。",
+    },
+    "sym.severity_since": {
+        "en": "It was {severity} and it started {since}.",
+        "ms": "Rasanya {severity} dan ia bermula {since}.",
+        "zh": "感觉{severity}，从{since}开始。",
     },
     "sym.by_voice": {
         "en": "{name} said this out loud.",

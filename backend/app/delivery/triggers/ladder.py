@@ -36,7 +36,7 @@ from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.db import as_utc, utcnow
-from app.delivery.strings import theirs
+from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import (
     Firing,
     Message,
@@ -68,7 +68,7 @@ from app.regions import REGION_TZ
 from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 from app.safety.boundary import YOUR_DOCTOR
-from app.safety.red_flags import FLAG_WINDOW, Flag
+from app.safety.red_flags import FLAG_WINDOW, Flag, Step, escalation_now, is_red
 
 PATIENT, HELPER, ON_DUTY, CHIEF, KEY_HOLDER = "patient", "helper", "on_duty", "chief", "key_holder"
 RUNG_OF = {PATIENT: 0, HELPER: 1, ON_DUTY: 2, CHIEF: 3, KEY_HOLDER: 4}
@@ -374,12 +374,24 @@ async def _doctor(run: Run, language: str) -> str:
     return YOUR_DOCTOR[language]
 
 
+TIERED_NOTICE: dict[Step, str] = {
+    Step.AMBULANCE: "red_flag_notice_ambulance",
+    Step.HOSPITAL_NOW: "red_flag_notice_hospital",
+    Step.NUMBER_IF_WORSE: "red_flag_notice_night",
+}
+"""The notice for a step that is not "call the doctor today" (E19-05): the ambulance tier at any
+hour, and a same-day flag out of the doctor's hours — the hospital on his insurance, or the
+emergency number."""
+
+
 def flag_message(run: Run, flag: Flag) -> Say:
     """The red-flag notice, in the reader's language: "This one we do not wait for. Mei said Pa
-    is not well. Call Dr Tan today." When he raised it himself, "Pa is not feeling well."; when
-    the person who raised it is on more than one family's list and has not said which, "It may
-    be about Pa." — each variant only where the number approves it, the approved notice
-    otherwise, so a flag never waits on Meta."""
+    is not well. Call Dr Tan today." When the flag is in the ambulance tier, or it is out of
+    the doctor's hours, the notice that says so (`TIERED_NOTICE`: call him now, then the
+    ambulance, the hospital's emergency department or the emergency number). When he raised
+    it himself, "Pa is not feeling well."; when the person who raised it is on more than one
+    family's list and has not said which, "It may be about Pa." — each variant only where the
+    number approves it, the approved notice otherwise, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
         lang = run.language_for(person)
@@ -388,10 +400,29 @@ def flag_message(run: Run, flag: Flag) -> Say:
         who = raiser.display_name if raiser is not None else name
         doctor = await _doctor(run, lang)
         approves = run.via.number.approves
-        # The approved notice always goes; its two variants go where the number approves them.
+        tiered: tuple[str, dict[str, str]] | None = None
+        if flag.feeling is not None and is_red(flag.feeling):
+            step = await escalation_now(
+                run.session,
+                context=run.acting,
+                feeling=flag.feeling,
+                local=run.local,
+                emergency_number=EMERGENCY_NUMBER[run.acting.region.value],
+                channel=Channel.SYSTEM,
+            )
+            if step.step is Step.HOSPITAL_NOW and step.hospital is not None:
+                tiered = (TIERED_NOTICE[step.step], {"name": name, "hospital": step.hospital})
+            elif step.step in TIERED_NOTICE:
+                tiered = (
+                    TIERED_NOTICE[step.step],
+                    {"name": name, "emergency_number": step.emergency_number},
+                )
+        # The approved notice always goes; its variants go where the number approves them.
         kind, params = "red_flag_notice", {"name": name, "who": who, "doctor": doctor}
         if flag.ambiguous_profile and approves("red_flag_notice_ambiguous"):
             kind, params = "red_flag_notice_ambiguous", {"who": who, "name": name}
+        elif tiered is not None and approves(tiered[0]):
+            kind, params = tiered
         elif (
             raiser is not None
             and raiser.id == run.profile.owner_person_id

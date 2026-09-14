@@ -1,10 +1,11 @@
-"""The six approved templates: the only proactive messages the number may send (E19-01).
+"""The approved templates: the only proactive messages the number may send (E19-01).
 
 Outside the 24-hour customer-service window a business may send nothing but a template Meta
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11) — is one of these fifteen, submitted once and named here: its slots, and the words a patient reads in each
+message (E11), and the red-flag notice by tier and by the doctor's hours and the pre-visit
+brief (B1) — is one of these nineteen, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -267,6 +268,92 @@ NUDGE = Template(
 )
 """The day's smart nudge (E17-03), sent by E11's engine: the planner's lines, exactly."""
 
+# @patient
+RED_FLAG_NOTICE_AMBULANCE = Template(
+    "red_flag_notice_ambulance",
+    ("name", "emergency_number"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not well.\n"
+            "Call {name} now.\n"
+            "If {name} does not answer, call {emergency_number} now."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Kalau {name} tidak jawab, telefon {emergency_number} sekarang."
+        ),
+        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n如果{name}没有接，现在就打{emergency_number}。",
+    },
+    approved=False,
+)
+"""A red flag in the ambulance tier (chest pain, breathless at rest, the signs of a stroke), to
+the family: never "call the doctor today", at any hour (E19-05)."""
+
+# @patient
+RED_FLAG_NOTICE_HOSPITAL = Template(
+    "red_flag_notice_hospital",
+    ("name", "hospital"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not well.\n"
+            "Call {name} now.\n"
+            "Help {name} get to the emergency department at {hospital} now."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang."
+        ),
+        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n现在就帮{name}去{hospital}的急诊部。",
+    },
+    approved=False,
+)
+"""A same-day red flag out of the doctor's hours, with a hospital on his insurance marked in
+the directory: its emergency department, named (E19-05)."""
+
+# @patient
+RED_FLAG_NOTICE_NIGHT = Template(
+    "red_flag_notice_night",
+    ("name", "emergency_number"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not well.\n"
+            "Call {name} now.\n"
+            "If it gets worse, call {emergency_number} now."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Kalau jadi lebih teruk, telefon {emergency_number} sekarang."
+        ),
+        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n如果变得更严重，现在就打{emergency_number}。",
+    },
+    approved=False,
+)
+"""A same-day red flag out of the doctor's hours with no hospital marked: the emergency number
+if it gets worse, never "call the doctor today" at night (E19-05)."""
+
+# @patient
+VISIT_BRIEF = Template(
+    "visit_brief",
+    ("message",),
+    {
+        "en": "Your visit is in a few days.\n{message}",
+        "ms": "Lawatan anda beberapa hari lagi.\n{message}",
+        "zh": "再过几天您就要去看医生了。\n{message}",
+    },
+    approved=False,
+)
+"""The pre-visit brief three days before a visit (E05-01), sent by E11's engine: the brief
+card's own lines — who and when, what it is about, what to bring — ending on its boundary."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -285,11 +372,16 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE_SELF,
         RED_FLAG_NOTICE_AMBIGUOUS,
         NUDGE,
+        RED_FLAG_NOTICE_AMBULANCE,
+        RED_FLAG_NOTICE_HOSPITAL,
+        RED_FLAG_NOTICE_NIGHT,
+        VISIT_BRIEF,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All fifteen, in the order they are submitted: E19's six (approved), then E11's nine
-(pending Meta's approval, `approved=False`)."""
+"""All nineteen, in the order they are submitted: E19's six (approved), then E11's nine and
+B1's four — the red-flag notice by tier and by the doctor's hours, and the brief — pending
+Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

@@ -19,6 +19,7 @@ import app.family.models
 import app.identity.models
 import app.ingestion.connectors.models
 import app.ingestion.models
+import app.insurance.insurer
 import app.keys.confirm
 import app.keys.models
 import app.keys.privacy

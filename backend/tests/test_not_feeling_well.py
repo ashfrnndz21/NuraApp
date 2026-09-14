@@ -30,7 +30,6 @@ from app.memory.models import Artifact, ArtifactKind, Event, EventKind, Fact
 from app.regions import OutOfRegion, Region
 from app.safety.models import Notice, NoticeKind, WhatToDoCard, WhatToDoKind
 from app.safety.not_feeling_well import (
-    ANCHOR_HOURS,
     NothingSaid,
     SaidTwice,
     not_feeling_well,
@@ -207,8 +206,9 @@ async def test_a_dose_not_taken_says_ask_before_you_take_it_and_never_how_much(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
     owner, mei, *_ = await _household(sg)
-    # 08:00 UTC is 16:00 in Singapore: breakfast has passed and the water pill was not tapped.
-    assert utcnow().hour == 8 and ANCHOR_HOURS
+    # 08:00 UTC is 16:00 in Singapore: the breakfast window closed at 08:30 on his day and
+    # the water pill was not tapped.
+    assert utcnow().hour == 8
     done = await _press(sg, owner, words="tired today")
 
     assert done.kind is WhatToDoKind.MISSED_DOSE and done.missed_medicine == "the water pill"

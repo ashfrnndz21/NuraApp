@@ -30,12 +30,14 @@ What happens, in order, and the order is the point:
    `symptom.reported` fact resting on the artefact, and a `feeling.control` fact — `act`
    for a red flag, `watch` otherwise, for the next 24 hours — which is how the safety layer
    sets the day's posture: through a fact State folds in, never by writing a snapshot itself.
-5. **The card.** One row of a fixed decision table (`DECISION_TABLE`), every line from
+5. **The card.** One row of a fixed decision table (`DECISION_TABLE`: go now, call the clinic,
+   a tablet with no Taken, rest — top row wins), every line from
    `app.channels.safety_strings` and verified as an action, inside the not-feeling-well
    boundary (`app.safety.boundary`, `Surface.NOT_FEELING_WELL`): the reassurance first —
    "Mei knows now." — then the row, then "Nura wrote down how you feel." and the two closing
    lines — or, on a red flag's urgent card, the one line "Nura does not decide what is wrong.",
-   never "Ask your doctor." after an emergency number. The card row carries that boundary, as every inferring surface's row must (E16). A key that can compute State
+   never "Ask your doctor." after an emergency number. Every card, whatever its row, ends on
+   "Nura does not decide what is wrong.". The card row carries that boundary, as every inferring surface's row must (E16). A key that can compute State
    (the owner, the chief) has the card rendered from the State those facts produced and
    written down as a `WhatToDoCard`; a narrower key gets the same lines to show him and no
    card row, since nothing rendered is stored without the State it came from.
@@ -72,7 +74,7 @@ from app.delivery.triggers.deliver import Via
 from app.delivery.triggers.ladder import escalate_flag
 from app.delivery.triggers.models import Ladder
 from app.drafts import FactDraft
-from app.drugs.registry import DrugRegistry
+from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile
@@ -83,13 +85,23 @@ from app.keys.confirm import confirm
 from app.keys.context import KeyContext
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
-from app.medicines.dose import Anchor
+from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.service import Slot, today
 from app.medicines.strings import PLAIN_NAME
 from app.memory.episodic import record_event
-from app.memory.models import Artifact, ConfidenceState, Event, EventKind, Fact, SourceChannel
+from app.memory.models import (
+    Artifact,
+    ConfidenceState,
+    Event,
+    EventKind,
+    Fact,
+    Provider,
+    ProviderKind,
+    SourceChannel,
+)
 from app.memory.semantic import assert_fact
-from app.regions import REGION_TZ, Region, guard_region
+from app.reasoning.feelings.words import NEW_MEDICINE_WINDOW, SYMPTOM_FEELINGS, WATCH_OUT_WORDS
+from app.regions import Region, guard_region
 from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.emergency_card import EMERGENCY_NUMBER
 from app.safety.models import Notice, NoticeKind, WhatToDoCard, WhatToDoKind
@@ -105,7 +117,7 @@ from app.safety.red_flags import (
     record_the_moment,
     write_flag_kept,
 )
-from app.safety.symptoms import Parsed, Symptom, parse_symptoms
+from app.safety.symptoms import Duration, Parsed, Symptom, parse_symptoms
 from app.state.models import Posture
 from app.state.service import RECOMPUTE_SCOPES, StateView, current_state, render_from_state
 
@@ -138,13 +150,15 @@ SYMPTOM_WINDOW = timedelta(days=7)
 
 CHECK_IN_AFTER = timedelta(hours=2)
 
-ANCHOR_HOURS: dict[Anchor, int] = {
-    Anchor.BREAKFAST: 9,
-    Anchor.LUNCH: 14,
-    Anchor.DINNER: 20,
-    Anchor.BED: 22,
-}
-"""The hour of his day after which a dose at that anchor counts as not tapped yet."""
+QUITE_A_LOT = 2
+"""The severity from which a symptom that is not a red flag is a call to the clinic today:
+"quite a lot" / "a lot" (2) and "very" (3), in his words (`app.safety.symptoms`)."""
+
+A_DAY_OR_MORE: frozenset[Duration] = frozenset(
+    {Duration.SINCE_YESTERDAY, Duration.FEW_DAYS, Duration.ABOUT_A_WEEK, Duration.LONGER}
+)
+"""How long a symptom has lasted before it is a call to the clinic today: since yesterday or
+longer. "Since yesterday" counts, on the side of calling."""
 
 NOT_FEELING_WELL_LABEL = "not feeling well"
 
@@ -250,6 +264,21 @@ class Situation:
     chief: Person | None
     others_told: bool
     region: Region
+    severity: int | None = None
+    """How much, in his words: 1 a little, 2 quite a lot, 3 very."""
+    lasting: bool = False
+    """He said it has lasted a day or more (`A_DAY_OR_MORE`)."""
+    new_medicine: bool = False
+    """What he said is on the licensed monograph of a medicine started in the last fourteen
+    days, by the rule the feeling cloud reads (E17)."""
+
+    @property
+    def calls_the_clinic(self) -> bool:
+        """Not a red flag, and quite a lot, or a day or more, or a new medicine's watch-out."""
+        if self.red_flag:
+            return False
+        severe = self.severity is not None and self.severity >= QUITE_A_LOT
+        return severe or self.lasting or self.new_medicine
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +341,17 @@ def _not_heard(s: Situation) -> tuple[str, ...]:
     return () if s.heard else ("nfw.not_heard", "nfw.say_again", "nfw.type_instead")
 
 
+def _call_clinic_lines(s: Situation) -> tuple[str, ...]:
+    """Call the doctor's clinic today — a question for the doctor, never what it might be —
+    and, when a tablet has no Taken, the same two lines the tablet row says; then rest, who
+    will call, and the check-in."""
+    lines: tuple[str, ...] = _not_heard(s) + ("nfw.call_clinic",)
+    lines += ("nfw.not_taken", "nfw.ask_before") if s.missed is not None else ()
+    lines += ("nfw.rest",)
+    lines += ("nfw.will_call",) if s.chief is not None else ()
+    return lines + ("nfw.check_in",)
+
+
 def _missed_dose_lines(s: Situation) -> tuple[str, ...]:
     lines: tuple[str, ...] = _not_heard(s) + ("nfw.not_taken", "nfw.ask_before", "nfw.rest")
     lines += ("nfw.will_call",) if s.chief is not None else ()
@@ -328,15 +368,21 @@ Row = tuple[WhatToDoKind, Callable[[Situation], bool], Callable[[Situation], tup
 
 DECISION_TABLE: tuple[Row, ...] = (
     (WhatToDoKind.RED_FLAG, lambda s: s.red_flag, _red_flag_lines, False),
+    (WhatToDoKind.CALL_CLINIC, lambda s: s.calls_the_clinic, _call_clinic_lines, True),
     (WhatToDoKind.MISSED_DOSE, lambda s: s.missed is not None, _missed_dose_lines, True),
     (WhatToDoKind.REST, lambda s: True, _rest_lines, True),
 )
 """The whole of what the button can say, top row wins. (kind, applies, lines, check-in.)
 
 Red flag: call the ambulance now, after that call the chief.
+Call the clinic — a symptom that is not a red flag, said "quite a lot" or "a lot", or that has
+lasted a day or more, or that a medicine started in the last fourteen days lists as a
+watch-out: call the doctor's clinic today (and, with a tablet not tapped, that Nura has no note
+of it and to ask before taking it), rest, the chief will call today, a check-in in two hours.
 A dose nobody tapped Taken on: Nura has no note you took it, ask the doctor before you take
 it, rest, the chief will call today, a check-in in two hours. Otherwise: rest, the chief will
-call today, a check-in in two hours. Nothing else exists, and nothing says what is wrong.
+call today, a check-in in two hours. Nothing else exists, nothing says what is wrong, and
+nothing says how much of a medicine to take.
 """
 
 
@@ -701,13 +747,58 @@ async def write_the_moment(
 async def _missed_dose(
     session: AsyncSession, *, context: KeyContext, registry: DrugRegistry, language: str
 ) -> Slot | None:
-    """The first dose of today whose hour has passed and that nobody tapped Taken on."""
+    """The first dose of today whose window has closed with nobody tapping Taken on it: the
+    window his routine sets (E04-02, `app.medicines.windows`), the same one the Taken card
+    and the ladder read."""
     if not context.allows(Scope.MEDICINES):
         return None
     slots = await today(session, context=context, registry=registry, language=language)
-    hour = utcnow().astimezone(REGION_TZ[context.region]).hour
-    due = [slot for slot in slots if not slot.taken and hour >= ANCHOR_HOURS[Anchor(slot.anchor)]]
+    due = [slot for slot in slots if not slot.taken and slot.missed]
     return due[0] if due else None
+
+
+async def _new_medicine(
+    session: AsyncSession, *, context: KeyContext, registry: DrugRegistry, parsed: Parsed
+) -> MedicationLine | None:
+    """A medicine started in the last fourteen days whose licensed monograph lists what he said
+    as a watch-out — the rule the feeling cloud reads a tap by (E17: `WATCH_OUT_WORDS` from the
+    registry's rule ids, `NEW_MEDICINE_WINDOW`), with his words read to the cloud's word
+    (`SYMPTOM_FEELINGS`). The pharmacology is the register's; nothing here is a finding."""
+    said = {SYMPTOM_FEELINGS[one] for one in parsed.symptoms if one in SYMPTOM_FEELINGS}
+    if not said or not context.allows(Scope.MEDICINES):
+        return None
+    moment = utcnow()
+    lines = await audited_read(
+        session,
+        MedicationLine,
+        context,
+        Scope.MEDICINES,
+        where=(
+            MedicationLine.superseded_at.is_(None),
+            MedicationLine.status == LineStatus.ACTIVE,
+        ),
+    )
+    for line in sorted(lines, key=lambda one: (as_utc(one.started_at), one.generic), reverse=True):
+        if moment - as_utc(line.started_at) > NEW_MEDICINE_WINDOW:
+            continue
+        try:
+            watch = registry.monograph(line.generic).watch_out_ids
+        except UnknownDrug:
+            continue
+        if any(WATCH_OUT_WORDS.get(rule) in said for rule in watch):
+            return line
+    return None
+
+
+async def _directory_doctor(session: AsyncSession, *, context: KeyContext) -> str | None:
+    """The doctor, else the clinic, his directory names — read under the emergency scope, the
+    part every role holds and the one his emergency card names the doctor from (ADR 0002)."""
+    providers = await audited_read(session, Provider, context, BUTTON_SCOPE)
+    for kind in (ProviderKind.DOCTOR, ProviderKind.CLINIC):
+        for provider in sorted(providers, key=lambda one: (as_utc(one.added_at), one.name)):
+            if provider.kind is kind:
+                return provider.name
+    return None
 
 
 def _plain_name(registry: DrugRegistry, generic: str, language: str) -> str:
@@ -736,13 +827,22 @@ def compose(
         "chief": chief.display_name if chief is not None else "",
         "medicine": missed_medicine or YOUR_MEDICINE[lang],
         "who": who,
+        # The clinic is always a doctor's: never the chief's name in "Call …'s clinic today."
+        "doctor": doctor or YOUR_DOCTOR[lang],
     }
     return [Line(line_id, render(line_id, lang, **slots)) for line_id in decision.line_ids]
 
 
 BOUNDARY_PREFIX = "boundary."
-BOUNDARY_IDS = ("boundary.opening", "boundary.did", "boundary.not_advice", "boundary.ask")
-"""The not-feeling-well boundary's four lines as he sees them (no letter is carried yet)."""
+BOUNDARY_IDS = (
+    "boundary.opening",
+    "boundary.did",
+    "boundary.not_advice",
+    "boundary.ask",
+    "boundary.not_deciding",
+)
+"""The not-feeling-well boundary's five lines as he sees them (no letter is carried yet): the
+reassurance, what Nura did, the two closing lines, and "Nura does not decide what is wrong."."""
 URGENT_BOUNDARY_IDS = ("boundary.opening", "boundary.urgent")
 """The urgent card's two: the reassurance first, "Nura does not decide what is wrong." last."""
 
@@ -832,6 +932,11 @@ async def not_feeling_well(
         else await _missed_dose(session, context=context, registry=registry, language=lang)
     )
     missed_name = None if missed is None else _plain_name(registry, missed.line.generic, lang)
+    new_line = (
+        None
+        if heard.any
+        else await _new_medicine(session, context=context, registry=registry, parsed=parsed)
+    )
     notices: list[Notice] = list(escalated.notices) if escalated is not None else []
     if not heard.any:
         notices = await tell_family(
@@ -865,10 +970,21 @@ async def not_feeling_well(
         chief=family.chief,
         others_told=bool(family.everyone),
         region=context.region,
+        severity=parsed.severity,
+        lasting=parsed.duration in A_DAY_OR_MORE,
+        new_medicine=new_line is not None,
     )
     decision = decide(situation)
     urgent = decision.kind is WhatToDoKind.RED_FLAG
     doctor = None if missed is None else missed.line.prescriber
+    if decision.kind is WhatToDoKind.CALL_CLINIC:
+        # The clinic of the doctor on the new medicine's label, else the tablet's, else his
+        # directory's doctor; "your doctor" when none is named.
+        doctor = (
+            (new_line.prescriber if new_line is not None else None)
+            or doctor
+            or await _directory_doctor(session, context=context)
+        )
     told = None if family.chief is None else family.chief.display_name
     lines = within_the_boundary(
         compose(
@@ -965,10 +1081,11 @@ async def not_feeling_well(
 
 
 __all__ = [
-    "ANCHOR_HOURS",
+    "A_DAY_OR_MORE",
     "BUTTON_SCOPE",
     "DECISION_TABLE",
     "FLAG_SCOPE",
+    "QUITE_A_LOT",
     "Captured",
     "Decision",
     "Escalated",

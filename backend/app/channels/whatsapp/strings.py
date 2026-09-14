@@ -149,21 +149,6 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("{name}文件里的这部分没有开放给您。", "{name}可以在应用里更改。"),
     },
-    "red_flag": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} know now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_one": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} knows now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_alone": {
-        "en": ("This one we do not wait for.", "Call {doctor} today."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。"),
-    },
     # A flag written but held back (it depends on a fact not on his papers): no alarm, and
     # still the next step for a worried family member.
     "red_flag_held": {
@@ -261,6 +246,87 @@ AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
 
 # @patient phrase
 OR: Mapping[str, str] = {"en": " or ", "ms": " atau ", "zh": "还是"}
+
+
+# --- a red flag, answered in the thread (E19-05) ------------------------------------------------
+#
+# Every reply to a red flag is three parts, each a whole line: that we do not wait for this
+# one, what to do now — the one step `app.safety.red_flags.step_for` chose from the flag's
+# tier, the doctor's hours and the hospital marked as on his insurance — and who knows now.
+# The replies are the parts joined, one key per step and per how many were told
+# (`red_flag_reply_key`); the send path verifies the whole reply again before it goes.
+
+# @patient
+RED_FLAG_OPENING: Mapping[str, str] = {
+    "en": "This one we do not wait for.",
+    "ms": "Yang ini kita tidak tunggu.",
+    "zh": "这个我们不等。",
+}
+
+# @patient action
+RED_FLAG_STEPS: Mapping[str, Mapping[str, Lines]] = {
+    "ambulance": {
+        "en": ("Call the ambulance now on {emergency_number}.",),
+        "ms": ("Hubungi ambulans sekarang di talian {emergency_number}.",),
+        "zh": ("现在就打{emergency_number}叫救护车。",),
+    },
+    "doctor_today": {
+        "en": ("Call {doctor} today.",),
+        "ms": ("Telefon {doctor} hari ini.",),
+        "zh": ("今天就打电话给{doctor}。",),
+    },
+    "doctor_today_hospital": {
+        "en": ("Call {doctor} today.", "If it gets worse, go to {hospital} now."),
+        "ms": ("Telefon {doctor} hari ini.", "Kalau jadi lebih teruk, pergi ke {hospital} sekarang."),
+        "zh": ("今天就打电话给{doctor}。", "如果变得更严重，现在就去{hospital}。"),
+    },
+    "hospital_now": {
+        "en": ("Go to the emergency department at {hospital} now.",),
+        "ms": ("Pergi ke jabatan kecemasan di {hospital} sekarang.",),
+        "zh": ("现在就去{hospital}的急诊部。",),
+    },
+    "number_if_worse": {
+        "en": ("If it gets worse, call {emergency_number} now.",),
+        "ms": ("Kalau jadi lebih teruk, telefon {emergency_number} sekarang.",),
+        "zh": ("如果变得更严重，现在就打{emergency_number}。",),
+    },
+}
+"""What to do now, by `app.safety.red_flags.Step`. The ambulance line is the same at any hour;
+out of the doctor's hours "call the doctor today" is never said."""
+
+# @patient
+RED_FLAG_KNOWS: Mapping[str, Mapping[str, str]] = {
+    "many": {"en": "{names} know now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+    "one": {"en": "{names} knows now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+}
+
+_TOLD: tuple[tuple[str, str | None], ...] = (("", "many"), ("_one", "one"), ("_alone", None))
+
+
+def _red_flag_replies() -> dict[str, Mapping[str, Lines]]:
+    made: dict[str, Mapping[str, Lines]] = {}
+    for step, said in RED_FLAG_STEPS.items():
+        for suffix, knows in _TOLD:
+            made[f"red_flag_{step}{suffix}"] = {
+                lang: (
+                    RED_FLAG_OPENING[lang],
+                    *said[lang],
+                    *(() if knows is None else (RED_FLAG_KNOWS[knows][lang],)),
+                )
+                for lang in RED_FLAG_OPENING
+            }
+    return made
+
+
+REPLIES = {**REPLIES, **_red_flag_replies()}
+
+
+def red_flag_reply_key(step: str, told: int) -> str:
+    """The reply for this step, naming nobody, one person or several as knowing now."""
+    if step not in RED_FLAG_STEPS:
+        raise NotACatalogueKey(f"no red-flag step named {step!r}")
+    suffix = "_alone" if told == 0 else "_one" if told == 1 else ""
+    return f"red_flag_{step}{suffix}"
 
 
 def reply(key: str, language: str | None, **params: str) -> str:

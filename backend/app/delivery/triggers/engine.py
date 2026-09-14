@@ -30,7 +30,7 @@ from app.audit.access import audited_read
 from app.audit.models import Channel
 from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_card, send_morning
 from app.channels.whatsapp.outbound.send import Delivered, send
-from app.db import as_utc, utcnow
+from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.nudges.models import Nudge, NudgeKind
 from app.delivery.strings import theirs
@@ -59,7 +59,7 @@ from app.delivery.triggers.ladder import (
     tapped_by,
 )
 from app.delivery.triggers.models import DeliveryChannel, DeliveryOutcome, Subject, TriggerType
-from app.delivery.triggers.rules import MORNING_LATEST
+from app.delivery.triggers.rules import BRIEF_DAYS_BEFORE, MORNING_LATEST
 from app.errors import Refusal
 from app.family.models import PushChannel, ScheduledPush
 from app.identity.models import Person
@@ -119,6 +119,7 @@ async def run_due(
         await _reorder(run, lines)
         await _pattern(run, lines)
     await _visit_tomorrow(run)
+    await _brief(run)
     await _papers(run)
     await _family_messages(run)
     await _nudges(run)
@@ -411,6 +412,80 @@ async def _visit_tomorrow(run: Run) -> None:
     await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
 
 
+async def _brief(run: Run) -> None:
+    """The pre-visit brief at T-3 (E05-01): three days before a visit, from his breakfast on,
+    the brief is rendered from State — the row is written then — and its card handed to him
+    under the cap on briefs a day (`brief_three_days_before`, one a day, quiet hours held). A
+    visit booked inside the three days gets its brief the first run it can, until the day
+    before, which is the visit reminder's. The card is the brief's own words, as the feed's
+    visit card carries them: who and when, what the visit is about, what to bring, and the
+    brief's boundary line."""
+    if run.patient is None or not run.acting.allows(Scope.VISITS):
+        return
+    zone = REGION_TZ[run.acting.region]
+    today = run.local.date()
+    if run.at < run.config.morning(today, zone):
+        return
+    # Imported here: the brief and the feed's card reach back into delivery.
+    from app.delivery.feed.compose import BRIEF_ON_THE_CARD
+    from app.reasoning.visits.brief import brief_for
+
+    for visit in await upcoming_appointments(run.session, context=run.acting, at=run.at, limit=5):
+        days = (as_utc(visit.scheduled_at).astimezone(zone).date() - today).days
+        if not 1 < days <= BRIEF_DAYS_BEFORE:
+            continue
+        firing = Firing(
+            type=TriggerType.BRIEF,
+            dedupe_key=f"brief:{visit.id}",
+            why={"appointment_id": str(visit.id), "days_before": days},
+        )
+        earlier = _about(run, firing, run.patient.id, await run.deliveries())
+        if any(row.outcome is DeliveryOutcome.SENT for row in earlier):
+            continue
+        try:
+            async with nested_unit_of_work(run.session):
+                brief = await brief_for(
+                    run.session,
+                    context=run.acting,
+                    appointment_id=visit.id,
+                    registry=run.via.providers.drug_registry,
+                )
+        except Refusal as refused:
+            await write(
+                run,
+                firing,
+                Recipient(run.patient, PATIENT),
+                DeliveryOutcome.SKIPPED,
+                reason=f"no brief: {type(refused).__name__}"[:64],
+            )
+            continue
+        run.forget_state()
+        carried = [
+            str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD
+        ]
+        card = [*carried, *(brief.boundary or "").splitlines()]
+        firing = Firing(
+            type=TriggerType.BRIEF,
+            dedupe_key=firing.dedupe_key,
+            why={**firing.why, "brief_id": str(brief.id), "state_id": str(brief.state_id)},
+        )
+
+        async def say(person: object, card: list[str] = card, lang: str = brief.language) -> Delivered:
+            return await send(
+                run.session,
+                context=run.acting,
+                to_person=person,  # type: ignore[arg-type]
+                kind="visit_brief",
+                params={"message": "\n".join(card)},
+                provider=run.via.providers.whatsapp,
+                number=run.via.number,
+                language=lang,
+                state=await run.state(),
+            )
+
+        await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
+
+
 async def _papers(run: Run) -> None:
     """A paper read into a review card and waiting for a yes: the chief is told there are
     papers to check, never what they say."""
@@ -507,8 +582,8 @@ async def _nudges(run: Run) -> None:
     queue (`app.delivery.nudges.handoff`). It goes to him from its `send_after` until it
     expires, never in the quiet hours, under the cap on nudges a day — the same cap the
     planner hands over by (`preferences.daily_cap`). Its lines are exactly the planner's. A
-    visit's anticipation nudge is skipped on a day the visit reminder reached him: one
-    reminder of a visit a day."""
+    visit's anticipation nudge is skipped on a day the visit reminder or the brief reached him:
+    one reminder of a visit a day."""
     if run.patient is None:
         return
     nudges = await audited_read(
@@ -523,7 +598,7 @@ async def _nudges(run: Run) -> None:
     reminded = {
         str(row.why.get("appointment_id"))
         for row in rows
-        if row.trigger_type is TriggerType.VISIT_TOMORROW
+        if row.trigger_type in (TriggerType.VISIT_TOMORROW, TriggerType.BRIEF)
         and row.outcome is DeliveryOutcome.SENT
         and row.day == run.day
     }
