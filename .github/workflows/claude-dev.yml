@@ -14,12 +14,14 @@ permissions:
   pull-requests: write
   issues: write
   id-token: write
-concurrency:
-  group: dev-agent
-  cancel-in-progress: false
 jobs:
   build-story:
     if: github.event_name != 'issues' || github.event.label.name == 'agent:ready'
+    # Job-level, not workflow-level: every label event enters a workflow-level group and
+    # cancels the pending real run; a skipped job never takes a slot.
+    concurrency:
+      group: dev-agent
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
