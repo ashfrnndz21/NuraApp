@@ -24,7 +24,6 @@ from app.consent.models import ConsentChannel, ConsentPurpose
 from app.consent.service import withdraw_consent
 from app.consent.texts import current_version
 from app.consent.withdrawal import STOP_LINES, STOPPED, STOPPED_LINES, stop_lines
-from app.delivery.triggers.engine import run_due
 from app.delivery.triggers.models import DeliveryOutcome, Ladder, TriggerType
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone

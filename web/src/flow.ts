@@ -45,7 +45,10 @@ export type FamilyPart =
   | "roster"
   | "messages"
   | "metrics"
-  | "calendar";
+  | "calendar"
+  | "deliveries"
+  | "settings"
+  | "documents";
 
 export type Tab = "today" | "family" | "me";
 

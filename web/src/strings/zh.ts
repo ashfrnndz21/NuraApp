@@ -108,7 +108,23 @@ export const zh = {
     // @patient phrase
     theirPhone: "他们的手机号码",
     // @patient phrase
-    relationshipLabel: "他们是您的谁",
+    relationshipLabel: "您是他们的什么人",
+    // @patient phrase
+    relationships: {
+      daughter: { label: "他们的女儿", said: "您的女儿" },
+      son: { label: "他们的儿子", said: "您的儿子" },
+      wife: { label: "他们的妻子", said: "您的妻子" },
+      husband: { label: "他们的丈夫", said: "您的丈夫" },
+      sister: { label: "他们的姐妹", said: "您的姐妹" },
+      brother: { label: "他们的兄弟", said: "您的兄弟" },
+      granddaughter: { label: "他们的孙女", said: "您的孙女" },
+      grandson: { label: "他们的孙子", said: "您的孙子" },
+      niece: { label: "他们的侄女", said: "您的侄女" },
+      nephew: { label: "他们的外甥", said: "您的外甥" },
+      friend: { label: "他们的朋友", said: "您的朋友" },
+    },
+    // @patient phrase
+    pickContact: "从我的联系人里选",
     // @patient
     asked: "是他们请您这么做的。",
     // @patient phrase
@@ -924,6 +940,77 @@ export const zh = {
     bookYes: "好，预约这次看医生",
     // @patient phrase
     notThis: "不是这个",
+    // @patient phrase
+    ladderYes: "我来处理",
+    // @patient headline
+    deliveries: "Nura 发了什么",
+    // @patient headline
+    settings: "Nura 什么时候、怎样发",
+    // @patient phrase
+    triggers: {
+      morning: "早上的卡",
+      dose: "吃药提醒",
+      reorder: "该买药了",
+      doses_untapped: "药还没点",
+      flag: "不舒服",
+      visit_tomorrow: "明天看医生",
+      papers: "文件在等",
+      family_message: "家人的一条消息",
+      first_week_prompt: "第一周",
+      nudge: "小提醒",
+    },
+    // @patient phrase
+    channels: {
+      app_push: "应用",
+      whatsapp: "WhatsApp",
+      caregiver: "通过照顾的人",
+    },
+    // @patient phrase
+    outcomes: {
+      sent: "已发送",
+      capped: "暂停：今天够了",
+      quiet: "暂停：安静时间",
+      no_channel: "联系不上他们",
+      no_scope: "他们的钥匙不包括这个",
+      skipped: "安静的日子跳过了",
+    },
+    // @patient phrase
+    rule: "规则",
+    // @patient phrase
+    quietFrom: "安静时间从",
+    // @patient phrase
+    quietUntil: "安静时间到",
+    // @patient phrase
+    skipQuietDays: "安静的日子不发早上的卡",
+    // @patient phrase
+    cap: "一天几次",
+    // @patient phrase
+    saveSettings: "保存这些设置",
+    // @patient phrase
+    neverHeld: "从不暂停",
+    // @patient headline
+    documents: "家人名单的文件",
+    // @patient phrase
+    tags: {
+      lpa: "持久授权书",
+      medical_letter: "医生的信",
+      consent_form: "同意书",
+    },
+    // @patient phrase
+    backs: {
+      consent: "支持一项同意",
+      stewardship: "支持代管文件",
+    },
+    // @patient phrase
+    stillOn: "还有效",
+    // @patient phrase
+    stoppedChip: "已停止",
+    // @patient phrase
+    addDocument: "加一份文件",
+    // @patient phrase
+    chooseDocument: "选一个文件或照片",
+    // @patient phrase
+    whatPaper: "什么文件",
   },
   review: {
     // @patient headline
@@ -1083,5 +1170,8 @@ export const zh = {
     AlreadyReviewed: "已经有人决定了这个。",
     NoSuchReviewItem: "那一项已经不在清单里了。",
     NotWellFormed: "Nura 不明白那个。",
+    AlertsAreNeverHeld: "不能等的消息从不暂停。",
+    NotOnTheLadder: "Nura 没有请您处理这个。",
+    NotADocument: "Nura 在这里只能保存文件或照片。",
   },
 } satisfies Strings;

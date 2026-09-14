@@ -108,7 +108,23 @@ export const ms = {
     // @patient phrase
     theirPhone: "Nombor telefon mereka",
     // @patient phrase
-    relationshipLabel: "Siapa mereka kepada anda",
+    relationshipLabel: "Siapa anda kepada mereka",
+    // @patient phrase
+    relationships: {
+      daughter: { label: "Anak perempuan mereka", said: "anak perempuan anda" },
+      son: { label: "Anak lelaki mereka", said: "anak lelaki anda" },
+      wife: { label: "Isteri mereka", said: "isteri anda" },
+      husband: { label: "Suami mereka", said: "suami anda" },
+      sister: { label: "Kakak atau adik perempuan mereka", said: "kakak atau adik perempuan anda" },
+      brother: { label: "Abang atau adik lelaki mereka", said: "abang atau adik lelaki anda" },
+      granddaughter: { label: "Cucu perempuan mereka", said: "cucu perempuan anda" },
+      grandson: { label: "Cucu lelaki mereka", said: "cucu lelaki anda" },
+      niece: { label: "Anak saudara perempuan mereka", said: "anak saudara perempuan anda" },
+      nephew: { label: "Anak saudara lelaki mereka", said: "anak saudara lelaki anda" },
+      friend: { label: "Kawan mereka", said: "kawan anda" },
+    },
+    // @patient phrase
+    pickContact: "Pilih daripada kenalan saya",
     // @patient
     asked: "Mereka minta anda buat ini.",
     // @patient phrase
@@ -924,6 +940,77 @@ export const ms = {
     bookYes: "Ya, tempah lawatan ini",
     // @patient phrase
     notThis: "Bukan yang ini",
+    // @patient phrase
+    ladderYes: "Saya uruskan",
+    // @patient headline
+    deliveries: "Apa yang Nura hantar",
+    // @patient headline
+    settings: "Bila dan bagaimana Nura hantar",
+    // @patient phrase
+    triggers: {
+      morning: "Kad pagi",
+      dose: "Peringatan ubat",
+      reorder: "Masa beli lagi",
+      doses_untapped: "Ubat belum ditekan",
+      flag: "Tidak sihat",
+      visit_tomorrow: "Lawatan esok",
+      papers: "Surat menunggu",
+      family_message: "Mesej daripada keluarga",
+      first_week_prompt: "Minggu pertama",
+      nudge: "Peringatan kecil",
+    },
+    // @patient phrase
+    channels: {
+      app_push: "Aplikasi",
+      whatsapp: "WhatsApp",
+      caregiver: "Melalui penjaga",
+    },
+    // @patient phrase
+    outcomes: {
+      sent: "Sudah dihantar",
+      capped: "Ditahan: cukup untuk hari ini",
+      quiet: "Ditahan: waktu senyap",
+      no_channel: "Tiada cara untuk sampai kepada mereka",
+      no_scope: "Kunci mereka tidak meliputinya",
+      skipped: "Dilangkau pada hari yang tenang",
+    },
+    // @patient phrase
+    rule: "Peraturan",
+    // @patient phrase
+    quietFrom: "Senyap dari",
+    // @patient phrase
+    quietUntil: "Senyap hingga",
+    // @patient phrase
+    skipQuietDays: "Pada hari yang tenang, langkau kad pagi",
+    // @patient phrase
+    cap: "Berapa kali sehari",
+    // @patient phrase
+    saveSettings: "Simpan tetapan ini",
+    // @patient phrase
+    neverHeld: "Tidak pernah ditahan",
+    // @patient headline
+    documents: "Surat untuk senarai keluarga",
+    // @patient phrase
+    tags: {
+      lpa: "Surat kuasa wakil berkekalan",
+      medical_letter: "Surat doktor",
+      consent_form: "Borang persetujuan",
+    },
+    // @patient phrase
+    backs: {
+      consent: "Menyokong satu persetujuan",
+      stewardship: "Menyokong penjagaan surat-surat",
+    },
+    // @patient phrase
+    stillOn: "Masih berjalan",
+    // @patient phrase
+    stoppedChip: "Sudah dihentikan",
+    // @patient phrase
+    addDocument: "Tambah surat",
+    // @patient phrase
+    chooseDocument: "Pilih dokumen atau foto",
+    // @patient phrase
+    whatPaper: "Jenis surat apa",
   },
   review: {
     // @patient headline
@@ -1083,5 +1170,8 @@ export const ms = {
     AlreadyReviewed: "Seseorang sudah memutuskan yang ini.",
     NoSuchReviewItem: "Perkara itu sudah tiada dalam senarai.",
     NotWellFormed: "Nura tidak faham itu.",
+    AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
+    NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
+    NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
   },
 } satisfies Strings;

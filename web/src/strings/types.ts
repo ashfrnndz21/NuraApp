@@ -56,6 +56,10 @@ export interface Strings {
     theirName: string;
     theirPhone: string;
     relationshipLabel: string;
+    /** Who the one setting up is to him, as a choice: the label she taps, and the words the
+     *  claim says to him ("Mei, your daughter, made this for you."). */
+    relationships: Record<"daughter" | "son" | "wife" | "husband" | "sister" | "brother" | "granddaughter" | "grandson" | "niece" | "nephew" | "friend", { label: string; said: string }>;
+    pickContact: string;
     asked: string;
     create: string;
   };
@@ -430,6 +434,27 @@ export interface Strings {
     agree: string;
     bookYes: string;
     notThis: string;
+    ladderYes: string;
+    deliveries: string;
+    settings: string;
+    triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
+    rule: string;
+    quietFrom: string;
+    quietUntil: string;
+    skipQuietDays: string;
+    cap: string;
+    saveSettings: string;
+    neverHeld: string;
+    documents: string;
+    tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
+    backs: Record<"consent" | "stewardship", string>;
+    stillOn: string;
+    stoppedChip: string;
+    addDocument: string;
+    chooseDocument: string;
+    whatPaper: string;
   };
   /** The pharmacist's review queue (E22-04): a staff page, never linked from the patient app. */
   review: {

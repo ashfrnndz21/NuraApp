@@ -3,6 +3,13 @@ import type { AppointmentOut, ConfirmationOut, ConsentOut, KeyOut, WordingOut } 
 import type {
   AcceptedOut,
   ConnectorOut,
+  DeliveryOut,
+  DeliverySettingsIn,
+  DeliverySettingsOut,
+  DocumentOut,
+  DocumentTag,
+  LadderOut,
+  OpenLadderOut,
   DigestOut,
   GrantOut,
   KeyRole,
@@ -169,3 +176,27 @@ export const acceptProposal = (token: string, profileId: string, proposalId: str
 
 export const dismissProposal = (token: string, profileId: string, proposalId: string, language: string) =>
   api<ProposalOut>(`/profiles/${profileId}/proposals/${proposalId}/dismiss`, { method: "POST", token, query: { language } });
+
+// --- E00-05, E11-05, E11-06: what was sent, when and how, and "I'm on it" --------------------------
+
+/** Every attempt to reach someone about him, newest first, with the rule that fired. */
+export const deliveries = (token: string, profileId: string) => api<DeliveryOut[]>(`/profiles/${profileId}/deliveries`, { token });
+
+export const deliverySettings = (token: string, profileId: string) => api<DeliverySettingsOut>(`/profiles/${profileId}/delivery-settings`, { token });
+
+export const changeDeliverySettings = (token: string, profileId: string, body: DeliverySettingsIn) =>
+  api<DeliverySettingsOut>(`/profiles/${profileId}/delivery-settings`, { method: "PUT", token, body });
+
+/** The red flags still climbing that reached the caller, with the lines beside "I'm on it". */
+export const ladders = (token: string, profileId: string, language: string) =>
+  api<OpenLadderOut[]>(`/profiles/${profileId}/ladders`, { token, query: { language } });
+
+export const acknowledge = (token: string, profileId: string, ladderId: string, language: string) =>
+  api<LadderOut>(`/profiles/${profileId}/ladders/${ladderId}/acknowledge`, { method: "POST", token, query: { language } });
+
+// --- E12-09: the papers behind the family list ----------------------------------------------------
+
+export const documents = (token: string, profileId: string) => api<DocumentOut[]>(`/profiles/${profileId}/documents`, { token });
+
+export const addDocument = (token: string, profileId: string, body: { data: string; content_type: string; captured_at: string; tag: DocumentTag }) =>
+  api<DocumentOut[]>(`/profiles/${profileId}/documents`, { method: "POST", token, body });

@@ -209,3 +209,62 @@ export interface WithdrawnOut {
   withdrawn: ConsentOut[];
   lines: string[];
 }
+
+export interface DeliveryOut {
+  delivery_id: string;
+  trigger_type: string;
+  rule: string;
+  to_person_id: string | null;
+  for_person_id: string | null;
+  standing: string | null;
+  rung: number | null;
+  ladder_id: string | null;
+  channel: string | null;
+  outcome: string;
+  reason: string | null;
+  day: string;
+  due_at: string;
+  recorded_at: string;
+}
+
+export interface DeliverySettingsOut {
+  breakfast_at: string;
+  skip_quiet_days: boolean;
+  quiet_from: string;
+  quiet_until: string;
+  /** Per trigger type, the channels in the order they are tried. */
+  channels: Record<string, string[]>;
+  /** Per trigger type, how many a day; null for an alert, which is never held. */
+  caps: Record<string, number | null>;
+}
+
+export interface DeliverySettingsIn {
+  skip_quiet_days: boolean;
+  quiet_from: string;
+  quiet_until: string;
+  channels: Record<string, string[]>;
+  caps: Record<string, number>;
+}
+
+export interface OpenLadderOut {
+  ladder_id: string;
+  subject: string;
+  started_at: string;
+  lines: string[];
+}
+
+export interface LadderOut {
+  ladder_id: string;
+  closed_because: string | null;
+  lines: string[];
+}
+
+export type DocumentTag = "lpa" | "medical_letter" | "consent_form";
+
+export interface DocumentOut {
+  artifact_id: string;
+  content_type: string;
+  captured_at: string;
+  tag: DocumentTag | null;
+  backs: { kind: "consent" | "stewardship" | string; id: string; basis: string; purpose: string | null; active: boolean }[];
+}

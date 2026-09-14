@@ -6,6 +6,7 @@ import { go, openProfile, reloadDoors } from "../flow";
 import { startOnboarding } from "../onboarding/state";
 import { me, token } from "../store/session";
 import { fill, language, t } from "../strings";
+import { canPickContact, pickContact } from "../onboarding/contact";
 import { Field, Header, Notice, Pill, RefusalNotice, Tile } from "../ui/components";
 
 function roleLine(each: ProfileOut): string {
@@ -161,11 +162,15 @@ export function ClaimScreen({ offer }: { offer: ClaimableOut }): JSX.Element {
 }
 
 /** The for-someone door: their name and number, who they are to you, and that they asked. */
+/** Who the one setting up is to him: choices, never typed (E01-01). */
+const RELATIONSHIPS = ["daughter", "son", "wife", "husband", "sister", "brother", "granddaughter", "grandson", "niece", "nephew", "friend"] as const;
+type Relationship = (typeof RELATIONSHIPS)[number];
+
 export function ForSomeoneScreen(): JSX.Element {
   const s = t();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+65");
-  const [relationship, setRelationship] = useState("");
+  const [relationship, setRelationship] = useState<Relationship | null>(null);
   const [asked, setAsked] = useState(false);
   const [words, setWords] = useState<WordingOut | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -186,7 +191,7 @@ export function ForSomeoneScreen(): JSX.Element {
         display_name: name.trim(),
         language: words.language,
         version: words.version,
-        relationship: relationship.trim() || null,
+        relationship: relationship ? s.forSomeone.relationships[relationship].said : null,
       });
       await startOnboarding(made);
     } catch (failure) {
@@ -203,7 +208,28 @@ export function ForSomeoneScreen(): JSX.Element {
         <p>{s.forSomeone.lead}</p>
         <Field name="their-name" label={s.forSomeone.theirName} value={name} onInput={setName} />
         <Field name="their-phone" label={s.forSomeone.theirPhone} value={phone} onInput={setPhone} type="tel" inputMode="tel" />
-        <Field name="relationship" label={s.forSomeone.relationshipLabel} value={relationship} onInput={setRelationship} />
+        {canPickContact() && (
+          <Pill
+            quiet
+            onClick={() =>
+              void pickContact().then((picked) => {
+                if (picked?.phone) setPhone(picked.phone);
+                if (picked?.name && !name.trim()) setName(picked.name);
+              })
+            }
+            testId="pick-contact"
+          >
+            {s.forSomeone.pickContact}
+          </Pill>
+        )}
+        <p class="label">{s.forSomeone.relationshipLabel}</p>
+        <div class="choices two" role="group" aria-label={s.forSomeone.relationshipLabel} data-testid="relationship">
+          {RELATIONSHIPS.map((each) => (
+            <Pill key={each} chosen={relationship === each} onClick={() => setRelationship(relationship === each ? null : each)} testId={`relationship-${each}`}>
+              {s.forSomeone.relationships[each].label}
+            </Pill>
+          ))}
+        </div>
         <label class="check">
           <input type="checkbox" checked={asked} onChange={(event) => setAsked((event.target as HTMLInputElement).checked)} />
           <span>{s.forSomeone.asked}</span>

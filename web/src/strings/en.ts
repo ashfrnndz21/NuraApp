@@ -108,7 +108,23 @@ export const en = {
     // @patient phrase
     theirPhone: "Their phone number",
     // @patient phrase
-    relationshipLabel: "Who they are to you",
+    relationshipLabel: "Who you are to them",
+    // @patient phrase
+    relationships: {
+      daughter: { label: "Their daughter", said: "your daughter" },
+      son: { label: "Their son", said: "your son" },
+      wife: { label: "Their wife", said: "your wife" },
+      husband: { label: "Their husband", said: "your husband" },
+      sister: { label: "Their sister", said: "your sister" },
+      brother: { label: "Their brother", said: "your brother" },
+      granddaughter: { label: "Their granddaughter", said: "your granddaughter" },
+      grandson: { label: "Their grandson", said: "your grandson" },
+      niece: { label: "Their niece", said: "your niece" },
+      nephew: { label: "Their nephew", said: "your nephew" },
+      friend: { label: "Their friend", said: "your friend" },
+    },
+    // @patient phrase
+    pickContact: "Choose from my contacts",
     // @patient
     asked: "They asked you to do this.",
     // @patient phrase
@@ -926,6 +942,77 @@ export const en = {
     bookYes: "Yes, book this visit",
     // @patient phrase
     notThis: "Not this one",
+    // @patient phrase
+    ladderYes: "I'm on it",
+    // @patient headline
+    deliveries: "What Nura sent",
+    // @patient headline
+    settings: "When and how Nura sends",
+    // @patient phrase
+    triggers: {
+      morning: "Morning card",
+      dose: "Tablet reminder",
+      reorder: "Time to buy more",
+      doses_untapped: "Tablets not tapped",
+      flag: "Not well",
+      visit_tomorrow: "Visit tomorrow",
+      papers: "Papers waiting",
+      family_message: "Family message",
+      first_week_prompt: "First week",
+      nudge: "A small reminder",
+    },
+    // @patient phrase
+    channels: {
+      app_push: "App",
+      whatsapp: "WhatsApp",
+      caregiver: "Through the carer",
+    },
+    // @patient phrase
+    outcomes: {
+      sent: "Sent",
+      capped: "Held: enough for today",
+      quiet: "Held: quiet hours",
+      no_channel: "No way to reach them",
+      no_scope: "Their key does not cover it",
+      skipped: "Skipped on a quiet day",
+    },
+    // @patient phrase
+    rule: "Rule",
+    // @patient phrase
+    quietFrom: "Quiet from",
+    // @patient phrase
+    quietUntil: "Quiet until",
+    // @patient phrase
+    skipQuietDays: "On a quiet day, skip the morning card",
+    // @patient phrase
+    cap: "How many a day",
+    // @patient phrase
+    saveSettings: "Keep these settings",
+    // @patient phrase
+    neverHeld: "Never held",
+    // @patient headline
+    documents: "Papers for the family list",
+    // @patient phrase
+    tags: {
+      lpa: "Lasting power of attorney",
+      medical_letter: "Doctor's letter",
+      consent_form: "Consent form",
+    },
+    // @patient phrase
+    backs: {
+      consent: "Backs an agreement",
+      stewardship: "Backs looking after the papers",
+    },
+    // @patient phrase
+    stillOn: "Still on",
+    // @patient phrase
+    stoppedChip: "Stopped",
+    // @patient phrase
+    addDocument: "Add a paper",
+    // @patient phrase
+    chooseDocument: "Choose a file or a photo",
+    // @patient phrase
+    whatPaper: "What kind of paper",
   },
   review: {
     // @patient headline
@@ -1087,5 +1174,8 @@ export const en = {
     AlreadyReviewed: "Someone already decided this one.",
     NoSuchReviewItem: "That item is not in the queue any more.",
     NotWellFormed: "Nura did not understand that.",
+    AlertsAreNeverHeld: "A message that cannot wait is never held.",
+    NotOnTheLadder: "Nura did not ask you about this one.",
+    NotADocument: "Nura can only keep a file or a photo here.",
   },
 } satisfies Strings;

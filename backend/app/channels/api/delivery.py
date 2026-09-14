@@ -3,6 +3,7 @@
     GET  /profiles/{id}/delivery-settings             what the deliveries follow (any key)
     PUT  /profiles/{id}/delivery-settings             change it (owner, chief)
     GET  /profiles/{id}/deliveries?day=               every attempt and its rule (owner, chief)
+    GET  /profiles/{id}/ladders?language=             the open flag ladders that reached the caller
     POST /profiles/{id}/ladders/{ladder}/acknowledge  "I have it": a flag's ladder stops
     POST /dev/run-triggers                            `run_due` for one profile at one moment
 
@@ -21,13 +22,19 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
+from app.audit.access import audited_profile_read
 from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.db import as_utc
+from app.delivery.ladder_words import answered_lines, asked_lines
+from app.delivery.ladder_words import language_of as ladder_language
 from app.delivery.triggers.deliver import Sent, Via
 from app.delivery.triggers.engine import run_due
-from app.delivery.triggers.ladder import acknowledge_flag
+from app.delivery.triggers.ladder import acknowledge_flag, open_flags_for
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, TriggerType
 from app.delivery.triggers.preferences import change, current, log
 from app.delivery.triggers.rules import Config
+from app.medicines.strings import say_date
+from app.regions import REGION_TZ
 from app.settings import Settings
 
 router = APIRouter(tags=["delivery"])
@@ -160,16 +167,29 @@ class LadderOut(BaseModel):
     closed_because: str | None
     acknowledged_by_person_id: uuid.UUID | None
     acknowledged_at: datetime | None
+    lines: list[str] = Field(default_factory=list)
+    """What the web says after "I'm on it", in the reader's language (E11-06)."""
 
     @classmethod
-    def of(cls, ladder: Ladder) -> LadderOut:
+    def of(cls, ladder: Ladder, lines: list[str] | None = None) -> LadderOut:
         return cls(
             ladder_id=ladder.id,
             subject=ladder.subject.value,
             closed_because=ladder.closed_because,
             acknowledged_by_person_id=ladder.acknowledged_by_person_id,
             acknowledged_at=ladder.acknowledged_at,
+            lines=lines or [],
         )
+
+
+class OpenLadderOut(BaseModel):
+    """A red flag's ladder still open that reached the caller, and what the web says beside
+    its one button."""
+
+    ladder_id: uuid.UUID
+    subject: str
+    started_at: datetime
+    lines: list[str]
 
 
 @router.get("/profiles/{profile_id}/delivery-settings")
@@ -207,12 +227,47 @@ async def deliveries(
     return [DeliveryOut.of(row) for row in await log(session, context=context, day=day)]
 
 
+@router.get("/profiles/{profile_id}/ladders")
+async def open_ladders(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> list[OpenLadderOut]:
+    """The red flags still climbing that reached the caller, newest first, each with the
+    lines the web shows beside "I'm on it". Under the emergency scope; nothing of the flag's
+    own words — those went in the notice."""
+    found = await open_flags_for(session, context=context)
+    if not found:
+        return []
+    profile = await audited_profile_read(session, context)
+    words = ladder_language(language or profile.language)
+    zone = REGION_TZ[context.region]
+    return [
+        OpenLadderOut(
+            ladder_id=ladder.id,
+            subject=ladder.subject.value,
+            started_at=ladder.started_at,
+            lines=asked_lines(
+                name=profile.display_name,
+                day=say_date(as_utc(ladder.started_at).astimezone(zone).date(), words),
+                language=words,
+            ),
+        )
+        for ladder in found
+    ]
+
+
 @router.post("/profiles/{profile_id}/ladders/{ladder_id}/acknowledge")
-async def acknowledge(ladder_id: uuid.UUID, context: Context, session: Db) -> LadderOut:
+async def acknowledge(
+    ladder_id: uuid.UUID,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> LadderOut:
     """Someone the flag's ladder reached says they have it; the ladder asks nobody else."""
     ladder = await acknowledge_flag(session, context=context, ladder_id=ladder_id)
     assert ladder is not None  # a named ladder that is not theirs is refused, not None
-    return LadderOut.of(ladder)
+    return LadderOut.of(ladder, answered_lines(language))
 
 
 def _dev_only(request: Request) -> Settings:
