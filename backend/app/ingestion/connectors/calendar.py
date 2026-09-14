@@ -22,6 +22,7 @@ from typing import Protocol
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.errors import Refusal
+from app.fixtures import fixture
 
 MAX_ICS_BYTES = 256 * 1024
 """A family's calendar export for a year is well under this; anything larger is refused."""
@@ -52,6 +53,7 @@ class NotACalendar(Refusal):
     """The file is not an iCalendar file this reader can read, or it is too large."""
 
 
+@fixture
 class FixtureCalendar:
     """A calendar that answers from the events it was given. For tests."""
 

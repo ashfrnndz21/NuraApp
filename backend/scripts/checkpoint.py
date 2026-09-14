@@ -33,6 +33,9 @@ BASE_URL = os.environ.get("NURA_BASE_URL", "http://127.0.0.1:8000")
 DEV_LOG = Path(os.environ.get("NURA_DEV_LOG", Path(__file__).resolve().parent.parent / ".dev.log"))
 LOG_NAME = os.environ.get("NURA_DEV_LOG", "backend/.dev.log")
 """How the log is named in a message: the path as the owner knows it from the repo root."""
+DEMO_LOGIN_CODE = os.environ.get("NURA_DEMO_LOGIN_CODE") or None
+"""Against a demo deployment (docs/deploy.md, ADR 0008): the operator's code signs every test
+number in, so no log is read, and every number is drawn from the test range (+65 0…)."""
 CODE_LINE = re.compile(r"login code for (\+[0-9]+): ([0-9]{6})")
 """What `LoggingCodeSender` logs on a dev run; see `app/identity/providers.py`."""
 CODE_WAIT_SECONDS = 3.0
@@ -118,6 +121,8 @@ def code_from_log(phone_e164: str, since: float) -> str:
     or a file that stops updating, means the server on the other terminal is not the one
     `make dev` starts — that is the only one that writes the log here.
     """
+    if DEMO_LOGIN_CODE is not None:
+        return DEMO_LOGIN_CODE
     deadline = time.monotonic() + CODE_WAIT_SECONDS
     while True:
         if DEV_LOG.exists():
@@ -142,8 +147,17 @@ def code_from_log(phone_e164: str, since: float) -> str:
     )
 
 
+def _code_source() -> str:
+    """Where this walk's login code came from, for the ✓ line."""
+    if DEMO_LOGIN_CODE is not None:
+        return "the demo's code (NURA_DEMO_LOGIN_CODE)"
+    return f"the six digits from {LOG_NAME}"
+
+
 def fresh_phone(prefix: str) -> str:
     """A Singapore-shaped number nobody has used on this dev.db: random last four digits."""
+    if DEMO_LOGIN_CODE is not None:
+        prefix = "+650" + prefix.removeprefix("+65")[1:]
     return f"{prefix}{random.randint(0, 9999):04d}"
 
 
@@ -178,7 +192,7 @@ def register(client: httpx.Client, person: Person, language: str) -> None:
     person.person_id = session["person_id"]
     ok(
         f"{who} registered by phone code: asked (202, no code in the answer), "
-        f"read the six digits from {LOG_NAME} — no SMS — and signed in (200, token issued)"
+        f"used {_code_source()} — no SMS — and signed in (200, token issued)"
     )
 
 
@@ -3024,20 +3038,20 @@ def checkpoint_9(client: httpx.Client) -> None:
         "Pa reads the emergency lines of his trail",
     )
     steps = [e["target"] for e in reversed(trail) if e["action"] == "write"]
-    if "red_flag" not in steps or "safety_escalation" not in steps:
+    if "red_flag" not in steps or "delivery_ladder" not in steps:
         raise fail("Pa reads the emergency lines of his trail", why=f"got {steps}")
-    if steps.index("red_flag") > steps.index("safety_escalation"):
+    if steps.index("red_flag") > steps.index("delivery_ladder"):
         raise fail("Pa reads the emergency lines of his trail", why=f"flag after ladder: {steps}")
     ok(
         'Mei posted "he fell in the bathroom": a red flag (the word table in app/safety/red_flags.py) '
         "— the moment it was said (a SYMPTOM event) and the Flag on it were written first, before the "
-        "message was even kept, then the message, then the "
-        "escalation record naming the ladder from the keys table (owner, chief keys, others; the "
-        "poster left out); nothing was extracted, no proposal. The reply in her thread, at once:"
+        "message was even kept, then the message, then the ladder (E11-06, the one record of who "
+        "is told: straight to the roster, never his own rung, the poster left out); nothing was "
+        "extracted, no proposal. The reply in her thread names only who the ladder reached:"
     )
     print_reply(fell)
     for row in reversed(trail):
-        if row["action"] == "write" and row["target"] in ("red_flag", "safety_escalation"):
+        if row["action"] == "write" and row["target"] in ("red_flag", "delivery_ladder"):
             print(f"    {row['at'][:19]}  Mei  write emergency {row['target']}  {row['channel']}")
 
     # 9. Pa's own word about himself: written down without a second yes.
@@ -3143,6 +3157,7 @@ CHECKPOINTS = {
     16: lambda client: checkpoints.cp16.run(BASE_URL, DEV_LOG) and sys.exit(1),
     17: lambda client: checkpoints.cp17.run(BASE_URL, DEV_LOG) and sys.exit(1),
     18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    20: lambda client: checkpoints.cp20.run(BASE_URL, DEV_LOG) and sys.exit(1),
     21: lambda client: checkpoints.cp21.run(BASE_URL, DEV_LOG) and sys.exit(1),
     22: lambda client: checkpoints.cp22.run(BASE_URL, DEV_LOG) and sys.exit(1),
     23: lambda client: checkpoints.cp23.run(BASE_URL, DEV_LOG) and sys.exit(1),
@@ -3166,7 +3181,7 @@ def main(argv: list[str]) -> int:
                 ) from None
             check(health, 200, f"the server answers at {BASE_URL}")
             ok(f"the dev server answers at {BASE_URL} (GET /health)")
-            if not DEV_LOG.exists():
+            if DEMO_LOGIN_CODE is None and not DEV_LOG.exists():
                 raise Failed(
                     f"✗ {LOG_NAME} is missing, so login codes cannot be read: the server answering "
                     "is not the one `make dev` starts. Stop it and run `make dev` there instead"

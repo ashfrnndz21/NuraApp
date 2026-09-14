@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.db import keep_on_refusal, utcnow
 from app.errors import Refusal
-from app.keys.context import KeyContext, OutOfScope
+from app.keys.context import KeyContext, OutOfScope, Standing
 from app.keys.repository import scoped_select
 from app.keys.scopes import KeyRole, Scope
 
@@ -61,15 +61,18 @@ async def record(
     (`app.db.keep_on_refusal`) that writes an equivalent line again once the channel has
     rolled the unit back — the reaching is seen whether or not anything else survived.
     """
+    # Nura's own reach (the delivery engine) is written as the system's: no person as the
+    # actor, the system channel, whatever door it came through (`keys.context.as_the_system`).
+    system = context.standing is Standing.SYSTEM
     values: dict[str, Any] = {
         "profile_id": context.profile_id,
         "at": utcnow(),
-        "actor_person_id": context.person_id,
-        "actor_role": context.role,
-        "key_id": context.key_id,
+        "actor_person_id": None if system else context.person_id,
+        "actor_role": None if system else context.role,
+        "key_id": None if system else context.key_id,
         "action": action,
         "scope": scope,
-        "channel": channel,
+        "channel": Channel.SYSTEM if system else channel,
         "target": target,
         "target_id": target_id,
         "rows": rows,

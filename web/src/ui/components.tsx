@@ -3,6 +3,7 @@ import { speak, type SpokenCard } from "../speech/speak";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
 import { go } from "../flow";
+import { demo } from "../store/deployment";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
 
@@ -227,5 +228,20 @@ export function TabBar({ current }: { current: Tab }): JSX.Element {
         </button>
       ))}
     </nav>
+  );
+}
+
+/** On a demo deployment (ADR 0008), first on every screen: what this is, in the person's
+ *  language, and that real health information does not belong in it. */
+export function DemoBanner(): JSX.Element | null {
+  if (!demo.value) return null;
+  const s = t().demo;
+  return (
+    <aside class="demo-banner" role="note" data-testid="demo-banner">
+      <strong>{s.banner}</strong>
+      {s.lines.map((line, index) => (
+        <span key={index}>{line}</span>
+      ))}
+    </aside>
   );
 }

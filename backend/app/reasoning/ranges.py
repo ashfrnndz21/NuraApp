@@ -34,6 +34,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
+from app.fixtures import fixture
 from app.settings import Settings
 
 FIXTURE_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "labs" / "ranges.json"
@@ -170,6 +171,7 @@ def _pick(
     return missing or NoRangeBecause.NONE_ON_FILE
 
 
+@fixture
 class FixtureRanges:
     """The fixture table, read from one JSON file. Pure lookups; nothing is written."""
 

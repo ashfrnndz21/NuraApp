@@ -19,10 +19,11 @@ What happens, in order, and the order is the point:
    (`write_flag_kept`, E21's `red_flag` table) — and kept: if anything later in the same
    request is refused, the event, the flag and the notices land anyway. A flag that depends
    on a fact the record does not hold (read as the system, whoever pressed) is written
-   suppressed and escalates nobody. Otherwise every
-   key holder on the emergency list gets a `Notice` to be delivered by E11/E19, whoever is
-   on duty first (E12's roster), and the ladder (`Escalation`, `roster_for`) is written
-   beside the flag. This whole step runs under `Scope.EMERGENCY`, which every role holds, so
+   suppressed and escalates nobody. Otherwise the flag goes up the ladder at once
+   (`app.delivery.triggers.ladder.escalate_flag`, E11-06), the one record of who is told:
+   whoever E12's roster puts on duty first, the chief a few minutes on if nobody answers,
+   then everyone else holding his emergency card — never his own rung, never capped, never
+   quiet — and the ladder is kept like the flag. This whole step runs under `Scope.EMERGENCY`, which every role holds, so
    a helper or a caregiver pressing the button for him escalates exactly as he would
    (docs/00-MASTER-BUILD-SPEC.md §8: red flags escalate immediately).
 4. **State.** When the key holds the record, the moment becomes a SYMPTOM event and a
@@ -57,7 +58,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read, audited_write
-from app.audit.models import Action, Channel
+from app.audit.models import Action
 from app.channels.safety_strings import (
     SYMPTOM_WORDS,
     YOUR_DOCTOR,
@@ -67,6 +68,9 @@ from app.channels.safety_strings import (
     render,
 )
 from app.db import as_utc, utcnow
+from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.ladder import escalate_flag
+from app.delivery.triggers.models import Ladder
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
@@ -92,7 +96,6 @@ from app.safety.models import Notice, NoticeKind, WhatToDoCard, WhatToDoKind
 from app.safety.people import key_holder, owner_of
 from app.safety.red_flags import (
     FLAG_SCOPE,
-    Escalation,
     Feeling,
     Flag,
     NotAFeeling,
@@ -100,10 +103,8 @@ from app.safety.red_flags import (
     is_red,
     keep_row,
     record_the_moment,
-    roster_for,
     write_flag_kept,
 )
-from app.safety.red_flags import escalate as write_the_ladder
 from app.safety.symptoms import Parsed, Symptom, parse_symptoms
 from app.state.models import Posture
 from app.state.service import RECOMPUTE_SCOPES, StateView, current_state, render_from_state
@@ -221,12 +222,13 @@ class Family:
 @dataclass(frozen=True, slots=True)
 class Escalated:
     """What the red-flag path wrote before anything else: the moment, the flag, and — unless
-    the flag was held back — a notice to each person on the emergency list and the ladder."""
+    the flag was held back — the ladder (E11-06), and who it asked first."""
 
     event: Event
     flag: Flag
     notices: list[Notice]
-    ladder: Escalation | None
+    ladder: Ladder | None
+    asked: list[uuid.UUID] = field(default_factory=list)
 
     @property
     def suppressed(self) -> bool:
@@ -473,6 +475,7 @@ async def escalate(
     captured: Captured,
     feeling: Feeling,
     family: Family,
+    via: Via,
 ) -> Escalated:
     """Step 3, when the table heard a red flag: the moment, the flag, then who is told.
 
@@ -496,31 +499,18 @@ async def escalate(
     flag = await write_flag_kept(session, context, feeling=feeling, event=event)
     if flag.suppressed_because is not None:
         return Escalated(event=event, flag=flag, notices=[], ladder=None)
-    notices: list[Notice] = []
-    for person in family.everyone:
-        notice = await _notice(
-            session,
-            context=context,
-            to=person,
-            kind=NoticeKind.FAMILY_ALERT,
-            template="family_alert.red_flag",
-            slots={"words": feeling.value, "heard": captured.heard},
-            flag_id=flag.id,
-            deliver_after=moment,
-            event_id=event.id,
-        )
-        keep_row(session, context, notice, scope=NOTICE_SCOPE)
-        notices.append(notice)
-    ladder = await write_the_ladder(
-        session,
-        context=context,
-        flag=flag,
-        roster=await roster_for(session, context=context, channel=Channel.APP),
-        told=[person.id for person in family.everyone],
-        channel=Channel.APP,
+    escalated = await escalate_flag(
+        session, context, flag, told_already=(context.person_id,), via=via, at=moment
     )
-    keep_row(session, context, ladder, scope=FLAG_SCOPE)
-    return Escalated(event=event, flag=flag, notices=notices, ladder=ladder)
+    if escalated.ladder is not None:
+        keep_row(session, context, escalated.ladder, scope=FLAG_SCOPE)
+    return Escalated(
+        event=event,
+        flag=flag,
+        notices=[],
+        ladder=escalated.ladder,
+        asked=list(escalated.asked),
+    )
 
 
 async def tell_family(
@@ -794,13 +784,15 @@ async def not_feeling_well(
     store: ObjectStore,
     transcriber: Transcriber,
     registry: DrugRegistry,
+    via: Via,
     words: str | None = None,
     audio: bytes | None = None,
     content_type: str | None = None,
     language: str | None = None,
     feeling: Feeling | None = None,
 ) -> WhatToDoNow:
-    """The button. See the module doc for the five steps and their order.
+    """The button. See the module doc for the five steps and their order. `via` is the
+    channels this process sends through: a red flag's ladder sends its first rung at once.
 
     `feeling` is for a caller that already knows the red word — a tap on the feeling cloud
     (E17), where he chose the word itself: the flag is that word, and the table is not asked
@@ -831,8 +823,13 @@ async def not_feeling_well(
     if feeling is not None:
         # Before the fact, before the card — and kept whatever follows.
         escalated = await escalate(
-            session, context=context, captured=captured, feeling=feeling, family=family
+            session, context=context, captured=captured, feeling=feeling, family=family, via=via
         )
+        if escalated.asked:
+            # The card names who the ladder called first: that is who knows now.
+            first = await key_holder(session, context, escalated.asked[0], scope=BUTTON_SCOPE)
+            if first is not None:
+                family = Family(chief=first, to_tell=family.to_tell, everyone=family.everyone)
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
 
     missed = (
@@ -962,7 +959,11 @@ async def not_feeling_well(
         suppressed=list(heard.suppressed) if can_record else [],
         symptoms=list(parsed.symptoms),
         flag_id=None if escalated is None or escalated.first is None else escalated.first.id,
-        notified_person_ids=[n.to_person_id for n in notices if n.kind is NoticeKind.FAMILY_ALERT],
+        notified_person_ids=(
+            list(escalated.asked)
+            if escalated is not None and escalated.first is not None
+            else [n.to_person_id for n in notices if n.kind is NoticeKind.FAMILY_ALERT]
+        ),
         check_in_at=check_in_at,
         missed_medicine=missed_name,
         notices=notices,

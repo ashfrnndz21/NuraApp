@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, time, timedelta
 from enum import StrEnum
 from itertools import pairwise
@@ -53,6 +53,7 @@ from app.medicines.dose import Dose, Frequency
 from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.strings import PLAIN_NAME, language_of, say_amount
 from app.regions import REGION_TZ
+from app.routines.breakfast import breakfast_time
 from app.routines.models import Routine
 from app.safety.plain_words import verify
 
@@ -149,12 +150,19 @@ def check_day(
     )
 
 
-def day_of(routine: Routine | None) -> Day:
+def day_of(routine: Routine | None, breakfast: time | None = None) -> Day:
+    """The day as set (or the default), with `breakfast` — the one breakfast time
+    (`app.routines.breakfast`) — as its breakfast anchor when it still sits between waking
+    and lunch."""
     if routine is None:
-        return check_day(DEFAULT_ANCHORS, (), (), DEFAULT_MORNING_CARD)
-    return check_day(
-        routine.anchors, routine.reading_prompts, routine.walks, routine.morning_card_at
-    )
+        day = check_day(DEFAULT_ANCHORS, (), (), DEFAULT_MORNING_CARD)
+    else:
+        day = check_day(
+            routine.anchors, routine.reading_prompts, routine.walks, routine.morning_card_at
+        )
+    if breakfast is None or not day.anchors["wake"] < breakfast < day.anchors["lunch"]:
+        return day
+    return replace(day, anchors={**day.anchors, "breakfast": breakfast})
 
 
 def may_set_routine(context: KeyContext) -> None:
@@ -306,7 +314,7 @@ async def the_day(
 ) -> TheDay:
     """The day as set (or the default), with every active medicine at its anchors."""
     routine = await current_routine(session, context=context)
-    day = day_of(routine)
+    day = day_of(routine, await breakfast_time(session, context=context))
     moments = {anchor: Moment(anchor=anchor, at=day.anchors[anchor]) for anchor in ANCHORS}
     withheld: set[Scope] = set()
     if context.allows(Scope.READINGS):
@@ -510,7 +518,10 @@ async def due_now(session: AsyncSession, *, context: KeyContext, at: datetime) -
     walk, or None when no anchor is due or nothing hangs on it. A weekly or when-needed
     medicine is never due by the clock alone. `at` is read, never written: this is for the
     feed and the nudges to ask about a moment."""
-    day = day_of(await current_routine(session, context=context))
+    day = day_of(
+        await current_routine(session, context=context),
+        await breakfast_time(session, context=context),
+    )
     local = as_utc(at).astimezone(REGION_TZ[context.region])
     anchor = due_at(day, local)
     if anchor is None:

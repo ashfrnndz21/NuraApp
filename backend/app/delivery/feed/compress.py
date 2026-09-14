@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from app.fixtures import fixture
+
 
 @dataclass(frozen=True, slots=True)
 class Found:
@@ -81,6 +83,7 @@ def digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+@fixture
 class FixtureSearcher:
     """Answers from `searches.json`: `{"<kind>:<term>": [{domain, url, title, published_at,
     text}]}`. A page whose domain is not among the domains asked for is never returned, so
@@ -107,6 +110,7 @@ class FixtureSearcher:
         return found
 
 
+@fixture
 class FixtureCompressor:
     """Answers from `compressions/<sha256 of the text>.json`: `{"<language>": {headline, body,
     why_topic, passage, start_sec?, end_sec?}}`. No file, or no entry in the language, is

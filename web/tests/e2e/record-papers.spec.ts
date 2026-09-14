@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, fixClock } from "./helpers";
+import { API, fixClock, seedMedicine } from "./helpers";
 import { auth, EVERY_PART, letIn, LOOKS, lookAs, LPA_PDF, openOwn, placeholderPng, readable, setUpOnLpa, signInAs, signUp } from "./record-helpers";
 import { freshPhone } from "./helpers";
 
@@ -32,6 +32,24 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
   const hers = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
   expect(hers).toEqual(["record-changes", "record-medicines", "record-routine"]);
   await readable(page, "caregiver");
+});
+
+test("on a demo deployment the banner is on every Record screen, and still nothing is drawn over a line", async ({ page, request }) => {
+  // ADR 0008: a demo shows its banner first on every screen. The backend's answer is set to
+  // a demo for this walk only; everything else is the dev run's.
+  await page.route("**/api/deployment", (route) => route.fulfill({ json: { region: "SG", demo: true } }));
+  const pa = await openOwn(request);
+  await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
+  await signInAs(page, pa, "Pa");
+  await page.getByTestId("tab-record").click();
+  await expect(page.getByTestId("demo-banner")).toBeVisible();
+  await readable(page, "patient");
+  for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes", "documents"]) {
+    await page.getByTestId(`record-${entry}`).click();
+    await expect(page.getByTestId("demo-banner")).toBeVisible();
+    await readable(page, "patient");
+    await page.getByTestId("record-back").click();
+  }
 });
 
 for (const look of LOOKS) {

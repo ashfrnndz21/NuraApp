@@ -28,8 +28,14 @@ from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
+from app.delivery.feed.twin import NotInThatLanguage
 from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
 from app.delivery.nudges.metrics import NotOwnerOrChief
+from app.delivery.triggers.deliver import NoOneToActFor
+from app.delivery.triggers.engine import NothingToSay
+from app.delivery.triggers.ladder import NotOnTheLadder
+from app.delivery.voice import NoVoiceFor, TooLongToSay
+from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
@@ -110,6 +116,8 @@ from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
+    # A demo takes test numbers only, and signs in by phone (app.demo, ADR 0008).
+    (NotInTheDemo, 403),
     # The pharmacist's review queue (E22-04): staff only, no profile in it.
     (NotStaff, 403),
     (NoSuchReviewItem, 404),
@@ -184,6 +192,15 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A fact heard at a visit that names a drug is never written; the answer names the rule.
     (DrugNamedInAFact, 400),
     (NoSuchItem, 404),
+    (NoOneToActFor, 404),
+    (NothingToSay, 404),
+    # Only someone a flag's ladder reached, whose key covers it, answers it (E11-06).
+    (NotOnTheLadder, 403),
+    # No audio for this card (E11-04): not its language, no voice in it yet, too long to say.
+    # The web client then says it with the phone's own voice.
+    (NotInThatLanguage, 404),
+    (NoVoiceFor, 404),
+    (TooLongToSay, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),

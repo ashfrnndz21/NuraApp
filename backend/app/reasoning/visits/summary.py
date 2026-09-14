@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +37,7 @@ from app.db import as_utc, keep_on_refusal, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.ingestion.speakers import Aligned
@@ -87,8 +88,11 @@ from app.regions import REGION_TZ, Region, guard_region
 from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import DOSE_ATTRIBUTES, as_words, names_high_risk
 from app.safety.recording import may_record
-from app.safety.red_flags import Flag, FlagKind, red_flags_heard, write_red_flag
+from app.safety.red_flags import Flag, FlagKind, keep_row, red_flags_heard, write_red_flag
 from app.state.service import StateView, current_state, render_from_state
+
+if TYPE_CHECKING:
+    from app.delivery.triggers.deliver import Via
 
 SUMMARY = VisitSummary.__tablename__
 ITEM = SummaryItem.__tablename__
@@ -328,6 +332,7 @@ def draft_from_fixture(fixture: Mapping[str, Any]) -> SummaryDraft:
     return SummaryDraft(actions, changes, follow_ups, facts)
 
 
+@fixture
 class FixtureSummariser:
     """Answers from `tests/fixtures/visits/*.json`, by the sha256 of the transcript text.
 
@@ -745,6 +750,7 @@ async def post_visit_summary(
     store: ObjectStore,
     summariser: Summariser,
     registry: DrugRegistry,
+    via: Via | None = None,
     clips: ConsultClips | None = None,
 ) -> VisitSummary:
     """Read the transcript into a card for the person to confirm.
@@ -813,6 +819,11 @@ async def post_visit_summary(
                 raised_at=utcnow(),
             )
         )
+    # Each red flag goes up the ladder at once (E11-06), the one record of who is told —
+    # the roster first, never capped, never quiet — and the ladder is kept like the flag.
+    # Without the process's channels (a service call), the engine's next run starts it.
+    if via is not None:
+        await _escalate(session, context=context, flags=flags, via=via)
     carer = await _carer(session, context)
     if red_flag:
         lines.append(_line("call_doctor_today", lang, doctor=visit.doctor))
@@ -877,6 +888,24 @@ async def post_visit_summary(
 
 
 @audited(Action.READ, Scope.VISITS, SUMMARY)
+async def _escalate(
+    session: AsyncSession, *, context: KeyContext, flags: Sequence[Flag], via: Via
+) -> None:
+    """The ladder for each flag heard, started now. A ladder that cannot start does not take
+    the flag, or the card, down with it: the engine's run is the net under it."""
+    from app.delivery.triggers.ladder import escalate_flag  # the ladder sends; imported late
+
+    for flag in flags:
+        try:
+            escalated = await escalate_flag(
+                session, context, flag, told_already=(context.person_id,), via=via
+            )
+        except Refusal:
+            continue
+        if escalated.ladder is not None:
+            keep_row(session, context, escalated.ladder, scope=Scope.EMERGENCY)
+
+
 async def require_summary(
     session: AsyncSession, *, context: KeyContext, summary_id: uuid.UUID
 ) -> VisitSummary:

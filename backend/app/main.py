@@ -10,7 +10,9 @@ fixture one over NURA_VOICE_FIXTURES, pinned to this region, until a speech prov
 (E02-06); the drug registry is the fixture one (`NURA_DRUG_REGISTRY=fixture`) until a licensed
 client exists (E04); the summariser is the fixture one over NURA_VISIT_FIXTURES until a model
 in the region does (E05); the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`,
-signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19).
+signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19); so
+does the fixture voice that says a card aloud (E11-04), and the app push reaches nobody until
+the app registers devices (E11-05).
 A dev run given NURA_FROZEN_CLOCK starts on a frozen clock (`app.clock.install_frozen`), for
 end-to-end runs; anywhere else that setting refuses to start.
 Logging is set up so that, on a dev run, the code line is seen.
@@ -26,11 +28,13 @@ from app.channels.whatsapp.provider import whatsapp_provider_for
 from app.clock import install_frozen
 from app.db import make_engine, make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.push import push_sender_for
+from app.delivery.voice import voice_for
 from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
-from app.ingestion.objects import LocalObjectStore
 from app.ingestion.speakers import FixtureSeparator
+from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
@@ -42,9 +46,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(m
 def providers_for(settings: Settings) -> Providers:
     """The outside world for this deployment: the code sender, the region's object store,
     the extractor, and the feed's searcher and compressor. A process with nowhere to keep
-    bytes, or nothing to read them with, refuses to start rather than guess."""
-    if settings.object_store_root is None:
-        raise MissingSetting("NURA_OBJECT_STORE is not set")
+    bytes, or nothing to read them with, refuses to start rather than guess. Every provider
+    here but the store's bucket is a fixture, and `create_app` refuses them all outside a
+    declared dev run or demo (`app.fixtures`)."""
     if settings.paper_fixtures is None:
         raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
     if settings.visit_fixtures is None:
@@ -55,7 +59,7 @@ def providers_for(settings: Settings) -> Providers:
         raise MissingSetting("NURA_FEED_FIXTURES is not set and there is no other searcher yet")
     return Providers(
         code_sender=code_sender_for(settings),
-        object_store=LocalObjectStore(Path(settings.object_store_root), settings.region),
+        object_store=object_store_for(settings),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=FixtureSearcher(Path(settings.feed_fixtures)),
@@ -64,6 +68,8 @@ def providers_for(settings: Settings) -> Providers:
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
         reference_ranges=reference_ranges_for(settings),
+        voice=voice_for(settings),
+        push=push_sender_for(settings),
         # Who spoke when in a consult (E02-05): the fixture separator over NURA_SPEAKER_FIXTURES
         # on a laptop; unset, a recording is one stretch by an unknown speaker.
         speaker_separator=None

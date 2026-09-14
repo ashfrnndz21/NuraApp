@@ -24,18 +24,21 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
-| 22 | Visit day: logistics, recording, clips | For Pa's visit to Dr Tan tomorrow, the logistics card from the record: the time his way, Dr Tan's address, Mei's note about the place under "Mei's note" as she wrote it, who drives him — Mei, the roster says, as a suggestion that waits for a yes, then "Mei will drive you to Dr Tan" — and what to bring (his blood pressure book, his tablets in their boxes, his hospital letter); the card on his feed the day before and on the day; no recording without his agreement to Nura listening, and a viewer refused before the room is told anything; the notice said to Dr Tan by name, one recording sent on Stop, kept as a consult, heard, split by speaker with Dr Tan's yes as the first seconds; the post-visit card with each line's place in the recording; "what did Dr Tan say about the water pill" answered first with "the card is waiting for your yes", then, once it is confirmed, with the clip; the recording heard by him and the family he let in (his chief, his caregiver) and refused to a viewer, a clinic and a helper; on the phone, the Visit screen: one big *Start recording*, the notice first, a red dot and a timer, *Stop*, "Hear what Dr Tan said"; a no that keeps nothing; a hidden page that stops at once | E05-03, E05-04, E02-05, E03-05 | **ready** |
-| 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 19 | Nura on your phone over https (demo) | Open the Singapore demo's https address in Safari, add it to the home screen, sign in with a test number (`+65 0…`) and the demo code, and see "Demo — not for real health information" at the top of every screen; walk checkpoints 2–6, 14, 16–18 and 21 against the same address. How-to: `docs/deploy.md` | ADR 0001, ADR 0008 | planned — needs a hosting account (Render recommended; Singapore) |
+| 20 | Delivery: triggers, the ladder, the morning ritual | On a dev run's frozen clock (`NURA_FROZEN_CLOCK`, stepped with `POST /dev/clock`): Pa with his blood pressure tablet and a roster (Siti the helper, Mei on duty weekdays); at his breakfast (07:30, the one time his settings, his routine and his first week all read), the morning card goes to him as the approved WhatsApp template, once; the breakfast tablet's window closes with no Taken and the ladder asks Pa, then Siti, then Mei — the third ask goes to the roster — and stops when Siti replies "sudah beri" on WhatsApp, which writes the Taken tap; the reorder date reached goes to Mei, held for the quiet hours before 7 and capped the second time that day; at 22:30 Pa writes that he fell and the flag goes straight to the roster, neither quiet nor capped; today's top three with why; one card played as voice | E00-05, E11-01, E11-02, E11-03, E11-04, E11-05, E11-06, E11-10 | **ready** |
 | 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the not-feeling-well button runs for him: the flag, the family told, the urgent card, posture act, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
+| 22 | Visit day: logistics, recording, clips | For Pa's visit to Dr Tan tomorrow, the logistics card from the record: the time his way, Dr Tan's address, Mei's note about the place under "Mei's note" as she wrote it, who drives him — Mei, the roster says, as a suggestion that waits for a yes, then "Mei will drive you to Dr Tan" — and what to bring (his blood pressure book, his tablets in their boxes, his hospital letter); the card on his feed the day before and on the day; no recording without his agreement to Nura listening, and a viewer refused before the room is told anything; the notice said to Dr Tan by name, one recording sent on Stop, kept as a consult, heard, split by speaker with Dr Tan's yes as the first seconds; the post-visit card with each line's place in the recording; "what did Dr Tan say about the water pill" answered first with "the card is waiting for your yes", then, once it is confirmed, with the clip; the recording heard by him and the family he let in (his chief, his caregiver) and refused to a viewer, a clinic and a helper; on the phone, the Visit screen: one big *Start recording*, the notice first, a red dot and a timer, *Stop*, "Hear what Dr Tan said"; a no that keeps nothing; a hidden page that stops at once | E05-03, E05-04, E02-05, E03-05 | **ready** |
 | 23 | Same words every time; the pharmacist's queue | `make language` holds every patient string in every catalogue — cards, WhatsApp, the web client — to one Malay and one Chinese line per English line and to the glossary's words (docs/plain-words.md §6), 0 failures; Pa in English (Mei holds a key), Kit in Chinese and Aminah in Malay each write down a blood pressure and every card comes back with its voice script: the numbers as words in the card's language, a pause after each line, a longer one before the boundary; the pharmacist, by staff token, reads the first cards of each type with nobody in them (`{name}`, no profile id), sees each type flagged until its first fifty are decided, rewrites a line as a proposed catalogue change that changes nothing Pa sees, and approves a new source only after a search naming it was refused; Pa's own key is refused on the queue | E22-02, E22-03, E22-04 | **ready** |
+| — | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | later — needs an Apple developer account |
 
-**Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
+**Trust documents.** Not checkpoints, but read before CP7 and before the first family on real health information (the TestFlight row): `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before real health information; the CP19 demo holds none, ADR 0008). E16.
 
 ## How a checkpoint is tested
 
 - **Backend checkpoints (1–9, 13–18, 21, 22, 23)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
-- **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
+- **Over https (19)**: needs a hosting account in Singapore, which you create — Render is the recommended one for the demo, Fly.io the alternative; `docs/deploy.md` is the whole runbook, from the account to the phone. It is a demo (ADR 0008): the fixtures, test numbers only, a banner on every screen, wiped each night. The backend checkpoints walk against it with `NURA_BASE_URL` and `NURA_DEMO_LOGIN_CODE`, except 7, 8, 9, 13 and 15, which step through dev-only routes.
+- **TestFlight (last, unnumbered)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
 
@@ -1014,6 +1017,68 @@ The operator's walk of the screen is `make web-e2e` (`web/tests/e2e/visit.spec.t
 - A checkpoint is not declared ready until `make checkpoint` passes end to end on a clean database.
 - Anything that needs a real credential (SMS provider, licensed drug data, WhatsApp BSP, Apple) is a fixture until you say otherwise; the checkpoint says so where it applies.
 
+## How to run checkpoint 20
+
+Delivery (E11): the trigger engine, the ladder, the morning ritual. It runs on a dev run's frozen clock (#118), so what the backend says about the hour does not drift with the hour you run it at: start the server with the clock standing at 06:00 on Monday 14 September, Pa's wall clock, and the checkpoint steps it (`POST /dev/clock`) to each hour it needs, running the engine there (`POST /dev/run-triggers`, the dev door onto `run_due`; a deployment's scheduler calls it every five minutes). Three fresh phone numbers every run — Pa, Mei, Siti — so it can be run again on the same `dev.db`.
+
+```sh
+NURA_FROZEN_CLOCK=2026-09-14T06:00:00+08:00 make dev    # terminal 1: migrates (0019 adds the delivery tables), a frozen clock
+make checkpoint N=20                                     # terminal 2: about five seconds
+```
+
+What you will see (the numbers and ids change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8112 (GET /health)
+✓ Pa (+6591201072), Mei (+6592209219) and Siti (+6597207304) registered by phone code (the codes read from the server log)
+✓ Pa opened his profile and agreed to WhatsApp; Mei (his daughter) holds a chief key and is on duty weekdays 6 in the morning to 11 at night; Siti holds a helper key (medicines, emergency, send)
+✓ Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route), at 06:00 on 2026-09-14 by the dev run's frozen clock
+✓ 07:20: nothing; 07:31, his breakfast (the one breakfast time, 07:30 until he says — the first week's prompt comes at the same moment): the morning card, the approved template (he has not written in 24 hours), once — 07:45 sends nothing. Pa (patient): sent by whatsapp, template morning_card; rule breakfast_anchor_reached. What he reads:
+    → Good morning, Pa, this is Nura.
+    → Today is Monday 14 September.
+    → Take 1 tablet of your blood pressure tablet with breakfast.
+    → Your blood pressure tablet runs out on Wednesday 16 September.
+    → Ask your family to order more.
+    → When you can, take your blood pressure.
+    → Send me the 2 numbers.
+✓ 08:31, the window closed untapped: rung 0, Pa — Pa (patient, rung 0): sent by whatsapp, template dose_reminder; rule dose_window_closed_untapped
+    → Pa, this is Nura.
+    → Have you had your blood pressure tablet with breakfast?
+    → When you have, reply Taken.
+✓ 09:01, nobody answered: rung 1, the helper — Siti (helper, rung 1): sent by whatsapp, template dose_check; rule dose_window_closed_untapped, in Malay:
+    → Pa belum kata Sudah ambil untuk ubat tekanan darah Pa bersama sarapan.
+    → Tolong tengok Pa.
+    → Bila Pa sudah ambil, balas sudah beri.
+✓ 09:31, still nobody: the third ask goes to the roster, not to him — Mei (on_duty, rung 2): sent by whatsapp, template dose_check; rule dose_window_closed_untapped
+✓ Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast tablet — on the medicines key she holds, on the WhatsApp channel — and the ladder stopped; 10:05 asks nobody. Her reply in the thread:
+    → Terima kasih, saya sudah tulis.
+    → Pa sudah ambil ubat tekanan darah Pa.
+✓ 07:20, the first run of the day, the reorder date reached: Mei (on_duty): sent by whatsapp, template reorder_family; rule reorder_date_reached:
+    → Pa's tablets are running low.
+    → Pa's blood pressure tablet runs out on Wednesday 16 September.
+    → Can you order more for Pa?
+✓ 07:31, the same rule the second time that day: capped (once a day) — no second message, and no row at all on the runs after it
+✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice_self), category alert, never capped and never quiet; not to him. His reply:
+    → This one we do not wait for.
+    → Call your doctor today.
+    → Mei knows now.
+✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_self; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
+✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
+    [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
+    [reminder] Your tablets today — one action: taken, on the stable wash. Why: You have medicines on your list.
+    [reminder] Your blood pressure tablet is running low — one action: ask_to_order, on the stable wash. Why: You have about 1 day of your blood pressure tablet left.
+✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache miss — the fixture voice is silence as long as the words take to say
+✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
+checkpoint 20 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at his breakfast — the one breakfast time his settings (E01), his routine's anchors (E10) and his first week's prompts all read, 07:30 until the family sets it — as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him; today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds. Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
+
+1. **Change the channel for a type.** As Pa, `PUT /profiles/{profile_id}/delivery-settings` with `{"channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}}`; the next day's reorder goes by WhatsApp only, and twice before the cap holds it. `{"caps": {"flag": 3}}` is refused: an alert is never capped.
+2. **Hear a card.** `GET /profiles/{profile_id}/feed/{item_id}/voice` for any card on his feed: `audio/wav`, `X-Duration-Seconds` under 30, `X-Voice-Cache: hit` the second time; `?language=ta` is a 404 (Tamil comes at T2) and the web client says it with the phone's voice.
+
 ## How to run checkpoint 13
 
 The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Four fresh phone numbers every run — Mei, Pa, Siti the helper, Kit the son — so it can be run again on the same `dev.db`.
@@ -1218,7 +1283,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Nura wrote down how you feel.
     This is not a doctor's advice.
     Ask your doctor.
-✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (85280904…), the posture is ACT, Mei and Lin were told (notices to 2 people, "Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, and one closing line, never "Ask your doctor." after 995:
+✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (85280904…), the posture is ACT, the ladder asked Mei first (E11-06, the one record of who is told; Lin five minutes on if nobody answers); the card, read aloud — who knows, the calls, and one closing line, never "Ask your doctor." after 995:
     Mei knows now.
     Call the ambulance now on 995.
     After that, call Mei.
@@ -1239,7 +1304,7 @@ What you will see (the phone numbers, ids and dates change each run):
 checkpoint 14 passed: every step did what docs/checkpoints.md says
 ```
 
-What to look at by hand: `GET /profiles/{id}/emergency-card.html` in a browser (Pa's or Lin's token as a bearer header, or from the web client once W1 lands) — one page, paper on mist, 20px, no request leaves for anything; `GET /profiles/{id}/state` after "chest pain" — `posture: act`, the situational dimension carrying `feeling.control = act` for 24 hours; `GET /profiles/{id}/audit` as Pa — the SYMPTOM `event` write, then the `red_flag` write, before the `notice`, `safety_escalation`, `fact` and `what_to_do_card` writes of that press, and Lin's `emergency_card` reads under scope `emergency`.
+What to look at by hand: `GET /profiles/{id}/emergency-card.html` in a browser (Pa's or Lin's token as a bearer header, or from the web client once W1 lands) — one page, paper on mist, 20px, no request leaves for anything; `GET /profiles/{id}/state` after "chest pain" — `posture: act`, the situational dimension carrying `feeling.control = act` for 24 hours; `GET /profiles/{id}/audit` as Pa — the SYMPTOM `event` write, then the `red_flag` write, before the `delivery_ladder`, `fact` and `what_to_do_card` writes of that press, and Lin's `emergency_card` reads under scope `emergency`.
 
 ## How to run checkpoint 16
 
@@ -1314,6 +1379,29 @@ checkpoint 16 passed: every step did what docs/checkpoints.md says
 
 1. **A part kept "only me".** Mark the readings only me (`POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "readings"}`, then the only-me route from checkpoint 13), then as Mei `GET /profiles/{profile_id}/timeline`: `withheld` names `readings`, the illness loses the blood pressure and the moment it was taken, and `POST /profiles/{profile_id}/ask` with "what was my blood pressure" answers "Nura does not have that written down." with `readings` withheld. Pa himself still sees it all.
 2. **A question that would change treatment.** As Pa, `POST /profiles/{profile_id}/ask` with `{"question": "should I stop my blood pressure tablet"}`: the answer says what is written down ("Dr Tan gave you your blood pressure tablet.") and then "Ask Dr Tan before you change any medicine." — never an instruction — with the boundary last.
+
+## How to run checkpoint 19
+
+Checkpoint 19 is Nura on your phone over https, from a demo deployment in Singapore
+(ADR 0008). The whole runbook is `docs/deploy.md`; in short:
+
+1. Create the hosting account yourself (Render recommended; Fly.io the alternative) — `docs/deploy.md` §4 (Render) or §5 (Fly.io) creates
+   the app, the Postgres and the secrets in Singapore and deploys. Choose the demo's six-digit
+   login code (`NURA_DEMO_LOGIN_CODE`) and keep it.
+2. `https://<the address>/health/ready` answers `{"status":"ok"}` and `/api/deployment`
+   answers `{"region":"SG","demo":true}`.
+3. On the phone: open `https://<the address>/app/` in Safari, **Share → Add to Home Screen**,
+   open it from the home screen, and sign in with `+65 0000 0001` and the demo code. The banner
+   "Demo — not for real health information" is at the top of every screen, in the language
+   the phone speaks.
+4. A real number (`+65 9…`) is refused with "This demo only takes test phone numbers."
+   Over https the offline worker installs as well (checkpoint 10 could not show it on the
+   Wi-Fi address): after one visit, the home-screen app opens with the phone in flight mode.
+5. From the laptop, the backend checkpoints walk against the same address:
+   `cd backend && NURA_BASE_URL=https://<the address> NURA_DEMO_LOGIN_CODE=<the code> python3 -m scripts.checkpoint 2`
+   — and 3–6, 14, 16, 17, 18 and 21 the same way (7, 8, 9, 13 and 15 need a laptop's dev run).
+6. The next morning, after 03:00 Singapore time, the demo is empty again: your test account is
+   gone, and signing in makes a new one.
 
 ## How to run checkpoint 21
 

@@ -271,6 +271,38 @@ async def _current_row(
     return max(found, key=lambda row: as_utc(row.set_at)) if found else None
 
 
+@dataclass(frozen=True, slots=True)
+class Reach:
+    """How to reach him, as the settings screen serves it: his language and the two times of
+    his day. None where he has not said."""
+
+    language: str | None
+    breakfast: time | None
+    checkin: time | None
+
+
+async def reach_of(session: AsyncSession, *, context: KeyContext) -> Reach:
+    """His language, breakfast and check-in exactly as `GET …/settings` serves them (the web's
+    About you): the one settings read for how to reach him. The breakfast resolver
+    (`app.routines.breakfast`), the nudges' check-in (`app.delivery.nudges.engine`) and every
+    message said in his language (`his_language`) ask it, so nothing reads the row another
+    way. The face of the graph, as `read_settings` reads it: how to reach him, not his
+    health, so every key may ask."""
+    row = await _current_row(session, context=context, scope=SETTINGS_SCOPE)
+    if row is None:
+        return Reach(language=None, breakfast=None, checkin=None)
+    values = values_of(row)
+    return Reach(language=values.language, breakfast=values.breakfast_time, checkin=values.checkin_time)
+
+
+async def his_language(session: AsyncSession, *, context: KeyContext) -> str:
+    """The language Nura says things to him in: his settings' (`reach_of`), else the
+    profile's own, which the settings keep in step. The capture lines (#132), the delivery
+    engine's messages to him and the morning card (E11) all ask here."""
+    said = (await reach_of(session, context=context)).language
+    return said if said else (await audited_profile_read(session, context)).language
+
+
 @audited(Action.READ, Scope.RECORDS, TARGET)
 async def current_settings(session: AsyncSession, *, context: KeyContext) -> ProfileSettings | None:
     """The settings row that stands now, whole — conditions and doctor included — for the

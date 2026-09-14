@@ -193,6 +193,13 @@ class FeedItem(RenderedFromState, ProfileScoped, Base):
     dedupe_key: Mapped[str] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     expires_at: Mapped[datetime] = mapped_column()
+    # The card grammar (E11-03, `grammar`): one number, one direction, one colour, one action.
+    # Nullable for the rows written before the grammar was a column; every card written
+    # since carries its colour and its action, and `create_item` refuses one that breaks it.
+    number: Mapped[str | None] = mapped_column(String(24), default=None)
+    direction: Mapped[str | None] = mapped_column(String(8), default=None)
+    colour: Mapped[str | None] = mapped_column(String(16), default=None)
+    action: Mapped[str | None] = mapped_column(String(24), default=None)
 
 
 frozen(FeedItem)

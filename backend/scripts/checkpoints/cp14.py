@@ -19,6 +19,7 @@ reads it back in plain words. Kit is refused.
 from __future__ import annotations
 
 import base64
+import os
 import random
 import re
 import time
@@ -28,6 +29,9 @@ from typing import Any
 
 import httpx
 
+DEMO_LOGIN_CODE = os.environ.get("NURA_DEMO_LOGIN_CODE") or None
+"""Against a demo deployment (docs/deploy.md, ADR 0008): the operator's code signs every test
+number in, so no log is read, and every number is drawn from the test range (+65 0…)."""
 CODE_LINE = re.compile(r"login code for (\+[0-9]+): ([0-9]{6})")
 CODE_WAIT_SECONDS = 3.0
 HOLD_WORDING = "1"
@@ -102,10 +106,14 @@ def refused(response: httpx.Response, status: int, refusal: str, what: str) -> J
 
 
 def fresh_phone(prefix: str) -> str:
+    if DEMO_LOGIN_CODE is not None:
+        prefix = "+650" + prefix.removeprefix("+65")[1:]
     return f"{prefix}{random.randint(0, 9999):04d}"
 
 
 def code_from_log(dev_log: Path, phone_e164: str, since: float) -> str:
+    if DEMO_LOGIN_CODE is not None:
+        return DEMO_LOGIN_CODE
     deadline = time.monotonic() + CODE_WAIT_SECONDS
     while True:
         if dev_log.exists():
@@ -405,9 +413,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         'Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, '
         f"heard at {chest['transcript_confidence']}, kept as his own note): the flag was written first "
         f"({chest['flag_id'][:8]}…), "
-        f"the posture is ACT, Mei and Lin were told (notices to {len(chest['notified_person_ids'])} people, "
-        '"Nura heard this: chest pain. Call Pa now."); the card, read aloud — who knows, the calls, '
-        'and one closing line, never "Ask your doctor." after 995:'
+        "the posture is ACT, and the ladder (E11-06, the one record of who is told) asked "
+        f"{len(chest['notified_person_ids'])} first — Mei, never capped, never quiet; "
+        'the card, read aloud — who knows, the calls, and one closing line, never "Ask your '
+        'doctor." after 995:'
     )
     for line in lines:
         say(line)

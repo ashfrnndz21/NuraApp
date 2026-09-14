@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.fixtures import fixture
 from app.regions import Region, guard_region
 
 
@@ -52,6 +53,7 @@ class Transcriber(Protocol):
     ) -> Transcript: ...
 
 
+@fixture
 class FixtureTranscriber:
     """Answers from `root/<sha256>.json` — `{"text": ..., "confidence": ..., "language": ...}`
     — and with `NOTHING_HEARD` for bytes it has no file for. No audio is committed: the

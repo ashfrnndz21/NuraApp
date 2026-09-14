@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
 from app.db import as_utc, nested_unit_of_work, utcnow
+from app.delivery.feed.grammar import Direction
 from app.delivery.feed.items import NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
     CardFormat,
@@ -493,7 +494,11 @@ async def _flags(
                 ),
                 why=Why(
                     kind="flag",
-                    plain="",
+                    plain=CAREGIVER_SUPPRESSED_LINE.format(
+                        name=house.profile.display_name,
+                        feeling=flag.feeling.value,
+                        reason=flag.suppressed_because,
+                    ),
                     flag_id=str(flag.id),
                     event_id=str(flag.event_id),
                     suppressed=flag.suppressed_because,
@@ -659,12 +664,30 @@ def _numbers(fact: Fact) -> tuple[int, int] | None:
     return None
 
 
+def _direction(numbers: tuple[int, int], before: tuple[int, int] | None) -> Direction | None:
+    """Up, down or the same as the number before, by the top number; nothing to say when
+    there is no number before. A direction, never a judgement of it."""
+    if before is None:
+        return None
+    if numbers[0] > before[0]:
+        return Direction.UP
+    if numbers[0] < before[0]:
+        return Direction.DOWN
+    return Direction.SAME
+
+
 async def _readings(make: Any, *, day: Day, house: Household, readings: Sequence[Fact]) -> None:
-    """One card per number taken today. The caps decide how many he sees (`rank`)."""
-    for fact in readings:
+    """One card per number taken today. The caps decide how many he sees (`rank`). The card
+    shows the one reading and its direction from the one before (E11-03)."""
+    in_order = sorted(
+        (fact for fact in readings if _numbers(fact) is not None),
+        key=lambda fact: as_utc(fact.valid_from),
+    )
+    for index, fact in enumerate(in_order):
         numbers = _numbers(fact)
         if numbers is None or not day.same_day(fact.valid_from):
             continue
+        before = _numbers(in_order[index - 1]) if index > 0 else None
         lines = render(
             "reading",
             house.language,
@@ -687,6 +710,8 @@ async def _readings(make: Any, *, day: Day, house: Household, readings: Sequence
             day=day.key,
             dedupe_key=f"reading:{fact.id}",
             expires_at=day.ends_at,
+            number=f"{numbers[0]}/{numbers[1]}",
+            direction=_direction(numbers, before),
         )
 
 
@@ -1023,6 +1048,7 @@ async def _story(
             day=day.key,
             dedupe_key=f"story:reading:{fact.id}:{day.week}",
             expires_at=until,
+            number=f"{numbers[0]}/{numbers[1]}",
         )
     if readings:
         lines = render(
@@ -1042,6 +1068,8 @@ async def _story(
             day=day.key,
             dedupe_key=f"story:count:{day.week}",
             expires_at=until,
+            number=str(len(readings)),
+            direction=Direction.UP,
         )
     if context.allows(Scope.RECORDS):
         # A story about a paper is the record's card (`scope=RECORDS`), so it names only what
