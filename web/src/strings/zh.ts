@@ -234,7 +234,7 @@ export const zh = {
     // @patient headline
     story: "您的故事",
     // @patient headline
-    learning: "简单地说",
+    learning: "用简单的话说",
     // @patient phrase
     ask: "问",
     // @patient phrase
@@ -341,7 +341,7 @@ export const zh = {
     // @patient
     none: "Nura还没有记下您的看诊。",
     // @patient
-    fromVisit: "这来自您的预约。",
+    fromVisit: "这来自您看医生的安排。",
     // @patient
     onDuty: "那天轮到{name}。",
     // @patient phrase
@@ -408,7 +408,7 @@ export const zh = {
       // @patient
       leadOther: "这些决定 Nura 怎样跟 {name} 说话。",
       // @patient
-      nameSelf: "Nura 应该怎么称呼您？",
+      nameSelf: "Nura 该怎么称呼您？",
       // @patient
       nameOther: "Nura 应该怎么称呼 {name}？",
       // @patient phrase
@@ -511,7 +511,7 @@ export const zh = {
     },
     readBack: {
       // @patient headline
-      title: "Nura 是这样理解的",
+      title: "这是 Nura 的理解",
       // @patient
       lead: "请说这对不对。",
       // @patient
@@ -577,9 +577,9 @@ export const zh = {
       // @patient
       kindLabReport: "这是一份验血报告。",
       // @patient
-      kindMedicineLabel: "这是一张药的标签。",
+      kindMedicineLabel: "这是一张药盒标签。",
       // @patient
-      kindDischargeLetter: "这是一封医院的信。",
+      kindDischargeLetter: "这是一封出院信。",
       // @patient
       kindClinicSlip: "这是一张预约卡。",
       // @patient
@@ -619,7 +619,7 @@ export const zh = {
       // @patient
       kept: "Nura 会把这个留到看医生的时候。",
       // @patient
-      dropped: "Nura 不会用这个。",
+      dropped: "Nura 不会用这一条。",
       // @patient
       none: "您的文件没有带出问题。",
     },

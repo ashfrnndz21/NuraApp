@@ -221,7 +221,7 @@ async def test_the_words_are_in_his_language(sg: AsyncSession) -> None:
     assert cloud.language == "ms" and cloud.words[0].label == "Pening"
     assert cloud.prompt == (
         "Ubat tekanan darah anda baru sejak Khamis 3 September.",
-        "Apa rasa anda hari ini?",
+        "Apa khabar hari ini?",
     )
     chinese = await _cloud(sg, his, "zh")
     assert chinese.words[0].label == "头晕" and chinese.words[-1].label == "今天还好"

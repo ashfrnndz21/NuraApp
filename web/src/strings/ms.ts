@@ -300,7 +300,7 @@ export const ms = {
     // @patient phrase
     save: "Simpan",
     // @patient
-    saved: "Nura sudah tulis nombor itu.",
+    saved: "Nura sudah tulis.",
     // @patient phrase
     cancel: "Bukan sekarang",
   },
@@ -341,7 +341,7 @@ export const ms = {
     // @patient
     none: "Nura tiada lawatan yang ditulis untuk anda.",
     // @patient
-    fromVisit: "Ini dari lawatan anda ke doktor.",
+    fromVisit: "Ini datang dari lawatan anda ke doktor.",
     // @patient
     onDuty: "Hari itu giliran {name}.",
     // @patient phrase
@@ -571,7 +571,7 @@ export const ms = {
       // @patient phrase
       looksRight: "Nampak betul",
       // @patient
-      saved: "Nura sudah menulisnya.",
+      saved: "Nura sudah tulis.",
       // @patient headline
       learnedTitle: "Apa yang Nura belajar",
       // @patient

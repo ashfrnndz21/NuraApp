@@ -27,12 +27,13 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 22 | Visit day: logistics, recording, clips | For Pa's visit to Dr Tan tomorrow, the logistics card from the record: the time his way, Dr Tan's address, Mei's note about the place under "Mei's note" as she wrote it, who drives him — Mei, the roster says, as a suggestion that waits for a yes, then "Mei will drive you to Dr Tan" — and what to bring (his blood pressure book, his tablets in their boxes, his hospital letter); the card on his feed the day before and on the day; no recording without his agreement to Nura listening, and a viewer refused before the room is told anything; the notice said to Dr Tan by name, one recording sent on Stop, kept as a consult, heard, split by speaker with Dr Tan's yes as the first seconds; the post-visit card with each line's place in the recording; "what did Dr Tan say about the water pill" answered first with "the card is waiting for your yes", then, once it is confirmed, with the clip; the recording heard by him and the family he let in (his chief, his caregiver) and refused to a viewer, a clinic and a helper; on the phone, the Visit screen: one big *Start recording*, the notice first, a red dot and a timer, *Stop*, "Hear what Dr Tan said"; a no that keeps nothing; a hidden page that stops at once | E05-03, E05-04, E02-05, E03-05 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 | 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the not-feeling-well button runs for him: the flag, the family told, the urgent card, posture act, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
+| 23 | Same words every time; the pharmacist's queue | `make language` holds every patient string in every catalogue — cards, WhatsApp, the web client — to one Malay and one Chinese line per English line and to the glossary's words (docs/plain-words.md §6), 0 failures; Pa in English (Mei holds a key), Kit in Chinese and Aminah in Malay each write down a blood pressure and every card comes back with its voice script: the numbers as words in the card's language, a pause after each line, a longer one before the boundary; the pharmacist, by staff token, reads the first cards of each type with nobody in them (`{name}`, no profile id), sees each type flagged until its first fifty are decided, rewrites a line as a proposed catalogue change that changes nothing Pa sees, and approves a new source only after a search naming it was refused; Pa's own key is refused on the queue | E22-02, E22-03, E22-04 | **ready** |
 
 **Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13–18, 21, 22)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13–18, 21, 22, 23)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -913,7 +914,7 @@ Both clocks stand at 10:00 in Singapore on Monday 14 September for the whole run
 Two parts: the API walk (`make checkpoint N=22`), and the Visit screen in the browser. Neither depends on another checkpoint having run. Four fresh numbers every run — Pa, his chief Mei, Kit with a viewer's key, Siti with a helper's — so it can be run again on the same `dev.db`.
 
 ```sh
-make dev                # terminal 1: migrates dev.db (0020 adds consult_recording, consult_segment and the clip columns), serves on http://127.0.0.1:8000
+make dev                # terminal 1: migrates dev.db (0022 adds consult_recording, consult_segment and the clip columns), serves on http://127.0.0.1:8000
 make checkpoint N=22    # terminal 2: walks the API part, about three seconds
 ```
 
@@ -1379,3 +1380,63 @@ checkpoint 21 passed: every step did what docs/checkpoints.md says
 
 1. **A yes that makes a word red.** `POST /profiles/{profile_id}/feelings` with `{"word": "breathless"}`: the one question is "Adakah ia berlaku walaupun anda duduk diam?". Answer it `{"answer": "yes"}` at `POST /profiles/{profile_id}/feelings/{tap_id}/answer`: a flag for breathlessness at rest, the family told, `opens: not_feeling_well`, and `note: null`.
 2. **Two ignored of a kind.** Hand a day's nudge over (`POST /profiles/{profile_id}/nudges/plan?day=…`) on two days and touch neither; on the third, `GET /profiles/{profile_id}/nudges/plan` holds that kind as `resting_after_two_ignored` for a week, and `GET /profiles/{profile_id}/nudge-metrics` shows the ignored streak.
+
+## How to run checkpoint 23
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Four fresh phone numbers every run — Pa, Mei, Kit, Aminah — so it can be run again on the same `dev.db`. The pharmacist is the one staff member `make dev` puts on `NURA_REVIEW_STAFF_TOKENS` (`pharmacist:nura-dev-pharmacist-token-0001`, a laptop's token that refuses to start anywhere but a dev run); the checkpoint reads the same token from `NURA_REVIEW_STAFF_TOKEN` if you set another. It reads the feed as if it were ten in the morning (`?at=`, as checkpoint 8 does), because the feed keeps quiet at night. No model, translation service or speech provider is called: the voice script is a function of the card's verified lines (`app/language/voice_script.py`), and audio is E11's.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0021 adds review_item), serves on http://127.0.0.1:8000
+make checkpoint N=23    # terminal 2: walks the whole scenario, about ten seconds
+```
+
+What you will see (the numbers, ids and counts change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ make language: 3429 strings, 1176 keys in 22 catalogues (backend and web), 0 failures, 89 notes — the notes are consent words and WhatsApp templates, which change only as a new version: follow-ups, not failures
+✓ “This one we do not wait for.” is one line in each language on the card, the reply and the notice (channels/safety_strings, delivery/strings, whatsapp/strings):
+    Malay: Yang ini kita tidak tunggu.
+    Chinese: 这个我们不等。
+✓ Pa (+6592239311) registered by phone code and signed in (the code read from the server log)
+✓ Mei (+6592243454) registered by phone code and signed in (the code read from the server log)
+✓ Pa (144/87, Mei holds a key): every card on his feed carries its voice script, computed from its verified voice lines — the reading card is said:
+    Your blood pressure today was one hundred and forty-four over eighty-seven.  ⟨500 ms⟩
+    It is in your blood pressure book.  ⟨500 ms⟩
+    Mei can see it too.  ⟨500 ms⟩
+✓ the learning card pauses longer before the boundary it ends on:
+    This comes from HealthHub.  ⟨1200 ms⟩
+    Nura explains one thing in simple words.  ⟨500 ms⟩
+    This is not a doctor's advice.  ⟨500 ms⟩
+    Ask your doctor.  ⟨500 ms⟩
+✓ Kit (+6592259126) registered by phone code and signed in (the code read from the server log)
+✓ Kit's card in Chinese: “您今天的血压是144比87。” is said “您今天的血压是一百四十四比八十七。”
+✓ Aminah (+6592269515) registered by phone code and signed in (the code read from the server log)
+✓ Aminah's card in Malay: “Tekanan darah anda hari ini 144 atas 87.” is said “Tekanan darah anda hari ini seratus empat puluh empat atas lapan puluh tujuh.”
+✓ the queue is staff's: Pa's own key is refused, NotStaff (403), and so is no key at all
+✓ GET /review/status: the first 50 of each card type, 0 sources waiting; flagged until their first fifty are decided: flag, now, reading, visit, memo, reorder, notice, gate, story, learning
+    reading    7 queued,  0 decided, flag True
+    …
+✓ Pa's reading card is sample 5 of its type, lines only — no profile id, no name, Mei is {name}:
+    Your blood pressure today was 144 over 87.
+    It is in your blood pressure book.
+    {name} can see it too.
+    filled from: backend/app/delivery/strings:HEADLINES.reading:en, backend/app/delivery/strings:LINES.reading.0:en, …
+✓ a rewrite is a proposed catalogue change, checked by the plain-words verifier, and nothing more:
+    backend/app/delivery/strings:LINES.reading.1:en
+    from: It is in your blood pressure book.
+    to:   Nura keeps it in your blood pressure book.
+✓ Pa's card still says “It is in your blood pressure book.”; the rewrite waits in GET /review/proposals for a person to make it in the catalogue
+✓ the pharmacist approves the now card (decided by pharmacist); deciding it again is refused, AlreadyReviewed (409)
+✓ cp23-00869.example.sg is on the list as pending: a self-search naming it is refused, SourceNotAllowlisted (400) — nothing from it can reach Pa
+✓ approved, it is allowlisted: the same self-search is accepted (201)
+✓ the second source is rejected with a reason and stays off: allowlisted false, review_status rejected
+checkpoint 23 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 23 passed`. The criteria: `make language` finds 0 failures — every English line has its Malay and Chinese twin, twins fill the same slots, one English line is one line in each language wherever it is filed, the glossary's words (§6) are the ones used and the words it rules out are not; what it notes is only what cannot be edited in place (a consent's words, an approved WhatsApp template), each with its follow-up. Every card carries a voice script computed from its own verified lines — the numbers said as words in the card's language, the card's own connecting word ("over", "atas", "比"), a pause after each line and a longer one before the boundary — and no other words. The queue answers staff only: a patient's key is refused like no key. What it holds names no profile and no person: a name that filled a slot is `{name}`, the doctor `{doctor}`, and a line of his own record's words is not kept. A card type is flagged until its first fifty are queued and decided. A rewrite is a proposal with the catalogue id it would replace, and changes nothing he is shown. A new source is pending and unusable — a search naming it is refused — until it is approved; a rejected one stays off. If the first fifty readings are already queued on your `dev.db`, the checkpoint says so: `make reset-db` and run it again.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with `Authorization: Bearer nura-dev-pharmacist-token-0001`:
+
+1. **A rewrite the verifier refuses.** `POST /review/items/{item}/rewrite` on a pending reading sample with a body line "One reading was missed.": refused, `RewriteNotPlainWords`, with the verifier's finding (rule 11, a red word) — nothing is kept.
+2. **The whole memory.** `cd backend && python3 -m app.language.memory --table` prints every patient line with its id (`catalogue:key:language`); `make language` prints the findings, and `--quiet-notes` leaves out the follow-ups.

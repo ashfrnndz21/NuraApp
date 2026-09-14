@@ -61,6 +61,8 @@ SPEAKERS = Path(__file__).resolve().parent / "fixtures" / "speakers"
 """Who spoke when in a consult recording, by the digest of the audio (E02-05)."""
 FEED = Path(__file__).resolve().parent / "fixtures" / "feed"
 """Where the feed's fixture searcher and compressor answer from (E21)."""
+STAFF_TOKEN = "nura-test-pharmacist-token-0001"
+"""The one staff token the served test deployment knows (`/review/*`, E22-04); nothing real."""
 
 
 async def _engine() -> AsyncEngine:
@@ -145,6 +147,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
+        review_staff=(("pharmacist", STAFF_TOKEN),),
     )
     # The object store is a fresh directory per served deployment, one region under it,
     # gone at the end: what the local store does under backend/var/objects on a laptop.

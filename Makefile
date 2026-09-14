@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate reset-db checkpoint test lint plain-words ios-test web build-web web-test web-e2e
+.PHONY: setup dev migrate reset-db checkpoint test lint plain-words language ios-test web build-web web-test web-e2e
 # Every backend target runs `python3 -m …`: the Python 3.12 that `make setup` installed the
 # backend into, never whatever bare `python` on the PATH happens to be.
 setup: ; cd backend && python3 -m pip install -e ".[dev]"
@@ -32,6 +32,9 @@ dev: export NURA_WEB_DIST ?= ../web/dist
 dev: export NURA_WHATSAPP_PROVIDER ?= fixture
 dev: export NURA_WHATSAPP_DEV_SECRET ?= nura-dev-webhook-secret
 dev: export NURA_WHATSAPP_FIXTURES ?= tests/fixtures/whatsapp
+# The pharmacist's review queue (E22-04, ADR 0007): one laptop-only staff member. A token that
+# starts `nura-dev-` is refused anywhere but a dev run (backend/app/settings.py).
+dev: export NURA_REVIEW_STAFF_TOKENS ?= pharmacist:nura-dev-pharmacist-token-0001
 migrate: ; cd backend && python3 -m alembic upgrade heads
 # The server log is also written to backend/.dev.log (gitignored, fresh on every start) so
 # that `make checkpoint` in another terminal can read the login codes the sender prints.
@@ -45,6 +48,11 @@ lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
 # Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
 # `python3 -m app.safety.plain_words --explain` says what each rule checks; `--text "..."` checks one line.
 plain-words: ; cd backend && python3 -m app.safety.plain_words
+# The same words every time (E22-02): every patient string in every catalogue — backend and web —
+# in one translation memory, held to docs/plain-words.md §6 in English, Malay and Chinese.
+# Failures fail the build; notes (words that change only as a new consent version or a
+# re-approved template) are follow-ups. `python3 -m app.language.memory --table` prints the memory.
+language: ; cd backend && python3 -m app.language.memory
 # The web client (ADR 0001). `make web` is the dev server on http://127.0.0.1:5173/app/, proxying
 # /api to the backend `make dev` serves; `--host` also answers on the Mac's LAN address so a phone
 # on the same Wi-Fi can open it. `make build-web` writes web/dist, which `make dev` then serves at

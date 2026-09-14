@@ -36,6 +36,7 @@ import app.ingestion.models
 import app.keys.confirm
 import app.keys.models
 import app.keys.privacy
+import app.language.models
 import app.medicines.models
 import app.memory.models
 import app.notes.models
@@ -857,6 +858,29 @@ CLASSES: dict[str, str] = {
     "nudge_response.kind": OPERATIONAL,
     "nudge_response.event_id": HEALTH,
     "nudge_response.at": OPERATIONAL,
+    # The pharmacist's review queue (E22-04, docs/adr/0007-the-pharmacist-review-queue.md):
+    # operator data, de-identified. No column points at a profile or a person on anyone's
+    # record — a card's lines are stored with every name taken out (`{name}`, `{doctor}`) and
+    # his record's own words left out, a source is a publisher, and `decided_by` is a staff
+    # handle from the deployment's staff list. The words themselves are health, de-identified
+    # (the operator's decision, 2026-09-15, on the clinical-safety review): a sample keeps his
+    # readings, days and plain names for medicines, a rewrite proposes such lines, and a
+    # reason is free text a pharmacist may quote a line into. The rest is operational.
+    "review_item.id": OPERATIONAL,
+    "review_item.kind": OPERATIONAL,
+    "review_item.card_type": OPERATIONAL,
+    "review_item.sample_number": OPERATIONAL,
+    "review_item.source_id": OPERATIONAL,
+    "review_item.language": OPERATIONAL,
+    "review_item.lines": HEALTH,
+    "review_item.catalogue_ids": OPERATIONAL,
+    "review_item.digest": OPERATIONAL,
+    "review_item.verdict": OPERATIONAL,
+    "review_item.reason": HEALTH,
+    "review_item.proposed": HEALTH,
+    "review_item.decided_by": OPERATIONAL,
+    "review_item.created_at": OPERATIONAL,
+    "review_item.decided_at": OPERATIONAL,
 }
 
 

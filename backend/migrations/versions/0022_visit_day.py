@@ -18,10 +18,10 @@ no database constraint, so no schema change for them.
 
 Follows main's head when this story was merged back (0017 → 0015_biography → 0019_row_scope
 → 0019_person_named_by → 0020_feelings
-→ this); the operator repoints `down_revision` if another story lands first.
+→ 0021_language → this); the operator repoints `down_revision` if another story lands first.
 
-Revision ID: 0020_visit_day
-Revises: 0020_feelings
+Revision ID: 0022_visit_day
+Revises: 0021_language
 Create Date: 2026-09-15
 """
 
@@ -30,8 +30,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0020_visit_day"
-down_revision = "0020_feelings"
+revision = "0022_visit_day"
+down_revision = "0021_language"
 branch_labels = None
 depends_on = None
 
