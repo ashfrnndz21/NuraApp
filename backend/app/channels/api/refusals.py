@@ -31,6 +31,7 @@ from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.memory.spine import NoSuchAppointment as NoSuchVisit
 from app.memory.spine import NoSuchProvider
 from app.reasoning.visits.gaps import NoSuchAppointment
+from app.reasoning.visits.guard import NotTheirsToChangeVisits
 from app.reasoning.visits.questions import NoSuchQuestion
 from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
 from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
@@ -46,6 +47,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
     (NoSuchHolder, 403),
+    # A key that reads the visits does not write them; same footing as the medicines.
+    (NotTheirsToChangeVisits, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),

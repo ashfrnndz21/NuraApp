@@ -153,10 +153,11 @@ async def test_the_whole_loop_in_malay(deployment: Deployment) -> None:
     _clean(summary["lines"], "ms")
     assert summary["red_flag"] is False and summary["confirmed_at"] is None
     assert "Tanya Dr Tan tentang jumlah baru pil air." in summary["lines"]
-    assert "Jumpa Dr Tan lagi pada Khamis 15 Oktober pukul 10 pagi." in summary["lines"]
+    assert "Anda berjumpa Dr Tan lagi pada Khamis 15 Oktober pukul 10 pagi." in summary["lines"]
+    assert "Anda akan tempahkannya." in summary["lines"]
     assert len(summary["spoken"]) == len(summary["lines"])
     kinds = {item["kind"] for item in summary["items"]}
-    assert kinds == {"action", "medication_change", "follow_up", "fact_heard"}
+    assert kinds == {"action", "medication_change", "follow_up", "follow_up_who", "fact_heard"}
     assert all(item["span"] and item["confidence"] > 0 for item in summary["items"])
     assert "full" not in " ".join(summary["lines"]).lower()
 
@@ -228,7 +229,7 @@ async def test_a_red_flag_transcript_marks_the_card_and_says_call_today(
     assert summary["red_flag"] is True
     assert summary["lines"][:2] == [
         "Call Dr Tan today.",
-        "Dr Tan should hear about the chest pain today.",
+        "Tell Dr Tan about the chest pain today.",
     ]
     _clean(summary["lines"], "en")
     trail = await deployment.client.get(
@@ -282,3 +283,91 @@ async def test_a_fragment_is_refused_and_a_narrow_key_cannot_read_the_brief(
     assert {(e["outcome"], e["refused_because"]) for e in trail.json()} >= {
         ("refused", "OutOfScope")
     }
+
+
+async def test_a_red_flag_row_survives_a_refused_request(deployment: Deployment) -> None:
+    """Review 2, #5, over HTTP: a doctor named with digits makes every card line unrenderable
+    (`NotASlotValue`, 400) — and the red-flag Flag written before the card is still in the
+    record afterwards, replayed like a refused audit line."""
+    from sqlalchemy import select
+
+    from app.reasoning.visits.models import Flag
+
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _recording(deployment, his, profile_id)
+    doctor = await deployment.client.post(
+        f"/profiles/{profile_id}/providers", json={"name": "Dr 999", "kind": "doctor"}, headers=his
+    )
+    booking = {
+        "provider_id": doctor.json()["provider_id"],
+        "scheduled_at": VISIT_AT,
+        "purpose": "check",
+    }
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "appointment", **booking},
+        headers=his,
+    )
+    booked = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments",
+        json={**booking, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=his,
+    )
+    appointment_id = booked.json()["appointment_id"]
+    text = "He had chest pain twice this week on the stairs."
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json={"data": base64.b64encode(text.encode()).decode(), "captured_at": VISIT_AT},
+        headers=his,
+    )
+    assert posted.status_code == 400 and posted.json() == {"refusal": "NotASlotValue"}
+    async with deployment.sessions() as session:
+        flags = (await session.scalars(select(Flag))).all()
+    assert [(f.kind.value, f.code) for f in flags] == [("red_flag", "chest_pain")]
+    assert str(flags[0].appointment_id) == appointment_id
+    trail = await deployment.client.get(
+        f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his
+    )
+    assert ("write", "flag", "allowed") in {
+        (e["action"], e["target"], e["outcome"]) for e in trail.json()
+    }
+
+
+async def test_a_clinic_key_reads_the_visits_and_cannot_write_them(deployment: Deployment) -> None:
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _recording(deployment, his, profile_id)
+    appointment_id = await _visit(deployment, his, profile_id)
+    clinic = await register_by_phone(deployment, MEI, "Clinic")
+    await let_in(deployment, pa, profile_id, MEI, ["visits", "records", "medicines"], "clinic")
+    granted = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={
+            "holder_phone_e164": MEI,
+            "role": "clinic",
+            "scopes": ["visits", "records", "medicines"],
+        },
+        headers=his,
+    )
+    assert granted.status_code == 201, granted.text
+    theirs = bearer(clinic["token"])
+    read = await deployment.client.get(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/questions", headers=theirs
+    )
+    assert read.status_code == 200
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json=_transcript(ROUTINE),
+        headers=theirs,
+    )
+    assert posted.status_code == 403 and posted.json() == {"refusal": "NotTheirsToChangeVisits"}
+    # A summary of another visit is not on this path.
+    other = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/summary/{appointment_id}/confirm",
+        json={"decisions": [], "confirmation_id": appointment_id},
+        headers=his,
+    )
+    assert other.status_code == 404 and other.json() == {"refusal": "NoSuchSummary"}

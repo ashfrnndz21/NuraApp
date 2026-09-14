@@ -35,7 +35,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
-from app.db import as_utc, utcnow
+from app.db import as_utc, keep_on_refusal, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
@@ -60,6 +60,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact
 from app.memory.spine import book_appointment, list_providers
+from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import write_memo
 from app.reasoning.visits.models import (
     SUMMARY_IN_PROGRESS,
@@ -77,6 +78,7 @@ from app.reasoning.visits.questions import CHANGE_TEMPLATE, Visit, require_visit
 from app.reasoning.visits.strings import (
     NotASlotValue,
     day_and_date,
+    has_subject_words,
     red_flag_words,
     say,
     spoken,
@@ -84,7 +86,7 @@ from app.reasoning.visits.strings import (
     time_of_day,
 )
 from app.regions import REGION_TZ, Region, guard_region
-from app.safety.high_risk import DOSE_ATTRIBUTES, names_high_risk
+from app.safety.high_risk import DOSE_ATTRIBUTES, as_words, names_high_risk
 from app.safety.red_flags import RedFlagHit, find_red_flags, red_flags_in
 from app.state.service import StateView, current_state, render_from_state
 
@@ -173,6 +175,10 @@ value itself is checked by `strings.check_slot` when rendered. `bring_bp_book_ne
 takes its day from the follow-up heard, never from the summariser."""
 
 MINUTES_AT_MOST = 300
+
+# @patient phrase
+YOU: Mapping[str, str] = {"en": "You", "ms": "Anda", "zh": "您"}
+"""Who books the next visit when there is no chief to name: he does."""
 
 
 class ChangeHeard(StrEnum):
@@ -374,6 +380,7 @@ async def store_transcript(
 ) -> Artifact:
     """Keep a transcript: the text in the region's store, one Artifact row naming it by key
     and digest. Nothing of what was said goes in the row."""
+    may_change_visits(context)
     guard_region(held_in=store.region, asked_from=context.region)
     data = text.encode("utf-8")
     if not text.strip():
@@ -392,7 +399,7 @@ async def store_transcript(
     digest = sha256_of(data)
     key = transcript_key(context.profile_id, digest)
     await store.put(key, data)
-    return await store_artifact(
+    artifact = await store_artifact(
         session,
         context=context,
         kind=ArtifactKind.TRANSCRIPT,
@@ -403,6 +410,31 @@ async def store_transcript(
         source_channel=source_channel,
         region=store.region,
     )
+
+    # The bytes are in the store whatever happens next in this request. If the summary that
+    # follows is refused, the savepoint takes this row with it — and with it the red-flag
+    # Flag that cites it (`write_red_flag`). So the row is kept too, the way the refused
+    # audit lines are: replayed after the rollback, same id, every check above already made.
+    kept: dict[str, Any] = {
+        "id": artifact.id,
+        "kind": artifact.kind,
+        "storage_key": artifact.storage_key,
+        "content_type": artifact.content_type,
+        "sha256": artifact.sha256,
+        "captured_at": artifact.captured_at,
+        "source_channel": artifact.source_channel,
+        "region": artifact.region,
+        "stored_at": artifact.stored_at,
+    }
+
+    async def keep(again: AsyncSession) -> None:
+        # Only if the rollback took it: a keeper registered by an earlier, successful unit
+        # of work on the same session finds the row still there and does nothing.
+        if await again.get(Artifact, artifact.id) is None:
+            await audited_write(again, Artifact, context, Scope.RECORDS, **kept)
+
+    keep_on_refusal(session, keep)
+    return artifact
 
 
 # --- composing the card -----------------------------------------------------------------------
@@ -450,7 +482,9 @@ def names_a_drug(registry: DrugRegistry, *values: Any) -> bool:
         return True
     for value in values:
         for text in _strings_in(value):
-            for word in {text, *re.split(r"[\s,;:/()]+", text)}:
+            # A code is read as words first: "warfarin_level" names warfarin.
+            words = as_words(text)
+            for word in {text, words, *re.split(r"[\s,;:/()]+", words)}:
                 if word and known_generic(word, registry) is not None:
                     return True
     return False
@@ -559,7 +593,12 @@ def _follow_up_day(draft: SummaryDraft, visit: Visit, region: Region) -> str | N
 
 
 def compose_items(
-    draft: SummaryDraft, visit: Visit, region: Region, registry: DrugRegistry
+    draft: SummaryDraft,
+    visit: Visit,
+    region: Region,
+    registry: DrugRegistry,
+    *,
+    who_books: str,
 ) -> list[Item]:
     """Every item rendered through its template — the change as a question, never as the
     change — and the verifier. A drug the register does not know is never named: the line
@@ -639,9 +678,27 @@ def compose_items(
                 ),
             )
         )
+        # Rule 7: who does the next thing. The chief books it; with no chief, he does.
+        items.append(
+            Item(
+                SummaryItemKind.FOLLOW_UP_WHO,
+                {"who": who_books},
+                follow_up.span,
+                follow_up.confidence,
+                "will_book_it",
+                say("will_book_it", lang, who=who_books),
+            )
+        )
     for fact in draft.facts_heard:
         if fact.attribute in DOSE_ATTRIBUTES or names_a_drug(registry, fact.subject, fact.value):
             raise DrugNamedInAFact(f"{fact.subject}.{fact.attribute} names a drug or a dose")
+        # A subject with no words of his is never spoken as its code: a whole line instead.
+        if has_subject_words(fact.subject):
+            key = "doctor_wrote_down"
+            text = say(key, lang, doctor=doctor, thing=subject_words(fact.subject, lang))
+        else:
+            key = "tell_doctor_how_you_feel"
+            text = say(key, lang, doctor=doctor)
         items.append(
             Item(
                 SummaryItemKind.FACT_HEARD,
@@ -653,16 +710,32 @@ def compose_items(
                 },
                 fact.span,
                 fact.confidence,
-                "doctor_wrote_down",
-                say(
-                    "doctor_wrote_down",
-                    lang,
-                    doctor=doctor,
-                    thing=subject_words(fact.subject, lang),
-                ),
+                key,
+                text,
             )
         )
     return items
+
+
+async def write_red_flag(session: AsyncSession, *, context: KeyContext, **values: Any) -> Flag:
+    """A red-flag Flag that outlives the request it was written in.
+
+    The request is one savepoint (`app.db.unit_of_work`): a refusal later in the same
+    request — a line the verifier will not pass, a slot value that is not one — rolls the
+    savepoint back. A red flag must not go with it, so the write also registers a keeper
+    (`app.db.keep_on_refusal`), the mechanism the refused audit lines use: after the
+    rollback the channel replays it and the same row, with the same id, lands and is
+    written down again. On success the keeper is dropped, the row already there.
+    """
+    flag_id = uuid.uuid4()
+
+    async def keep(again: AsyncSession) -> None:
+        if await again.get(Flag, flag_id) is None:  # only if the rollback took it
+            await audited_write(again, Flag, context, Scope.RECORDS, id=flag_id, **values)
+
+    flag = await audited_write(session, Flag, context, Scope.RECORDS, id=flag_id, **values)
+    keep_on_refusal(session, keep)
+    return flag
 
 
 def red_flags_heard(
@@ -711,6 +784,7 @@ async def post_visit_summary(
     register does not know is never named. The card names the transcript, the visit and
     the State.
     """
+    may_change_visits(context)
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )
@@ -747,11 +821,9 @@ async def post_visit_summary(
     flags: list[Flag] = []
     for code, (word, span, found_in) in found.items():
         flags.append(
-            await audited_write(
+            await write_red_flag(
                 session,
-                Flag,
-                context,
-                Scope.RECORDS,
+                context=context,
                 kind=FlagKind.RED_FLAG,
                 code=code,
                 subject="symptom",
@@ -762,16 +834,16 @@ async def post_visit_summary(
                 raised_at=utcnow(),
             )
         )
+    carer = await _carer(session, context)
     if red_flag:
         lines.append(_line("call_doctor_today", lang, doctor=visit.doctor))
-        carer = await _carer(session, context)
         for code in found:
             what = red_flag_words(code, lang)
-            lines.append(_line("doctor_should_hear", lang, doctor=visit.doctor, what=what))
+            lines.append(_line("tell_doctor_about", lang, doctor=visit.doctor, what=what))
             if carer:
                 lines.append(_line("tell_carer_today", lang, carer=carer, what=what))
 
-    items = compose_items(heard, visit, context.region, registry)
+    items = compose_items(heard, visit, context.region, registry, who_books=carer or YOU[lang])
     when = day_and_date(visit.appointment.scheduled_at, lang, context.region)
     lines.append(_line("doctor_said_on", lang, doctor=visit.doctor, day=when))
     lines.extend(
@@ -1014,6 +1086,7 @@ async def confirm_summary(
     Fact with the transcript as provenance and the person as confirmer. A rejected item
     writes nothing. The card closes last, naming who confirmed it and when.
     """
+    may_change_visits(context)
     draft = await summary_draft_for(
         session, context=context, summary_id=summary_id, decisions=decisions
     )
@@ -1127,6 +1200,8 @@ async def confirm_summary(
                 item.memo_id = memo.id
                 outcome.flags.append(flag)
                 outcome.memos.append(memo)
+            elif item.kind is SummaryItemKind.FOLLOW_UP_WHO:
+                pass  # the line beside the follow-up: nothing of its own to write
             elif item.kind is SummaryItemKind.FACT_HEARD:
                 fact = await _write_fact_heard(
                     session,

@@ -48,14 +48,16 @@ from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.memos import consolidate_memos, memo_card
 from app.reasoning.visits.questions import (
     change_questions,
+    current_questions,
     patient_card,
-    questions_for,
     spoken_card,
 )
 from app.reasoning.visits.summary import (
+    NoSuchSummary,
     confirm_summary,
     list_summaries,
     post_visit_summary,
+    require_summary,
     store_transcript,
     summary_items,
 )
@@ -123,17 +125,11 @@ async def brief(
 
 
 @router.get("/{profile_id}/appointments/{appointment_id}/questions")
-async def questions(
-    appointment_id: uuid.UUID, request: Request, context: Context, session: Db
-) -> QuestionsOut:
-    """The current questions for this visit, refreshed from gaps, memos and flags, each with
-    its source; and the one card for him — the first three by priority."""
-    found = await questions_for(
-        session,
-        context=context,
-        appointment_id=appointment_id,
-        registry=providers_of(request).drug_registry,
-    )
+async def questions(appointment_id: uuid.UUID, context: Context, session: Db) -> QuestionsOut:
+    """The current questions for this visit, each with its source, and the one card for him
+    — the first three by priority. A read: the list is refreshed from gaps, memos and flags
+    when the brief is built (`GET …/brief`), and changed by `POST …/questions`."""
+    found = await current_questions(session, context=context, appointment_id=appointment_id)
     card = await patient_card(session, context=context, appointment_id=appointment_id)
     return QuestionsOut(
         questions=[QuestionOut.of(one) for one in found], card=card, spoken_card=spoken_card(card)
@@ -211,6 +207,10 @@ async def confirm_card(
     """Close the card on the yes minted for exactly these decisions: actions become memos, a
     medicine change becomes a flag and a memo asking the doctor (never a change), follow-ups
     become planned visits, facts heard become facts citing the transcript."""
+    # The card must be the visit's in the path: a summary of another visit is not here.
+    found = await require_summary(session, context=context, summary_id=summary_id)
+    if found.appointment_id != appointment_id:
+        raise NoSuchSummary(f"summary {summary_id} is not on appointment {appointment_id}")
     outcome = await confirm_summary(
         session,
         context=context,

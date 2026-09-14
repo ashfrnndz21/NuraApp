@@ -234,3 +234,15 @@ async def test_a_dose_is_a_dose_whatever_its_subject_code(sg: AsyncSession) -> N
             event_id=told.id,
         )
     assert await current_facts(sg, context=context) == []
+
+
+def test_a_code_is_read_as_words_before_the_drug_is_looked_for() -> None:
+    """Review 2, #4: an underscore is a word character; a code is exactly where a drug hides."""
+    from app.safety.high_risk import as_words
+
+    assert as_words("warfarin_level") == "warfarin level"
+    assert as_words("insulinGlargine.dose") == "insulin Glargine dose"
+    assert high_risk_class("warfarin_level") == "anticoagulant"
+    assert high_risk_class("digoxin-level") == "cardiac_glycoside"
+    assert names_high_risk({"code": "methotrexate_weekly"}) == "antimetabolite"
+    assert high_risk_class("paracetamol_level") is None

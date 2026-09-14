@@ -111,13 +111,25 @@ def class_of(value: Any) -> str | None:
     return None
 
 
+_CODE_JOINS = re.compile(r"[_.\-]+|(?<=[a-z0-9])(?=[A-Z])")
+
+
+def as_words(text: str) -> str:
+    """A code read as words: `warfarin_level`, `warfarin-level`, `warfarin.level` and
+    `warfarinLevel` all become "warfarin level", so a whole-word match sees the drug. An
+    underscore is a word character to a regex, and a code is exactly where one hides."""
+    return _CODE_JOINS.sub(" ", text)
+
+
 def high_risk_class(name: str | None) -> str | None:
     """Which class a drug name falls in, or None. Matches whole words, so "Insulin Glargine
-    (Lantus)" is insulin and "warfarin 5 mg" is an anticoagulant."""
+    (Lantus)" is insulin and "warfarin 5 mg" is an anticoagulant — and a code is read as
+    words first, so "warfarin_level" is too."""
     if not name:
         return None
+    text = as_words(name)
     for danger, pattern in _NAMES:
-        if pattern.search(name):
+        if pattern.search(text):
             return danger
     return None
 

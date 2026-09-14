@@ -1200,6 +1200,52 @@ def _check_length(line: _Line) -> None:
         )
 
 
+_TREATMENT_VERBS: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"\b(?:start|starts|started|starting|stop|stops|stopped|stopping|double|doubles|"
+        r"doubled|halve|halves|halved|increase|increases|increased|reduce|reduces|reduced|"
+        r"take (?:more|less))\b",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(
+        r"\b(?:mula (?:makan|ambil)|berhenti (?:makan|ambil)|tambah|kurangkan|gandakan)\b",
+        re.IGNORECASE,
+    ),
+    "zh": re.compile(r"开始吃|停吃|停药|停止吃|多吃|少吃|加量|减量|加倍"),
+}
+_MEDICINE_NOUNS: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"\b(?:tablets?|pills?|capsules?|medicines?|insulin|injections?|aspirin|"
+        r"water pill|sugar tablet|cholesterol tablet|blood pressure tablet)\b",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(r"\b(?:ubat|pil|tablet|kapsul|insulin|suntikan|aspirin)\b", re.IGNORECASE),
+    "zh": re.compile(r"药|片|胰岛素|阿司匹林"),
+}
+_ASKING = re.compile(
+    r"^\W*(?:ask|tell|tanya|beritahu)\b|^\W*(?:问一问|问|告诉)|\?|？", re.IGNORECASE
+)
+"""The boundary (CLAUDE.md): no line the patient reads starts, stops or changes a medicine.
+A treatment-changing verb beside a medicine noun fails unless the line is a question for
+the doctor — one that begins by asking or telling — in any language. Kept tight: a verb
+alone ("You can tell Nura to stop at any time.") or a noun alone passes."""
+
+
+def _check_boundary(line: _Line) -> None:
+    language = line.language if line.language in _TREATMENT_VERBS else "en"
+    verbs, nouns = _TREATMENT_VERBS[language], _MEDICINE_NOUNS[language]
+    verb = verbs.search(line.text)
+    if verb is None or nouns.search(line.text) is None:
+        return
+    if _ASKING.search(line.text):
+        return
+    line.add(
+        14,
+        f'a medicine started, stopped or changed: "{verb.group()}"',
+        'a question for the doctor: "Ask Dr Tan about the new amount of the water pill."',
+    )
+
+
 def _check_action(line: _Line) -> None:
     if line.language != "en":
         return
@@ -1292,6 +1338,8 @@ def verify(text: str, language: str = "en", kind: Kind = "line") -> list[Finding
             _check_length_of_words_only(line)
         if line.kind == "action":
             _check_action(line)
+        if line.kind != "phrase":
+            _check_boundary(line)
         findings.extend(line.findings)
     return findings
 
@@ -1760,6 +1808,8 @@ plain-words checks every patient string against docs/plain-words.md. By the doc'
   12 Nothing to decode: dose, recheck, follow-up, flag, log; abbreviations in capitals (OK and
      IC are his); units he does not use (mg, mmHg, mmol/L); any id, phone number, IC number.
   13 The same words every time: "the log", "the readings", "discharge summary", "the clinic".
+  14 The boundary: no line starts, stops or changes a medicine — a treatment verb beside a
+     medicine noun fails unless the line asks the doctor (en, ms and zh alike).
 Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action.
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.

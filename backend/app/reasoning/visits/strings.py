@@ -110,7 +110,7 @@ def day_and_date(moment: datetime, language: str, region: Region) -> str:
 
 # @patient phrase
 _PERIODS: Mapping[str, tuple[tuple[int, str], ...]] = {
-    "en": ((5, "in the morning"), (12, "at noon"), (13, "in the afternoon"), (18, "at night")),
+    "en": ((5, "in the morning"), (12, "noon"), (13, "in the afternoon"), (18, "in the evening")),
     "ms": ((5, "pagi"), (12, "tengah hari"), (14, "petang"), (19, "malam")),
     "zh": ((5, "上午"), (12, "中午"), (13, "下午"), (18, "晚上")),
 }
@@ -189,8 +189,8 @@ SUBJECT_WORDS: Mapping[str, Mapping[str, str]] = {
         "diabetes": "您的血糖",
     },
 }
-"""A subject code, in his words. A code not here is spoken as its words with the underscores
-taken out, and the verifier decides whether that is plain enough."""
+"""A subject code, in his words. A code not here has no words: the loop says a whole
+fallback line instead ("Tell {doctor} about how you feel today."), never the code."""
 
 # @patient phrase
 VISIT_SUBJECTS: Mapping[str, Mapping[str, str]] = {
@@ -334,8 +334,17 @@ RED_FLAG_WORDS: Mapping[str, Mapping[str, str]] = {
 
 
 def subject_words(subject: str, language: str) -> str:
+    """His words for a subject code, or `NotASlotValue`: a code the table does not know is
+    never turned into patient text at run time (a line is never assembled from a code)."""
     lang = language_for(language)
-    return SUBJECT_WORDS[lang].get(subject, subject.replace("_", " "))
+    words = SUBJECT_WORDS[lang].get(subject)
+    if words is None:
+        raise NotASlotValue(f"no words for subject {subject!r}")
+    return words
+
+
+def has_subject_words(subject: str) -> bool:
+    return subject in SUBJECT_WORDS["en"]
 
 
 def medicine_words(name: str, language: str, registry: DrugRegistry | None = None) -> str:
@@ -365,7 +374,10 @@ def medicine_words(name: str, language: str, registry: DrugRegistry | None = Non
 
 def red_flag_words(code: str, language: str) -> str:
     lang = language_for(language)
-    return RED_FLAG_WORDS[lang].get(code, code.replace("_", " "))
+    words = RED_FLAG_WORDS[lang].get(code)
+    if words is None:
+        raise NotASlotValue(f"no words for red flag {code!r}")
+    return words
 
 
 _BRACKETED = re.compile(r"\s*\([^()]*\)")
@@ -412,9 +424,9 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "自{day}以来，您的病历文件多了{count}项新内容。",
     },
     "changed_how_you_are": {
-        "en": "Since {day}, {count} things changed about how you are.",
-        "ms": "Sejak {day}, {count} perkara berubah tentang keadaan anda.",
-        "zh": "自{day}以来，您的情况有{count}处变化。",
+        "en": "Since {day}, {count} things changed about how you feel.",
+        "ms": "Sejak {day}, {count} perkara berubah tentang apa yang anda rasa.",
+        "zh": "自{day}以来，您的感觉有{count}处变化。",
     },
     "nothing_changed": {
         "en": "Nothing has changed since {day}.",
@@ -461,13 +473,13 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     },
     "ask_starting": {
         "en": "Ask {doctor} about starting {medicine}.",
-        "ms": "Tanya {doctor} kenapa anda perlu mula makan {medicine}.",
-        "zh": "问一问{doctor}，为什么要开始吃{medicine}。",
+        "ms": "Tanya {doctor} tentang mula makan {medicine}.",
+        "zh": "问一问{doctor}，{medicine}要不要开始吃。",
     },
     "ask_stopping": {
         "en": "Ask {doctor} about stopping {medicine}.",
-        "ms": "Tanya {doctor} kenapa anda perlu berhenti makan {medicine}.",
-        "zh": "问一问{doctor}，为什么要停吃{medicine}。",
+        "ms": "Tanya {doctor} tentang berhenti makan {medicine}.",
+        "zh": "问一问{doctor}，{medicine}要不要停。",
     },
     "ask_medicine_change": {
         "en": "Ask {doctor} about the change to {medicine}.",
@@ -492,9 +504,19 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "{doctor}在{day}说了这些。",
     },
     "see_again_on": {
-        "en": "See {doctor} again on {day} at {time}.",
-        "ms": "Jumpa {doctor} lagi pada {day} pukul {time}.",
-        "zh": "{day}{time}再去见{doctor}。",
+        "en": "You see {doctor} again on {day} at {time}.",
+        "ms": "Anda berjumpa {doctor} lagi pada {day} pukul {time}.",
+        "zh": "您在{day}{time}再见{doctor}。",
+    },
+    "will_book_it": {
+        "en": "{who} will book it.",
+        "ms": "{who} akan tempahkannya.",
+        "zh": "{who}会去预约。",
+    },
+    "tell_doctor_how_you_feel": {
+        "en": "Tell {doctor} about how you feel today.",
+        "ms": "Beritahu {doctor} tentang apa yang anda rasa hari ini.",
+        "zh": "今天就告诉{doctor}您的感觉。",
     },
     "doctor_wrote_down": {
         "en": "{doctor} wrote down {thing}.",
@@ -542,11 +564,6 @@ ACTION_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "en": "Call {doctor} today.",
         "ms": "Telefon {doctor} hari ini.",
         "zh": "今天就给{doctor}打电话。",
-    },
-    "doctor_should_hear": {
-        "en": "{doctor} should hear about {what} today.",
-        "ms": "{doctor} patut tahu tentang {what} hari ini.",
-        "zh": "今天就要让{doctor}知道{what}的事。",
     },
     "tell_carer_today": {
         "en": "Tell {carer} about {what} today.",
@@ -605,6 +622,7 @@ _NUMBER = re.compile(r"^\d{1,3}$")
 SLOT_RULES: Mapping[str, tuple[re.Pattern[str], int]] = {
     "doctor": (_NAME, 60),
     "carer": (_NAME, 60),
+    "who": (_NAME, 60),
     "medicine": (_WORDS, 60),
     "other": (_WORDS, 60),
     "thing": (_WORDS, 60),

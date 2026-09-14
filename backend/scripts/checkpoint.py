@@ -2079,8 +2079,16 @@ def checkpoint_7(client: httpx.Client) -> None:
         "Pa uploads the routine transcript",
     )
     kinds = {item["kind"] for item in summary["items"]}
-    if summary["red_flag"] or kinds != {"action", "medication_change", "follow_up", "fact_heard"}:
+    if summary["red_flag"] or kinds != {
+        "action",
+        "medication_change",
+        "follow_up",
+        "follow_up_who",
+        "fact_heard",
+    }:
         raise fail("Pa uploads the routine transcript", why=f"got {summary}")
+    if "Anda akan tempahkannya." not in summary["lines"]:
+        raise fail("Pa uploads the routine transcript", why="nobody named to book the follow-up")
     if "Tanya Dr Tan tentang jumlah baru pil air." not in summary["lines"]:
         raise fail(
             "Pa uploads the routine transcript",
@@ -2185,7 +2193,7 @@ def checkpoint_7(client: httpx.Client) -> None:
     )
     if not red["red_flag"] or red["lines"][:2] != [
         "Telefon Dr Tan hari ini.",
-        "Dr Tan patut tahu tentang sakit dada hari ini.",
+        "Beritahu Dr Tan tentang sakit dada hari ini.",
     ]:
         raise fail("Pa uploads the red-flag transcript", why=f"got {red}")
     verifier_clean(red["lines"], language, "Pa uploads the red-flag transcript")

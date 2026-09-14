@@ -35,6 +35,7 @@ from app.reasoning.visits.models import Brief, MemoKind
 from app.reasoning.visits.questions import (
     Visit,
     propose_questions,
+    questions_for,
     render_proposed,
     require_visit,
 )
@@ -270,6 +271,9 @@ async def build_brief(
     gaps = await find_gaps(
         session, context=context, registry=registry, appointment_id=appointment_id
     )
+    # The questions list is refreshed here, the one write behind the brief; the questions
+    # route itself only reads.
+    await questions_for(session, context=context, appointment_id=appointment_id, registry=registry)
     return await render_from_state(
         session,
         Brief,

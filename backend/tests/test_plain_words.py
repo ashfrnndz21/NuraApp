@@ -621,3 +621,29 @@ def test_the_fillers_speak_the_lines_language() -> None:
     assert fill("You see {doctor} on {day} at {time}.") == (
         "You see Ash on Monday 14 September at 10 in the morning."
     )
+
+
+def test_rule_14_the_boundary_holds_in_every_language() -> None:
+    """E05 review 2: no patient line starts, stops or changes a medicine. A treatment verb
+    beside a medicine noun fails unless the line asks or tells the doctor; a verb alone
+    ("You can tell Nura to stop at any time.") passes, and so do E04's missed-dose lines."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Stop the water pill from Friday.", "en")
+    assert rule_14("From Friday, take more of the water pill.", "en")
+    assert rule_14("Your blood pressure tablet is doubled from Monday 14 September.", "en")
+    assert not rule_14("Ask Dr Tan about stopping the water pill (frusemide).", "en")
+    assert not rule_14("Tell Dr Tan that you stopped the water pill.", "en")
+    assert not rule_14("You can tell Nura to stop at any time.", "en")
+    assert not rule_14("Never take 2 at once.", "en")
+    assert not rule_14("If you forgot, leave it.", "en")
+    assert rule_14("Berhenti makan pil air mulai Jumaat.", "ms")
+    assert not rule_14("Tanya Dr Tan tentang berhenti makan pil air.", "ms")
+    assert not rule_14("Anda boleh minta Nura berhenti pada bila-bila masa.", "ms")
+    assert not rule_14("Jangan ambil lebih untuk ganti.", "ms")
+    assert rule_14("从星期五开始停吃去水药。", "zh")
+    assert not rule_14("问一问陈医生，去水药要不要停。", "zh")
+    assert not rule_14("您可以随时叫 Nura 停下来。", "zh")

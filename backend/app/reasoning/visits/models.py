@@ -214,6 +214,8 @@ class SummaryItemKind(StrEnum):
     ACTION = "action"
     MEDICATION_CHANGE = "medication_change"
     FOLLOW_UP = "follow_up"
+    FOLLOW_UP_WHO = "follow_up_who"
+    """The line beside a follow-up that says who books it (rule 7). Writes nothing."""
     FACT_HEARD = "fact_heard"
 
 

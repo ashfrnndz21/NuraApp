@@ -620,6 +620,8 @@ def test_a_fact_heard_about_a_dose_is_rerouted_whatever_its_subject() -> None:
             FactHeard("medicine", "stop", "aspirin", None, Span(6, 10), 0.8),
             # A free subject code with a dose attribute: still a dose.
             FactHeard("warfarin", "dose", {"amount": "5 mg"}, "mg", Span(11, 15), 0.9),
+            # An underscore hides nothing: "warfarin_level" names warfarin (review 2, #4).
+            FactHeard("warfarin_level", "reading", 5, "mg", Span(15, 16), 0.9),
             # A fact whose value names a drug the register knows: never a fact.
             FactHeard("symptom", "reported", "dizzy since the amlodipine", None, Span(16, 20), 0.8),
             # A fact whose subject names a high-risk drug: never a fact.
@@ -639,11 +641,14 @@ def test_a_fact_heard_about_a_dose_is_rerouted_whatever_its_subject() -> None:
         ("warfarin", ChangeHeard.DOSE),
         ("aspirin", ChangeHeard.STOP),
         ("warfarin", ChangeHeard.DOSE),
+        ("warfarin_level", ChangeHeard.UNCLEAR),
         ("dizzy since the amlodipine", ChangeHeard.UNCLEAR),
         ("keeps it in the fridge", ChangeHeard.UNCLEAR),
     ]
     assert [f.subject for f in rerouted.facts_heard] == ["blood_pressure"]
     assert names_a_drug(REGISTRY, "symptom", {"note": "took Lasix"}) is True
+    assert names_a_drug(REGISTRY, "amlodipine-level", 5) is True
+    assert names_a_drug(REGISTRY, "sleep", "fine") is False
     assert names_a_drug(REGISTRY, "blood_pressure", {"systolic": 142}) is False
 
 
@@ -680,7 +685,8 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     assert summary.red_flag is False and summary.is_open and summary.state_id
     assert lines[0] == "Dr Tan said this on Thursday 10 September."
     assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in lines
-    assert "See Dr Tan again on Thursday 15 October at 10 in the morning." in lines
+    assert "You see Dr Tan again on Thursday 15 October at 10 in the morning." in lines
+    assert "You will book it." in lines  # rule 7: no chief on this profile, so he does
     assert "Every morning, stand on the scale before breakfast." in lines
     assert "Eat nothing after 12 midnight on Sunday 27 September." in lines
     assert "Bring your blood pressure book on Thursday 15 October." in lines
@@ -765,7 +771,8 @@ async def test_transcript_in_summary_card_out_memos_on_the_yes(
     # Every item names what it became; the card is closed and takes no second yes.
     for item in outcome.items:
         assert item.state is ItemState.CONFIRMED
-        assert any((item.memo_id, item.appointment_id, item.fact_id, item.flag_id))
+        if item.kind is not SummaryItemKind.FOLLOW_UP_WHO:  # the who-books line writes nothing
+            assert any((item.memo_id, item.appointment_id, item.fact_id, item.flag_id))
     assert summary.confirmed_at is not None and summary.confirmed_by_person_id == context.person_id
     async with refused_unit(sg, AlreadyConfirmed):
         await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions)
@@ -853,8 +860,8 @@ async def test_a_red_flag_word_writes_a_flag_first_and_the_card_says_call_today(
     _clean(lines, "en")
     assert summary.red_flag is True
     assert lines[0] == "Call Dr Tan today."
-    # P1: the card says what happened, on the line after the call.
-    assert lines[1] == "Dr Tan should hear about the chest pain today."
+    # P1/F2: the card says what happened, on the line after the call — one doer, one act.
+    assert lines[1] == "Tell Dr Tan about the chest pain today."
     assert "Dr Tan said your medicines stay the same." in lines
     assert not any(
         word in " ".join(lines).lower() for word in ("angina", "heart attack", "cardiac")
@@ -940,7 +947,8 @@ def test_day_and_date_says_the_day_in_each_language() -> None:
     assert time_of_day(when, "ms", Region.MY) == "10 pagi"
     assert time_of_day(when, "zh", Region.SG) == "上午10点"
     late = datetime(2026, 9, 14, 11, 30, tzinfo=UTC)
-    assert time_of_day(late, "en", Region.SG) == "half past 7 at night"
+    assert time_of_day(late, "en", Region.SG) == "half past 7 in the evening"
+    assert time_of_day(datetime(2026, 9, 14, 4, 0, tzinfo=UTC), "en", Region.SG) == "12 noon"
     assert time_of_day(late, "ms", Region.MY) == "7.30 malam"
     assert time_of_day(late, "zh", Region.SG) == "晚上7点半"
     # Late at night UTC is the next morning on his clock.
@@ -1092,7 +1100,7 @@ async def test_a_red_flag_word_in_the_transcript_is_found_when_the_summariser_om
     assert summary.red_flag is True
     assert [str(line["text"]) for line in summary.lines][:2] == [
         "Call Dr Tan today.",
-        "Dr Tan should hear about the chest pain today.",
+        "Tell Dr Tan about the chest pain today.",
     ]
     [flag] = (await sg.scalars(select(Flag))).all()
     assert flag.payload["found_in"] == "transcript"
@@ -1178,9 +1186,10 @@ async def test_a_follow_up_with_a_new_doctors_name_never_adds_a_provider(
         summariser=_Says(heard),
         registry=REGISTRY,
     )
-    [item] = await summary_items(sg, context=context, summary_id=summary.id)
+    item, who = await summary_items(sg, context=context, summary_id=summary.id)
     assert item.payload["provider_heard"] == "Dr Nobody"
-    decisions = [Decision(item.id, ItemState.CONFIRMED)]
+    assert who.kind is SummaryItemKind.FOLLOW_UP_WHO and who.text == "You will book it."
+    decisions = [Decision(one.id, ItemState.CONFIRMED) for one in (item, who)]
     yes = await confirm(
         sg,
         context,
@@ -1244,6 +1253,167 @@ async def test_an_action_carries_only_the_slots_its_kind_allows(
             summariser=_Says(too_long),
             registry=REGISTRY,
         )
+
+
+async def test_a_red_flag_outlives_a_refusal_later_in_the_same_request(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Review 2, #5: the request is one savepoint. A red-flag word plus one item the loop
+    will not render is a refusal — and the Flag row is still there afterwards, replayed
+    like a refused audit line (`app.db.keep_on_refusal`)."""
+    from app.reasoning.visits.summary import ActionHeard, ActionKind
+
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text=transcript(RED_FLAG), captured_at=VISIT_AT
+    )
+    unrenderable = SummaryDraft(
+        actions=(ActionHeard(ActionKind.WALK_EVERY_DAY, {"minutes": 9000}, Span(0, 5), 0.9),)
+    )
+    async with refused_unit(sg, NotASlotValue):
+        await post_visit_summary(
+            sg,
+            context=context,
+            appointment_id=appointment.id,
+            artifact_id=artifact.id,
+            store=store,
+            summariser=_Says(unrenderable),
+            registry=REGISTRY,
+        )
+    assert (await sg.scalars(select(VisitSummary))).all() == []  # the card was rolled back
+    [flag] = (await sg.scalars(select(Flag))).all()  # the flag was not
+    assert flag.kind is FlagKind.RED_FLAG and flag.code == "chest_pain"
+    assert flag.artifact_id == artifact.id and flag.appointment_id == appointment.id
+    trail = await read_audit(sg, context=context)
+    assert any(e.target == "flag" and e.action is Action.WRITE for e in trail)
+    assert {e.refused_because for e in trail if e.outcome is Outcome.REFUSED} >= {"NotASlotValue"}
+
+
+async def test_a_key_that_reads_the_visits_does_not_write_them(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review 2: a viewer's or a clinic's key holds the visits scope to read; a transcript,
+    a summary, a question are writes, refused by name and on the trail (same footing as
+    the medicines, `medicines.service.CHANGERS`)."""
+    from app.reasoning.visits.guard import NotTheirsToChangeVisits
+
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    clinic = await __import__("app.identity.service", fromlist=["register_person"]).register_person(
+        sg, region=Region.SG, display_name="Clinic", phone_e164="+6592220009"
+    )
+    await agree_to_family_sharing(sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS})
+    await grant_key(
+        sg,
+        context=context,
+        holder=clinic,
+        role=KeyRole.CLINIC,
+        scopes={Scope.VISITS, Scope.RECORDS},
+    )
+    theirs = await resolve_key_context(
+        sg, region=Region.SG, person_id=clinic.id, profile_id=context.profile_id
+    )
+    store = LocalObjectStore(tmp_path, Region.SG)
+    async with refused_unit(sg, NotTheirsToChangeVisits):
+        await store_transcript(
+            sg, context=theirs, store=store, text=transcript(ROUTINE), captured_at=SEPT_3
+        )
+    async with refused_unit(sg, NotTheirsToChangeVisits):
+        await change_questions(
+            sg,
+            context=theirs,
+            appointment_id=appointment.id,
+            confirmation_id=uuid.uuid4(),
+            text="Is the water pill bad for my kidneys?",
+        )
+    async with refused_unit(sg, NotTheirsToChangeVisits):
+        await questions_for(sg, context=theirs, appointment_id=appointment.id, registry=REGISTRY)
+    # Reading is theirs.
+    from app.reasoning.visits.questions import current_questions
+
+    assert await current_questions(sg, context=theirs, appointment_id=appointment.id) == []
+    refused = [
+        e
+        for e in await read_audit(sg, context=context)
+        if e.outcome is Outcome.REFUSED and e.actor_person_id == clinic.id
+    ]
+    assert {e.refused_because for e in refused} == {"NotTheirsToChangeVisits"}
+
+
+async def test_a_code_with_no_words_of_his_becomes_a_whole_line_never_the_code(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Review 2, F7: a subject the tables do not know is never spoken as its code."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(VISIT_AT + timedelta(hours=1))
+    artifact = await store_transcript(
+        sg, context=context, store=store, text="He sleeps badly.", captured_at=VISIT_AT
+    )
+    heard = SummaryDraft(
+        facts_heard=(FactHeard("sleep", "quality", "poor", None, Span(0, 5), 0.8),)
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=_Says(heard),
+        registry=REGISTRY,
+    )
+    [item] = await summary_items(sg, context=context, summary_id=summary.id)
+    assert (
+        item.text == "Tell Dr Tan about how you feel today."
+        and item.key == "tell_doctor_how_you_feel"
+    )
+    assert "sleep" not in " ".join(str(line["text"]) for line in summary.lines)
+    # And a gap about an unknown subject asks what the visit is for, never "about egfr".
+    photo = await __import__("tests.visits", fromlist=["label_photo"]).label_photo(sg, context)
+    await assert_fact(
+        sg,
+        context=context,
+        subject="egfr",
+        attribute="value",
+        value=61,
+        confidence=0.9,
+        artifact_id=photo.id,
+        valid_from=SEPT_3 - timedelta(days=400),
+        valid_to=SEPT_3 - timedelta(days=30),
+    )
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    texts = [q.text for q in found if q.source_kind == GapKind.FACT_EXPIRED.value]
+    assert texts == ["Ask Dr Tan what this visit is for."]
+    with pytest.raises(NotASlotValue):
+        strings.subject_words("egfr", "en")
+
+
+def test_no_template_in_any_language_starts_stops_or_changes_a_medicine() -> None:
+    """Review 2, check 3: the boundary as the verifier now reads it (rule 14), in en, ms and
+    zh alike — a treatment verb beside a medicine noun fails unless the line asks."""
+    from app.safety.plain_words import fill
+
+    for key, by_language in strings.TEMPLATES.items():
+        for language in strings.LANGUAGES:
+            text = fill(by_language[language], language)
+            assert [f for f in verify(text, language) if f.rule == 14] == [], (key, language, text)
+    for text, language in (
+        ("Stop the water pill from Friday.", "en"),
+        ("From Friday, take more of the water pill.", "en"),
+        ("Berhenti makan pil air mulai Jumaat.", "ms"),
+        ("Anda perlu mula makan ubat baru.", "ms"),
+        ("从星期五开始停吃去水药。", "zh"),
+        ("这个药要多吃一片。", "zh"),
+    ):
+        assert [f.rule for f in verify(text, language)] == [14] or 14 in [
+            f.rule for f in verify(text, language)
+        ], text
 
 
 __all__ = ["uuid"]

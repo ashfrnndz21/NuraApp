@@ -33,6 +33,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import Appointment, Provider
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
+from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import (
     LINE_LENGTH,
@@ -44,6 +45,7 @@ from app.reasoning.visits.models import (
     QuestionSource,
 )
 from app.reasoning.visits.strings import (
+    has_subject_words,
     language_for,
     medicine_words,
     red_flag_words,
@@ -166,7 +168,11 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
     doctor = {"doctor": visit.doctor}
     priority = GAP_PRIORITY[gap.kind]
     if gap.kind is GapKind.FACT_EXPIRED:
-        key, slots = "ask_fact_expired", {**doctor, "thing": subject_words(gap.subject, lang)}
+        # A subject with no words of his: the whole fallback line, never the code (F7).
+        if not has_subject_words(gap.subject):
+            key, slots = "ask_visit_purpose", doctor
+        else:
+            key, slots = "ask_fact_expired", {**doctor, "thing": subject_words(gap.subject, lang)}
     elif gap.kind is GapKind.READING_STALE:
         key, slots = "ask_reading_stale", doctor
     elif gap.kind is GapKind.MEDICINE_NO_PURPOSE:
@@ -189,7 +195,10 @@ def question_from_gap(gap: Gap, visit: Visit) -> Proposed:
             },
         )
     elif gap.kind is GapKind.OPEN_DISPUTE:
-        key, slots = "tell_dispute", {**doctor, "thing": subject_words(gap.subject, lang)}
+        if not has_subject_words(gap.subject):
+            key, slots = "ask_visit_purpose", doctor
+        else:
+            key, slots = "tell_dispute", {**doctor, "thing": subject_words(gap.subject, lang)}
     else:
         key, slots = "ask_visit_purpose", doctor
     return Proposed(key, slots, QuestionSource.GAP, gap.kind.value, gap.source_ids(), priority)
@@ -299,6 +308,17 @@ def _current(rows: Sequence[Question]) -> list[Question]:
     )
 
 
+@audited(Action.READ, Scope.VISITS, QUESTION)
+async def current_questions(
+    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+) -> Sequence[Question]:
+    """The current questions as they stand: the unsuperseded rows, by priority. A read and
+    nothing else — what `GET …/questions` answers with. The list is refreshed from the
+    record when the brief is built (`brief.build_brief`) and changed by a person."""
+    await require_visit(session, context=context, appointment_id=appointment_id)
+    return _current(await _rows(session, context=context, appointment_id=appointment_id))
+
+
 @audited(Action.WRITE, Scope.VISITS, QUESTION)
 async def questions_for(
     session: AsyncSession,
@@ -311,8 +331,10 @@ async def questions_for(
 
     A generated question already on the list stands; a new one is written, rendered through
     its template and the verifier; one whose source has gone is superseded. One a person
-    removed is not proposed again. The person's own questions stand as he wrote them.
+    removed is not proposed again. The person's own questions stand as he wrote them. A
+    write: only a key that may change the visits refreshes the list.
     """
+    may_change_visits(context)
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )
@@ -440,6 +462,7 @@ async def change_questions(
     is refused (`NotPlainEnough`) before anything is written or spent. An edit or a removal
     is a new row superseding the old, so the list is always the unsuperseded rows.
     """
+    may_change_visits(context)
     draft = await question_draft_for(
         session,
         context=context,
@@ -519,6 +542,7 @@ __all__ = [
     "Proposed",
     "Visit",
     "change_questions",
+    "current_questions",
     "patient_card",
     "propose_questions",
     "question_draft_for",

@@ -35,7 +35,9 @@ FLAG_KIND = _enum("flag_kind", "red_flag", "medicine_change_heard")
 QUESTION_SOURCE = _enum("question_source", "gap", "memo", "flag", "person")
 MEMO_KIND = _enum("memo_kind", "action", "ask", "bring", "tell")
 MEMO_SOURCE = _enum("memo_source", "visit", "conversation", "person")
-ITEM_KIND = _enum("summary_item_kind", "action", "medication_change", "follow_up", "fact_heard")
+ITEM_KIND = _enum(
+    "summary_item_kind", "action", "medication_change", "follow_up", "follow_up_who", "fact_heard"
+)
 ITEM_STATE = _enum("summary_item_state", "proposed", "confirmed", "rejected")
 
 
