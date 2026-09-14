@@ -257,6 +257,8 @@ export const zh = {
     declinedToday: "今天不会再给您看这类卡。",
     // @patient
     shared: "您的家人现在能看到这张卡。",
+    // @patient phrase
+    fromPublisher: "来自 {publisher}",
     // @patient
     cannotShare: "Nura 还不能把这张卡发给您的家人。",
     // @patient
@@ -864,6 +866,7 @@ export const zh = {
     ChallengeExpired: "这个验证码太旧了。",
     ChallengeLocked: "请要一个新的验证码，重新开始。",
     NoKey: "您不能再看这份文件了。",
+    AccountClosing: "Nura 已停止保存这些文件。",
     OutOfScope: "文件的这部分没有对您开放。",
     OutOfRegion: "这份文件保存在另一个国家。",
     NotTheirsToRead: "只有文件的主人可以看这个。",

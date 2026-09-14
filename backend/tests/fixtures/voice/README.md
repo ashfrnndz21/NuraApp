@@ -13,3 +13,9 @@ and asks him to say it again.
 | `tired-today` | `96fac11f71fa…` | 'I feel tired today' | 0.91 |
 | `dizzy-quite-a-lot` | `54ca8c2bbec8…` | 'dizzy, quite a lot, since this morning' | 0.9 |
 | `sakit-dada` | `023ff271d8b2…` | 'dada saya sakit' | 0.88 |
+| `pa-whatsapp-market` | `67b86fc47925…` | 'I walked to the market this morning. My knee felt fine.' | 0.9 |
+| `pa-whatsapp-fell` | `430e9cabf8ac…` | 'I fell in the bathroom this morning.' | 0.92 |
+
+The two `pa-whatsapp-*` notes are Pa's voice notes on WhatsApp (E11-01): the fixture provider serves
+the same placeholder for the media ids in `tests/fixtures/whatsapp/media.json`, and `pa-voice-mumbled`
+has no file here, so nothing is heard in it.

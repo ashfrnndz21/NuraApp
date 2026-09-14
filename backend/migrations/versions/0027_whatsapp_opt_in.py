@@ -1,7 +1,7 @@
-"""A person's own yes or no to Nura messaging them on WhatsApp about a profile (#143).
+"""A key holder's own answers at the key-accept step: WhatsApp, and the family's group (#143).
 
-Revision ID: 0026_whatsapp_opt_in
-Revises: 0025_account_closure
+Revision ID: 0027_whatsapp_opt_in
+Revises: 0026_account_closure
 Create Date: 2026-09-15
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0026_whatsapp_opt_in"
-down_revision = "0025_account_closure"
+revision = "0027_whatsapp_opt_in"
+down_revision = "0026_account_closure"
 branch_labels = None
 depends_on = None
 
@@ -28,6 +28,9 @@ def upgrade() -> None:
         ),
         sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         sa.Column("said_yes", sa.Boolean(), nullable=False),
+        sa.Column("joins_group", sa.Boolean(), nullable=False),
+        sa.Column("wording_version", sa.String(length=32), nullable=False),
+        sa.Column("language", sa.String(length=16), nullable=False),
         sa.Column("said_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("profile_id", "id", name="uq_whatsapp_opt_in_profile_id_id"),
     )

@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard, audited_read
 from app.audit.models import Action
+from app.db import utcnow
 from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.models import FeedItem
+from app.delivery.feed.rank import _visible_to, _without_photos_taken_back
 from app.delivery.voice import Voice, Voiced, voice_language, voiced
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
@@ -66,13 +68,19 @@ async def spoken_twin(
 
 async def one_card(session: AsyncSession, *, context: KeyContext, item_id: uuid.UUID) -> FeedItem:
     """One card by its id, under its own scope: what a push opens (#143). A card that is not
-    on this profile is `NoSuchItem`; one this key may not see is refused, on the trail."""
+    on this profile, has expired, or is not one this key's feed shows (its audience, a photo
+    taken back) is `NoSuchItem`; one outside this key's scope is refused, on the trail."""
     found = await audited_read(
-        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id,)
+        session,
+        FeedItem,
+        context,
+        Scope.PROFILE,
+        where=(FeedItem.id == item_id, FeedItem.expires_at > utcnow()),
     )
-    if not found:
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
+    if not visible:
         raise NoSuchItem(f"no card {item_id} on this profile")
-    item = found[0]
+    item = visible[0]
     async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
         context.require(item.scope)
     return item

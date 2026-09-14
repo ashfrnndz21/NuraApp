@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,10 +42,13 @@ from app.delivery.feed.sources import (
     usable_sources,
 )
 from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines
+from app.delivery.voice import Voice
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.reasoning.ranges import ReferenceRanges
 from app.state.models import Dimension
 from app.state.service import StateView
 
@@ -65,12 +69,20 @@ class NoTerms(Refusal):
 @dataclass(frozen=True, slots=True)
 class Engine:
     """The ports the feed composes from, as one deployment has them: the searcher and the
-    compressor (fixtures here; real adapters later), and the licensed drug registry
-    (`app.drugs`) the medicines module reads a line's plain name and count through."""
+    compressor (fixtures here; real adapters later), the licensed drug registry
+    (`app.drugs`) the medicines module reads a line's plain name and count through, and the
+    reference ranges a lab result is placed against for a story card (E09-01, E21-05) — None
+    where a deployment has not named them, and then no lab story is told."""
 
     searcher: Searcher
     compressor: Compressor
     registry: DrugRegistry
+    ranges: ReferenceRanges | None = None
+    voice: Voice | None = None
+    store: ObjectStore | None = None
+    """Where a card's spoken twin is said and kept the moment the card is made (E22-03): the
+    one voice port, and the region's object store. None, and the twin is said on its first
+    play instead (`app.delivery.feed.twin`)."""
 
 
 @audited(Action.WRITE, Scope.RECORDS, JOB_TARGET)
@@ -177,6 +189,11 @@ async def run_job(
         except SourceNotAllowlisted:
             rejected.append({"url": found.url, "because": "not_allowlisted"})
             continue
+        if not on_its_source(found.url, source.domain):
+            # The page a card links to is on the allowlisted site itself, over https, or the
+            # card is not made: a searcher cannot put another site's link on his card.
+            rejected.append({"url": found.url, "because": "not_on_its_source"})
+            continue
         compressed = engine.compressor.compress(found.text, code, _facts_for(state))
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
@@ -188,6 +205,10 @@ async def run_job(
         if key in existing:
             continue
         cite = {
+            # The page the card cites, for the card to show and link (E21-06): who published
+            # it, where, and the passage the lines came from.
+            "publisher": source.name,
+            "domain": source.domain,
             "url": found.url,
             "title": found.title,
             "published_at": found.published_at,
@@ -324,6 +345,14 @@ async def run_job(
     }
     await session.flush()
     return [*made, *questions]
+
+
+def on_its_source(url: str, domain: str) -> bool:
+    """Whether a page is on its source's site: https, and the host the domain or under it."""
+    page = urlparse(url)
+    host = (page.hostname or "").lower()
+    site = domain.strip().lower()
+    return page.scheme == "https" and bool(site) and (host == site or host.endswith("." + site))
 
 
 def _batches_on_record(state: StateView) -> set[str]:

@@ -274,6 +274,21 @@ class AccountClosing(Refusal):
     deleted. His undo, and the closing's own status, are the only doors left open to him."""
 
 
+async def only_the_owner_while_closing(session: AsyncSession, context: KeyContext) -> None:
+    """For a route resolved `while_closing` that only the owner may use while it stands: his
+    own record — every agreement, his trail — stays his to read in the window (PDPA access),
+    and every key is refused as it would be at the door, on the trail."""
+    if context.is_owner or await closing_since(session, profile_id=context.profile_id) is None:
+        return
+    profile = await session.get(Profile, context.profile_id)
+    closing = AccountClosing(f"profile {context.profile_id} is closing")
+    if profile is not None:
+        await _record_refused(
+            session, profile=profile, person_id=context.person_id, refusal=closing
+        )
+    raise closing
+
+
 async def closing_since(session: AsyncSession, *, profile_id: uuid.UUID) -> datetime | None:
     """When the owner closed this account, if that closing stands (not undone); else None."""
     from app.identity.closure_models import AccountClosure

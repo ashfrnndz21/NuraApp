@@ -67,18 +67,34 @@ async def test_the_send_door_asks_his_agreement_only_for_him(
         await _may_message(sg, context=h.owner, person=stranger)
 
 
-async def test_a_key_holder_says_yes_or_no_to_whatsapp_for_herself(deployment: Deployment) -> None:
+async def test_a_key_holder_answers_the_two_questions_for_herself(deployment: Deployment) -> None:
+    """The key-accept step: the two questions in her language, and her answers to exactly
+    those words, the newest standing. Words that are not today's are refused."""
     pa = await register_by_phone(deployment, "+6591430101", "Pa")
     profile_id = await own_profile(deployment, pa, language="en")
-    said = await deployment.client.post(
-        f"/profiles/{profile_id}/whatsapp-opt-in", json={"yes": True}, headers=bearer(pa["token"])
-    )
+    base, his = f"/profiles/{profile_id}/whatsapp-opt-in", bearer(pa["token"])
+    asked = await deployment.client.get(base, params={"language": "en"}, headers=his)
+    assert asked.status_code == 200, asked.text
+    shown = asked.json()
+    assert shown["messages_words"] == ["Nura may message you on WhatsApp."]
+    assert shown["group_words"] == [
+        "Do you want to join the family group on WhatsApp?",
+        "Everyone in it can see your number.",
+    ]
+    assert shown["messages"] is None and shown["group"] is None
+    body = {
+        "messages": True,
+        "group": False,
+        "wording_version": shown["wording_version"],
+        "language": "en",
+    }
+    said = await deployment.client.post(base, json=body, headers=his)
     assert said.status_code == 201, said.text
-    assert said.json()["said_yes"] is True
-    again = await deployment.client.post(
-        f"/profiles/{profile_id}/whatsapp-opt-in", json={"yes": False}, headers=bearer(pa["token"])
-    )
-    assert again.status_code == 201 and again.json()["said_yes"] is False
+    assert (said.json()["messages"], said.json()["group"]) == (True, False)
+    now = (await deployment.client.get(base, headers=his)).json()
+    assert (now["messages"], now["group"]) == (True, False)
+    stale = await deployment.client.post(base, json={**body, "wording_version": "0"}, headers=his)
+    assert stale.status_code >= 400 and stale.json()["refusal"] == "NotTheCurrentWording"
 
 
 async def test_a_push_opens_one_card_by_its_id_under_its_scope(deployment: Deployment) -> None:

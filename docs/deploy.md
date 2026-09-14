@@ -252,3 +252,5 @@ people signing in with two different test numbers see two different accounts.
   - the bucket and the platform are confirmed to keep data in Singapore
   - the platform's request logs are checked: where they are kept and for how long
   - the platform accepts a 48 MiB request, the largest recording of a visit
+
+**Closing an account and object versions (#143).** Erasing a closed account deletes every object under the profile's prefixes. If the region's bucket keeps object versions, those deletes leave the older versions behind. Either keep versioning off for the artefact bucket, or add a lifecycle rule that expires noncurrent versions (30 days, pending counsel: `docs/trust/account-closure.md`).

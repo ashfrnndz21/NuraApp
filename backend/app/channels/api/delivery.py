@@ -23,7 +23,15 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.channels.api.deps import Context, Db, SignedIn, current_login, providers_of, settings_of
+from app.channels.api.deps import (
+    ClosingContext,
+    Context,
+    Db,
+    SignedIn,
+    current_login,
+    providers_of,
+    settings_of,
+)
 from app.delivery.subscriptions import subscribe, unsubscribe
 from app.delivery.triggers.deliver import Sent, Via
 from app.delivery.triggers.engine import run_due
@@ -31,6 +39,7 @@ from app.delivery.triggers.ladder import acknowledge_flag
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, TriggerType
 from app.delivery.triggers.preferences import change, current, log
 from app.delivery.triggers.rules import Config
+from app.identity.closing import answerable_while_closing
 from app.settings import Settings
 
 router = APIRouter(tags=["delivery"])
@@ -211,8 +220,10 @@ async def deliveries(
 
 
 @router.post("/profiles/{profile_id}/ladders/{ladder_id}/acknowledge")
-async def acknowledge(ladder_id: uuid.UUID, context: Context, session: Db) -> LadderOut:
-    """Someone the flag's ladder reached says they have it; the ladder asks nobody else."""
+async def acknowledge(ladder_id: uuid.UUID, context: ClosingContext, session: Db) -> LadderOut:
+    """Someone the flag's ladder reached says they have it; the ladder asks nobody else. While
+    the owner's closing stands, still so for a flag raised before it (#143)."""
+    await answerable_while_closing(session, context=context, ladder_id=ladder_id)
     ladder = await acknowledge_flag(session, context=context, ladder_id=ladder_id)
     assert ladder is not None  # a named ladder that is not theirs is refused, not None
     return LadderOut.of(ladder)

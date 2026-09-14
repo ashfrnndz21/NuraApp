@@ -20,10 +20,11 @@ own scheduler in a deployment.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from collections.abc import Sequence
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from enum import Enum
 from typing import Any, Protocol
 
@@ -42,19 +43,23 @@ from app.consent.service import (
     grant_consent,
     revoke_consent,
 )
-from app.db import Base, ProfileScoped, as_utc, utcnow
-from app.delivery.triggers.models import PushSubscription
+from app.db import Base, ProfileScoped, as_utc, nested_unit_of_work, utcnow
+from app.delivery.strings import EMERGENCY_NUMBER
+from app.delivery.triggers.models import Ladder, PushSubscription
 from app.drafts import CloseDraft
 from app.errors import Refusal
 from app.identity.closure_models import AccountClosure, ErasureRecord
 from app.identity.models import Profile
-from app.ingestion.objects import ObjectStore, check_key
+from app.ingestion.objects import NotAStorageKey, ObjectStore, check_key
 from app.keys.confirm import consume_confirmation
-from app.keys.context import KeyContext
+from app.keys.context import AccountClosing, KeyContext, _record_refused, closing_since
 from app.keys.scopes import Scope
 from app.memory.models import Artifact
 from app.regions import REGION_TZ
+from app.safety.red_flags import Flag
 
+log = logging.getLogger(__name__)
+_UNDER_A_PROFILE = re.compile(r"^[a-z]+/([0-9a-f-]{36})/")
 TARGET = AccountClosure.__tablename__
 
 OBJECT_KINDS = (
@@ -93,6 +98,13 @@ def _delete_on(moment: datetime, days: int, context: KeyContext) -> date:
     return (moment + timedelta(days=days)).astimezone(REGION_TZ[context.region]).date()
 
 
+def _window_ends(delete_on: date, context: KeyContext) -> datetime:
+    """The first moment after `delete_on`, on his wall clock: "deleted after {day}" and
+    "until then" mean the whole of that day."""
+    tz = REGION_TZ[context.region]
+    return datetime.combine(delete_on + timedelta(days=1), time(0), tzinfo=tz).astimezone(UTC)
+
+
 async def closing_status(session: AsyncSession, *, context: KeyContext) -> AccountClosure | None:
     """The closing that stands, for its owner. Nobody else asks after it."""
     async with audited_guard(session, context, Action.READ, Scope.PROFILE, TARGET):
@@ -116,7 +128,8 @@ async def close_draft_for(
         if not context.is_owner:
             raise NotTheirsToClose("only the owner closes his account")
     delete_on = _delete_on(utcnow(), retention_days, context)
-    return CloseDraft(lines=closing_lines(language, delete_on), delete_on=delete_on.isoformat())
+    lines = closing_lines(language, delete_on, EMERGENCY_NUMBER[context.region.value])
+    return CloseDraft(lines=lines, delete_on=delete_on.isoformat())
 
 
 async def close_account(
@@ -145,7 +158,7 @@ async def close_account(
         Scope.PROFILE,
         requested_by_person_id=context.person_id,
         requested_at=moment,
-        delete_after=moment + timedelta(days=retention_days),
+        delete_after=_window_ends(_delete_on(moment, retention_days, context), context),
     )
     # Nura stops keeping his papers: the agreement is withdrawn, on the record.
     try:
@@ -220,6 +233,37 @@ async def undo_closure(
 _PREFIX = re.compile(r"^[a-z]+/[0-9a-f-]{36}/$")
 
 
+async def answerable_while_closing(
+    session: AsyncSession, *, context: KeyContext, ladder_id: uuid.UUID
+) -> None:
+    """While his closing stands, the one thing a key may still do is say it has a red flag
+    raised before the closing (the flag the engine still carries, #143): the ladder then asks
+    nobody else. Anything else is refused as it is at the door, on the trail."""
+    closing = await closing_since(session, profile_id=context.profile_id)
+    if closing is None:
+        return
+    ladder = await session.get(Ladder, ladder_id)
+    flag = (
+        None
+        if ladder is None or ladder.flag_id is None
+        else await session.get(Flag, ladder.flag_id)
+    )
+    if (
+        ladder is not None
+        and ladder.profile_id == context.profile_id
+        and flag is not None
+        and as_utc(flag.raised_at) <= as_utc(closing)
+    ):
+        return
+    profile = await session.get(Profile, context.profile_id)
+    refused = AccountClosing(f"profile {context.profile_id} is closing")
+    if profile is not None:
+        await _record_refused(
+            session, profile=profile, person_id=context.person_id, refusal=refused
+        )
+    raise refused
+
+
 class Eraser(Protocol):
     """Deletes one closed account's graph when its window has passed."""
 
@@ -281,8 +325,20 @@ class GraphEraser:
                 select(Artifact.storage_key).where(Artifact.profile_id == profile_id)
             )
         ).all()
+        unremovable = 0
         for key in sorted(set(keys)):
             if any(key.startswith(prefix) for prefix in prefixes):
+                continue
+            under = _UNDER_A_PROFILE.match(key)
+            if under is not None and under.group(1) != str(profile_id):
+                # Under another profile's own prefix: its bytes are that profile's to keep.
+                continue
+            try:
+                check_key(key)
+            except NotAStorageKey:
+                # Not a key the store could ever have kept: nothing to delete, and never a
+                # reason to hold up the rest of the erasure. Counted, so the DPO sees it.
+                unremovable += 1
                 continue
             shared = await session.scalar(
                 select(Artifact.id)
@@ -290,9 +346,11 @@ class GraphEraser:
                 .limit(1)
             )
             if shared is None:
-                await self.store.delete(check_key(key))
+                await self.store.delete(key)
                 objects += 1
         removed["objects"] = objects
+        if unremovable:
+            removed["unremovable_keys"] = unremovable
         region, requested_by, requested_at = (
             profile.region,
             closure.requested_by_person_id,
@@ -334,4 +392,14 @@ async def run_erasures(
             )
         )
     ).all()
-    return [await eraser.erase(session, closure) for closure in due]
+    erased: list[ErasureRecord] = []
+    for closure in due:
+        # Each closing in a savepoint of its own: one that fails stays due, is logged, and
+        # never holds up the others. Objects already deleted stay deleted; the next run
+        # deletes the rest.
+        try:
+            async with nested_unit_of_work(session):
+                erased.append(await eraser.erase(session, closure))
+        except Exception:
+            log.exception("erasure: closing %s failed and stays due", closure.id)
+    return erased

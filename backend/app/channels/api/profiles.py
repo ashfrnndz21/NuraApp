@@ -23,7 +23,14 @@ from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
-from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
+from app.channels.api.deps import (
+    ClosingContext,
+    Context,
+    CurrentPerson,
+    Db,
+    providers_of,
+    settings_of,
+)
 from app.channels.api.schemas import (
     WITHHELD_TARGET,
     AppointmentConfirmIn,
@@ -62,6 +69,7 @@ from app.channels.api.schemas import (
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
 )
+from app.channels.whatsapp.group import sync_group
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
@@ -91,7 +99,7 @@ from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
-from app.keys.context import resolve_key_context
+from app.keys.context import only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
@@ -444,6 +452,8 @@ async def grant(body: KeyGrant, request: Request, context: Context, session: Db)
         scopes=body.scopes,
         window=body.window,
     )
+    # The family's WhatsApp group is who reads the family thread: set again from the keys.
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return KeyOut.of(key)
 
 
@@ -458,17 +468,22 @@ async def keys(context: Context, session: Db) -> list[KeyOut]:
 
 
 @router.delete("/{profile_id}/keys/{key_id}")
-async def revoke(key_id: uuid.UUID, context: Context, session: Db) -> KeyOut:
-    return KeyOut.of(await revoke_key(session, context=context, key_id=key_id))
+async def revoke(key_id: uuid.UUID, request: Request, context: Context, session: Db) -> KeyOut:
+    closed = await revoke_key(session, context=context, key_id=key_id)
+    # A key closed is a person out of the family's WhatsApp group, now (E11-01).
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return KeyOut.of(closed)
 
 
 # --- consent -----------------------------------------------------------------------------
 
 
 @router.get("/{profile_id}/consents")
-async def consents(context: Context, session: Db) -> list[ConsentOut]:
+async def consents(context: ClosingContext, session: Db) -> list[ConsentOut]:
     """Every agreement ever given on this profile, withdrawn ones included, oldest first.
-    Read under the family scope: the owner's and his chief's."""
+    Read under the family scope: the owner's and his chief's. While his account is closing
+    (#143) it stays his to read, and nobody else's."""
+    await only_the_owner_while_closing(session, context)
     return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
 
 
@@ -545,7 +560,9 @@ async def preview_letting_in(
 
 
 @router.post("/{profile_id}/consents/whatsapp", status_code=status.HTTP_201_CREATED)
-async def agree_to_whatsapp(body: WhatsAppConsentIn, context: Context, session: Db) -> ConsentOut:
+async def agree_to_whatsapp(
+    body: WhatsAppConsentIn, request: Request, context: Context, session: Db
+) -> ConsentOut:
     """The owner agrees to WhatsApp: the morning card, the thread, every send (E19).
 
     Profile-wide and on his own basis; a chief acting for him needs a recorded proxy basis,
@@ -561,6 +578,8 @@ async def agree_to_whatsapp(body: WhatsAppConsentIn, context: Context, session: 
         language=body.language,
         text_version=body.wording_version,
     )
+    # His agreement in force: he is in the family's group again, now (#143).
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return ConsentOut.of(consent)
 
 

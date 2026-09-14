@@ -5,7 +5,8 @@ holder's own yes to WhatsApp.
     POST /profiles/{id}/closure           close it, on his yes to exactly those words
     GET  /profiles/{id}/closure           the closing and its day (the owner, while closing)
     POST /profiles/{id}/closure/undo      undo it within the window (the owner, while closing)
-    POST /profiles/{id}/whatsapp-opt-in   his own yes or no to WhatsApp (any key holder)
+    GET  /profiles/{id}/whatsapp-opt-in   the key-accept questions, and his own answers
+    POST /profiles/{id}/whatsapp-opt-in   his own yes or no: WhatsApp, and the family's group
     POST /dev/run-erasures                the erasure job, now (a dev run only)
 
 Stopping WhatsApp itself is the one withdraw route W6 (#137) serves; this PR only makes the
@@ -21,8 +22,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.channels.api.deps import ClosingContext, Context, Db, providers_of, settings_of
-from app.channels.whatsapp.opt_in import record_opt_in
+from app.channels.whatsapp.group import sync_group
+from app.channels.whatsapp.opt_in import answers_of, record_opt_in
 from app.consent.models import ConsentChannel
+from app.consent.opt_in_words import OPT_IN_VERSION, opt_in_questions
 from app.consent.service import RecordConsent
 from app.db import as_utc
 from app.identity.closing import (
@@ -74,12 +77,22 @@ class ClosingOut(BaseModel):
 
 
 class OptInIn(BaseModel):
-    yes: bool
+    """His two answers, to the words he was shown (`GET`): WhatsApp, and the family's group."""
+
+    messages: bool
+    group: bool
+    wording_version: str = Field(min_length=1, max_length=32)
+    language: str = Field(min_length=2, max_length=16)
 
 
 class OptInOut(BaseModel):
-    said_yes: bool
-    said_at: datetime
+    wording_version: str
+    messages_words: list[str]
+    group_words: list[str]
+    messages: bool | None = None
+    """His newest answer to the first question; none before he has answered."""
+    group: bool | None = None
+    said_at: datetime | None = None
 
 
 class ErasedOut(BaseModel):
@@ -101,7 +114,9 @@ async def closure_preview(
 
 
 @router.post("/profiles/{profile_id}/closure", status_code=status.HTTP_201_CREATED)
-async def closure_close(body: CloseIn, request: Request, context: Context, session: Db) -> ClosingOut:
+async def closure_close(
+    body: CloseIn, request: Request, context: Context, session: Db
+) -> ClosingOut:
     """Close it on his yes (`POST /confirmations`, subject `close_account`): every key and his
     own reads suspended at once, keeping his papers withdrawn, every push revoked, nothing
     more sent about him but a red flag raised before now."""
@@ -112,6 +127,8 @@ async def closure_close(body: CloseIn, request: Request, context: Context, sessi
         language=body.language,
         retention_days=settings_of(request).account_retention_days,
     )
+    # The family's WhatsApp group is emptied now, and nothing is mirrored while it stands.
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return ClosingOut.of(closure)
 
 
@@ -122,7 +139,9 @@ async def closure_now(context: ClosingContext, session: Db) -> ClosingOut:
 
 
 @router.post("/profiles/{profile_id}/closure/undo")
-async def closure_undo(body: UndoIn, context: ClosingContext, session: Db) -> ClosingOut:
+async def closure_undo(
+    body: UndoIn, request: Request, context: ClosingContext, session: Db
+) -> ClosingOut:
     """His yes within the window: today's words for keeping his papers, and it is as it was."""
     await undo_closure(
         session,
@@ -133,15 +152,50 @@ async def closure_undo(body: UndoIn, context: ClosingContext, session: Db) -> Cl
             captured_via=body.captured_via,
         ),
     )
+    # Everyone who said yes to the family's group is in it again, now.
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return ClosingOut(closing=False)
 
 
+def _opt_in_out(language: str, row: object | None) -> OptInOut:
+    messages_words, group_words = opt_in_questions(language)
+    out = OptInOut(
+        wording_version=OPT_IN_VERSION,
+        messages_words=list(messages_words),
+        group_words=list(group_words),
+    )
+    if row is not None:
+        out.messages = row.said_yes  # type: ignore[attr-defined]
+        out.group = row.joins_group  # type: ignore[attr-defined]
+        out.said_at = as_utc(row.said_at)  # type: ignore[attr-defined]
+    return out
+
+
+@router.get("/profiles/{profile_id}/whatsapp-opt-in")
+async def whatsapp_opt_in_now(context: Context, session: Db, language: str = "en") -> OptInOut:
+    """The two questions at the key-accept step, in `language`, and the caller's own newest
+    answers to them: none before he has answered."""
+    return _opt_in_out(language, await answers_of(session, context=context))
+
+
 @router.post("/profiles/{profile_id}/whatsapp-opt-in", status_code=status.HTTP_201_CREATED)
-async def whatsapp_opt_in(body: OptInIn, context: Context, session: Db) -> OptInOut:
-    """The caller's own answer to "Nura may message you on WhatsApp", kept going forward. It
-    decides nothing yet, and never holds back a red-flag notice."""
-    row = await record_opt_in(session, context=context, said_yes=body.yes)
-    return OptInOut(said_yes=row.said_yes, said_at=as_utc(row.said_at))
+async def whatsapp_opt_in(
+    body: OptInIn, request: Request, context: Context, session: Db
+) -> OptInOut:
+    """The caller's own answers at the key-accept step, to today's words. His yes to the
+    family's group puts him in it now, and his no takes him out now; nobody but the patient
+    is in it without it. The WhatsApp answer decides nothing yet, and never holds back a
+    red-flag notice."""
+    row = await record_opt_in(
+        session,
+        context=context,
+        messages=body.messages,
+        joins_group=body.group,
+        wording_version=body.wording_version,
+        language=body.language,
+    )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return _opt_in_out(body.language, row)
 
 
 @router.post("/dev/run-erasures")

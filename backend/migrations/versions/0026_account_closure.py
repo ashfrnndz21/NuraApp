@@ -4,8 +4,8 @@
 it outlives the profile it records, keeping the consent rows as they stood and the one line
 that says the graph was erased (`docs/trust/pdpa-data-map.md` §4).
 
-Revision ID: 0025_account_closure
-Revises: 0024_push_subscription
+Revision ID: 0026_account_closure
+Revises: 0025_family_story
 Create Date: 2026-09-15
 """
 
@@ -14,8 +14,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0025_account_closure"
-down_revision = "0024_push_subscription"
+revision = "0026_account_closure"
+down_revision = "0025_family_story"
 branch_labels = None
 depends_on = None
 
@@ -47,9 +47,7 @@ def upgrade() -> None:
         sa.Column(
             "region", sa.Enum("SG", "MY", name="region", native_enum=False, length=32), nullable=False
         ),
-        sa.Column(
-            "requested_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False
-        ),
+        sa.Column("requested_by_person_id", sa.Uuid(), nullable=False),
         sa.Column("requested_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("erased_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("consents", sa.JSON(), nullable=False),

@@ -19,7 +19,7 @@ from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, ForeignKey, String, Time
+from sqlalchemy import JSON, Boolean, CheckConstraint, ForeignKey, String, Time, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
@@ -79,6 +79,34 @@ class ThreadMessage(ProfileScoped, Base):
     @property
     def is_card(self) -> bool:
         return self.card_kind is not None
+
+
+class ThreadPhoto(ProfileScoped, Base):
+    """A photo one of the family shared in the thread (E12-02), with the message it came with.
+
+    The photo is an artefact written under the family scope — the family's, like the words
+    of the thread, never one of his papers: nothing is read off it, and a key that does not
+    hold the family's part does not read it. `on_his_feed` is the poster's own yes, asked when
+    the photo is shared, to its being one of his story cards (E21-05); without it the photo
+    stays in the thread only. `withdrawn_at` is the poster taking the photo back: from then it
+    is not shown, in the thread or on his feed, to anyone. Written once; only the taking back
+    is ever set."""
+
+    __tablename__ = "thread_photo"
+    __table_args__ = (
+        _row_of_profile("thread_photo"),
+        _tied_to_profile("thread_photo", "message_id", "thread_message"),
+        _tied_to_profile("thread_photo", "artifact_id", "artifact"),
+        UniqueConstraint("message_id", name="uq_thread_photo_message"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("thread_message.id"), index=True)
+    artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifact.id"))
+    author_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    on_his_feed: Mapped[bool] = mapped_column(Boolean)
+    posted_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    withdrawn_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 class RosterSlot(ProfileScoped, Base):
@@ -232,6 +260,8 @@ class Document(ProfileScoped, Base):
 
 # What was said was said; a card names the State it named; a push is what was previewed.
 frozen(ThreadMessage)
+# A shared photo is what was shared; the one who shared it may only take it back.
+frozen(ThreadPhoto, except_for=frozenset({"withdrawn_at"}))
 frozen(ScheduledPush)
 frozen(Document)
 # A slot takes its ending; a task takes its close, by the doer, through the service only.

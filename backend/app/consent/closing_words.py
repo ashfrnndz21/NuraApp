@@ -15,29 +15,36 @@ from app.medicines.strings import say_date
 CLOSING: Mapping[str, tuple[str, ...]] = {
     "en": (
         "Nura will stop keeping your papers.",
+        "Nobody can open them from now on, not even you.",
+        "Nura will not remind you about your medicines.",
         "Your family will not be told when you are unwell.",
-        "Nobody can open your papers from now on.",
-        "Your papers will be deleted on {day}.",
+        "If you are unwell, call {emergency_number}.",
+        "Your papers will be deleted after {day}.",
         "Until then, you can change your mind.",
     ),
     "ms": (
         "Nura akan berhenti menyimpan surat-surat anda.",
+        "Tiada sesiapa boleh bukanya mulai sekarang, termasuk anda.",
+        "Nura tidak akan ingatkan anda tentang ubat anda.",
         "Keluarga anda tidak akan diberitahu apabila anda tidak sihat.",
-        "Tiada sesiapa boleh buka surat-surat anda mulai sekarang.",
-        "Surat-surat anda akan dipadam pada {day}.",
+        "Jika anda tidak sihat, telefon {emergency_number}.",
+        "Surat-surat anda akan dipadam selepas {day}.",
         "Sebelum itu, anda boleh ubah fikiran.",
     ),
     "zh": (
         "Nura 会停止保存您的文件。",
+        "从现在起，谁都不能打开，包括您自己。",
+        "Nura 不会再提醒您用药。",
         "您不舒服时，不会再通知您的家人。",
-        "从现在起，谁都不能打开您的文件。",
-        "您的文件会在{day}删除。",
+        "如果您不舒服，请拨打 {emergency_number}。",
+        "您的文件会在{day}之后删除。",
         "在那之前，您可以改变主意。",
     ),
 }
-"""What stops, what is no longer told, and the day his papers go, in that order."""
+"""What stops, who can no longer open them, who to call, and the day his papers go."""
 
 
-def closing_lines(language: str | None, delete_on: date) -> tuple[str, ...]:
+def closing_lines(language: str | None, delete_on: date, emergency_number: str) -> tuple[str, ...]:
     code = language_of(language)
-    return tuple(line.format(day=say_date(delete_on, code)) for line in CLOSING[code])
+    day = say_date(delete_on, code)
+    return tuple(line.format(day=day, emergency_number=emergency_number) for line in CLOSING[code])

@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read
 from app.audit.models import Channel
+from app.channels.whatsapp.group import sync_group
 from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_card, send_morning
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.db import as_utc, utcnow
@@ -65,6 +66,7 @@ from app.family.models import PushChannel, ScheduledPush
 from app.identity.models import Person
 from app.ingestion.models import ReviewCard
 from app.keys.context import closing_since
+from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Dose, Frequency
 from app.medicines.service import LineView, active_lines
@@ -129,6 +131,7 @@ async def run_due(
     await _papers(run)
     await _family_messages(run)
     await _nudges(run)
+    await _family_group(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
 
@@ -510,6 +513,33 @@ async def _family_messages(run: Run) -> None:
             run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say, channels=channels)
         )
 
+
+
+GROUP_SWEEP = timedelta(minutes=15)
+"""How far back a run looks for a key that lapsed: the engine runs every five minutes, so a
+lapsed key is caught by the next run, and a missed run or two by the one after."""
+
+
+async def _family_group(run: Run) -> None:
+    """The family's WhatsApp group follows the keys (E11-01): a key that lapsed since the
+    engine last ran is a person out of the group now, before anyone posts there again. A key
+    closed by hand, an agreement withdrawn and "only me" set the group where they happen."""
+    if not run.acting.allows(Scope.FAMILY):
+        return
+    lapsed = await audited_read(
+        run.session,
+        Key,
+        run.acting,
+        Scope.FAMILY,
+        where=(
+            Key.expires_at.is_not(None),
+            Key.expires_at > run.at - GROUP_SWEEP,
+            Key.expires_at <= run.at,
+        ),
+        channel=Channel.SYSTEM,
+    )
+    if lapsed:
+        await sync_group(run.session, context=run.acting, provider=run.via.providers.whatsapp)
 
 
 async def _nudges(run: Run) -> None:

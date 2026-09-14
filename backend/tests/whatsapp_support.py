@@ -16,8 +16,10 @@ from app.channels.api.deps import Providers
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.config import BusinessNumber, business_number_for
 from app.channels.whatsapp.inbound import Handled, handle_inbound
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.channels.whatsapp.provider import DevInbound, FixtureProvider
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import grant_consent
 from app.db import utcnow
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
@@ -118,6 +120,7 @@ async def family(
     whatsapp_consent: bool = True,
     mei_scopes: frozenset[Scope] | None = None,
     mei_role: KeyRole = KeyRole.CHIEF,
+    group_yes: bool = True,
 ) -> Family:
     settings, providers = deployment(tmp_path)
     pa = await register_person(
@@ -143,6 +146,16 @@ async def family(
             purpose=ConsentPurpose.WHATSAPP,
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.OWNER,
+            language="en",
+        )
+    if group_yes:
+        # Mei's own answers at the key-accept step (#143): WhatsApp, and the family's group.
+        await record_opt_in(
+            session,
+            context=chief,
+            messages=True,
+            joins_group=True,
+            wording_version=OPT_IN_VERSION,
             language="en",
         )
     return Family(

@@ -52,7 +52,9 @@ class ErasureRecord(Base):
     profile_id: Mapped[uuid.UUID] = mapped_column(index=True)
     """The erased profile's id, as a plain value: its row is gone."""
     region: Mapped[Region] = mapped_column(enum_column(Region, "region"))
-    requested_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    requested_by_person_id: Mapped[uuid.UUID] = mapped_column()
+    """Who asked, as a plain reference: no foreign key, so a later request to delete his
+    sign-in account is not held up by the record that his papers were erased."""
     requested_at: Mapped[datetime] = mapped_column()
     erased_at: Mapped[datetime] = mapped_column(default=utcnow)
     consents: Mapped[list[dict[str, Any]]] = mapped_column(JSON)

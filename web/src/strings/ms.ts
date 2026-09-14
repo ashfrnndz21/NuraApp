@@ -257,6 +257,8 @@ export const ms = {
     declinedToday: "Anda tidak akan lihat kad seperti ini lagi hari ini.",
     // @patient
     shared: "Keluarga anda boleh lihat kad ini sekarang.",
+    // @patient phrase
+    fromPublisher: "Daripada {publisher}",
     // @patient
     cannotShare: "Nura belum boleh hantar kad ini kepada keluarga anda.",
     // @patient
@@ -864,6 +866,7 @@ export const ms = {
     ChallengeExpired: "Kod itu sudah terlalu lama.",
     ChallengeLocked: "Minta kod baharu dan mula semula.",
     NoKey: "Anda tidak boleh melihat surat-surat ini lagi.",
+    AccountClosing: "Nura sudah berhenti menyimpan surat-surat ini.",
     OutOfScope: "Bahagian surat-surat ini tidak dibuka untuk anda.",
     OutOfRegion: "Surat-surat ini disimpan di negara lain.",
     NotTheirsToRead: "Hanya pemilik boleh melihat ini.",

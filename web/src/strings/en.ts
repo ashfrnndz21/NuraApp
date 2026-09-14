@@ -257,6 +257,8 @@ export const en = {
     declinedToday: "You will not see this kind of card again today.",
     // @patient
     shared: "Your family can see this card now.",
+    // @patient phrase
+    fromPublisher: "From {publisher}",
     // @patient
     cannotShare: "Nura cannot send this card to your family yet.",
     // @patient
@@ -868,6 +870,7 @@ export const en = {
     ChallengeExpired: "That code is too old now.",
     ChallengeLocked: "Ask for a new code and start again.",
     NoKey: "You cannot see these papers any more.",
+    AccountClosing: "Nura has stopped keeping these papers.",
     OutOfScope: "This part of the papers is not open to you.",
     OutOfRegion: "These papers are kept in another country.",
     NotTheirsToRead: "Only the owner can see this.",

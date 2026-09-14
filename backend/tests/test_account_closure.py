@@ -16,11 +16,13 @@ import re
 import uuid
 from datetime import timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import tests.delivery_support as ds
 from app.clock import FrozenClock
 from app.consent.models import Consent, ConsentChannel, ConsentPurpose
 from app.consent.service import RecordConsent, active_consents
@@ -28,12 +30,13 @@ from app.consent.texts import current_version
 from app.db import as_utc, utcnow
 from app.delivery.push import b64url
 from app.delivery.subscriptions import subscribe
-from app.delivery.triggers.models import DeliveryOutcome, PushSubscription, TriggerType
+from app.delivery.triggers.models import DeliveryOutcome, Ladder, PushSubscription, TriggerType
 from app.identity.closing import (
     OBJECT_KINDS,
     GraphEraser,
     NotTheirsToClose,
     TooLateToUndo,
+    answerable_while_closing,
     close_account,
     close_draft_for,
     profile_tables,
@@ -41,6 +44,7 @@ from app.identity.closing import (
     undo_closure,
 )
 from app.identity.closure_models import AccountClosure, ErasureRecord
+from app.identity.doors import doors_for
 from app.identity.models import LoginSession, Person, Profile
 from app.ingestion.objects import LocalObjectStore
 from app.keys.confirm import confirm
@@ -110,7 +114,14 @@ async def test_closing_stops_every_delivery_and_every_key_at_once(
     before = await _run(sg, h, clock, at(10))
     assert _rows(before, TriggerType.REORDER)
     closure = await _close(sg, h)
-    assert as_utc(closure.delete_after) - as_utc(closure.requested_at) == timedelta(days=DAYS)
+    # The window runs to the end of the day his papers are said to go, on his wall clock.
+    ends = as_utc(closure.delete_after).astimezone(ZoneInfo("Asia/Singapore"))
+    assert (ends.hour, ends.minute) == (0, 0)
+    assert (
+        timedelta(days=DAYS)
+        <= as_utc(closure.delete_after) - as_utc(closure.requested_at)
+        <= timedelta(days=DAYS + 1)
+    )
     # At once: nobody opens his profile — not Mei, not Siti, not Pa himself.
     for person in (h.pa, h.mei, h.siti):
         assert not await _opens(sg, h, person), person.display_name
@@ -224,6 +235,22 @@ async def test_after_the_window_nothing_of_his_remains_but_the_record_of_it(
         )
     )
     await store.put("evidence/someone-elses.pdf", b"not his")
+    other = uuid.uuid4()
+    await store.put(f"photos/{other}/theirs", b"another profile's bytes")
+    for key in (f"photos/{other}/theirs", "Not A Key!"):
+        sg.add(
+            Artifact(
+                profile_id=profile_id,
+                kind=ArtifactKind.PDF,
+                storage_key=key,
+                content_type="application/pdf",
+                sha256="1" * 64,
+                captured_at=utcnow(),
+                source_channel=SourceChannel.APP,
+                region=Region.SG,
+                written_scope=Scope.RECORDS,
+            )
+        )
     await sg.flush()
     closure = await _close(sg, h)
     too_early = await run_erasures(
@@ -257,11 +284,14 @@ async def test_after_the_window_nothing_of_his_remains_but_the_record_of_it(
     assert [p for kind in OBJECT_KINDS for p in (root / kind / str(profile_id)).rglob("*")] == []
     assert not (root / "evidence" / "lpa-of-pa.pdf").exists()
     assert (root / "evidence" / "someone-elses.pdf").exists()
+    # Under another profile's own prefix: its bytes stay. A key no store keeps: counted.
+    assert (root / "photos" / str(other) / "theirs").exists()
     # What stays: the one record, with every consent row archived, and his sign-in account.
     [kept] = (await sg.execute(select(ErasureRecord))).scalars().all()
     assert kept.id == erased.id and kept.profile_id == profile_id
     assert {row["purpose"] for row in kept.consents} >= {"hold_health_record", "share_with_family"}
     assert all(row["profile_id"] == str(profile_id) for row in kept.consents)
+    assert kept.removed["unremovable_keys"] == 1
     assert kept.removed["objects"] >= 3 and kept.removed.get("delivery", 0) > 0
     assert (await sg.execute(select(Consent))).scalars().all() == []
     assert await sg.get(Person, h.pa.id) is not None
@@ -306,8 +336,10 @@ async def test_closing_and_undoing_over_http(deployment: Deployment) -> None:
     assert shown.status_code == 200, shown.text
     lines = shown.json()["lines"]
     assert lines[0] == "Nura will stop keeping your papers."
-    assert lines[1] == "Your family will not be told when you are unwell."
-    assert re.match(r"Your papers will be deleted on \w+day \d+ \w+\.", lines[3])
+    assert lines[1] == "Nobody can open them from now on, not even you."
+    assert lines[2] == "Nura will not remind you about your medicines."
+    assert lines[4] == "If you are unwell, call 995."
+    assert re.match(r"Your papers will be deleted after \w+day \d+ \w+\.", lines[5])
     yes = await deployment.client.post(
         f"{base}/confirmations", json={"subject": "close_account", "language": "en"}, headers=his
     )
@@ -323,6 +355,12 @@ async def test_closing_and_undoing_over_http(deployment: Deployment) -> None:
     assert refused.status_code == 403 and refused.json() == {"refusal": "AccountClosing"}
     status = await deployment.client.get(f"{base}/closure", headers=his)
     assert status.status_code == 200 and status.json()["closing"] is True
+    # His own record stays his to read in the window: every agreement, and his trail.
+    agreed = await deployment.client.get(f"{base}/consents", headers=his)
+    assert agreed.status_code == 200 and any(
+        c["purpose"] == "hold_health_record" for c in agreed.json()
+    )
+    assert (await deployment.client.get(f"{base}/trail", headers=his)).status_code == 200
     undone = await deployment.client.post(
         f"{base}/closure/undo",
         json={
@@ -343,3 +381,77 @@ async def test_closing_and_undoing_over_http(deployment: Deployment) -> None:
         headers=his,
     )
     assert wrong.status_code == 400 and wrong.json() == {"refusal": "NotWhatWasConfirmed"}
+
+
+async def test_his_familys_doors_still_open_and_his_closing_one_is_listed_by_id(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    h = await home(sg, tmp_path)
+    await _close(sg, h)
+    for person in (h.mei, h.pa):
+        doors = await doors_for(sg, region=Region.SG, person=person)
+        assert doors.closing == [h.owner.profile_id], person.display_name
+        assert doors.own is None and doors.invited == [] and doors.stewarding == []
+
+
+async def test_a_yes_on_whatsapp_still_answers_a_flag_raised_before_the_closing(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Pa falls at 09:00 and Mei is told; he closes a minute later; her "yes" at 09:02 is
+    that flag's answer, so at 09:06 the ladder asks nobody else."""
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    await h.inbound(sg, PA, "I fell in the bathroom")
+    clock.set(at(9, 1))
+    await _close(sg, h)
+    clock.set(at(9, 2))
+    said = await h.inbound(sg, MEI, "Yes")
+    assert said.outcome == "flag_acknowledged"
+    assert h.sent_to(h.mei)[-1].startswith("Thank you, you have it now.")
+    assert (await _run(sg, h, clock, at(9, 6))).sent == ()
+
+
+async def test_the_ack_route_answers_only_a_flag_raised_before_the_closing(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    handled = await h.inbound(sg, PA, "I fell in the bathroom")
+    ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id == handled.flag_id))).one()
+    clock.set(at(9, 1))
+    await _close(sg, h)
+    mei = await resolve_key_context(
+        sg, region=Region.SG, person_id=h.mei.id, profile_id=h.owner.profile_id, while_closing=True
+    )
+    await answerable_while_closing(sg, context=mei, ladder_id=ladder.id)
+    with pytest.raises(AccountClosing):
+        await answerable_while_closing(sg, context=mei, ladder_id=uuid.uuid4())
+
+
+async def test_a_red_word_about_a_closing_family_is_never_raised_on_another(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Mei holds keys to Pa's papers and to Ma's. She last wrote about Pa; Pa closes his
+    account; her "he fell" gets the fixed line with who to call, and nothing is raised on Ma."""
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    await h.inbound(sg, MEI, "Pa had a good breakfast")
+    ma = await ds.register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6593330051", language="en"
+    )
+    ma_profile = await ds.create_own_profile(
+        sg, region=Region.SG, owner=ma, consent=ds.OPENING_CONSENT, language="en"
+    )
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    everything = frozenset(ds.Scope) - {ds.Scope.PROFILE}
+    await ds.agree_to_family_sharing(
+        sg, ma_owner, h.mei, scopes=everything, relationship="daughter"
+    )
+    await ds.grant_key(sg, context=ma_owner, holder=h.mei, role=ds.KeyRole.CHIEF, scopes=everything)
+    clock.set(at(9, 5))
+    await _close(sg, h)
+    said = await h.inbound(sg, MEI, "he fell in the bathroom")
+    assert said.outcome == "closing" and said.flag_id is None
+    assert (await sg.execute(select(Flag))).scalars().all() == []

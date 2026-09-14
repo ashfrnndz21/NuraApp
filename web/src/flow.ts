@@ -60,18 +60,22 @@ export async function afterSignIn(): Promise<void> {
     await chooseProfile(still);
     return landOn(opening);
   }
+  const closing = doors.closing ?? [];
   if (remembered && !still) {
-    // The key to the remembered papers was closed since: nothing of them stays on the phone,
-    // and he is told why he is back at the doors.
+    // The key to the remembered papers was closed since, or their owner is closing his
+    // account (#143): nothing of them stays on the phone, and he is told why he is back at
+    // the doors.
     await clearProfileData(remembered.profile_id);
     forgetFeed();
     await chooseProfile(null);
-    return go({ name: "doors", doors, refusal: "NoKey" });
+    const why = closing.includes(remembered.profile_id) ? "AccountClosing" : "NoKey";
+    return go({ name: "doors", doors, refusal: why });
   }
   if (doors.own && known.length === 1 && doors.claimable.length === 0) {
     await chooseProfile(doors.own);
     return landOn(opening);
   }
+  if (known.length === 0 && closing.length > 0) return go({ name: "doors", doors, refusal: "AccountClosing" });
   go({ name: "doors", doors });
 }
 

@@ -90,6 +90,7 @@ JSON_UPLOADS: tuple[tuple[str, Cap], ...] = (
     (rf"{_PROFILE}/imports", Cap(base64_body(MAX_PDF_BYTES), PdfTooLarge)),
     (rf"{_PROFILE}/events/[^/]+/notes", Cap(base64_body(notes.MAX_VOICE_BYTES), NoteTooLarge)),
     (rf"{_PROFILE}/documents", Cap(base64_body(MAX_PHOTO_BYTES), DocumentTooLarge)),
+    (rf"{_PROFILE}/thread/photos", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
     (rf"{_PROFILE}/not-feeling-well", Cap(base64_body(voice.MAX_VOICE_BYTES), VoiceNoteTooLong)),
     (rf"{_PROFILE}/symptoms", Cap(base64_body(voice.MAX_VOICE_BYTES), VoiceNoteTooLong)),
     (
