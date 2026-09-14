@@ -44,7 +44,7 @@ from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.models import LineStatus, MedicationLine
-from app.memory.episodic import require_artifact, store_artifact
+from app.memory.episodic import require_artifact, row_is_there, store_artifact
 from app.memory.models import (
     Appointment,
     AppointmentStatus,
@@ -426,8 +426,9 @@ async def store_transcript(
     async def keep(again: AsyncSession) -> None:
         # Only if the rollback took it: a keeper registered by an earlier, successful unit
         # of work on the same session finds the row still there and does nothing.
-        if await again.get(Artifact, artifact.id) is None:
-            await audited_write(again, Artifact, context, Scope.RECORDS, **kept)
+        if not await row_is_there(again, Artifact, artifact.id):
+            # Under the scope the transcript was kept under: a consult is the visits'.
+            await audited_write(again, Artifact, context, artifact.written_scope, **kept)
 
     keep_on_refusal(session, keep)
     return artifact

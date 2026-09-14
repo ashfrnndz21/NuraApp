@@ -990,6 +990,9 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
         captured_at=SEPT_3,
         source_channel=SourceChannel.CLINIC,
         region=Region.MY,
+        # Even a row that entered out of band says the scope it sits under: the table
+        # refuses one that does not.
+        written_scope=Scope.RECORDS,
     )
     sg.add(astray)
     await sg.flush()
@@ -1024,6 +1027,7 @@ async def test_an_artefact_that_is_held_in_another_region_is_refused_on_read(
         occurred_at=SEPT_3,
         source_channel=SourceChannel.CLINIC,
         artifact_id=astray.id,
+        written_scope=Scope.READINGS,
     )
     stray_fact = Fact(
         profile_id=owner.profile_id,
