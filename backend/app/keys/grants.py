@@ -94,9 +94,15 @@ async def grant_key(
     return key
 
 
-async def list_keys(session: AsyncSession, *, context: KeyContext) -> Sequence[Key]:
-    """Every key ever cut on this profile, so the owner can read who holds what."""
-    return await audited_read(session, Key, context, Scope.FAMILY)
+async def list_keys(
+    session: AsyncSession, *, context: KeyContext, now: datetime | None = None
+) -> Sequence[Key]:
+    """Every key ever cut on this profile, so the owner can read who holds what.
+
+    `now` stamps the line in the trail, so a read done as part of something else is written
+    down at the moment that something else happened rather than at wall-clock time.
+    """
+    return await audited_read(session, Key, context, Scope.FAMILY, now=now)
 
 
 async def revoke_key(

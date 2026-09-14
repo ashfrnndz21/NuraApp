@@ -25,6 +25,7 @@ from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.state.models import StateSnapshot
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
@@ -39,6 +40,7 @@ TABLES: tuple[Table, ...] = (
     Episode.__table__,
     Provider.__table__,
     Appointment.__table__,
+    StateSnapshot.__table__,
 )
 
 
