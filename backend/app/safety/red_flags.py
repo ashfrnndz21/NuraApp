@@ -56,7 +56,15 @@ from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 
 class Feeling(StrEnum):
-    """The words on the feeling cloud. The first nine are the red flags."""
+    """The words on the feeling cloud. The first nine are the red flags.
+
+    The rest are everyday words: the base set every cloud carries (tired, pain, dizzy, short
+    of breath, low, worried, poor sleep, and "Fine today"), and the words State adds when a
+    medicine's monograph or a discharge makes them matter (E17-01,
+    `app.reasoning.feelings.words`). None of those is red by itself; a word with a red
+    variant — short of breath, swollen ankles, a headache — asks the one follow-up that
+    tells them apart, and a yes goes to the red word here.
+    """
 
     FALL = "fall"
     CHEST_TIGHTNESS = "chest_tightness"
@@ -73,6 +81,13 @@ class Feeling(StrEnum):
     TIRED = "tired"
     ACHES = "aches"
     HEADACHE = "headache"
+    PAIN = "pain"
+    BREATHLESS = "breathless"
+    LOW = "low"
+    WORRIED = "worried"
+    CANT_SLEEP = "cant_sleep"
+    SWOLLEN_ANKLES = "swollen_ankles"
+    STOMACH_UPSET = "stomach_upset"
     FINE = "fine"
 
 

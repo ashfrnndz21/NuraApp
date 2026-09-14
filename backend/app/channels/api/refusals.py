@@ -26,6 +26,8 @@ from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
 from app.delivery.feed.search import NoSuchSearchJob
 from app.delivery.feed.sources import NotTheirsToManage
+from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
+from app.delivery.nudges.metrics import NotOwnerOrChief
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
@@ -50,6 +52,8 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.memory.spine import NoSuchProvider
+from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.state.service import NoState
@@ -116,6 +120,14 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # up for, are answered by name and nothing else.
     (AlreadySetUp, 409),
     (WaitingToBeClaimed, 409),
+    # The feeling cloud and the nudges (E17): the metrics are the owner's and his chief's; a
+    # tap asks one thing once; a day with nothing to hand over says so by name.
+    (NotOwnerOrChief, 403),
+    (NoSuchTap, 404),
+    (NoSuchNudge, 404),
+    (NoSuchProvider, 404),
+    (AlreadyAnswered, 409),
+    (NothingToHandOver, 409),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no. The
 high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class — and so
@@ -130,6 +142,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    NotAnAnswer,
+    NotAPlanDay,
 )
 """Named so that a reader of this file sees every family refusal; each is a 400."""
 

@@ -925,6 +925,29 @@ async def today(
     return sorted(slots, key=lambda s: (order.index(s.anchor), s.line.generic))
 
 
+@dataclass(frozen=True, slots=True)
+class Proud:
+    """The proud number: how many days of his have a tablet taken on them."""
+
+    days: int
+    as_of: datetime
+
+
+@audited(Action.READ, Scope.MEDICINES, Event.__tablename__)
+async def proud_days(session: AsyncSession, *, context: KeyContext) -> Proud:
+    """Distinct local days with any DOSE_TAKEN event on the profile, from the memory events
+    under the medicines scope, in one audited read — never the audit trail. The days he took
+    his tablets, whoever tapped Taken: a helper's "given" is his tablet taken. It is a count
+    of days, not a streak: a quiet day takes nothing away, and it never goes down on the same
+    record."""
+    zone = REGION_TZ[context.region]
+    events = await audited_read(
+        session, Event, context, Scope.MEDICINES, where=(Event.kind == EventKind.DOSE_TAKEN,)
+    )
+    days = {as_utc(event.occurred_at).astimezone(zone).date() for event in events}
+    return Proud(days=len(days), as_of=utcnow())
+
+
 __all__ = [
     "AlreadyRecorded",
     "Count",
@@ -935,6 +958,7 @@ __all__ = [
     "NotTheirsToChange",
     "Outcome",
     "Plan",
+    "Proud",
     "Reconciled",
     "Slot",
     "active_lines",

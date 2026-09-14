@@ -6,6 +6,7 @@
     GET  /profiles/{id}/medicines/history          every line ever written, the change log
     GET  /profiles/{id}/medicines/interactions     every flag on the list, as questions
     GET  /profiles/{id}/medicines/today            today's dose cards at his anchors
+    GET  /profiles/{id}/proud                      the proud number: days with a tablet taken
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
 
@@ -27,6 +28,7 @@ from app.channels.api.schemas import (
     MedicineDraftIn,
     MedicineDraftOut,
     MedicineIn,
+    ProudOut,
     ReconciledOut,
     SlotOut,
     StoryOut,
@@ -38,6 +40,7 @@ from app.medicines.service import (
     history,
     interaction_flags,
     plan,
+    proud_days,
     reconcile,
     record_dose_taken,
     story,
@@ -152,6 +155,15 @@ async def doses_today(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
     return [SlotOut.of(slot) for slot in slots]
+
+
+@router.get("/{profile_id}/proud")
+async def proud(context: Context, session: Db) -> ProudOut:
+    """The proud number: distinct days with a DOSE_TAKEN event, counted from the memory
+    events under the medicines scope in one audited read. The client shows this and never a
+    number it worked out or kept for itself."""
+    counted = await proud_days(session, context=context)
+    return ProudOut(days=counted.days, as_of=counted.as_of)
 
 
 @router.post("/{profile_id}/medicines/{line_id}/taken", status_code=status.HTTP_201_CREATED)

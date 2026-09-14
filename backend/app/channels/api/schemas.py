@@ -525,6 +525,16 @@ class PushScheduleIn(PushComposeIn):
     expires_at: datetime
 
 
+class AppointmentConfirmIn(BaseModel):
+    """A yes to booking a visit: with whom, when, why — exactly what `POST /appointments`
+    will write (E05, the spine's `book_appointment`)."""
+
+    subject: Literal[ConfirmSubject.APPOINTMENT]
+    provider_id: uuid.UUID
+    scheduled_at: datetime
+    purpose: str = Field(min_length=1, max_length=80)
+
+
 class PushConfirmIn(PushScheduleIn):
     """A yes to exactly the previewed lines, then, there, until (E12-06)."""
 
@@ -538,7 +548,8 @@ ConfirmIn = Annotated[
     | KeyChangeConfirmIn
     | OnlyMeConfirmIn
     | TaskDoneConfirmIn
-    | PushConfirmIn,
+    | PushConfirmIn
+    | AppointmentConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -1114,6 +1125,14 @@ class SlotOut(BaseModel):
             taken=slot.taken,
             taken_label=slot.taken_label,
         )
+
+
+class ProudOut(BaseModel):
+    """The proud number (`GET /profiles/{id}/proud`): days with a tablet taken, and when it
+    was counted. The client shows this number and nothing it worked out itself."""
+
+    days: int
+    as_of: datetime
 
 
 # --- readings and State ------------------------------------------------------------------

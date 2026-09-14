@@ -24,6 +24,7 @@ from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of, settings_of
 from app.channels.api.schemas import (
+    AppointmentConfirmIn,
     AuditOut,
     ClaimableOut,
     ClaimConfirmIn,
@@ -54,7 +55,7 @@ from app.channels.api.schemas import (
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
 from app.db import utcnow
-from app.drafts import FactDraft
+from app.drafts import AppointmentDraft, FactDraft
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
 from app.family.pushes import preview_push, push_draft
@@ -75,7 +76,7 @@ from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
 from app.memory.episodic import record_event
-from app.memory.models import ConfidenceState, EventKind, SourceChannel
+from app.memory.models import ConfidenceState, EventKind, SourceChannel, short_label
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
 from app.safety.boundary import Surface, boundary_line
@@ -244,6 +245,14 @@ async def mint_confirmation(
             preview, send_at=body.send_at, channel=body.channel, expires_at=body.expires_at
         )
         return ConfirmationOut.of(await confirm(session, context, push))
+    if isinstance(body, AppointmentConfirmIn):
+        # A visit he has arranged: the yes binds to with whom, when and why (the spine).
+        booking = AppointmentDraft(
+            provider_id=body.provider_id,
+            scheduled_at=body.scheduled_at,
+            purpose=short_label(body.purpose),
+        )
+        return ConfirmationOut.of(await confirm(session, context, booking))
     review = await review_draft_for(
         session,
         context=context,
