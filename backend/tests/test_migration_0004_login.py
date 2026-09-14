@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 
+from tests.conftest import on_an_empty_database
 from tests.test_migration import _load
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -25,11 +26,11 @@ def _keys() -> sa.TableClause:
     return sa.table("key", sa.column("id", sa.Uuid()), sa.column("scopes", sa.JSON()))
 
 
-def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out() -> None:
+async def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out() -> None:
     before = [_load(VERSIONS / f"{name}.py") for name in BEFORE]
     login = _load(VERSIONS / "0004_login_and_sessions.py")
-    engine = sa.create_engine("sqlite+pysqlite://")
-    with engine.begin() as connection:
+
+    def walk(connection: sa.Connection) -> None:
         for migration in before:
             with Operations.context(MigrationContext.configure(connection)):
                 migration.upgrade()
@@ -101,4 +102,5 @@ def test_0004_backfills_profile_into_existing_key_scopes_and_takes_it_back_out()
             login.downgrade()
         held = connection.execute(sa.select(_keys().c.scopes)).scalar_one()
         assert held == ["medicines", "visits"]
-    engine.dispose()
+
+    await on_an_empty_database(walk)

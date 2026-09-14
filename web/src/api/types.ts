@@ -1021,3 +1021,9 @@ export interface CardClipOut {
   end_s: number;
   doctor: string;
 }
+
+/** `GET /api/deployment`: the region this backend serves, and whether it is a demo (ADR 0008). */
+export interface DeploymentOut {
+  region: "SG" | "MY";
+  demo: boolean;
+}

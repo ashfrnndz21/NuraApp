@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import AwareDatetime
 
 from app.channels.api.delivery import via_of
-from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.channels.api.safety_schemas import (
     EmergencyCardOut,
     OfflineCardsOut,
@@ -78,7 +78,7 @@ async def printable(
         format=CardFormat.HTML,
     )
     return HTMLResponse(
-        emergency_card_html(shown),
+        emergency_card_html(shown, demo=settings_of(request).demo_mode),
         headers={"Cache-Control": "private, max-age=0, must-revalidate"},
     )
 
