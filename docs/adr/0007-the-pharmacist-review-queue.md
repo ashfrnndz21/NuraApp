@@ -1,6 +1,6 @@
 # ADR 0007 — The pharmacist's review queue is operator scope, and holds no profile
 
-**Date** 2026-09-15 · **Status** proposed · **Decided by** the operator, for the owner · **Stories** E22-04 (with E22-02, E22-03)
+**Date** 2026-09-15 · **Status** accepted · **Decided by** the operator, for the owner · **Stories** E22-04 (with E22-02, E22-03)
 
 ## Context
 
@@ -23,7 +23,7 @@ The first fifty cards are rendered for real people: they carry names ("Mei can s
 ## Consequences
 
 - Staff actions are recorded on the item (who, when, why) and in the log under `nura.review` by item id and handle, never with content. They are not on any owner's trail, because they touch nothing of his.
-- `review_item` is classified operational in the PDPA data map (`scripts/data_map.py`, `docs/trust/pdpa-data-map.md`): de-identified lines and a staff handle.
+- In the PDPA data map (`scripts/data_map.py`, `docs/trust/pdpa-data-map.md`) the queue's words — `review_item.lines`, `.proposed` and `.reason` — are **health, de-identified**: a sample keeps his readings, days and plain names for medicines, a rewrite proposes such lines, and a reason is free text a pharmacist may quote a line into. They are handled as health data: in region, never to an analytics vendor, nothing trains on them. The rest of the row — kind, card type, ids, digest, verdict, the staff handle, times — is operational.
 - The residual risk of de-identification is in the values kept on purpose — a number, a day, a medicine's plain name. Alone they identify nobody; together, on one card, a determined reader with other data might narrow it down. The queue is operator scope, in region, and read by the pharmacist only; a per-language balance of samples and a shorter retention after the first fifty are decided are follow-ups.
 - When a staff identity provider exists (SSO), it replaces the token list behind the same `staff` dependency; nothing else changes.
 
@@ -36,10 +36,10 @@ The `clinical-safety-reviewer` pass on this change asked for, and got:
 - **On a learning card or a notice, a line that is plainly a catalogue template loses its people whatever filled the slot** — when at least 40% of its letters are the template's own (`review.TEMPLATE_SHARE`). A compressed sentence that only brushes a thin template ("{name} is {value}.") is kept as written, so "Blood pressure is how hard your blood pushes." is not mistaken for a name.
 - **Amounts are said whole** in the voice script (E22-03): "1,000 mg", "1/2 tablet", "0.5 mg" in all three languages; a fraction with no everyday words stays digits.
 
-Two points are left to the operator rather than changed here:
+Two points were left to the operator:
 
-- **The classification of `review_item.lines` and `.proposed`.** The story asks for review items to classify as operational/de-identified, and they do. The reviewer recommends *health (de-identified)*, because a sample keeps readings, days and his plain names for medicines. Changing it is one line per column in `scripts/data_map.py` and a regenerated data map.
-- **"Your body salt" for potassium** (`trend_strings.NAMES`, now 您身体的盐 in Chinese as in English and Malay) follows the glossary's own row ("A body salt. Doctors call it potassium."). The reviewer notes that salt substitutes are potassium chloride, so "salt" may mislead someone told to watch his potassium. That is the glossary's wording to settle with the pharmacist — the review queue is where it will surface.
+- **The classification of the queue's words.** The story asked for review items to classify as operational/de-identified; the reviewer recommended *health (de-identified)*, because a sample keeps readings, days and his plain names for medicines. **The operator decided health (de-identified) on 2026-09-15**, for `review_item.lines`, `.proposed` and `.reason` (free text a pharmacist may quote a line into); the data map is regenerated.
+- **"Your body salt" for potassium** (`trend_strings.NAMES`, now 您身体的盐 in Chinese as in English and Malay) follows the glossary's own row ("A body salt. Doctors call it potassium."). The reviewer notes that salt substitutes are potassium chloride, so "salt" may mislead someone told to watch his potassium. That is the glossary's wording to settle with the pharmacist; the operator has filed it for the pharmacist, and the wording stays as it is until then.
 
 ## Alternatives considered
 
