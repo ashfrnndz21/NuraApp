@@ -30,6 +30,10 @@ class ConfirmSubject(StrEnum):
     APPOINTMENT_STATUS = "appointment_status"
     CLAIM = "claim"
     REVIEW_CARD = "review_card"
+    KEY_CHANGE = "key_change"
+    ONLY_ME = "only_me"
+    TASK_DONE = "task_done"
+    PUSH = "push"
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,7 +195,110 @@ class ReviewDraft:
         }
 
 
-Draft = FactDraft | AppointmentDraft | StatusChange | ClaimDraft | ReviewDraft
+@dataclass(frozen=True, slots=True)
+class KeyChangeDraft:
+    """A key about to be narrowed (E12-01): which key, the parts it will open afterwards,
+    and the window it will run for — by name, so the service works the end out at the write
+    and a yes minted a minute earlier still binds. A yes to widening is not a thing: the
+    service refuses a draft wider than the key before it looks for the yes."""
+
+    key_id: uuid.UUID
+    scopes: tuple[str, ...]
+    window: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.KEY_CHANGE
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.key_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"key_id": self.key_id, "scopes": list(self.scopes), "window": self.window}
+
+
+@dataclass(frozen=True, slots=True)
+class OnlyMeDraft:
+    """The owner about to mark a part of his record "only me", or to open it again (E12-04):
+    which part, and which way."""
+
+    scope: str
+    only_me: bool
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.ONLY_ME
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"scope": self.scope, "only_me": self.only_me}
+
+
+@dataclass(frozen=True, slots=True)
+class TaskDoneDraft:
+    """A task about to be marked done by the person it was given to (E12-03). The tap is
+    the doer's own: the yes is minted and spent by the same person, and the service refuses
+    anyone but the one the task names."""
+
+    task_id: uuid.UUID
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.TASK_DONE
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.task_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"task_id": self.task_id}
+
+
+@dataclass(frozen=True, slots=True)
+class PushDraft:
+    """A message to the patient about to be put on the calendar (E12-06): the lines exactly
+    as he will read them, in his language, when, on which channel, and until when. The yes
+    binds to the lines, so what the chief previewed is what is scheduled and nothing else."""
+
+    language: str
+    lines: tuple[str, ...]
+    send_at: datetime
+    channel: str
+    expires_at: datetime
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.PUSH
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "language": self.language,
+            "lines": list(self.lines),
+            "send_at": self.send_at,
+            "channel": self.channel,
+            "expires_at": self.expires_at,
+        }
+
+
+Draft = (
+    FactDraft
+    | AppointmentDraft
+    | StatusChange
+    | ClaimDraft
+    | ReviewDraft
+    | KeyChangeDraft
+    | OnlyMeDraft
+    | TaskDoneDraft
+    | PushDraft
+)
 
 
 def _canonical(value: Any) -> Any:

@@ -124,3 +124,15 @@ def window_ends_at(window: KeyWindow, granted_at: datetime) -> datetime | None:
     """When a key cut now stops working, or None for a key that runs until it is revoked."""
     length = _WINDOW_LENGTHS.get(window)
     return None if length is None else granted_at + length
+
+
+def window_of(granted_at: datetime, expires_at: datetime | None) -> KeyWindow | None:
+    """The preset window a key was cut for, read back from its dates, or None when its end
+    is not one of the presets — a key that was shortened to a day of its own (E12-01)."""
+    if expires_at is None:
+        return KeyWindow.ALWAYS
+    length = expires_at - granted_at
+    for window, preset in _WINDOW_LENGTHS.items():
+        if length == preset:
+            return window
+    return None

@@ -1,0 +1,356 @@
+"""Family, sharing and the helper over HTTP (E12).
+
+    PUT  /profiles/{id}/keys/{key_id}          narrow a key: fewer parts, shorter window (yes)
+    GET  /family/roles                          the six roles, their default parts and windows
+    GET  /profiles/{id}/grants                  every live key as a grant, in his words
+    GET  /profiles/{id}/helpers                 who holds a helper key and what she may do
+    GET  /profiles/{id}/thread?cursor=          the thread, newest first, a page at a time
+    POST /profiles/{id}/thread                  a message (text) or a card (card_kind)
+    GET  /profiles/{id}/thread/digest?since=    the digest for the caller, verified
+    GET  /profiles/{id}/roster                  the open slots
+    POST /profiles/{id}/roster                  put someone on duty
+    DELETE /profiles/{id}/roster/{slot_id}      take a slot off the roster
+    GET  /profiles/{id}/roster/on-duty?at=      who is on duty at a moment
+    GET  /profiles/{id}/tasks?mine=&open=       the tasks; `mine` under the footing every key holds
+    POST /profiles/{id}/tasks                   give someone a task
+    POST /profiles/{id}/tasks/{task_id}/done    the doer's own tap (yes)
+    GET  /profiles/{id}/trail                   the trail as he reads it, by day
+    GET  /profiles/{id}/privacy                 what is marked only me
+    POST /profiles/{id}/privacy                 mark a part only me (owner's yes)
+    POST /profiles/{id}/privacy/{scope}/lift    open it again (owner's yes)
+    POST /profiles/{id}/pushes/preview          exactly what he will see
+    POST /profiles/{id}/pushes                  schedule it (yes); nothing sends here
+    GET  /profiles/{id}/pushes                  what is scheduled
+    GET  /profiles/{id}/documents               the papers behind a basis, with what they back
+    POST /profiles/{id}/documents               upload a PDF or a photo and tag it
+
+Every profile route takes the key context like every other. The yeses are minted at
+`POST /profiles/{id}/confirmations` with subjects `key_change`, `only_me`, `task_done` and
+`push`.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime
+
+from fastapi import APIRouter, Query, Request, status
+
+from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
+from app.channels.api.schemas import (
+    DigestOut,
+    DocumentIn,
+    DocumentOut,
+    GrantOut,
+    HelperOut,
+    HelpersOut,
+    KeyNarrowIn,
+    KeyOut,
+    LiftOnlyMeIn,
+    OnDutyOut,
+    OnlyMeIn,
+    PrivacyOut,
+    PushComposeIn,
+    PushIn,
+    PushOut,
+    PushPreviewOut,
+    RolePresetOut,
+    RosterSlotIn,
+    RosterSlotOut,
+    TaskDoneIn,
+    TaskIn,
+    TaskOut,
+    ThreadCardIn,
+    ThreadEntryOut,
+    ThreadPageOut,
+    ThreadPostIn,
+    TrailDayOut,
+)
+from app.family.documents import add_document, documents
+from app.family.grants import grants, helper_list, role_presets
+from app.family.privacy import lift_only_me, mark_only_me, marked
+from app.family.pushes import preview_push, pushes, schedule_push
+from app.family.roster import (
+    add_slot,
+    add_task,
+    end_slot,
+    mark_task_done,
+    my_tasks,
+    roster,
+    tasks,
+    who_is_on_duty,
+)
+from app.family.thread import digest, post_card, post_message, read_thread
+from app.family.trail import trail
+from app.keys.grants import narrow_key
+from app.keys.scopes import Scope
+
+router = APIRouter(tags=["family"])
+
+# --- grants ----------------------------------------------------------------------------------
+
+
+@router.put("/profiles/{profile_id}/keys/{key_id}")
+async def narrow(key_id: uuid.UUID, body: KeyNarrowIn, context: Context, session: Db) -> KeyOut:
+    """Narrow a live key in place, on the caller's yes for exactly this change. Wider is
+    refused (`WouldWiden`, 403): that is a fresh consent and a new key."""
+    return KeyOut.of(
+        await narrow_key(
+            session,
+            context=context,
+            key_id=key_id,
+            scopes=body.scopes,
+            window=body.window,
+            confirmation_id=body.confirmation_id,
+        )
+    )
+
+
+@router.get("/family/roles")
+async def roles(
+    person: CurrentPerson,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+    name: str = Query(default="Ash", min_length=1, max_length=120),
+) -> list[RolePresetOut]:
+    """The six roles as the family screen offers them, said for `name`, in `language`."""
+    return [RolePresetOut.of(preset) for preset in role_presets(language, name=name)]
+
+
+@router.get("/profiles/{profile_id}/grants")
+async def grant_list(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> list[GrantOut]:
+    return [
+        GrantOut.of(grant) for grant in await grants(session, context=context, language=language)
+    ]
+
+
+@router.get("/profiles/{profile_id}/helpers")
+async def helpers(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> HelpersOut:
+    found, lines = await helper_list(session, context=context, language=language)
+    return HelpersOut(helpers=[HelperOut.of(helper) for helper in found], lines=lines)
+
+
+# --- the thread ------------------------------------------------------------------------------
+
+
+@router.get("/profiles/{profile_id}/thread")
+async def thread(
+    context: Context,
+    session: Db,
+    cursor: datetime | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> ThreadPageOut:
+    entries, next_cursor = await read_thread(session, context=context, cursor=cursor, limit=limit)
+    return ThreadPageOut(
+        entries=[ThreadEntryOut.of(entry) for entry in entries], next_cursor=next_cursor
+    )
+
+
+@router.post("/profiles/{profile_id}/thread", status_code=status.HTTP_201_CREATED)
+async def post(body: ThreadPostIn, context: Context, session: Db) -> ThreadEntryOut:
+    if isinstance(body, ThreadCardIn):
+        return ThreadEntryOut.of(
+            await post_card(session, context=context, kind=body.card_kind, task_id=body.task_id)
+        )
+    return ThreadEntryOut.of(await post_message(session, context=context, text=body.text))
+
+
+@router.get("/profiles/{profile_id}/thread/digest")
+async def thread_digest(
+    context: Context,
+    session: Db,
+    since: datetime,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> DigestOut:
+    """The thread and the day's cards since `since`, for the caller, in whole sentences."""
+    return DigestOut.of(await digest(session, context=context, since=since, language=language))
+
+
+# --- the roster and the tasks -----------------------------------------------------------------
+
+
+@router.get("/profiles/{profile_id}/roster")
+async def roster_list(context: Context, session: Db) -> list[RosterSlotOut]:
+    return [RosterSlotOut.of(slot) for slot in await roster(session, context=context)]
+
+
+@router.post("/profiles/{profile_id}/roster", status_code=status.HTTP_201_CREATED)
+async def roster_add(body: RosterSlotIn, context: Context, session: Db) -> RosterSlotOut:
+    return RosterSlotOut.of(
+        await add_slot(
+            session,
+            context=context,
+            person_id=body.person_id,
+            role=body.role,
+            weekdays=body.weekdays,
+            starts_on=body.starts_on,
+            ends_on=body.ends_on,
+            from_time=body.from_time,
+            to_time=body.to_time,
+        )
+    )
+
+
+@router.delete("/profiles/{profile_id}/roster/{slot_id}")
+async def roster_end(slot_id: uuid.UUID, context: Context, session: Db) -> RosterSlotOut:
+    return RosterSlotOut.of(await end_slot(session, context=context, slot_id=slot_id))
+
+
+@router.get("/profiles/{profile_id}/roster/on-duty")
+async def on_duty(context: Context, session: Db, at: datetime | None = None) -> list[OnDutyOut]:
+    return [OnDutyOut.of(duty) for duty in await who_is_on_duty(session, context=context, at=at)]
+
+
+@router.get("/profiles/{profile_id}/tasks")
+async def task_list(
+    context: Context,
+    session: Db,
+    mine: bool = Query(default=False),
+    open_only: bool = Query(default=False, alias="open"),
+) -> list[TaskOut]:
+    """Every task (owner and chief), or with `?mine=true` the ones that name the caller,
+    which any key holder reads."""
+    if mine:
+        found = await my_tasks(session, context=context)
+        return [TaskOut.of(task) for task in found if not (open_only and task.is_done)]
+    return [TaskOut.of(task) for task in await tasks(session, context=context, open_only=open_only)]
+
+
+@router.post("/profiles/{profile_id}/tasks", status_code=status.HTTP_201_CREATED)
+async def task_add(body: TaskIn, person: CurrentPerson, context: Context, session: Db) -> TaskOut:
+    return TaskOut.of(
+        await add_task(
+            session,
+            context=context,
+            what=body.what,
+            assigned_person_id=body.assigned_person_id,
+            due_at=body.due_at,
+            language=person.language,
+        )
+    )
+
+
+@router.post("/profiles/{profile_id}/tasks/{task_id}/done")
+async def task_done(task_id: uuid.UUID, body: TaskDoneIn, context: Context, session: Db) -> TaskOut:
+    """The doer's own tap, with the yes she minted for it. Anyone else is `NotTheDoer` (403)."""
+    return TaskOut.of(
+        await mark_task_done(
+            session, context=context, task_id=task_id, confirmation_id=body.confirmation_id
+        )
+    )
+
+
+# --- the trail and only me ----------------------------------------------------------------------
+
+
+@router.get("/profiles/{profile_id}/trail")
+async def trail_days(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+    since: datetime | None = None,
+    limit: int = Query(default=500, ge=1, le=2000),
+) -> list[TrailDayOut]:
+    """Who looked at what, in his words, by day, newest first. Owner and chief only."""
+    days = await trail(session, context=context, language=language, since=since, limit=limit)
+    return [TrailDayOut.of(day) for day in days]
+
+
+@router.get("/profiles/{profile_id}/privacy")
+async def privacy_list(context: Context, session: Db) -> list[PrivacyOut]:
+    return [PrivacyOut.of(row) for row in await marked(session, context=context)]
+
+
+@router.post("/profiles/{profile_id}/privacy", status_code=status.HTTP_201_CREATED)
+async def privacy_mark(body: OnlyMeIn, context: Context, session: Db) -> PrivacyOut:
+    """The owner keeps one part to himself, on his yes. Every key stops opening it at once."""
+    return PrivacyOut.of(
+        await mark_only_me(
+            session, context=context, scope=body.scope, confirmation_id=body.confirmation_id
+        )
+    )
+
+
+@router.post("/profiles/{profile_id}/privacy/{scope}/lift")
+async def privacy_lift(
+    scope: Scope, body: LiftOnlyMeIn, context: Context, session: Db
+) -> PrivacyOut:
+    return PrivacyOut.of(
+        await lift_only_me(
+            session, context=context, scope=scope, confirmation_id=body.confirmation_id
+        )
+    )
+
+
+# --- the push composer -----------------------------------------------------------------------
+
+
+@router.post("/profiles/{profile_id}/pushes/preview")
+async def push_preview(body: PushComposeIn, context: Context, session: Db) -> PushPreviewOut:
+    """Exactly what he will see. A line that does not pass plain words is `NotPlainWords`
+    (400) with the findings."""
+    return PushPreviewOut.of(
+        await preview_push(
+            session,
+            context=context,
+            template_id=body.template_id,
+            slots=body.slots,
+            memo_lines=body.memo_lines,
+            language=body.language,
+        )
+    )
+
+
+@router.post("/profiles/{profile_id}/pushes", status_code=status.HTTP_201_CREATED)
+async def push_schedule(body: PushIn, context: Context, session: Db) -> PushOut:
+    return PushOut.of(
+        await schedule_push(
+            session,
+            context=context,
+            send_at=body.send_at,
+            channel=body.channel,
+            expires_at=body.expires_at,
+            confirmation_id=body.confirmation_id,
+            template_id=body.template_id,
+            slots=body.slots,
+            memo_lines=body.memo_lines,
+            language=body.language,
+        )
+    )
+
+
+@router.get("/profiles/{profile_id}/pushes")
+async def push_list(context: Context, session: Db) -> list[PushOut]:
+    return [PushOut.of(push) for push in await pushes(session, context=context)]
+
+
+# --- documents -------------------------------------------------------------------------------
+
+
+@router.get("/profiles/{profile_id}/documents")
+async def document_list(context: Context, session: Db) -> list[DocumentOut]:
+    return [DocumentOut.of(view) for view in await documents(session, context=context)]
+
+
+@router.post("/profiles/{profile_id}/documents", status_code=status.HTTP_201_CREATED)
+async def document_add(
+    body: DocumentIn, request: Request, context: Context, session: Db
+) -> list[DocumentOut]:
+    """Keep a document by reference and tag it; the answer is the document list with it in."""
+    await add_document(
+        session,
+        context=context,
+        store=providers_of(request).object_store,
+        data=body.as_bytes(),
+        content_type=body.content_type,
+        tag=body.tag,
+        captured_at=body.captured_at,
+    )
+    return [DocumentOut.of(view) for view in await documents(session, context=context)]

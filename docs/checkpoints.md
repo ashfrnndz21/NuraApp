@@ -16,14 +16,21 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs; a medicine running low makes a reorder card from E04's count | E21 backend (Session 8) | **ready** |
 | 9 | WhatsApp (sandbox) | Send a photo to the WhatsApp sandbox number and watch it file itself and reply | E19-01…E19-03 | planned |
 | 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | planned |
-| 11 | Feed and onboarding on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
-| 12 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 11 | Onboarding on your phone (web) | Run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
+| 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2–W3 (ADR 0001) | planned |
+| 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
+| 14 | Emergency card and not feeling well | Written by its story (E13/E14) | E13, E14 | planned |
+| 15 | Biography | Written by its story | — | planned |
+| 16 | Timeline | Written by its story | — | planned |
+| 17 | Trends, routine and calendar | Written by its story | — | planned |
+| 18 | Capture | Written by its story | — | planned |
+| 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
-- **iOS checkpoints (10–11)**: the operator runs the app on the simulator first and attaches screenshots to the checkpoint note; you then run it yourself from Xcode.
-- **TestFlight (12)**: needs your Apple developer account; the operator prepares the build and the steps.
+- **Backend checkpoints (1–9, 13)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Web checkpoints (10–12, ADR 0001)**: the operator opens the app on a phone first and attaches screenshots to the checkpoint note; you then open the URL yourself in Safari.
+- **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
 
@@ -445,3 +452,71 @@ what came back (status and body) and what was expected; tell the operator and pa
 - Stories merge when CI is green, the safety and plain-words reviewers pass, and the operator has read the diff. `risk:high` stories get a written note in the PR saying what was checked.
 - A checkpoint is not declared ready until `make checkpoint` passes end to end on a clean database.
 - Anything that needs a real credential (SMS provider, licensed drug data, WhatsApp BSP, Apple) is a fixture until you say otherwise; the checkpoint says so where it applies.
+
+## How to run checkpoint 13
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Four fresh phone numbers every run — Mei, Pa, Siti the helper, Kit the son — so it can be run again on the same `dev.db`.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0013 adds the family tables), serves on http://127.0.0.1:8000
+make checkpoint N=13    # terminal 2: walks the whole scenario, about three seconds
+```
+
+What you will see (the numbers, ids and days change each run; the trail is in Pa's language, Malay):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Mei (+6594447692) registered by phone code and signed in (the code read from the server log)
+✓ Mei set up a profile for Pa (+6593332250) on the basis of a lasting power of attorney, citing its PDF by digest e2d853e9…; she is its steward
+✓ Pa (+6593332250) registered by phone code and signed in (the code read from the server log)
+✓ Pa claimed the profile: he is its owner, Mei his chief on his own consent
+✓ Siti (+6596662970) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6595550162) registered by phone code and signed in (the code read from the server log)
+✓ Pa agreed, in Malay, to let Siti (his helper) and Kit (his son) see named parts
+✓ Mei cut Siti a helper key and Kit a caregiver key; the helper list, in Pa's words:
+    Siti ialah pembantu anda.
+    Siti boleh melihat ubat anda dan tekan Sudah ambil untuk anda.
+    Siti boleh melihat kad kecemasan anda.
+    Siti dapat senarai daripada Nura setiap pagi.
+    Siti boleh melihatnya sehingga anda minta ia dihentikan.
+✓ Mei narrowed Siti's key in place to the medicines only, on her own yes (PUT /keys/{key})
+✓ widening Siti's key to the readings was refused: WouldWiden (403) — wider is a fresh consent from Pa and a new key
+✓ Siti's narrowed key opens the medicines and nothing else: the roster refuses her (403)
+✓ Pa let Mei in to his private notes as well (a fresh consent naming them, a chief key cut again); Mei reads the note
+✓ Pa marked his private notes only me (his own yes); Mei, who read them a moment ago as his chief, is refused at once: OutOfScope notes (403), the note never left
+✓ and it is on Pa's trail in his words: Mei asked to see your private notes on Monday 14 September. Only you can.
+✓ the roster: Mei Monday to Friday, Kit at the weekend, 7 in the morning to 10 at night on Pa's wall clock; on Saturday 19 September at noon Kit is on duty
+✓ a task "buy the water pill" for Siti: Mei tapping it done is refused, NotTheDoer (403); Siti sees it with her medicines-only key and taps it done herself
+✓ the family thread: Mei's message, then the reading card (a reference to the State it was rendered from, never words); Kit reads it newest first
+✓ the digest for Kit, every line through the plain-words verifier:
+    Pa on Monday 14 September.
+    Mei wrote on Monday 14 September:
+    Pa slept well. I will come by at 6.
+    Mei wrote down Pa's blood pressure on Monday 14 September.
+    It was 138 over 84.
+    Mei is on duty today.
+✓ Mei composed a message to Pa from a template; the preview, exactly as he will see it, in Malay:
+    Mei akan ambil anda pada pukul 9.
+    Bawa buku tekanan darah anda.
+✓ and scheduled it for 8 hours from now on WhatsApp, on her yes for exactly those lines, stamped with the State it was composed against; nothing is sent here (E11 delivers)
+✓ Pa reads his trail as sentences in his language, 1 day(s), newest first:
+    Isnin 14 September
+      Mei menulis dalam mesej yang Nura hantar pada Isnin 14 September.
+      Mei melihat kunci rekod anda pada Isnin 14 September.
+      Mei melihat lawatan anda ke doktor pada Isnin 14 September.
+      Mei melihat surat-surat anda pada Isnin 14 September.
+      Mei melihat keadaan anda pada Isnin 14 September.
+      Mei menulis dalam jawapan ya anda pada Isnin 14 September.
+      Mei melihat jawapan ya anda pada Isnin 14 September.
+      Mei melihat rekod anda pada Isnin 14 September.
+✓ no sentence on it carries a class name, a table name or an id
+✓ Mei uploaded the LPA PDF placeholder: found by its digest to be the paper the graph was set up on — one artefact, now with its bytes — tagged lpa, and listed under documents backing the stewardship and the agreement Mei gave for Pa on that basis
+checkpoint 13 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 13 passed`. That is the whole of the criteria: a key is narrowed in place — fewer parts, a shorter window — on the chief's own yes and never widened (wider is a fresh consent from the patient and a new key); the patient can keep a part of his record to himself and every key on the profile stops opening it the same second, with the refused reach on his trail as a sentence he can read; the roster answers who is on duty on his wall clock, and a task is done only by the person it names; the family thread carries messages and health cards together and is read as a digest, every line through the plain-words verifier; a message to him is previewed exactly as he will see it and scheduled on a yes for those lines, and nothing is sent here; a paper behind a basis is kept by reference, tagged, and listed with what it backs. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
+
+1. **Lift the mark.** As Pa, `POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "notes", "only_me": false}`, then `POST /profiles/{profile_id}/privacy/notes/lift` with that `confirmation_id`. Then, as Mei, `GET /profiles/{profile_id}/notes` works again — her key was never changed, only what it opens — and Pa's `GET /profiles/{profile_id}/trail?language=en` shows both the mark and the lift as "You wrote in what only you can see on …".
+2. **Read the trail in another language.** `GET /profiles/{profile_id}/trail?language=zh` as Pa: the same days and lines, in Chinese, with the day as `9月14日星期一`; nothing on any line is a class name or an id, whichever language.
