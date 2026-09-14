@@ -21,7 +21,8 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import Table
+from sqlalchemy import Table, TypeDecorator
+from sqlalchemy.types import TypeEngine
 
 # Every module that declares a table, so the metadata is whole.
 import app.audit.models
@@ -900,6 +901,11 @@ def tables() -> list[Table]:
     return [t for t in Base.metadata.sorted_tables if not t.name.startswith("test_")]
 
 
+def _type_name(kind: TypeEngine[object]) -> str:
+    """A column type's name; a decorated type (`UTCDateTime`) by the type it stores as."""
+    return type(kind.impl if isinstance(kind, TypeDecorator) else kind).__name__
+
+
 def rows() -> Iterator[tuple[str, str, str, str, str]]:
     """(table, column, type, nullable, classification) for every column. The type is the
     SQLAlchemy type's name (`Uuid`, `String`, `JSON`), the same on SQLite and Postgres."""
@@ -908,7 +914,7 @@ def rows() -> Iterator[tuple[str, str, str, str, str]]:
             yield (
                 table.name,
                 column.name,
-                type(column.type).__name__,
+                _type_name(column.type),
                 "yes" if column.nullable else "no",
                 classification_of(table.name, column.name),
             )
