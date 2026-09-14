@@ -25,9 +25,10 @@ from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
-from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET
+from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
 
@@ -51,6 +52,7 @@ async def test_a_reopened_page_is_answered_while_the_feed_is_still_writing(tmp_p
             object_store=LocalObjectStore(tmp_path / "objects", Region.SG),
             extractor=FixtureExtractor(PAPER),
             transcriber=FixtureTranscriber(VOICE, Region.SG),
+            summariser=FixtureSummariser(VISITS),
             searcher=FixtureSearcher(FEED),
             compressor=FixtureCompressor(FEED),
             drug_registry=FixtureRegistry.load(),

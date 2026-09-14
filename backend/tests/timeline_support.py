@@ -158,8 +158,15 @@ async def artefact(
         captured_at=when or now(),
         source_channel=SourceChannel.APP,
         region=Region.SG,
-        # A voice says whose voices it carries (ADR 0003): here, his own words.
-        recording=Recording.OWN_NOTE if kind is ArtifactKind.VOICE else None,
+        # A recording says whose voices it carries (ADR 0003): a voice here is his own words;
+        # a visit's transcript is a consult (E05), which rests on the RECORDING consent.
+        recording=(
+            Recording.OWN_NOTE
+            if kind is ArtifactKind.VOICE
+            else Recording.CONSULT
+            if kind is ArtifactKind.TRANSCRIPT
+            else None
+        ),
     )
 
 

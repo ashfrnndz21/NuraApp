@@ -17,7 +17,6 @@ from app.ingestion.transcribe import FixtureTranscriber
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
-from app.medicines.strings import DAY_NAMES
 from app.memory.episodic import store_artifact
 from app.memory.models import ArtifactKind, Fact, Provider, ProviderKind, SourceChannel
 from app.memory.semantic import assert_fact
@@ -183,13 +182,8 @@ def first_write_of(lines: Sequence[AuditEntry], target: str, *, after: int = -1)
 
 
 def assert_plain(lines, language: str = "en") -> None:
-    """Every line passes the verifier. A Malay or Chinese day name is swapped for the English
-    one first, the way `app.channels.safety_strings.render` checks a date: the verifier's
-    rule 5 knows the English day names and the form is what it checks."""
+    """Every line passes the verifier, as it is written. Rule 5 reads a Malay or Chinese date
+    against that language's own day names (E05 review, P3), so nothing is swapped first."""
     for line in lines:
         text = getattr(line, "text", line)
-        checked = text
-        if language != "en":
-            for index, day in enumerate(DAY_NAMES[language]):
-                checked = checked.replace(day, DAY_NAMES["en"][index])
-        assert [f for f in verify(checked, language) if f.severity == "fail"] == [], line
+        assert [f for f in verify(text, language) if f.severity == "fail"] == [], line

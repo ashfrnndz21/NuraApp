@@ -25,6 +25,7 @@ from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.safety.plain_words import (
     RULES_FILE,
@@ -34,7 +35,7 @@ from app.safety.plain_words import (
     strings_in_typescript,
 )
 from app.settings import Settings
-from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
+from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
 
@@ -105,6 +106,7 @@ def _app(web_dist: str | None) -> AsyncClient:
         object_store=LocalObjectStore(root, Region.SG),
         extractor=FixtureExtractor(PAPER),
         transcriber=FixtureTranscriber(VOICE, Region.SG),
+        summariser=FixtureSummariser(VISITS),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),

@@ -41,6 +41,7 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
 from app.keys import confirm  # noqa: F401
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
 
@@ -49,6 +50,8 @@ from tests import support  # noqa: F401
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
 
+VISITS = Path(__file__).resolve().parent / "fixtures" / "visits"
+"""The visit transcripts the fixture summariser knows (E05-05)."""
 WHATSAPP_SECRET = "nura-test-webhook-secret"
 """The fixed secret the fixture provider signs with in the tests; nothing real."""
 WHATSAPP_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "whatsapp"
@@ -148,6 +151,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         code_sender=sender,
         object_store=objects,
         extractor=FixtureExtractor(PAPER),
+        summariser=FixtureSummariser(VISITS),
         transcriber=FixtureTranscriber(VOICE, region),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),

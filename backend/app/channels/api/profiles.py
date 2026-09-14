@@ -45,12 +45,14 @@ from app.channels.api.schemas import (
     ProfileForSomeone,
     ProfileOut,
     PushConfirmIn,
+    QuestionConfirmIn,
     ReadingIn,
     ReadingOut,
     SharingConsentIn,
     StateOut,
     StatusConfirmIn,
     StewardshipOut,
+    SummaryConfirmIn,
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
 )
@@ -81,6 +83,8 @@ from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel, short_label
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
+from app.reasoning.visits.questions import question_draft_for
+from app.reasoning.visits.summary import summary_draft_for
 from app.safety.boundary import Surface, boundary_line
 from app.state.service import current_state
 
@@ -200,11 +204,38 @@ async def mint_confirmation(
     graph — the stewardship, the steward, the parts, today's words in `language` — so
     the yes binds to what he was shown by `GET /profiles/mine/claimable`. For a review
     card, it is recomputed from the card and his decisions, so the yes binds to every field
-    as shown and every decision as made (E02-07: one tap saves the card).
+    as shown and every decision as made (E02-07: one tap saves the card). For a visit, it is
+    with whom, when and why; for a question, the words as typed; for a post-visit summary,
+    every item as decided (E05).
     """
     if isinstance(body, ClaimConfirmIn):
         draft = await claim_draft_for(session, context=context, language=body.language)
         return ConfirmationOut.of(await confirm(session, context, draft))
+    if isinstance(body, AppointmentConfirmIn):
+        booking = AppointmentDraft(
+            provider_id=body.provider_id,
+            scheduled_at=body.scheduled_at,
+            purpose=short_label(body.purpose),
+        )
+        return ConfirmationOut.of(await confirm(session, context, booking))
+    if isinstance(body, QuestionConfirmIn):
+        asked = await question_draft_for(
+            session,
+            context=context,
+            appointment_id=body.appointment_id,
+            text=body.text,
+            question_id=body.question_id,
+            remove=body.remove,
+        )
+        return ConfirmationOut.of(await confirm(session, context, asked))
+    if isinstance(body, SummaryConfirmIn):
+        heard = await summary_draft_for(
+            session,
+            context=context,
+            summary_id=body.summary_id,
+            decisions=[decision.as_decision() for decision in body.decisions],
+        )
+        return ConfirmationOut.of(await confirm(session, context, heard))
     if isinstance(body, MedicineConfirmIn):
         # For a medicine, the draft is recomputed from the label and the list
         # (`app.medicines.service.plan`), so the yes binds to what `POST

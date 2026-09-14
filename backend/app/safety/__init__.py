@@ -16,13 +16,16 @@ spoken before a recording starts and `may_record`, the gate on the RECORDING con
 
 `red_flags` is the list of the things we do not wait for (docs/smart-nudges.md §2), one
 module and one table (`red_flag`): a word tapped on the feeling cloud (E21), free text on
-WhatsApp (E19-05) and the words said or typed to the not-feeling-well button and the symptom
+WhatsApp (E19-05), the words said or typed to the not-feeling-well button and the symptom
 log (E13/E14) all raise the same `Flag` on the SYMPTOM event they were said in, before any
 ranking or cap, telling every live key with the emergency scope; the words are one table
-(`RED_FLAG_WORDS`, `detect`), in three languages. A flag that depends on a fact not on the
-record is written with why it was suppressed, so the caregiver sees it was considered. The
-button's flag is written through `write_flag_kept`, so a refusal later in the same request
-cannot take it back, and the escalation ladder (`Escalation`) is written beside it.
+(`RED_FLAG_WORDS`, `detect`), in three languages. A word heard in a visit transcript (E05) is
+found with its span (`RED_FLAG_TERMS`, `red_flags_heard`), written before the summary card is
+composed and tells the same keys; the same row carries a medicine change heard at a visit for
+E04's reconcile, never an amount. A flag that depends on a fact not on the record is written
+with why it was suppressed, so the caregiver sees it was considered. Every flag is kept the
+same way (`write_flag_kept`, `write_red_flag`): a refusal later in the same request cannot
+take it back, and the escalation ladder (`Escalation`) is written beside it.
 
 `emergency_card`, `not_feeling_well` and `symptom_log` are E13/E14: the card a stranger is
 handed, the one button, and how he feels in his words (ADR 0002). `people` is the two narrow,

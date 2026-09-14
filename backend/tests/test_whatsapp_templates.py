@@ -34,6 +34,10 @@ DOSES = {
 }
 """The doses slot is what the medicines module renders in the profile's language."""
 
+DAYS = {"en": "Monday 14 September", "ms": "Isnin 14 September", "zh": "9月14日星期一"}
+"""The day slot as `app.delivery.feed.compose.plain_day` renders it in each language: rule 5
+reads a Malay line for a Malay weekday (docs/plain-words.md)."""
+
 FILL = {
     "name": "Pa",
     "day": "Monday 14 September",
@@ -63,7 +67,8 @@ def test_there_are_six_and_each_has_every_language() -> None:
 @pytest.mark.parametrize("name", SIX)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
-    params = {slot: {**FILL, "doses": DOSES[language]}[slot] for slot in TEMPLATES[name].slots}
+    fill = {**FILL, "doses": DOSES[language], "day": DAYS[language]}
+    params = {slot: fill[slot] for slot in TEMPLATES[name].slots}
     text = render(name, language, params)
     assert "{" not in text and "}" not in text
     assert [f for f in verify(text, language) if f.severity == "fail"] == []
