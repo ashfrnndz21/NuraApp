@@ -1,6 +1,6 @@
 # Checkpoints — where you can try the app yourself
 
-Each checkpoint is a point where the pipeline stops being the only thing that can see the product. When a checkpoint is reached, the operator posts "Checkpoint N ready" with the exact steps, and `make checkpoint N=<n>` walks the backend part of it for you. Everything before CP7 runs on your Mac with no cloud account; nothing needs a real phone until CP8.
+Each checkpoint is a point where the pipeline stops being the only thing that can see the product. When a checkpoint is reached, the operator posts "Checkpoint N ready" with the exact steps, and `make checkpoint N=<n>` walks the backend part of it for you. Everything before CP7 runs on your Mac with no cloud account; nothing needs a real phone until CP12 — CP9's WhatsApp is a sandbox on your Mac.
 
 Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it did what the criteria say).
 
@@ -13,16 +13,17 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence (the unsure fields dotted), correct one value, confirm with one OK, and see Facts with provenance appear; upload the warfarin label and see the high-risk class on the card; a key without the record cannot see a card | E02-01, E02-07, E16-04 | **ready** |
 | 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | **ready** |
 | 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
-| 8 | Feed and WhatsApp (sandbox) | Call the feed endpoint and see the supply order (now, today, gate, story, learning); send a photo to the WhatsApp sandbox number and watch it file itself and reply | E21 backend, E19-01…E19-03 | planned |
-| 9 | iOS Today on the simulator | Open `ios/Nura.xcodeproj`, run on iPhone simulator, sign in with a phone code, see the Today shell with the Now card and Taken, and the medium widget | Session 10 | planned |
-| 10 | iOS feed and onboarding | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | Sessions 11–12 | planned |
-| 11 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 8 | Feed | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with cursor pagination and the engagement events | E21 backend | planned |
+| 9 | WhatsApp (sandbox) | Mei forwards a photo to the number and it files itself as a review card and replies; she posts "BP 150/90" and gets a read-back that only her own "yes" turns into a Fact; a stranger's number gets one fixed line and nothing is stored; "he fell" writes a Flag first and escalates in-thread; the morning card goes to Pa as an approved template and his "tired" is written down; the thread is by reference and every line is on the trail | E19-01…E19-03, E19-05 | **ready** |
+| 10 | iOS Today on the simulator | Open `ios/Nura.xcodeproj`, run on iPhone simulator, sign in with a phone code, see the Today shell with the Now card and Taken, and the medium widget | Session 10 | planned |
+| 11 | iOS feed and onboarding | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | Sessions 11–12 | planned |
+| 12 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–8)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
-- **iOS checkpoints (9–10)**: the operator runs the app on the simulator first and attaches screenshots to the checkpoint note; you then run it yourself from Xcode.
-- **TestFlight (11)**: needs your Apple developer account; the operator prepares the build and the steps.
+- **Backend checkpoints (1–9)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp — CP9 drives the number through a dev-only door that walks the webhook's own path) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **iOS checkpoints (10–11)**: the operator runs the app on the simulator first and attaches screenshots to the checkpoint note; you then run it yourself from Xcode.
+- **TestFlight (12)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
 
@@ -324,6 +325,83 @@ checkpoint 6 passed: every step did what docs/checkpoints.md says
 
 1. **A refill.** `POST /profiles/{profile_id}/photos` with any base64 bytes you like as `data`, `"content_type": "image/png"` and a `captured_at` (the card comes back `unknown`; keep its `artifact_id`), then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
 2. **A yes for other words.** Mint a confirmation for a label of `"quantity": 28` and spend it on a `POST /profiles/{profile_id}/medicines` whose label says `"quantity": 30`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for a different label. Nothing is written, and the refusal is on the trail (`GET /profiles/{profile_id}/audit?scope=medicines`) as `refused_because: NotWhatWasConfirmed`.
+
+## How to run checkpoint 9
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having been run. Nothing reaches Meta: the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`, which `make dev` sets), which keeps what it "sends" in memory and serves media from `backend/tests/fixtures/whatsapp/`. The script drives the number through `POST /dev/whatsapp/inbound` — a dev-only door, gone outside a dev run, that walks exactly the path the signed webhook (`POST /whatsapp/webhook`) walks — and reads the replies back from it.
+
+```sh
+make setup              # once, if you have not
+make dev                # terminal 1: migrates dev.db (0010 adds the WhatsApp tables), serves on http://127.0.0.1:8000
+make checkpoint N=9     # terminal 2: walks the whole scenario, about three seconds
+```
+
+Three fresh phone numbers every run — Pa, Mei his daughter, and Kit, a son nobody has let in — so it can be run again on the same `dev.db`. The "photo" Mei forwards is the lipid report of checkpoint 5, served by media id from the fixtures; the medicine on Pa's list is amlodipine, added through checkpoint 6's route so the morning card has a dose to say.
+
+What you will see (the numbers, ids and dates change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591113072) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
+✓ Mei (+6592229093) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa let Mei, his daughter, in to his record and cut her a chief key
+✓ Mei wrote to the number before Pa agreed to WhatsApp: refused, ConsentWithheld, nothing kept — the one line she got says so, and names no health content:
+    → Nura does not send WhatsApp messages for Pa yet.
+    → Pa can turn that on in the app.
+✓ Pa agreed to WhatsApp (POST /profiles/{id}/consents/whatsapp, his own basis); the words he read:
+    Every morning, Nura sends you your Today page on WhatsApp.
+    You can stop this at any time.
+✓ Pa added amlodipine from a label (checkpoint 6's route); run_morning (POST /dev/whatsapp/morning/{id}, what the scheduler will call) sent Pa the morning card — one of the six approved templates, because Pa has not written in the last 24 hours, composed from his State and today's doses, through his WHATSAPP consent, verified against plain words:
+    → Good morning, Pa, this is Nura.
+    → Today is Monday 14 September.
+    → Take 1 tablet of your blood pressure tablet with breakfast.
+    → When you can, take your blood pressure.
+    → Send me the 2 numbers.
+✓ Mei forwarded the lipid report (POST /dev/whatsapp/inbound, media from the fixtures — the webhook's own path, no Meta): the bytes went to the SG store as a WhatsApp photo artefact, the extractor read it as a lab_report, and a review card with 7 fields waits for a yes in the app; nothing is a fact. The reply in her thread:
+    → I kept the photo.
+    → You can check it in the app.
+✓ Mei posted "BP 150/90 this morning": the classifier heard a blood pressure and wrote a proposal — what was heard, who said it, good for a day — and nothing else: GET /facts?subject=blood_pressure is []. The read-back in her thread:
+    → Did I get this right?
+    → Pa's blood pressure was 150 over 90.
+    → Answer yes or no.
+✓ Kit (+6595550623), a number no profile knows, wrote to the number: one fixed reply, no health content, nothing stored, no thread, no line on any trail:
+    → Hello, this is Nura.
+    → Nura keeps health papers for families.
+    → This number is not on a family list yet.
+    → Ask your family to add you in the app.
+    → Nura is not a doctor.
+✓ Pa answered "yes": nothing of his is waiting, so nothing was written — only the poster confirms:
+    → I have no question open for you.
+✓ Mei answered "yes": a confirmation was minted for exactly the draft recomputed from the proposal and spent in the same unit of work; the reading is a Fact, 150/90 mmHg, confirmed_by_person Mei, resting on the event of the reading and on the message it was heard in (artefact 0f211b2c…); State recomputed, snapshot 2, trigger new_fact naming it. The reply:
+    → Thank you for telling me.
+    → I wrote it down.
+✓ Mei posted "he fell in the bathroom": a red flag (the word table in app/safety/red_flags.py) — the Flag was written first, before the message was even kept, then the message, then the escalation record naming the ladder from the keys table (owner, chief keys, others; the poster left out); nothing was extracted, no proposal. The reply in her thread, at once:
+    → This one we do not wait for.
+    → Call your doctor today.
+    → Pa knows now.
+    2026-09-14T10:37:10  Mei  write emergency safety_flag  whatsapp
+    2026-09-14T10:37:10  Mei  write emergency safety_escalation  whatsapp
+✓ Pa answered "tired": his own word about himself, one of the three the check-in offers, so no read-back — a SYMPTOM event and a feeling fact confirmed by him, the yes minted and spent in the same request the way the app's save button does. The reply:
+    → Thank you for telling me.
+    → I wrote it down.
+✓ Pa reads the thread (GET /profiles/{id}/whatsapp/thread, 13 messages, owner and chief only): every kept message by reference — who, when, what kind, which artefact, template or State — never the words; Kit is not on it
+✓ Kit (+6595550623) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Kit, now registered but on no family list, is refused the thread: NoKey (403)
+✓ Pa reads his trail (187 lines, 80 on the WhatsApp channel): every kept message is a write, every send a SHARE naming who it went to (8 of them, the refusal notice included), and the refusals are on it by name; Kit is on none of it:
+    2026-09-14T10:37:10   Pa  write profile whatsapp_proposal  refused NoOpenProposal
+    2026-09-14T10:37:09  Mei  read profile consent  refused ConsentWithheld
+checkpoint 9 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 9 passed`. The criteria: the sender's number is their identity — it resolves to their account and to the one profile their key opens, and everything the message does happens inside that key through the same doors as the app; no thread is kept and nothing is sent about a profile until its owner has agreed to WhatsApp, in words he read; a forwarded photo is filed the way an uploaded one is (a WhatsApp artefact in the region's store, a review card waiting for a yes) and answered in the thread from the catalogue; a health event heard in free text is a proposal, not a fact, until the poster — and only the poster, from the same number, within a day — says yes, at which point a confirmation is minted for exactly that draft and spent, the fact rests on the event and on the message it was heard in, and State recomputes; a number no profile knows gets one fixed line with no health content and leaves nothing behind, not even a line on a trail; a red flag writes the Flag before anything else, answers in the thread at once, and writes the ladder from the keys table; everything proactive is one of six approved templates, sent as a template outside the 24-hour window and as text inside it, composed from State, through the plain-words verifier; the patient's own feeling word is written down on his word alone; the thread is read by the owner and his chief, by reference, never the words; and every message in or out is a line on the trail. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it) and the profile id and Mei's number from it:
+
+1. **A no.** `POST /dev/whatsapp/inbound` with `{"from_e164": "<Mei's number>", "text": "sugar 7.2 before breakfast"}`: the answer's `outcome` is `proposal` and the reply reads it back. Then the same with `"text": "no"`: `outcome: declined`, the reply is "OK, I did not write it down.", and `GET /profiles/{profile_id}/facts?subject=blood_sugar` is still `[]`. Send `"yes"` now and the answer is `nothing_open`: a proposal is answered once.
+2. **The signed webhook.** The dev door walks the webhook's path; the webhook itself checks a signature first. `POST /whatsapp/webhook` with any body and no `X-Hub-Signature-256` header answers `403 {"refusal": "NotAWebhook"}` and nothing happens. `GET /whatsapp/webhook?hub.mode=subscribe&hub.verify_token=nura-dev-webhook-secret&hub.challenge=hello` answers `hello`: the handshake a provider makes once, with the secret `make dev` sets. A wrong token is `403`.
+
+The provider is a port (`backend/app/channels/whatsapp/provider.py`): `send_text`, `send_template`, `fetch_media`, `verify_webhook`, `parse_inbound`. The fixture behind it is the only one built, and the process refuses to start on it outside a declared dev run, the way it refuses the logging code sender. The six templates are in `backend/app/channels/whatsapp/templates.py` as names, slot lists and the words in English, Malay and Chinese; a real number carries them to Meta for approval once, and `app/channels/whatsapp/config.py` says which are approved on this number.
 
 ## Rules the operator follows between checkpoints
 

@@ -18,6 +18,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.whatsapp.provider import WhatsAppProvider
 from app.db import unit_of_work
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
@@ -45,6 +46,9 @@ class Providers:
     drug_registry: DrugRegistry
     """The licensed drug data behind its port (`app.drugs`): identification, interactions and
     monographs come from it and from nowhere else."""
+    whatsapp: WhatsAppProvider
+    """The business solution provider behind its port (`app.channels.whatsapp.provider`);
+    the fixture on a laptop and in the tests, which sends nothing anywhere."""
 
 
 def settings_of(request: Request) -> Settings:

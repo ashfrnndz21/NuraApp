@@ -24,6 +24,7 @@ from alembic.operations import Operations
 from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
+from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.models import ReviewCard, ReviewField
@@ -32,6 +33,7 @@ from app.keys.models import Key
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
+from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
@@ -60,6 +62,11 @@ TABLES: tuple[Table, ...] = (
     Supply.__table__,
     DoseTaken.__table__,
     InteractionFlag.__table__,
+    WhatsAppThread.__table__,
+    Flag.__table__,
+    WhatsAppMessage.__table__,
+    Proposal.__table__,
+    Escalation.__table__,
 )
 
 
@@ -139,7 +146,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0009_medicines"]
+    assert heads == ["0010_whatsapp"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
