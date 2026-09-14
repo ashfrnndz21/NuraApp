@@ -13,6 +13,7 @@ fresh phone numbers, so it can be run again on the same dev.db; `make reset-db` 
 
 from __future__ import annotations
 
+import base64
 import os
 import random
 import re
@@ -951,7 +952,447 @@ def checkpoint_4(client: httpx.Client) -> None:
     )
 
 
-CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3, 4: checkpoint_4}
+# --- checkpoint 6: medicines ----------------------------------------------------------------
+
+LABEL_PHOTO = base64.b64encode(b"\xff\xd8\xff\xe0 the dispensing label, as a photo").decode()
+VOICE_NOTE = base64.b64encode(b"ID3 a voice note: the helper says one tablet at night").decode()
+NO_SUCH_YES = "00000000-0000-0000-0000-000000000001"
+
+
+def artefact(client: httpx.Client, person: Person, profile_id: str, kind: str, what: str) -> str:
+    made = check(
+        client.post(
+            f"/profiles/{profile_id}/artefacts",
+            headers=bearer(person.token),
+            json={
+                "kind": kind,
+                "content_type": "image/jpeg" if kind == "photo" else "audio/mpeg",
+                "content_base64": LABEL_PHOTO if kind == "photo" else VOICE_NOTE,
+            },
+        ),
+        201,
+        what,
+    )
+    artifact_id: str = made["artifact_id"]
+    return artifact_id
+
+
+def medicine_label(generic: str, strength: str, dose_text: str, quantity: int) -> JSON:
+    return {
+        "generic": generic,
+        "strength": strength,
+        "dose_text": dose_text,
+        "quantity": quantity,
+        "prescriber": "Dr Tan",
+        "source_kind": "retail",
+    }
+
+
+def say_yes(
+    client: httpx.Client, person: Person, profile_id: str, label: JSON, artifact_id: str, what: str
+) -> str:
+    minted = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(person.token),
+            json={"subject": "medicine", "label": label, "source_artifact_id": artifact_id},
+        ),
+        201,
+        what,
+    )
+    confirmation_id: str = minted["confirmation_id"]
+    return confirmation_id
+
+
+def add_medicine(
+    client: httpx.Client, person: Person, profile_id: str, label: JSON, artifact_id: str, what: str
+) -> httpx.Response:
+    """Say yes to what the label means, then write it. The write's response, unchecked."""
+    yes = say_yes(client, person, profile_id, label, artifact_id, f"{what}: his OK")
+    return client.post(
+        f"/profiles/{profile_id}/medicines",
+        headers=bearer(person.token),
+        json={"label": label, "source_artifact_id": artifact_id, "confirmation_id": yes},
+    )
+
+
+def medicines_of(
+    client: httpx.Client, person: Person, profile_id: str, what: str
+) -> dict[str, JSON]:
+    rows = check(
+        client.get(f"/profiles/{profile_id}/medicines?language=en", headers=bearer(person.token)),
+        200,
+        what,
+    )
+    return {row["generic"]: row for row in rows}
+
+
+def checkpoint_6(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+
+    # 1. Pa opens his profile, in Malay, and has no medicines yet.
+    profile_id = open_own_profile(client, pa, "ms")
+    if medicines_of(client, pa, profile_id, "Pa reads his medicines") != {}:
+        raise fail("Pa reads his medicines", why="a fresh profile already has medicines")
+    ok("Pa reads his medicines (GET /profiles/{id}/medicines): none yet ([])")
+
+    # 2. A label photo, then what the label would mean: a new line, identified in the register.
+    photo = artefact(client, pa, profile_id, "photo", "Pa keeps the label photo")
+    amlodipine = medicine_label("amlodipine", "5 mg", "1 biji sekali sehari pagi", 30)
+    shown = check(
+        client.post(
+            f"/profiles/{profile_id}/medicines/draft",
+            headers=bearer(pa.token),
+            json={"label": amlodipine, "source_artifact_id": photo},
+        ),
+        200,
+        "Pa asks what the amlodipine label means",
+    )
+    match = shown["match"]
+    if shown["outcome"] != "new_line" or match["generic"] != "amlodipine" or match["high_risk"]:
+        raise fail("Pa asks what the amlodipine label means", why=f"got {shown}")
+    ok(
+        "Pa kept a label photo (POST /profiles/{id}/artefacts, stored in the region) and asked "
+        "what the label means (POST /profiles/{id}/medicines/draft): a new line — the fixture "
+        f"register identified {match['brand']} {match['strength']} as {match['generic']} "
+        f"({match['registration_no']}), the dose read from the label's Malay words, "
+        "1 biji sekali sehari pagi; nothing written yet"
+    )
+
+    # 3. His OK, then the write.
+    added = check(
+        add_medicine(client, pa, profile_id, amlodipine, photo, "Pa adds amlodipine"),
+        201,
+        "Pa adds amlodipine",
+    )
+    if added["outcome"] != "new_line" or added["supply"]["quantity"] != 30 or added["flags"]:
+        raise fail("Pa adds amlodipine", why=f"got {added}")
+    amlodipine_id: str = added["line_id"]
+    ok(
+        "Pa said OK (POST /profiles/{id}/confirmations, subject medicine: a yes for exactly this "
+        "label, good for ten minutes, used once) and added it (POST /profiles/{id}/medicines): "
+        "one medication fact on the photo, confirmed by him, one line, one supply of 30"
+    )
+
+    # 4. The story, in Malay.
+    story = check(
+        client.get(
+            f"/profiles/{profile_id}/medicines/{amlodipine_id}/story", headers=bearer(pa.token)
+        ),
+        200,
+        "Pa hears the story of his blood pressure tablet",
+    )
+    if story["language"] != "ms" or "amlodipine" in " ".join(story["lines"]):
+        raise fail("Pa hears the story of his blood pressure tablet", why=f"got {story}")
+    ok(
+        "Pa reads the story in Malay (GET .../story; his profile's language): purpose, how to "
+        "take, what to look out for, what to avoid, if he forgot, and the boundary — from "
+        "templates keyed by the licensed monograph, no model, the chemical name kept small:"
+    )
+    for line in story["lines"]:
+        print(f"    {line}")
+
+    # 5. Two taps; the count and the reorder date.
+    for anchor in ("breakfast", None):
+        check(
+            client.post(
+                f"/profiles/{profile_id}/medicines/{amlodipine_id}/taken",
+                headers=bearer(pa.token),
+                json={} if anchor is None else {"anchor": anchor},
+            ),
+            201,
+            "Pa taps Taken",
+        )
+    row = medicines_of(client, pa, profile_id, "Pa reads the count")["amlodipine"]
+    count = row["count"]
+    if count["remaining"] != 28 or count["days_left"] != 28 or count["basis"] != "taps":
+        raise fail("Pa reads the count", why=f"got {count}")
+    ok(
+        "Pa tapped Taken twice (POST .../taken: his own tap, no confirm, a DOSE_TAKEN event "
+        f"each): {int(count['dispensed'])} dispensed − {int(count['taken'])} taken = "
+        f"{int(count['remaining'])} left, about {count['days_left']} days; reorder on "
+        f"{count['reorder_date']} (days left − 3 days lead time for a retail pharmacy); in his words:"
+    )
+    for line in count["lines"]:
+        print(f"    {line}")
+
+    # 6. Warfarin from a voice note: refused by class. From the label photo: saved, high-risk.
+    voice = artefact(client, pa, profile_id, "voice", "Pa keeps a voice note")
+    warfarin = medicine_label("warfarin", "3 mg", "1 tab ON", 28)
+    refused_high_risk = add_medicine(
+        client, pa, profile_id, warfarin, voice, "Pa adds warfarin from a voice note"
+    )
+    body = refused(
+        refused_high_risk, 400, "HighRiskNeedsLabelPhoto", "Pa adds warfarin from a voice note"
+    )
+    if body.get("drug_class") != "anticoagulant":
+        raise fail("Pa adds warfarin from a voice note", refused_high_risk, "expected the class")
+    if "warfarin" in medicines_of(client, pa, profile_id, "Pa reads his medicines again"):
+        raise fail("Pa adds warfarin from a voice note", why="the line was written anyway")
+    ok(
+        "warfarin from a voice note was refused: HighRiskNeedsLabelPhoto (400), by class — "
+        f"{body['drug_class']}; nothing written, and his yes was not spent on it"
+    )
+    label_photo = artefact(client, pa, profile_id, "photo", "Pa photographs the warfarin label")
+    saved = check(
+        add_medicine(
+            client, pa, profile_id, warfarin, label_photo, "Pa adds warfarin from the label"
+        ),
+        201,
+        "Pa adds warfarin from the label",
+    )
+    if not saved["high_risk"] or saved["generic"] != "warfarin":
+        raise fail("Pa adds warfarin from the label", why=f"got {saved}")
+    warfarin_id: str = saved["line_id"]
+    ok("from the label photo warfarin was added (201), marked high_risk")
+
+    # 7. Aspirin: screened before it is saved; the flag is a question for the doctor.
+    aspirin = medicine_label("aspirin", "100 mg", "1 tab OD", 30)
+    aspirin_photo = artefact(client, pa, profile_id, "photo", "Pa photographs the aspirin box")
+    shown = check(
+        client.post(
+            f"/profiles/{profile_id}/medicines/draft",
+            headers=bearer(pa.token),
+            json={"label": aspirin, "source_artifact_id": aspirin_photo},
+        ),
+        200,
+        "Pa asks what the aspirin label means",
+    )
+    flagged = shown["flagged"]
+    if (
+        len(flagged) != 1
+        or flagged[0]["other_generic"] != "warfarin"
+        or flagged[0]["severity"] != "major"
+    ):
+        raise fail("Pa asks what the aspirin label means", why=f"expected a major flag: {shown}")
+    added = check(
+        add_medicine(client, pa, profile_id, aspirin, aspirin_photo, "Pa adds aspirin"),
+        201,
+        "Pa adds aspirin",
+    )
+    if len(added["flags"]) != 1 or added["flags"][0]["text_id"] != "bleeding_risk":
+        raise fail("Pa adds aspirin", why=f"got {added}")
+    questions = check(
+        client.get(
+            f"/profiles/{profile_id}/medicines/interactions?language=en", headers=bearer(pa.token)
+        ),
+        200,
+        "Pa reads the interaction questions",
+    )
+    if len(questions) != 1 or questions[0]["other_generic"] != "warfarin":
+        raise fail("Pa reads the interaction questions", why=f"got {questions}")
+    ok(
+        "aspirin was screened before it was saved: the licensed data flagged aspirin with "
+        "warfarin, major (bleeding_risk), shown on the draft and written as a flag with the "
+        "line; GET .../medicines/interactions renders it as a question for the doctor, "
+        "both medicines named in his words:"
+    )
+    for line in questions[0]["question"]:
+        print(f"    {line}")
+
+    # 8. A dose change: 10 mg on the new pack. Nothing moves without his OK.
+    new_pack = artefact(client, pa, profile_id, "photo", "Pa photographs the new pack")
+    ten = medicine_label("amlodipine", "10 mg", "1 biji sekali sehari pagi", 30)
+    shown = check(
+        client.post(
+            f"/profiles/{profile_id}/medicines/draft",
+            headers=bearer(pa.token),
+            json={"label": ten, "source_artifact_id": new_pack},
+        ),
+        200,
+        "Pa asks what the new amlodipine pack means",
+    )
+    if shown["outcome"] != "dose_change" or shown["matched_line_id"] != amlodipine_id:
+        raise fail("Pa asks what the new amlodipine pack means", why=f"got {shown}")
+    no_yes = client.post(
+        f"/profiles/{profile_id}/medicines",
+        headers=bearer(pa.token),
+        json={"label": ten, "source_artifact_id": new_pack, "confirmation_id": NO_SUCH_YES},
+    )
+    refused(no_yes, 400, "NotAConfirmerHere", "the dose change without Pa's OK")
+    still = medicines_of(client, pa, profile_id, "Pa reads his medicines")["amlodipine"]
+    if still["strength"] != "5 mg" or still["line_id"] != amlodipine_id:
+        raise fail("the dose change without Pa's OK", why=f"the line moved: {still}")
+    ok(
+        "the new pack says 10 mg: the draft classifies it as a dose_change on the 5 mg line; "
+        "written without his OK it is refused, NotAConfirmerHere (400), and the 5 mg line "
+        "stays current"
+    )
+    changed = check(
+        add_medicine(client, pa, profile_id, ten, new_pack, "Pa says OK to the new pack"),
+        201,
+        "Pa says OK to the new pack",
+    )
+    if changed["outcome"] != "dose_change" or changed["supersedes_id"] != amlodipine_id:
+        raise fail("Pa says OK to the new pack", why=f"got {changed}")
+    now = medicines_of(client, pa, profile_id, "Pa reads his medicines after the change")[
+        "amlodipine"
+    ]
+    story = check(
+        client.get(
+            f"/profiles/{profile_id}/medicines/{now['line_id']}/story?language=en",
+            headers=bearer(pa.token),
+        ),
+        200,
+        "Pa reads the story after the change",
+    )
+    if now["strength"] != "10 mg" or now["change_kind"] != "dose_change":
+        raise fail("Pa reads his medicines after the change", why=f"got {now}")
+    if not now["doctor_question"] or any(line.startswith("Take ") for line in story["lines"]):
+        raise fail("Pa reads the story after the change", why=f"got {story}")
+    log = check(
+        client.get(f"/profiles/{profile_id}/medicines/history", headers=bearer(pa.token)),
+        200,
+        "Pa reads the change log",
+    )
+    old = [row for row in log if row["line_id"] == amlodipine_id]
+    if len(old) != 1 or old[0]["superseded_at"] is None:
+        raise fail("Pa reads the change log", why=f"the 5 mg line is not kept as superseded: {log}")
+    ok(
+        "with his OK the 10 mg line supersedes the 5 mg line (kept, marked with when, in "
+        "GET .../medicines/history); the story does not tell him an amount — it asks the doctor:"
+    )
+    for line in now["doctor_question"]:
+        print(f"    {line}")
+
+    # 9. Today's cards.
+    cards = check(
+        client.get(f"/profiles/{profile_id}/medicines/today?language=en", headers=bearer(pa.token)),
+        200,
+        "Pa reads today's doses",
+    )
+    if [(c["generic"], c["anchor"]) for c in cards] != [
+        ("amlodipine", "breakfast"),
+        ("aspirin", "breakfast"),
+        ("warfarin", "bed"),
+    ]:
+        raise fail("Pa reads today's doses", why=f"got {cards}")
+    ok("Pa reads today's doses (GET .../medicines/today): one card per medicine at its anchor:")
+    for card in cards:
+        mark = "taken" if card["taken"] else "not yet"
+        print(f"    {card['anchor']:>9}  {card['card']}  [{card['taken_label']}: {mark}]")
+
+    # 10. Mei, a helper with the medicines key: reads, taps, cannot add.
+    register(client, mei, "en")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": ["medicines"],
+                "relationship": "helper",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei see his medicines",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_phone_e164": mei.phone_e164, "role": "helper", "scopes": ["medicines"]},
+        ),
+        201,
+        "Pa cuts Mei a helper key",
+    )
+    hers = medicines_of(client, mei, profile_id, "Mei reads Pa's medicines")
+    if set(hers) != {"amlodipine", "warfarin", "aspirin"}:
+        raise fail("Mei reads Pa's medicines", why=f"got {sorted(hers)}")
+    told = check(
+        client.get(
+            f"/profiles/{profile_id}/medicines/{warfarin_id}/story", headers=bearer(mei.token)
+        ),
+        200,
+        "Mei reads the warfarin story",
+    )
+    if told["language"] != "ms":
+        raise fail("Mei reads the warfarin story", why=f"got {told}")
+    paracetamol = medicine_label("paracetamol", "500 mg", "2 tabs prn", 20)
+    her_draft = client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        headers=bearer(mei.token),
+        json={"label": paracetamol, "source_artifact_id": photo},
+    )
+    refused(her_draft, 403, "NotTheirsToChange", "Mei asks what a label means")
+    her_yes = client.post(
+        f"/profiles/{profile_id}/confirmations",
+        headers=bearer(mei.token),
+        json={"subject": "medicine", "label": paracetamol, "source_artifact_id": photo},
+    )
+    refused(her_yes, 403, "NotTheirsToChange", "Mei mints a yes for a medicine")
+    her_add = client.post(
+        f"/profiles/{profile_id}/medicines",
+        headers=bearer(mei.token),
+        json={"label": paracetamol, "source_artifact_id": photo, "confirmation_id": NO_SUCH_YES},
+    )
+    refused(her_add, 403, "NotTheirsToChange", "Mei adds a medicine")
+    if len(medicines_of(client, pa, profile_id, "Pa reads his medicines")) != 3:
+        raise fail("Mei adds a medicine", why="a line was written")
+    given = check(
+        client.post(
+            f"/profiles/{profile_id}/medicines/{warfarin_id}/taken",
+            headers=bearer(mei.token),
+            json={"anchor": "bed"},
+        ),
+        201,
+        "Mei taps Taken for the warfarin",
+    )
+    if given["by_person_id"] != mei.person_id:
+        raise fail("Mei taps Taken for the warfarin", why=f"not in her name: {given}")
+    ok(
+        "Mei (helper key, medicines) reads the list (3 lines) and the warfarin story in Pa's "
+        "language, and taps Taken for him in her own name; asking what a label means, minting a "
+        "yes and adding a line are all refused: NotTheirsToChange (403) — a key to read the "
+        "medicines is not a key to change them"
+    )
+
+    # 11. The refusals are on Pa's trail, by name, with nothing of the medicines on them.
+    lines: list[JSON] = []
+    for person in (pa, mei):
+        lines.extend(
+            check(
+                client.get(
+                    f"/profiles/{profile_id}/audit?actor_person_id={person.person_id}"
+                    "&scope=medicines&limit=500",
+                    headers=bearer(pa.token),
+                ),
+                200,
+                "Pa reads his trail",
+            )
+        )
+    refusals = [row for row in lines if row["outcome"] == "refused"]
+    names = {(row["actor_person_id"], row["refused_because"]) for row in refusals}
+    wanted = {
+        (pa.person_id, "HighRiskNeedsLabelPhoto"),
+        (pa.person_id, "NotAConfirmerHere"),
+        (mei.person_id, "NotTheirsToChange"),
+    }
+    if not wanted <= names:
+        raise fail("Pa reads his trail", why=f"missing {wanted - names}")
+    if any(word in str(lines) for word in ("warfarin", "amlodipine", "aspirin", "Dr Tan")):
+        raise fail("Pa reads his trail", why="a medicine's name is on the trail")
+    ok(
+        f"Pa reads his trail under the medicines scope ({len(lines)} lines for the two of them); "
+        "every refusal is on it by name, and no line says which medicine:"
+    )
+    seen: set[tuple[str, str, str]] = set()
+    for row in refusals:
+        who = "Mei" if row["actor_person_id"] == mei.person_id else "Pa"
+        key = (who, row["action"], row["refused_because"])
+        if key in seen:
+            continue
+        seen.add(key)
+        print(
+            f"    {row['at'][:19]}  {who:>3}  {row['action']} {row['scope']} {row['target']}  "
+            f"refused {row['refused_because']}"
+        )
+
+
+CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3, 4: checkpoint_4, 6: checkpoint_6}
 
 
 def main(argv: list[str]) -> int:

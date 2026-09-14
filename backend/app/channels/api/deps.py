@@ -19,11 +19,13 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import unit_of_work
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
 from app.identity.models import LoginSession, Person
 from app.identity.providers import CodeSender
 from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.memory.objects import ObjectStore
 from app.regions import OutOfRegion
 from app.settings import Settings
 
@@ -32,9 +34,16 @@ log = logging.getLogger("nura.channels.api")
 
 @dataclass(frozen=True, slots=True)
 class Providers:
-    """The outside world, as the app sees it. Tests pass fixtures; `main` passes the real ones."""
+    """The outside world, as the app sees it. Tests pass fixtures; `main` passes the real ones.
+
+    `drug_registry` is the licensed drug data behind its port (`app.drugs`): identification,
+    interactions and monographs come from it and from nowhere else. `object_store` is where
+    an artefact's bytes go, in the profile's region; None means the API cannot take uploads.
+    """
 
     code_sender: CodeSender
+    drug_registry: DrugRegistry
+    object_store: ObjectStore | None = None
 
 
 def settings_of(request: Request) -> Settings:

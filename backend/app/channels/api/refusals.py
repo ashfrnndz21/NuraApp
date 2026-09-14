@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.medicines import NoObjectStore
 from app.channels.api.profiles import NoSuchHolder
 from app.consent.service import (
     NoConsent,
@@ -25,7 +26,9 @@ from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
+from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -41,10 +44,17 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
     (NotTheClaimant, 403),
+    # A key to read the medicines is not a key to change them.
+    (NotTheirsToChange, 403),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoSuchLine, 404),
+    # The same label twice, or one that adds nothing, changes nothing.
+    (AlreadyRecorded, 409),
+    # No object store on this deployment: the API cannot take the bytes.
+    (NoObjectStore, 503),
     (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
@@ -52,7 +62,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (AlreadySetUp, 409),
     (WaitingToBeClaimed, 409),
 )
-"""Every other refusal is a 400: the request was well formed and the answer is no."""
+"""Every other refusal is a 400: the request was well formed and the answer is no. The
+high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class."""
 
 
 def status_of(refusal: Refusal) -> int:
@@ -67,4 +78,6 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
     body: dict[str, str] = {"refusal": type(refusal).__name__}
     if isinstance(refusal, OutOfScope):
         body["scope"] = refusal.scope.value
+    if isinstance(refusal, HighRiskNeedsLabelPhoto):
+        body["drug_class"] = refusal.drug_class
     return JSONResponse(status_code=status_of(refusal), content=body)

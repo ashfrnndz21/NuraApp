@@ -12,8 +12,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+import app.medicines  # wires the high-risk label-photo rule onto the memory store
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
-from app.channels.api import auth, doors, profiles
+from app.channels.api import auth, doors, medicines, profiles
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused
 from app.db import KeptSession
@@ -38,6 +39,7 @@ def create_app(
     app.include_router(auth.router)
     app.include_router(doors.router)
     app.include_router(profiles.router)
+    app.include_router(medicines.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

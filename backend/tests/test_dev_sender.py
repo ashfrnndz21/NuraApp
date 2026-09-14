@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.db import make_session_factory
+from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
     LoggingCodeSender,
@@ -45,11 +46,28 @@ async def test_create_app_refuses_the_logging_sender_outside_a_dev_run() -> None
     sessions = make_session_factory(engine)
     production = Settings(region=Region.SG, database_url="sqlite+aiosqlite://")
     with pytest.raises(DevSenderInProduction):
-        create_app(production, sessions, Providers(code_sender=LoggingCodeSender()))
+        create_app(
+            production,
+            sessions,
+            Providers(code_sender=LoggingCodeSender(), drug_registry=FixtureRegistry.load()),
+        )
     with pytest.raises(DevSenderInProduction):
-        create_app(production, sessions, Providers(code_sender=LoggingCodeSender(reveal=True)))
+        create_app(
+            production,
+            sessions,
+            Providers(
+                code_sender=LoggingCodeSender(reveal=True), drug_registry=FixtureRegistry.load()
+            ),
+        )
     dev = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True)
-    assert create_app(dev, sessions, Providers(code_sender=LoggingCodeSender())) is not None
+    assert (
+        create_app(
+            dev,
+            sessions,
+            Providers(code_sender=LoggingCodeSender(), drug_registry=FixtureRegistry.load()),
+        )
+        is not None
+    )
     await engine.dispose()
 
 

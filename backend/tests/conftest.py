@@ -30,8 +30,10 @@ from sqlalchemy.pool import StaticPool
 from app.channels.api import Providers, create_app
 from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
+from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.keys import confirm  # noqa: F401
+from app.memory.objects import MemoryObjectStore
 from app.regions import Region
 from app.settings import Settings
 
@@ -115,7 +117,15 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
     sender = LoggingCodeSender(reveal=True)
     settings = Settings(region=region, database_url="sqlite+aiosqlite://", dev_code_sender=True)
-    app = create_app(settings, sessions, Providers(code_sender=sender))
+    app = create_app(
+        settings,
+        sessions,
+        Providers(
+            code_sender=sender,
+            drug_registry=FixtureRegistry.load(),
+            object_store=MemoryObjectStore(),
+        ),
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://nura.test") as client:
         yield Deployment(region=region, client=client, sessions=sessions, sender=sender)
     await engine.dispose()

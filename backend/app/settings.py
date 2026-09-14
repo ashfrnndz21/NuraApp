@@ -20,6 +20,13 @@ class Settings:
     dev_code_sender: bool = False
     """Only with NURA_DEV_CODE_SENDER=1 may the logging code sender run. It prints login
     codes to the server log, which is fine on a laptop and account takeover anywhere else."""
+    drug_registry: str = "fixture"
+    """Which licensed drug registry the deployment runs on (`app.drugs.client`). Only the
+    fixture is built; a name this build does not have refuses to start."""
+    object_store_dir: str | None = None
+    """Where a local run keeps artefact bytes (NURA_OBJECT_STORE_DIR). Unset, artefacts
+    cannot be uploaded through the API; the regional object store replaces this in a
+    deployment."""
 
 
 class MissingSetting(RuntimeError):
@@ -38,4 +45,10 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     except KeyError as missing:
         raise MissingSetting(f"{missing.args[0]} is not set") from missing
     dev_code_sender = source.get("NURA_DEV_CODE_SENDER", "") == "1"
-    return Settings(region=region, database_url=database_url, dev_code_sender=dev_code_sender)
+    return Settings(
+        region=region,
+        database_url=database_url,
+        dev_code_sender=dev_code_sender,
+        drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
+        object_store_dir=source.get("NURA_OBJECT_STORE_DIR") or None,
+    )

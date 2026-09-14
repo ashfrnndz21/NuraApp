@@ -7,6 +7,8 @@ setup: ; cd backend && python3 -m pip install -e ".[dev]"
 # sets both explicitly.
 dev migrate: export NURA_REGION ?= SG
 dev migrate: export NURA_DATABASE_URL ?= sqlite+aiosqlite:///./dev.db
+# A local run keeps artefact bytes (label photos) in backend/.objects, gitignored.
+dev: export NURA_OBJECT_STORE_DIR ?= ./.objects
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
 migrate: ; cd backend && python3 -m alembic upgrade heads

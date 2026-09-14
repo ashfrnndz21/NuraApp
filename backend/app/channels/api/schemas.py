@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
-from typing import Any, Literal
+from dataclasses import asdict
+from datetime import date, datetime
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -24,7 +25,28 @@ from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
-from app.memory.models import ArtifactKind, ConfidenceState, Event, Fact
+from app.medicines.dose import Anchor, Dose, Frequency, parse_dose_text
+from app.medicines.models import (
+    ChangeKind,
+    DoseTaken,
+    InteractionFlag,
+    LineStatus,
+    MedicationLine,
+    SourceKind,
+    Supply,
+)
+from app.medicines.service import (
+    Count,
+    FlagView,
+    Label,
+    LineView,
+    Plan,
+    Reconciled,
+    Slot,
+)
+from app.medicines.service import Outcome as MedicineOutcome
+from app.medicines.story import Story
+from app.memory.models import Artifact, ArtifactKind, ConfidenceState, Event, Fact
 from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
@@ -350,9 +372,22 @@ class ClaimConfirmIn(BaseModel):
     language: str = Field(min_length=2, max_length=16)
 
 
-ConfirmIn = ClaimConfirmIn
-"""What `POST /profiles/{id}/confirmations` takes, by subject. Facts and visits are minted
-by the surfaces that show them once those exist; the claim is the first."""
+class MedicineConfirmIn(BaseModel):
+    """A yes to what a label means for the list, as shown by `POST /medicines/draft`.
+
+    The draft is recomputed from the label and the list — a new line, a refill, a dose change
+    naming the line it supersedes — so the yes binds to exactly what `POST /medicines` will
+    write with it, and nothing here can name a different medicine or amount.
+    """
+
+    subject: Literal["medicine"]
+    label: LabelIn
+    source_artifact_id: uuid.UUID
+
+
+ConfirmIn = Annotated[ClaimConfirmIn | MedicineConfirmIn, Field(discriminator="subject")]
+"""What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01) and a medicine
+label (E04). Visits are minted by the surface that shows them once it exists."""
 
 
 class ConfirmationOut(BaseModel):
@@ -509,38 +544,447 @@ class NoteOut(BaseModel):
         return cls(note_id=note.id, text=note.text, written_at=note.written_at)
 
 
-class MedicineOut(BaseModel):
-    """A current fact with subject "medicine", with its provenance and its confidence.
+class DoseIn(BaseModel):
+    """How much, how often, at which moments of his day. A code, never a sentence."""
 
-    Nothing infers without provenance: the artefact or event the fact was read from travels
-    with it, so a screen can always show where a value came from. The real medicine line
-    arrives with E04.
-    """
+    amount: float = Field(gt=0)
+    unit: str = Field(min_length=1, max_length=16)
+    frequency: Frequency
+    anchors: list[Anchor] = Field(default_factory=list)
 
-    fact_id: uuid.UUID
-    attribute: str
-    value: Any
-    unit: str | None
-    confidence: float
-    confidence_state: ConfidenceState
-    artifact_id: uuid.UUID | None
-    event_id: uuid.UUID | None
-    valid_from: datetime
-    valid_to: datetime | None
+    def as_dose(self) -> Dose:
+        return Dose(
+            amount=self.amount,
+            unit=self.unit,
+            frequency=self.frequency,
+            anchors=tuple(self.anchors),
+        )
+
+
+class LabelIn(BaseModel):
+    """What one label or pack said. The dose comes as a code or as the label's own words
+    (`dose_text`: "1 tab BD", "1 biji 2 kali sehari"), one of the two. Nothing here is a
+    patient's name: the label's patient line is checked by ingestion and never stored."""
+
+    generic: str | None = Field(default=None, min_length=1, max_length=64)
+    brand: str | None = Field(default=None, min_length=1, max_length=80)
+    strength: str | None = Field(default=None, min_length=1, max_length=32)
+    form: str | None = Field(default=None, min_length=1, max_length=32)
+    registration_no: str | None = Field(default=None, min_length=1, max_length=32)
+    dose: DoseIn | None = None
+    dose_text: str | None = Field(default=None, min_length=1, max_length=120)
+    quantity: int | None = Field(default=None, gt=0)
+    prescriber: str | None = Field(default=None, min_length=1, max_length=80)
+    dispensed_at: datetime | None = None
+    source_kind: SourceKind = SourceKind.RETAIL
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _one_dose(self) -> LabelIn:
+        if (self.dose is None) == (self.dose_text is None):
+            raise ValueError("give the dose as a code or as the label's words, one of the two")
+        if self.generic is None and self.brand is None and self.registration_no is None:
+            raise ValueError("a label names the medicine: registration number, brand or generic")
+        return self
+
+    def as_label(self) -> Label:
+        dose = (
+            self.dose.as_dose() if self.dose is not None else parse_dose_text(self.dose_text or "")
+        )
+        return Label(
+            dose=dose,
+            generic=self.generic,
+            brand=self.brand,
+            strength=self.strength,
+            form=self.form,
+            registration_no=self.registration_no,
+            quantity=self.quantity,
+            prescriber=self.prescriber,
+            dispensed_at=self.dispensed_at,
+            source_kind=self.source_kind,
+            confidence=self.confidence,
+        )
+
+
+class MedicineDraftIn(BaseModel):
+    """Ask what this label would do to the list, before anyone says yes."""
+
+    label: LabelIn
+    source_artifact_id: uuid.UUID
+
+
+class MedicineIn(BaseModel):
+    """Write what the label means, with the yes minted for exactly that."""
+
+    label: LabelIn
+    source_artifact_id: uuid.UUID
+    confirmation_id: uuid.UUID
+
+
+class DrugMatchOut(BaseModel):
+    """The product the licensed register identified. Never a guess."""
+
+    registration_no: str
+    brand: str
+    generic: str
+    strength: str
+    form: str
+    drug_class: str
+    high_risk: bool
+
+
+class FlaggedOut(BaseModel):
+    """One pair the licensed data flagged: which other line, how much it matters, and the
+    question for the doctor in the patient's words."""
+
+    other_line_id: uuid.UUID
+    other_generic: str
+    severity: str
+    text_id: str
+    question: list[str]
 
     @classmethod
-    def of(cls, fact: Fact) -> MedicineOut:
+    def of(cls, view: FlagView) -> FlaggedOut:
         return cls(
-            fact_id=fact.id,
-            attribute=fact.attribute,
-            value=fact.value,
-            unit=fact.unit,
-            confidence=fact.confidence,
-            confidence_state=fact.confidence_state,
-            artifact_id=fact.artifact_id,
-            event_id=fact.event_id,
-            valid_from=fact.valid_from,
-            valid_to=fact.valid_to,
+            other_line_id=view.other.id,
+            other_generic=view.other.generic,
+            severity=view.flag.severity.value,
+            text_id=view.flag.text_id,
+            question=view.question,
+        )
+
+
+class MedicineDraftOut(BaseModel):
+    """What the label means against the list, before anything is written.
+
+    `flagged` names the interactions that would be recorded with a new line, severity and
+    both medicines. `needs_label_photo` is the high-risk rule: this class is saved only from
+    a label photo, and the artefact given is not one.
+    """
+
+    outcome: MedicineOutcome
+    match: DrugMatchOut
+    matched_line_id: uuid.UUID | None
+    flagged: list[FlaggedOut]
+    needs_label_photo: bool
+    lead_time_days: int
+
+    @classmethod
+    def of(cls, plan: Plan, questions: list[list[str]]) -> MedicineDraftOut:
+        return cls(
+            outcome=plan.outcome,
+            match=DrugMatchOut(**asdict(plan.match)),
+            matched_line_id=None if plan.matched_line is None else plan.matched_line.id,
+            flagged=[
+                FlaggedOut(
+                    other_line_id=each.other_line.id,
+                    other_generic=each.other_line.generic,
+                    severity=each.interaction.severity.value,
+                    text_id=each.interaction.text_id,
+                    question=question,
+                )
+                for each, question in zip(plan.flagged, questions, strict=True)
+            ],
+            needs_label_photo=plan.needs_label_photo,
+            lead_time_days=plan.lead_time_days,
+        )
+
+
+class CountOut(BaseModel):
+    """The running count and the reorder date, with what they rest on, and the same in his
+    words. `basis` is `taps` (dispensed minus Taken) or `none` (nothing dispensed yet)."""
+
+    remaining: float
+    unit: str
+    dispensed: float
+    taken: float
+    daily_amount: float | None
+    days_left: int | None
+    reorder_date: date | None
+    reorder_due: bool
+    lead_time_days: int
+    basis: str
+    lines: list[str]
+    reorder: list[str]
+    reorder_actions: dict[str, str]
+
+    @classmethod
+    def of(cls, count: Count) -> CountOut:
+        return cls(**asdict(count))
+
+
+class LineOut(BaseModel):
+    """One line of the reconciled list: what the register identified, the dose the label
+    said, where it came from and how sure, its count, its flags, and the other active lines
+    of the same medicine (two strengths in the cupboard)."""
+
+    line_id: uuid.UUID
+    fact_id: uuid.UUID
+    name: str
+    generic: str
+    brand: str | None
+    strength: str
+    form: str
+    registration_no: str | None
+    drug_class: str
+    high_risk: bool
+    dose: DoseIn
+    prescriber: str | None
+    source_kind: SourceKind
+    source_artifact_id: uuid.UUID | None
+    source_event_id: uuid.UUID | None
+    confidence: float
+    confidence_state: ConfidenceState
+    status: LineStatus
+    change_kind: ChangeKind
+    started_at: datetime
+    supersedes_id: uuid.UUID | None
+    superseded_at: datetime | None
+    confirmed_by_person_id: uuid.UUID
+    count: CountOut | None
+    flags: list[FlaggedOut]
+    duplicate_of: list[uuid.UUID]
+    doctor_question: list[str]
+    taken_label: str | None
+
+    @classmethod
+    def of(cls, view: LineView) -> LineOut:
+        return cls(
+            **cls._columns(view.line),
+            name=view.name,
+            count=CountOut.of(view.count),
+            flags=[FlaggedOut.of(flag) for flag in view.flags],
+            duplicate_of=view.duplicate_of,
+            doctor_question=view.doctor_question,
+            taken_label=view.taken_label,
+        )
+
+    @classmethod
+    def history_of(cls, line: MedicationLine) -> LineOut:
+        return cls(
+            **cls._columns(line),
+            name=line.generic,
+            count=None,
+            flags=[],
+            duplicate_of=[],
+            doctor_question=[],
+            taken_label=None,
+        )
+
+    @staticmethod
+    def _columns(line: MedicationLine) -> dict[str, Any]:
+        dose = Dose.from_json(line.dose)
+        return {
+            "line_id": line.id,
+            "fact_id": line.fact_id,
+            "generic": line.generic,
+            "brand": line.brand,
+            "strength": line.strength,
+            "form": line.form,
+            "registration_no": line.registration_no,
+            "drug_class": line.drug_class,
+            "high_risk": line.high_risk,
+            "dose": DoseIn(
+                amount=dose.amount,
+                unit=dose.unit,
+                frequency=dose.frequency,
+                anchors=list(dose.anchors),
+            ),
+            "prescriber": line.prescriber,
+            "source_kind": line.source_kind,
+            "source_artifact_id": line.source_artifact_id,
+            "source_event_id": line.source_event_id,
+            "confidence": line.confidence,
+            "confidence_state": line.confidence_state,
+            "status": line.status,
+            "change_kind": line.change_kind,
+            "started_at": line.started_at,
+            "supersedes_id": line.supersedes_id,
+            "superseded_at": line.superseded_at,
+            "confirmed_by_person_id": line.confirmed_by_person_id,
+        }
+
+
+class SupplyOut(BaseModel):
+    supply_id: uuid.UUID
+    line_id: uuid.UUID
+    fact_id: uuid.UUID
+    quantity: int
+    dispensed_at: datetime
+    artifact_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, supply: Supply) -> SupplyOut:
+        return cls(
+            supply_id=supply.id,
+            line_id=supply.line_id,
+            fact_id=supply.fact_id,
+            quantity=supply.quantity,
+            dispensed_at=supply.dispensed_at,
+            artifact_id=supply.artifact_id,
+        )
+
+
+class FlagOut(BaseModel):
+    flag_id: uuid.UUID
+    line_id: uuid.UUID
+    other_line_id: uuid.UUID
+    severity: str
+    text_id: str
+
+    @classmethod
+    def of(cls, flag: InteractionFlag) -> FlagOut:
+        return cls(
+            flag_id=flag.id,
+            line_id=flag.line_id,
+            other_line_id=flag.other_line_id,
+            severity=flag.severity.value,
+            text_id=flag.text_id,
+        )
+
+
+class ReconciledOut(BaseModel):
+    """What the label became: the outcome, the line it landed on, the supply and the flags."""
+
+    outcome: MedicineOutcome
+    line_id: uuid.UUID
+    fact_id: uuid.UUID
+    generic: str
+    strength: str
+    high_risk: bool
+    change_kind: ChangeKind
+    supersedes_id: uuid.UUID | None
+    supply: SupplyOut | None
+    flags: list[FlagOut]
+
+    @classmethod
+    def of(cls, done: Reconciled) -> ReconciledOut:
+        return cls(
+            outcome=done.outcome,
+            line_id=done.line.id,
+            fact_id=done.line.fact_id,
+            generic=done.line.generic,
+            strength=done.line.strength,
+            high_risk=done.line.high_risk,
+            change_kind=done.line.change_kind,
+            supersedes_id=done.line.supersedes_id,
+            supply=None if done.supply is None else SupplyOut.of(done.supply),
+            flags=[FlagOut.of(flag) for flag in done.flags],
+        )
+
+
+class TakenIn(BaseModel):
+    anchor: Anchor | None = None
+    amount: float | None = Field(default=None, gt=0)
+
+
+class TakenOut(BaseModel):
+    dose_taken_id: uuid.UUID
+    line_id: uuid.UUID
+    event_id: uuid.UUID
+    anchor: str | None
+    amount: float
+    taken_at: datetime
+    by_person_id: uuid.UUID
+
+    @classmethod
+    def of(cls, taken: DoseTaken) -> TakenOut:
+        return cls(
+            dose_taken_id=taken.id,
+            line_id=taken.line_id,
+            event_id=taken.event_id,
+            anchor=taken.anchor,
+            amount=taken.amount,
+            taken_at=taken.taken_at,
+            by_person_id=taken.by_person_id,
+        )
+
+
+class StoryOut(BaseModel):
+    """The medication story as a card and a script: each section a few whole sentences,
+    `lines` the whole thing in order for the voice."""
+
+    line_id: uuid.UUID
+    language: str
+    name: str
+    generic: str
+    strength: str
+    purpose: list[str]
+    how_to_take: list[str]
+    watch_out: list[str]
+    avoid: list[str]
+    if_forgotten: list[str]
+    boundary: list[str]
+    doctor_question: list[str]
+    lines: list[str]
+
+    @classmethod
+    def of(cls, line_id: uuid.UUID, story: Story) -> StoryOut:
+        return cls(
+            line_id=line_id,
+            language=story.language,
+            name=story.name,
+            generic=story.generic,
+            strength=story.strength,
+            purpose=story.purpose,
+            how_to_take=story.how_to_take,
+            watch_out=story.watch_out,
+            avoid=story.avoid,
+            if_forgotten=story.if_forgotten,
+            boundary=story.boundary,
+            doctor_question=story.doctor_question,
+            lines=story.lines,
+        )
+
+
+class SlotOut(BaseModel):
+    """One dose card at one moment of his day."""
+
+    line_id: uuid.UUID
+    generic: str
+    anchor: str
+    card: str
+    taken: bool
+    taken_label: str
+
+    @classmethod
+    def of(cls, slot: Slot) -> SlotOut:
+        return cls(
+            line_id=slot.line.id,
+            generic=slot.line.generic,
+            anchor=slot.anchor,
+            card=slot.card,
+            taken=slot.taken,
+            taken_label=slot.taken_label,
+        )
+
+
+class ArtefactIn(BaseModel):
+    """A photo or a paper, as bytes, to keep in the profile's region. Base64 on the wire."""
+
+    kind: ArtifactKind
+    content_type: str = Field(min_length=3, max_length=128)
+    content_base64: str = Field(min_length=4)
+    captured_at: datetime | None = None
+
+
+class ArtefactOut(BaseModel):
+    artifact_id: uuid.UUID
+    kind: ArtifactKind
+    content_type: str
+    sha256: str
+    captured_at: datetime
+    region: Region
+
+    @classmethod
+    def of(cls, artifact: Artifact) -> ArtefactOut:
+        return cls(
+            artifact_id=artifact.id,
+            kind=artifact.kind,
+            content_type=artifact.content_type,
+            sha256=artifact.sha256,
+            captured_at=artifact.captured_at,
+            region=artifact.region,
         )
 
 

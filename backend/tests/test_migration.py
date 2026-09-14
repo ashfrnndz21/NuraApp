@@ -28,6 +28,7 @@ from app.consent.models import Consent
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
+from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 from app.notes.models import Note
 from app.state.models import StateSnapshot
@@ -52,6 +53,10 @@ TABLES: tuple[Table, ...] = (
     Note.__table__,
     Stewardship.__table__,
     StateSnapshot.__table__,
+    MedicationLine.__table__,
+    Supply.__table__,
+    DoseTaken.__table__,
+    InteractionFlag.__table__,
 )
 
 
@@ -131,7 +136,9 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0007_doors_and_stewardship"]
+    # E04 (0008_medicines) and E02 (0008_ingestion) branch from 0007 side by side; the merge
+    # revision that joins them is the operator's, at merge. On this branch the head is E04's.
+    assert heads == ["0008_medicines"]
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
@@ -156,7 +163,18 @@ def test_the_migrations_build_the_tables_the_models_declare(
 
         # The ties that keep provenance on the profile survive the batch rewrite (0004), and
         # so do the checks 0003 put on the fact table.
-        for table in (Artifact, Event, Fact, Episode, Provider, Appointment):
+        for table in (
+            Artifact,
+            Event,
+            Fact,
+            Episode,
+            Provider,
+            Appointment,
+            MedicationLine,
+            Supply,
+            DoseTaken,
+            InteractionFlag,
+        ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {
             "ck_fact_has_provenance",
