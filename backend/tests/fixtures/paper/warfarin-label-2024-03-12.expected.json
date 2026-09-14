@@ -1,0 +1,47 @@
+{
+  "placeholder": "warfarin-label-2024-03-12",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "medicine_label",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Warfarin",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 5,
+      "unit": "mg"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Warfarin",
+        "instruction": "1 tablet once a day at night",
+        "as_printed": "1 biji sekali sehari waktu malam"
+      },
+      "unit": "tablet"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 28,
+      "unit": "tablets"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dispensed_at",
+      "value": "2024-03-12",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "prescriber",
+      "value": "Dr Lim",
+      "unit": null
+    }
+  ]
+}

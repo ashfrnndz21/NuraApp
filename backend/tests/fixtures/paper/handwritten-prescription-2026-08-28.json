@@ -1,0 +1,93 @@
+{
+  "placeholder": "handwritten-prescription-2026-08-28",
+  "sha256": "acd017c684b39d4a90692061a853e2b6df46ec9410437928fa8b811ab6188025",
+  "format": "png",
+  "note": "Redacted sample. A prescription written by hand at a GP visit: the patient's name and IC number, the clinic's stamp and the doctor's registration number were removed, and the image is not committed. Drug, dose and frequency are each read with the recogniser's confidence (E02-02); the abbreviations as written ('1 tab', 'BD pc') are parsed per docs/medications-module.md section 2, the dose and frequency below the threshold and dotted, and the prescriber's scrawl lower still.",
+  "document_kind": "handwritten_prescription",
+  "document_date": "2026-08-28",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Metformin",
+      "unit": null,
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.18,
+        "x1": 0.6,
+        "y1": 0.23
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 500,
+      "unit": "mg",
+      "confidence": 0.87,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.18,
+        "x1": 0.6,
+        "y1": 0.23
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Metformin",
+        "instruction": "1 tablet",
+        "as_written": "1 tab"
+      },
+      "unit": "tablet",
+      "confidence": 0.79,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.27,
+        "x1": 0.6,
+        "y1": 0.32
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "frequency",
+      "value": "twice a day after meals",
+      "unit": null,
+      "confidence": 0.76,
+      "paper_says": "BD pc",
+      "span": {
+        "x0": 0.1,
+        "y0": 0.34,
+        "x1": 0.6,
+        "y1": 0.39
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 60,
+      "unit": "tablets",
+      "confidence": 0.83,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.42,
+        "x1": 0.6,
+        "y1": 0.47
+      }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "prescriber",
+      "value": "Dr Lim",
+      "unit": null,
+      "confidence": 0.62,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.8,
+        "x1": 0.6,
+        "y1": 0.85
+      }
+    }
+  ]
+}

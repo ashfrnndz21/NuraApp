@@ -31,6 +31,7 @@ from app.memory.models import (
     Event,
     EventKind,
     Fact,
+    Recording,
     SourceChannel,
     short_label,
 )
@@ -108,9 +109,15 @@ def fact_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> Colu
 
 
 RECORDED_KINDS: frozenset[ArtifactKind] = frozenset({ArtifactKind.VOICE})
-"""The artefact kinds that are a recording of people talking, and so rest on the RECORDING
-consent as well as the consent to hold the record. A transcript kind joins this set the day
-it exists (E05)."""
+"""The artefact kinds that are a recording of people talking: every writer of one declares
+whose voices it carries (`Recording`), and a consult rests on the RECORDING consent as well as
+the consent to hold the record (ADR 0003). A transcript kind joins this set the day it exists:
+E05's consult transcripts, which pass `Recording.CONSULT` when that story merges."""
+
+
+class RecordingNotDeclared(Refusal):
+    """A voice is stored saying whose voices it carries — a consult, or someone's own note —
+    and nothing else is. This writer did not say, or said it of something that is not a voice."""
 
 
 @audited(Action.WRITE, Scope.RECORDS, Artifact.__tablename__)
@@ -125,11 +132,18 @@ async def store_artifact(
     captured_at: datetime,
     source_channel: SourceChannel,
     region: Region,
+    recording: Recording | None = None,
 ) -> Artifact:
     """Write down an artefact whose bytes are already at `storage_key` in `region`.
 
     The region must be the profile's own: health data never leaves it, and a reference to
     bytes held elsewhere would be exactly that. The refusal is in the trail like any other.
+
+    `recording` is required for a voice (`RECORDED_KINDS`) and refused for anything else
+    (`RecordingNotDeclared`): the writer says whose voices it carries (ADR 0003). A
+    `Recording.CONSULT` — people other than the account holder, a visit — rests on the
+    RECORDING consent under the visits scope; a `Recording.OWN_NOTE` — his own words, or a
+    caregiver's on his event — rests on holding the record, like typed text.
     """
     guard_region(held_in=region, asked_from=context.region)
     # Keeping anything at all rests on the consent to hold the record (E00-02).
@@ -139,15 +153,22 @@ async def store_artifact(
         purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
         scope=Scope.RECORDS,
     )
-    # Keeping a recording rests on the consent to record (E16-02). Checked here, where the
-    # bytes enter, and not only at the surface's gate (`app.safety.recording.may_record`), so
-    # that no writer — the app, WhatsApp, a connector — can keep a voice without it.
-    if kind in RECORDED_KINDS:
+    # Every voice says whose voices it carries, and nothing else claims to be a recording.
+    if (kind in RECORDED_KINDS) != (recording is not None):
+        raise RecordingNotDeclared(
+            f"a {kind} artefact declares a recording" if kind in RECORDED_KINDS
+            else f"a {kind} artefact is not a recording"
+        )
+    # A recording of other people — a consult — rests on the consent to record (E16-02,
+    # ADR 0003). Checked here, where the bytes enter, and not only at the surface's gate
+    # (`app.safety.recording.may_record`), so that no writer — the app, WhatsApp, a
+    # connector — can keep a consult without it. His own note needs only the record's.
+    if recording is Recording.CONSULT:
         await require_consent(
             session,
             context=context,
             purpose=ConsentPurpose.RECORDING,
-            scope=Scope.RECORDS,
+            scope=Scope.VISITS,
         )
     digest = sha256.strip().lower()
     if not _DIGEST.match(digest):

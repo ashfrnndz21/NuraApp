@@ -1,0 +1,47 @@
+{
+  "placeholder": "handwritten-prescription-2026-08-28",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "handwritten_prescription",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "Metformin",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 500,
+      "unit": "mg"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "Metformin",
+        "instruction": "1 tablet",
+        "as_written": "1 tab"
+      },
+      "unit": "tablet"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "frequency",
+      "value": "twice a day after meals",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 60,
+      "unit": "tablets"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "prescriber",
+      "value": "Dr Lim",
+      "unit": null
+    }
+  ]
+}

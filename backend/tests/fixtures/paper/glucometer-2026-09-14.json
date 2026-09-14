@@ -1,0 +1,49 @@
+{
+  "placeholder": "glucometer-2026-09-14",
+  "sha256": "dad5ec6917fd0122bcedb8883a238f4ba60dcbba5942f6c98c0374298b533002",
+  "format": "png",
+  "note": "Redacted sample. A phone photo of a glucometer's screen before breakfast; nothing identifying was on the screen, and the image is not committed. The recogniser reads the sugar, its unit, the kind of machine and the time on the screen (E02-08).",
+  "document_kind": "device_screen",
+  "document_date": "2026-09-14",
+  "fields": [
+    {
+      "subject": "device",
+      "attribute": "kind",
+      "value": "glucometer",
+      "unit": null,
+      "confidence": 0.92,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.05,
+        "x1": 0.6,
+        "y1": 0.1
+      }
+    },
+    {
+      "subject": "blood_sugar",
+      "attribute": "glucose",
+      "value": 6.8,
+      "unit": "mmol/L",
+      "confidence": 0.94,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.4,
+        "x1": 0.6,
+        "y1": 0.45
+      }
+    },
+    {
+      "subject": "reading",
+      "attribute": "taken_at",
+      "value": "2026-09-14T06:55",
+      "unit": null,
+      "confidence": 0.83,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.8,
+        "x1": 0.6,
+        "y1": 0.85
+      }
+    }
+  ]
+}

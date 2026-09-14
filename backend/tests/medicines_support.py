@@ -17,7 +17,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Dose, parse_dose_text
 from app.medicines.service import Label, Plan, Reconciled, plan, reconcile
 from app.memory.episodic import store_artifact
-from app.memory.models import Artifact, ArtifactKind, SourceChannel
+from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel
 from app.regions import Region
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
 
@@ -71,6 +71,8 @@ async def artefact(
         captured_at=when,
         source_channel=SourceChannel.APP,
         region=Region.SG,
+        # A voice note is someone's own words, kept on the record consent (ADR 0003).
+        recording=Recording.OWN_NOTE if kind is ArtifactKind.VOICE else None,
     )
 
 

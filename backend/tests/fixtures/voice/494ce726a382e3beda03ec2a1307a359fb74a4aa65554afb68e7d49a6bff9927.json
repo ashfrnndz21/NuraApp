@@ -1,0 +1,7 @@
+{
+  "placeholder": "pa-after-the-walk",
+  "note": "A voice note Pa left on his blood pressure reading after his morning walk, in English. No audio is committed: the bytes are the placeholder named here (tests/voice_notes.py), and this is what the fixture transcriber hears.",
+  "text": "I took it after my walk. I felt fine, only a little tired.",
+  "confidence": 0.91,
+  "language": "en"
+}

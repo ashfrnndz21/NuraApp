@@ -157,6 +157,9 @@ class DecidedField:
     value: Any
     unit: str | None
     decision: str
+    corrected_by: uuid.UUID | None = None
+    """Who typed the value kept, where it is not what was read: a field Nura could not read,
+    typed in by a daughter before the patient says yes (E02-02). None for a value as read."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +192,7 @@ class ReviewDraft:
                     "value": field.value,
                     "unit": field.unit,
                     "decision": field.decision,
+                    "corrected_by": field.corrected_by,
                 }
                 for field in self.fields
             ],

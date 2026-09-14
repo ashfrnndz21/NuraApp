@@ -12,11 +12,11 @@ prompt a day for a gap, due at breakfast on his clock, pending until done or ski
 `event_kind` gains `onboarding`; it is a non-native enum with no database constraint, so no
 column changes for it (as 0010 did for `engagement`).
 
-Follows E19's WhatsApp revision (0011), main's head when this story was merged back; the
+Follows E02's capture revision (0018), main's head when this story was merged back; the
 operator repoints `down_revision` again if another story lands first.
 
 Revision ID: 0015_biography
-Revises: 0011_whatsapp
+Revises: 0018_capture_extras
 Create Date: 2026-09-14
 """
 
@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0015_biography"
-down_revision = "0011_whatsapp"
+down_revision = "0018_capture_extras"
 branch_labels = None
 depends_on = None
 
