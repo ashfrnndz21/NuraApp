@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
 import { asksFor, boost, cloudView, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
-import { conditionWords, TOP } from "../../src/api/mock/graph";
 
 const w = (code: string, weight: number, top: boolean, related: string[] = [], ask = false, term: string | null = null): ConditionOut => ({
   code,
@@ -110,24 +109,7 @@ describe("toggle", () => {
 });
 
 describe("asksFor", () => {
-  it("lists the picked words with a follow-up, in pick order — none from #117 yet", () => {
+  it("lists the picked words with a follow-up, in pick order", () => {
     expect(codes(asksFor(GRAPH, ["statin", "bp", "bp_meds", "doc"]))).toEqual(["statin", "bp_meds", "doc"]);
-    expect(asksFor(conditionWords(), [...TOP])).toEqual([]);
-  });
-});
-
-describe("the mock graph: E01's own (#117 conditions.json)", () => {
-  const graph = conditionWords();
-  const byCode = new Map(graph.map((each) => [each.code, each]));
-
-  it("names only words that exist, and marks exactly the top words", () => {
-    for (const word of graph) for (const related of word.related) expect(byCode.has(related), `${word.code} → ${related}`).toBe(true);
-    expect(graph.filter((each) => each.top).map((each) => each.code).sort()).toEqual([...TOP].sort());
-  });
-
-  it("puts at least four common words on the first screen, in his words, never codes", () => {
-    expect(topWords(graph).filter((each) => each.weight === 3).length).toBeGreaterThanOrEqual(4);
-    expect(byCode.get("high_blood_pressure")?.name).toBe("High blood pressure");
-    for (const word of graph) expect(word.name, word.code).not.toBe(word.code);
   });
 });

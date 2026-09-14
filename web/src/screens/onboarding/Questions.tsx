@@ -11,8 +11,8 @@ import { Sheet, Status, StepTitle } from "./parts";
 
 /** Questions from the papers (#117): the backend's list, each one whole line, spoken on Hear,
  *  with Keep or Not this one, and the backend's own line for how many more wait for later.
- *  Keep puts the line on the next visit's questions (E05) when a visit is booked; the sitting
- *  records the answer either way, and moves a kept one to a visit's list once one is booked.
+ *  Keep is his yes: the sitting puts the line on the next visit's list (E05) when one is
+ *  booked, and with none it waits there and moves when one is (`handed_over_to`).
  *  Then the sitting closes. The patient sees one per screen; the caregiver, the list. */
 export function QuestionsStep(): JSX.Element {
   const s = t();
@@ -39,14 +39,8 @@ export function QuestionsStep(): JSX.Element {
   const decide = (question: QuestionOut, keep: boolean) =>
     act(async () => {
       const { bearer, profileId } = who();
-      if (keep) {
-        // E05: a kept question goes on the next visit's list, as his yes on exactly this line.
-        const next = (await nura.upcomingAppointments(bearer, profileId))[0];
-        if (next) {
-          const yes = await nura.mintQuestionYes(bearer, profileId, next.appointment_id, question.line);
-          await nura.addVisitQuestion(bearer, profileId, next.appointment_id, question.line, yes.confirmation_id);
-        }
-      }
+      // His keep is the one call: the sitting puts a kept question on the next visit's list
+      // itself (E05), and with no visit booked it waits and moves when one is.
       const updated = await nura.answerQuestion(bearer, profileId, question.question_id, keep);
       biography.value = updated;
       setAck(keep ? q.kept : q.dropped);
@@ -83,8 +77,8 @@ export function QuestionsStep(): JSX.Element {
           key={question.question_id}
           caption={patient ? fill(s.onboarding.readBack.lineOf, { n: questions.indexOf(question) + 1, total: questions.length }) : undefined}
           lines={[question.line]}
-          source={question.source}
-          stateId={question.state_id}
+          source={question.source ?? undefined}
+          stateId={question.state_id ?? undefined}
           testId="question"
         >
           <div class="choices" role="group">

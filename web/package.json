@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e": "playwright test",
-    "plain-words": "cd ../backend && python3 -m app.safety.plain_words --only ../web/src/strings/en.ts ../web/src/strings/ms.ts ../web/src/strings/zh.ts ../web/src/api/mock/words.ts ../web/src/api/mock/graph.ts"
+    "plain-words": "cd ../backend && python3 -m app.safety.plain_words --only ../web/src/strings/en.ts ../web/src/strings/ms.ts ../web/src/strings/zh.ts"
   },
   "dependencies": {
     "@preact/signals": "2.11.2",

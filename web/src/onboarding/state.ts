@@ -4,6 +4,7 @@ import { go } from "../flow";
 import { clearProfileData } from "../offline/todayCache";
 import { chooseProfile, profile } from "../store/session";
 import { fill } from "../strings";
+import type { AboutItem } from "./about";
 
 /** Where the onboarding session is, and what it has been told so far.
  *
@@ -13,7 +14,8 @@ import { fill } from "../strings";
  *  the plan, and the screens ask it again. Closing the app mid-way loses only the place. */
 
 export type Stage =
-  | { name: "about" }
+  /** `only`: one question of About you, from a gap card; answering it saves and goes back. */
+  | { name: "about"; only?: AboutItem }
   | { name: "cloud" }
   /** `only`: one word's follow-up, reopened by a gap card; answering it goes back there. */
   | { name: "asks"; only?: string }

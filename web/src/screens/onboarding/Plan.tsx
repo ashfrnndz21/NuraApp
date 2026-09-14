@@ -4,7 +4,7 @@ import * as nura from "../../api/nura";
 import type { PromptOut } from "../../api/types";
 import { refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { dayLine } from "../../onboarding/dates";
-import { cardsToShow, invites, opensCamera, opensFile, tapsCloud } from "../../onboarding/plan";
+import { cardsToShow, invites, opensCamera, opensFile, tapsCloud, tapsSetting } from "../../onboarding/plan";
 import { closed, finish, plan, planNote, returnTo, to } from "../../onboarding/state";
 import { density, profile } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
@@ -79,6 +79,19 @@ export function PlanStep(): JSX.Element {
                 onClick={() => {
                   returnTo.value = "plan";
                   to({ name: "cloud" });
+                }}
+                disabled={busy}
+                testId="do-it-now"
+              >
+                {prompt.action ?? p.later}
+              </Pill>
+            )}
+            {tapsSetting(prompt) && (
+              <Pill
+                plum={patient}
+                onClick={() => {
+                  returnTo.value = "plan";
+                  to({ name: "about", only: "breakfast" });
                 }}
                 disabled={busy}
                 testId="do-it-now"

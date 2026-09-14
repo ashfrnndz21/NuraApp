@@ -79,27 +79,29 @@ describe("about you, as #117's settings hold it", () => {
   });
 });
 
+const sent = startingSettings(saved, profile("owner"), "en");
+
 describe("what his answers change on the phone, at once", () => {
   it("makes his language the phone's, when the papers are his own", () => {
-    expect(deviceEffects(saved, "owner")).toEqual({ language: "zh", density: null });
+    expect(deviceEffects(sent, "owner")).toEqual({ language: "zh", density: null });
   });
 
   it("chooses the big-and-simple look for bigger writing, bigger buttons, one thing at a time or the simple density", () => {
     for (const patch of [{ large_text: true }, { big_targets: true }, { one_thing_per_screen: true }, { density: "simple" as const }]) {
-      expect(deviceEffects({ ...saved, ...patch }, "owner").density, JSON.stringify(patch)).toBe("patient");
+      expect(deviceEffects({ ...sent, ...patch }, "owner").density, JSON.stringify(patch)).toBe("patient");
     }
   });
 
   it("never makes the screen smaller", () => {
-    expect(deviceEffects({ ...saved, high_contrast: true, voice_on: true, read_back: true }, "owner").density).toBeNull();
+    expect(deviceEffects({ ...sent, high_contrast: true, voice_on: true, read_back: true }, "owner").density).toBeNull();
   });
 
   it("changes nothing on a chief's phone when she sets up for her father", () => {
-    expect(deviceEffects({ ...saved, large_text: true }, "steward")).toEqual({ language: null, density: null });
-    expect(deviceEffects(saved, "holder")).toEqual({ language: null, density: null });
+    expect(deviceEffects({ ...sent, large_text: true }, "steward")).toEqual({ language: null, density: null });
+    expect(deviceEffects(sent, "holder")).toEqual({ language: null, density: null });
   });
 
   it("ignores a language Nura does not speak", () => {
-    expect(deviceEffects({ ...saved, language: "ta" }, "owner").language).toBeNull();
+    expect(deviceEffects({ ...sent, language: "ta" }, "owner").language).toBeNull();
   });
 });

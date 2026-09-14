@@ -24,8 +24,10 @@ export function cardsToShow(plan: PlanOut | null, density: Density): { shown: Pr
 /** What "Do it now" opens, by how the backend says the gap is filled. */
 export const opensCamera = (prompt: PromptOut): boolean => prompt.capture === "photo";
 export const opensFile = (prompt: PromptOut): boolean => prompt.capture === "pdf";
-/** A tap gap is filled by a tap on the cloud (E01 has no follow-up question for it yet). */
-export const tapsCloud = (prompt: PromptOut): boolean => prompt.capture === "tap";
+/** A tap gap about a word of the cloud is filled by a tap there (which medicine, say). */
+export const tapsCloud = (prompt: PromptOut): boolean => prompt.capture === "tap" && Boolean(prompt.word);
+/** A tap gap about no word is a setting (his breakfast time): the one question, then back. */
+export const tapsSetting = (prompt: PromptOut): boolean => prompt.capture === "tap" && !prompt.word;
 
 /** The invite is his own yes (the consent route takes the owner's), so only on his own papers. */
 export function invites(prompt: PromptOut, standing: string | undefined): boolean {

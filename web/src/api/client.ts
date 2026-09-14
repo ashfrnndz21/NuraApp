@@ -42,27 +42,9 @@ function isRefusalBody(value: unknown): value is RefusalBody {
  *  laptop as on the deployment. */
 let queue: Promise<unknown> = Promise.resolve();
 
-/** The real call, handed to a stand-in so it can ask the live API what it needs to know. */
-export type Passthrough = <T>(path: string, call: Call) => Promise<T>;
-
-/** A stand-in for routes the backend does not have yet. `src/api/mock/` installs one under
- *  `VITE_API_MOCK=1` (`main.tsx`); it answers the paths it knows and returns `undefined` for
- *  the rest, which then go to the real API as always. A production build has no
- *  `VITE_API_MOCK`, so the import is dead code and nothing is installed or even shipped. */
-export type MockTransport = (path: string, call: Call, passthrough: Passthrough) => Promise<unknown> | undefined;
-
-let mock: MockTransport | null = null;
-
-export function setMockTransport(next: MockTransport | null): void {
-  mock = next;
-}
-
 /** One call to the API. Bearer token in a header, never a cookie; JSON in and out. */
 export function api<T>(path: string, call: Call = {}): Promise<T> {
-  const next = queue.then(() => {
-    const answered = mock?.(path, call, send);
-    return answered === undefined ? send<T>(path, call) : (answered as Promise<T>);
-  });
+  const next = queue.then(() => send<T>(path, call));
   queue = next.catch(() => undefined);
   return next;
 }

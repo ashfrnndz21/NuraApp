@@ -16,7 +16,7 @@ export function OnboardingScreen(): JSX.Element {
   const current = stage.value;
   switch (current.name) {
     case "about":
-      return <AboutStep />;
+      return <AboutStep only={current.only} />;
     case "cloud":
       return <CloudStep />;
     case "asks":

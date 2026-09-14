@@ -89,7 +89,7 @@ describe("onboarding's words", () => {
       if (typeof text !== "string") continue;
       if (key.endsWith("Self")) expect(text, key).not.toContain("{name}");
     }
-    expect(fill(about.memoryOther, { name: "Pa" })).toBe("Does Pa forget things more than before?");
+    expect(fill(about.switchOther.large_text, { name: "Pa" })).toBe("Would bigger writing help Pa?");
   });
 
   it("use 'papers', never 'record', in Malay and Chinese as in English", () => {

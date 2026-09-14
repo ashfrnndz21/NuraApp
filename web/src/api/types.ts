@@ -358,8 +358,7 @@ export interface ReviewConfirmedOut {
 
 // --- E01: onboarding — #117's contract (branch E01-biography-profile, "Client contract") --
 //
-// The real client speaks these shapes. Until #117 merges, `src/api/mock/` answers them in dev
-// and in tests (VITE_API_MOCK=1); nothing here is the mock's own invention.
+// #117 is merged; these are the shapes its routes answer with.
 
 /** One word of the cloud (`GET /onboarding/conditions`): its code, his name for it, how large
  *  it sits, the words that appear once it is tapped, and whether the cloud shows it first. A
@@ -451,14 +450,16 @@ export interface ReadBackLineOut {
   dispute_fact_id: string | null;
 }
 
-/** A question the papers raised: the gap it would fill, one whole line, Keep or Not this one.
- *  E01 will add a State id and a source line; the card shows them when present. */
+/** A question the papers raised: the gap it would fill, one whole line, Keep or Not this one,
+ *  the State it was rendered from and its source line — and, once kept and handed over, the
+ *  visit (appointment) whose list it went onto (E05). */
 export interface QuestionOut {
   question_id: string;
   line: string;
   kept: boolean | null;
-  state_id?: string;
-  source?: string;
+  state_id: string | null;
+  source: string | null;
+  handed_over_to: string | null;
 }
 
 export type BiographyStep = "about_you" | "papers" | "read_back" | "questions" | "closed";
@@ -572,25 +573,4 @@ export interface ConsentOut {
   scopes: string[] | null;
   text_version: string;
   wording_text: string;
-}
-
-
-// --- E05: a question kept for the next visit ---------------------------------------------
-
-/** One visit still to come (`GET /profiles/{id}/appointments`, soonest first). */
-export interface AppointmentOut {
-  appointment_id: string;
-  provider_id: string;
-  scheduled_at: string;
-  status: string;
-  purpose: string;
-}
-
-/** A question on a visit's list (`POST /appointments/{id}/questions`), with its source. */
-export interface VisitQuestionOut {
-  question_id: string;
-  appointment_id: string;
-  text: string;
-  source: string;
-  state_id: string;
 }

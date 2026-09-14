@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlanOut, PromptOut } from "../../src/api/types";
-import { cardsToShow, invites, opensCamera, opensFile, pending, tapsCloud } from "../../src/onboarding/plan";
+import { cardsToShow, invites, opensCamera, opensFile, pending, tapsCloud, tapsSetting } from "../../src/onboarding/plan";
 
 const prompt = (gap: string, due: string, capture: PromptOut["capture"] = "photo", status: PromptOut["status"] = "pending"): PromptOut => ({
   prompt: gap,
@@ -66,7 +66,11 @@ describe("the first week on the Ready screen", () => {
     expect(opensCamera(prompt("medicines", A, "photo"))).toBe(true);
     expect(opensFile(prompt("cholesterol_result", A, "pdf"))).toBe(true);
     expect(opensCamera(prompt("cholesterol_result", A, "pdf"))).toBe(false);
-    expect(tapsCloud(prompt("allergy_which", A, "tap"))).toBe(true);
+    const about = (word: string | null) => ({ ...prompt("allergy_which", A, "tap"), word });
+    expect(tapsCloud(about("Allergic to a medicine"))).toBe(true);
+    expect(tapsSetting(about("Allergic to a medicine"))).toBe(false);
+    expect(tapsSetting(about(null))).toBe(true);
+    expect(tapsCloud(about(null))).toBe(false);
   });
 
   it("goes to the invite only on his own papers, since the consent is his own yes", () => {

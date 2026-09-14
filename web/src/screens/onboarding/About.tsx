@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { SettingsIn } from "../../api/types";
-import { openSitting } from "../../onboarding/actions";
+import { openSitting, refreshPlan, saveSettings } from "../../onboarding/actions";
 import { ABOUT_ITEMS, BREAKFAST_TIMES, DECADES, isSwitch, startingSettings, type AboutItem } from "../../onboarding/about";
 import { biography, draft, finish, picked, say, settings, to } from "../../onboarding/state";
 import { density, profile, setLanguage, token } from "../../store/session";
@@ -17,7 +17,7 @@ import { Sheet, StepTitle } from "./parts";
  *  draft and go in one PUT with the words he taps next (#117 keeps the words in the settings).
  *  His language takes effect the moment he picks it. The sitting is opened here, so its own
  *  words for the step lead the screen. */
-export function AboutStep(): JSX.Element {
+export function AboutStep({ only }: { only?: AboutItem } = {}): JSX.Element {
   const s = t();
   const a = s.onboarding.about;
   const papers = profile.value;
@@ -58,13 +58,22 @@ export function AboutStep(): JSX.Element {
 
   const answer = (patch: Partial<SettingsIn>, advance: boolean) => {
     draft.value = { ...current, ...patch };
+    if (only) {
+      // One question from a gap card: save it with everything else, and back to the week.
+      if (advance) {
+        void saveSettings()
+          .then(refreshPlan)
+          .then(() => to({ name: "plan" }), setError);
+      }
+      return;
+    }
     if (patch.language && isLanguage(patch.language) && papers?.standing === "owner") void setLanguage(patch.language);
     if (!patient || !advance) return;
     if (index + 1 < ABOUT_ITEMS.length) setIndex(index + 1);
     else to({ name: "cloud" });
   };
 
-  const items = patient ? [ABOUT_ITEMS[index]!] : [...ABOUT_ITEMS];
+  const items = only ? [only] : patient ? [ABOUT_ITEMS[index]!] : [...ABOUT_ITEMS];
   const lead = bio?.step === "about_you" && bio.prompt.lines.length > 0 ? bio.prompt.lines : [say(a.leadSelf, a.leadOther)];
   const typed = ABOUT_ITEMS[index] === "name" || ABOUT_ITEMS[index] === "doctor";
 
@@ -72,6 +81,7 @@ export function AboutStep(): JSX.Element {
     <main class="screen onboarding" data-stage="about" data-item={patient ? items[0] : "all"}>
       <StepTitle title={title} />
       {index === 0 &&
+        !only &&
         lead.map((line, position) => (
           <p key={position} class="lead" data-testid="about-lead">
             {line}
@@ -81,7 +91,7 @@ export function AboutStep(): JSX.Element {
         <Question key={item} item={item} draft={current} answer={answer} patient={patient} />
       ))}
       <Notice error={error} />
-      {patient ? (
+      {only ? null : patient ? (
         <>
           {typed && (
             <Pill plum onClick={() => (index + 1 < ABOUT_ITEMS.length ? setIndex(index + 1) : to({ name: "cloud" }))} testId="about-next">
@@ -99,7 +109,7 @@ export function AboutStep(): JSX.Element {
           {s.onboarding.next}
         </Pill>
       )}
-      {index === 0 && (
+      {index === 0 && !only && (
         <Pill quiet onClick={finish} testId="set-up-later">
           {s.onboarding.later}
         </Pill>
