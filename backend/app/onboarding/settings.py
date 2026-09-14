@@ -271,6 +271,15 @@ async def _current_row(
     return max(found, key=lambda row: as_utc(row.set_at)) if found else None
 
 
+async def breakfast_said(session: AsyncSession, *, context: KeyContext) -> time | None:
+    """His breakfast time exactly as the settings screen serves it (`GET …/settings`, the
+    web's About you), or None before he has said: the one breakfast resolver
+    (`app.routines.breakfast`) reads it here, so the card, the routine and the first week
+    never parse the row another way. The face of the graph, as `read_settings` reads it."""
+    row = await _current_row(session, context=context, scope=SETTINGS_SCOPE)
+    return None if row is None else values_of(row).breakfast_time
+
+
 @audited(Action.READ, Scope.RECORDS, TARGET)
 async def current_settings(session: AsyncSession, *, context: KeyContext) -> ProfileSettings | None:
     """The settings row that stands now, whole — conditions and doctor included — for the

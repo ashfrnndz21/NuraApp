@@ -7,10 +7,10 @@ said, the routine's own breakfast anchor stands (E10); before either, 07:30 on h
 morning card (`app.delivery.triggers`) all ask it, so the day's prompt and the morning card
 always come at the same moment, and a change to his settings moves all three.
 
-Models only, so every service can import it: the settings row is read here directly, through
-the audit door, under the face of the graph every key opens — his breakfast time is how to
-reach him, not his health (`app.onboarding.settings`); the routine under the medicines, where
-it is kept.
+His settings are read through `app.onboarding.settings.breakfast_said`, the same row and the
+same field `GET /profiles/{id}/settings` serves (the web's About you), under the face of the
+graph every key opens — his breakfast time is how to reach him, not his health; the routine
+under the medicines, where it is kept.
 """
 
 from __future__ import annotations
@@ -40,19 +40,11 @@ def _clock(text: str | None) -> time | None:
 async def breakfast_time(session: AsyncSession, *, context: KeyContext) -> time:
     """His settings' breakfast, else the routine's breakfast anchor, else 07:30."""
     # Imported here: `app.onboarding` wires its plan at import, and the plan asks this module.
-    from app.onboarding.models import ProfileSettings
+    from app.onboarding.settings import breakfast_said
 
-    rows = await audited_read(
-        session,
-        ProfileSettings,
-        context,
-        Scope.PROFILE,
-        where=(ProfileSettings.superseded_at.is_(None),),
-    )
-    if rows:
-        said = _clock(max(rows, key=lambda row: as_utc(row.set_at)).breakfast_time)
-        if said is not None:
-            return said
+    said = await breakfast_said(session, context=context)
+    if said is not None:
+        return said
     if context.allows(Scope.MEDICINES):
         days = await audited_read(
             session, Routine, context, Scope.MEDICINES, where=(Routine.superseded_at.is_(None),)

@@ -63,3 +63,24 @@ async def test_the_log_is_the_owners_and_his_chiefs_and_the_dev_run_fills_it(
         f"/profiles/{profile_id}/deliveries", headers=bearer(mei["token"])
     )
     assert hers.status_code == 403 and hers.json()["refusal"] == "NotTheirsToRead"
+
+
+async def test_the_breakfast_he_saves_on_the_web_is_the_card_s_and_the_routine_s(
+    deployment: Deployment,
+) -> None:
+    """#115's About you saves his breakfast through `PUT …/settings`; the morning card and the
+    breakfast tablet read that same field (`GET …/settings`), not a time of their own."""
+    pa = await register_by_phone(deployment, "+6591119923", "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    saved = await deployment.client.put(
+        f"/profiles/{profile_id}/settings",
+        json={"language": "en", "breakfast_time": "08:15"},
+        headers=his,
+    )
+    assert saved.status_code == 200, saved.text
+    shown = await deployment.client.get(f"/profiles/{profile_id}/settings", headers=his)
+    assert shown.status_code == 200 and shown.json()["breakfast_time"][:5] == "08:15"
+    delivery = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
+    assert delivery.json()["breakfast_at"] == "08:15:00"
+    assert delivery.json()["anchors"]["breakfast"] == "08:15:00"
