@@ -1,0 +1,13 @@
+{
+  "en": {
+    "headline": "A notice about one batch of your blood thinner",
+    "body": [
+      "One batch of warfarin tablets is being taken back.",
+      "Look for the batch number 240077 on your box.",
+      "If it matches, bring the box to the pharmacy.",
+      "Other boxes are fine to keep taking."
+    ],
+    "why_topic": "your blood thinner",
+    "passage": "batch 240077 ... should return them to the pharmacy for a replacement"
+  }
+}

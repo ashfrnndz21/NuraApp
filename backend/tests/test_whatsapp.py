@@ -35,8 +35,9 @@ from app.identity.service import create_own_profile, register_person
 from app.ingestion.models import ReviewCard, ReviewField
 from app.keys.confirm import Confirmation
 from app.keys.scopes import KeyRole, Scope
+from app.memory.episodic import record_event
 from app.memory.models import Artifact, ArtifactKind, Event, EventKind, Fact, SourceChannel
-from app.memory.semantic import current_facts
+from app.memory.semantic import assert_fact, current_facts
 from app.regions import Region
 from app.state.service import current_state
 from tests.support import OPENING_CONSENT, refused_unit
@@ -448,6 +449,46 @@ async def test_a_template_goes_outside_the_window_and_free_text_inside_it(
         profile_id=home.profile.id,
     )
     assert third.kind == "template"
+
+
+async def test_the_morning_card_says_what_his_feed_leads_with(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The morning card is the thread's twin of the top of his feed: the now card (no
+    tablets written down here), then today's cards under the feed's caps — a number he
+    took this morning, said the way the feed card says it."""
+    home = await family(sg, tmp_path)
+    taken = await record_event(
+        sg,
+        context=home.owner,
+        kind=EventKind.READING,
+        occurred_at=utcnow(),
+        label="blood pressure",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=home.owner,
+        subject="blood_pressure",
+        attribute="reading",
+        value={"systolic": 138, "diastolic": 84},
+        unit="mmHg",
+        confidence=1.0,
+        event_id=taken.id,
+    )
+    await run_morning(
+        sg,
+        settings=home.settings,
+        providers=home.providers,
+        number=home.number,
+        profile_id=home.profile.id,
+    )
+    assert home.whatsapp.sent[-1].params["doses"].splitlines() == [
+        "You have no tablets written down for today.",
+        "Your blood pressure today was 138 over 84.",
+        "It is in your blood pressure book.",
+        "Mei can see it too.",
+    ]
 
 
 async def test_every_template_send_names_the_state_it_was_composed_from(

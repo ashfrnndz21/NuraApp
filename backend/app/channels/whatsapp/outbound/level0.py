@@ -4,8 +4,9 @@ Four things go to him, each one of the six approved templates, each composed fro
 current State and the record it folds, each a function a scheduler (E11) will call at its
 hour — nothing here is scheduled yet, and the dev-only route calls `run_morning` by hand:
 
-- the morning card: today's doses as the medicines module renders them, and one thing to
-  measure;
+- the morning card: the now and today cards his feed leads with (`rank.morning_supply`) —
+  the tablets card said as today's doses the way the medicines module renders them — and one
+  thing to measure;
 - the feeling check-in: three words, one tap; his answer is his own and is written down
   without a second yes (`inbound._check_in_answer` says why);
 - the visit card: the next visit on the spine, with who takes him;
@@ -32,6 +33,9 @@ from app.channels.whatsapp.outbound.send import Delivered, send
 from app.channels.whatsapp.strings import YOUR_DOCTOR
 from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
+from app.delivery.feed.models import CardType
+from app.delivery.feed.rank import morning_supply
+from app.delivery.feed.search import Engine
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.keys.context import KeyContext, profile_by_id, resolve_key_context
@@ -44,7 +48,7 @@ from app.memory.semantic import current_facts
 from app.memory.spine import upcoming_appointments
 from app.regions import REGION_TZ
 from app.settings import Settings
-from app.state.service import current_state
+from app.state.service import StateView, current_state
 
 # @patient
 NO_DOSES_TODAY = {
@@ -53,6 +57,18 @@ NO_DOSES_TODAY = {
     "zh": "今天没有记下要吃的药。",
 }
 """The doses slot of the morning card when the list is empty."""
+
+# @patient
+TABLETS_ON_YOUR_LIST = {
+    "en": ("Your tablets for today are on your list.", "Take them the way the label says."),
+    "ms": (
+        "Ubat anda untuk hari ini ada dalam senarai anda.",
+        "Ambil ikut apa yang tertulis pada label.",
+    ),
+    "zh": ("您今天的药在您的清单上。", "请按照药盒上写的吃。"),
+}
+"""The feed's tablets card on WhatsApp when there are medicines on his papers but no dose
+line written down yet: its words without the app's Taken button, which the thread has not."""
 
 
 class NoPatientYet(Refusal):
@@ -85,14 +101,14 @@ async def run_morning(
     number: BusinessNumber,
     profile_id: uuid.UUID,
 ) -> Delivered:
-    """The morning card to the patient: today's doses and one thing to measure."""
+    """The morning card to the patient: what his feed leads with today, and one thing to
+    measure. The doses slot carries the lines; the State is the one the cards came from."""
     profile, owner, context = await _owner(session, settings=settings, profile_id=profile_id)
     language = language_of(profile.language)
-    state = await current_state(session, context=context)
-    slots = await today(
-        session, context=context, registry=providers.drug_registry, language=language
+    state, lines = await _morning_lines(
+        session, context=context, providers=providers, language=language
     )
-    doses = "\n".join(slot.card for slot in slots) or NO_DOSES_TODAY[language]
+    doses = "\n".join(lines)
     return await send(
         session,
         context=context,
@@ -104,6 +120,39 @@ async def run_morning(
         language=language,
         state=state,
     )
+
+
+async def _morning_lines(
+    session: AsyncSession, *, context: KeyContext, providers: Providers, language: str
+) -> tuple[StateView, list[str]]:
+    """The lines between the day and the thing to measure: the now and today cards of his
+    feed, in its order and under its caps. The now card about his tablets is said as today's
+    doses from the medicines module (the app's card points at the list; a thread has no
+    list); a quiet now card as "no tablets written down"; every other card as its own body,
+    lines that already passed plain words when the card was made. When the feed gives no line
+    at all — every card held by his "not for me" — the doses alone, as before the feed."""
+    engine = Engine(
+        searcher=providers.searcher,
+        compressor=providers.compressor,
+        registry=providers.drug_registry,
+    )
+    state, items = await morning_supply(session, context=context, engine=engine)
+    slots = await today(
+        session, context=context, registry=providers.drug_registry, language=language
+    )
+    doses = [slot.card for slot in slots]
+    lines: list[str] = []
+    for item in items:
+        if item.type is CardType.NOW and item.scope is not Scope.VISITS:
+            if doses:
+                lines.extend(doses)
+            elif item.scope is Scope.MEDICINES:
+                lines.extend(TABLETS_ON_YOUR_LIST[language])
+            else:
+                lines.append(NO_DOSES_TODAY[language])
+        else:
+            lines.extend(item.body)
+    return state, lines or doses or [NO_DOSES_TODAY[language]]
 
 
 async def run_feeling_check_in(

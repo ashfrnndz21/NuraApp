@@ -20,6 +20,7 @@ from app.channels.whatsapp.provider import DevInbound, FixtureProvider
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import grant_consent
 from app.db import utcnow
+from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.models import Person, Profile
 from app.identity.providers import LoggingCodeSender
@@ -31,7 +32,7 @@ from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
 from app.regions import Region
 from app.settings import Settings
-from tests.conftest import WHATSAPP_FIXTURES, WHATSAPP_SECRET
+from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
 
@@ -95,6 +96,8 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         code_sender=LoggingCodeSender(),
         object_store=LocalObjectStore(tmp_path, region),
         extractor=FixtureExtractor(PAPER),
+        searcher=FixtureSearcher(FEED),
+        compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
     )

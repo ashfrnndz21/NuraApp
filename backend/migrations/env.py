@@ -16,6 +16,7 @@ from app.audit import models as audit_models  # noqa: F401
 from app.channels.whatsapp import models as whatsapp_models  # noqa: F401
 from app.consent import models as consent_models  # noqa: F401
 from app.db import Base
+from app.delivery.feed import models as feed_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
 from app.ingestion import models as ingestion_models  # noqa: F401
 from app.keys import confirm as key_confirm  # noqa: F401
@@ -25,6 +26,7 @@ from app.memory import models as memory_models  # noqa: F401
 from app.notes import models as note_models  # noqa: F401
 from app.safety import red_flags as red_flag_models  # noqa: F401
 from app.settings import load_settings
+from app.state import models as state_models  # noqa: F401
 
 target_metadata = Base.metadata
 settings = load_settings()

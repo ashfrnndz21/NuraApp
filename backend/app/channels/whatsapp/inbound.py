@@ -72,7 +72,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact
 from app.regions import OutOfRegion, Region, guard_region
-from app.safety.red_flags import detect, escalate, raise_flag, roster_for
+from app.safety.red_flags import detect, escalate, raise_flag, record_the_moment, roster_for
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -300,16 +300,48 @@ async def _doctor(session: AsyncSession, work: _Work) -> str:
 
 
 async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
-    rule = detect(work.message.text)
-    assert rule is not None
-    # The flag first: nothing this message does afterwards can take it down.
-    flag = await raise_flag(
-        session, context=work.context, rule=rule, source_channel=SourceChannel.WHATSAPP
+    """The words matched the table: the flag before anything else, then the thread.
+
+    The Flag rests on the SYMPTOM event the words were said in (the same row the feeling
+    cloud raises one on), so the event is recorded first — a moment, with no content — and
+    the flag right after it, before the words themselves are kept. Then the message, the
+    reply in the thread, and the ladder for E11. The moment and the words are kept under the
+    emergency scope, not the record's: a helper's key holds the one and not the other, and
+    her word is enough to start this. A flag written with `suppressed_because` (shaky-and-
+    sweaty with no sugar condition on the record) is kept for the caregiver to see and is not
+    escalated in the thread.
+    """
+    feeling = detect(work.message.text)
+    assert feeling is not None
+    said = await record_the_moment(
+        session,
+        context=work.context,
+        feeling=feeling,
+        occurred_at=work.message.at,
+        source_channel=SourceChannel.WHATSAPP,
+        channel=Channel.WHATSAPP,
     )
-    artifact = await _keep_text(session, work=work)
+    flag = await raise_flag(
+        session,
+        context=work.context,
+        feeling=feeling,
+        event_id=said.id,
+        channel=Channel.WHATSAPP,
+    )
+    artifact = await _keep_text(session, work=work, scope=Scope.EMERGENCY)
     row = await _keep_row(
         session, work=work, kind=MessageKind.RED_FLAG, artifact=artifact, flag_id=flag.id
     )
+    if flag.suppressed_because is not None:
+        await _say(session, work, "written_down")
+        return Handled(
+            outcome="red_flag_suppressed",
+            replies=tuple(work.replies),
+            profile_id=work.profile.id,
+            message_id=row.id,
+            artifact_id=artifact.id,
+            flag_id=flag.id,
+        )
     roster = await roster_for(session, context=work.context)
     doctor = await _doctor(session, work)
     names: list[str] = []

@@ -76,7 +76,7 @@ class WhatsAppMessage(ProfileScoped, Base):
         _row_of_profile("whatsapp_message"),
         _tied_to_profile("whatsapp_message", "thread_id", "whatsapp_thread"),
         _tied_to_profile("whatsapp_message", "artifact_id", "artifact"),
-        _tied_to_profile("whatsapp_message", "flag_id", "safety_flag"),
+        _tied_to_profile("whatsapp_message", "flag_id", "red_flag"),
         _tied_to_profile("whatsapp_message", "state_id", "state_snapshot"),
     )
 
@@ -89,7 +89,7 @@ class WhatsAppMessage(ProfileScoped, Base):
     at: Mapped[datetime] = mapped_column(index=True)
     provider_message_id: Mapped[str | None] = mapped_column(String(80), default=None)
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
-    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("safety_flag.id"), default=None)
+    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
     template_name: Mapped[str | None] = mapped_column(String(32), default=None)
     catalogue_key: Mapped[str | None] = mapped_column(String(48), default=None)
     state_id: Mapped[uuid.UUID | None] = mapped_column(

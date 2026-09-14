@@ -22,6 +22,10 @@ from app.consent.service import (
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
+from app.delivery.feed.engagement import NoSuchItem
+from app.delivery.feed.rank import NoCachedPage
+from app.delivery.feed.search import NoSuchSearchJob
+from app.delivery.feed.sources import NotTheirsToManage
 from app.errors import Refusal
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
@@ -49,6 +53,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # The engine's sources and jobs are the owner's and his chief's to see (E21).
+    (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
     # A key to read the medicines is not a key to change them.
     (NotTheirsToChange, 403),
@@ -59,6 +65,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
+    (NoSuchItem, 404),
+    (NoSuchSearchJob, 404),
+    (NoCachedPage, 404),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
     # Free text needs the 24-hour window; outside it only a template goes.
