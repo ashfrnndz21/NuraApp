@@ -22,6 +22,16 @@ for (const look of LOOKS) {
     const mei = await letIn(request, pa, "Mei", "chief", EVERY_PART);
     const [line] = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as Line[];
     await captureSpeech(page);
+    // Record every play instead of making a sound: what played, and when (nothing before a tap).
+    await page.addInitScript(() => {
+      const played: string[] = [];
+      (window as unknown as { __played: string[] }).__played = played;
+      HTMLMediaElement.prototype.play = function play(this: HTMLMediaElement) {
+        played.push(this.src);
+        return Promise.resolve();
+      };
+      HTMLMediaElement.prototype.pause = function pause() {};
+    });
     await signInAs(page, pa, "Pa");
     await lookAs(page, look);
     await readable(page, look);
@@ -59,15 +69,36 @@ for (const look of LOOKS) {
       purpose: string[];
       boundary: string[];
       lines: string[];
+      voice_parts?: string[];
     };
     const tile = page.getByTestId("story");
     await expect(tile.getByTestId("story-purpose")).toContainText(story.purpose[0]!);
     await expect(tile.locator(".lines").last()).toHaveAttribute("data-testid", "boundary");
     for (const said of story.boundary) await expect(tile.getByTestId("boundary")).toContainText(said);
     await readable(page, look);
-    await tile.getByTestId("hear").click();
-    const spoken = await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.join(" "));
-    for (const said of story.lines) expect(spoken).toContain(said);
+
+    // One voice note a part (E04-06), from the backend's own route: fetched when the story
+    // opens, played only on a tap. A part with no note is said in the phone's voice.
+    expect(story.voice_parts?.length ?? 0).toBeGreaterThan(0);
+    for (const part of story.voice_parts ?? []) await expect(tile.getByTestId(`hear-${part}`)).toBeVisible();
+    const played = () => page.evaluate(() => (window as unknown as { __played?: string[] }).__played ?? []);
+    const spoken = () => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
+    expect(await played()).toEqual([]);
+    expect(await spoken()).toEqual([]);
+    await tile.getByTestId("hear-purpose").click();
+    await expect.poll(played).toHaveLength(1);
+    expect((await played())[0]).toMatch(/^blob:/);
+    expect(await spoken()).toEqual([]);
+    const fallback = (story.voice_parts ?? []).find((part) => part !== "purpose");
+    if (fallback) {
+      await page.route(`**/story/voice?part=${fallback}*`, (route) => route.fulfill({ status: 404, body: "" }));
+      await page.reload();
+      await page.getByTestId("tab-record").click();
+      await page.getByTestId("record-medicines").click();
+      await page.getByTestId("medicine-line").getByTestId("open-story").click();
+      await page.getByTestId("story").getByTestId(`hear-${fallback}`).click();
+      await expect.poll(async () => (await spoken()).join(" ")).toContain(story.boundary[0]!);
+    }
   });
 
   test(`the reorder card on his feed carries Ask-to-order and I-have-more (${look})`, async ({ page, request }) => {

@@ -1,8 +1,11 @@
-import { useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { LabelIn, LineOut, MedicineDraftOut, MoreOut } from "../../api/types";
+import { browserAudio } from "../../feed/playback";
 import { base64Of, isPdf } from "../../onboarding/actions";
+import { StoryVoice } from "../../record/storyVoice";
+import { speak } from "../../speech/speak";
 import { confidenceLine, countOf, labelFromCard, lineQuestions, outcomeLine, reorderActions, severityLine, tidyLabel } from "../../record/model";
 import { density } from "../../store/session";
 import { fill, language, t } from "../../strings";
@@ -135,6 +138,23 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
     const { bearer, profileId } = session();
     return nura.story(bearer, profileId, lineId, language.value);
   }, [lineId, language.value]);
+  // One voice note a part (E04-06), fetched when the story opens and played only on a tap.
+  const voice = useMemo(
+    () =>
+      new StoryVoice({
+        fetch: (part) => {
+          const { bearer, profileId } = session();
+          return nura.storyVoice(bearer, profileId, lineId, part, language.value);
+        },
+        audio: browserAudio,
+        speak,
+      }),
+    [lineId, language.value],
+  );
+  useEffect(() => {
+    if (story?.voice_parts) voice.warm(story.voice_parts);
+  }, [story, voice]);
+  useEffect(() => () => voice.stop(), [voice]);
   const sections: [string, string][] = [
     ["purpose", s.record.storyPurpose],
     ["how_to_take", s.record.storyHow],
@@ -160,6 +180,19 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
                 {lines.map((line, index) => (
                   <p key={index}>{line}</p>
                 ))}
+                {story.voice_parts?.includes(key) && (
+                  <HearPart
+                    title={title}
+                    onHear={() =>
+                      void voice.hear(key, {
+                        // As the backend says the part: every part but what it is for ends on the boundary.
+                        lines: key === "purpose" ? lines : [...lines, ...story.boundary],
+                        language: language.value,
+                      })
+                    }
+                    testId={`hear-${key}`}
+                  />
+                )}
               </div>
             );
           })}
@@ -168,10 +201,26 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
               <p key={index}>{line}</p>
             ))}
           </div>
-          <Hear lines={story.lines} />
+          {/* A backend with no voice notes yet: the whole story in the phone's voice. */}
+          {!story.voice_parts?.length && <Hear lines={story.lines} />}
         </Tile>
       )}
     </RecordFrame>
+  );
+}
+
+/** One part's Hear: the same button as every card's, naming the part it plays. */
+function HearPart({ title, onHear, testId }: { title: string; onHear: () => void; testId: string }): JSX.Element {
+  const s = t();
+  return (
+    <Pill quiet onClick={onHear} label={`${s.today.hear}: ${title}`} testId={testId}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 10v4h3l4 4V6L7 10H4z" />
+        <path d="M15 9a4 4 0 0 1 0 6" />
+        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
+      </svg>
+      {s.today.hear}
+    </Pill>
   );
 }
 

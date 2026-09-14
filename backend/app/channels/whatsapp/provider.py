@@ -66,6 +66,8 @@ class Sent:
     language: str
     params: Mapping[str, str]
     provider_message_id: str
+    group_id: str | None = None
+    """For a message into the family's group (E11-01): which group; `to_e164` is empty."""
 
 
 class WhatsAppProvider(Protocol):
@@ -88,7 +90,22 @@ class WhatsAppProvider(Protocol):
         """A voice note, inside the 24-hour window only. The provider's message id."""
         ...
 
-    async def fetch_media(self, media_id: str) -> Media: ...
+    async def fetch_media(self, media_id: str, *, max_bytes: int | None = None) -> Media:
+        """The media under the provider's handle. With `max_bytes`, read against it as it
+        arrives and refused (`MediaTooLarge`) the moment it runs past: never held whole first."""
+        ...
+
+    async def open_group(self, subject: str) -> str:
+        """A new group on the business number (E11-01). The provider's handle for it."""
+        ...
+
+    async def set_group_members(self, group_id: str, members: Sequence[str]) -> None:
+        """Exactly these numbers in the group: the provider adds and removes to match."""
+        ...
+
+    async def send_group_text(self, group_id: str, text: str) -> str:
+        """Free text into the group. The provider's message id."""
+        ...
 
     def verify_webhook(self, signature: str | None, body: bytes) -> bool:
         """Whether `body` was signed by the provider (`X-Hub-Signature-256: sha256=…`)."""
@@ -107,8 +124,16 @@ class NoSuchMedia(Refusal):
     """The provider has nothing under that media id, or it has expired."""
 
 
+class MediaTooLarge(Refusal):
+    """The media under that id runs past what it may be here (a voice note's cap, #136)."""
+
+
 class NotAWebhook(Refusal):
     """The webhook body was not signed by the provider, or was not shaped like one."""
+
+
+class WebhookTooLarge(Refusal):
+    """A webhook delivery is at most a megabyte; this one was longer, or said it would be."""
 
 
 class NoWhatsAppProvider(RuntimeError):
@@ -140,6 +165,8 @@ class FixtureProvider:
         self._secret = secret.encode()
         self._fixtures = fixtures
         self.sent: list[Sent] = []
+        self.groups: dict[str, tuple[str, ...]] = {}
+        """Each group the fixture opened, and the numbers in it now."""
         self._media: dict[str, dict[str, Any]] | None = None
 
     def _index(self) -> dict[str, dict[str, Any]]:
@@ -176,12 +203,35 @@ class FixtureProvider:
         self.sent.append(Sent(to_e164, "audio", shown, None, "", {}, message_id))
         return message_id
 
-    async def fetch_media(self, media_id: str) -> Media:
+    async def open_group(self, subject: str) -> str:
+        group_id = f"group.fixture.{uuid.uuid4().hex[:12]}"
+        self.groups[group_id] = ()
+        return group_id
+
+    async def set_group_members(self, group_id: str, members: Sequence[str]) -> None:
+        self.groups[group_id] = tuple(sorted(set(members)))
+
+    async def send_group_text(self, group_id: str, text: str) -> str:
+        message_id = f"wamid.fixture.{uuid.uuid4().hex[:12]}"
+        self.sent.append(Sent("", "group", text, None, "", {}, message_id, group_id=group_id))
+        return message_id
+
+    async def fetch_media(self, media_id: str, *, max_bytes: int | None = None) -> Media:
+        media = await self._fetch(media_id)
+        if max_bytes is not None and len(media.data) > max_bytes:
+            raise MediaTooLarge(f"the media is past {max_bytes} bytes")
+        return media
+
+    async def _fetch(self, media_id: str) -> Media:
         entry = self._index().get(media_id)
         if entry is None:
             raise NoSuchMedia(f"no media {media_id} in the fixtures")
         label = str(entry.get("label", media_id))
         content_type = str(entry.get("content_type", "image/png"))
+        if content_type.startswith("audio/"):
+            # The voice notes' placeholder (tests/voice_notes.py): its digest names what the
+            # fixture transcriber heard (tests/fixtures/voice/). No audio is committed.
+            return Media(data=b"nura-voice-placeholder:" + label.encode("ascii") + b"\n", content_type=content_type)
         if content_type == "application/pdf":
             data = b"%PDF-1.4\n%nura-paper-placeholder:" + label.encode("ascii") + b"\n"
         else:
@@ -233,6 +283,18 @@ def _parse_one(message: Mapping[str, Any]) -> InboundMessage | None:
             from_e164,
             at,
             text=media.get("caption"),
+            media_id=media.get("id"),
+            content_type=media.get("mime_type"),
+            group_id=group,
+        )
+    if kind in ("audio", "voice"):
+        # A voice note (E11-01): the provider's handle for the audio, fetched and heard in
+        # the region; never stored as a handle.
+        media = message.get(kind) or {}
+        return InboundMessage(
+            message_id,
+            from_e164,
+            at,
             media_id=media.get("id"),
             content_type=media.get("mime_type"),
             group_id=group,

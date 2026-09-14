@@ -62,6 +62,7 @@ from app.channels.api.schemas import (
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
 )
+from app.channels.whatsapp.group import sync_group
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
@@ -443,6 +444,8 @@ async def grant(body: KeyGrant, request: Request, context: Context, session: Db)
         scopes=body.scopes,
         window=body.window,
     )
+    # The family's WhatsApp group is who reads the family thread: set again from the keys.
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return KeyOut.of(key)
 
 
@@ -457,8 +460,11 @@ async def keys(context: Context, session: Db) -> list[KeyOut]:
 
 
 @router.delete("/{profile_id}/keys/{key_id}")
-async def revoke(key_id: uuid.UUID, context: Context, session: Db) -> KeyOut:
-    return KeyOut.of(await revoke_key(session, context=context, key_id=key_id))
+async def revoke(key_id: uuid.UUID, request: Request, context: Context, session: Db) -> KeyOut:
+    closed = await revoke_key(session, context=context, key_id=key_id)
+    # A key closed is a person out of the family's WhatsApp group, now (E11-01).
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return KeyOut.of(closed)
 
 
 # --- consent -----------------------------------------------------------------------------

@@ -504,6 +504,11 @@ export const addDocument = (token: string, profileId: string, data: string, cont
 export const story = (token: string, profileId: string, lineId: string, language: string) =>
   api<StoryOut>(`/profiles/${profileId}/medicines/${lineId}/story`, { token, query: { language } });
 
+/** One part of the story as a voice note (E04-06): the audio, or `Refused("NotFound", 404)`
+ *  when the backend has none for this part — then the phone says the words itself. */
+export const storyVoice = (token: string, profileId: string, lineId: string, part: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/medicines/${lineId}/story/voice`, { token, query: { part, language } });
+
 /** What this label would do to the list, screened before anything is saved (E04-03). */
 export const medicineDraft = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
   api<MedicineDraftOut>(`/profiles/${profileId}/medicines/draft`, { method: "POST", token, body: { label, source_artifact_id: sourceArtifactId } });

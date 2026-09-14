@@ -135,6 +135,7 @@ export interface Strings {
     declined: string;
     declinedToday: string;
     shared: string;
+    fromPublisher: string;
     cannotShare: string;
     quiet: string;
     quietSub: string;

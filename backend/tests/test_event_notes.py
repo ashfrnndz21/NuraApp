@@ -1,6 +1,7 @@
 """E02-06: scribble and voice notes on any event.
 
-Acceptance line: the note attaches to the selected event and appears in recall. A voice note
+Acceptance line: the note attaches to the selected event and appears in recall — Ask (E03-05)
+finds it, cited with the note and its event, for a key that opens the note. A voice note
 is a VOICE artefact heard by the region's transcriber, its words kept by reference and never
 a fact; it can be heard again. It is the writer's own words — his about himself, or a
 caregiver's on his event — so it rests on the consent to hold the record, not on the
@@ -12,6 +13,7 @@ record's, and a key that does not open the notes does not see a private one.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -49,6 +51,63 @@ def _notes(profile_id: str, event_id: str) -> str:
     return f"/profiles/{profile_id}/events/{event_id}/notes"
 
 
+ASKED = "what did I say after my walk"
+
+
+def _note_lines(answer: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        line for line in answer["lines"] if any(c["kind"] == "event_note" for c in line["cites"])
+    ]
+
+
+async def test_recall_finds_only_the_notes_a_key_opens_and_names_who_left_each(
+    deployment: Deployment,
+) -> None:
+    """His private note is the notes scope's: his caregiver's key, which does not open the
+    notes, does not recall it, and he does. Her own note on his moment is shared: he recalls
+    it, told as hers."""
+    pa, profile_id, event_id = await _reading(deployment)
+    his = bearer(pa["token"])
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    hers = bearer(mei["token"])
+    await key_for(deployment, pa, profile_id, MEI, ["records", "readings", "ask"])
+    mine = await deployment.client.post(
+        _notes(profile_id, event_id), json=voice(AFTER_THE_WALK, private=True), headers=his
+    )
+    assert mine.status_code == 201, mine.text
+    ask = {"question": ASKED, "mode": "text"}
+
+    theirs = await deployment.client.post(f"/profiles/{profile_id}/ask", json=ask, headers=hers)
+    assert theirs.status_code == 200, theirs.text
+    assert _note_lines(theirs.json()) == []
+
+    drawn = await deployment.client.post(
+        _notes(profile_id, event_id),
+        json={
+            "kind": "scribble",
+            "data": b64(SCRIBBLE),
+            "content_type": "image/png",
+            "captured_at": "2026-09-03T07:55:00Z",
+            "label": "after the walk",
+        },
+        headers=hers,
+    )
+    assert drawn.status_code == 201, drawn.text
+    answered = await deployment.client.post(f"/profiles/{profile_id}/ask", json=ask, headers=his)
+    lines = _note_lines(answered.json())
+    assert sorted(line["text"] for line in lines) == [
+        "Mei left a note on Thursday 3 September.",
+        "You left a note on Thursday 3 September.",
+    ]
+    noted = {c["id"] for line in lines for c in line["cites"] if c["kind"] == "event_note"}
+    assert noted == {mine.json()["note_id"], drawn.json()["note_id"]}
+    # Her key recalls her own shared note, and still not his private one.
+    again = await deployment.client.post(f"/profiles/{profile_id}/ask", json=ask, headers=hers)
+    assert [line["text"] for line in _note_lines(again.json())] == [
+        "You left a note on Thursday 3 September."
+    ]
+
+
 async def test_a_voice_note_attaches_to_the_event_is_heard_again_and_is_never_a_fact(
     deployment: Deployment,
 ) -> None:
@@ -66,9 +125,20 @@ async def test_a_voice_note_attaches_to_the_event_is_heard_again_and_is_never_a_
     assert note["transcript"] == {"text": HEARD, "confidence": 0.91, "language": "en"}
     assert note["notice"] is None
 
-    # Recall: the note is on the event, with its words.
-    recalled = await deployment.client.get(_notes(profile_id, event_id), headers=his)
-    assert recalled.status_code == 200 and recalled.json() == [note]
+    # Recall: asked about in his own words, the note is found and cited with its event.
+    asked = await deployment.client.post(
+        f"/profiles/{profile_id}/ask", json={"question": ASKED, "mode": "text"}, headers=his
+    )
+    assert asked.status_code == 200, asked.text
+    found = _note_lines(asked.json())
+    assert [line["text"] for line in found] == ["You left a note on Thursday 3 September."]
+    cited = {(cite["kind"], cite["id"]) for cite in found[0]["cites"]}
+    assert {("event_note", note["note_id"]), ("event", event_id)} <= cited
+    assert "artifact" in {cite["kind"] for cite in found[0]["cites"]}
+    assert HEARD not in asked.text  # the words name the note; the answer never says them
+    # And on the event itself, with its words.
+    listed = await deployment.client.get(_notes(profile_id, event_id), headers=his)
+    assert listed.status_code == 200 and listed.json() == [note]
     # Hearable: the recording, as it was kept.
     heard = await deployment.client.get(
         f"{_notes(profile_id, event_id)}/{note['note_id']}/content", headers=his

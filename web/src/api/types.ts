@@ -959,6 +959,9 @@ export interface StoryOut {
   boundary: string[];
   doctor_question: string[];
   lines: string[];
+  /** The parts said as voice notes (E04-06), in order, each played from
+   *  `…/medicines/{line}/story/voice?part=`. Absent from a backend that has none yet. */
+  voice_parts?: string[];
 }
 
 /** What one label or pack said, as typed or as read off the photo (E04-03). */

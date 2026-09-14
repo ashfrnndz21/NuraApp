@@ -15,9 +15,10 @@ from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
+from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
-from app.channels.whatsapp.provider import NotAWebhook
+from app.channels.whatsapp.provider import NotAWebhook, WebhookTooLarge
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
@@ -39,6 +40,7 @@ from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
+from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
 from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
 from app.family.roster import (
@@ -82,6 +84,7 @@ from app.language.review import (
 )
 from app.medicines.reorder import NobodyToAsk, NotACount
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
@@ -113,6 +116,7 @@ from app.regions import OutOfRegion
 from app.routines.service import NotTheirsToSet
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.search.ask import NotAQuestion
+from app.search.transcripts import NotASearch
 from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -202,6 +206,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotInThatLanguage, 404),
     (NoVoiceFor, 404),
     (TooLongToSay, 404),
+    (NoSuchStoryPart, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
@@ -221,6 +226,11 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (ConsultTooLong, 413),
     # A visit's recording is heard by him and the family he let in, and nobody else.
     (OnlyTheFamilyHears, 403),
+    (NoSuchPhoto, 404),
+    (WebhookTooLarge, 413),
+    (NoFamilyGroup, 404),
+    (NotTheirsToOpen, 403),
+    (NotTheirsToTakeBack, 403),
     (NoSuchRecording, 404),
     (TranscriptTooLarge, 413),
     (VoiceNoteTooLong, 413),
@@ -284,6 +294,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NoteNamesHealth,
     NotACursor,
     NotAQuestion,
+    NotASearch,
+    # A photo shared with the family that is not an image (E12-02, E21-05).
+    NotAPhoto,
     # The visit day's (E05-03, E02-05): bytes that are not a recorder's audio, a clip outside
     # its recording, a driver who holds nothing here or a visit that has been.
     NotAConsultRecording,

@@ -101,6 +101,28 @@ class WhatsAppMessage(ProfileScoped, Base):
     )
 
 
+class WhatsAppGroup(ProfileScoped, Base):
+    """The family's group on WhatsApp (E11-01): the thread of the family (E12-02), mirrored.
+
+    One per profile, named by the provider's handle for the group. Who is in it is never
+    stored: it is the people who read the family thread — the patient, and every live key that
+    holds the family's part — worked out from the keys every time the group is used, and told
+    to the provider then (`app.channels.whatsapp.group`). A key closed is a person out of the
+    group at the next message, whichever side it comes from."""
+
+    __tablename__ = "whatsapp_group"
+    __table_args__ = (
+        _row_of_profile("whatsapp_group"),
+        UniqueConstraint("profile_id", name="uq_whatsapp_group_profile"),
+        UniqueConstraint("provider_group_id", name="uq_whatsapp_group_provider"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_group_id: Mapped[str] = mapped_column(String(80))
+    opened_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    opened_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class ProposalStatus(StrEnum):
     OPEN = "open"
     CONFIRMED = "confirmed"
@@ -161,6 +183,8 @@ class Proposal(ProfileScoped, Base):
 
 
 frozen(WhatsAppMessage)
+# A group is opened once; who is in it is never a column, so there is nothing to edit.
+frozen(WhatsAppGroup)
 # A proposal takes one change, its answer, and only while the proposals service is making it.
 frozen(
     Proposal,

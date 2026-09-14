@@ -234,3 +234,25 @@ def test_the_amount_is_said_as_digits_small_and_few() -> None:
         strings.say_date(__import__("datetime").date(2026, 9, 29), "en") == "Tuesday 29 September"
     )
     assert strings.say_date(__import__("datetime").date(2026, 9, 29), "ms") == "Selasa 29 September"
+
+
+def test_each_voice_part_but_what_it_is_for_ends_on_the_boundary() -> None:
+    """Each part of the story plays on its own tap (E04-06), so each that says how to take
+    it, what to watch, avoid or do if he forgot ends on the boundary lines."""
+    from app.drugs.fixture import FixtureRegistry
+    from app.medicines.dose import Dose, Frequency
+    from app.medicines.models import ChangeKind
+    from app.medicines.story import medication_story, story_part, voice_parts
+
+    registry = FixtureRegistry.load()
+    told = medication_story(
+        generic="amlodipine", strength="5 mg", dose=Dose(1, "tablet", Frequency.OD),
+        prescriber="Dr Tan", change_kind=next(iter(ChangeKind)),
+        monograph=registry.monograph("amlodipine"), language="en",
+    )
+    for part in voice_parts(told):
+        lines, boundary = story_part(told, part)
+        if part == "purpose":
+            assert boundary is None
+        else:
+            assert boundary == "\n".join(told.boundary) and lines[-len(told.boundary):] == told.boundary
