@@ -921,7 +921,68 @@ No audio is committed and no speech provider is called. The recording is a place
 What you will see (the numbers, ids and days change each run):
 
 ```
-CP22_OUTPUT
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591223782) registered by phone code and signed in (the code read from the server log)
+✓ Mei (+6592239645) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6593248450) registered by phone code and signed in (the code read from the server log)
+✓ Siti (+6594253583) registered by phone code and signed in (the code read from the server log)
+✓ Pa opened his profile: Mei his chief (every part), Kit a viewer (the visits, the readings), Siti a helper (the medicines)
+✓ Dr Tan in Pa's directory at Gleneagles Hospital, 6A Napier Road; the visit tomorrow, Wednesday 16 September at 9, on Pa's yes; Mei's note about the place ("parking at B2") and Mei on the roster tomorrow from 7 to 12
+✓ Pa's blood pressure tablet from its label, and his hospital letter confirmed: both are things to bring
+✓ GET …/appointments/{appt}/logistics: the card for tomorrow, from the record and State (state eff0552c…), every line through the plain-words verifier:
+    [when  ] You see Dr Tan on Wednesday 16 September at 9 in the morning.
+    [place ] Dr Tan is at Gleneagles Hospital, 6A Napier Road.
+    [note  ] Mei wrote a note about getting to Dr Tan.
+    [driver] Mei will tell you who is driving you to Dr Tan on Wednesday 16 September.
+    [bring ] Bring your blood pressure book on Wednesday 16 September.
+    [bring ] Bring your medicines in their boxes on Wednesday 16 September.
+    [bring ] Bring your hospital letter on Wednesday 16 September.
+             Mei's note: "parking at B2"  (as she wrote it)
+    driver: suggested — Mei, on the roster then; needs the chief's yes: True
+✓ the suggestion is nothing until a yes: without one, NotAConfirmerHere (400); Kit's viewer key does not reach the family list, so it cannot mint one, OutOfScope (403, family). Mei's yes (subject drive) made the task "drive Pa to Dr Tan", hers, due at the visit; the card now says: "Mei will drive you to Dr Tan on Wednesday 16 September."
+✓ Mei's list (Pa's feed keeps quiet at night): the visit_logistics card the day before — "Getting to Dr Tan tomorrow", its lines the card's, rendered from state eff0552c…, no boundary (it infers nothing), never autoplayed
+✓ no recording without Pa's agreement: the notice and the upload are both refused, ConsentWithheld (403), and nothing is kept; Kit's viewer key is refused before the room is told anything, NotTheirsToChangeVisits (403)
+✓ Pa agreed to Nura listening (POST …/consents/recording); the notice Mei's phone says first, to Dr Tan by name:
+    Nura will listen now.
+    Nura keeps what you and Dr Tan say.
+    Only you and those you let in can hear it.
+    Is that OK, Dr Tan?
+    and on a no: Nura will not listen today. / Mei will write the notes by hand.
+✓ Mei's recording, sent once on Stop (POST …/recording, audio/webm;codecs=opus, 66 s): a consult voice artefact a195f7cd… on the RECORDING consent 1cd4d5a9…, heard at 0.93, and who spoke when — 11 stretches, no words in any row:
+      0.0–8.6   unknown
+      8.6–10.4  doctor  ← Dr Tan's yes, the first seconds after the notice
+     10.4–19.8  doctor
+     19.8–28.9  doctor
+     28.9–36.2  doctor
+     36.2–39.0  doctor
+     39.0–47.5  doctor
+     47.5–55.1  doctor
+     55.1–59.3  patient
+     59.3–63.0  doctor
+     63.0–65.8  family
+✓ the post-visit card from the transcript (summary 19232fc4…), each line with where in the recording Dr Tan said it:
+     19.8–28.9  Ask Dr Tan about the new amount of the water pill (frusemide).
+     28.9–36.2  Every morning, stand on the scale before breakfast.
+     36.2–39.0  Every evening, eat a lighter dinner.
+     39.0–47.5  You have a blood test on Monday 28 September.
+     39.0–47.5  Eat nothing after 12 midnight on Sunday 27 September.
+     39.0–47.5  Water is OK.
+     47.5–55.1  Bring your blood pressure book on Thursday 15 October.
+     47.5–55.1  You see Dr Tan again on Thursday 15 October at 10 in the morning.
+     47.5–55.1  Mei will book it.
+     10.4–19.8  Dr Tan wrote down your blood pressure.
+✓ Mei asks "what did Dr Tan say about the water pill": "Dr Tan talked about this on Wednesday 16 September." — citing the recording a195f7cd… from 19.8 to 28.9 seconds, the button "Hear what Dr Tan said"
+✓ the clip (GET …/artifacts/{a}/clip?start=19.8&end=28.9): the recording's 47 bytes, audio/webm, X-Media-Fragment t=19.8,28.9 — the phone plays that stretch; Kit, who reads the visits, hears it; Siti's helper key is refused, OutOfScope (403, visits); a stretch outside the recording is NotAClip (400)
+✓ Pa reads his trail (500 lines); every refusal of this walk is on it:
+    2026-09-14T18:34:07    Pa  read visits consult_recording  refused NotAClip
+    2026-09-14T18:34:07  Siti  read visits consult_recording  refused OutOfScope
+    2026-09-14T18:34:06   Kit  read visits consult_recording  refused NotTheirsToChangeVisits
+    2026-09-14T18:34:06   Mei  write visits consult_recording  refused ConsentWithheld
+    2026-09-14T18:34:06   Mei  read visits consent  refused ConsentWithheld
+    2026-09-14T18:34:05   Mei  read visits consult_recording  refused ConsentWithheld
+    2026-09-14T18:34:02   Kit  read family visit_logistics  refused OutOfScope
+    2026-09-14T18:34:02   Mei  write family visit_logistics  refused NotAConfirmerHere
+checkpoint 22 passed: every step did what docs/checkpoints.md says
 ```
 
 **What "passed" means.** Every line is a ✓ and the last line says `checkpoint 22 passed`. The criteria: the logistics card is composed from the record only — the time from the booking, his way; the place from the directory; the chief's note shown as she wrote it under her name, never as Nura's words; who drives from a family task naming this visit, or the roster's person on duty then as a suggestion that is nothing until the chief's yes, which makes the task "drive Pa to Dr Tan"; what to bring from his record — and every line passed the plain-words verifier and the card names its State; the feed carries it the day before and on the day; nothing records without the RECORDING consent in force, a key that does not change the visits is refused before the notice is given, and every refusal is on the trail; the recording is kept as a consult voice artefact in the region, on the consent it rested on, heard, split by speaker with times and no words in any row, and read into the post-visit card with each line's place in the recording; an answer about what the doctor said cites the recording from its start to its end, and the clip plays only for a key that reads the visits. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
@@ -936,7 +997,9 @@ CP22_OUTPUT
 The operator's walk of the screen is `make web-e2e` (`web/tests/e2e/visit.spec.ts`): the phone's clock and the backend's frozen at 10 in the morning on Monday 14 September, the recorder a stand-in that hands back the placeholder recording.
 
 ```
-E2E_OUTPUT
+✓ tests/e2e/visit.spec.ts:32:1 › the visit screen: logistics from the record, the yes to a driver, consent, the notice first, one upload on Stop, the card with its clips
+✓ tests/e2e/visit.spec.ts:127:1 › a no keeps nothing: the recorder stops, nothing is sent, and the notes are written by hand
+✓ tests/e2e/visit.spec.ts:159:1 › the page hidden while listening stops at once, and what was heard is kept on the phone for one tap
 ```
 
 ## Rules the operator follows between checkpoints

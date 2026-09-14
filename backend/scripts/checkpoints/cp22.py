@@ -29,7 +29,7 @@ import base64
 import random
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -246,7 +246,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
 
     # 1. Dr Tan, his address, the visit tomorrow at 9 in the morning on Pa's yes.
     tomorrow = (datetime.now(SINGAPORE) + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
-    at = tomorrow.isoformat()
+    # Sent in UTC, as the app sends it: the local database keeps a time without its offset.
+    at = tomorrow.astimezone(UTC).isoformat().replace("+00:00", "Z")
     tan = check(
         client.post(
             f"/profiles/{profile_id}/providers",
@@ -406,12 +407,14 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "Mei gives the drive without a yes",
     )
     drive = {"subject": "drive", "appointment_id": appointment_id, "person_id": mei.person_id}
-    refused(
+    kit_says = refused(
         client.post(f"/profiles/{profile_id}/confirmations", headers=bearer(kit.token), json=drive),
         403,
-        "NotAChief",
+        "OutOfScope",
         "Kit says yes to the drive",
     )
+    if kit_says.get("scope") != "family":
+        raise fail("Kit says yes to the drive", why=f"refused at the wrong door: {kit_says}")
     drive_yes = check(
         client.post(f"/profiles/{profile_id}/confirmations", headers=hers, json=drive), 201, "Mei says yes to driving"
     )
@@ -429,8 +432,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if task["what"] != "drive Pa to Dr Tan" or task["errand"] != "drive" or after["driver"]["status"] != "assigned":
         raise fail("Mei gives herself the drive", why=f"{task} / {after['driver']}")
     ok(
-        "the suggestion is nothing until a yes: without one, NotAConfirmerHere (400); Kit, not the chief, "
-        f"cannot mint one, NotAChief (403). Mei's yes (subject drive) made the task \"{task['what']}\", "
+        "the suggestion is nothing until a yes: without one, NotAConfirmerHere (400); Kit's viewer key does not "
+        f"reach the family list, so it cannot mint one, OutOfScope (403, family). Mei's yes (subject drive) made the task \"{task['what']}\", "
         f"hers, due at the visit; the card now says: \"{driving[0]}\""
     )
 
@@ -570,7 +573,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     names = {"Pa": pa.person_id, "Mei": mei.person_id, "Kit": kit.person_id, "Siti": siti.person_id}
     who = {value: key for key, value in names.items()}
     refusals = [e for e in trail if e["outcome"] == "refused"]
-    wanted = {"ConsentWithheld", "NotTheirsToChangeVisits", "NotAChief", "NotAClip", "OutOfScope"}
+    wanted = {"ConsentWithheld", "NotTheirsToChangeVisits", "NotAClip", "OutOfScope"}
     missing = wanted - {e["refused_because"] for e in refusals}
     if missing:
         raise fail("Pa reads his trail", why=f"not on it: {sorted(missing)}")
