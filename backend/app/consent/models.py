@@ -84,6 +84,12 @@ class Consent(ProfileScoped, Base):
 
     __tablename__ = "consent"
 
+    # Not cascaded with the profile, unlike every other table of profile data: the proof of
+    # what was agreed and withdrawn outlives the graph. Deleting a profile first exports
+    # and archives its consents (the PDPA erasure story); until then the database refuses.
+    profile_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profile.id", ondelete="RESTRICT"), index=True
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
     purpose: Mapped[ConsentPurpose] = mapped_column(enum_column(ConsentPurpose, "consent_purpose"))

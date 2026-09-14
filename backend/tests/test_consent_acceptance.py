@@ -263,7 +263,9 @@ async def test_a_consent_is_stored_with_its_moment_its_scope_and_its_version(
     # Its version: the wording he saw, in the language he saw it in, and the words.
     assert given.text_version == current_version(ConsentPurpose.SHARE_WITH_PERSON)
     assert given.language == "en"
-    assert given.wording_text.startswith("You are letting Daughter see your medicines,")
+    assert given.wording_text.startswith(
+        "You are letting Daughter see some of your record.\nDaughter can see these parts:\n"
+    )
     assert given.person_id == pa.id
     assert given.captured_via is ConsentChannel.APP
     assert given.basis is ConsentBasis.OWNER
@@ -555,21 +557,32 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         "  These are the words you read in English:\n"
         "  Nura keeps your papers, your medicines and your blood pressure book.\n"
         "  They never leave Singapore.\n"
-        "  You can stop this at any time.\n"
-        "  Nura then stops keeping anything new."
+        "  You can tell Nura to stop at any time.\n"
+        "  After that day, Nura keeps nothing new.\n"
+        "  The papers Nura already has stay in your record."
     ) in text
-    assert "  Nura has changed these words since you said yes.\n  Nura will ask you to say yes again." in text
+    assert (
+        "  Nura has changed these words since you said yes.\n"
+        "  Nura will ask you to say yes again the next time you open the app."
+    ) in text
     assert "  This one is still on." in text
+    parts = (
+        "  - your medicines\n"
+        "  - your visits to the doctor\n"
+        "  - your blood pressure book and your sugar numbers\n"
+        "  - your papers\n"
+        "  - your emergency card\n"
+        "  - your questions to Nura\n"
+        "  - the messages Nura sends\n"
+    )
     assert (
         "## Who can see your papers\n\n"
         "- You said yes in the app on Saturday 24 October 2026.\n"
-        "  Daughter can see your medicines, visits to the doctor, blood pressure and sugar "
-        "numbers, papers, emergency card, questions to Nura and messages Nura sends.\n"
+        "  Daughter can see these parts:\n" + parts +
         "  These are the words you read in English:\n"
-        "  You are letting Daughter, your daughter, see your medicines, visits to the doctor, "
-        "blood pressure and sugar numbers, papers, emergency card, questions to Nura and "
-        "messages Nura sends.\n"
-        "  Daughter, your daughter, can see these until you say stop.\n"
+        "  You are letting Daughter, your daughter, see some of your record.\n"
+        "  Daughter can see these parts:\n" + parts +
+        "  Daughter can see them until you say stop.\n"
         "  You can stop this at any time."
     ) in text
     for jargon in ("UTC", "version", "08:00", "in force", "withdrew", "SG", "agreed", "Pa"):
@@ -601,8 +614,8 @@ async def test_the_words_on_the_page_are_the_words_on_the_row_not_todays_catalog
     record = await export_consent_record(sg, context=owner, now=CLAIMED_AT + timedelta(days=1))
     assert record.document["consents"][0]["wording"] == as_read
     page = record.rendered.body.decode()
-    for sentence in as_read.split(". "):
-        assert sentence.rstrip(".") in page
+    for line in as_read.splitlines():
+        assert line in page
     assert "Different words." not in page
 
 
@@ -630,7 +643,7 @@ async def test_the_page_names_a_person_he_let_in_before_their_key_is_cut(
     record = await export_consent_record(sg, context=owner, now=CLAIMED_AT + timedelta(days=2))
     entry = record.document["consents"][-1]
     assert entry["holder"] == "Daughter"
-    assert "  Daughter can see your medicines" in record.rendered.body.decode()
+    assert "  Daughter can see these parts:\n  - your medicines" in record.rendered.body.decode()
     # And nobody was written down as refused for being named.
     assert not [e for e in await read_audit(sg, context=owner) if e.outcome is Outcome.REFUSED]
 
@@ -646,14 +659,18 @@ async def test_a_page_made_for_the_chief_names_the_patient(sg: AsyncSession) -> 
     text = (await export_consent_record(sg, context=chief, now=CLAIMED_AT)).rendered.body.decode()
     assert text.startswith("# What Pa said yes to\n\nPa said yes to the things on this page.")
     assert "Nura made this page for Son on Monday 14 September 2026." in text
-    assert "  Son can see Pa's medicines" in text
+    assert "  Son can see these parts:\n  - your medicines" in text
 
 
 async def test_a_key_is_never_wider_than_the_words_the_patient_read(sg: AsyncSession) -> None:
     _, _, owner = await _pa(sg)
     siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
     let_in = await agree_to_family_sharing(sg, owner, siti, scopes={Scope.MEDICINES})
-    assert let_in.wording_text.startswith("You are letting Siti see your medicines.")
+    assert let_in.wording_text.splitlines()[:3] == [
+        "You are letting Siti see some of your record.",
+        "Siti can see these parts:",
+        "- your medicines",
+    ]
     key = await grant_key(sg, context=owner, holder=siti, role=KeyRole.CAREGIVER)
     assert key.scopes_held == {Scope.MEDICINES, Scope.PROFILE}
 
@@ -677,6 +694,40 @@ async def test_onboarding_in_malay_or_chinese_is_not_refused(sg: AsyncSession) -
         [opening] = await all_consents(sg, context=owner)
         assert opening.language == language
         assert "Nura" in opening.wording_text
+
+
+async def test_who_else_was_let_in_is_read_under_the_family_scope_whatever_the_act(
+    sg: AsyncSession,
+) -> None:
+    _, profile, owner = await _pa(sg)
+    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003")
+    daughter = await register_person(
+        sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
+    )
+    await agree_to_family_sharing(sg, owner, siti)
+    await agree_to_family_sharing(sg, owner, daughter)
+    await grant_key(sg, context=owner, holder=siti, role=KeyRole.HELPER)
+    helper = await resolve_key_context(
+        sg, region=Region.SG, person_id=siti.id, profile_id=profile.id
+    )
+    # A helper may send, but asking under SEND whether the daughter was let in is refused:
+    # that is the family list.
+    with pytest.raises(OutOfScope):
+        await require_consent(
+            sg,
+            context=helper,
+            purpose=ConsentPurpose.SHARE_WITH_PERSON,
+            scope=Scope.SEND,
+            holder_person_id=daughter.id,
+        )
+
+
+def test_consent_rows_outlive_the_profile_they_are_pinned_to() -> None:
+    """Every other table of profile data goes with the profile; the proof of consent stays."""
+    [consent_fk] = Consent.__table__.c.profile_id.foreign_keys
+    assert consent_fk.ondelete == "RESTRICT"
+    [key_fk] = Key.__table__.c.profile_id.foreign_keys
+    assert key_fk.ondelete == "CASCADE"
 
 
 # --- region-pinned and profile-scoped ----------------------------------------------------

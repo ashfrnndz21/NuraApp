@@ -7,6 +7,11 @@ withdrawing marks one, new words add one. No column can hold health content.
 
 It follows the memory stores because a proxy basis points at the artefact behind it.
 
+Unlike every other table of profile data, `consent` is not cascade-deleted with its
+profile: the proof of what was agreed and withdrawn outlives the graph. Deleting a profile
+first exports and archives its consents (the PDPA erasure story); until that runs, the
+database refuses to delete a profile that still has consent rows.
+
 Revision ID: 0003_consent
 Revises: 0003_memory
 Create Date: 2026-09-14
@@ -58,7 +63,7 @@ def upgrade() -> None:
         sa.Column(
             "profile_id",
             sa.Uuid(),
-            sa.ForeignKey("profile.id", ondelete="CASCADE"),
+            sa.ForeignKey("profile.id", ondelete="RESTRICT"),
             nullable=False,
         ),
         sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),

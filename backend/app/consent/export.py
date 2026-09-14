@@ -5,18 +5,25 @@ profile, with the words as they were read, who gave it, for whom, how, on what b
 and when it was withdrawn — and hands it to a renderer. The document carries no health
 content and names people and the profile by display name, never by id; the only
 identifiers in it are the consent rows' own ids, so a line can be pointed at if disputed.
-The words come from the row, never re-derived from the catalogue.
+Whether a recording sits behind a spoken agreement is carried as a yes or no, never as the
+recording's id: that id opens health data. The words come from the row, never re-derived
+from the catalogue.
 
 Rendering sits behind `ConsentRenderer`. `PlainTextRenderer` is the one implementation
 here: Markdown a person can read as it is, in plain words, addressed to whoever it was
-made for — "you" when that is the patient, his name when it is someone he let in. A PDF
-renderer is a later adapter with the same one method; nothing above it changes when it
-arrives. Whatever renders it receives the whole document, names included.
+made for — "you" when that is the patient, his name when it is someone he let in. The
+frame of the page is English today; the words he agreed to are printed in the language he
+read them in, and the parts a person may see are named in that language too. A page whose
+frame is in his language is the next step. A PDF renderer is a later adapter with the
+same one method; nothing above it changes when it arrives. Whatever renders it receives
+the whole document, names included.
 
 The `status` codes and raw enum values in the document are for the caregiver's app and the
 PDF adapter to put words to; the plain words for the patient are the `*_words` fields and
 the rendered page. Every read here goes through the doors: the consents under `FAMILY`,
 the profile under `PROFILE`, the names under `FAMILY` and only for people the record names.
+`ConsentRecord.region` says which region the bytes belong to; a channel sending them
+calls `guard_region` — the field is the label, not the guard.
 """
 
 from __future__ import annotations
@@ -34,7 +41,7 @@ from app.audit.access import audited_profile_read, person_display_name, record_s
 from app.audit.models import Channel
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import all_consents
-from app.consent.texts import LANGUAGES, current_version, what_words
+from app.consent.texts import LANGUAGES, current_version, what_lines
 from app.db import as_utc, utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -60,31 +67,42 @@ CHANNEL_WORDS: Mapping[ConsentChannel, str] = {
 # @patient
 REGION_NAMES: Mapping[Region, str] = {Region.SG: "Singapore", Region.MY: "Malaysia"}
 
-_SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s*")
+_SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s+")
 
 
 # @patient
-def basis_lines(basis: ConsentBasis, giver: str, patient: str) -> list[str]:
-    """The lines that say why `giver` could agree for `patient`. None when he agreed himself.
+def basis_lines(
+    basis: ConsentBasis,
+    *,
+    giver: str,
+    patient: str,
+    patients: str,
+    witness: str | None,
+    recording_kept: bool,
+) -> list[str]:
+    """The lines that say why `giver` could agree for `patient`, one idea each. Empty when
+    he agreed himself.
 
-    `giver` and `patient` arrive already in the reader's voice ("you", or a name).
+    Names arrive already in the reader's voice ("you"/"your", or a name and "Pa's").
     """
     match basis:
         case ConsentBasis.OWNER:
             return []
         case ConsentBasis.LPA:
             return [
-                f"{giver} holds the paper that says {giver} may decide for {patient}.",
-                "Lawyers call that paper a lasting power of attorney.",
+                f"{giver} holds a paper about {patients} health.",
+                f"That paper lets {giver} decide for {patient}.",
             ]
         case ConsentBasis.MEDICAL_LETTER:
             return [f"A doctor's letter says {giver} may decide for {patient}."]
         case ConsentBasis.VERBAL_RECORDED:
-            return [
-                f"{patient} said yes out loud.",
-                f"{giver} wrote it down here.",
-                f"Nura kept what {patient} said.",
-            ]
+            lines = [f"{patient} said yes out loud."]
+            if witness is not None:
+                lines.append(f"{witness} was there and heard {patient} say it.")
+            lines.append(f"{giver} wrote it down here.")
+            if recording_kept:
+                lines.append("Nura kept the recording.")
+            return lines
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +125,7 @@ class ConsentRecord:
     document: dict[str, Any]
     rendered: Rendered
     region: Region
-    """The region the record belongs to. The bytes do not leave it."""
+    """The region the record belongs to. A label for the channel, which guards the leaving."""
 
 
 def _stamp(moment: datetime) -> str:
@@ -143,6 +161,9 @@ class _Voice:
     def whose(self, name: str) -> str:
         return "your" if self.reader_is_patient and name == self.patient else f"{name}'s"
 
+    def opens(self, name: str) -> str:
+        return "open" if self.who(name) == "you" else "opens"
+
     @staticmethod
     def cap(line: str) -> str:
         """Capitalise the first letter, past any bullet or indent: "- you" becomes "- You"."""
@@ -150,6 +171,16 @@ class _Voice:
             if char.isalpha():
                 return line[:index] + char.upper() + line[index + 1 :]
         return line
+
+
+def _lines_of(wording: str) -> list[str]:
+    """The words as read, one idea per line: the row's lines, and the sentences in each."""
+    return [
+        sentence
+        for line in wording.splitlines()
+        for sentence in _SENTENCE_END.split(line.strip())
+        if sentence
+    ]
 
 
 class PlainTextRenderer:
@@ -193,22 +224,29 @@ class PlainTextRenderer:
                 if entry["holder"]:
                     holder = voice.who(entry["holder"])
                     can = "can no longer see" if entry["status"] == "withdrawn" else "can see"
-                    lines.append(cap(f"  {holder} {can} {mine} {entry['what_words']}."))
+                    lines.append(cap(f"  {holder} {can} these parts:"))
+                    lines.extend(f"  - {part}" for part in entry["what_lines"])
                 basis = ConsentBasis(entry["basis"])
                 if basis not in (ConsentBasis.OWNER, ConsentBasis.VERBAL_RECORDED):
                     lines.append(cap(f"  {giver} said yes for {me}."))
-                for line in basis_lines(basis, giver, me):
+                witness = entry["witness"]
+                for line in basis_lines(
+                    basis,
+                    giver=giver,
+                    patient=me,
+                    patients=mine,
+                    witness=voice.who(witness) if witness else None,
+                    recording_kept=entry["recording_kept"],
+                ):
                     lines.append(f"  {cap(line)}")
                 if entry["wording"]:
                     if entry["language_name"]:
                         lines.append(f"  These are the words {giver} read in {entry['language_name']}:")
                     else:
                         lines.append(f"  These are the words {giver} read:")
-                    for sentence in _SENTENCE_END.split(entry["wording"]):
-                        if sentence:
-                            lines.append(f"  {sentence}")
+                    lines.extend(f"  {line}" for line in _lines_of(entry["wording"]))
                 else:
-                    lines.append(f"  Nura does not have the words {giver} read that day.")
+                    lines.append(f"  Nura did not keep the words {giver} read that day.")
                 if entry["status"] == "withdrawn":
                     if entry["withdrawn_by"]:
                         who = voice.who(entry["withdrawn_by"])
@@ -217,10 +255,15 @@ class PlainTextRenderer:
                         )
                     else:
                         lines.append(f"  This one stopped on {entry['withdrawn_at_plain']}.")
-                        lines.append("  Nura does not have who stopped it.")
+                        lines.append("  Nura does not know who stopped it.")
                 elif entry["status"] == "out_of_date":
                     lines.append(f"  Nura has changed these words since {giver} said yes.")
-                    lines.append(cap(f"  Nura will ask {me} to say yes again."))
+                    lines.append(
+                        cap(
+                            f"  Nura will ask {me} to say yes again the next time {me} "
+                            f"{voice.opens(patient)} the app."
+                        )
+                    )
                 else:
                     lines.append("  This one is still on.")
             lines.append("")
@@ -268,7 +311,8 @@ async def export_consent_record(
                 else None
             ),
             "scopes": sorted(scope.value for scope in scopes) if scopes is not None else None,
-            "what_words": what_words(scopes, "en") if scopes is not None else what_words((), "en"),
+            # In the language he read the words in, so the page names the parts as he knows them.
+            "what_lines": what_lines(scopes or (), consent.language),
             "version": consent.text_version,
             "wording": consent.wording_text,
             "language": consent.language,
@@ -276,6 +320,13 @@ async def export_consent_record(
             "captured_via": consent.captured_via.value,
             "captured_via_words": CHANNEL_WORDS[consent.captured_via],
             "basis": consent.basis.value,
+            "witness": (
+                await name_of(consent.witness_person_id)
+                if consent.witness_person_id is not None
+                else None
+            ),
+            # Yes or no, never the artefact's id: that id opens the recording itself.
+            "recording_kept": consent.basis_artifact_id is not None,
             "given_by": giver,
             "given_at": _stamp(consent.granted_at),
             "given_at_plain": _plain(consent.granted_at, region),

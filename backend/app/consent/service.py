@@ -141,13 +141,14 @@ class Sharing:
     holder: Person
     scopes: frozenset[Scope]
     relationship: str | None = None
+    """Who they are to him, in the language of the words, or nothing. The words decide how
+    to say it (`app.consent.texts.named_words`); nothing is baked into the name."""
 
+    # @patient
     @property
     def name(self) -> str:
-        """The person as the words name them: "Ash", or "Ash, your daughter,"."""
-        if self.relationship is None:
-            return self.holder.display_name
-        return f"{self.holder.display_name}, {self.relationship},"
+        """The person as the words name them, bare: "Ash"."""
+        return self.holder.display_name
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,19 +191,22 @@ async def _check_basis(
     if basis in DOCUMENTED_BASES and basis_artifact_id is None:
         return NothingBehindTheBasis(f"{basis} needs the document as an artefact")
     if basis is ConsentBasis.VERBAL_RECORDED:
-        if witness_person_id is None:
-            return NoSuchWitness("a spoken agreement names who heard it")
-        if witness_person_id != context.person_id:
-            heard_by = await audited_read(
-                session,
-                Key,
-                context,
-                Scope.FAMILY,
-                where=(Key.holder_person_id == witness_person_id,),
-                now=moment,
-            )
-            if not any(key.is_active(moment) for key in heard_by):
-                return NoSuchWitness(f"person {witness_person_id} holds no key here")
+        # A spoken agreement needs both halves: a second person who heard it and holds a
+        # key here — never the one writing it down — and the recording as an artefact.
+        if witness_person_id is None or witness_person_id == context.person_id:
+            return NoSuchWitness("a spoken agreement names who else heard it")
+        heard_by = await audited_read(
+            session,
+            Key,
+            context,
+            Scope.FAMILY,
+            where=(Key.holder_person_id == witness_person_id,),
+            now=moment,
+        )
+        if not any(key.is_active(moment) for key in heard_by):
+            return NoSuchWitness(f"person {witness_person_id} holds no key here")
+        if basis_artifact_id is None:
+            return NothingBehindTheBasis(f"{basis} needs the recording as an artefact")
     if basis_artifact_id is not None:
         # The document or the recording, as an artefact on this profile and no other. Read
         # through the door under the records scope, like any artefact; `app.memory` reaches
@@ -273,7 +277,13 @@ async def grant_consent(
             raise refusal
         assert template is not None
         words = (
-            render_sharing(template, name=sharing.name, scopes=sharing.scopes, language=language)
+            render_sharing(
+                template,
+                name=sharing.name,
+                relationship=sharing.relationship,
+                scopes=sharing.scopes,
+                language=language,
+            )
             if sharing is not None
             else template
         )
@@ -333,6 +343,12 @@ def _about(purpose: ConsentPurpose, holder_person_id: uuid.UUID | None) -> list[
     return where
 
 
+def read_scope(purpose: ConsentPurpose, scope: Scope) -> Scope:
+    """The scope a consent of this purpose is read under: the act's own for a profile-wide
+    purpose, `FAMILY` for a per-holder one, whatever the caller asked."""
+    return Scope.FAMILY if purpose in PER_HOLDER else scope
+
+
 def _shape(purpose: ConsentPurpose, holder_person_id: uuid.UUID | None) -> Refusal | None:
     if purpose in PER_HOLDER and holder_person_id is None:
         return NoHolderNamed(f"{purpose} is asked about one person at a time")
@@ -354,10 +370,13 @@ async def require_consent(
     `scope` is the scope of the act this consent is being asked for. The check is refused
     exactly when the act would be, so a helper cannot learn from the gate what a chief
     could learn from the record. For a per-holder purpose, `holder_person_id` says whom the
-    act is for. `channel` is where the act came from, and both the check and any refusal
-    are written into the trail on it.
+    act is for, and the read runs under `FAMILY` whatever the act's scope: who else was let
+    in, and to what, is the family list, and the family list is the owner's and his chief's
+    (`app.audit.access.person_display_name` says the same). `channel` is where the act came
+    from, and both the check and any refusal are written into the trail on it.
     """
     moment = now or utcnow()
+    scope = read_scope(purpose, scope)
     misshapen = _shape(purpose, holder_person_id)
     if misshapen is not None:
         await _refused_read(session, context, misshapen, scope, channel, moment)

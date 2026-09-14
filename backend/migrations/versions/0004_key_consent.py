@@ -3,9 +3,12 @@
 `key` was shipped in 0001 with a free-text `basis`. The basis of a key is now the consent
 row it rests on — who agreed, for whom, on what footing, to which words — so `consent_id`
 replaces it. The shipped table is altered here in batch, never by editing 0001. The column
-is nullable for keys cut before consent was recorded; `grant_key` always sets it. The
-free-text basis of any key already cut is not carried over: nothing has shipped, so there
-is nothing to backfill, and the downgrade re-adds the column empty.
+is nullable for keys cut before consent was recorded; `grant_key` always sets it.
+
+`key.basis` is dropped irrecoverably: the free-text basis of any key already cut is not
+carried over into `consent_id`, and the downgrade re-adds the column empty. Nothing has
+shipped, so no key row exists to lose a basis; if that changes before this runs, backfill
+first.
 
 Revision ID: 0004_key_consent
 Revises: 0003_consent
