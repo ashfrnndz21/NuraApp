@@ -20,11 +20,12 @@ log = logging.getLogger("nura.identity.sender")
 class CodeSender(Protocol):
     """How a one-time secret reaches the person who asked for it."""
 
-    async def send_phone_code(self, phone_e164: str, code: str) -> None:
-        """Send the code to a phone, by SMS or by WhatsApp.
+    async def send_phone_code(self, phone_e164: str, code: str, *, message: str) -> None:
+        """Send the code to a phone, by SMS or by WhatsApp, in exactly the words given.
 
-        The words are `app.channels.strings.phone_code_message(code)`, and only those: a
-        provider carries the sentence, it does not write one.
+        `message` is `app.channels.strings.phone_code_message(code, language=...)`, already in
+        the person's language (`app.identity.login` chooses it): a provider carries the
+        sentence, it does not write one. `code` is the six digits inside it.
         """
         ...
 
@@ -53,10 +54,12 @@ class LoggingCodeSender:
     def __init__(self, *, reveal: bool = False) -> None:
         self.reveal = reveal
         self._codes: dict[str, str] = {}
+        self._messages: dict[str, str] = {}
         self._tokens: dict[str, str] = {}
 
-    async def send_phone_code(self, phone_e164: str, code: str) -> None:
+    async def send_phone_code(self, phone_e164: str, code: str, *, message: str) -> None:
         self._codes[phone_e164] = code
+        self._messages[phone_e164] = message
         if self.reveal:
             log.info("login code for %s: %s", phone_e164, code)
         else:
@@ -72,6 +75,10 @@ class LoggingCodeSender:
     def last_code(self, phone_e164: str) -> str:
         """The last code sent to this number. Tests only."""
         return self._codes[phone_e164]
+
+    def last_message(self, phone_e164: str) -> str:
+        """The words of the last code message sent to this number. Tests only."""
+        return self._messages[phone_e164]
 
     def last_email_token(self, email: str) -> str:
         """The last link token sent to this address. Tests only."""
