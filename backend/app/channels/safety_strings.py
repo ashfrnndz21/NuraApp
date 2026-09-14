@@ -244,13 +244,13 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
     },
     "nfw.offline_call_chief": {
         "en": "Call {chief} now.",
-        "ms": "Hubungi {chief} sekarang.",
-        "zh": "现在就打给{chief}。",
+        "ms": "Telefon {chief} sekarang.",
+        "zh": "现在就打电话给{chief}。",
     },
     "nfw.offline_call_family": {
         "en": "Call your family now.",
-        "ms": "Hubungi keluarga anda sekarang.",
-        "zh": "现在就打给您的家人。",
+        "ms": "Telefon keluarga anda sekarang.",
+        "zh": "现在就打电话给您的家人。",
     },
     "nfw.offline_bad_995": {
         "en": "If you feel very bad, call the ambulance now on 995.",

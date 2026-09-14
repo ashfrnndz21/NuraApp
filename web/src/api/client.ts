@@ -30,6 +30,8 @@ export interface Call {
   body?: unknown;
   token?: string | null;
   query?: Record<string, string | undefined>;
+  /** Goes ahead of every call still waiting (see `enqueue`): the red-flag path only. */
+  urgent?: boolean;
 }
 
 function isRefusalBody(value: unknown): value is RefusalBody {
@@ -39,14 +41,43 @@ function isRefusalBody(value: unknown): value is RefusalBody {
 /** Calls go out one at a time. The person does one thing at a time, and the local dev
  *  database (SQLite) refuses two requests that each read and then write their audit line
  *  at once; a queue costs a few milliseconds and makes the app's behaviour the same on a
- *  laptop as on the deployment. */
-let queue: Promise<unknown> = Promise.resolve();
+ *  laptop as on the deployment.
+ *
+ *  An `urgent` call — a red word on the feeling cloud, the not-feeling-well button — goes
+ *  next: ahead of every call still waiting, behind only the one already on the wire (and any
+ *  urgent call before it). A red word reaches the flag before any page read that was queued
+ *  first (W7, E13-02, E17-02). */
+interface Job {
+  urgent: boolean;
+  run: () => Promise<void>;
+}
+const waiting: Job[] = [];
+let sending = false;
+
+function enqueue<T>(work: () => Promise<T>, urgent = false): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const job: Job = { urgent, run: () => work().then(resolve, reject) };
+    if (urgent) {
+      const first = waiting.findIndex((one) => !one.urgent);
+      waiting.splice(first < 0 ? waiting.length : first, 0, job);
+    } else waiting.push(job);
+    void pump();
+  });
+}
+
+async function pump(): Promise<void> {
+  if (sending) return;
+  sending = true;
+  try {
+    for (let job = waiting.shift(); job; job = waiting.shift()) await job.run();
+  } finally {
+    sending = false;
+  }
+}
 
 /** One call to the API. Bearer token in a header, never a cookie; JSON in and out. */
 export function api<T>(path: string, call: Call = {}): Promise<T> {
-  const next = queue.then(() => send<T>(path, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue(() => send<T>(path, call), call.urgent);
 }
 
 function urlFor(path: string, call: Call): URL {
@@ -61,9 +92,7 @@ function urlFor(path: string, call: Call): URL {
  *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
  *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
 export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
-  const next = queue.then(() => sendBlob(path, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue(() => sendBlob(path, call), call.urgent);
 }
 
 async function sendBlob(path: string, call: Call): Promise<Blob> {
@@ -90,9 +119,7 @@ async function sendBlob(path: string, call: Call): Promise<Blob> {
 
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
-  const next = queue.then(() => sendBytes<T>(path, body, contentType, call));
-  queue = next.catch(() => undefined);
-  return next;
+  return enqueue(() => sendBytes<T>(path, body, contentType, call), call.urgent);
 }
 
 async function sendBytes<T>(path: string, body: Blob, contentType: string, call: Call): Promise<T> {
