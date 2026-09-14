@@ -103,6 +103,8 @@ class Why:
     visit_id: str | None = None
     note_id: str | None = None
     memo_id: str | None = None
+    memo_ids: tuple[str, ...] = ()
+    brief_id: str | None = None
     flag_id: str | None = None
     source_id: str | None = None
     gap: str | None = None
@@ -143,6 +145,7 @@ async def create_item(
     source: Source | None = None,
     cite: dict[str, Any] | None = None,
     search_job_id: uuid.UUID | None = None,
+    surface: Surface | None = None,
 ) -> FeedItem:
     """Write one card, or refuse it.
 
@@ -160,7 +163,9 @@ async def create_item(
                 raise NotPlainWords(failing)
         if type is CardType.LEARNING and (source is None or not usable(source, context.region)):
             raise SourceNotAllowlisted("a learning card names an allowlisted source")
-        surface = SURFACE_OF.get(type)
+        # A card whose words come from an inferring surface elsewhere — the visit brief, the
+        # memos — names it; otherwise its type decides (`SURFACE_OF`).
+        surface = surface if surface is not None else SURFACE_OF.get(type)
         if surface is not None and not _ends_on_its_line(lines):
             raise NoBoundaryLine(f"a {type.value} card ends on the boundary line it carries")
         return await render_from_state(

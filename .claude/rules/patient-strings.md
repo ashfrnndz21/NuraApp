@@ -6,6 +6,7 @@ paths:
   - "backend/app/consent/**"
   - "backend/app/family/**"
   - "backend/app/medicines/**"
+  - "backend/app/reasoning/visits/strings.py"
   - "backend/app/safety/boundary.py"
   - "backend/app/safety/recording.py"
   - "ios/Nura/**"

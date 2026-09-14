@@ -28,9 +28,10 @@ from app.identity.providers import (
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings, load_settings
-from tests.conftest import FEED
+from tests.conftest import FEED, VISITS
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
 
@@ -42,6 +43,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         code_sender=sender,
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        summariser=FixtureSummariser(VISITS),
         transcriber=FixtureTranscriber(VOICE, Region.SG),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
