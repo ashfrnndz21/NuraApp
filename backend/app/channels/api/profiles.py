@@ -17,7 +17,9 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import HTMLResponse
 from pydantic import AwareDatetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
@@ -60,8 +62,13 @@ from app.channels.api.schemas import (
     SummaryConfirmIn,
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
+    WithdrawalOut,
+    WithdrawIn,
+    WithdrawnOut,
 )
-from app.consent.models import ConsentBasis, ConsentPurpose
+from app.channels.printable import PrintableConsentRenderer
+from app.consent.export import export_consent_record
+from app.consent.models import Consent, ConsentBasis, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
     Sharing,
@@ -70,7 +77,10 @@ from app.consent.service import (
     grant_consent,
     may_invite,
     preview_sharing,
+    withdraw_consent,
+    withdrawal_of,
 )
+from app.consent.withdrawal import stop_lines, stopped_lines
 from app.db import utcnow
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
@@ -89,7 +99,7 @@ from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
-from app.keys.context import resolve_key_context
+from app.keys.context import KeyContext, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
@@ -460,6 +470,62 @@ async def consents(context: Context, session: Db) -> list[ConsentOut]:
     """Every agreement ever given on this profile, withdrawn ones included, oldest first.
     Read under the family scope: the owner's and his chief's."""
     return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
+
+
+@router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
+async def consent_record_page(context: Context, session: Db) -> HTMLResponse:
+    """Every agreement ever given on this profile, withdrawn ones included, as one printable
+    page to keep (the PDPA record): the words as they were read, who agreed, for whom, how,
+    when and when it stopped, with no health content. Self-contained like the emergency
+    card's page. The owner's and his chief's; the page leaving is a share on his trail."""
+    record = await export_consent_record(
+        session, context=context, renderer=PrintableConsentRenderer()
+    )
+    return HTMLResponse(
+        record.rendered.body.decode(), headers={"Cache-Control": "private, no-store"}
+    )
+
+
+@router.get("/{profile_id}/consents/{consent_id}/withdrawal")
+async def withdrawal(
+    consent_id: uuid.UUID, context: Context, session: Db, language: str | None = Language
+) -> WithdrawalOut:
+    """What stopping this agreement will do, in his words, for the confirm step. The owner's
+    alone (`NotTheirConsentToWithdraw`, 403); an agreement already stopped or not on this
+    profile is `NoConsentToWithdraw` (404). Nothing is written but the read on his trail."""
+    row = await withdrawal_of(session, context=context, consent_id=consent_id)
+    words = language or (await audited_profile_read(session, context)).language
+    return WithdrawalOut(
+        consent_id=row.id,
+        purpose=row.purpose,
+        lines=stop_lines(row.purpose, name=await _named(session, context, row), language=words),
+    )
+
+
+@router.post("/{profile_id}/consents/{consent_id}/withdraw")
+async def withdraw(
+    consent_id: uuid.UUID, body: WithdrawIn, context: Context, session: Db
+) -> WithdrawnOut:
+    """The owner stops one agreement. For letting someone in, that person's keys close in
+    the same transaction, and nothing still waiting to be sent reaches them. The rows stay,
+    marked with when and by whom; the printable record says so."""
+    row, withdrawn = await withdraw_consent(
+        session, context=context, consent_id=consent_id, captured_via=body.captured_via
+    )
+    words = body.language or (await audited_profile_read(session, context)).language
+    return WithdrawnOut(
+        consent_id=row.id,
+        purpose=row.purpose,
+        withdrawn=[ConsentOut.of(each) for each in withdrawn],
+        lines=stopped_lines(row.purpose, name=await _named(session, context, row), language=words),
+    )
+
+
+async def _named(session: AsyncSession, context: KeyContext, row: Consent) -> str:
+    """The person an agreement lets in, by name; nobody for a profile-wide one."""
+    if row.holder_person_id is None:
+        return ""
+    return await person_display_name(session, context, row.holder_person_id)
 
 
 @router.post("/{profile_id}/consents/sharing", status_code=status.HTTP_201_CREATED)

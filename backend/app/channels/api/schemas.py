@@ -37,7 +37,7 @@ from app.family.models import (
     Task,
     ThreadMessage,
 )
-from app.family.pushes import Preview
+from app.family.pushes import Preview, PushState
 from app.family.roster import OnDuty
 from app.family.thread import Digest, DigestEntry
 from app.family.trail import TrailDay, TrailLine
@@ -744,6 +744,30 @@ class DoorsOut(BaseModel):
 
 
 # --- keys --------------------------------------------------------------------------------
+
+
+class WithdrawalOut(BaseModel):
+    """What stopping one agreement will do, in his words, for the confirm step (E00-02)."""
+
+    consent_id: uuid.UUID
+    purpose: ConsentPurpose
+    lines: list[str]
+
+
+class WithdrawIn(BaseModel):
+    """The owner stopping one agreement: how he said it, and the language he reads."""
+
+    captured_via: ConsentChannel = ConsentChannel.APP
+    language: str | None = Field(default=None, min_length=2, max_length=16)
+
+
+class WithdrawnOut(BaseModel):
+    """What was stopped: every row withdrawn with it, and what stopping did, in his words."""
+
+    consent_id: uuid.UUID
+    purpose: ConsentPurpose
+    withdrawn: list[ConsentOut]
+    lines: list[str]
 
 
 class KeyGrant(BaseModel):
@@ -2544,10 +2568,16 @@ class PushOut(BaseModel):
     send_at: datetime
     channel: PushChannel
     expires_at: datetime
+    state: Literal["scheduled", "sent", "not_sent"] = "scheduled"
+    """What became of it, from the delivery log (E11): `sent` once it reached him, `not_sent`
+    when its end passed first, `scheduled` until then."""
+    sent_at: datetime | None = None
 
     @classmethod
-    def of(cls, push: ScheduledPush) -> PushOut:
+    def of(cls, push: ScheduledPush, state: PushState | None = None) -> PushOut:
         return cls(
+            state="scheduled" if state is None else state.state,
+            sent_at=None if state is None else state.sent_at,
             push_id=push.id,
             state_id=push.state_id,
             composed_by_person_id=push.composed_by_person_id,
