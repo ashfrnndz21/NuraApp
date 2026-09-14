@@ -473,13 +473,13 @@ async def consents(context: Context, session: Db) -> list[ConsentOut]:
 
 
 @router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
-async def consent_record_page(context: Context, session: Db) -> HTMLResponse:
+async def consent_record_page(request: Request, context: Context, session: Db) -> HTMLResponse:
     """Every agreement ever given on this profile, withdrawn ones included, as one printable
     page to keep (the PDPA record): the words as they were read, who agreed, for whom, how,
     when and when it stopped, with no health content. Self-contained like the emergency
     card's page. The owner's and his chief's; the page leaving is a share on his trail."""
     record = await export_consent_record(
-        session, context=context, renderer=PrintableConsentRenderer()
+        session, context=context, renderer=PrintableConsentRenderer(demo=settings_of(request).demo_mode)
     )
     return HTMLResponse(
         record.rendered.body.decode(), headers={"Cache-Control": "private, no-store"}

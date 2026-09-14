@@ -1,5 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { Refused } from "../api/client";
+import { deployment } from "../api/nura";
 import * as review from "../api/review";
 import type { ReviewItemOut, StatusOut } from "../api/review";
 import { fill, t } from "../strings";
@@ -48,6 +50,8 @@ export function ReviewApp(): JSX.Element {
   const open = async () => {
     setError(null);
     try {
+      // A laptop's token is a dev run's only (ADR 0007): anywhere else it is never sent.
+      if (draft.trim().startsWith("nura-dev-") && !(await deployment()).dev) throw new Refused("NotStaff", 403);
       await load(draft.trim());
       setToken(draft.trim());
       keep(draft.trim());

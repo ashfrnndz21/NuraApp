@@ -707,3 +707,11 @@ export interface ConsentOut {
   granted_at?: string;
   revoked_at?: string | null;
 }
+
+/** `GET /api/deployment`: the region this backend serves, and whether it is a demo (ADR 0008). */
+export interface DeploymentOut {
+  region: "SG" | "MY";
+  demo: boolean;
+  /** A declared dev run: the only place a laptop's `nura-dev-` staff token is taken. */
+  dev?: boolean;
+}

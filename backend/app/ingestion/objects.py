@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.regions import Region
 
 _KEY = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,510}$")
@@ -58,6 +59,7 @@ class ObjectStore(Protocol):
     async def get(self, key: str) -> bytes: ...
 
 
+@fixture
 class LocalObjectStore:
     """Files under `root/<region>/`, for a laptop and the tests.
 
@@ -73,6 +75,11 @@ class LocalObjectStore:
     @property
     def region(self) -> Region:
         return self._region
+
+    @property
+    def root(self) -> Path:
+        """This region's directory: what a demo's night wipe empties."""
+        return self._root
 
     def path_of(self, key: str) -> Path:
         return self._root / check_key(key)

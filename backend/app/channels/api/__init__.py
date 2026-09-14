@@ -16,14 +16,28 @@ service worker tell the app's shell (cached) from its data (never cached by path
 When the deployment names a built web client (`NURA_WEB_DIST`, see `app.settings`) and the
 directory exists, it is served at `/app` from the same origin as the API. That is how a
 phone reaches the app: one address, no cross-origin cookies or CORS.
+
+`GET /health` says the process is up; `GET /health/ready` also asks the database, and is the
+one a hosting platform's health check calls (docs/deploy.md). `GET /deployment` says which
+region this is and whether it is a demo, which is how the web client knows to show the demo
+banner on every screen (`app.demo`, ADR 0008). A demo also gets `DemoNumbersOnly` in front
+of every route and a night watch that wipes it each night.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 import app.ingestion  # wires the label-photo rule onto the memory store
@@ -51,16 +65,20 @@ from app.channels.api import (
     trends,
     visits,
 )
-from app.channels.api.deps import Providers
+from app.channels.api.deps import Providers, settings_of
 from app.channels.api.refusals import refused
 from app.channels.whatsapp import api as whatsapp
 from app.channels.whatsapp.provider import check_whatsapp_provider
 from app.db import KeptSession
+from app.demo import DemoNumbersOnly, keep_wiping, wipe_quietly
 from app.errors import Refusal
+from app.fixtures import check_fixtures
 from app.identity.providers import check_sender
 from app.settings import Settings
 
 __all__ = ["API_PREFIX", "Providers", "create_app"]
+
+log = logging.getLogger("nura.channels.api")
 
 API_PREFIX = "/api"
 """Where the web client finds the API: every root route, again, under this prefix."""
@@ -96,7 +114,52 @@ def _api() -> APIRouter:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @api.get("/health/ready", response_model=None)
+    async def ready(request: Request) -> dict[str, str] | JSONResponse:
+        """Up, and the database answers. What a platform's health check and deploy gate ask."""
+        try:
+            async with request.app.state.session_factory() as session:
+                await session.execute(text("SELECT 1"))
+        except (SQLAlchemyError, OSError, TimeoutError):
+            log.warning("health: the database did not answer", exc_info=True)
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        return {"status": "ok"}
+
+    @api.get("/deployment")
+    async def deployment(request: Request) -> dict[str, str | bool]:
+        """Which region this deployment serves, whether it is a demo (ADR 0008), and whether it
+        is a declared dev run — where, and only where, a laptop's `nura-dev-` staff token is
+        taken (the staff page asks before it sends one)."""
+        settings = settings_of(request)
+        return {
+            "region": settings.region.value,
+            "demo": settings.demo_mode,
+            "dev": settings.dev_code_sender,
+        }
+
     return api
+
+
+Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
+
+
+def _demo_lifespan(
+    settings: Settings, sessions: async_sessionmaker[KeptSession], object_root: Path | None
+) -> Lifespan:
+    """A demo checks for the night's wipe before it serves, then every few minutes."""
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await wipe_quietly(sessions, settings.region, object_root)
+        watch = asyncio.create_task(keep_wiping(sessions, settings.region, object_root))
+        try:
+            yield
+        finally:
+            watch.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watch
+
+    return lifespan
 
 
 def create_app(
@@ -106,7 +169,17 @@ def create_app(
 ) -> FastAPI:
     check_sender(settings, providers.code_sender)
     check_whatsapp_provider(settings, providers.whatsapp)
-    app = FastAPI(title="Nura", version="0.1.0")
+    check_fixtures(settings, providers)
+    if settings.demo_mode:
+        object_root = getattr(providers.object_store, "root", None)
+        app = FastAPI(
+            title="Nura (demo — not for real health information)",
+            version="0.1.0",
+            lifespan=_demo_lifespan(settings, session_factory, object_root),
+        )
+        app.add_middleware(DemoNumbersOnly)
+    else:
+        app = FastAPI(title="Nura", version="0.1.0")
     app.state.settings = settings
     app.state.session_factory = session_factory
     app.state.providers = providers

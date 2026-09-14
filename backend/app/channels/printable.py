@@ -20,6 +20,7 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
+from app.channels.strings import DEMO_HEADLINE, DEMO_LINES
 from app.consent.export import PlainTextRenderer
 from app.safety.emergency_card import Card
 
@@ -68,6 +69,7 @@ table {{ width: 100%; border-collapse: collapse; }}
 td, th {{ text-align: left; padding: 8px 4px; border-top: 1px solid var(--mist); vertical-align: top; }}
 th {{ font-weight: 500; }}
 .caption {{ font-size: 16px; color: var(--ink-soft); }}
+.demo {{ background: var(--ink); color: var(--paper); }}
 @media print {{ body {{ background: var(--paper); }} .paper {{ box-shadow: none; border: 1px solid var(--mist); }} }}
 """
 
@@ -76,8 +78,20 @@ def _tel(number: str) -> str:
     return "tel:" + "".join(ch for ch in number if ch.isdigit() or ch == "+")
 
 
-def emergency_card_html(card: Card) -> str:
-    """The card as one HTML page. Sentences from the card's lines; data in the tables."""
+def _demo_banner(language: str) -> str:
+    """On a demo deployment (ADR 0008), first on the page and on every printed copy."""
+    code = language if language in DEMO_HEADLINE else "en"
+    return (
+        '<section class="paper demo" role="note">'
+        f"<h2>{escape(DEMO_HEADLINE[code])}</h2>"
+        + "".join(f"<p>{escape(line)}</p>" for line in DEMO_LINES[code])
+        + "</section>"
+    )
+
+
+def emergency_card_html(card: Card, *, demo: bool = False) -> str:
+    """The card as one HTML page. Sentences from the card's lines; data in the tables. On a
+    demo the banner comes first, so a printed demo card cannot pass for a real one."""
     by_id: dict[str, list[str]] = {}
     for line in card.lines:
         by_id.setdefault(line.id, []).append(line.text)
@@ -127,7 +141,8 @@ def emergency_card_html(card: Card) -> str:
         f'<html lang="{escape(card.language)}"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{escape(title)}</title><style>{_style()}</style></head><body><main>"
-        f'<section class="paper"><h1>{escape(title)}</h1>{section("ec.show", "ec.language", "ec.age")}</section>'
+        + (_demo_banner(card.language) if demo else "")
+        + f'<section class="paper"><h1>{escape(title)}</h1>{section("ec.show", "ec.language", "ec.age")}</section>'
         f'<section class="paper">{section("ec.condition", "ec.no_condition")}</section>'
         f'<section class="paper">{section("ec.medicine", "ec.medicine_when", "ec.high_risk", "ec.no_medicine")}'
         + (f"<table><tbody>{medicines}</tbody></table>" if medicines else "")
@@ -149,17 +164,22 @@ class PrintableConsentRenderer:
 
     media_type = "text/html"
 
+    def __init__(self, *, demo: bool = False) -> None:
+        self.demo = demo
+
     def render(self, document: dict[str, Any]) -> bytes:
         lines = PlainTextRenderer().render(document).decode().splitlines()
-        return consent_record_html(lines).encode()
+        return consent_record_html(lines, demo=self.demo).encode()
 
 
-def consent_record_html(lines: list[str]) -> str:
+def consent_record_html(lines: list[str], *, demo: bool = False) -> str:
     """The record's Markdown lines as HTML: `#` the title, `##` a paper per kind of agreement,
     `- ` one agreement, an indented `- ` one part of the record, any other line a paragraph.
     Every line is escaped; no line is added."""
     title = ""
-    body: list[str] = []
+    # On a demo the banner comes first, as on the emergency card: a printed demo record cannot
+    # pass for a real one. The record's frame is English; so is its banner.
+    body: list[str] = [_demo_banner("en")] if demo else []
     in_paper = in_entry = in_list = False
 
     def close_list() -> None:

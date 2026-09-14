@@ -1,5 +1,6 @@
 /** A small key-value store on IndexedDB: the token, the chosen profile, the language, the
- *  density, and the last Today page. IndexedDB because it outlives the tab, is available to
+ *  density, whether the server is a demo (ADR 0008), and the last Today page. IndexedDB
+ *  because it outlives the tab, is available to
  *  a home-screen app on iOS, and is never sent to the server (a cookie would be, on every
  *  request, to routes that do not want it). Where IndexedDB is missing the store is a Map,
  *  which is what a unit test sees. */

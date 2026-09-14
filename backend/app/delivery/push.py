@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.settings import Settings
 
 
@@ -45,6 +46,7 @@ class PushSender(Protocol):
         ...
 
 
+@fixture
 class NoDevices:
     """No device is registered anywhere yet: nobody is reachable by push."""
 
@@ -57,6 +59,7 @@ class NoDevices:
         raise NoDevice(f"person {person_id} has no device registered")
 
 
+@fixture
 class FixturePush:
     """Pushes into a list, to the people a test registered. Nothing leaves the process."""
 
@@ -82,5 +85,7 @@ class FixturePush:
 
 def push_sender_for(settings: Settings) -> PushSender:
     """The fixture on a declared dev run (with no devices until one is registered), and
-    `NoDevices` anywhere else until a real sender exists."""
+    `NoDevices` anywhere else until a real sender exists. Both are fixtures (`app.fixtures`):
+    a demo runs on `NoDevices` and reaches nobody, and a deployment that is neither a dev run
+    nor a demo refuses to start until a real push sender is built."""
     return FixturePush() if settings.dev_code_sender else NoDevices()
