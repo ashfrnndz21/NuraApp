@@ -403,6 +403,108 @@ export const ms = {
     // @patient
     noMicSub: "Anda boleh tulis nota dengan tangan.",
   },
+  day: {
+    // @patient headline
+    topThree: "3 perkara untuk hari ini",
+    // @patient phrase
+    notWell: "Saya rasa tidak sihat",
+    // @patient headline
+    notWellTitle: "Beritahu Nura apa yang anda rasa",
+    // @patient
+    notWellLead: "Sebut atau taip dengan kata-kata anda sendiri.",
+    // @patient phrase
+    wordsLabel: "Apa yang anda rasa",
+    // @patient phrase
+    send: "Beritahu Nura",
+    // @patient phrase
+    sayIt: "Sebut dengan kuat",
+    // @patient phrase
+    stopAndSend: "Berhenti dan hantar",
+    // @patient
+    sending: "Nura sedang menghantar ini sekarang.",
+    // @patient headline
+    whatToDo: "Apa perlu dibuat sekarang",
+    // @patient phrase
+    backToday: "Kembali ke Hari Ini",
+    // @patient phrase
+    symptomsOpen: "Catat apa yang anda rasa",
+    // @patient headline
+    symptomsTitleSelf: "Bagaimana perasaan anda",
+    // @patient headline
+    symptomsTitleOther: "Bagaimana perasaan {name}",
+    // @patient
+    symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
+    // @patient phrase
+    symptomsKeep: "Simpan ini",
+    // @patient
+    // @patient phrase
+    sendAgain: "Hantar sekali lagi",
+    symptomsSaved: "Nura sudah mencatat ini.",
+    // @patient phrase
+    nudgeOk: "OK",
+    // @patient phrase
+    nudgeWentWell: "Semuanya baik",
+    // @patient phrase
+    nudgeNotToday: "Bukan hari ini",
+    // @patient phrase
+    briefOpen: "Baca sebelum lawatan anda",
+    // @patient headline
+    briefTitle: "Sebelum lawatan anda",
+    // @patient phrase
+    questionsOpen: "Soalan anda untuk doktor",
+    // @patient headline
+    questionsTitle: "Soalan untuk lawatan anda",
+    // @patient phrase
+    questionLabel: "Soalan anda",
+    // @patient phrase
+    questionAdd: "Simpan soalan ini",
+    // @patient
+    questionCheck: "Adakah ini yang anda mahu tanya?",
+    // @patient phrase
+    questionYes: "Ya, simpan",
+    // @patient phrase
+    questionRemove: "Buang soalan ini",
+    // @patient
+    questionRemoveCheck: "Buang soalan ini daripada senarai anda?",
+    // @patient phrase
+    questionRemoveYes: "Ya, buang",
+    // @patient
+    questionKept: "Nura sudah simpan soalan anda.",
+    // @patient
+    questionRemoved: "Nura sudah buang soalan itu daripada senarai anda.",
+    // @patient
+    summaryLead: "Semak setiap baris, kemudian kata ya.",
+    // @patient phrase
+    summaryLeaveOut: "Jangan simpan ini",
+    // @patient
+    summaryLeftOut: "Nura tidak akan simpan ini.",
+    // @patient
+    summaryFromNotes: "Ini daripada nota yang anda tulis.",
+    // @patient phrase
+    summaryYes: "Ya, simpan kad ini",
+    // @patient
+    summaryKept: "Nura sudah simpan apa yang {doctor} katakan.",
+    // @patient
+    summaryWaiting: "Kad ini menunggu jawapan ya daripada anda.",
+    fallback: {
+      // @patient
+      youDidRight: "Bagus, anda sudah beritahu.",
+      // @patient action
+      notSent: "Nura tidak dapat menghantar ini kepada keluarga anda.",
+      // @patient action
+      call995: "Hubungi ambulans sekarang di talian 995.",
+      // @patient action
+      call999: "Hubungi ambulans sekarang di talian 999.",
+      // @patient action
+      callFamily: "Telefon keluarga anda sekarang.",
+      // @patient action
+      bad995: "Jika anda rasa sangat teruk, hubungi ambulans sekarang di talian 995.",
+      // @patient action
+      bad999: "Jika anda rasa sangat teruk, hubungi ambulans sekarang di talian 999.",
+      // @patient
+      closing: "Nura tidak menentukan apa masalahnya.",
+    },
+  },
   onboarding: {
     // @patient phrase
     next: "Seterusnya",

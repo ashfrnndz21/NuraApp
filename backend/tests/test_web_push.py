@@ -244,8 +244,12 @@ async def _signed_in(sg: AsyncSession, person: Person) -> LoginSession:
     return login
 
 
-async def _pushing(sg: AsyncSession, h: Home, service: PushService, phone: Phone) -> LoginSession:
-    """Reorders by app push first, Web Push behind the port, and Mei's phone subscribed."""
+async def _pushing(
+    sg: AsyncSession, h: Home, service: PushService, phone: Phone, person: Person | None = None
+) -> LoginSession:
+    """Reorders by app push first, Web Push behind the port, and one phone subscribed: Mei's,
+    or `person`'s."""
+    who = person or h.mei
     await change(
         sg,
         context=h.owner,
@@ -256,10 +260,10 @@ async def _pushing(sg: AsyncSession, h: Home, service: PushService, phone: Phone
         caps={},
     )
     h.via = Via.of(h.via.settings, replace(h.via.providers, push=_sender(service)))
-    login = await _signed_in(sg, h.mei)
+    login = await _signed_in(sg, who)
     await subscribe(
         sg,
-        context=await h.ctx(sg, h.mei),
+        context=await h.ctx(sg, who),
         login_id=login.id,
         endpoint=phone.endpoint,
         p256dh=phone.p256dh,
@@ -357,6 +361,50 @@ async def test_a_phone_signed_out_gets_nothing(
     [row] = _rows(await _run(sg, h, clock, at(10)), TriggerType.REORDER)
     assert row.via is DeliveryChannel.WHATSAPP and row.passed_over == ["app_push: no device"]
     assert service.requests == []
+
+
+async def test_a_nudge_push_names_the_nudge_the_web_reads(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A push carries no words, so a nudge's push carries the nudge's own id: the one
+    `GET /profiles/{id}/nudges?day=` (#138) returns, where the app reads what it says."""
+    from app.db import as_utc
+    from app.delivery.nudges.engine import hand_over
+    from tests.feelings_support import REGISTRY
+
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    service, phone = PushService(), Phone.new()
+    await _pushing(sg, h, service, phone, person=h.pa)
+    _, nudge = await hand_over(sg, context=h.owner, registry=REGISTRY)
+    due = as_utc(nudge.send_after) + timedelta(minutes=1)
+    [row] = _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)
+    assert row.via is DeliveryChannel.APP_PUSH and row.outcome is DeliveryOutcome.SENT
+    said = [phone.read(request) for request in service.requests]
+    assert all(set(one) == {"text", "id"} for one in said)
+    assert str(nudge.id) in {one["id"] for one in said}
+
+
+async def test_a_nudge_he_answered_in_the_app_is_not_pushed(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """#138: delivery skips a nudge he already answered in the app, before any channel, so
+    no push goes for it either."""
+    from app.db import as_utc
+    from app.delivery.nudges.engine import hand_over, respond
+    from app.delivery.nudges.models import ResponseKind
+    from tests.feelings_support import REGISTRY
+
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    service, phone = PushService(), Phone.new()
+    await _pushing(sg, h, service, phone, person=h.pa)
+    _, nudge = await hand_over(sg, context=h.owner, registry=REGISTRY)
+    await respond(sg, context=h.owner, nudge_id=nudge.id, kind=ResponseKind.DISMISSED)
+    due = as_utc(nudge.send_after) + timedelta(minutes=1)
+    [row] = _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)
+    assert row.outcome is DeliveryOutcome.SKIPPED and row.reason == "answered in the app"
+    assert str(nudge.id) not in {phone.read(request)["id"] for request in service.requests}
 
 
 # --- the door --------------------------------------------------------------------------------

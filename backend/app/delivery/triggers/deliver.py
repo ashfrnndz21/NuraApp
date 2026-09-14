@@ -483,10 +483,11 @@ async def deliver(
                 passed.append("app_push: no device")
                 continue
             line = PUSH_LINE[run.language_for(to.person)]
-            # The push says only the line and an id the app opens: the card on his feed when
-            # the trigger names one, else this delivery's own row. No health word rides it.
+            # The push says only the line and an id the app opens: the card on his feed, or the
+            # nudge (`GET /profiles/{id}/nudges?day=`), when the trigger names one; else this
+            # delivery's own row. No health word rides it.
             row_id = uuid.uuid4()
-            ref = str(firing.why.get("feed_item_id") or row_id)
+            ref = str(firing.why.get("feed_item_id") or firing.why.get("nudge_id") or row_id)
             try:
                 await push.push(run.session, run.acting, to.person.id, line, ref=ref)
             except NoDevice:

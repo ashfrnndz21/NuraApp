@@ -1,5 +1,25 @@
 import { api, apiBlob, apiUpload } from "./client";
 import type {
+  AnsweredOut,
+  BriefOut,
+  CloudOut,
+  DayNudgesOut,
+  FeelingOut,
+  HandedOverOut,
+  ItemDecision,
+  MeSummaryOut,
+  MemoCardOut,
+  NudgeAnswer,
+  NudgePlanOut,
+  OfflineCardsOut,
+  QuestionChange,
+  Said,
+  SummaryConfirmedOut,
+  SymptomLoggedOut,
+  SymptomLogOut,
+  VisitQuestionOut,
+  VisitQuestionsOut,
+  WhatToDoOut,
   AppointmentOut,
   ConsultOut,
   LogisticsOut,
@@ -394,3 +414,109 @@ export const cutKey = (token: string, profileId: string, holder_phone_e164: stri
     token,
     body: { holder_phone_e164, role: "caregiver", scopes },
   });
+
+// --- W7: the patient's day (E05-01, E05-02, E05-05, E13-02, E14-01, E17, E11-07) ------------
+
+/** The pre-visit brief (E05-01): purpose, what changed, the questions, what to bring. */
+export const brief = (token: string, profileId: string, appointmentId: string) =>
+  api<BriefOut>(`/profiles/${profileId}/appointments/${appointmentId}/brief`, { token });
+
+/** The questions for a visit, each with its source, and his one card (E05-02). */
+export const visitQuestions = (token: string, profileId: string, appointmentId: string) =>
+  api<VisitQuestionsOut>(`/profiles/${profileId}/appointments/${appointmentId}/questions`, { token });
+
+/** His yes to one change to the questions: the words as typed, or the one to take off. */
+export const mintQuestionYes = (token: string, profileId: string, appointmentId: string, change: QuestionChange) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "question", appointment_id: appointmentId, ...change },
+  });
+
+/** Spend that yes on exactly that change. */
+export const changeQuestion = (token: string, profileId: string, appointmentId: string, change: QuestionChange, confirmation_id: string) =>
+  api<VisitQuestionOut>(`/profiles/${profileId}/appointments/${appointmentId}/questions`, {
+    method: "POST",
+    token,
+    body: { ...change, confirmation_id },
+  });
+
+/** The post-visit cards for a visit (E05-05), each with its items. */
+export const summaries = (token: string, profileId: string, appointmentId: string) =>
+  api<VisitSummaryOut[]>(`/profiles/${profileId}/appointments/${appointmentId}/summaries`, { token });
+
+/** His yes to the whole card as shown: every item, kept or left out. */
+export const mintSummaryYes = (token: string, profileId: string, summaryId: string, decisions: ItemDecision[]) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "visit_summary", summary_id: summaryId, decisions },
+  });
+
+/** Spend it: memos, the planned follow-up, facts citing the transcript, a flag for a change. */
+export const confirmSummary = (
+  token: string,
+  profileId: string,
+  appointmentId: string,
+  summaryId: string,
+  decisions: ItemDecision[],
+  confirmation_id: string,
+) =>
+  api<SummaryConfirmedOut>(`/profiles/${profileId}/appointments/${appointmentId}/summary/${summaryId}/confirm`, {
+    method: "POST",
+    token,
+    body: { decisions, confirmation_id },
+  });
+
+/** The memo card: what the doctor said, one line each, ending on the boundary. */
+export const memoCard = (token: string, profileId: string) => api<MemoCardOut>(`/profiles/${profileId}/memos`, { token });
+
+/** The not-feeling-well button (E13-02): his words or his voice in, the card out. Urgent: it
+ *  goes ahead of every read still waiting. */
+export const notFeelingWell = (token: string, profileId: string, said: Said, language: string) =>
+  api<WhatToDoOut>(`/profiles/${profileId}/not-feeling-well`, { method: "POST", token, body: { ...said, language }, urgent: true });
+
+/** The two cards the phone keeps for when it cannot reach Nura (W7). */
+export const offlineCards = (token: string, profileId: string, language: string) =>
+  api<OfflineCardsOut>(`/profiles/${profileId}/not-feeling-well/offline`, { token, query: { language } });
+
+/** A symptom in his words, by voice or typed: how much and since when are read from them. */
+export const logSymptom = (token: string, profileId: string, said: Said, language: string) =>
+  api<SymptomLoggedOut>(`/profiles/${profileId}/symptoms`, { method: "POST", token, body: { ...said, language }, urgent: true });
+
+/** The last seven days of symptoms, in plain words with the day's name. */
+export const symptomLog = (token: string, profileId: string, language: string) =>
+  api<SymptomLogOut>(`/profiles/${profileId}/symptoms`, { token, query: { language } });
+
+/** The feeling cloud now (E17-01): whether it shows, the question, the words. */
+export const feelingCloud = (token: string, profileId: string, language: string) =>
+  api<CloudOut>(`/profiles/${profileId}/feelings/cloud`, { token, query: { language } });
+
+/** A tap on one word. Urgent: a red word is flagged before anything else is read. */
+export const tapFeeling = (token: string, profileId: string, word: string, language: string) =>
+  api<FeelingOut>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language }, urgent: true });
+
+/** His one answer to the one question. Urgent: a yes can make the word red. */
+export const answerFeeling = (token: string, profileId: string, tapId: string, answer: string, language: string) =>
+  api<AnsweredOut>(`/profiles/${profileId}/feelings/${tapId}/answer`, { method: "POST", token, body: { answer, language }, urgent: true });
+
+/** The day's plan of nudges (E17-03, E11-07): what goes, with its why. */
+export const nudgePlan = (token: string, profileId: string) => api<NudgePlanOut>(`/profiles/${profileId}/nudges/plan`, { token });
+
+/** Write the planned nudge down and give it to delivery: the planner's own write. */
+export const handOverNudge = (token: string, profileId: string) =>
+  api<HandedOverOut>(`/profiles/${profileId}/nudges/plan`, { method: "POST", token });
+
+/** The nudges handed over today, with what this person did with each. */
+export const dayNudges = (token: string, profileId: string) => api<DayNudgesOut>(`/profiles/${profileId}/nudges`, { token });
+
+/** What he did with a nudge: accepted or dismissed ("Not today"). */
+export const answerNudge = (token: string, profileId: string, nudgeId: string, kind: NudgeAnswer) =>
+  api<unknown>(`/profiles/${profileId}/nudges/${nudgeId}/response`, { method: "POST", token, body: { kind } });
+
+/** Today's top three (E11-02): alerts, then reminders, then insights, each with its why. */
+export const feedToday = (token: string, profileId: string) => api<FeedPageOut>(`/profiles/${profileId}/feed/today`, { token });
+
+/** The Me page (E17-04): the number that only goes up, in his words. */
+export const meSummary = (token: string, profileId: string, language: string) =>
+  api<MeSummaryOut>(`/profiles/${profileId}/me-summary`, { token, query: { language } });

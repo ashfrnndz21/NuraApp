@@ -59,9 +59,9 @@ describe("the post-visit card", () => {
   it("puts each line's clip under it, and the boundary last, apart", () => {
     const view = summaryView(summary);
     expect(view.lines).toEqual([
-      { text: "Dr Tan said this on Monday 14 September.", clip: null },
-      { text: "Ask Dr Tan about the new amount of the water pill (frusemide).", clip: { artifact_id: "rec-1", start_s: 19.8, end_s: 28.9 } },
-      { text: "Every morning, stand on the scale before breakfast.", clip: null },
+      { text: "Dr Tan said this on Monday 14 September.", clip: null, itemId: null },
+      { text: "Ask Dr Tan about the new amount of the water pill (frusemide).", clip: { artifact_id: "rec-1", start_s: 19.8, end_s: 28.9 }, itemId: "i1" },
+      { text: "Every morning, stand on the scale before breakfast.", clip: null, itemId: "i2" },
     ]);
     expect(view.boundary).toEqual(["Nura wrote this from what Dr Tan said.", "Ask Dr Tan."]);
   });

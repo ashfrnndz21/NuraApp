@@ -29,6 +29,12 @@ async function todaySlots(request: APIRequestContext, token: string, profileId: 
 
 /** The feed's cards for "For you today", as the app reads them: its first two now and today
  *  cards. In the quiet hours (21:00–07:00 on his wall clock) there are none. */
+/** Today's top three (E11-02), as the app reads them live: the backend's order. */
+async function topThreeFromFeed(request: APIRequestContext, token: string, profileId: string): Promise<FeedItem[]> {
+  const page = (await (await request.get(`${API}/profiles/${profileId}/feed/today`, auth(token))).json()) as { items: FeedItem[] };
+  return page.items.filter((item) => item.status !== "dismissed");
+}
+
 async function forYouFromFeed(request: APIRequestContext, token: string, profileId: string): Promise<FeedItem[]> {
   const page = (await (await request.get(`${API}/profiles/${profileId}/feed`, auth(token))).json()) as { items: FeedItem[] };
   return page.items.filter((item) => item.status !== "dismissed" && (item.supply === "now" || item.supply === "today")).slice(0, 2);
@@ -70,14 +76,23 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   const due = slots.find((slot) => slot.due_now);
   const missed = slots.find((slot) => slot.missed && !slot.taken);
   const fromFeed = await forYouFromFeed(request, token, me.profile_id);
+  const top = await topThreeFromFeed(request, token, me.profile_id);
   await page.reload();
 
   if (fromFeed.length > 0) {
-    // The feed carries today's cards: its first two, in its order, each under its own why.
-    const cards = page.getByTestId("feed-card");
-    await expect(cards).toHaveCount(fromFeed.length);
-    await expect(cards.first()).toContainText(fromFeed[0]!.headline);
-    if (fromFeed[0]!.why.plain) await expect(cards.first()).toContainText(fromFeed[0]!.why.plain);
+    if (top.length > 0) {
+      // Today's top three (E11-02) stand in "For you today" on a live page: the backend's first
+      // card, under its own why, one at a time (day.spec.ts walks the rest).
+      const card = page.getByTestId("top-three-card");
+      await expect(card).toContainText(top[0]!.headline);
+      if (top[0]!.why.plain) await expect(card).toContainText(top[0]!.why.plain);
+    } else {
+      // The feed carries today's cards: its first two, in its order, each under its own why.
+      const cards = page.getByTestId("feed-card");
+      await expect(cards).toHaveCount(fromFeed.length);
+      await expect(cards.first()).toContainText(fromFeed[0]!.headline);
+      if (fromFeed[0]!.why.plain) await expect(cards.first()).toContainText(fromFeed[0]!.why.plain);
+    }
     await expect(page.getByTestId("state-card")).toHaveCount(0);
   } else {
     // No feed cards (the quiet hours, or nothing new): the State and the medicines, in the
