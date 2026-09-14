@@ -92,8 +92,6 @@ from app.memory.models import (
     ConfidenceState,
     Event,
     Fact,
-    Provider,
-    ProviderKind,
 )
 from app.notes.models import NOTE_LENGTH, Note
 from app.reasoning.visits.models import (
@@ -482,6 +480,9 @@ class ReviewCardConfirmIn(BaseModel):
     subject: Literal[ConfirmSubject.REVIEW_CARD]
     card_id: uuid.UUID
     decisions: list[DecisionIn]
+    episode_id: uuid.UUID | None = None
+    """The open episode the card goes into once confirmed (E03-02), part of what is said yes
+    to: its facts name the episode and its photo hangs off it."""
 
 
 class MedicineConfirmIn(BaseModel):
@@ -592,17 +593,33 @@ class PushConfirmIn(PushScheduleIn):
     subject: Literal[ConfirmSubject.PUSH]
 
 
+
+
+class StatusConfirmIn(BaseModel):
+    """A yes to one step of a visit's status: this visit, to this status."""
+
+    subject: Literal[ConfirmSubject.APPOINTMENT_STATUS]
+    appointment_id: uuid.UUID
+    status: AppointmentStatus
+
+
+class AttachConfirmIn(BaseModel):
+    """A yes to hanging this artefact off exactly one thing: an episode or a visit."""
+
+    subject: Literal[ConfirmSubject.ATTACH]
+    artifact_id: uuid.UUID
+    episode_id: uuid.UUID | None = None
+    appointment_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_thing(self) -> AttachConfirmIn:
+        if (self.episode_id is None) == (self.appointment_id is None):
+            raise ValueError("a paper hangs off an episode or a visit, one of the two")
+        return self
+
+
 ConfirmIn = Annotated[
-    ClaimConfirmIn
-    | ReviewCardConfirmIn
-    | MedicineConfirmIn
-    | AppointmentConfirmIn
-    | QuestionConfirmIn
-    | SummaryConfirmIn
-    | KeyChangeConfirmIn
-    | OnlyMeConfirmIn
-    | TaskDoneConfirmIn
-    | PushConfirmIn,
+    ClaimConfirmIn | ReviewCardConfirmIn | MedicineConfirmIn | AppointmentConfirmIn | QuestionConfirmIn | SummaryConfirmIn | KeyChangeConfirmIn | OnlyMeConfirmIn | TaskDoneConfirmIn | PushConfirmIn | StatusConfirmIn | AttachConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -1194,6 +1211,8 @@ class ReadingIn(BaseModel):
     systolic: int = Field(ge=40, le=300)
     diastolic: int = Field(ge=20, le=200)
     taken_at: datetime | None = None
+    episode_id: uuid.UUID | None = None
+    """The open episode this reading was taken during, if any (E03-02)."""
 
 
 class ReadingOut(BaseModel):
@@ -1456,6 +1475,8 @@ class ReviewConfirmIn(BaseModel):
 
     decisions: list[DecisionIn]
     confirmation_id: uuid.UUID
+    episode_id: uuid.UUID | None = None
+    """The open episode the yes named, if it named one (E03-02)."""
 
 
 class FactOut(BaseModel):
@@ -1574,35 +1595,7 @@ class EventNoteOut(BaseModel):
 # --- the visit loop (E05) ------------------------------------------------------------------------
 
 
-class ProviderIn(BaseModel):
-    """A doctor, clinic, hospital or pharmacy to add to the profile's own directory."""
 
-    name: str = Field(min_length=1, max_length=120)
-    kind: ProviderKind = ProviderKind.DOCTOR
-    phone_e164: str | None = Field(default=None, pattern=PHONE)
-    address: str | None = Field(default=None, max_length=300)
-
-
-class ProviderOut(BaseModel):
-    provider_id: uuid.UUID
-    name: str
-    kind: ProviderKind
-    region: Region
-
-    @classmethod
-    def of(cls, provider: Provider) -> ProviderOut:
-        return cls(
-            provider_id=provider.id, name=provider.name, kind=provider.kind, region=provider.region
-        )
-
-
-class AppointmentIn(BaseModel):
-    """Write down a visit a person has arranged, with the yes minted for exactly it."""
-
-    provider_id: uuid.UUID
-    scheduled_at: datetime
-    purpose: str = Field(min_length=1, max_length=80)
-    confirmation_id: uuid.UUID
 
 
 class AppointmentOut(BaseModel):

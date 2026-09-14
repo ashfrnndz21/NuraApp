@@ -1,0 +1,8 @@
+{
+  "question": "what was my blood pressure",
+  "sha256": "f303744c78dd60810fbc806dfa6d13f71ae9b297b7b17950ee01d55ce8821382",
+  "names": [
+    "blood pressure"
+  ],
+  "note": "The phrases a model would pick out of this question; keyed by the sha256 of the question, normalised (app.search.retrieve.normalise)."
+}

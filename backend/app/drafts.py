@@ -36,6 +36,7 @@ class ConfirmSubject(StrEnum):
     ONLY_ME = "only_me"
     TASK_DONE = "task_done"
     PUSH = "push"
+    ATTACH = "attach"
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +174,10 @@ class ReviewDraft:
     card_id: uuid.UUID
     artifact_id: uuid.UUID
     fields: tuple[DecidedField, ...]
+    episode_id: uuid.UUID | None = None
+    """The open episode the card's facts and its photo hang off once confirmed (E03-02),
+    when the person named one; part of the yes, so a card confirmed into an episode was
+    shown as such."""
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -186,6 +191,7 @@ class ReviewDraft:
         return {
             "card_id": self.card_id,
             "artifact_id": self.artifact_id,
+            "episode_id": self.episode_id,
             "fields": [
                 {
                     "field_id": field.field_id,
@@ -363,6 +369,33 @@ class PushDraft:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class AttachDraft:
+    """An artefact about to hang off an episode or a visit (E03-01, E03-02): which artefact,
+    and which one thing it hangs off. Attaching is a person's word that this paper belongs
+    to that concern or that visit, so it takes a yes like any other write that arranges the
+    record; the ingestion confirm that names an open episode carries its own."""
+
+    artifact_id: uuid.UUID
+    episode_id: uuid.UUID | None
+    appointment_id: uuid.UUID | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.ATTACH
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.artifact_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "artifact_id": self.artifact_id,
+            "episode_id": self.episode_id,
+            "appointment_id": self.appointment_id,
+        }
+
+
 Draft = (
     FactDraft
     | AppointmentDraft
@@ -375,6 +408,7 @@ Draft = (
     | OnlyMeDraft
     | TaskDoneDraft
     | PushDraft
+    | AttachDraft
 )
 
 

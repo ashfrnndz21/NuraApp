@@ -50,15 +50,19 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
-from app.memory.spine import NoSuchAppointment as NoSuchVisit
-from app.memory.spine import NoSuchProvider
-from app.reasoning.visits.gaps import NoSuchAppointment
+from app.memory.attach import AlreadyHangsThere
+from app.memory.providers import NotAPlaceNote, NoteNamesHealth
+from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
+from app.memory.timeline import NotACursor
+from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
+from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
 from app.reasoning.visits.questions import NoSuchQuestion
 from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
 from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
+from app.search.ask import NotAQuestion
 from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -115,6 +119,13 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
+    # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
+    # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
+    (NoSuchEpisode, 404),
+    (AlreadyHangsThere, 409),
+    (EpisodeAlreadyOpen, 409),
+    (EpisodeAlreadyClosed, 409),
+    (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
     (TranscriptTooLarge, 413),
     # Free text needs the 24-hour window; outside it only a template goes.
@@ -148,8 +159,15 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    # The timeline's (E03): a place note that is not one line, or that names a medicine or a
+    # condition; a cursor that is not the last page's; a question that is not one line.
+    NotAPlaceNote,
+    NoteNamesHealth,
+    NotACursor,
+    NotAQuestion,
 )
-"""Named so that a reader of this file sees every family refusal; each is a 400."""
+"""Named so that a reader of this file sees every family and timeline refusal; each is a
+400."""
 
 
 def status_of(refusal: Refusal) -> int:

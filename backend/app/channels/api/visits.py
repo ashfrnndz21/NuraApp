@@ -26,14 +26,11 @@ from fastapi import APIRouter, Request, status
 
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
-    AppointmentIn,
     AppointmentOut,
     BriefOut,
     FactOut,
     MemoCardOut,
     MemoOut,
-    ProviderIn,
-    ProviderOut,
     QuestionChangeIn,
     QuestionOut,
     QuestionsOut,
@@ -43,7 +40,7 @@ from app.channels.api.schemas import (
     TranscriptIn,
 )
 from app.db import utcnow
-from app.memory.spine import add_provider, book_appointment, list_providers, upcoming_appointments
+from app.memory.spine import upcoming_appointments
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.guard import can_change_visits
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card
@@ -64,41 +61,6 @@ from app.reasoning.visits.summary import (
 )
 
 router = APIRouter(prefix="/profiles", tags=["visits"])
-
-
-@router.post("/{profile_id}/providers", status_code=status.HTTP_201_CREATED)
-async def add_a_provider(body: ProviderIn, context: Context, session: Db) -> ProviderOut:
-    """A doctor, clinic, hospital or pharmacy in this profile's own directory."""
-    provider = await add_provider(
-        session,
-        context=context,
-        name=body.name,
-        kind=body.kind,
-        region=context.region,
-        phone_e164=body.phone_e164,
-        address=body.address,
-    )
-    return ProviderOut.of(provider)
-
-
-@router.get("/{profile_id}/providers")
-async def providers(context: Context, session: Db) -> list[ProviderOut]:
-    return [ProviderOut.of(one) for one in await list_providers(session, context=context)]
-
-
-@router.post("/{profile_id}/appointments", status_code=status.HTTP_201_CREATED)
-async def book(body: AppointmentIn, context: Context, session: Db) -> AppointmentOut:
-    """Write down a visit a person has arranged, on the yes minted for exactly this
-    provider, time and purpose. Nothing here contacts a clinic."""
-    appointment = await book_appointment(
-        session,
-        context=context,
-        provider_id=body.provider_id,
-        scheduled_at=body.scheduled_at,
-        purpose=body.purpose,
-        confirmation_id=body.confirmation_id,
-    )
-    return AppointmentOut.of(appointment)
 
 
 @router.get("/{profile_id}/appointments")

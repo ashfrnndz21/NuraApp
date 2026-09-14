@@ -233,6 +233,25 @@ CLASSES: dict[str, str] = {
     "appointment.confirmed_by_person_id": IDENTIFIER,
     "appointment.status_changed_by_person_id": IDENTIFIER,
     "appointment.booked_at": OPERATIONAL,
+    # The timeline (E03): a paper hung off a visit or an episode is a reference to health
+    # data; a chief's note about a clinic is about a provider he uses; a look is the reader's
+    # own act, and the spine it saw is visit ids and statuses.
+    "attachment.id": HEALTH,
+    "attachment.artifact_id": HEALTH,
+    "attachment.episode_id": HEALTH,
+    "attachment.appointment_id": HEALTH,
+    "attachment.how": OPERATIONAL,
+    "attachment.attached_by_person_id": IDENTIFIER,
+    "attachment.attached_at": OPERATIONAL,
+    "provider_note.id": HEALTH,
+    "provider_note.provider_id": HEALTH,
+    "provider_note.text": HEALTH,
+    "provider_note.written_by_person_id": IDENTIFIER,
+    "provider_note.written_at": OPERATIONAL,
+    "last_looked.id": OPERATIONAL,
+    "last_looked.person_id": IDENTIFIER,
+    "last_looked.looked_at": OPERATIONAL,
+    "last_looked.appointments": HEALTH,
     # --- State --------------------------------------------------------------------------------
     "state_snapshot.sequence": OPERATIONAL,
     "state_snapshot.computed_at": OPERATIONAL,

@@ -34,7 +34,17 @@ from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.keys.privacy import Privacy
 from app.medicines.models import DoseTaken, InteractionFlag, MedicationLine, Supply
-from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.memory.models import (
+    Appointment,
+    Artifact,
+    Attachment,
+    Episode,
+    Event,
+    Fact,
+    LastLooked,
+    Provider,
+    ProviderNote,
+)
 from app.notes.models import Note
 from app.reasoning.visits.models import (
     Brief,
@@ -95,6 +105,9 @@ TABLES: tuple[Table, ...] = (
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
+    Attachment.__table__,
+    ProviderNote.__table__,
+    LastLooked.__table__,
 )
 
 
