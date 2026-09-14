@@ -13,6 +13,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
 
+from app.audit.access import audited_profile_read
 from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.deps import Context, CurrentPerson, Db, settings_of
@@ -27,13 +28,14 @@ from app.channels.api.schemas import (
     ProfileOut,
 )
 from app.errors import Refusal
-from app.identity.models import Person, Profile
+from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key, list_keys, revoke_key
 from app.keys.scopes import Scope
 from app.memory.semantic import current_facts
 from app.notes.service import list_notes, write_note
+from app.regions import guard_region
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 
@@ -52,6 +54,7 @@ async def create_mine(
         session,
         region=region,
         owner=person,
+        consent=body.consent.model_dump(),
         display_name=body.display_name,
         language=body.language,
     )
@@ -65,13 +68,9 @@ async def create_mine(
 async def get_profile(context: Context, session: Db) -> ProfileOut:
     """The profile as the caller holds it: name, language, and what his key opens.
 
-    The context is the read: what comes back is the profile's face and the caller's own
-    reach, which he was told when the key was cut. The rows of the graph stay behind
-    their scopes.
+    Read under `Scope.PROFILE`, which every key holds, and written down like any read.
     """
-    profile = await session.get(Profile, context.profile_id)
-    assert profile is not None  # the context was resolved from this row a moment ago
-    return ProfileOut.of(profile, context)
+    return ProfileOut.of(await audited_profile_read(session, context), context)
 
 
 # --- keys --------------------------------------------------------------------------------
@@ -84,16 +83,15 @@ async def _holder(session: Db, *, request: Request, body: KeyGrant) -> Person:
     invite will land on when the person proves the number, as the invited door does in
     E01. Whether the number was already known is not something the answer gives away.
     """
+    region = settings_of(request).region
     if body.holder_person_id is not None:
         found = await session.get(Person, body.holder_person_id)
         if found is None:
             raise NoSuchHolder(f"no person {body.holder_person_id}")
+        guard_region(held_in=found.region, asked_from=region)
         return found
     return await register_person(
-        session,
-        region=settings_of(request).region,
-        display_name="",
-        phone_e164=body.holder_phone_e164,
+        session, region=region, display_name="", phone_e164=body.holder_phone_e164
     )
 
 
@@ -135,7 +133,8 @@ async def audit(
     since: datetime | None = None,
     limit: int = Query(default=200, ge=1, le=500),
 ) -> list[AuditOut]:
-    """Who touched what on this profile, newest first. The owner's and his chief's to read."""
+    """Who touched what on this profile, newest first. Read by the owner, or by someone he
+    named to run his care; nobody else."""
     entries = await read_audit(
         session,
         context=context,
@@ -163,7 +162,9 @@ async def add_note(body: NoteIn, context: Context, session: Db) -> NoteOut:
 
 @router.get("/{profile_id}/medicines")
 async def medicines(context: Context, session: Db) -> list[MedicineOut]:
-    """The current facts about medicines, read under the medicines scope. A placeholder
-    until E04 builds the medicine line; it is here so a caregiver key has something to open."""
-    facts = await current_facts(session, context=context, subject="medicine", scope=Scope.MEDICINES)
+    """The current facts with subject "medicine", which `app.keys.scopes` puts under the
+    medicines scope. A placeholder until E04 builds the medicine line — it is here so a
+    caregiver key has something to open — and not to be bound to a patient-mode screen
+    before then: attribute codes, units and confidences are not plain words."""
+    facts = await current_facts(session, context=context, subject="medicine")
     return [MedicineOut.of(fact) for fact in facts]

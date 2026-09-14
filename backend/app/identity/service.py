@@ -7,11 +7,18 @@ belong to E01; this story covers only a person opening his own graph.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import Action
+from app.audit.trail import record
 from app.errors import Refusal
 from app.identity.models import Person, Profile
+from app.keys.context import KeyContext
+from app.keys.scopes import ALL_SCOPES, Scope
 from app.regions import Region, guard_region
 
 
@@ -63,6 +70,12 @@ async def register_person(
     return person
 
 
+async def find_own_profile(session: AsyncSession, owner: Person) -> Profile | None:
+    """The graph this person owns, if he has opened one. A lookup, not a read: the caller
+    reads it through `app.audit.access.audited_profile_read` with a context."""
+    return await session.scalar(select(Profile).where(Profile.owner_person_id == owner.id))
+
+
 async def create_own_profile(
     session: AsyncSession,
     *,
@@ -70,12 +83,24 @@ async def create_own_profile(
     owner: Person,
     display_name: str | None = None,
     language: str | None = None,
+    consent: Mapping[str, Any] | None = None,
 ) -> Profile:
-    """Open the health graph this person owns. It is pinned here and it never moves."""
+    """Open the health graph this person owns. It is pinned here and it never moves.
+
+    Opening a graph is a write to it, and it is written down as one, under the owner's own
+    context, in the same transaction.
+
+    `consent` is the agreement the owner gave to Nura holding his record: its wording
+    version, the language he saw it in, and how it was captured. It is carried here so the
+    door takes it from the first day; recording it as a Consent row is E00-02, which types
+    this parameter, makes it required, and records `HOLD_HEALTH_RECORD` from it. Until that
+    lands the values are required and validated at the door, and not yet stored.
+    """
+    # E00-02 seam: `consent` becomes a typed, required record written by the consent service.
+    del consent
     guard_region(held_in=owner.region, asked_from=region)
-    existing = await session.scalar(select(Profile).where(Profile.owner_person_id == owner.id))
-    if existing is not None:
-        raise ProfileAlreadyOwned(f"person {owner.id} already owns profile {existing.id}")
+    if await find_own_profile(session, owner) is not None:
+        raise ProfileAlreadyOwned(f"person {owner.id} already owns a profile")
 
     profile = Profile(
         region=region,
@@ -85,4 +110,15 @@ async def create_own_profile(
     )
     session.add(profile)
     await session.flush()
+    await record(
+        session,
+        context=KeyContext(
+            profile_id=profile.id, region=region, person_id=owner.id, scopes=ALL_SCOPES
+        ),
+        action=Action.WRITE,
+        scope=Scope.PROFILE,
+        target=Profile.__tablename__,
+        target_id=profile.id,
+        rows=1,
+    )
     return profile

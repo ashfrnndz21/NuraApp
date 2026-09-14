@@ -8,6 +8,7 @@ and `app.keys.repository` is the only place allowed to fill that column in or fi
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -68,6 +69,29 @@ class ProfileScoped:
         __tablename__: str
 
         def __init__(self, **values: Any) -> None: ...
+
+
+Keeper = Callable[[AsyncSession], Awaitable[None]]
+_KEPT = "keep_on_refusal"
+
+
+def keep_on_refusal(session: AsyncSession, keeper: Keeper) -> None:
+    """Register a write that must survive a refusal.
+
+    A channel runs each request inside a savepoint and rolls it back when the request is
+    refused, so a half-done write never lands. The audit line that says the reach was
+    refused, and the wrong try counted against a code, are the exceptions: they are the
+    reason a refusal exists. Whoever writes one registers a keeper here; the channel
+    replays the keepers after the rollback and commits them. On a request that succeeds
+    the keepers are dropped, because the rows they would re-add are already there.
+    """
+    session.info.setdefault(_KEPT, []).append(keeper)
+
+
+def take_keepers(session: AsyncSession) -> list[Keeper]:
+    """The keepers registered so far, removed from the session."""
+    kept: list[Keeper] = session.info.pop(_KEPT, [])
+    return kept
 
 
 def make_engine(url: str) -> AsyncEngine:

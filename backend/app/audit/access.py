@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
 from app.db import ProfileScoped
+from app.identity.models import Profile
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
@@ -134,6 +135,45 @@ async def record_share(
         shared_with_label=shared_with_label,
         now=now,
     )
+
+
+PROFILE_TARGET = Profile.__tablename__
+
+
+async def audited_profile_read(
+    session: AsyncSession,
+    context: KeyContext,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+    now: datetime | None = None,
+) -> Profile:
+    """Read the profile row itself — whose graph, its name and language — and write it down.
+
+    The profile is not a row *of* the graph, it is the graph, so `scoped_select` cannot name
+    it; this is the one read that reaches it, under `Scope.PROFILE`, which every key holds.
+    """
+    try:
+        context.require(Scope.PROFILE)
+    except OutOfScope as refusal:
+        await _refused(
+            session, context, Action.READ, Scope.PROFILE, PROFILE_TARGET, refusal, channel, now
+        )
+        raise
+    profile = await session.get(Profile, context.profile_id)
+    assert profile is not None  # the context was resolved from this row
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.PROFILE,
+        target=PROFILE_TARGET,
+        target_id=profile.id,
+        rows=1,
+        channel=channel,
+        now=now,
+    )
+    return profile
 
 
 async def _refused(

@@ -22,7 +22,7 @@ from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
+from app.keys.scopes import scope_for_subject
 from app.memory.episodic import NoSuchArtifact, NoSuchEvent, require_artifact, require_event
 from app.memory.models import ConfidenceState, Fact
 from app.memory.working import require_open_episode
@@ -117,7 +117,7 @@ async def assert_fact(
         session,
         Fact,
         context,
-        Scope.RECORDS,
+        scope_for_subject(subject),
         now=now,
         subject=subject,
         attribute=attribute,
@@ -157,11 +157,19 @@ async def supersede_fact(
     given, so confirming a reading still links to the photo it was read from.
     """
     moment = now or utcnow()
-    found = await audited_read(
-        session, Fact, context, Scope.RECORDS, where=(Fact.id == fact_id,), now=now
-    )
-    if not found:
+    # The scope is the fact's own subject's, so the row is looked at first to learn it. The
+    # audited read below is the one that checks the key and writes the line.
+    row = await session.get(Fact, fact_id)
+    if row is None or row.profile_id != context.profile_id:
         raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
+    found = await audited_read(
+        session,
+        Fact,
+        context,
+        scope_for_subject(row.subject),
+        where=(Fact.id == fact_id,),
+        now=now,
+    )
     old = found[0]
     if old.superseded_at is not None:
         raise AlreadySuperseded(f"fact {fact_id} was superseded at {old.superseded_at}")
@@ -190,7 +198,7 @@ async def supersede_fact(
         session,
         context=context,
         action=Action.WRITE,
-        scope=Scope.RECORDS,
+        scope=scope_for_subject(old.subject),
         target=Fact.__tablename__,
         target_id=old.id,
         rows=1,
@@ -206,7 +214,6 @@ async def current_facts(
     subject: str | None = None,
     attribute: str | None = None,
     at: datetime | None = None,
-    scope: Scope = Scope.RECORDS,
     now: datetime | None = None,
 ) -> Sequence[Fact]:
     """The facts that hold at `at` (default now): unsuperseded, inside their window.
@@ -214,9 +221,8 @@ async def current_facts(
     Passing `at` is how the timeline asks what was known on a day; the window is on the
     fact's own validity, so a fact asserted later about an earlier time is still found.
 
-    Facts are records, and are read as such unless the caller names the scope the subject
-    falls under — the medicine list is read under `Scope.MEDICINES`, which is the key a
-    caregiver or a helper holds.
+    The scope is the subject's, decided in `app.keys.scopes`: medicines under MEDICINES,
+    readings under READINGS, the whole record — no subject named — under RECORDS.
     """
     moment = at or now or utcnow()
     where: list[ColumnElement[bool]] = [
@@ -228,5 +234,7 @@ async def current_facts(
         where.append(Fact.subject == subject)
     if attribute is not None:
         where.append(Fact.attribute == attribute)
-    found = await audited_read(session, Fact, context, scope, where=where, now=now)
+    found = await audited_read(
+        session, Fact, context, scope_for_subject(subject), where=where, now=now
+    )
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))

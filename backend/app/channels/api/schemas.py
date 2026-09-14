@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -48,7 +48,11 @@ class EmailVerify(BaseModel):
 
 
 class Started(BaseModel):
-    """The code went out. How long it is good for, so the app can show a clock."""
+    """The code went out, and for how long it works.
+
+    The number is for the app's own clock; the line the screen shows is written in words:
+    "The code works for ten minutes." Never the seconds.
+    """
 
     expires_in_seconds: int
 
@@ -86,7 +90,21 @@ class MeOut(BaseModel):
 # --- profiles ----------------------------------------------------------------------------
 
 
+class ConsentIn(BaseModel):
+    """The agreement the owner gave to Nura holding his record, as the app captured it.
+
+    Which words (by version), in which language he read them, and how — in the app, on
+    WhatsApp, on paper, or spoken and witnessed. Recording it is E00-02; the door takes it
+    from the first day so no profile is ever opened without it.
+    """
+
+    wording_version: str = Field(min_length=1, max_length=16, pattern=r"^[0-9A-Za-z._-]+$")
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: Literal["app", "whatsapp", "paper", "verbal_witnessed"]
+
+
 class ProfileCreate(BaseModel):
+    consent: ConsentIn
     display_name: str | None = Field(default=None, min_length=1, max_length=120)
     language: str | None = Field(default=None, min_length=1, max_length=16)
 
@@ -222,7 +240,12 @@ class NoteOut(BaseModel):
 
 
 class MedicineOut(BaseModel):
-    """A current fact with subject "medicine". The real medicine line arrives with E04."""
+    """A current fact with subject "medicine", with its provenance and its confidence.
+
+    Nothing infers without provenance: the artefact or event the fact was read from travels
+    with it, so a screen can always show where a value came from. The real medicine line
+    arrives with E04.
+    """
 
     fact_id: uuid.UUID
     attribute: str
@@ -230,6 +253,8 @@ class MedicineOut(BaseModel):
     unit: str | None
     confidence: float
     confidence_state: ConfidenceState
+    artifact_id: uuid.UUID | None
+    event_id: uuid.UUID | None
     valid_from: datetime
     valid_to: datetime | None
 
@@ -242,6 +267,8 @@ class MedicineOut(BaseModel):
             unit=fact.unit,
             confidence=fact.confidence,
             confidence_state=fact.confidence_state,
+            artifact_id=fact.artifact_id,
+            event_id=fact.event_id,
             valid_from=fact.valid_from,
             valid_to=fact.valid_to,
         )

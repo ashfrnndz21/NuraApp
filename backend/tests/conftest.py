@@ -76,8 +76,8 @@ class Deployment:
 async def _serve(region: Region) -> AsyncIterator[Deployment]:
     engine = await _engine()
     sessions = make_session_factory(engine)
-    sender = LoggingCodeSender()
-    settings = Settings(region=region, database_url="sqlite+aiosqlite://")
+    sender = LoggingCodeSender(reveal=True)
+    settings = Settings(region=region, database_url="sqlite+aiosqlite://", dev_code_sender=True)
     app = create_app(settings, sessions, Providers(code_sender=sender))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://nura.test") as client:
         yield Deployment(region=region, client=client, sessions=sessions, sender=sender)

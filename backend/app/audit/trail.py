@@ -15,11 +15,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
-from app.db import utcnow
+from app.db import keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_select
@@ -55,27 +56,37 @@ async def record(
     resolved a key for them — cannot put a line into a graph they hold nothing on.
 
     It is written in the same transaction as the access it records, so a write that is rolled
-    back leaves behind no claim that it happened.
+    back leaves behind no claim that it happened. The one rollback it survives is a channel's
+    refusal: the line is registered with `keep_on_refusal`, so that when a refused request is
+    unwound the record of the reaching stays.
     """
-    entry = AuditEntry(
-        profile_id=context.profile_id,
-        at=now or utcnow(),
-        actor_person_id=context.person_id,
-        actor_role=context.role,
-        key_id=context.key_id,
-        action=action,
-        scope=scope,
-        channel=channel,
-        target=target,
-        target_id=target_id,
-        rows=rows,
-        outcome=outcome,
-        refused_because=refused_because,
-        shared_with_person_id=shared_with_person_id,
-        shared_with_label=shared_with_label,
-    )
+    values: dict[str, Any] = {
+        "id": uuid.uuid4(),
+        "profile_id": context.profile_id,
+        "at": now or utcnow(),
+        "actor_person_id": context.person_id,
+        "actor_role": context.role,
+        "key_id": context.key_id,
+        "action": action,
+        "scope": scope,
+        "channel": channel,
+        "target": target,
+        "target_id": target_id,
+        "rows": rows,
+        "outcome": outcome,
+        "refused_because": refused_because,
+        "shared_with_person_id": shared_with_person_id,
+        "shared_with_label": shared_with_label,
+    }
+    entry = AuditEntry(**values)
     session.add(entry)
     await session.flush()
+
+    async def again(session: AsyncSession) -> None:
+        session.add(AuditEntry(**values))
+        await session.flush()
+
+    keep_on_refusal(session, again)
     return entry
 
 

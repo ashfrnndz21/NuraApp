@@ -33,9 +33,15 @@ async def register_by_phone(
     return session
 
 
+CONSENT = {"wording_version": "1", "language": "en", "captured_via": "app"}
+"""The agreement every door takes: which words, in which language, captured how."""
+
+
 async def own_profile(client: AsyncClient, token: str, **body: str) -> str:
     """Open the caller's own health graph; its id."""
-    created = await client.post("/profiles/mine", json=body, headers=bearer(token))
+    created = await client.post(
+        "/profiles/mine", json={"consent": CONSENT, **body}, headers=bearer(token)
+    )
     assert created.status_code == 201, created.text
     profile_id: str = created.json()["profile_id"]
     return profile_id

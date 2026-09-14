@@ -473,7 +473,15 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
     written = {(entry.target, entry.target_id) for entry in trail if entry.action is Action.WRITE}
     for row in rows:
         assert (row.__tablename__, row.id) in written
-    assert {e.scope for e in trail if e.target in {"artifact", "event", "fact", "episode"}} == {
+    assert {e.scope for e in trail if e.target in {"artifact", "event", "episode"}} == {
+        Scope.RECORDS
+    }
+    # A fact is written under its subject's scope — a blood-pressure reading is a reading —
+    # and the whole record, read with no subject named, is read under RECORDS.
+    assert {e.scope for e in trail if e.target == "fact" and e.action is Action.WRITE} == {
+        Scope.READINGS
+    }
+    assert {e.scope for e in trail if e.target == "fact" and e.action is Action.READ} == {
         Scope.RECORDS
     }
     assert {e.scope for e in trail if e.target in {"provider", "appointment"}} == {Scope.VISITS}

@@ -253,5 +253,11 @@ async def test_a_person_pinned_to_malaysia_is_refused_by_the_singapore_deploymen
     assert verified.status_code == 403
     assert verified.json() == {"refusal": "OutOfRegion"}
 
+    # No session, and nothing about the number left behind: the ask was thrown away.
     async with deployment.sessions() as db:
         assert (await db.scalars(select(LoginSession))).all() == []
+        assert (
+            await db.scalars(
+                select(LoginChallenge).where(LoginChallenge.phone_e164 == "+60121110001")
+            )
+        ).all() == []

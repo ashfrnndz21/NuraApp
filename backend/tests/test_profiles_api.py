@@ -10,15 +10,17 @@ medicines with it, be refused on notes, and read the refusal back in the audit t
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
 from app.regions import Region
-from tests.api import bearer, own_profile, register_by_phone
+from tests.api import CONSENT, bearer, own_profile, register_by_phone
 from tests.conftest import Deployment
 
 PA = "+6591110001"
@@ -67,14 +69,14 @@ async def test_a_caregiver_key_scoped_to_medicines_and_visits_cannot_read_notes(
     daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
     key = await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
     assert key["holder_person_id"] == daughter["person_id"]
-    assert key["scopes"] == ["medicines", "visits"]
+    assert key["scopes"] == ["medicines", "profile", "visits"]
     hers = bearer(daughter["token"])
 
     # The key opens the profile, and the medicines.
     summary = await deployment.client.get(f"/profiles/{profile_id}", headers=hers)
     assert summary.status_code == 200
     assert summary.json()["role"] == "caregiver"
-    assert sorted(summary.json()["scopes"]) == ["medicines", "visits"]
+    assert sorted(summary.json()["scopes"]) == ["medicines", "profile", "visits"]
     medicines = await deployment.client.get(f"/profiles/{profile_id}/medicines", headers=hers)
     assert medicines.status_code == 200
     assert medicines.json() == []
@@ -208,12 +210,22 @@ async def test_no_profile_route_is_reachable_without_a_key_context(
     assert nowhere.status_code == 403
     assert nowhere.json() == {"refusal": "NoKey"}
 
-    # And a reach with no key leaves no line in the owner's trail: there is no context to
-    # write one under. It goes to the channel log instead.
+    # The reach with no key is in the owner's trail: a refused read of the profile, under a
+    # context that holds nothing, so the owner sees who came to the door.
     trail = await deployment.client.get(
         f"/profiles/{profile_id}/audit", headers=bearer(pa["token"])
     )
-    assert stranger["person_id"] not in {entry["actor_person_id"] for entry in trail.json()}
+    reaches = [e for e in trail.json() if e["actor_person_id"] == stranger["person_id"]]
+    assert [(e["action"], e["scope"], e["outcome"], e["refused_because"]) for e in reaches] == [
+        ("read", "profile", "refused", "NoKey")
+    ]
+    assert reaches[0]["key_id"] is None and reaches[0]["actor_role"] is None
+    assert PRIVATE not in trail.text
+
+    # The profile that does not exist got no line anywhere: there is no graph to write under.
+    async with deployment.sessions() as db:
+        entries = (await db.scalars(select(AuditEntry))).all()
+    assert {str(e.profile_id) for e in entries} == {profile_id}
 
 
 # --- the owner's own profile -------------------------------------------------------------
@@ -222,14 +234,28 @@ async def test_no_profile_route_is_reachable_without_a_key_context(
 async def test_a_person_opens_one_profile_and_it_is_his(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
     his = bearer(pa["token"])
+    # No agreement, no profile: the door takes the consent from the first day.
+    unsigned = await deployment.client.post(
+        "/profiles/mine", json={"display_name": "Pa"}, headers=his
+    )
+    assert unsigned.status_code == 422
+    unknown = await deployment.client.post(
+        "/profiles/mine",
+        json={"consent": {**CONSENT, "captured_via": "telepathy"}},
+        headers=his,
+    )
+    assert unknown.status_code == 422
+
     created = await deployment.client.post(
-        "/profiles/mine", json={"display_name": "Pa", "language": "ms"}, headers=his
+        "/profiles/mine",
+        json={"consent": CONSENT, "display_name": "Pa", "language": "ms"},
+        headers=his,
     )
     assert created.status_code == 201
     profile = created.json()
     assert profile["region"] == "SG" and profile["language"] == "ms"
 
-    again = await deployment.client.post("/profiles/mine", json={}, headers=his)
+    again = await deployment.client.post("/profiles/mine", json={"consent": CONSENT}, headers=his)
     assert again.status_code == 409
     assert again.json() == {"refusal": "ProfileAlreadyOwned"}
 
@@ -238,7 +264,14 @@ async def test_a_person_opens_one_profile_and_it_is_his(deployment: Deployment) 
 
     summary = await deployment.client.get(f"/profiles/{profile['profile_id']}", headers=his)
     assert summary.json()["role"] is None
-    assert len(summary.json()["scopes"]) == 10
+    assert "profile" in summary.json()["scopes"]
+    assert len(summary.json()["scopes"]) == 11
+
+    # Opening the graph was written down as a write to it; reading its face, as reads.
+    trail = await deployment.client.get(f"/profiles/{profile['profile_id']}/audit", headers=his)
+    profile_lines = [(e["action"], e["outcome"]) for e in trail.json() if e["target"] == "profile"]
+    assert profile_lines == [("read", "allowed"), ("read", "allowed"), ("write", "allowed")]
+    assert all(e["actor_person_id"] == pa["person_id"] for e in trail.json())
 
     assert (await deployment.client.post("/profiles/mine", json={})).status_code == 401
 
@@ -286,6 +319,20 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
     later = await register_by_phone(deployment, "+6591110003", "Siti")
     assert later["person_id"] == str(siti.id)
 
+    # A person pinned to another region is not a holder this deployment will name.
+    async with deployment.sessions() as db:
+        ash = Person(region=Region.MY, display_name="Ash", phone_e164="+60121110001")
+        db.add(ash)
+        await db.commit()
+        ash_id = str(ash.id)
+    elsewhere = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_person_id": ash_id, "role": "viewer", "basis": "owner_consent"},
+        headers=his,
+    )
+    assert elsewhere.status_code == 403
+    assert elsewhere.json() == {"refusal": "OutOfRegion"}
+
     # A caregiver may not cut a key.
     await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
     hers = await deployment.client.post(
@@ -310,3 +357,77 @@ async def test_a_profile_pinned_elsewhere_is_out_of_region(deployment: Deploymen
     )
     assert refused.status_code == 403
     assert refused.json() == {"refusal": "OutOfRegion"}
+
+    # And nothing about another region's profile was written into this region's trail.
+    async with deployment.sessions() as db:
+        entries = (await db.scalars(select(AuditEntry))).all()
+    assert not any(e.refused_because == "OutOfRegion" for e in entries)
+
+
+# --- the person whose key was closed ------------------------------------------------------
+
+
+async def test_an_ex_key_holders_reach_appears_in_the_owners_trail(
+    deployment: Deployment, caplog: pytest.LogCaptureFixture
+) -> None:
+    pa, profile_id = await _pa_with_a_note(deployment)
+    daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
+    key = await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+    his = bearer(pa["token"])
+    await deployment.client.delete(f"/profiles/{profile_id}/keys/{key['key_id']}", headers=his)
+
+    with caplog.at_level(logging.INFO, logger="nura.channels.api"):
+        for _ in range(2):
+            refused = await deployment.client.get(
+                f"/profiles/{profile_id}/medicines", headers=bearer(daughter["token"])
+            )
+            assert refused.status_code == 403
+            assert refused.json() == {"refusal": "NoKey"}
+
+    # The channel log names the reach by a handle and the route by its template: no ids.
+    lines = [r.getMessage() for r in caplog.records if r.name == "nura.channels.api"]
+    assert len(lines) == 2 and lines[0] == lines[1]
+    assert "refusal=NoKey" in lines[0] and "route=GET /profiles/{profile_id}/medicines" in lines[0]
+    assert profile_id not in lines[0] and daughter["person_id"] not in lines[0]
+
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    hers = [
+        e
+        for e in trail.json()
+        if e["actor_person_id"] == daughter["person_id"] and e["outcome"] == "refused"
+    ]
+    assert [(e["scope"], e["refused_because"]) for e in hers] == [("profile", "NoKey")] * 2
+    assert hers[0]["at"] >= hers[1]["at"]  # newest first
+
+
+# --- what a refusal keeps, and what it does not -------------------------------------------
+
+
+async def test_a_refused_request_keeps_its_audit_line_and_nothing_else_it_wrote(
+    deployment: Deployment,
+) -> None:
+    """A caregiver tries to cut a key for a new number. Naming the holder reserves the number
+    an account, then the grant is refused: the refusal stays in the trail and the account
+    it would have left behind is gone with it."""
+    pa, profile_id = await _pa_with_a_note(deployment)
+    daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
+    await _caregiver_key(deployment.client, pa["token"], profile_id, DAUGHTER)
+
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": "+6591110003", "role": "helper", "basis": "owner_consent"},
+        headers=bearer(daughter["token"]),
+    )
+    assert refused.status_code == 403
+    assert refused.json() == {"refusal": "OutOfScope", "scope": "family"}
+
+    async with deployment.sessions() as db:
+        assert await db.scalar(select(Person).where(Person.phone_e164 == "+6591110003")) is None
+
+    trail = await deployment.client.get(
+        f"/profiles/{profile_id}/audit", headers=bearer(pa["token"])
+    )
+    hers = [e for e in trail.json() if e["outcome"] == "refused"]
+    assert [
+        (e["actor_person_id"], e["action"], e["scope"], e["refused_because"]) for e in hers
+    ] == [(daughter["person_id"], "write", "family", "OutOfScope")]

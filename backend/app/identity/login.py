@@ -15,17 +15,18 @@ import hashlib
 import hmac
 import secrets
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import Delete, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import as_utc, utcnow
+from app.db import as_utc, keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.identity.models import LoginChallenge, LoginChannel, LoginSession, Person
 from app.identity.providers import CodeSender
 from app.identity.service import find_person_by_phone, register_person
-from app.regions import Region, guard_region
+from app.regions import OutOfRegion, Region, guard_region
 
 CODE_LIFETIME = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
@@ -219,15 +220,47 @@ async def _verify(
         raise ChallengeLocked("five wrong tries spend the code")
 
     if not hmac.compare_digest(challenge.code_hash, _hash_secret(challenge.id, secret)):
-        # The wrong try is counted before the refusal goes out, and it must be kept.
+        # The wrong try is counted before the refusal goes out, and it must be kept: the
+        # channel unwinds a refused request, so the count is registered to be replayed.
         challenge.attempts += 1
         await session.flush()
+        keep_on_refusal(session, _count_wrong_try(challenge.id))
         raise WrongCode("that is not the code that was sent")
 
     challenge.consumed_at = moment
-    person = await _person_for(session, region=region, challenge=challenge)
+    try:
+        person = await _person_for(session, region=region, challenge=challenge)
+    except OutOfRegion:
+        # This deployment should never have been asked. Refusing at start would tell the
+        # asker the number is known elsewhere, so the ask was taken and is thrown away now:
+        # nothing about the address stays in this region's database.
+        await session.execute(_purge(channel, address))
+        keep_on_refusal(session, _purge_again(channel, address))
+        raise
     challenge.person_id = person.id
     return await open_session(session, region=region, person=person, now=moment)
+
+
+def _count_wrong_try(challenge_id: uuid.UUID) -> Callable[[AsyncSession], Awaitable[None]]:
+    async def again(session: AsyncSession) -> None:
+        row = await session.get(LoginChallenge, challenge_id)
+        if row is not None:
+            row.attempts += 1
+            await session.flush()
+
+    return again
+
+
+def _purge(channel: LoginChannel, address: str) -> Delete:
+    column = LoginChallenge.phone_e164 if channel is LoginChannel.PHONE else LoginChallenge.email
+    return delete(LoginChallenge).where(LoginChallenge.channel == channel, column == address)
+
+
+def _purge_again(channel: LoginChannel, address: str) -> Callable[[AsyncSession], Awaitable[None]]:
+    async def again(session: AsyncSession) -> None:
+        await session.execute(_purge(channel, address))
+
+    return again
 
 
 async def verify_phone_code(

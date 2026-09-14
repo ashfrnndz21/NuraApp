@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy import select
 
+from app.audit.access import audited_profile_read
 from app.channels.api.deps import Db, SignedIn, current_login, providers_of, settings_of
 from app.channels.api.schemas import (
     EmailStart,
@@ -25,7 +25,8 @@ from app.identity.login import (
     verify_email_link,
     verify_phone_code,
 )
-from app.identity.models import Profile
+from app.identity.service import find_own_profile
+from app.keys.context import resolve_key_context
 
 router = APIRouter(tags=["auth"])
 
@@ -81,9 +82,20 @@ async def sign_out(signed_in: Annotated[SignedIn, Depends(current_login)], sessi
 
 
 @router.get("/me")
-async def me(signed_in: Annotated[SignedIn, Depends(current_login)], session: Db) -> MeOut:
-    """The caller's own account, and the id of his own profile once he has opened one."""
-    own = await session.scalar(
-        select(Profile).where(Profile.owner_person_id == signed_in.person.id)
+async def me(
+    signed_in: Annotated[SignedIn, Depends(current_login)], request: Request, session: Db
+) -> MeOut:
+    """The caller's own account, and the id of his own profile once he has opened one.
+
+    The profile is read the way every profile is read: through a context, written down.
+    """
+    found = await find_own_profile(session, signed_in.person)
+    if found is None:
+        return MeOut.of(signed_in.person, None)
+    context = await resolve_key_context(
+        session,
+        region=settings_of(request).region,
+        person_id=signed_in.person.id,
+        profile_id=found.id,
     )
-    return MeOut.of(signed_in.person, own)
+    return MeOut.of(signed_in.person, await audited_profile_read(session, context))

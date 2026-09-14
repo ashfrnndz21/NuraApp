@@ -1,0 +1,81 @@
+"""The logging code sender runs on a laptop and nowhere else.
+
+It prints login codes to the server log, which is how you sign in under `make dev` and how
+someone takes over an account anywhere else. So the process refuses to start on it unless
+the deployment says, explicitly, that it is a dev run.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import pytest
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from app.channels.api import Providers, create_app
+from app.db import make_session_factory
+from app.identity.providers import (
+    DevSenderInProduction,
+    LoggingCodeSender,
+    NoCodeSender,
+    code_sender_for,
+    phone_code_message,
+)
+from app.regions import Region
+from app.settings import Settings, load_settings
+
+ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
+
+
+def test_the_flag_is_off_unless_set_to_exactly_one() -> None:
+    assert load_settings(ENV).dev_code_sender is False
+    assert load_settings({**ENV, "NURA_DEV_CODE_SENDER": "true"}).dev_code_sender is False
+    assert load_settings({**ENV, "NURA_DEV_CODE_SENDER": "1"}).dev_code_sender is True
+
+
+def test_without_the_flag_there_is_no_sender_and_the_process_does_not_start() -> None:
+    with pytest.raises(NoCodeSender):
+        code_sender_for(load_settings(ENV))
+    revealed = code_sender_for(load_settings({**ENV, "NURA_DEV_CODE_SENDER": "1"}))
+    assert isinstance(revealed, LoggingCodeSender) and revealed.reveal
+
+
+async def test_create_app_refuses_the_logging_sender_outside_a_dev_run() -> None:
+    engine = create_async_engine("sqlite+aiosqlite://")
+    sessions = make_session_factory(engine)
+    production = Settings(region=Region.SG, database_url="sqlite+aiosqlite://")
+    with pytest.raises(DevSenderInProduction):
+        create_app(production, sessions, Providers(code_sender=LoggingCodeSender()))
+    with pytest.raises(DevSenderInProduction):
+        create_app(production, sessions, Providers(code_sender=LoggingCodeSender(reveal=True)))
+    dev = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True)
+    assert create_app(dev, sessions, Providers(code_sender=LoggingCodeSender())) is not None
+    await engine.dispose()
+
+
+async def test_the_sender_never_logs_the_code_beside_the_number_unless_told_to(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    quiet = LoggingCodeSender()
+    with caplog.at_level(logging.INFO, logger="nura.identity.sender"):
+        await quiet.send_phone_code("+6591110001", "123456")
+        await quiet.send_email_link("pa@example.sg", "tok-en")
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert "123456" not in logged and "+6591110001" not in logged
+    assert "tok-en" not in logged and "pa@example.sg" not in logged
+    assert quiet.last_code("+6591110001") == "123456"
+
+    caplog.clear()
+    loud = LoggingCodeSender(reveal=True)
+    with caplog.at_level(logging.INFO, logger="nura.identity.sender"):
+        await loud.send_phone_code("+6591110001", "123456")
+    assert "login code for +6591110001: 123456" in caplog.text
+
+
+def test_the_words_the_phone_receives() -> None:
+    assert phone_code_message("419372") == (
+        "Your Nura number is 419372.\nYou asked for it just now.\nIt works for ten minutes."
+    )
+    assert phone_code_message("419372", asked_by="Ash").splitlines()[1] == (
+        "Ash asked for it just now."
+    )

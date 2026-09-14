@@ -4,6 +4,8 @@
 # sets both explicitly.
 dev migrate: export NURA_REGION ?= SG
 dev migrate: export NURA_DATABASE_URL ?= sqlite+aiosqlite:///./dev.db
+# The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
+dev: export NURA_DEV_CODE_SENDER = 1
 migrate: ; cd backend && alembic upgrade heads
 dev: migrate ; cd backend && uvicorn app.main:app --reload
 test: ; cd backend && pytest -q
