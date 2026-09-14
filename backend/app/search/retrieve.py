@@ -36,7 +36,8 @@ class Candidate:
     """One thing on the record a question could be about."""
 
     kind: str
-    """`reading`, `fact`, `visit`, `medicine` or `paper`."""
+    """`reading`, `fact`, `visit`, `medicine`, `paper`, `consult`, `consult_waiting` or
+    `note` (a voice note or a scribble on one of his moments, E02-06)."""
     ref: uuid.UUID
     at: datetime
     names: frozenset[str]

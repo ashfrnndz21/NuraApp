@@ -785,6 +785,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recording/notice"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recordings"),
     Walk("GET", f"{P}/artifacts/{{artifact_id}}/clip", params={"start": "19.8", "end": "28.9"}),
+    Walk("POST", f"{P}/transcripts/search", json={"words": "water pill"}),
     Walk("GET", f"{P}/memos"),
     Walk("GET", f"{P}/proposals"),
     Walk("GET", f"{P}/routine"),

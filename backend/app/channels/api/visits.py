@@ -17,6 +17,7 @@
     POST /profiles/{id}/appointments/{appt}/recording            the recording's bytes, on Stop (E02-05)
     GET  /profiles/{id}/appointments/{appt}/recordings           the recordings kept, who spoke when
     GET  /profiles/{id}/artifacts/{artifact}/clip?start=&end=    a stretch of one (E03-05)
+    POST /profiles/{id}/transcripts/search                       words said at a confirmed visit (E02-05)
 
 Every route takes the key context like every other profile route. Briefs, questions, cards
 and memos are under the visits scope; the transcript is an artefact under the record's; a
@@ -65,8 +66,10 @@ from app.ingestion.consult import (
     record_consult,
     recordings_for,
 )
+from app.channels.api.timeline_schemas import TranscriptSearchIn, TranscriptSearchOut
 from app.keys.scopes import Scope
 from app.memory.spine import upcoming_appointments
+from app.search.transcripts import search_transcripts
 from app.reasoning.visits.brief import brief_for
 from app.reasoning.visits.guard import can_change_visits
 from app.reasoning.visits.logistics import assign_driver, logistics_for
@@ -378,3 +381,21 @@ async def clip(
             "X-Media-Fragment": fragment,
         },
     )
+
+
+@router.post("/{profile_id}/transcripts/search")
+async def transcript_search(
+    body: TranscriptSearchIn, request: Request, context: Context, session: Db
+) -> TranscriptSearchOut:
+    """Where these words were said in the recording of a visit whose card he confirmed: the
+    sentence as heard, which visit in his words, and the stretch of the recording to play
+    (`…/artifacts/{artifact}/clip`). For him and the family he let in; a viewer, a clinic or
+    a helper is refused by name, on the trail. The words searched are not kept (E02-05)."""
+    found = await search_transcripts(
+        session,
+        context=context,
+        store=providers_of(request).object_store,
+        searched=body.words,
+        language=body.language,
+    )
+    return TranscriptSearchOut.of(found)

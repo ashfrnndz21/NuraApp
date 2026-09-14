@@ -179,6 +179,9 @@ CHANGED: Mapping[str, Mapping[str, str]] = {
         "note_added": "{who} wrote a note about {doctor} on {date}.",
         "episode_opened": "Something new going on was written down on {date}.",
         "attached": "A paper was put with your visit or your illness.",
+        "note_left": "{who} left a note on {date}.",
+        "family_message": "{who} wrote to the family on {date}.",
+        "family_photo": "{who} shared a photo with the family on {date}.",
     },
     "ms": {
         "first_look": "Ini kali pertama anda melihat apa yang berubah.",
@@ -204,6 +207,9 @@ CHANGED: Mapping[str, Mapping[str, str]] = {
         "note_added": "{who} menulis nota tentang {doctor} pada {date}.",
         "episode_opened": "Sesuatu yang baru berlaku ditulis pada {date}.",
         "attached": "Satu surat diletakkan bersama lawatan atau sakit anda.",
+        "note_left": "{who} meninggalkan nota pada {date}.",
+        "family_message": "{who} menulis kepada keluarga pada {date}.",
+        "family_photo": "{who} berkongsi gambar dengan keluarga pada {date}.",
     },
     "zh": {
         "first_look": "这是您第一次看有什么变了。",
@@ -229,10 +235,15 @@ CHANGED: Mapping[str, Mapping[str, str]] = {
         "note_added": "{date}{who}写了一条关于{doctor}的留言。",
         "episode_opened": "{date}写下了一件新的事。",
         "attached": "一份文件放到了您看医生或生病的记录里。",
+        "note_left": "{who}在{date}留了一条笔记。",
+        "family_message": "{who}在{date}给家人留了言。",
+        "family_photo": "{who}在{date}给家人分享了一张照片。",
     },
 }
 """What changed since the reader last looked, one whole line per change. A new amount on a
-pack is told as a question for the doctor, never as the amount (E04)."""
+pack is told as a question for the doctor, never as the amount (E04). A note someone left on
+one of his moments, and what the family wrote or shared in the thread, are told by who and
+when, never by what was said (E02-06, E12-02)."""
 
 # @patient
 WAITING: Mapping[str, Mapping[str, str]] = {
@@ -267,6 +278,9 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "paper": "Your {what} from {date} is in your papers.",
         "consult_said": "{doctor} talked about this on {date}.",
         "consult_waiting": "Your card from {doctor} on {date} is waiting for your yes.",
+        "note_yours": "You left a note on {date}.",
+        "note_theirs": "{who} left a note on {date}.",
+        "transcript_said": "This was said when you saw {doctor} on {date}.",
     },
     "ms": {
         "visit_past": "Anda berjumpa {doctor} pada {date}.",
@@ -276,6 +290,9 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "paper": "{what} anda dari {date} ada dalam surat-surat anda.",
         "consult_said": "{doctor} bercakap tentang perkara ini pada {date}.",
         "consult_waiting": "Kad anda daripada {doctor} pada {date} sedang menunggu persetujuan anda.",
+        "note_yours": "Anda meninggalkan nota pada {date}.",
+        "note_theirs": "{who} meninggalkan nota pada {date}.",
+        "transcript_said": "Ini dikatakan semasa anda berjumpa {doctor} pada {date}.",
     },
     "zh": {
         "visit_past": "您{date}看了{doctor}。",
@@ -285,13 +302,19 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "paper": "您{date}的{what}在您的文件里。",
         "consult_said": "{doctor}在{date}讲过这件事。",
         "consult_waiting": "{doctor}在{date}的卡片正在等您确认。",
+        "note_yours": "您在{date}留了一条笔记。",
+        "note_theirs": "{who}在{date}留了一条笔记。",
+        "transcript_said": "这是您{date}看{doctor}时说的。",
     },
 }
 """The lines an answer is made of. Each says what is written down and when, filled only with
 the values of the facts it cites; none says what a number means. `consult_said` is a line of
 a recorded visit (E03-05): it cites the summary item and the stretch of the recording where
 the doctor said it, which the phone plays on a tap — once he has confirmed the card. Until then
-`consult_waiting` says the card is waiting for his yes, and cites the card only."""
+`consult_waiting` says the card is waiting for his yes, and cites the card only. `note_yours`
+and `note_theirs` are a note on one of his moments (E02-06), cited with the note and its event;
+the words heard in it are the note's own and played from it. `transcript_said` heads a
+sentence found in a confirmed visit's transcript (E02-05), which is the room's words, quoted."""
 
 # @patient
 READING: Mapping[str, Lines] = {

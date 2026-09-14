@@ -13,9 +13,12 @@ withheld by name where the key does not reach:
 - the facts, by State dimension: new ones, and corrections old → new with the provenance of
   both;
 - the papers: new photos and papers, new episodes, papers put with a visit or an illness;
+- the notes someone else left on one of his moments (E02-06): a shared one under the record's
+  scope, a private one only under the notes', and only on a moment the key reads;
 - the things we do not wait for, raised since;
-- the family: keys cut and closed, agreements given and withdrawn, and the chief's notes
-  about a place (only for the owner and his chief).
+- the family: keys cut and closed, agreements given and withdrawn, what the family wrote or
+  shared in the thread (E12-02; the WhatsApp family group lands there too), and the chief's
+  notes about a place (only for the owner and his chief).
 
 Beside the changes, what is still waiting — cards waiting for a yes, today's tablets not
 taken yet — said at every look, because it is a to-do and not a change. Every line is a
@@ -35,13 +38,21 @@ from typing import Any
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_read, audited_write, person_display_name
+from app.audit.access import (
+    audited,
+    audited_profile_read,
+    audited_read,
+    audited_write,
+    person_display_name,
+)
 from app.audit.models import Action
 from app.consent.models import Consent
 from app.db import as_utc, utcnow
 from app.delivery import timeline_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
-from app.ingestion.models import ReviewCard, ReviewField
+from app.family.models import ThreadMessage, ThreadPhoto
+from app.ingestion.models import EventNote, ReviewCard, ReviewField
+from app.ingestion.notes import notes_written_since
 from app.keys.context import KeyContext
 from app.keys.models import Key
 from app.keys.scopes import Scope
@@ -77,7 +88,7 @@ from app.state.dimensions import dimension_of
 
 LOOK_TARGET = LastLooked.__tablename__
 
-SECTIONS = ("visits", "medicines", "facts", "papers", "flags", "family")
+SECTIONS = ("visits", "medicines", "facts", "papers", "notes", "flags", "family")
 """The parts of what changed, in the order they are said."""
 
 MEDICATION = "medication"
@@ -514,6 +525,46 @@ async def _papers(
             said.still("cards", refs, count=str(len(open_cards)))
 
 
+async def _notes(session: AsyncSession, said: _Said, after: datetime | None) -> None:
+    """The notes others left on his moments since the last look (E02-06), one line per person
+    per day: who and when, never what was said. The reader's own notes are not news to them.
+    A key without the record reads none — the papers already named the record as withheld —
+    and a private note is only under the notes scope (`notes_written_since`)."""
+    context = said.context
+    if not context.allows(Scope.RECORDS):
+        return
+    left = await notes_written_since(session, context=context, after=after)
+    profile = await audited_profile_read(session, context) if left else None
+    grouped: dict[tuple[uuid.UUID, str], list[EventNote]] = {}
+    for note in left:
+        grouped.setdefault((note.written_by_person_id, said.day(note.written_at)), []).append(note)
+    for (writer, day), notes in grouped.items():
+        # The patient is named under the profile's own scope; anyone else only by a key that
+        # reads the family list. Otherwise the line says "Someone" (`timeline_strings`).
+        named = profile is not None and (
+            writer == profile.owner_person_id or context.allows(Scope.FAMILY)
+        )
+        said.say(
+            "notes",
+            "note_left",
+            {
+                "event_note_ids": _ids(*(note.id for note in notes)),
+                "event_ids": _ids(*dict.fromkeys(note.event_id for note in notes)),
+            },
+            who=await person_display_name(session, context, writer) if named else "",
+            date=day,
+        )
+    said.sections["notes"] = [
+        {
+            "event_note_id": str(note.id),
+            "event_id": str(note.event_id),
+            "kind": note.kind.value,
+            "written_by_person_id": str(note.written_by_person_id),
+        }
+        for note in left
+    ]
+
+
 async def _flags(
     session: AsyncSession,
     said: _Said,
@@ -581,6 +632,49 @@ async def _family(
             said.say("family", "consent_given", refs, date=said.day(consent.granted_at))
         if consent.revoked_at is not None and since(consent.revoked_at):
             said.say("family", "consent_withdrawn", refs, date=said.day(consent.revoked_at))
+    # What the family wrote or shared in the thread (E12-02), one line per person per kind per
+    # day: who and when, never the words. The reader's own messages are not news to them; a
+    # photo taken back by the one who shared it is told as the message it came with.
+    posted = await audited_read(
+        session,
+        ThreadMessage,
+        context,
+        Scope.FAMILY,
+        where=(
+            ThreadMessage.text.is_not(None),
+            ThreadMessage.author_person_id != context.person_id,
+            *newer(ThreadMessage.posted_at),
+        ),
+    )
+    with_photo: set[uuid.UUID] = set()
+    if posted:
+        with_photo = {
+            photo.message_id
+            for photo in await audited_read(
+                session,
+                ThreadPhoto,
+                context,
+                Scope.FAMILY,
+                where=(
+                    ThreadPhoto.message_id.in_([message.id for message in posted]),
+                    ThreadPhoto.withdrawn_at.is_(None),
+                ),
+            )
+        }
+    told: dict[tuple[str, uuid.UUID, str], list[ThreadMessage]] = {}
+    for message in sorted(posted, key=lambda m: as_utc(m.posted_at)):
+        kind = "family_photo" if message.id in with_photo else "family_message"
+        told.setdefault((kind, message.author_person_id, said.day(message.posted_at)), []).append(
+            message
+        )
+    for (kind, author, day), messages in told.items():
+        said.say(
+            "family",
+            kind,
+            {"thread_message_ids": _ids(*(message.id for message in messages))},
+            who=await name_of(author),
+            date=day,
+        )
     notes: Sequence[ProviderNote] = ()
     if is_chief(context):
         notes = await audited_read(
@@ -600,6 +694,7 @@ async def _family(
         "key_ids": [str(k.id) for k in keys if since(k.granted_at) or since(k.revoked_at)],
         "consent_ids": [str(c.id) for c in consents if since(c.granted_at) or since(c.revoked_at)],
         "provider_note_ids": [str(n.id) for n in notes],
+        "thread_message_ids": [str(m.id) for m in posted],
     }
 
 
@@ -631,6 +726,7 @@ async def what_changed(
     await _medicines(session, said, newer, registry)
     await _facts(session, said, newer)
     await _papers(session, said, newer)
+    await _notes(session, said, after)
     await _flags(session, said, newer)
     await _family(session, said, newer, after, providers)
 

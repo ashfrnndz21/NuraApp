@@ -407,6 +407,27 @@ class NoSuchEvent(Refusal):
     """No event by that id on this profile."""
 
 
+@audited(Action.READ, Scope.RECORDS, Event.__tablename__)
+async def readable_event_ids(
+    session: AsyncSession, *, context: KeyContext, event_ids: Sequence[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Of these events, the ids this key reads — each row under the scope it was written
+    under, citing nothing held elsewhere — as a set of ids, never the rows. For a reader that
+    finds a thing through the moment it hangs off (a note on an event, E02-06): a note whose
+    event the key does not reach is not shown, the way `notes_for` reads the event first."""
+    wanted = sorted(set(event_ids), key=str)
+    if not wanted:
+        return set()
+    found = await audited_read(
+        session,
+        Event,
+        context,
+        Scope.RECORDS,
+        where=(Event.id.in_(wanted), event_cites_only_what_is_held_here(context, Scope.RECORDS)),
+    )
+    return {event.id for event in found}
+
+
 WITHHELD_ARTIFACT = "artifact"
 WITHHELD_EVENT = "event"
 """The names a surface gives a reference it withholds: never the id, never a silent gap."""

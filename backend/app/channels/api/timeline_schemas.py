@@ -42,6 +42,7 @@ from app.memory.models import (
 from app.memory.providers import Paper, ProviderHistory, ProviderSummary
 from app.memory.timeline import Anchor, EpisodeView, TimelineItem, TimelinePage
 from app.regions import Region
+from app.search.transcripts import Search
 from app.search.ask import Answer, Mode
 
 PHONE = r"^\+[1-9][0-9]{7,14}$"
@@ -508,6 +509,63 @@ class ClipOut(BaseModel):
     start_s: float
     end_s: float
     doctor: str
+
+
+class TranscriptSearchIn(BaseModel):
+    """A few words to find in the recordings of his confirmed visits (E02-05). Not kept."""
+
+    words: str = Field(min_length=1, max_length=100)
+    language: str | None = Field(default=None, min_length=2, max_length=16)
+
+
+class FoundOut(BaseModel):
+    """One place the words were said: which visit, in his words; the sentence as heard; who
+    the separator heard say it; the stretch to play, and what it rests on."""
+
+    appointment_id: uuid.UUID
+    summary_id: uuid.UUID
+    doctor: str
+    line: str
+    sentence: str
+    heard_in: str | None
+    speaker: str | None
+    clip: ClipOut
+    cites: list[CiteOut]
+
+
+class TranscriptSearchOut(BaseModel):
+    language: str
+    found: list[FoundOut]
+    honest: list[str]
+
+    @classmethod
+    def of(cls, search: Search) -> TranscriptSearchOut:
+        return cls(
+            language=search.language,
+            found=[
+                FoundOut(
+                    appointment_id=one.appointment_id,
+                    summary_id=one.summary_id,
+                    doctor=one.doctor,
+                    line=one.line,
+                    sentence=one.sentence,
+                    heard_in=one.heard_in,
+                    speaker=one.speaker,
+                    clip=ClipOut(
+                        artifact_id=one.clip.artifact_id,
+                        start_s=one.clip.start_s,
+                        end_s=one.clip.end_s,
+                        doctor=one.clip.doctor,
+                    ),
+                    cites=[
+                        CiteOut(kind=c.kind, id=c.id, start_s=c.start_s, end_s=c.end_s)
+                        for c in one.cites
+                    ],
+                )
+                for one in search.found
+            ],
+            honest=list(search.honest),
+        )
 
 
 class AnswerLineOut(BaseModel):
