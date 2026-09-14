@@ -39,11 +39,13 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.keys import confirm  # noqa: F401
 from app.regions import Region
+from app.safety.transcribe import FixtureTranscriber
 from app.settings import Settings
 
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
 from tests.paper import PAPER
+from tests.voice import VOICE
 
 
 async def _engine() -> AsyncEngine:
@@ -132,6 +134,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         object_store=objects,
         extractor=FixtureExtractor(PAPER),
         drug_registry=FixtureRegistry.load(),
+        transcriber=FixtureTranscriber(VOICE),
     )
     app = create_app(settings, sessions, providers)
     try:

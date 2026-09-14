@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.profiles import NoSuchHolder
+from app.channels.safety_strings import NotPlainWords
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
@@ -30,7 +31,8 @@ from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
-from app.state.service import NoState
+from app.safety.transcribe import VoiceNoteTooLong
+from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
@@ -54,6 +56,12 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchReviewCard, 404),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
+    (VoiceNoteTooLong, 413),
+    # The record moved past the State a card was composed from: read it again, compose again.
+    (StaleState, 409),
+    # A template failed the plain-words standard at run time: the line is withheld, and the
+    # fault is the catalogue's, not the caller's.
+    (NotPlainWords, 500),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),

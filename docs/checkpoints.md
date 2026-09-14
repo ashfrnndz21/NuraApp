@@ -16,13 +16,14 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 8 | Feed and WhatsApp (sandbox) | Call the feed endpoint and see the supply order (now, today, gate, story, learning); send a photo to the WhatsApp sandbox number and watch it file itself and reply | E21 backend, E19-01…E19-03 | planned |
 | 9 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | planned |
 | 10 | Feed and onboarding on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
-| 11 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 11 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice and the flag is written first, State is ACT, Mei is told, the card's first line is "Call Mei now." then "Call 995 now."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
+| 12 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region (numbering to be reconciled by the operator with E12's CP10 and the web rows) | build-plan §6, weeks 2–8 | planned |
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–8)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–8, 11)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **iOS checkpoints (9–10)**: the operator runs the app on the simulator first and attaches screenshots to the checkpoint note; you then run it yourself from Xcode.
-- **TestFlight (11)**: needs your Apple developer account; the operator prepares the build and the steps.
+- **TestFlight (12)**: needs your Apple developer account; the operator prepares the build and the steps.
 
 ## How to run checkpoint 2
 
@@ -324,6 +325,78 @@ checkpoint 6 passed: every step did what docs/checkpoints.md says
 
 1. **A refill.** `POST /profiles/{profile_id}/photos` with any base64 bytes you like as `data`, `"content_type": "image/png"` and a `captured_at` (the card comes back `unknown`; keep its `artifact_id`), then `POST /profiles/{profile_id}/medicines/draft` with the warfarin label from the run — `{"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28}` — and the new `source_artifact_id`. The answer says `outcome: refill` and names the line. `POST /profiles/{profile_id}/confirmations` with `{"subject": "medicine", "label": …, "source_artifact_id": …}`, then `POST /profiles/{profile_id}/medicines` with the same label, artefact and the `confirmation_id`: a `supply` of 28 lands on the same line, and `GET /profiles/{profile_id}/medicines` shows the count gone up by 28.
 2. **A yes for other words.** Mint a confirmation for a label of `"quantity": 28` and spend it on a `POST /profiles/{profile_id}/medicines` whose label says `"quantity": 30`. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`: the yes was for a different label. Nothing is written, and the refusal is on the trail (`GET /profiles/{profile_id}/audit?scope=medicines`) as `refused_because: NotWhatWasConfirmed`.
+
+## How to run checkpoint 11
+
+Two terminals, as before. Checkpoint 11 is a module of its own (`backend/scripts/checkpoints/cp11.py`); `make checkpoint N=11` dispatches to it.
+
+```sh
+make reset-db           # optional: a clean local database (stop `make dev` first)
+make dev                # terminal 1
+make checkpoint N=11    # terminal 2, about three seconds
+```
+
+It registers Pa, Mei (chief), Lin (a neighbour with an emergency-only key) and Kit (no key) on fresh numbers, adds the water pill from a label photo and a blood pressure, then walks the three stories: the emergency card as JSON and as the printable page (open the URL it prints in a browser with Pa's token, or print it), the not-feeling-well button with "tired today" and with "chest pain" by voice (a placeholder voice note the fixture transcriber knows by digest, `backend/tests/fixtures/voice/`), the symptom log by voice, and Kit refused. The voice notes and the typed words are kept as artefacts in `backend/var/objects/SG/voice/` and `words/`; no row holds his words.
+
+What you will see (the phone numbers, ids and dates change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591112371) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Pa opened his own profile (wording 1, in the app)
+✓ Mei (+6592220249) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Lin (+6594440950) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Kit (+6593332825) registered by phone code (no SMS; the six digits read from the server log) and signed in
+✓ Pa let Mei, his daughter, in to everything and cut her the chief key
+✓ Pa let Lin, a neighbour, in to the emergency card only and cut her an emergency key (scopes: emergency, profile)
+✓ Pa added the water pill (frusemide 40 mg, 1 tablet every morning) from a label photo, with his OK, and tapped Taken
+✓ Pa typed in a blood pressure (138 over 84): a reading event and a fact resting on it
+✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, the last blood pressure's date, 995 for Singapore, rendered from State 403f66b5… and written down as render 9ccd9011…; the lines, every one verified:
+    This is Pa's emergency card.
+    Show this card to the doctor or the ambulance.
+    Pa speaks English.
+    No condition is written down for Pa.
+    Pa takes the water pill (frusemide).
+    That is 1 tablet every morning.
+    Pa has no known allergy.
+    Call Mei first.
+    The last blood pressure was on Monday 14 September.
+    This card is not a doctor's advice.
+✓ Pa opened the printable page (GET /profiles/{id}/emergency-card.html): one self-contained page — no script, no stylesheet, no image fetched — paper surface, Ink #2B2733 on white, 20px body, the strength and the phone number as data beside the sentences; its first lines:
+    http://127.0.0.1:8000/profiles/aecc8d0a-4a2e-4f1f-9d46-c9fb134defe0/emergency-card.html
+    This is Pa's emergency card.
+    Show this card to the doctor or the ambulance.
+    Pa speaks English.
+    No condition is written down for Pa.
+    Pa takes the water pill (frusemide).
+    That is 1 tablet every morning.
+✓ Mei read the card with her chief key (render ca349767…), and Lin read it with her emergency-only key — the same lines, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
+✓ Pa pressed the button and typed "tired today" (POST /profiles/{id}/not-feeling-well): his words kept as an artefact, a SYMPTOM event and a symptom fact resting on it, no red flag, the water pill already taken — so the card says rest, Mei is told (notice to 2 people), and a check-in is written for 2026-09-14T13:10:52.942603Z:
+    Sit down and rest.
+    Drink water.
+    Mei will call you.
+    Nura will ask you again in 2 hours.
+✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94): the flag was written first (004e9663…), the posture is ACT, Mei and Lin were told (notices to 2 people, "Pa said: 'chest pain'. Call Pa now."), and the card's first line is the call:
+    Call Mei now.
+    Call 995 now.
+    Mei knows.
+✓ State's posture is act (GET /profiles/{id}/state): the wash on his screen shifts to coral
+✓ Pa logged a symptom by voice (POST /profiles/{id}/symptoms): "dizzy, quite a lot, since this morning" heard as dizzy, severity 2 (quite a lot), since this morning; a SYMPTOM event and a fact with a seven-day window, his words kept in the voice note
+✓ Mei read the symptom log (GET /profiles/{id}/symptoms) in plain words, with the day's name:
+    Pa felt tired on Monday 14 September.
+    It started this morning.
+    Pa typed this.
+    Pa felt chest pain on Monday 14 September.
+    Pa said this by voice.
+    Pa felt dizzy on Monday 14 September.
+    It was quite a lot.
+    It started this morning.
+    Pa said this by voice.
+✓ Kit, with no key, was refused the card and the button: NoKey (403), in words that name nobody
+checkpoint 11 passed: every step did what docs/checkpoints.md says
+```
+
+What to look at by hand: `GET /profiles/{id}/emergency-card.html` in a browser (Pa's or Lin's token as a bearer header, or from the web client once W1 lands) — one page, paper on mist, 20px, no request leaves for anything; `GET /profiles/{id}/state` after "chest pain" — `posture: act`, the situational dimension carrying `feeling.control = act` for 24 hours; `GET /profiles/{id}/audit` as Pa — the `flag` write before the `event`, `fact`, `notice` and `what_to_do_card` writes of that press, and Lin's `emergency_card` reads under scope `emergency`.
 
 ## Rules the operator follows between checkpoints
 

@@ -26,8 +26,10 @@ from app.identity.providers import (
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.regions import Region
+from app.safety.transcribe import FixtureTranscriber
 from app.settings import Settings, load_settings
 from tests.paper import PAPER
+from tests.voice import VOICE
 
 ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
 
@@ -38,6 +40,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
         drug_registry=FixtureRegistry.load(),
+        transcriber=FixtureTranscriber(VOICE),
     )
 
 

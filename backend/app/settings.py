@@ -28,6 +28,10 @@ class Settings:
     """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
     from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
     a later adapter, and without either the process refuses to start."""
+    voice_fixtures: str | None = None
+    """NURA_VOICE_FIXTURES: the directory of voice transcripts the fixture transcriber
+    answers from (`app.safety.transcribe.FixtureTranscriber`), keyed by the sha256 of the
+    bytes. Set on a laptop; a speech provider in the region is a later adapter."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
@@ -58,5 +62,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         dev_code_sender=dev_code_sender,
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
+        voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
     )

@@ -28,6 +28,7 @@ from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
+from app.safety.transcribe import Transcriber
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.api")
@@ -45,6 +46,9 @@ class Providers:
     drug_registry: DrugRegistry
     """The licensed drug data behind its port (`app.drugs`): identification, interactions and
     monographs come from it and from nowhere else."""
+    transcriber: Transcriber
+    """Speech to words behind its port (`app.safety.transcribe`): the fixture one until a
+    provider in the region exists; a voice note it cannot hear is kept and said so."""
 
 
 def settings_of(request: Request) -> Settings:

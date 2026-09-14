@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 import app.ingestion  # wires the label-photo rule onto the memory store
 import app.medicines
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
-from app.channels.api import auth, capture, doors, medicines, profiles
+from app.channels.api import auth, capture, doors, medicines, profiles, safety
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused
 from app.db import KeptSession
@@ -42,6 +42,7 @@ def create_app(
     app.include_router(profiles.router)
     app.include_router(capture.router)
     app.include_router(medicines.router)
+    app.include_router(safety.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

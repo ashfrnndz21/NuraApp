@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+from scripts.checkpoints import cp11
+
 BASE_URL = os.environ.get("NURA_BASE_URL", "http://127.0.0.1:8000")
 DEV_LOG = Path(os.environ.get("NURA_DEV_LOG", Path(__file__).resolve().parent.parent / ".dev.log"))
 LOG_NAME = os.environ.get("NURA_DEV_LOG", "backend/.dev.log")
@@ -1802,6 +1804,7 @@ CHECKPOINTS = {
     4: checkpoint_4,
     5: checkpoint_5,
     6: checkpoint_6,
+    11: cp11.run,
 }
 
 
@@ -1811,6 +1814,10 @@ def main(argv: list[str]) -> int:
         print(f"usage: python -m scripts.checkpoint <n>   (ready: {ready})", file=sys.stderr)
         return 2
     number = int(argv[1])
+    step = CHECKPOINTS[number]
+    if step.__module__.startswith("scripts.checkpoints."):
+        # The newer checkpoints are modules of their own: each walks on its own client.
+        return step(BASE_URL, DEV_LOG)
     try:
         with httpx.Client(base_url=BASE_URL, timeout=10.0) as client:
             try:

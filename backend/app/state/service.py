@@ -36,7 +36,7 @@ the keys as well, so it needs `RECOMPUTE_SCOPES`: the owner's context and a chie
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -491,6 +491,61 @@ async def _still_current(session: AsyncSession, *, context: KeyContext, state: S
     latest = await current_state(session, context=context)
     if latest.id != state.id:
         raise StaleState("this state has been superseded")
+
+
+class SnapshotBehindTheCard(StaleState):
+    """The last snapshot does not fold in every fact the card was composed from."""
+
+
+async def render_from_last_snapshot[Row: ProfileScoped](
+    session: AsyncSession,
+    model: type[Row],
+    context: KeyContext,
+    scope: Scope,
+    /,
+    *,
+    covering: Iterable[uuid.UUID],
+    channel: Channel = Channel.APP,
+    **values: Any,
+) -> Row:
+    """Write a rendered row for a key too narrow to recompute State, stamped with the last
+    snapshot — refused unless that snapshot already folds in every fact the caller rendered.
+
+    `render_from_state` asks `current_state`, which a key without `RECOMPUTE_SCOPES` cannot
+    have: it would read the record to check the snapshot against it. The emergency card
+    (E13-01) is the one thing rendered for such a key — an emergency-only key opens a fixed
+    projection of the record (`app.safety.emergency_card`) and nothing else — so the check is
+    made the narrow way instead: the snapshot is read under the caller's own `scope`, and the
+    ids of the facts the card was composed from (`covering`) must all be in the ids it was
+    computed from, and its `stale_after` must not have passed. A fact the snapshot has not
+    folded in means the record moved past it, and the card is refused as stale rather than
+    shown — the same promise as `render_from_state`, kept without reading what the key does
+    not hold. A key that can recompute goes through `render_from_state`; this is not a way
+    round it, and the row it writes names its State like every other.
+    """
+    if not issubclass(model, RenderedFromState):
+        raise NotRenderable("this table does not record the state it was rendered from")
+    found = await audited_read(
+        session,
+        StateSnapshot,
+        context,
+        scope,
+        order_by=(StateSnapshot.sequence.desc(),),
+        limit=1,
+        channel=channel,
+    )
+    if not found:
+        raise NoState("no state has been computed for this profile")
+    snapshot = found[0]
+    folded = set(snapshot.computed_from.get("facts", []))
+    missing = [str(one) for one in covering if str(one) not in folded]
+    if missing:
+        raise SnapshotBehindTheCard("the record has facts the last state has not folded in")
+    if snapshot.stale_after is not None and as_utc(snapshot.stale_after) <= utcnow():
+        raise StaleState("a window in the last state has closed; read state again")
+    return await audited_write(
+        session, model, context, scope, channel=channel, state_id=snapshot.id, **values
+    )
 
 
 # --- the hook on the memory store ---------------------------------------------------------
