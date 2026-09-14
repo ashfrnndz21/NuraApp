@@ -399,7 +399,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if state["posture"] != "act":
         raise fail("the red tap sets the day's posture to act", why=f"got {state['posture']}")
     notes = w.get(pa, f"{base}/feelings/notes", "Pa's notes")
-    if [n["note_id"] for n in notes] != [note["note_id"]]:
+    if [n["note_id"] for n in notes["notes"]] != [note["note_id"]] or notes["withheld"]:
         raise fail("no note for a red word", why=f"{len(notes)} notes")
     ok(
         f"Pa tapped Sakit dada: the red-flag path before anything else — the moment, the flag "

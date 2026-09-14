@@ -186,6 +186,14 @@ class NoteOut(BaseModel):
         )
 
 
+class NotesOut(BaseModel):
+    """The notes this key may read, and how many rest on a part of the record it does not hold:
+    those are withheld by count, never dropped in silence (ADR 0004)."""
+
+    notes: list[NoteOut]
+    withheld: int
+
+
 class AnsweredOut(BaseModel):
     """What his answer did: a note, or — a yes that made the word red — the red-flag path."""
 

@@ -21,7 +21,6 @@ under the boundary line, or not written at all (`render_from_state`).
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -347,12 +346,30 @@ async def _render_note(
     )
 
 
+REASON_SCOPES: dict[str, Scope] = {
+    "new_medicine": Scope.MEDICINES,
+    "reading_trend": Scope.READINGS,
+}
+"""The part of the record a note's reason rests on, where it is not the record's own: a medicine
+line, his blood pressure facts. A note citing one is read only by a key holding that part
+(ADR 0004: a row is read under the scope it rests on); the others are withheld by count."""
+
+
+def note_scopes(note: FeelingNote) -> frozenset[Scope]:
+    """Every part a note shows or cites: the record's, and each reason's own."""
+    return frozenset(
+        {Scope.RECORDS}
+        | {REASON_SCOPES[r["code"]] for r in note.reasons if r.get("code") in REASON_SCOPES}
+    )
+
+
 @audited(Action.READ, Scope.RECORDS, NOTE)
 async def recent_notes(
     session: AsyncSession, *, context: KeyContext, limit: int = 20
-) -> Sequence[FeelingNote]:
-    """The notes, newest first: what he said, read into things to tell the doctor."""
-    return await audited_read(
+) -> tuple[list[FeelingNote], int]:
+    """The notes this key may read, newest first, and how many were withheld because they
+    rest on a part of the record the key does not hold. Never a silent gap."""
+    found = await audited_read(
         session,
         FeelingNote,
         context,
@@ -360,3 +377,5 @@ async def recent_notes(
         order_by=(FeelingNote.created_at.desc(),),
         limit=limit,
     )
+    readable = [note for note in found if note_scopes(note) <= context.scopes]
+    return readable, len(found) - len(readable)

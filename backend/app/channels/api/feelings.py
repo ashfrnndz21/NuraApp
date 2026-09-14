@@ -32,6 +32,7 @@ from app.channels.api.feelings_schemas import (
     HandedOverOut,
     MeSummaryOut,
     NoteOut,
+    NotesOut,
     NudgeMetricsOut,
     NudgeOut,
     NudgePlanOut,
@@ -100,8 +101,11 @@ async def answer(
 
 
 @router.get("/{profile_id}/feelings/notes")
-async def notes(context: Context, session: Db) -> list[NoteOut]:
-    return [NoteOut.of(note) for note in await recent_notes(session, context=context)]
+async def notes(context: Context, session: Db) -> NotesOut:
+    """The notes, newest first; one resting on a part the key does not hold is counted in
+    `withheld` instead of shown."""
+    readable, withheld = await recent_notes(session, context=context)
+    return NotesOut(notes=[NoteOut.of(note) for note in readable], withheld=withheld)
 
 
 @router.get("/{profile_id}/nudges/plan")

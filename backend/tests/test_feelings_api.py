@@ -11,13 +11,19 @@ metrics with no health content, and one route per path.
 from __future__ import annotations
 
 import re
+import uuid
 from collections import Counter
 
 from fastapi.routing import APIRoute
 
+from app.keys.context import resolve_key_context
+from app.keys.scopes import Scope
+from app.memory.models import Event
+from app.regions import Region
 from app.safety.red_flags import Feeling
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
+from tests.feelings_support import new_medicine
 
 PA = "+6591410001"
 MEI = "+6591410002"
@@ -56,7 +62,8 @@ async def test_a_tap_its_one_answer_and_the_note_in_malay(deployment: Deployment
     )
     assert again.status_code == 409 and again.json() == {"refusal": "AlreadyAnswered"}
     notes = await deployment.client.get(f"/profiles/{profile_id}/feelings/notes", headers=his)
-    assert [n["note_id"] for n in notes.json()] == [note["note_id"]]
+    assert [n["note_id"] for n in notes.json()["notes"]] == [note["note_id"]]
+    assert notes.json()["withheld"] == 0
 
 
 async def test_a_red_word_over_http_takes_the_red_flag_path_and_makes_no_note(
@@ -73,7 +80,7 @@ async def test_a_red_word_over_http_takes_the_red_flag_path_and_makes_no_note(
     assert body["red_flag"] is True and body["flag_id"] and body["opens"] == "not_feeling_well"
     assert body["question"] is None and body["lines"][-1] == "Nura does not decide what is wrong."
     notes = await deployment.client.get(f"/profiles/{profile_id}/feelings/notes", headers=his)
-    assert notes.json() == []
+    assert notes.json() == {"notes": [], "withheld": 0}
     unknown = await deployment.client.post(
         f"/profiles/{profile_id}/feelings", json={"word": "heart attack"}, headers=his
     )
@@ -143,3 +150,64 @@ def test_no_route_is_declared_twice(deployment: Deployment) -> None:
         for method in route.methods
     )
     assert [pair for pair, n in declared.items() if n > 1] == []
+
+
+async def test_a_tap_is_the_records_and_a_note_on_a_medicine_is_withheld_without_the_medicines(
+    deployment: Deployment,
+) -> None:
+    """The tap's moment is written under the record's scope (ADR 0004: its `written_scope`), so
+    a key without the record reads no cloud; a note resting on a medicine line is withheld, by
+    count, from a key that holds the record and not the medicines."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    async with deployment.sessions() as session:
+        owner = await resolve_key_context(
+            session,
+            region=Region.SG,
+            person_id=uuid.UUID(pa["person_id"]),
+            profile_id=uuid.UUID(profile_id),
+        )
+        await new_medicine(session, owner)
+        await session.commit()
+    tap = (
+        await deployment.client.post(
+            f"/profiles/{profile_id}/feelings", json={"word": "dizzy"}, headers=his
+        )
+    ).json()
+    answered = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings/{tap['tap_id']}/answer",
+        json={"answer": "yesterday"},
+        headers=his,
+    )
+    assert answered.json()["note"]["reasons"][0]["code"] == "new_medicine"
+    async with deployment.sessions() as session:
+        moment = await session.get(Event, uuid.UUID(tap["event_id"]))
+        assert moment is not None and moment.written_scope is Scope.RECORDS
+
+    async def key(phone: str, parts: list[str]) -> dict[str, str]:
+        holder = await register_by_phone(deployment, phone, "Kit")
+        await let_in(deployment, pa, profile_id, phone, parts, "son")
+        cut = await deployment.client.post(
+            f"/profiles/{profile_id}/keys",
+            json={"holder_phone_e164": phone, "role": "caregiver", "scopes": parts},
+            headers=his,
+        )
+        assert cut.status_code == 201, cut.text
+        return bearer(holder["token"])
+
+    medicines_only = await key("+6591410031", ["medicines"])
+    refused = await deployment.client.get(
+        f"/profiles/{profile_id}/feelings/cloud", headers=medicines_only
+    )
+    assert refused.status_code == 403
+    record_only = await key("+6591410032", ["records", "readings"])
+    withheld = (
+        await deployment.client.get(f"/profiles/{profile_id}/feelings/notes", headers=record_only)
+    ).json()
+    assert withheld == {"notes": [], "withheld": 1}
+    both = await key("+6591410033", ["records", "readings", "medicines"])
+    shown = (
+        await deployment.client.get(f"/profiles/{profile_id}/feelings/notes", headers=both)
+    ).json()
+    assert [n["note_id"] for n in shown["notes"]] == [answered.json()["note"]["note_id"]]

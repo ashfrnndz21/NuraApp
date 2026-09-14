@@ -463,9 +463,7 @@ async def let_someone_in(
 
 
 @router.post("/{profile_id}/consents/whatsapp", status_code=status.HTTP_201_CREATED)
-async def agree_to_whatsapp(
-    body: WhatsAppConsentIn, context: Context, session: Db
-) -> ConsentOut:
+async def agree_to_whatsapp(body: WhatsAppConsentIn, context: Context, session: Db) -> ConsentOut:
     """The owner agrees to WhatsApp: the morning card, the thread, every send (E19).
 
     Profile-wide and on his own basis; a chief acting for him needs a recorded proxy basis,
@@ -533,9 +531,7 @@ async def audit(
     return [
         AuditOut.of(
             entry,
-            ()
-            if entry.target_id is None or context.allows(entry.scope)
-            else (WITHHELD_TARGET,),
+            () if entry.target_id is None or context.allows(entry.scope) else (WITHHELD_TARGET,),
         )
         for entry in entries
     ]

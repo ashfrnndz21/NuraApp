@@ -610,8 +610,6 @@ class PushConfirmIn(PushScheduleIn):
     subject: Literal[ConfirmSubject.PUSH]
 
 
-
-
 class StatusConfirmIn(BaseModel):
     """A yes to one step of a visit's status: this visit, to this status."""
 
@@ -636,7 +634,20 @@ class AttachConfirmIn(BaseModel):
 
 
 ConfirmIn = Annotated[
-    ClaimConfirmIn | ReviewCardConfirmIn | MedicineConfirmIn | AppointmentConfirmIn | QuestionConfirmIn | SummaryConfirmIn | KeyChangeConfirmIn | OnlyMeConfirmIn | TaskDoneConfirmIn | PushConfirmIn | StatusConfirmIn | AttachConfirmIn | RoutineConfirmIn | ProposalConfirmIn,
+    ClaimConfirmIn
+    | ReviewCardConfirmIn
+    | MedicineConfirmIn
+    | AppointmentConfirmIn
+    | QuestionConfirmIn
+    | SummaryConfirmIn
+    | KeyChangeConfirmIn
+    | OnlyMeConfirmIn
+    | TaskDoneConfirmIn
+    | PushConfirmIn
+    | StatusConfirmIn
+    | AttachConfirmIn
+    | RoutineConfirmIn
+    | ProposalConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -1650,7 +1661,9 @@ class EventNoteOut(BaseModel):
             content_type=view.artifact.content_type,
             transcript=None
             if heard is None
-            else TranscriptOut(text=heard.text, confidence=heard.confidence, language=heard.language),
+            else TranscriptOut(
+                text=heard.text, confidence=heard.confidence, language=heard.language
+            ),
             notice=list(COULD_NOT_HEAR) if unheard else None,
             written_by_person_id=note.written_by_person_id,
             written_at=utc(note.written_at),
@@ -1658,9 +1671,6 @@ class EventNoteOut(BaseModel):
 
 
 # --- the visit loop (E05) ------------------------------------------------------------------------
-
-
-
 
 
 class AppointmentOut(BaseModel):
