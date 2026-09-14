@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
+from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
@@ -50,6 +51,11 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.memory.attach import AlreadyHangsThere
+from app.memory.providers import NotAPlaceNote, NoteNamesHealth
+from app.memory.spine import NoSuchAppointment, NoSuchProvider, NotThatStatusChange
+from app.memory.timeline import NotACursor
+from app.memory.working import EpisodeAlreadyClosed, EpisodeAlreadyOpen, NoSuchEpisode
 from app.onboarding.biography import (
     AlreadyReadBack,
     BiographyAlreadyOpen,
@@ -62,6 +68,7 @@ from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
 from app.regions import OutOfRegion
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
+from app.search.ask import NotAQuestion
 from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
@@ -114,6 +121,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    (NoWordsInThatLanguage, 404),
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
@@ -121,6 +129,15 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
+    # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
+    # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
+    (NoSuchAppointment, 404),
+    (NoSuchEpisode, 404),
+    (NoSuchProvider, 404),
+    (AlreadyHangsThere, 409),
+    (EpisodeAlreadyOpen, 409),
+    (EpisodeAlreadyClosed, 409),
+    (NotThatStatusChange, 409),
     (PhotoTooLarge, 413),
     # Free text needs the 24-hour window; outside it only a template goes.
     (OutsideTheWindow, 409),
@@ -152,8 +169,15 @@ _SHAPE: tuple[type[Refusal], ...] = (
     MissingSlot,
     BadWindow,
     NotADocument,
+    # The timeline's (E03): a place note that is not one line, or that names a medicine or a
+    # condition; a cursor that is not the last page's; a question that is not one line.
+    NotAPlaceNote,
+    NoteNamesHealth,
+    NotACursor,
+    NotAQuestion,
 )
-"""Named so that a reader of this file sees every family refusal; each is a 400."""
+"""Named so that a reader of this file sees every family and timeline refusal; each is a
+400."""
 
 
 def status_of(refusal: Refusal) -> int:

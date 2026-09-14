@@ -1,0 +1,583 @@
+"""Ask: natural-language recall over his own record, with citations (E03-05).
+
+Pa asks by voice, "what was my blood pressure", and hears one line; Mei asks in text, "what
+did Dr Tan say", and reads a few. Either way the answer is made of the templates in
+`app.delivery.timeline_strings` and the values of the facts it cites — nothing else — and
+every such line names the ids it rests on: the fact and the event or artefact under it, the
+visit and its provider, the medicine line and its label. When nothing on the record answers,
+it says so — "Nura does not have that written down." — and names the doctor; it never
+guesses. A question that would change treatment is answered with what is written down and a
+question for the doctor. The boundary is last on every answer — `app.safety.boundary`'s line
+for `Surface.RECALL` — because recall is an inferring surface (spec §10).
+
+Recall is a reading of the record under the asker's key, and the asker must hold the ask
+scope (`Scope.ASK`) to ask at all. Each part — visits, readings, medicines, the record — is
+read under its own scope; a part the key does not reach is not read and is named as
+withheld, a part the owner keeps "only me" among them. Which parts a question is about is the
+retriever's to say (`app.search.retrieve.Retriever`): it sees the question and the candidates
+this key could read, never the database, and writes no words.
+
+The question itself is kept, by reference: the text goes to the region's object store as the
+bytes of a MESSAGE artefact written under the ask scope, and the answer names that artefact.
+No row holds the question's words. Every ask is on the trail, and so is every refusal.
+"""
+
+from __future__ import annotations
+
+import re
+import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.audit.access import audited, audited_read, audited_write
+from app.audit.models import Action
+from app.audit.trail import record
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
+from app.db import as_utc, utcnow
+from app.delivery import timeline_strings as words
+from app.drugs.registry import DrugRegistry, UnknownDrug
+from app.errors import Refusal
+from app.ingestion.models import ReviewCard
+from app.ingestion.objects import ObjectStore, sha256_of
+from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.medicines.models import MedicationLine
+from app.medicines.strings import PLAIN_NAME
+from app.memory.episodic import fact_cites_only_what_is_held_here, held_here
+from app.memory.models import (
+    Appointment,
+    AppointmentStatus,
+    Artifact,
+    ArtifactKind,
+    Attachment,
+    ConfidenceState,
+    Fact,
+    Provider,
+    SourceChannel,
+)
+from app.memory.semantic import fact_is_under
+from app.memory.spine import UPCOMING
+from app.memory.timeline import language_for
+from app.regions import guard_region
+from app.safety.boundary import Surface, boundary_lines
+from app.search.retrieve import Candidate, Retriever
+
+ASK_TARGET = "ask"
+"""The trail's name for an ask: one line per question, naming the kept question."""
+
+QUESTION_LENGTH = 300
+TEXT_LINES = 5
+"""The most cited lines a text answer gives; a voice answer gives the lines of one thing."""
+
+BLOOD_PRESSURE = ("blood_pressure", "reading")
+
+CHANGE_WORDS = frozenset(
+    {
+        "stop",
+        "start",
+        "change",
+        "increase",
+        "reduce",
+        "double",
+        "skip",
+        "halve",
+        "more",
+        "less",
+        "berhenti",
+        "tukar",
+        "tambah",
+        "kurangkan",
+    }
+)
+CHANGE_WORDS_ZH = ("停", "换", "加", "减")
+MEDICINE_WORDS = frozenset(
+    {"medicine", "medicines", "tablet", "tablets", "pill", "pills", "ubat", "药"}
+)
+VISIT_WORDS = frozenset({"visit", "visits", "appointment", "lawatan", "看医生", "预约"})
+PAPER_WORDS = frozenset({"paper", "papers", "letter", "surat", "文件"})
+_GENERIC_WORDS = frozenset(
+    {"test", "paper", "number", "filter", "your", "the", "ujian", "surat", "nombor", "blood"}
+)
+_LATIN_WORD = re.compile(r"[a-z]+")
+
+
+class Mode(StrEnum):
+    VOICE = "voice"
+    TEXT = "text"
+
+
+class NotAQuestion(Refusal):
+    """A question is one line of one to three hundred characters."""
+
+
+@dataclass(frozen=True, slots=True)
+class Cite:
+    """One thing a line rests on, by kind and id."""
+
+    kind: str
+    id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerLine:
+    text: str
+    cites: tuple[Cite, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Answer:
+    question_artifact_id: uuid.UUID
+    mode: Mode
+    language: str
+    lines: tuple[AnswerLine, ...]
+    """The cited lines: each made of a template and the values of the facts it cites."""
+    honest: tuple[str, ...]
+    """What is said when the record does not answer, or when the question would change
+    treatment: plain, and claiming nothing, so it cites nothing."""
+    boundary: tuple[str, ...]
+    withheld: tuple[Scope, ...]
+    dropped: int
+
+    @property
+    def answered(self) -> bool:
+        return bool(self.lines)
+
+    @property
+    def spoken(self) -> list[str]:
+        """The whole answer as it is read or heard, the boundary last."""
+        return [line.text for line in self.lines] + list(self.honest) + list(self.boundary)
+
+
+# --- the corpus: what this key may read, as candidates ---------------------------------------
+
+
+@dataclass
+class _Corpus:
+    candidates: list[Candidate] = field(default_factory=list)
+    facts: dict[uuid.UUID, Fact] = field(default_factory=dict)
+    visits: dict[uuid.UUID, Appointment] = field(default_factory=dict)
+    providers: dict[uuid.UUID, Provider] = field(default_factory=dict)
+    medicines: dict[uuid.UUID, MedicationLine] = field(default_factory=dict)
+    papers: dict[uuid.UUID, Artifact] = field(default_factory=dict)
+    paper_kinds: dict[uuid.UUID, str] = field(default_factory=dict)
+    hung: dict[uuid.UUID, list[Attachment]] = field(default_factory=dict)
+    withheld: list[Scope] = field(default_factory=list)
+
+    def withhold(self, scope: Scope) -> None:
+        if scope not in self.withheld:
+            self.withheld.append(scope)
+
+
+def _with_words(phrases: set[str]) -> frozenset[str]:
+    """Each phrase, and each word of it that says something on its own ("cholesterol")."""
+    found = {phrase.lower() for phrase in phrases if phrase}
+    for phrase in list(found):
+        for word in _LATIN_WORD.findall(phrase):
+            if len(word) >= 4 and word not in _GENERIC_WORDS:
+                found.add(word)
+    return frozenset(found)
+
+
+def _what_names(subject: str) -> set[str]:
+    return {words.what_word(subject, lang) for lang in words.LANGUAGES} | {
+        subject.replace("_", " ")
+    }
+
+
+def _plain_names(registry: DrugRegistry | None, generic: str) -> set[str]:
+    names = {generic.lower()}
+    if registry is None:
+        return names
+    try:
+        plain_id = registry.monograph(generic).plain_name_id
+    except UnknownDrug:
+        return names
+    for lang in words.LANGUAGES:
+        name = PLAIN_NAME[lang].get(plain_id)
+        if name:
+            for prefix in ("your ", "the ", "您的"):
+                name = name.removeprefix(prefix)
+            names.add(name.removesuffix(" anda"))
+    return names
+
+
+def _plain_name(registry: DrugRegistry | None, generic: str, language: str) -> str:
+    if registry is not None:
+        try:
+            return PLAIN_NAME[language][registry.monograph(generic).plain_name_id]
+        except (UnknownDrug, KeyError):
+            pass
+    return words.what_word("medicine", language)
+
+
+def _is_reading(fact: Fact) -> bool:
+    value = fact.value
+    return (
+        (fact.subject, fact.attribute) == BLOOD_PRESSURE
+        and isinstance(value, dict)
+        and "systolic" in value
+        and "diastolic" in value
+    )
+
+
+async def _corpus(
+    session: AsyncSession, context: KeyContext, registry: DrugRegistry | None
+) -> _Corpus:
+    corpus = _Corpus()
+    if context.allows(Scope.VISITS):
+        providers = await audited_read(session, Provider, context, Scope.VISITS)
+        corpus.providers = {provider.id: provider for provider in providers}
+        for visit in await audited_read(session, Appointment, context, Scope.VISITS):
+            provider = corpus.providers.get(visit.provider_id)
+            corpus.visits[visit.id] = visit
+            names = set(VISIT_WORDS) | ({provider.name.lower()} if provider else set())
+            corpus.candidates.append(
+                Candidate("visit", visit.id, visit.scheduled_at, frozenset(names))
+            )
+    else:
+        corpus.withhold(Scope.VISITS)
+    # Readings and the record: current facts, each under its subject's scope. A medicine is
+    # recalled from its line, below, not from the facts under it.
+    for scope in (Scope.READINGS, Scope.RECORDS):
+        if not context.allows(scope):
+            corpus.withhold(scope)
+            continue
+        facts = await audited_read(
+            session,
+            Fact,
+            context,
+            scope,
+            where=(
+                fact_is_under(scope),
+                Fact.superseded_at.is_(None),
+                Fact.confidence_state != ConfidenceState.DISPUTED,
+                fact_cites_only_what_is_held_here(context, scope),
+            ),
+        )
+        for fact in facts:
+            corpus.facts[fact.id] = fact
+            names = _what_names(fact.subject)
+            if fact.attribute not in ("reading", "value", "systolic", "diastolic"):
+                names.add(fact.attribute.replace("_", " "))
+            kind = "reading" if _is_reading(fact) else "fact"
+            corpus.candidates.append(Candidate(kind, fact.id, fact.valid_from, _with_words(names)))
+    if context.allows(Scope.MEDICINES):
+        lines = await audited_read(
+            session,
+            MedicationLine,
+            context,
+            Scope.MEDICINES,
+            where=(MedicationLine.superseded_at.is_(None),),
+        )
+        for line in lines:
+            corpus.medicines[line.id] = line
+            names = _plain_names(registry, line.generic) | set(MEDICINE_WORDS)
+            if line.brand:
+                names.add(line.brand.lower())
+            if line.prescriber:
+                names.add(line.prescriber.lower())
+            corpus.candidates.append(
+                Candidate("medicine", line.id, line.started_at, frozenset(names))
+            )
+    else:
+        corpus.withhold(Scope.MEDICINES)
+    if context.allows(Scope.RECORDS):
+        hung = await audited_read(session, Attachment, context, Scope.RECORDS)
+        for each in hung:
+            corpus.hung.setdefault(each.artifact_id, []).append(each)
+        if corpus.hung:
+            artifacts = await audited_read(
+                session,
+                Artifact,
+                context,
+                Scope.RECORDS,
+                where=(Artifact.id.in_(list(corpus.hung)), held_here(context)),
+            )
+            corpus.papers = {artifact.id: artifact for artifact in artifacts}
+            cards = await audited_read(
+                session,
+                ReviewCard,
+                context,
+                Scope.RECORDS,
+                where=(ReviewCard.artifact_id.in_(list(corpus.papers)),),
+            )
+            corpus.paper_kinds = {card.artifact_id: card.document_kind.value for card in cards}
+        for artifact in corpus.papers.values():
+            names = set(PAPER_WORDS)
+            names |= {
+                words.paper_word(corpus.paper_kinds.get(artifact.id), lang)
+                for lang in words.LANGUAGES
+            }
+            for fact in corpus.facts.values():
+                if fact.artifact_id == artifact.id:
+                    names |= _what_names(fact.subject)
+            names |= {name.lower() for name in _providers_of(corpus, artifact.id)}
+            corpus.candidates.append(
+                Candidate("paper", artifact.id, artifact.captured_at, _with_words(names))
+            )
+    return corpus
+
+
+def _providers_of(corpus: _Corpus, artifact_id: uuid.UUID) -> set[str]:
+    """The providers a paper is from: the one whose visit it hangs off, and the ones whose
+    visits were part of the episode it hangs off."""
+    names: set[str] = set()
+    for each in corpus.hung.get(artifact_id, []):
+        for visit in corpus.visits.values():
+            if visit.id == each.appointment_id or (
+                each.episode_id is not None and visit.episode_id == each.episode_id
+            ):
+                provider = corpus.providers.get(visit.provider_id)
+                if provider is not None:
+                    names.add(provider.name)
+    return names
+
+
+# --- the answer ----------------------------------------------------------------------------
+
+
+def _doctor(corpus: _Corpus) -> str | None:
+    """Who to ask: the provider of the next visit, else of the last one that happened."""
+    now = utcnow()
+    visits = sorted(corpus.visits.values(), key=lambda visit: as_utc(visit.scheduled_at))
+    coming = [v for v in visits if v.status in UPCOMING and as_utc(v.scheduled_at) >= now]
+    happened = [
+        v
+        for v in visits
+        if v.status == AppointmentStatus.ATTENDED and as_utc(v.scheduled_at) <= now
+    ]
+    chosen = coming[0] if coming else (happened[-1] if happened else None)
+    if chosen is None:
+        return None
+    provider = corpus.providers.get(chosen.provider_id)
+    return None if provider is None else provider.name
+
+
+def _cites_of_fact(fact: Fact) -> list[Cite]:
+    cites = [Cite("fact", fact.id)]
+    if fact.event_id is not None:
+        cites.append(Cite("event", fact.event_id))
+    if fact.artifact_id is not None:
+        cites.append(Cite("artifact", fact.artifact_id))
+    return cites
+
+
+def _day(moment: datetime, context: KeyContext, language: str) -> str:
+    return words.said_date(moment, context.region, language)
+
+
+def _compose(
+    hits: Sequence[Candidate],
+    corpus: _Corpus,
+    context: KeyContext,
+    language: str,
+    registry: DrugRegistry | None,
+) -> list[list[AnswerLine]]:
+    """The lines for each thing the question is about, one group per thing, from the
+    templates and the cited values. A group is one line, or two where one would carry more
+    numbers than a line may (a reading in Chinese: the day, then the numbers)."""
+    now = utcnow()
+    groups: list[list[AnswerLine]] = []
+    papers_said: set[uuid.UUID] = set()
+    for hit in hits:
+        if hit.kind == "reading":
+            fact = corpus.facts[hit.ref]
+            value: dict[str, Any] = fact.value
+            cites = tuple(_cites_of_fact(fact))
+            texts = words.reading_lines(
+                language,
+                date=_day(fact.valid_from, context, language),
+                top_number=str(value["systolic"]),
+                bottom_number=str(value["diastolic"]),
+            )
+            groups.append([AnswerLine(text, cites) for text in texts])
+        elif hit.kind == "fact":
+            fact = corpus.facts[hit.ref]
+            source = fact.artifact_id or fact.event_id
+            if source in papers_said:
+                continue
+            together = [
+                f
+                for f in corpus.facts.values()
+                if source is not None and (f.artifact_id == source or f.event_id == source)
+            ] or [fact]
+            papers_said.add(source or fact.id)
+            text = words.recall_line(
+                "paper",
+                language,
+                what=words.what_word(fact.subject, language),
+                date=_day(fact.valid_from, context, language),
+            )
+            fact_cites = [c for f in together for c in _cites_of_fact(f)]
+            groups.append([AnswerLine(text, tuple(dict.fromkeys(fact_cites)))])
+        elif hit.kind == "visit":
+            visit = corpus.visits[hit.ref]
+            provider = corpus.providers.get(visit.provider_id)
+            doctor = "" if provider is None else provider.name
+            when = _day(visit.scheduled_at, context, language)
+            if visit.status == AppointmentStatus.ATTENDED and as_utc(visit.scheduled_at) <= now:
+                key = "visit_past"
+            elif visit.status in UPCOMING and as_utc(visit.scheduled_at) >= now:
+                key = "visit_next"
+            else:
+                continue
+            text = words.recall_line(key, language, doctor=doctor, date=when)
+            visit_cites = (Cite("appointment", visit.id), Cite("provider", visit.provider_id))
+            groups.append([AnswerLine(text, visit_cites)])
+        elif hit.kind == "medicine":
+            line = corpus.medicines[hit.ref]
+            name = _plain_name(registry, line.generic, language)
+            if line.prescriber:
+                text = words.recall_line(
+                    "medicine_from", language, doctor=line.prescriber, name=name
+                )
+            else:
+                text = words.recall_line("medicine_listed", language, name=name)
+            line_cites = [Cite("medication_line", line.id), Cite("fact", line.fact_id)]
+            if line.source_artifact_id is not None:
+                line_cites.append(Cite("artifact", line.source_artifact_id))
+            if line.source_event_id is not None:
+                line_cites.append(Cite("event", line.source_event_id))
+            groups.append([AnswerLine(text, tuple(line_cites))])
+        elif hit.kind == "paper":
+            if hit.ref in papers_said:
+                continue
+            papers_said.add(hit.ref)
+            artifact = corpus.papers[hit.ref]
+            on_it = [f for f in corpus.facts.values() if f.artifact_id == artifact.id]
+            what = (
+                words.what_word(on_it[0].subject, language)
+                if on_it
+                else words.paper_word(corpus.paper_kinds.get(artifact.id), language)
+            )
+            moment = on_it[0].valid_from if on_it else artifact.captured_at
+            text = words.recall_line(
+                "paper", language, what=what, date=_day(moment, context, language)
+            )
+            paper_cites = [Cite("artifact", artifact.id)]
+            paper_cites += [
+                Cite("attachment", each.id) for each in corpus.hung.get(artifact.id, [])
+            ]
+            paper_cites += [Cite("fact", f.id) for f in on_it]
+            groups.append([AnswerLine(text, tuple(paper_cites))])
+    return groups
+
+
+def _would_change_treatment(question: str, hits: Sequence[Candidate]) -> bool:
+    low = question.lower()
+    latin = set(_LATIN_WORD.findall(low))
+    changing = bool(latin & CHANGE_WORDS) or any(word in low for word in CHANGE_WORDS_ZH)
+    about_medicine = (
+        bool(latin & MEDICINE_WORDS) or "药" in low or any(hit.kind == "medicine" for hit in hits)
+    )
+    return changing and about_medicine
+
+
+async def _keep_question(
+    session: AsyncSession, context: KeyContext, store: ObjectStore, text: str
+) -> Artifact:
+    """The question's words to the region's store; a MESSAGE artefact under the ask scope
+    names them by key and digest. No row holds the words."""
+    guard_region(held_in=store.region, asked_from=context.region)
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.ASK
+    )
+    data = text.encode("utf-8")
+    digest = sha256_of(data)
+    key = f"questions/{context.profile_id}/{digest}"
+    await store.put(key, data)
+    moment = utcnow()
+    return await audited_write(
+        session,
+        Artifact,
+        context,
+        Scope.ASK,
+        kind=ArtifactKind.MESSAGE,
+        storage_key=key,
+        content_type="text/plain; charset=utf-8",
+        sha256=digest,
+        captured_at=moment,
+        source_channel=SourceChannel.APP,
+        region=store.region,
+        stored_at=moment,
+    )
+
+
+@audited(Action.READ, Scope.ASK, ASK_TARGET)
+async def recall(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    question: str,
+    mode: Mode,
+    retriever: Retriever,
+    store: ObjectStore,
+    registry: DrugRegistry | None = None,
+    language: str | None = None,
+) -> Answer:
+    """Answer a question from his own record, with citations, the boundary last.
+
+    Voice gives the best thing, in one line (two where one line would carry too many numbers),
+    and text up to five lines. Every cited line is a
+    template filled with the values of what it cites and passes the plain-words verifier;
+    a line that does not is not said. Nothing answered is "Nura does not have that written
+    down", never a guess. The question is kept as a MESSAGE artefact and the ask is written
+    to the trail, naming it.
+    """
+    text = question.strip()
+    if not text or len(text) > QUESTION_LENGTH or "\n" in text or "\r" in text:
+        raise NotAQuestion(f"a question is one line of one to {QUESTION_LENGTH} characters")
+    lang = await language_for(session, context, language)
+    kept = await _keep_question(session, context, store, text)
+    corpus = await _corpus(session, context, registry)
+    hits = retriever.retrieve(text, corpus.candidates)
+    doctor = _doctor(corpus)
+    groups = _compose(hits, corpus, context, lang, registry)
+    passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
+    dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
+    said: list[AnswerLine] = []
+    for group in passing[:1] if mode is Mode.VOICE else passing:
+        if said and len(said) + len(group) > TEXT_LINES:
+            break
+        said.extend(group)
+    honest: list[str] = []
+    if _would_change_treatment(text, hits):
+        honest = words.reroute_lines(lang, doctor)
+    elif not said:
+        honest = words.honest_lines(lang, doctor)
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.ASK,
+        target=ASK_TARGET,
+        target_id=kept.id,
+        rows=len(said),
+    )
+    return Answer(
+        question_artifact_id=kept.id,
+        mode=mode,
+        language=lang,
+        lines=tuple(said),
+        honest=tuple(honest),
+        boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
+        withheld=tuple(corpus.withheld),
+        dropped=dropped,
+    )
+
+
+__all__ = [
+    "ASK_TARGET",
+    "Answer",
+    "AnswerLine",
+    "Cite",
+    "Mode",
+    "NotAQuestion",
+    "recall",
+]

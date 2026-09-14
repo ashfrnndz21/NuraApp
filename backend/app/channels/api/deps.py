@@ -12,7 +12,7 @@ import hashlib
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -31,6 +31,7 @@ from app.ingestion.objects import ObjectStore
 from app.ingestion.transcribe import Transcriber
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.regions import OutOfRegion
+from app.search.retrieve import KeywordRetriever, Retriever
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.api")
@@ -58,6 +59,9 @@ class Providers:
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""
+    retriever: Retriever = field(default_factory=KeywordRetriever)
+    """Which things on the record a question is about, for Ask (E03-05): keywords until a
+    model-backed retriever exists behind the same port; the tests pass a fixture one."""
 
 
 def settings_of(request: Request) -> Settings:
