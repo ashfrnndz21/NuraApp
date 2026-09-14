@@ -250,6 +250,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 headers=bearer(pa.token),
                 json={
                     "holder_phone_e164": person.phone_e164,
+                    "holder_display_name": person.name,
                     "scopes": scopes,
                     "relationship": relationship,
                     "language": "en",

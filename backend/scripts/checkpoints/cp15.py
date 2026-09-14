@@ -578,6 +578,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         201,
         "Pa lets Kit see his record",
         holder_phone_e164=kit.phone_e164,
+        holder_display_name=kit.name,
         scopes=["records", "medicines", "visits"],
         relationship="son",
         language="ms",

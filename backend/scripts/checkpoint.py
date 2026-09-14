@@ -2268,6 +2268,7 @@ def checkpoint_7(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
                 "relationship": "daughter",
                 "language": "en",
