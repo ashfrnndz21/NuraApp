@@ -344,6 +344,104 @@ class Appointment(ProfileScoped, Base):
     booked_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+# --- what hangs off the spine and the episodes (E03) -----------------------------------------
+
+
+class AttachedHow(StrEnum):
+    """How an artefact came to hang off an episode or a visit: a person's own yes on the
+    surface, or the yes on an ingestion card that named the episode as it was confirmed."""
+
+    MANUAL = "manual"
+    INGESTION = "ingestion"
+
+
+class Attachment(ProfileScoped, Base):
+    """One artefact hanging off one thing: an episode, or a visit on the spine.
+
+    An artefact is stored once and never changed (`frozen(Artifact)`), and an event names
+    its episode when it is written, so the way a paper that came in on its own joins the
+    concern it belongs to — or the visit it came from — is this row: who hung it there,
+    when, and on whose yes. Exactly one of `episode_id` and `appointment_id` is set; the
+    table refuses a row hanging off both or neither. Hanging is a moment: the row is never
+    edited, and the same artefact may hang off a visit and off the episode that visit was
+    part of.
+    """
+
+    __tablename__ = "attachment"
+    __table_args__ = (
+        _row_of_profile("attachment"),
+        _tied_to_profile("attachment", "artifact_id", "artifact"),
+        _tied_to_profile("attachment", "episode_id", "episode"),
+        _tied_to_profile("attachment", "appointment_id", "appointment"),
+        CheckConstraint(
+            "(episode_id IS NULL) <> (appointment_id IS NULL)",
+            name="ck_attachment_hangs_off_one_thing",
+        ),
+        UniqueConstraint(
+            "profile_id",
+            "artifact_id",
+            "episode_id",
+            "appointment_id",
+            name="uq_attachment_once",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifact.id"), index=True)
+    episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("appointment.id"), default=None
+    )
+    how: Mapped[AttachedHow] = mapped_column(enum_column(AttachedHow, "attached_how"))
+    attached_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    attached_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+
+
+NOTE_LENGTH = 280
+"""The most a chief's note about a clinic may hold: a line, never a letter."""
+
+
+class ProviderNote(ProfileScoped, Base):
+    """The chief's own note about a clinic: "parking at B2", "long waits, go early".
+
+    The second free-text column the graph allows, beside the patient's own note
+    (`app.notes.models.Note`), and on the same terms: short, the writer's own words, kept
+    under a scope only the owner and his chief are preset to (`Scope.FAMILY`). It is a
+    note about the *place*, never about his health: `providers.write_chief_note` refuses a
+    line that names a medicine or a condition, so nothing clinical ever sits in prose.
+    """
+
+    __tablename__ = "provider_note"
+    __table_args__ = (
+        _row_of_profile("provider_note"),
+        _tied_to_profile("provider_note", "provider_id", "provider"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("provider.id"), index=True)
+    text: Mapped[str] = mapped_column(String(NOTE_LENGTH))
+    written_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    written_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+
+
+class LastLooked(ProfileScoped, Base):
+    """When one person last looked at what changed on this profile (E03-04).
+
+    One row per look, never edited: the newest row for a person is the moment his next
+    "what changed" counts from. The look is the reader's own act, so the row names him and
+    nothing else — nothing of what he saw is written here. `appointments` is the spine as
+    he saw it, id to status, so a visit whose status has moved since can be told apart from
+    one that has not; a status change leaves no timestamp of its own on the visit.
+    """
+
+    __tablename__ = "last_looked"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    looked_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    appointments: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
 __all__ = ["ImmutableRow"]
 
 STATUS_CHANGE_IN_PROGRESS = "appointment_status_change"
@@ -369,3 +467,7 @@ frozen(
     except_for=frozenset({"status", "status_changed_by_person_id"}),
     only_when=_status_change_is_in_progress,
 )
+# Hanging is a moment, a note is a line as written, a look is when it happened.
+frozen(Attachment)
+frozen(ProviderNote)
+frozen(LastLooked)
