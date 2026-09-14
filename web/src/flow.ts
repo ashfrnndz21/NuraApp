@@ -20,7 +20,8 @@ export type Screen =
   | { name: "forSomeone" }
   | { name: "today"; saved?: boolean }
   | { name: "reading" }
-  | { name: "me" };
+  | { name: "me" }
+  | { name: "onboarding" };
 
 export const screen = signal<Screen>({ name: "loading" });
 

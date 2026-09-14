@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { en } from "../../src/strings/en";
 import { ms } from "../../src/strings/ms";
 import { zh } from "../../src/strings/zh";
+import { readdirSync, readFileSync } from "node:fs";
 import { deviceLanguage, fill, LANGUAGES, refusalSentence, stringsFor } from "../../src/strings";
 
 function leaves(value: unknown, path = ""): [string, string][] {
@@ -62,5 +63,37 @@ describe("stringsFor", () => {
   it("answers every language the picker offers", () => {
     for (const code of LANGUAGES) expect(stringsFor(code).tabs.today).toBeTruthy();
     expect(refusalSentence("NoSession", "ms")).toBe(ms.refusals.NoSession);
+  });
+});
+
+describe("onboarding's words", () => {
+  const fixtures = new URL("../../../backend/tests/fixtures/paper/", import.meta.url);
+  const papers = readdirSync(fixtures)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => JSON.parse(readFileSync(new URL(name, fixtures), "utf8")) as { fields: { subject: string; attribute: string }[] });
+
+  it("name every line the paper fixtures can put on a review card, in every language", () => {
+    expect(papers.length).toBeGreaterThan(0);
+    for (const code of LANGUAGES) {
+      for (const paper of papers) {
+        for (const field of paper.fields) {
+          expect(stringsFor(code).onboarding.fields[field.subject]?.[field.attribute], `${code} ${field.subject}.${field.attribute}`).toBeTruthy();
+        }
+      }
+    }
+  });
+
+  it("say the self and other lines with the name slot only where a name belongs", () => {
+    const about = en.onboarding.about;
+    for (const [key, text] of Object.entries(about)) {
+      if (typeof text !== "string") continue;
+      if (key.endsWith("Self")) expect(text, key).not.toContain("{name}");
+    }
+    expect(fill(about.memoryOther, { name: "Pa" })).toBe("Does Pa forget things more than before?");
+  });
+
+  it("use 'papers', never 'record', in Malay and Chinese as in English", () => {
+    for (const [path, text] of leaves(ms.onboarding)) expect(text, path).not.toMatch(/rekod/i);
+    for (const [path, text] of leaves(zh.onboarding)) expect(text, path).not.toMatch(/记录/);
   });
 });

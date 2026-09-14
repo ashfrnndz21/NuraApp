@@ -10,6 +10,8 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
   await signInThroughTheApp(page, freshPhone(), "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
+  // Onboarding comes next (W3); this test is Today's, so set up later.
+  await page.getByTestId("set-up-later").click();
 
   // Just before midnight.
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");

@@ -47,6 +47,8 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await expect(words).toContainText("Nura keeps your papers, your medicines and your blood pressure book.");
   await expect(words).toContainText("They never leave Singapore.");
   await page.getByTestId("agree").click();
+  // Onboarding comes next (W3); this walk is Today's, so set up later.
+  await page.getByTestId("set-up-later").click();
 
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await expect(page.getByTestId("proud-number")).toHaveText("0");
@@ -237,6 +239,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
+  await page.getByTestId("set-up-later").click();
   await expect(page.getByTestId("proud")).toBeVisible();
   let failed = 0;
   await page.route("**/api/me", async (route) => {
@@ -267,6 +270,7 @@ test("the language picker changes every string and persists on the device", asyn
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
+  await page.getByTestId("set-up-later").click();
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");

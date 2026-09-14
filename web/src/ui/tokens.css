@@ -18,6 +18,13 @@
   --cream: #f3e6e0; /* the warm middle stop of the watch wash */
   --coral-mid: #f2e0de; /* the middle stop of the act wash */
   --white: #ffffff;
+  /* Onboarding (W3): a word the last tap revealed, and the two answered read-back buttons.
+     Each pair is 7:1 or better (tests/unit/contrast.test.ts). */
+  --chip-fresh: #f3eef8;
+  --yes-bg: #e6f0e9;
+  --yes-ink: #24503a;
+  --no-bg: #f7e4e1;
+  --no-ink: #7a2e24;
 
   /* Surfaces: glass carries chrome and context, paper carries any decision */
   --glass-bg: rgba(255, 255, 255, 0.55);
@@ -74,6 +81,10 @@
   --icon-size: 24px;
   --card-bg: var(--glass-bg);
   --card-blur: var(--glass-blur);
+  /* The word cloud's three sizes: how common a word is, plus what his taps point at. */
+  --word-1: 0.9375rem; /* 15px */
+  --word-2: 1.0625rem; /* 17px */
+  --word-3: 1.25rem; /* 20px */
 }
 
 /* --- Patient density (Dad): paper for every decision, 20px body, 56px targets ------------ */
@@ -92,6 +103,10 @@
   --icon-size: 28px;
   --card-bg: var(--paper-bg);
   --card-blur: none;
+  /* Never below the 20px body, however light the word. */
+  --word-1: 1.25rem; /* 20px */
+  --word-2: 1.375rem; /* 22px */
+  --word-3: 1.5rem; /* 24px */
 }
 
 /* --- The wash is the status ------------------------------------------------------------- */

@@ -55,12 +55,27 @@ interface PillProps {
   disabled?: boolean;
   label?: string;
   testId?: string;
+  /** The answer already given, among several choices: a plum outline, not a fill. */
+  chosen?: boolean;
+  /** A toggle's state, for the screen reader and the answered colours. */
+  pressed?: boolean;
+  extraClass?: string;
 }
 
-export function Pill({ onClick, children, plum, coral, done, quiet, disabled, label, testId }: PillProps): JSX.Element {
-  const classes = ["pill", plum && "plum", coral && "coral", done && "done", quiet && "quiet"].filter(Boolean).join(" ");
+export function Pill({ onClick, children, plum, coral, done, quiet, disabled, label, testId, chosen, pressed, extraClass }: PillProps): JSX.Element {
+  const classes = ["pill", plum && "plum", coral && "coral", done && "done", quiet && "quiet", chosen && "chosen", extraClass]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <button type="button" class={classes} onClick={onClick} disabled={disabled} aria-label={label} data-testid={testId}>
+    <button
+      type="button"
+      class={classes}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={pressed ?? (chosen === undefined ? undefined : chosen)}
+      data-testid={testId}
+    >
       {children}
     </button>
   );

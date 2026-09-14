@@ -225,3 +225,238 @@ export interface RefusalBody {
   scope?: string;
   drug_class?: string;
 }
+
+// --- E02: a photo in, a review card out ------------------------------------------------
+
+export type FieldState = "proposed" | "confirmed" | "corrected" | "rejected";
+
+export interface ReviewFieldOut {
+  field_id: string;
+  position: number;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+  confidence: number;
+  /** Below the backend's threshold: the dotted underline, "please check this one". */
+  needs_confirm: boolean;
+  /** Nura saw this line and could not read it: `value` is null and `prompt` asks for it. */
+  unreadable: boolean;
+  /** The backend's whole lines shown beside a line nobody has typed yet (E02-02). */
+  prompt: string[] | null;
+  /** For a PDF of several pages, the page the line was read on. */
+  page: number | null;
+  state: FieldState;
+  corrected_value: unknown | null;
+  fact_id: string | null;
+}
+
+export type DocumentKind =
+  | "lab_report"
+  | "medicine_label"
+  | "discharge_letter"
+  | "clinic_slip"
+  | "handwritten_prescription"
+  | "insurance_letter"
+  | "device_screen"
+  | "not_health"
+  | "unknown";
+
+/** Where an imported PDF came from, in the backend's words (E02-03). */
+export type DocumentSource = "portal" | "email" | "share";
+
+export interface ReviewCardOut {
+  card_id: string;
+  profile_id: string;
+  artifact_id: string;
+  document_kind: DocumentKind;
+  document_date: string | null;
+  /** What he said a PDF was, and where it came from (E02-03). */
+  asked_as: DocumentKind | null;
+  source: DocumentSource | null;
+  /** The backend's whole lines where the page is not what it was offered as, or not a
+   *  health paper at all (then the card has no fields). */
+  notice: string[] | null;
+  high_risk_class: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+  fields: ReviewFieldOut[];
+}
+
+export interface DecisionIn {
+  field_id: string;
+  decision: "confirmed" | "corrected" | "rejected";
+  corrected_value?: unknown;
+}
+
+export interface FactOut {
+  fact_id: string;
+  subject: string;
+  attribute: string;
+  value: unknown;
+  unit: string | null;
+}
+
+export interface ReviewConfirmedOut {
+  card: ReviewCardOut;
+  facts: FactOut[];
+}
+
+// --- E01: onboarding — the shapes the web client codes against ---------------------------
+//
+// The backend half (branch E01-biography-profile) is being built beside this client. Until
+// it lands these routes are answered by `src/api/mock/` when `VITE_API_MOCK=1`; the shapes
+// here are the contract the mock keeps and the real client must match at merge.
+
+/** One word of the cloud (`GET /onboarding/conditions?language=`). The plain word is what he
+ *  reads; the medical term is in brackets on tap; the weight is how common it is. A word
+ *  with a `parent` appears only once the parent is picked; `related` are the words that
+ *  gain weight when this one is picked. */
+export interface ConditionWordOut {
+  id: string;
+  word: string;
+  term: string | null;
+  weight: 1 | 2 | 3;
+  parent: string | null;
+  related: string[];
+  ask: { question: string; options: { id: string; text: string }[] } | null;
+}
+
+export interface ConditionsOut {
+  language: string;
+  version: string;
+  words: ConditionWordOut[];
+}
+
+/** `GET/PUT /profiles/{id}/settings` — E01-03. Every yes/no is a plain fact about how he
+ *  reads, hears and holds the phone; the density and the voice follow at once. */
+export interface SettingsOut {
+  profile_id: string;
+  preferred_name: string | null;
+  language: string;
+  birth_decade: number | null;
+  doctor: string | null;
+  /** "07:30", the anchor every morning reminder ties to. */
+  breakfast_time: string | null;
+  sight: boolean;
+  hearing: boolean;
+  hands: boolean;
+  cognitive: boolean;
+  updated_at: string | null;
+}
+
+export type SettingsIn = Omit<SettingsOut, "profile_id" | "updated_at">;
+
+/** One line of the read-back: the backend's whole sentence, with the State it was rendered
+ *  under and where it came from. The client never composes one. */
+export interface ReadBackLineOut {
+  line_id: string;
+  text: string;
+  answer: "yes" | "no" | null;
+  state_id: string;
+  source: string;
+}
+
+/** The assistant's next prompt in the records step: whole lines to show and speak, and
+ *  what it is asking for. `kind: "done"` is the closing line. */
+export interface PromptOut {
+  prompt_id: string;
+  kind: "paper" | "done";
+  lines: string[];
+  state_id: string;
+  source: string;
+}
+
+/** A paper the biography has taken in, and the whole lines the backend learned from it. */
+export interface PaperOut {
+  paper_id: string;
+  card_id: string;
+  artifact_id: string;
+  document_kind: ReviewCardOut["document_kind"];
+  learned: string[];
+  source: string;
+}
+
+/** A question the papers raised: whole lines, spoken as written, one Keep / Not this one. */
+export interface QuestionOut {
+  question_id: string;
+  lines: string[];
+  kept: boolean | null;
+  state_id: string;
+  source: string;
+}
+
+export interface BiographyOut {
+  biography_id: string;
+  profile_id: string;
+  language: string;
+  opened_at: string;
+  closed_at: string | null;
+  words: string[];
+  answers: Record<string, string>;
+  read_back: ReadBackLineOut[];
+  next_prompt: PromptOut | null;
+  papers: PaperOut[];
+  questions: QuestionOut[];
+}
+
+export interface BiographyIn {
+  language: string;
+  words: string[];
+  answers: Record<string, string>;
+}
+
+/** One gap card (`GET /profiles/{id}/plan`, docs/gaps-and-unlocks.md §1): three whole lines
+ *  from the backend, the one action, the day it is for, and its State and source. */
+export interface PlanCardOut {
+  gap_id: string;
+  day: string;
+  tier: 1 | 2 | 3;
+  missing: string;
+  unlock: string;
+  action: string;
+  /** What "do it now" opens: the camera, the follow-up question of `word`, the invite
+   *  (E12: a sharing consent, then a key), or nothing. `word` and `"invite"` are proposed
+   *  to E01; the mock answers with them. */
+  capture: "photo" | "tap" | "invite" | "none";
+  word?: string | null;
+  state_id: string;
+  source: string;
+  deferred: number;
+}
+
+export interface PlanOut {
+  profile_id: string;
+  state_id: string;
+  cards: PlanCardOut[];
+}
+
+// --- E12: letting one person in (sharing consent, then a key), from the Ready screen ---
+
+export type Part = "medicines" | "visits" | "readings" | "records";
+
+export interface SharingIn {
+  holder_phone_e164: string;
+  scopes: Part[];
+  relationship: string | null;
+  language: string;
+}
+
+/** The words he agrees to, rendered by the backend for this person and these parts before
+ *  he says yes. `POST /profiles/{id}/consents/sharing/preview` is **proposed** (not on main):
+ *  the consent route renders the words only at the moment of agreement, and the client may
+ *  not compose them. The mock answers it until the backend has it. */
+export interface SharingPreviewOut {
+  wording_version: string;
+  language: string;
+  lines: string[];
+}
+
+export interface ConsentOut {
+  consent_id: string;
+  holder_person_id: string | null;
+  scopes: string[] | null;
+  text_version: string;
+  wording_text: string;
+}
+

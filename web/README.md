@@ -9,6 +9,7 @@ make web         # dev server on http://127.0.0.1:5173/app/ (proxies /api to mak
 make build-web   # web/dist, which make dev then serves at http://127.0.0.1:8000/app/
 make web-test    # Vitest: strings, refusal map, Today model, the kept page, the voice, contrast
 make web-e2e     # Playwright against the built app the backend serves (needs make dev)
+make web-mock    # make web, with E01's onboarding routes answered by src/api/mock/ until E01 merges
 npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 ```
 
@@ -26,6 +27,13 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 - `src/today/` — the Today model: the Now card from the backend's `due_now`/`missed`, the feed's
   cards for today, the State card with the backend's boundary, the medicines card with the
   questions for the doctor, the day and time in his words.
+- `src/onboarding/` — onboarding's logic apart from any screen, all unit-tested: `cloud.ts`
+  (which words show, how big, in what order), `about.ts` (the questions and what the answers
+  change on the phone), `review.ts` (one decision per review-card field), `plan.ts` (which gap
+  cards show), `dates.ts`; `state.ts` is where the session is, in memory only.
+- `src/screens/onboarding/` — one file per step: About, Cloud, Asks, ReadBack, Records (the
+  prompt, the capture and the review card), Questions, Plan.
+- `src/api/mock/` — dev only: the stand-in for E01's routes under `VITE_API_MOCK=1`.
 - `src/speech/speak.ts` — `speak(card)`: the one seam for the spoken twin.
 - `src/sw/sw.ts` — the service worker; `src/offline/` — its registration and the Today cache.
 
@@ -124,3 +132,67 @@ dev), so `make web` is for working on screens and the offline behaviour is prove
 `make dev` serving `web/dist`. Over plain http on a LAN address the browser will not
 install a worker or offer "add to home screen" — that needs https, which the cloud
 deployment brings; on the Mac, `127.0.0.1` counts as secure.
+
+## Onboarding (W3)
+
+About you → the word cloud → the follow-ups → the read-back → the papers (prompt, photo,
+review card, one yes) → the questions the papers raised → the gaps → Today. It starts after
+*I agree* on the for-me door and after *Set it up* on the for-someone door; *Set up later*
+skips it and *Set up Nura* under Me starts it again.
+
+**Live and mocked.** E01's backend (branch `E01-biography-profile`) is being built beside this
+client. Until it merges, `make web-mock` (`VITE_API_MOCK=1`) answers its routes from
+`src/api/mock/`, and `src/api/nura.ts` calls the real paths with the same shapes
+(`src/api/types.ts`), so switching over changes nothing but the flag. The mock is in memory
+for the tab, and a build without the flag has none of it (Vite drops the import).
+
+| Route | State |
+|---|---|
+| `POST /profiles/{id}/photos`, `POST /profiles/{id}/imports` (a PDF), `POST /profiles/{id}/confirmations` (`review_card`), `POST /profiles/{id}/review-cards/{card}/confirm`, `GET /profiles/{id}/review-cards/{card}` | live (E02) |
+| `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys`, `GET /profiles/{id}/keys`, `GET /consent/wording?purpose=share_with_family` | live (E12, W1) |
+| `GET /onboarding/conditions?language=` | mocked until E01 |
+| `GET` / `PUT /profiles/{id}/settings` | mocked until E01 |
+| `POST /profiles/{id}/biography`, `/biography/read-back`, `/biography/papers`, `/biography/close` | mocked until E01 |
+| `GET /profiles/{id}/plan?language=` | mocked until E01 |
+| `POST /profiles/{id}/biography/questions` (Keep / Not this one), `POST /profiles/{id}/plan/later` | mocked; **assumed** paths — aligned to E01's names when its branch lands; Keep goes to E05's `POST /profiles/{id}/appointments/{appt}/questions` once #105 is on main |
+| `POST /profiles/{id}/consents/sharing/preview`; `word` and `capture: "invite"` on a gap card | mocked; **proposed** — not on any branch yet (see below) |
+
+**Papers of every kind.** A PDF goes to `POST /imports` (sent as a `share`), anything else
+to `POST /photos`; both answer with the same review card. A line Nura could not read shows
+the backend's own prompt and an empty box, and is never confirmed as read: what he types is
+the correction, or he leaves it out. A card's `notice` lines are shown as the backend wrote
+them; a page that is not a health paper has nothing to say yes to. In the patient density
+every line of the card has its own Hear (what the line is, what was read, how sure Nura is);
+the caregiver density keeps the header's.
+
+**The gap card's three actions.** A photo gap opens the camera; a tap gap reopens its
+word's follow-up question and comes back with the gap closed; the invite gap goes to E12's
+flow — who, which parts, the words, one *I agree*, then `POST /consents/sharing` and a
+caregiver key to the same parts (`POST /keys`). Only on his own papers: the consent route
+takes the owner's own yes. The words are never composed here: the consent route renders them
+only at the moment of agreement, so the client asks a proposed
+`POST /consents/sharing/preview` for exactly the lines he will agree to, and sends back
+their version (the mock renders the live template for now).
+
+**Nothing kept on the phone.** Settings, words, the biography, review cards and the plan live
+in memory (`src/onboarding/state.ts`) and on the backend, never in IndexedDB or web storage:
+none of it could be bound to a key and an expiry, so none of it is cached. A unit test fails
+if any onboarding file mentions browser storage; the e2e reads IndexedDB after the walk.
+
+**No sentence is composed here.** Read-back lines, prompts, what a paper taught, questions and
+gap cards are the backend's whole lines, shown with their `source` and their `state_id`
+(`data-state-id`). The client's own lines are in the catalogue; slots take only a name, a
+date or a number. A review-card correction is exactly what he typed (a number stays a number);
+a structured value such as a dose instruction cannot be retyped, only kept or left out.
+
+**One thing per screen, or the list.** In the patient density each About question, follow-up,
+read-back line and question is its own screen, and the Ready screen shows one gap card and how
+many follow. The caregiver density (a chief setting up for someone) gets each step as one page
+and the full gap list (docs/gaps-and-unlocks.md §3). His answers change his own phone at once
+(his language; the big look for small print, small buttons or memory) and never the chief's.
+
+**The word cloud.** Plain words from the backend's graph, sized by how common each is (1–3)
+plus one for every picked word that relates to it; top words heaviest first so they are on the
+first screen; revealed words go straight after the word that revealed them, so nothing moves
+under his finger; unpicking drops what only it revealed. A tap speaks the word and "Doctors
+call it …" — the term is a slot value, shown only in brackets after his word.

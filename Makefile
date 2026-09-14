@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate reset-db checkpoint test lint plain-words ios-test web build-web web-test web-e2e
+.PHONY: setup dev migrate reset-db checkpoint test lint plain-words ios-test web web-mock build-web web-test web-e2e
 # Every backend target runs `python3 -m …`: the Python 3.12 that `make setup` installed the
 # backend into, never whatever bare `python` on the PATH happens to be.
 setup: ; cd backend && python3 -m pip install -e ".[dev]"
@@ -44,6 +44,10 @@ plain-words: ; cd backend && python3 -m app.safety.plain_words
 # on the same Wi-Fi can open it. `make build-web` writes web/dist, which `make dev` then serves at
 # /app. `npm install` runs once, when node_modules is missing.
 web: web/node_modules ; cd web && npm run dev -- --host
+# The same dev server with E01's onboarding routes answered by web/src/api/mock/ (VITE_API_MOCK=1)
+# until the backend on branch E01-biography-profile merges; every other route still goes to
+# `make dev`. Checkpoint 11 runs on this until then. A build never contains the mock.
+web-mock: web/node_modules ; cd web && VITE_API_MOCK=1 npm run dev -- --host
 build-web: web/node_modules ; cd web && npm run build
 web-test: web/node_modules ; cd web && npm test
 web-e2e: web/node_modules ; cd web && npm run e2e

@@ -25,7 +25,7 @@ A family health app for Malaysia and Singapore: an elderly patient, the adult ch
 
 ## Commands
 - Backend: `make setup` (once), `make dev` (run), `make test`, `make lint`, `make plain-words`; `make checkpoint N=<n>` walks a checkpoint from `docs/checkpoints.md` against the running server, `make reset-db` starts the local database over.
-- Web (ADR 0001): `make web` (dev server on http://127.0.0.1:5173/app/, proxying `/api` to `make dev`), `make build-web` (writes `web/dist`, which `make dev` serves at http://127.0.0.1:8000/app/), `make web-test` (Vitest), `make web-e2e` (Playwright against the served build). `make plain-words` covers `web/src/strings/**` too.
+- Web (ADR 0001): `make web` (dev server on http://127.0.0.1:5173/app/, proxying `/api` to `make dev`), `make build-web` (writes `web/dist`, which `make dev` serves at http://127.0.0.1:8000/app/), `make web-test` (Vitest), `make web-e2e` (Playwright against the served build), `make web-mock` (the dev server with E01's onboarding routes answered by `web/src/api/mock/` until that backend merges). `make plain-words` covers `web/src/strings/**` too.
 - iOS: `cd ios && xcodegen generate`, then open `Nura.xcodeproj`; `make ios-test` runs `xcodebuild test` on the simulator. Builds require Xcode on macOS.
 - Infra: `cd infra && cdk synth`.
 
@@ -39,7 +39,7 @@ A family health app for Malaysia and Singapore: an elderly patient, the adult ch
 - `backend/app/delivery` — feed ranking, cards, voice, triggers, nudges, escalation.
 - `backend/app/channels` — app API, WhatsApp, share links.
 - `backend/app/safety` — boundary copy, high-risk drug rule, red-flag rules, plain-words verifier.
-- `web/` — the web client: `src/ui` (tokens, the two densities), `src/strings` (en, ms, zh, tagged `@patient`), `src/api`, `src/store`, `src/screens`, `src/today`, `src/speech`, `src/sw`; `tests/unit`, `tests/e2e`.
+- `web/` — the web client: `src/ui` (tokens, the two densities), `src/strings` (en, ms, zh, tagged `@patient`), `src/api` (and `src/api/mock`, dev only), `src/store`, `src/screens`, `src/today`, `src/onboarding`, `src/speech`, `src/sw`; `tests/unit`, `tests/e2e`.
 - `ios/Nura/` — Identity, Onboarding, Capture, Feed, Medicines, Visits, Ask, Family, Safety, Settings, DesignSystem.
 
 ## Domain vocabulary
