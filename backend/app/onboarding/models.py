@@ -69,6 +69,8 @@ class ProfileSettings(ProfileScoped, Base):
     preferred_name: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     doctor_name: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     breakfast_time: Mapped[str | None] = mapped_column(String(CLOCK_TIME_LENGTH), default=None)
+    checkin_time: Mapped[str | None] = mapped_column(String(CLOCK_TIME_LENGTH), default=None)
+    """When he is asked how he is (E17), "HH:MM" on his region's clock."""
     birth_decade: Mapped[int | None] = mapped_column(Integer, default=None)
     """The decade he was born in, by its first year (1950): the age band a lab range is read
     from (E07, lab trends). Never the year."""
@@ -199,6 +201,7 @@ class BiographyQuestion(ProfileScoped, Base):
     __table_args__ = (
         _row_of_profile("biography_question"),
         _tied_to_profile("biography_question", "session_id", "biography_session"),
+        _tied_to_profile("biography_question", "question_id", "question"),
         UniqueConstraint("session_id", "gap", name="uq_biography_question_session_id_gap"),
     )
 
@@ -208,6 +211,9 @@ class BiographyQuestion(ProfileScoped, Base):
     kept: Mapped[bool] = mapped_column(Boolean)
     decided_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     decided_at: Mapped[datetime] = mapped_column(default=utcnow)
+    question_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("question.id"), default=None)
+    """The visit's question (E05) a kept one became, once there was a visit to ask it at."""
+    handed_over_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
 # --- E01-04: the first week -------------------------------------------------------------------
@@ -311,6 +317,8 @@ frozen(
 )
 frozen(
     BiographyQuestion,
-    except_for=frozenset({"kept", "decided_by_person_id", "decided_at"}),
+    except_for=frozenset(
+        {"kept", "decided_by_person_id", "decided_at", "question_id", "handed_over_at"}
+    ),
     only_when=_question_is_in_progress,
 )

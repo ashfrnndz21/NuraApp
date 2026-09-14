@@ -29,6 +29,7 @@ SETTINGS: dict[str, Any] = {
     "large_text": True,
     "voice_on": True,
     "breakfast_time": "07:30",
+    "checkin_time": "18:00",
     "doctor_name": "Dr Tan",
     "preferred_name": "Pa",
     "birth_decade": 1950,

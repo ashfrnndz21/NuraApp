@@ -85,6 +85,9 @@ CONDITION = "condition"
 DOCTOR = ("doctor", "name")
 BREAKFAST = ("nudges", "breakfast_time")
 PREFERRED_NAME = ("nudges", "preferred_name")
+CHECKIN_TIME = ("setting", "checkin_time")
+"""When he is asked how he is, "HH:MM" on his region's clock: a `setting.*` fact the
+check-in (E17) reads; State has no need to fold it."""
 BIRTH_DECADE = ("setting", "birth_decade")
 """The one `setting.*` fact: the decade he was born in, by its first year, which lab trends
 (E07) read his age band from. Clinical by State's default, as a reference range is."""
@@ -146,6 +149,7 @@ class SettingsValues:
     preferred_name: str | None = None
     doctor_name: str | None = None
     breakfast_time: time | None = None
+    checkin_time: time | None = None
     birth_decade: int | None = None
 
     def checked(self) -> SettingsValues:
@@ -166,6 +170,9 @@ class SettingsValues:
             breakfast_time=None
             if self.breakfast_time is None
             else time(self.breakfast_time.hour, self.breakfast_time.minute),
+            checkin_time=None
+            if self.checkin_time is None
+            else time(self.checkin_time.hour, self.checkin_time.minute),
         )
 
 
@@ -184,6 +191,7 @@ def values_of(row: ProfileSettings) -> SettingsValues:
         preferred_name=row.preferred_name,
         doctor_name=row.doctor_name,
         breakfast_time=parse_clock_time(row.breakfast_time),
+        checkin_time=parse_clock_time(row.checkin_time),
         birth_decade=row.birth_decade,
     )
 
@@ -204,6 +212,7 @@ def facts_of(values: SettingsValues) -> dict[tuple[str, str], Any]:
         BREAKFAST: clock_time(values.breakfast_time),
         PREFERRED_NAME: values.preferred_name,
         DOCTOR: values.doctor_name,
+        CHECKIN_TIME: clock_time(values.checkin_time),
         BIRTH_DECADE: values.birth_decade,
     }
     for code in values.conditions:
@@ -380,6 +389,7 @@ async def save_settings(
         preferred_name=chosen.preferred_name,
         doctor_name=chosen.doctor_name,
         breakfast_time=clock_time(chosen.breakfast_time),
+        checkin_time=clock_time(chosen.checkin_time),
         birth_decade=chosen.birth_decade,
         event_id=event.id,
         set_by_person_id=context.person_id,

@@ -40,7 +40,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -76,7 +76,15 @@ from app.memory.episodic import fact_cites_only_what_is_held_here, record_event
 from app.memory.models import ConfidenceState, Event, EventKind, Fact, SourceChannel
 from app.memory.semantic import assert_fact, current_facts
 from app.onboarding.conditions import graph, name_of
-from app.onboarding.gaps import ANTICOAGULANT, open_gaps, questions_for_gaps, what_is_known
+from app.onboarding.gaps import (
+    ANTICOAGULANT,
+    Gap,
+    Known,
+    open_gaps,
+    questions_for_gaps,
+    what_is_known,
+)
+from app.onboarding.handover import asked_at, keep_at_visit, withdraw
 from app.onboarding.models import (
     BIOGRAPHY_IN_PROGRESS,
     QUESTION_IN_PROGRESS,
@@ -88,6 +96,7 @@ from app.onboarding.models import (
     BiographySession,
     PaperKind,
     PlanPrompt,
+    ProfileSettings,
 )
 from app.onboarding.plan import make_plan
 from app.onboarding.settings import (
@@ -106,9 +115,13 @@ from app.onboarding.words import (
     questions_more,
     read_back,
     script,
+    source_paper,
+    source_plan,
+    source_told,
     summary,
 )
 from app.regions import REGION_TZ
+from app.state.service import NoState, current_state
 
 BIO_SCOPE = Scope.RECORDS
 """A sitting reads the record back, so it is read and written under the record's scope."""
@@ -120,6 +133,11 @@ QUESTION = BiographyQuestion.__tablename__
 
 MAX_QUESTIONS = 4
 """The questions shown at once; the rest are a count (docs/gaps-and-unlocks.md §3)."""
+
+VISIT_GAPS = frozenset({"next_visit", "last_visit"})
+MEDICINE_LED = frozenset({"kidney_result", "next_visit", "last_visit"})
+"""The gaps a medicine on the record raises by itself: the kidney test every new medicine is
+read against, and the visits, when he told no condition."""
 
 LAB_LINES: Mapping[tuple[str, str], str] = {
     ("lipid_panel", "total_cholesterol"): "total_cholesterol",
@@ -196,12 +214,16 @@ class LineView:
 
 @dataclass(frozen=True, slots=True)
 class Question:
-    """A question the papers raised, by the gap it would fill (its id), and what he said to
-    it: kept, not this one (False), or nothing yet (None)."""
+    """A question the papers raised, by the gap it would fill (its id); what he said to it —
+    kept, not this one (False), or nothing yet (None); the State it was worked out under;
+    where it came from, in his words; and the visit it went to, once kept and handed over."""
 
     gap: str
     line: str
     kept: bool | None = None
+    state_id: uuid.UUID | None = None
+    source: str | None = None
+    handed_over_to: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -467,30 +489,88 @@ async def _decisions(
     )
 
 
+async def _state_id(session: AsyncSession, *, context: KeyContext) -> uuid.UUID | None:
+    try:
+        return (await current_state(session, context=context)).id
+    except NoState:
+        return None
+
+
+def _local_day(moment: datetime, context: KeyContext) -> date:
+    return as_utc(moment).astimezone(REGION_TZ[context.region]).date()
+
+
+def _source_of(
+    gap: Gap,
+    *,
+    known: Known,
+    papers: Sequence[PaperView],
+    told_on: date,
+    read_on: date,
+    language: str,
+) -> str | None:
+    """Where a question came from: what he told (a word of the cloud the gap is about, or any
+    condition for a visit), the paper that raised it (a medicine label raises the kidney test
+    and, when he told no condition, the visits), or the papers read together."""
+    if set(gap.words) & known.conditions or (gap.code in VISIT_GAPS and known.conditions):
+        return source_told(told_on, language)
+    if gap.code in MEDICINE_LED and known.medicines:
+        label = next((one for one in papers if one.paper.paper is PaperKind.MEDICINE), None)
+        if label is not None:
+            day = label.card.document_date or as_utc(label.paper.added_at).date()
+            return source_paper(PaperKind.MEDICINE.value, day, language)
+    return source_plan(read_on, language)
+
+
 async def _questions(
     session: AsyncSession,
     *,
     context: KeyContext,
     bio: BiographySession,
-    doctor: str | None,
+    row: ProfileSettings | None,
+    papers: Sequence[PaperView],
     language: str,
     answered: Sequence[LineView],
 ) -> tuple[tuple[Question, ...], str | None, str | None]:
-    """The questions shown — the first open gaps, with what he said to each — the line after
-    a "no", and the count of the rest."""
+    """The questions shown — the first open gaps, with what he said to each, the State they
+    were worked out under, where each came from and the visit a kept one went to — the line
+    after a "no", and the count of the rest."""
     after = None
     if any(line.answer is Answer.NO for line in answered):
         after = after_a_no(await _who_checks(session, context=context, bio=bio), language)
-    gaps = open_gaps(await what_is_known(session, context=context))
-    decided = {row.gap: row.kept for row in await _decisions(session, context=context, bio=bio)}
-    asked = tuple(
-        Question(gap=code, line=line, kept=decided.get(code))
-        for code, line in questions_for_gaps(gaps[:MAX_QUESTIONS], language=language, doctor=doctor)
-    )
+    known = await what_is_known(session, context=context)
+    gaps = open_gaps(known)
+    state_id = await _state_id(session, context=context)
+    decisions = {one.gap: one for one in await _decisions(session, context=context, bio=bio)}
+    told_on = _local_day(row.set_at if row is not None else bio.opened_at, context)
+    read_on = _local_day(bio.read_back_at or bio.opened_at, context)
+    doctor = None if row is None else row.doctor_name
+    shown = {gap.code: gap for gap in gaps[:MAX_QUESTIONS]}
+    asked: list[Question] = []
+    for code, line in questions_for_gaps(list(shown.values()), language=language, doctor=doctor):
+        decided = decisions.get(code)
+        went = None if decided is None else await asked_at(session, context=context, row=decided)
+        asked.append(
+            Question(
+                gap=code,
+                line=line,
+                kept=None if decided is None else decided.kept,
+                state_id=state_id,
+                source=_source_of(
+                    shown[code],
+                    known=known,
+                    papers=papers,
+                    told_on=told_on,
+                    read_on=read_on,
+                    language=language,
+                ),
+                handed_over_to=None if went is None else went.appointment_id,
+            )
+        )
     more = (
         questions_more(len(gaps) - MAX_QUESTIONS, language) if len(gaps) > MAX_QUESTIONS else None
     )
-    return asked, after, more
+    return tuple(asked), after, more
 
 
 async def _view(
@@ -525,7 +605,8 @@ async def _view(
             session,
             context=context,
             bio=bio,
-            doctor=None if row is None else row.doctor_name,
+            row=row,
+            papers=papers,
             language=words,
             answered=lines,
         )
@@ -855,8 +936,9 @@ async def keep_question(
     session: AsyncSession, *, context: KeyContext, question_id: str, keep: bool
 ) -> BiographyView:
     """Keep a question the papers raised, or not this one; he may change his mind until the
-    sitting closes. A kept question is the seam to the visit loop: once E05's questions are
-    on main it becomes one of them, and until then it is kept here, on the sitting. A question
+    sitting closes. A kept question is a question for the doctor: with a visit coming it
+    goes on that visit's list now (E05, on the person's yes), and with none it waits here and
+    goes on the list of the next visit booked (`app.onboarding.handover`). A question
     he said "not this one" to is left out of the first week."""
     a_setter(context)
     bio = await _require_open(session, context=context)
@@ -867,7 +949,7 @@ async def keep_question(
         raise NoSuchQuestion(f"no open question {question_id!r} on this sitting")
     moment = utcnow()
     found = [
-        row for row in await _decisions(session, context=context, bio=bio) if row.gap == question_id
+        one for one in await _decisions(session, context=context, bio=bio) if one.gap == question_id
     ]
     if found:
         row = found[0]
@@ -900,6 +982,13 @@ async def keep_question(
             decided_by_person_id=context.person_id,
             decided_at=moment,
         )
+    decided = next(
+        one for one in await _decisions(session, context=context, bio=bio) if one.gap == question_id
+    )
+    if keep:
+        await keep_at_visit(session, context=context, row=decided)
+    else:
+        await withdraw(session, context=context, row=decided)
     return await _view(session, context=context, bio=bio)
 
 

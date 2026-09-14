@@ -636,6 +636,7 @@ CLASSES: dict[str, str] = {
     "profile_settings.preferred_name": IDENTIFIER,
     "profile_settings.doctor_name": HEALTH,
     "profile_settings.breakfast_time": HEALTH,
+    "profile_settings.checkin_time": HEALTH,
     # The decade he was born in: part of a date of birth, so it points at a person.
     "profile_settings.birth_decade": IDENTIFIER,
     "profile_settings.event_id": HEALTH,
@@ -689,6 +690,8 @@ CLASSES: dict[str, str] = {
     "biography_question.kept": HEALTH,
     "biography_question.decided_by_person_id": IDENTIFIER,
     "biography_question.decided_at": OPERATIONAL,
+    "biography_question.question_id": HEALTH,
+    "biography_question.handed_over_at": OPERATIONAL,
     # --- trends, the routine, the calendar (E09-01, E10-01, E18-02) ---------------------------
     # A trend card is what was shown to him about his results: the analyte, the facts, the
     # direction, the lines and the boundary line are health, like a feed card's.

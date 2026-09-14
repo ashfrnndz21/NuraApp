@@ -947,12 +947,15 @@ make dev                # terminal 1: migrates dev.db (0015 adds the onboarding 
 make checkpoint N=15    # terminal 2: walks the whole scenario, a few seconds
 ```
 
+To see the first morning of his week come due, start the server on a frozen clock (#118): `NURA_FROZEN_CLOCK=2026-09-15T16:00:00+08:00 make dev`. The walk reads the server's clock (`GET /dev/clock`), moves it to 07:30 the next morning (`POST /dev/clock`) and asks what is due. On the wall clock it asks with `?at=` instead.
+
 What you will see (the numbers, ids and dates change each run; the words are in Pa's language, Malay; the first week starts tomorrow on his clock):
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Mei (+6594444291) registered by phone code and signed in (the code read from the server log)
-✓ Mei set up a profile for Pa (+6593336332) as he asked: she is its steward
+✓ the server's clock reads 2026-09-15T01:24+08:00 in Singapore (frozen, NURA_FROZEN_CLOCK; the walk moves it with POST /dev/clock)
+✓ Mei (+6594445772) registered by phone code and signed in (the code read from the server log)
+✓ Mei set up a profile for Pa (+6593339308) as he asked: she is its steward
 ✓ the word cloud answers without signing in (GET /onboarding/conditions?language=ms): 20 words first, 68 in all, in Malay — Darah tinggi, Kolesterol tinggi, Kencing manis, Sakit jantung, Masalah buah pinggang …
 ✓ Mei opened the biography (POST /profiles/{id}/biography): step about_you, next save_settings; the words of the step, in Pa's Malay:
     Sedikit tentang anda
@@ -977,7 +980,7 @@ What you will see (the numbers, ids and dates change each run; the words are in 
     Label ini untuk ubat cair darah anda, Warfarin.
     Label ini menyebut 1 biji sekali sehari waktu malam.
     Label ini kata Dr Lim yang beri ubat ini.
-✓ Mei said no to "Kolesterol jahat anda 152 pada Khamis 7 September 2023." on its own (one line, one screen), then yes to the other 11 at once — a dispute (54326e0e…) opened beside the fact, which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is overwritten
+✓ Mei said no to "Kolesterol jahat anda 152 pada Khamis 7 September 2023." on its own (one line, one screen), then yes to the other 11 at once — a dispute (c0fc1d0f…) opened beside the fact, which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is overwritten
 ✓ the questions the papers raised, in Malay (step questions):
     Beberapa soalan tentang surat-surat anda
     Mei akan lihat surat itu sekali lagi.
@@ -986,7 +989,7 @@ What you will see (the numbers, ids and dates change each run; the words are in 
     Bila ujian gula anda yang terakhir?
     Bila ujian buah pinggang anda yang terakhir?
     3 lagi boleh tunggu kemudian.
-✓ Mei kept two of them (POST …/biography/questions): bp_numbers, discharge_letter — kept on the sitting, the seam to the visit loop's questions
+✓ Mei kept two of them (POST …/biography/questions): bp_numbers, discharge_letter — no visit yet, so they wait on the sitting for the first one booked
 ✓ Mei closed the biography: 2 papers, 13 facts, 1 disputed; the summary, in Malay:
     Nura simpan 2 surat anda.
     Nura catat 13 perkara daripada surat-surat anda.
@@ -995,19 +998,22 @@ What you will see (the numbers, ids and dates change each run; the words are in 
     Esok waktu sarapan, Nura akan minta satu perkara lagi.
     Ada 7 perkara untuk diminta, satu setiap hari.
     Halaman Hari Ini anda datang daripada apa yang anda beritahu kami.
-✓ Pa (+6593336332) registered by phone code and signed in (the code read from the server log)
+✓ Mei booked a visit with Dr Tan on 2026-10-01 (POST …/appointments): the two questions she kept on Day 0, when there was no visit, went on its list in the same request (E05, GET …/appointments/{id}/questions), and the sitting names the visit:
+    Adakah anda periksa tekanan darah di rumah?
+    Adakah anda ada surat hospital anda?
+✓ Pa (+6593339308) registered by phone code and signed in (the code read from the server log)
 ✓ Pa claimed the profile with his OK: he is its owner, Mei his chief
 ✓ Pa reads his first week (GET /profiles/{id}/plan): 7 prompts, one a day from tomorrow, 2026-09-16, at 07:30 on his clock (Asia/Singapore); nothing is due yet:
     day 1  2026-09-16T07:30  pending  Nombor tekanan darah biasa anda — Hari ini, ambil gambar mesin tekanan darah anda.
     day 2  2026-09-17T07:30  pending  Surat hospital anda — Hari ini, ambil gambar surat hospital anda.
     day 3  2026-09-18T07:30  pending  Ujian gula anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
     day 4  2026-09-19T07:30  pending  Ujian buah pinggang anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
-    day 5  2026-09-20T07:30  pending  Lawatan anda yang seterusnya ke Dr Tan — Hari ini, ambil gambar kad temu janji anda.
+    day 5  2026-09-20T07:30  done     Lawatan anda yang seterusnya ke Dr Tan — Hari ini, ambil gambar kad temu janji anda.
     day 6  2026-09-21T07:30  pending  Lawatan terakhir anda ke Dr Tan — Hari ini, ambil gambar slip lawatan terakhir anda.
     day 7  2026-09-22T07:30  pending  Kad insurans anda — Hari ini, ambil gambar kad insurans anda.
 ✓ tomorrow at 07:30 exactly one prompt is due (bp_numbers); Pa said Later to the insurance card (POST …/plan/later): it goes to the back of the week, asked once more on 2026-09-23 at 07:30; a second Later would retire it
 ✓ Pa's State shows his settings: cognitive (language ms, density simple, voice), functional (large text), preference (breakfast 07:30, called Pa), and the five conditions he told in the clinical dimension, as told — no posture moved (posture stable, reading language ms)
-✓ Kit (+6595556403) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6595557536) registered by phone code and signed in (the code read from the server log)
 ✓ Kit, his caregiver, reads the settings whole (a key to the record opens the conditions and the doctor); changing them is refused: NotTheirsToSetUp (403), and it is on Pa's trail
 checkpoint 15 passed: every step did what docs/checkpoints.md says
 ```

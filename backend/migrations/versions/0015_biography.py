@@ -108,6 +108,7 @@ def upgrade() -> None:
         sa.Column("preferred_name", sa.String(length=80), nullable=True),
         sa.Column("doctor_name", sa.String(length=80), nullable=True),
         sa.Column("breakfast_time", sa.String(length=5), nullable=True),
+        sa.Column("checkin_time", sa.String(length=5), nullable=True),
         sa.Column("birth_decade", sa.Integer(), nullable=True),
         sa.Column("event_id", sa.Uuid(), sa.ForeignKey("event.id"), nullable=False),
         sa.Column("set_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
@@ -171,8 +172,11 @@ def upgrade() -> None:
         sa.Column("kept", sa.Boolean(), nullable=False),
         sa.Column("decided_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         _when("decided_at"),
+        sa.Column("question_id", sa.Uuid(), sa.ForeignKey("question.id"), nullable=True),
+        _when("handed_over_at", nullable=True),
         _row_of_profile("biography_question"),
         _tied("biography_question", "session_id", "biography_session"),
+        _tied("biography_question", "question_id", "question"),
         sa.UniqueConstraint("session_id", "gap", name="uq_biography_question_session_id_gap"),
     )
     op.create_table(

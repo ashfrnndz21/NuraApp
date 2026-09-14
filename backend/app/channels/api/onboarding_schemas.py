@@ -85,6 +85,8 @@ class SettingsIn(BaseModel):
     preferred_name: str | None = Field(default=None, max_length=80)
     doctor_name: str | None = Field(default=None, max_length=80)
     breakfast_time: str | None = Field(default=None, pattern=CLOCK)
+    checkin_time: str | None = Field(default=None, pattern=CLOCK)
+    """When he is asked how he is (E17), "HH:MM" on his clock."""
     birth_decade: int | None = None
     """The decade he was born in, by its first year: 1950. Never the year."""
 
@@ -103,6 +105,7 @@ class SettingsIn(BaseModel):
             preferred_name=self.preferred_name,
             doctor_name=self.doctor_name,
             breakfast_time=parse_clock_time(self.breakfast_time),
+            checkin_time=parse_clock_time(self.checkin_time),
             birth_decade=self.birth_decade,
         )
 
@@ -128,6 +131,7 @@ class SettingsOut(BaseModel):
     preferred_name: str | None
     doctor_name: str | None
     breakfast_time: str | None
+    checkin_time: str | None
     birth_decade: int | None
     set_by_person_id: uuid.UUID | None
     set_at: datetime | None
@@ -152,6 +156,7 @@ class SettingsOut(BaseModel):
             preferred_name=values.preferred_name,
             doctor_name=None if "doctor_name" in view.withheld else values.doctor_name,
             breakfast_time=clock_time(values.breakfast_time),
+            checkin_time=clock_time(values.checkin_time),
             birth_decade=None if "birth_decade" in view.withheld else values.birth_decade,
             set_by_person_id=None if view.row is None else view.row.set_by_person_id,
             set_at=None if view.row is None else utc(view.row.set_at),
@@ -235,15 +240,28 @@ class LineOut(BaseModel):
 
 class QuestionOut(BaseModel):
     """A question the papers raised: its id (the gap it would fill — what `POST …/questions`
-    takes), the line, and what he said: kept, not this one (false), or nothing yet (null)."""
+    takes), the line, and what he said: kept, not this one (false), or nothing yet (null).
+    `state_id` is the State it was worked out under; `source` says where it came from, in his
+    words (what he told, which paper, or the papers together); `handed_over_to` is the visit
+    whose list a kept one is on (E05), null while it waits for a visit to be booked."""
 
     question_id: str
     line: str
     kept: bool | None
+    state_id: uuid.UUID | None
+    source: str | None
+    handed_over_to: uuid.UUID | None
 
     @classmethod
     def of(cls, question: Question) -> QuestionOut:
-        return cls(question_id=question.gap, line=question.line, kept=question.kept)
+        return cls(
+            question_id=question.gap,
+            line=question.line,
+            kept=question.kept,
+            state_id=question.state_id,
+            source=question.source,
+            handed_over_to=question.handed_over_to,
+        )
 
 
 class QuestionIn(BaseModel):

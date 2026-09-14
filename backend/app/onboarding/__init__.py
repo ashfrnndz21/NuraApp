@@ -12,13 +12,18 @@ done when it arrives by any route. `strings` holds every word he reads while thi
 
 Importing this package wires the first week's eager close onto the memory store: a fact that
 fills a gap closes its prompt in the same unit of work (`plan.close_prompts_on_fact` on
-`app.memory.semantic.after_fact_write`), the way State's recompute is wired by `app.state`.
+`app.memory.semantic.after_fact_write`), the way State's recompute is wired by `app.state`;
+and the hand-over of kept questions onto a visit booked later (`handover.hand_over_on_booking`
+on `app.memory.spine.after_appointment_booked`).
 """
 
 from __future__ import annotations
 
-from app.memory import semantic
+from app.memory import semantic, spine
+from app.onboarding.handover import hand_over_on_booking
 from app.onboarding.plan import close_prompts_on_fact
 
 if close_prompts_on_fact not in semantic.after_fact_write:
     semantic.after_fact_write.append(close_prompts_on_fact)
+if hand_over_on_booking not in spine.after_appointment_booked:
+    spine.after_appointment_booked.append(hand_over_on_booking)

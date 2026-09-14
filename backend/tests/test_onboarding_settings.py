@@ -108,6 +108,9 @@ async def test_settings_drive_density_and_voice_language_immediately(
     clinical = state["dimensions"]["clinical"]
     assert clinical["facts"]["condition"]["diabetes"]["value"] is True
     assert clinical["facts"]["doctor"]["name"]["value"] == "Dr Tan"
+    checkin = clinical["facts"]["setting"]["checkin_time"]
+    assert checkin["value"] == "18:00" and checkin["confidence_state"] == "confirmed_by_person"
+    assert saved["checkin_time"] == "18:00"
     decade = clinical["facts"]["setting"]["birth_decade"]
     assert decade["value"] == 1950 and decade["confidence_state"] == "confirmed_by_person"
     assert decade["event_id"] and saved["birth_decade"] == 1950
@@ -237,6 +240,7 @@ async def test_what_each_key_reads_and_who_may_write(deployment: Deployment) -> 
     assert sitis["birth_decade"] is None and kits["birth_decade"] == 1950
     assert (sitis["language"], sitis["voice_on"], sitis["large_text"]) == ("ms", True, True)
     assert (sitis["breakfast_time"], sitis["preferred_name"]) == ("07:30", "Pa")
+    assert sitis["checkin_time"] == "18:00"  # when he is asked how he is: not his record
     # Neither of them changes it.
     for token in (kit["token"], siti["token"]):
         await refused(deployment, "PUT", path, token, 403, "NotTheirsToSetUp", json=SETTINGS)

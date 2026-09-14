@@ -15,6 +15,7 @@ import uuid
 from typing import Any
 
 import pytest
+import sqlalchemy
 
 from app.memory.models import Artifact, ArtifactKind, ConfidenceState, Fact
 from app.safety.plain_words import verify
@@ -560,3 +561,180 @@ async def test_a_card_made_through_capture_joins_the_sitting(deployment: Deploym
     assert "Your cholesterol was 230 on Thursday 7 September 2023." in [
         line["line"] for line in english["read_back"]
     ]
+
+
+# --- a kept question is a question for the doctor (E05) -------------------------------------
+
+BP_QUESTION_MS = "Adakah anda periksa tekanan darah di rumah?"
+
+
+async def _book_dr_tan(
+    deployment: Deployment, token: str, profile_id: str, when: str = "2026-10-01T02:00:00Z"
+) -> str:
+    provider = await call(
+        deployment,
+        "POST",
+        f"/profiles/{profile_id}/providers",
+        token,
+        201,
+        json={"name": "Dr Tan", "kind": "doctor"},
+    )
+    booking = {"provider_id": provider["provider_id"], "scheduled_at": when, "purpose": "check-up"}
+    minted = await call(
+        deployment,
+        "POST",
+        f"/profiles/{profile_id}/confirmations",
+        token,
+        201,
+        json={"subject": "appointment", **booking},
+    )
+    visit = await call(
+        deployment,
+        "POST",
+        f"/profiles/{profile_id}/appointments",
+        token,
+        201,
+        json={**booking, "confirmation_id": minted["confirmation_id"]},
+    )
+    appointment_id: str = visit["appointment_id"]
+    return appointment_id
+
+
+async def _on_the_list(
+    deployment: Deployment, person_id: str, profile_id: str, appointment_id: str
+) -> list[str]:
+    """The visit's current questions (E05), as the loop reads them."""
+    from app.db import unit_of_work
+    from app.keys.context import resolve_key_context
+    from app.reasoning.visits.questions import current_questions
+    from app.regions import Region
+
+    async with deployment.sessions() as session:
+        async with unit_of_work(session):
+            context = await resolve_key_context(
+                session,
+                region=Region.SG,
+                person_id=uuid.UUID(person_id),
+                profile_id=uuid.UUID(profile_id),
+            )
+            found = await current_questions(
+                session, context=context, appointment_id=uuid.UUID(appointment_id)
+            )
+            texts = [one.text for one in found]
+        await session.commit()
+    return texts
+
+
+def _question(view: dict[str, Any], question_id: str) -> dict[str, Any]:
+    found: dict[str, Any] = next(q for q in view["questions"] if q["question_id"] == question_id)
+    return found
+
+
+async def test_a_question_kept_on_day_0_goes_to_the_visit_booked_later(
+    deployment: Deployment,
+) -> None:
+    """Option (a): with no visit it waits on the sitting; booking Dr Tan puts it on that
+    visit's list in the same request, on the booker's yes, and the sitting names the visit."""
+    from app.onboarding.models import BiographyQuestion
+
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    base = f"/profiles/{profile_id}/biography"
+    view = await through_the_papers(deployment, her, profile_id)
+    answered = await call(
+        deployment, "POST", f"{base}/read-back", her, 200, json={"answers": answers(view)}
+    )
+    # Every question carries the State it was worked out under and where it came from.
+    assert all(q["state_id"] for q in answered["questions"])
+    assert _question(answered, "bp_numbers")["source"] == (
+        "Ini daripada apa yang anda beritahu Nura pada Khamis 3 September 2026."
+    )
+    assert _question(answered, "kidney_result")["source"] == (
+        "Ini daripada label ubat anda, Selasa 12 Mac 2024."
+    )
+    kept = await call(
+        deployment,
+        "POST",
+        f"{base}/questions",
+        her,
+        200,
+        json={"question_id": "bp_numbers", "keep": True},
+    )
+    waiting = _question(kept, "bp_numbers")
+    assert waiting["kept"] is True and waiting["handed_over_to"] is None
+    async with deployment.sessions() as session:
+        row = (
+            await session.execute(
+                sqlalchemy.select(BiographyQuestion).where(BiographyQuestion.gap == "bp_numbers")
+            )
+        ).scalar_one()
+        assert row.question_id is None and row.handed_over_at is None
+
+    appointment_id = await _book_dr_tan(deployment, her, profile_id)
+    after = await call(deployment, "GET", base, her, 200)
+    assert _question(after, "bp_numbers")["handed_over_to"] == appointment_id
+    assert BP_QUESTION_MS in await _on_the_list(
+        deployment, mei["person_id"], profile_id, appointment_id
+    )
+    # The hand-over is written down: the sitting's question names the visit's question now.
+    from sqlalchemy import select
+
+    from app.audit.models import Action, AuditEntry, Outcome
+
+    async with deployment.sessions() as session:
+        handed = (
+            await session.execute(
+                select(BiographyQuestion).where(BiographyQuestion.gap == "bp_numbers")
+            )
+        ).scalar_one()
+        assert handed.question_id is not None and handed.handed_over_at is not None
+        lines = (
+            (
+                await session.execute(
+                    select(AuditEntry).where(
+                        AuditEntry.target == "biography_question",
+                        AuditEntry.target_id == handed.id,
+                        AuditEntry.action == Action.WRITE,
+                        AuditEntry.outcome == Outcome.ALLOWED,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(lines) >= 2  # kept, then handed over
+
+
+async def test_with_a_visit_coming_a_kept_question_goes_on_its_list_and_comes_off(
+    deployment: Deployment,
+) -> None:
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    base = f"/profiles/{profile_id}/biography"
+    view = await through_the_papers(deployment, her, profile_id)
+    appointment_id = await _book_dr_tan(deployment, her, profile_id)
+    await call(deployment, "POST", f"{base}/read-back", her, 200, json={"answers": answers(view)})
+
+    async def keep(flag: bool) -> dict[str, Any]:
+        said: dict[str, Any] = await call(
+            deployment,
+            "POST",
+            f"{base}/questions",
+            her,
+            200,
+            json={"question_id": "bp_numbers", "keep": flag},
+        )
+        return _question(said, "bp_numbers")
+
+    assert (await keep(True))["handed_over_to"] == appointment_id
+    assert BP_QUESTION_MS in await _on_the_list(
+        deployment, mei["person_id"], profile_id, appointment_id
+    )
+    assert (await keep(False))["handed_over_to"] is None
+    assert BP_QUESTION_MS not in await _on_the_list(
+        deployment, mei["person_id"], profile_id, appointment_id
+    )
+    assert (await keep(True))["handed_over_to"] == appointment_id
+    assert (await _on_the_list(deployment, mei["person_id"], profile_id, appointment_id)).count(
+        BP_QUESTION_MS
+    ) == 1

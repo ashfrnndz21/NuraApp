@@ -449,3 +449,52 @@ SUMMARY: Mapping[str, Mapping[str, str]] = {
         "ready": "您的今天页面来自您告诉我们的一切。",
     },
 }
+
+# --- where a question came from: what he told, which paper, or the papers together ----------
+
+# @patient
+SOURCE: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "told": "This comes from what you told Nura on {date}.",
+        "paper": "This comes from your {paper} of {date}.",
+        "plan": "Nura made this from your papers on {date}.",
+    },
+    "ms": {
+        "told": "Ini daripada apa yang anda beritahu Nura pada {date}.",
+        "paper": "Ini daripada {paper} anda, {date}.",
+        "plan": "Nura buat ini daripada surat-surat anda pada {date}.",
+    },
+    "zh": {
+        "told": "这来自您在{date}告诉Nura的事。",
+        "paper": "这来自您{date}的{paper}。",
+        "plan": "这是Nura在{date}根据您的文件做的。",
+    },
+}
+
+# @patient phrase
+PAPER_NAME: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "discharge_letter": "hospital letter",
+        "lab_result": "blood test",
+        "medicine": "medicine label",
+        "clinic_card": "clinic card",
+        "insurance_card": "insurance card",
+        "other": "paper",
+    },
+    "ms": {
+        "discharge_letter": "surat hospital",
+        "lab_result": "ujian darah",
+        "medicine": "label ubat",
+        "clinic_card": "kad klinik",
+        "insurance_card": "kad insurans",
+        "other": "surat",
+    },
+    "zh": {
+        "discharge_letter": "出院信",
+        "lab_result": "验血报告",
+        "medicine": "药标签",
+        "clinic_card": "诊所卡",
+        "insurance_card": "保险卡",
+        "other": "文件",
+    },
+}

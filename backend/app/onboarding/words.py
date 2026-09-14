@@ -18,6 +18,7 @@ from app.delivery.feed.compose import MONTHS, WEEKDAYS
 from app.onboarding.strings import (
     CHECK_AGAIN,
     KEPT_BESIDE,
+    PAPER_NAME,
     PROMPT_ACTION,
     PROMPT_HEADLINE,
     PROMPT_UNLOCK,
@@ -26,6 +27,7 @@ from app.onboarding.strings import (
     READ_BACK,
     SCRIPT_HEADLINE,
     SCRIPT_LINES,
+    SOURCE,
     SUMMARY,
     language_for,
 )
@@ -129,3 +131,22 @@ def summary(key: str, language: str, count: int | None = None) -> str | None:
     code = language_for(language)
     template = SUMMARY[code][key]
     return checked(template.format(count=count) if count is not None else template, code)
+
+
+def source_told(day: date, language: str) -> str | None:
+    """Where a question came from: what he told, on the day he told it."""
+    code = language_for(language)
+    return checked(SOURCE[code]["told"].format(date=plain_date(day, code)), code)
+
+
+def source_paper(paper: str, day: date, language: str) -> str | None:
+    """Where a question came from: one paper, by his word for it, and its date."""
+    code = language_for(language)
+    name = PAPER_NAME[code].get(paper, PAPER_NAME[code]["other"])
+    return checked(SOURCE[code]["paper"].format(paper=name, date=plain_date(day, code)), code)
+
+
+def source_plan(day: date, language: str) -> str | None:
+    """Where a question came from: the papers together, on the day Nura read them."""
+    code = language_for(language)
+    return checked(SOURCE[code]["plan"].format(date=plain_date(day, code)), code)

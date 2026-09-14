@@ -42,8 +42,7 @@ test: ; cd backend && python3 -m pytest -q
 lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
 # Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
 # `python3 -m app.safety.plain_words --explain` says what each rule checks; `--text "..."` checks one line.
-# app/onboarding/strings.py is passed by name until the rules file's paths name backend/app/onboarding/**.
-plain-words: ; cd backend && python3 -m app.safety.plain_words app/onboarding/strings.py
+plain-words: ; cd backend && python3 -m app.safety.plain_words
 # The web client (ADR 0001). `make web` is the dev server on http://127.0.0.1:5173/app/, proxying
 # /api to the backend `make dev` serves; `--host` also answers on the Mac's LAN address so a phone
 # on the same Wi-Fi can open it. `make build-web` writes web/dist, which `make dev` then serves at

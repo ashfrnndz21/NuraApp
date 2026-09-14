@@ -226,6 +226,16 @@ class Walk:
 
 def walk(client: httpx.Client, dev_log: Path) -> None:
     w = Walk(client, dev_log)
+    clock = check(client.get("/dev/clock"), 200, "the server says what time it is")
+    server_now = datetime.fromisoformat(clock["now"]).astimezone(SINGAPORE)
+    ok(
+        f"the server's clock reads {server_now.isoformat(timespec='minutes')} in Singapore "
+        + (
+            "(frozen, NURA_FROZEN_CLOCK; the walk moves it with POST /dev/clock)"
+            if clock["frozen"]
+            else "(the wall clock)"
+        )
+    )
     pa = Person("Pa", fresh_phone("+659333"))
     mei = Person("Mei", fresh_phone("+659444"))
     kit = Person("Kit", fresh_phone("+659555"))
@@ -421,13 +431,13 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     ok(
         "Mei kept two of them (POST …/biography/questions): "
         + ", ".join(kept_ids)
-        + " — kept on the sitting, the seam to the visit loop's questions"
+        + " — no visit yet, so they wait on the sitting for the first one booked"
     )
 
     # 8. The close: the summary and the first week.
     closed = w.send(mei, "POST", f"{base}/biography/close", 200, "Mei closes the biography")
     plan = closed["plan"]
-    tomorrow = (datetime.now(SINGAPORE) + timedelta(days=1)).date()
+    tomorrow = (server_now + timedelta(days=1)).date()
     first_due = f"{tomorrow.isoformat()}T07:30:00+08:00"
     if len(plan["prompts"]) != 7 or plan["prompts"][0]["due_local"] != first_due:
         raise fail("Mei closes the biography", why=f"plan {plan}")
@@ -437,6 +447,52 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "summary, in Malay:"
     )
     said(closed["summary"]["lines"])
+
+    # 8b. A visit is booked with Dr Tan: the questions Mei kept go on its list (E05).
+    provider = w.send(
+        mei, "POST", f"{base}/providers", 201, "Mei adds Dr Tan", name="Dr Tan", kind="doctor"
+    )
+    when = datetime.combine(
+        (server_now + timedelta(days=16)).date(), datetime.min.time().replace(hour=10), SINGAPORE
+    ).isoformat()
+    booking = {"provider_id": provider["provider_id"], "scheduled_at": when, "purpose": "check-up"}
+    yes = w.send(
+        mei,
+        "POST",
+        f"{base}/confirmations",
+        201,
+        "Mei says OK to the visit",
+        subject="appointment",
+        **booking,
+    )
+    visit = w.send(
+        mei,
+        "POST",
+        f"{base}/appointments",
+        201,
+        "Mei books the visit with Dr Tan",
+        confirmation_id=yes["confirmation_id"],
+        **booking,
+    )
+    listed = w.get(
+        mei,
+        f"{base}/appointments/{visit['appointment_id']}/questions",
+        "Mei reads the visit's questions",
+    )
+    texts = [one["text"] for one in listed["questions"]]
+    kept_lines = [q["line"] for q in shown[:2]]
+    after_booking = w.get(mei, f"{base}/biography", "Mei reads the biography after the booking")
+    went = {q["question_id"]: q["handed_over_to"] for q in after_booking["questions"]}
+    if not all(line in texts for line in kept_lines) or any(
+        went.get(q["question_id"]) != visit["appointment_id"] for q in shown[:2]
+    ):
+        raise fail("Mei books the visit with Dr Tan", why=f"list {texts}, handed over {went}")
+    ok(
+        f"Mei booked a visit with Dr Tan on {when[:10]} (POST …/appointments): the two questions she "
+        "kept on Day 0, when there was no visit, went on its list in the same request (E05, "
+        "GET …/appointments/{id}/questions), and the sitting names the visit:"
+    )
+    said(kept_lines)
 
     # 9. Pa claims the profile, as in checkpoint 4, and sees his first week.
     w.register(pa, "ms")
@@ -472,7 +528,15 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             f"{prompt['headline']} — {prompt['action']}",
             flush=True,
         )
-    due = w.get(pa, f"{base}/plan", "Pa asks what is due tomorrow at 07:30", at=first_due)
+    if clock["frozen"]:
+        check(
+            client.post("/dev/clock", json={"at": first_due}),
+            200,
+            "the clock is moved to tomorrow at 07:30",
+        )
+        due = w.get(pa, f"{base}/plan", "Pa asks what is due now, at 07:30 tomorrow")
+    else:
+        due = w.get(pa, f"{base}/plan", "Pa asks what is due tomorrow at 07:30", at=first_due)
     if [p["prompt"] for p in due["due"]] != [plan["prompts"][0]["prompt"]]:
         raise fail("Pa asks what is due tomorrow at 07:30", why=f"got {due['due']}")
     later = w.send(
