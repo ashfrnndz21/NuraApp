@@ -333,6 +333,7 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         )
         connection.execute(
             Artifact.__table__.insert().values(
+                written_scope="records",
                 id=photo,
                 profile_id=profile,
                 kind="photo",
@@ -364,6 +365,7 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         told = uuid.uuid4()
         connection.execute(
             Event.__table__.insert().values(
+                written_scope="records",
                 id=told,
                 profile_id=profile,
                 kind="visit",

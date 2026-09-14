@@ -59,6 +59,7 @@ from app.ingestion.review import (
     type_field,
 )
 from app.keys.context import KeyContext
+from app.memory.episodic import withheld_provenance
 from app.memory.models import SourceChannel
 from app.memory.semantic import current_facts
 
@@ -236,9 +237,11 @@ async def facts(
     """The facts that hold now, with provenance and confirmer, narrowed to one subject. The
     scope is the subject's (`app.keys.scopes.scope_for_subject`): medicines under the
     medicines scope, readings under the readings scope, everything else — or all of it,
-    with no subject — under the record's."""
+    with no subject — the facts under each scope the key holds. A fact whose artefact or
+    event the key may not follow is shown with that reference withheld, by name."""
     found = await current_facts(session, context=context, subject=subject)
-    return [FactOut.of(fact) for fact in found]
+    withheld = await withheld_provenance(session, context=context, rows=found)
+    return [FactOut.of(fact, withheld.get(fact.id, ())) for fact in found]
 
 
 # --- notes on an event (E02-06) ------------------------------------------------------------

@@ -48,7 +48,14 @@ from app.keys.scopes import Scope
 from app.medicines.models import ChangeKind, InteractionFlag, MedicationLine
 from app.medicines.service import today
 from app.medicines.strings import PLAIN_NAME
-from app.memory.episodic import fact_cites_only_what_is_held_here, held_here
+from app.memory.episodic import (
+    WITHHELD_ARTIFACT,
+    WITHHELD_EVENT,
+    fact_cites_only_what_is_held_here,
+    held_here,
+    withheld_provenance,
+    withheld_references,
+)
 from app.memory.models import (
     Appointment,
     AppointmentStatus,
@@ -240,13 +247,25 @@ async def _medicines(
         session, MedicationLine, context, Scope.MEDICINES, where=newer(MedicationLine.asserted_at)
     )
     changed: list[dict[str, Any]] = []
+    # A line is the medicines'; the label photo it came from is the record's. A key without
+    # the record reads the line and is told the photo is withheld, never its id.
+    sources = await withheld_references(
+        session,
+        context=context,
+        cited=[
+            (line.id, Scope.MEDICINES, line.source_artifact_id, line.source_event_id)
+            for line in lines
+        ],
+    )
     for line in sorted(lines, key=lambda each: as_utc(each.asserted_at)):
         name = _name(registry, line.generic, said.language)
+        hidden = sources.get(line.id, ())
         refs = {
             "medication_line_ids": _ids(line.id, line.supersedes_id),
             "fact_ids": _ids(line.fact_id),
-            "artifact_ids": _ids(line.source_artifact_id),
-            "event_ids": _ids(line.source_event_id),
+            "artifact_ids": () if WITHHELD_ARTIFACT in hidden else _ids(line.source_artifact_id),
+            "event_ids": () if WITHHELD_EVENT in hidden else _ids(line.source_event_id),
+            **({"withheld": hidden} if hidden else {}),
         }
         if line.change_kind == ChangeKind.DOSE_CHANGE:
             said.say("medicines", "medicine_changed", refs, name=name)
@@ -262,8 +281,9 @@ async def _medicines(
                 "change_kind": line.change_kind.value,
                 "fact_id": str(line.fact_id),
                 "source_artifact_id": _ids(line.source_artifact_id)[0]
-                if line.source_artifact_id
+                if line.source_artifact_id and WITHHELD_ARTIFACT not in hidden
                 else None,
+                **({"withheld": list(hidden)} if hidden else {}),
             }
         )
     flags = await audited_read(
@@ -300,11 +320,19 @@ async def _medicines(
             )
 
 
-def _provenance(fact: Fact) -> dict[str, str | None]:
+def _provenance(fact: Fact, withheld: tuple[str, ...] = ()) -> dict[str, Any]:
+    """The fact and what it cites — a reference the key may not follow named, never shown."""
     return {
         "fact_id": str(fact.id),
-        "artifact_id": None if fact.artifact_id is None else str(fact.artifact_id),
-        "event_id": None if fact.event_id is None else str(fact.event_id),
+        "artifact_id": (
+            None
+            if fact.artifact_id is None or WITHHELD_ARTIFACT in withheld
+            else str(fact.artifact_id)
+        ),
+        "event_id": (
+            None if fact.event_id is None or WITHHELD_EVENT in withheld else str(fact.event_id)
+        ),
+        **({"withheld": list(withheld)} if withheld else {}),
     }
 
 
@@ -339,6 +367,9 @@ async def _facts(
                 session, Fact, context, scope, where=(Fact.id.in_(replaced), fact_is_under(scope))
             )
             olds = {old.id: old for old in found}
+        withheld = await withheld_provenance(
+            session, context=context, rows=[*rows, *olds.values()]
+        )
         new_groups: dict[tuple[str, str], list[Fact]] = {}
         fixed_groups: dict[tuple[str, str], list[tuple[Fact, Fact]]] = {}
         for fact in sorted(rows, key=lambda each: as_utc(each.asserted_at)):
@@ -348,8 +379,8 @@ async def _facts(
                     {
                         "subject": fact.subject,
                         "attribute": fact.attribute,
-                        "old": _provenance(old),
-                        "new": _provenance(fact),
+                        "old": _provenance(old, withheld.get(old.id, ())),
+                        "new": _provenance(fact, withheld.get(fact.id, ())),
                     }
                 )
                 if fact.subject != MEDICATION:
@@ -361,12 +392,22 @@ async def _facts(
             if fact.subject != MEDICATION:
                 new_groups.setdefault((fact.subject, said.day(fact.asserted_at)), []).append(fact)
         for (subject, day), facts in new_groups.items():
+            hidden = {name for f in facts for name in withheld.get(f.id, ())}
+            shown_artifacts = {
+                f.artifact_id
+                for f in facts
+                if f.artifact_id and WITHHELD_ARTIFACT not in withheld.get(f.id, ())
+            }
+            shown_events = {
+                f.event_id
+                for f in facts
+                if f.event_id and WITHHELD_EVENT not in withheld.get(f.id, ())
+            }
             refs = {
                 "fact_ids": _ids(*(f.id for f in facts)),
-                "artifact_ids": _ids(
-                    *sorted({f.artifact_id for f in facts if f.artifact_id}, key=str)
-                ),
-                "event_ids": _ids(*sorted({f.event_id for f in facts if f.event_id}, key=str)),
+                "artifact_ids": _ids(*sorted(shown_artifacts, key=str)),
+                "event_ids": _ids(*sorted(shown_events, key=str)),
+                **({"withheld": tuple(sorted(hidden))} if hidden else {}),
             }
             said.say(
                 "facts", "new_fact", refs, what=words.what_word(subject, said.language), date=day
@@ -419,15 +460,31 @@ async def _papers(
     hung = await audited_read(
         session, Attachment, context, Scope.RECORDS, where=newer(Attachment.attached_at)
     )
+    # A paper put with a visit or an illness is shown under the artefact's own scope: the
+    # hanging of one this key may not read says so by name, never by the artefact's id.
+    readable: set[uuid.UUID] = set()
+    if hung:
+        readable = {
+            artifact.id
+            for artifact in await audited_read(
+                session,
+                Artifact,
+                context,
+                Scope.RECORDS,
+                where=(Artifact.id.in_([each.artifact_id for each in hung]), held_here(context)),
+            )
+        }
     for each in hung:
+        shown = each.artifact_id in readable
         said.say(
             "papers",
             "attached",
             {
                 "attachment_ids": _ids(each.id),
-                "artifact_ids": _ids(each.artifact_id),
+                "artifact_ids": _ids(each.artifact_id) if shown else (),
                 "episode_ids": _ids(each.episode_id),
                 "appointment_ids": _ids(each.appointment_id),
+                **({} if shown else {"withheld": (WITHHELD_ARTIFACT,)}),
             },
         )
     said.sections["papers"] = {
