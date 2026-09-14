@@ -206,6 +206,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"{base}/consents/sharing",
         {
             "holder_phone_e164": mei.phone_e164,
+            "holder_display_name": mei.name,
             "scopes": EVERY_PART,
             "relationship": "daughter",
             "language": "en",
