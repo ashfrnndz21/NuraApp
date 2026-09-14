@@ -4,18 +4,27 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
-from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.models import (
+    DOCUMENTED_BASES,
+    Consent,
+    ConsentBasis,
+    ConsentChannel,
+    ConsentPurpose,
+)
 from app.consent.service import RecordConsent
-from app.identity.models import Person, Profile
-from app.keys.context import KeyContext
+from app.drafts import ConfirmSubject
+from app.identity.doors import Claimable, Doors, Evidence
+from app.identity.models import Person, Profile, Stewardship
+from app.keys.confirm import Confirmation
+from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
-from app.memory.models import ConfidenceState, Event, Fact
+from app.memory.models import ArtifactKind, ConfidenceState, Event, Fact
 from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
@@ -186,7 +195,9 @@ class ProfileCreate(BaseModel):
 
 
 class ProfileOut(BaseModel):
-    """The profile as the caller holds it: its name, and what his key opens on it."""
+    """The profile as the caller holds it: its name, what his key opens on it, and on what
+    footing he reaches it — its owner, a key holder, its steward until the patient claims
+    it, or the patient before he has (`app.keys.context.Standing`)."""
 
     profile_id: uuid.UUID
     display_name: str
@@ -194,6 +205,7 @@ class ProfileOut(BaseModel):
     region: Region
     role: KeyRole | None
     scopes: list[Scope]
+    standing: Standing
 
     @classmethod
     def of(cls, profile: Profile, context: KeyContext) -> ProfileOut:
@@ -204,6 +216,185 @@ class ProfileOut(BaseModel):
             region=profile.region,
             role=context.role,
             scopes=sorted(context.scopes),
+            standing=context.standing,
+        )
+
+
+# --- for someone I care for, and the claim ----------------------------------------------
+
+
+class EvidenceIn(BaseModel):
+    """The document behind a documented basis — the lasting power of attorney, the doctor's
+    letter — already stored in the region; it becomes the first artefact on the graph."""
+
+    kind: ArtifactKind
+    storage_key: str = Field(min_length=1, max_length=512)
+    content_type: str = Field(min_length=1, max_length=128)
+    sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
+    captured_at: datetime
+
+    def as_evidence(self) -> Evidence:
+        return Evidence(
+            kind=self.kind,
+            storage_key=self.storage_key,
+            content_type=self.content_type,
+            sha256=self.sha256.lower(),
+            captured_at=self.captured_at,
+        )
+
+
+class ProfileForSomeone(BaseModel):
+    """Set up a graph for someone by their phone number, held by the caller until claimed.
+
+    `consent` is the agreement to Nura keeping the record as the caller read it; `basis`
+    is what entitles him to give it for the patient: the patient asked (his claim is the
+    proof to come), or a lasting power of attorney or a doctor's letter, with `evidence`.
+    `relationship` is who the caller is to the patient, in the caller's words, for the
+    claim to name him by.
+    """
+
+    patient_phone_e164: str = Field(pattern=PHONE)
+    display_name: str = Field(min_length=1, max_length=120)
+    language: str = Field(min_length=2, max_length=16)
+    consent: ConsentIn
+    basis: ConsentBasis
+    relationship: str | None = Field(default=None, min_length=1, max_length=80)
+    evidence: EvidenceIn | None = None
+
+    @model_validator(mode="after")
+    def _a_document_for_a_documented_basis(self) -> ProfileForSomeone:
+        documented = self.basis in DOCUMENTED_BASES
+        if documented and self.evidence is None:
+            raise ValueError(f"{self.basis.value} needs the document as evidence")
+        if not documented and self.evidence is not None:
+            raise ValueError(f"{self.basis.value} takes no document")
+        return self
+
+
+class StewardshipOut(BaseModel):
+    """Who holds this graph for the patient, on what footing, and whether he has claimed it."""
+
+    stewardship_id: uuid.UUID
+    profile_id: uuid.UUID
+    steward_person_id: uuid.UUID
+    steward_display_name: str
+    relationship: str | None
+    basis: ConsentBasis
+    key_id: uuid.UUID
+    consent_id: uuid.UUID
+    opened_at: datetime
+    closed_at: datetime | None
+    claimed_by_person_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, stewardship: Stewardship, steward_display_name: str) -> StewardshipOut:
+        return cls(
+            stewardship_id=stewardship.id,
+            profile_id=stewardship.profile_id,
+            steward_person_id=stewardship.steward_person_id,
+            steward_display_name=steward_display_name,
+            relationship=stewardship.relationship,
+            basis=stewardship.basis,
+            key_id=stewardship.key_id,
+            consent_id=stewardship.consent_id,
+            opened_at=stewardship.opened_at,
+            closed_at=stewardship.closed_at,
+            claimed_by_person_id=stewardship.claimed_by_person_id,
+        )
+
+
+class ClaimableOut(BaseModel):
+    """A graph set up for the caller, waiting for his OK: who set it up, what they keep
+    seeing once it is his, and the words he is agreeing to, in the language asked for.
+    The claim's confirmation is minted for exactly these fields (`POST
+    /profiles/{id}/confirmations` with subject `claim` and this `language`)."""
+
+    profile_id: uuid.UUID
+    display_name: str
+    language: str
+    stewardship_id: uuid.UUID
+    steward_person_id: uuid.UUID
+    set_up_by: str
+    relationship: str | None
+    parts: list[Scope]
+    words_language: str
+    hold_wording_version: str
+    hold_words: str
+    sharing_wording_version: str
+    sharing_words: str
+
+    @classmethod
+    def of(cls, claimable: Claimable) -> ClaimableOut:
+        return cls(
+            profile_id=claimable.profile.id,
+            display_name=claimable.profile.display_name,
+            language=claimable.profile.language,
+            stewardship_id=claimable.stewardship.id,
+            steward_person_id=claimable.stewardship.steward_person_id,
+            set_up_by=claimable.steward.display_name,
+            relationship=claimable.stewardship.relationship,
+            parts=[Scope(name) for name in claimable.draft.scopes],
+            words_language=claimable.draft.language,
+            hold_wording_version=claimable.draft.hold_wording_version,
+            hold_words=claimable.hold_words,
+            sharing_wording_version=claimable.draft.sharing_wording_version,
+            sharing_words=claimable.sharing_words,
+        )
+
+
+class ClaimConfirmIn(BaseModel):
+    """A yes to claiming this graph, as shown: the words in `language`. The draft itself is
+    recomputed from the graph, so nothing here can name a different steward or wider parts."""
+
+    subject: Literal[ConfirmSubject.CLAIM]
+    language: str = Field(min_length=2, max_length=16)
+
+
+ConfirmIn = ClaimConfirmIn
+"""What `POST /profiles/{id}/confirmations` takes, by subject. Facts and visits are minted
+by the surfaces that show them once those exist; the claim is the first."""
+
+
+class ConfirmationOut(BaseModel):
+    """The yes, handed once to the person who said it, so he can spend it."""
+
+    confirmation_id: uuid.UUID
+    subject: ConfirmSubject
+    expires_at: datetime
+
+    @classmethod
+    def of(cls, confirmation: Confirmation) -> ConfirmationOut:
+        return cls(
+            confirmation_id=confirmation.id,
+            subject=confirmation.subject,
+            expires_at=confirmation.expires_at,
+        )
+
+
+class ClaimIn(BaseModel):
+    """Claim the graph with the yes minted for it, in the language the words were read in."""
+
+    confirmation_id: uuid.UUID
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: ConsentChannel = ConsentChannel.APP
+
+
+class DoorsOut(BaseModel):
+    """Which doors apply to the caller: his own graph, graphs set up for him waiting for
+    his claim, graphs he was let in to by a key, and graphs he holds for someone."""
+
+    own: ProfileOut | None
+    claimable: list[ClaimableOut]
+    invited: list[ProfileOut]
+    stewarding: list[ProfileOut]
+
+    @classmethod
+    def of(cls, doors: Doors) -> DoorsOut:
+        return cls(
+            own=None if doors.own is None else ProfileOut.of(doors.own.profile, doors.own.context),
+            claimable=[ClaimableOut.of(each) for each in doors.claimable],
+            invited=[ProfileOut.of(each.profile, each.context) for each in doors.invited],
+            stewarding=[ProfileOut.of(each.profile, each.context) for each in doors.stewarding],
         )
 
 

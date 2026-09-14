@@ -1,8 +1,12 @@
-"""Person and Profile, and the two rows that get a person signed in.
+"""Person and Profile, the Stewardship that holds a Profile until its owner claims it, and
+the two rows that get a person signed in.
 
 A Person is an account: a phone number or an email, a language, a region. A Profile is a
-health graph with exactly one owner, and a Person owns at most one. Everything else about a
-person's reach into someone else's graph is a Key, never a column here.
+health graph with exactly one owner, and a Person owns at most one. Before the owner has
+claimed it, a steward holds it on a declared basis (E01): the Profile has no owner yet, the
+number it was set up against says who may claim it, and the Stewardship says who holds it
+meanwhile and on what footing. Everything else about a person's reach into someone else's
+graph is a Key, never a column here.
 
 A LoginChallenge is one attempt to prove a phone number or an email address; a LoginSession
 is what the proof earns. Neither holds a secret in the clear.
@@ -17,7 +21,8 @@ from enum import StrEnum
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, as_utc, enum_column, utcnow
+from app.consent.models import ConsentBasis
+from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
 from app.regions import Region
 
 
@@ -36,7 +41,13 @@ class Person(Base):
 
 
 class Profile(Base):
-    """The health graph. Pinned to a region at creation and owned by exactly one Person."""
+    """The health graph. Pinned to a region at creation and owned by exactly one Person.
+
+    `owner_person_id` is empty only while the graph is stewarded: set up for someone by his
+    number, not yet claimed by him. `patient_phone_e164` is that number — the owner's own
+    when he opened the graph himself — and there is one graph per number, ever: that is how
+    two siblings cannot set up two graphs for one father.
+    """
 
     __tablename__ = "profile"
 
@@ -44,8 +55,44 @@ class Profile(Base):
     region: Mapped[Region] = mapped_column(enum_column(Region, "region"))
     display_name: Mapped[str] = mapped_column(String(120))
     language: Mapped[str] = mapped_column(String(16), default="en")
-    owner_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), unique=True)
+    owner_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), unique=True, default=None
+    )
+    patient_phone_e164: Mapped[str | None] = mapped_column(String(20), unique=True, default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    @property
+    def is_stewarded(self) -> bool:
+        return self.owner_person_id is None
+
+
+class Stewardship(ProfileScoped, Base):
+    """Who holds a graph for the patient until he claims it, and on what footing.
+
+    Opened when a profile is set up for someone (`app.identity.doors`), closed by his claim.
+    `key_id` is the chief key the steward holds meanwhile; `consent_id` is the agreement to
+    Nura keeping the record that the steward gave on the patient's behalf, and that row
+    carries the document or the recording behind `basis`. `relationship` is who the
+    steward said he is to the patient, in the steward's words, for the claim to name him
+    ("Mei, your daughter"). The row stays after the claim, closed, naming who claimed it.
+    """
+
+    __tablename__ = "stewardship"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    steward_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    key_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("key.id"))
+    consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("consent.id"))
+    basis: Mapped[ConsentBasis] = mapped_column(enum_column(ConsentBasis, "consent_basis"))
+    relationship: Mapped[str | None] = mapped_column(String(80), default=None)
+    opened_at: Mapped[datetime] = mapped_column(default=utcnow)
+    closed_at: Mapped[datetime | None] = mapped_column(default=None)
+    claimed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
+
+    def is_open(self, now: datetime) -> bool:
+        return self.closed_at is None or as_utc(self.closed_at) > now
 
 
 class LoginChannel(StrEnum):

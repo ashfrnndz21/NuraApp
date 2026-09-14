@@ -28,6 +28,7 @@ class ConfirmSubject(StrEnum):
     FACT = "fact"
     APPOINTMENT = "appointment"
     APPOINTMENT_STATUS = "appointment_status"
+    CLAIM = "claim"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +109,39 @@ class StatusChange:
         return {"appointment_id": self.appointment_id, "status": self.status}
 
 
-Draft = FactDraft | AppointmentDraft | StatusChange
+@dataclass(frozen=True, slots=True)
+class ClaimDraft:
+    """A graph about to become the patient's own: which stewardship ends, who set it up,
+    which parts that person keeps seeing, and the words — which version, in which
+    language — the patient read before saying it is his (E01)."""
+
+    stewardship_id: uuid.UUID
+    steward_person_id: uuid.UUID
+    scopes: tuple[str, ...]
+    language: str
+    hold_wording_version: str
+    sharing_wording_version: str
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.CLAIM
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.stewardship_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "stewardship_id": self.stewardship_id,
+            "steward_person_id": self.steward_person_id,
+            "scopes": list(self.scopes),
+            "language": self.language,
+            "hold_wording_version": self.hold_wording_version,
+            "sharing_wording_version": self.sharing_wording_version,
+        }
+
+
+Draft = FactDraft | AppointmentDraft | StatusChange | ClaimDraft
 
 
 def _canonical(value: Any) -> Any:

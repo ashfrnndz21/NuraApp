@@ -30,7 +30,7 @@ from app.audit.access import audited_read, audited_write
 from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
-from app.drafts import ConfirmSubject, Draft, FactDraft, digest_of
+from app.drafts import ClaimDraft, ConfirmSubject, Draft, FactDraft, digest_of
 from app.errors import Refusal
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope, scope_for_subject
@@ -42,9 +42,12 @@ CONFIRM_WINDOW = timedelta(minutes=10)
 
 
 def scope_of(draft: Draft) -> Scope:
-    """The scope of the act: a fact's is from its subject, a visit's is the visits scope."""
+    """The scope of the act: a fact's is from its subject, a visit's is the visits scope, and
+    a claim's is the face of the graph — whose it is — which is all a claimant holds."""
     if isinstance(draft, FactDraft):
         return scope_for_subject(draft.subject)
+    if isinstance(draft, ClaimDraft):
+        return Scope.PROFILE
     return Scope.VISITS
 
 

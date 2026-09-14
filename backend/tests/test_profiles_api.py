@@ -197,6 +197,9 @@ PROFILE_ROUTES = (
     ("GET", "/profiles/{id}/notes"),
     ("POST", "/profiles/{id}/notes"),
     ("GET", "/profiles/{id}/medicines"),
+    ("POST", "/profiles/{id}/confirmations"),
+    ("POST", "/profiles/{id}/claim"),
+    ("GET", "/profiles/{id}/stewardship"),
 )
 
 

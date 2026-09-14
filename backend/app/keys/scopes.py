@@ -64,6 +64,11 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
 """Private notes and money are the patient's own: only a chief is ever preset to them.
 Every role holds PROFILE: a key that opens nothing of whose graph it is opens nothing."""
 
+STEWARD_SCOPES = ALL_SCOPES - {Scope.NOTES}
+"""What the person who set a graph up for someone holds until that person claims it: a chief
+key over everything but the notes. Private notes are the patient's own words for himself,
+and there is no patient here yet to have written any or to have let anyone read them."""
+
 
 _SUBJECT_SCOPES: dict[str, Scope] = {
     "medicine": Scope.MEDICINES,

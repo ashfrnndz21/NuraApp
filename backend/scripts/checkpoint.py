@@ -631,7 +631,327 @@ def checkpoint_3(client: httpx.Client) -> None:
         )
 
 
-CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3}
+def _for_someone(patient: Person, language: str) -> JSON:
+    return {
+        "patient_phone_e164": patient.phone_e164,
+        "display_name": patient.name,
+        "language": language,
+        "consent": {"wording_version": HOLD_WORDING, "language": "en", "captured_via": "app"},
+        "basis": "patient_asked",
+        "relationship": "daughter",
+    }
+
+
+def checkpoint_4(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659333"))
+    mei = Person("Mei", fresh_phone("+659444"))
+    kit = Person("Kit", fresh_phone("+659555"))
+
+    # 1. Mei registers and sets up a profile for Pa, by his number. She is its steward.
+    register(client, mei, "en")
+    opened = check(
+        client.post(
+            "/profiles/for-someone", headers=bearer(mei.token), json=_for_someone(pa, "ms")
+        ),
+        201,
+        "Mei sets up a profile for Pa by his number",
+    )
+    profile_id: str = opened["profile_id"]
+    if opened["standing"] != "steward" or opened["role"] != "chief":
+        raise fail("Mei sets up a profile for Pa by his number", why=f"got {opened}")
+    if "notes" in opened["scopes"] or not {"medicines", "family", "records"} <= set(
+        opened["scopes"]
+    ):
+        raise fail("Mei sets up a profile for Pa by his number", why=f"scopes {opened['scopes']}")
+    ok(
+        f"Mei set up a profile for Pa ({pa.phone_e164}) on the basis that he asked: she is its "
+        "steward, holding a chief key over everything but his private notes"
+    )
+    doors = check(
+        client.get("/doors", headers=bearer(mei.token)), 200, "Mei asks which doors apply"
+    )
+    if [d["profile_id"] for d in doors["stewarding"]] != [profile_id] or doors["own"] is not None:
+        raise fail("Mei asks which doors apply", why=f"got {doors}")
+    ok("Mei's doors (GET /doors): no profile of her own, one she is stewarding — Pa's")
+
+    # 2. Pa's son tries the same number: refused, in words that name nobody. So is Mei, again.
+    register(client, kit, "en")
+    second = client.post(
+        "/profiles/for-someone",
+        headers=bearer(kit.token),
+        json={**_for_someone(pa, "ms"), "relationship": "son"},
+    )
+    refused(second, 409, "AlreadySetUp", "Kit sets up a profile for the same number")
+    if profile_id in second.text or mei.person_id in second.text:
+        raise fail("Kit sets up a profile for the same number", second, "the answer named someone")
+    again = client.post(
+        "/profiles/for-someone", headers=bearer(mei.token), json=_for_someone(pa, "ms")
+    )
+    refused(again, 409, "AlreadySetUp", "Mei sets up the same profile again")
+    if again.text != second.text:
+        raise fail("Mei sets up the same profile again", again, "not the same words as Kit got")
+    ok(
+        f"Kit ({kit.phone_e164}) tried the same number and was refused: AlreadySetUp (409), the "
+        f"answer naming nobody — {second.text}; Mei trying again got the very same words"
+    )
+
+    # 3. What the steward can and cannot do while nobody owns the profile.
+    medicines = check(
+        client.get(f"/profiles/{profile_id}/medicines", headers=bearer(mei.token)),
+        200,
+        "Mei reads Pa's medicines as steward",
+    )
+    if medicines != []:
+        raise fail("Mei reads Pa's medicines as steward", why=f"expected none yet, got {medicines}")
+    posted = check(
+        client.post(
+            f"/profiles/{profile_id}/readings",
+            headers=bearer(mei.token),
+            json={"systolic": 138, "diastolic": 84},
+        ),
+        201,
+        "Mei records a blood-pressure reading for Pa as steward",
+    )
+    if not posted.get("event_id") or not posted.get("fact_id"):
+        raise fail("Mei records a blood-pressure reading for Pa as steward", why=f"got {posted}")
+    notes = client.get(f"/profiles/{profile_id}/notes", headers=bearer(mei.token))
+    refused(notes, 403, "OutOfScope", "Mei reads Pa's private notes as steward")
+    held = check(
+        client.get(f"/profiles/{profile_id}/stewardship", headers=bearer(mei.token)),
+        200,
+        "Mei reads the stewardship",
+    )
+    if held["basis"] != "patient_asked" or held["closed_at"] is not None:
+        raise fail("Mei reads the stewardship", why=f"got {held}")
+    steward_key_id: str = held["key_id"]
+    trail = check(
+        client.get(f"/profiles/{profile_id}/audit", headers=bearer(mei.token)),
+        200,
+        "Mei reads the trail as steward",
+    )
+    ok(
+        "as steward Mei reads the medicines (none yet), records a blood-pressure reading for Pa, "
+        "138/84 (one event, one fact resting on it, under the agreement she gave for him), reads "
+        f"the stewardship (open, basis patient_asked) and the trail ({len(trail)} lines); the "
+        "private notes refuse her: OutOfScope notes (403)"
+    )
+
+    # 4. Pa registers with that number and finds the profile waiting for him.
+    register(client, pa, "ms")
+    me = check(client.get("/me", headers=bearer(pa.token)), 200, "Pa asks who he is")
+    if me["profile_id"] is not None:
+        raise fail(
+            "Pa asks who he is", why="a fresh number already owns a profile; run make reset-db"
+        )
+    beside = client.post(
+        "/profiles/mine",
+        headers=bearer(pa.token),
+        json={
+            "consent": {"wording_version": HOLD_WORDING, "language": "ms", "captured_via": "app"}
+        },
+    )
+    refused(beside, 409, "WaitingToBeClaimed", "Pa opens a second profile beside the one waiting")
+    ok(
+        "Pa registered; opening his own profile beside the one waiting was refused: WaitingToBeClaimed (409)"
+    )
+    waiting = check(
+        client.get("/profiles/mine/claimable", headers=bearer(pa.token)),
+        200,
+        "Pa asks what is waiting for him",
+    )
+    if len(waiting) != 1 or waiting[0]["profile_id"] != profile_id:
+        raise fail("Pa asks what is waiting for him", why=f"got {waiting}")
+    offer = waiting[0]
+    if (
+        offer["set_up_by"] != mei.name
+        or "notes" in offer["parts"]
+        or offer["words_language"] != "ms"
+    ):
+        raise fail("Pa asks what is waiting for him", why=f"got {offer}")
+    ok(
+        f"Pa sees the profile waiting for him (GET /profiles/mine/claimable): set up by {offer['set_up_by']}, "
+        f"{offer['relationship']}, who would keep seeing {len(offer['parts'])} parts; the words he reads, in Malay:"
+    )
+    for line in offer["hold_words"].splitlines():
+        print(f"    {line}")
+    for line in offer["sharing_words"].splitlines():
+        print(f"    {line}")
+
+    # 5. Pa mints his OK for exactly that, and claims.
+    minted = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(pa.token),
+            json={"subject": "claim", "language": "ms"},
+        ),
+        201,
+        "Pa says OK",
+    )
+    claimed = check(
+        client.post(
+            f"/profiles/{profile_id}/claim",
+            headers=bearer(pa.token),
+            json={"confirmation_id": minted["confirmation_id"], "language": "ms"},
+        ),
+        200,
+        "Pa claims the profile",
+    )
+    if claimed["standing"] != "owner" or "notes" not in claimed["scopes"]:
+        raise fail("Pa claims the profile", why=f"got {claimed}")
+    ok(
+        "Pa minted his OK (a confirmation for subject claim, good for ten minutes, used once) and claimed the profile: he is its owner"
+    )
+    spent = client.post(
+        f"/profiles/{profile_id}/claim",
+        headers=bearer(pa.token),
+        json={"confirmation_id": minted["confirmation_id"], "language": "ms"},
+    )
+    refused(spent, 403, "NotTheClaimant", "Pa claims again")
+    ok("claiming again is refused: NotTheClaimant (403); there is nothing left to claim")
+
+    # 6. What the claim recorded: consents, keys, the closed stewardship, the trail.
+    consents = check(
+        client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa.token)),
+        200,
+        "Pa reads his consents",
+    )
+    proxy = [c for c in consents if c["basis"] == "patient_asked"]
+    own = [c for c in consents if c["purpose"] == "hold_health_record" and c["basis"] == "owner"]
+    sharing = [c for c in consents if c["purpose"] == "share_with_family"]
+    if not (
+        len(proxy) == 1
+        and proxy[0]["revoked_by_person_id"] == pa.person_id
+        and len(own) == 1
+        and own[0]["language"] == "ms"
+        and len(sharing) == 1
+        and sharing[0]["holder_person_id"] == mei.person_id
+        and sharing[0]["basis"] == "owner"
+    ):
+        raise fail("Pa reads his consents", why=f"got {consents}")
+    ok(
+        "Pa reads his consents: Mei's agreement for him (patient_asked) withdrawn by him at the claim; "
+        "his own agreement to Nura keeping his record, in Malay; and his agreement to let Mei, his "
+        "daughter, see the parts she held — on his own basis"
+    )
+    keys = check(
+        client.get(f"/profiles/{profile_id}/keys", headers=bearer(pa.token)),
+        200,
+        "Pa reads his keys",
+    )
+    old = [k for k in keys if k["key_id"] == steward_key_id]
+    live = [k for k in keys if k["revoked_at"] is None]
+    if not (
+        len(old) == 1
+        and old[0]["revoked_at"] is not None
+        and old[0]["consent_id"] is None
+        and len(live) == 1
+        and live[0]["role"] == "chief"
+        and live[0]["holder_person_id"] == mei.person_id
+        and live[0]["consent_id"] == sharing[0]["consent_id"]
+        and live[0]["granted_by_person_id"] == pa.person_id
+    ):
+        raise fail("Pa reads his keys", why=f"got {keys}")
+    ok(
+        "Pa reads his keys: the steward key is closed; Mei now holds a chief key, cut by Pa, resting on that consent"
+    )
+    closed = check(
+        client.get(f"/profiles/{profile_id}/stewardship", headers=bearer(pa.token)),
+        200,
+        "Pa reads the stewardship",
+    )
+    if closed["closed_at"] is None or closed["claimed_by_person_id"] != pa.person_id:
+        raise fail("Pa reads the stewardship", why=f"got {closed}")
+    ok("the stewardship is closed, naming Pa as the person who claimed")
+    trail = check(
+        client.get(f"/profiles/{profile_id}/audit", headers=bearer(pa.token)),
+        200,
+        "Pa reads his trail",
+    )
+    steps = {
+        (e["action"], e["scope"], e["target"])
+        for e in trail
+        if e["actor_person_id"] == pa.person_id and e["outcome"] == "allowed"
+    }
+    wanted = {
+        ("write", "profile", "profile"),
+        ("write", "family", "consent"),
+        ("share", "family", "key"),
+        ("write", "family", "key"),
+        ("write", "family", "stewardship"),
+    }
+    if not wanted <= steps:
+        raise fail("Pa reads his trail", why=f"missing {wanted - steps}")
+    refusals = [e for e in trail if e["outcome"] == "refused"]
+    if not any(
+        e["refused_because"] == "AlreadySetUp" and e["actor_person_id"] == mei.person_id
+        for e in refusals
+    ):
+        raise fail("Pa reads his trail", why="Mei's refused second setup is not on it")
+    if any(e["actor_person_id"] == kit.person_id for e in trail):
+        raise fail("Pa reads his trail", why="a stranger's try was written into the trail")
+    ok(
+        f"Pa reads his trail ({len(trail)} lines): the claim is on it in his name — the transfer, the consents, the key, the closed stewardship — and the refusals:"
+    )
+    for row in refusals:
+        who = {mei.person_id: "Mei", pa.person_id: "Pa"}.get(row["actor_person_id"], "?")
+        print(
+            f"    {row['at'][:19]}  {who:>3}  {row['action']} {row['scope']} {row['target']}  "
+            f"refused {row['refused_because']}"
+        )
+    ok(
+        "Kit's try is not on the trail: a stranger's reach is counted out of band, never written in, so nobody can fill a trail by repeating a number"
+    )
+
+    # 7. Mei after the claim: a chief on Pa's consent, still not the notes.
+    check(
+        client.post(
+            f"/profiles/{profile_id}/notes",
+            headers=bearer(pa.token),
+            json={"text": "I did not tell the children about the fall."},
+        ),
+        201,
+        "Pa writes a private note",
+    )
+    seen = check(
+        client.get(f"/profiles/{profile_id}", headers=bearer(mei.token)),
+        200,
+        "Mei opens Pa's profile",
+    )
+    if seen["standing"] != "holder" or seen["role"] != "chief":
+        raise fail("Mei opens Pa's profile", why=f"got {seen}")
+    check(
+        client.get(f"/profiles/{profile_id}/medicines", headers=bearer(mei.token)),
+        200,
+        "Mei reads Pa's medicines",
+    )
+    notes = client.get(f"/profiles/{profile_id}/notes", headers=bearer(mei.token))
+    body = refused(notes, 403, "OutOfScope", "Mei reads Pa's private notes")
+    if body.get("scope") != "notes" or "fall" in notes.text:
+        raise fail("Mei reads Pa's private notes", notes, "expected scope notes and no note text")
+    doors = check(
+        client.get("/doors", headers=bearer(mei.token)), 200, "Mei asks which doors apply now"
+    )
+    if doors["stewarding"] != [] or [d["role"] for d in doors["invited"]] != ["chief"]:
+        raise fail("Mei asks which doors apply now", why=f"got {doors}")
+    ok(
+        "Mei opens Pa's profile as his chief on his consent, reads his medicines, and cannot read his private notes: OutOfScope notes (403); her doors now list Pa's profile as one she was let in to"
+    )
+    later = client.post(
+        "/profiles/for-someone",
+        headers=bearer(kit.token),
+        json={**_for_someone(pa, "ms"), "relationship": "son"},
+    )
+    refused(later, 409, "AlreadySetUp", "Kit tries the number once more, after the claim")
+    if later.text != second.text:
+        raise fail(
+            "Kit tries the number once more, after the claim", later, "not the same words as before"
+        )
+    ok(
+        "Kit trying the number once more, now that Pa owns the profile, gets the same words as before: nothing says which case it is"
+    )
+
+
+CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3, 4: checkpoint_4}
 
 
 def main(argv: list[str]) -> int:
