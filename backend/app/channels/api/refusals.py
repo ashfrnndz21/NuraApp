@@ -19,6 +19,10 @@ from app.consent.service import (
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
+from app.delivery.feed.engagement import NoSuchItem
+from app.delivery.feed.rank import NoCachedPage
+from app.delivery.feed.search import NoSuchSearchJob
+from app.delivery.feed.sources import NotTheirsToManage
 from app.errors import Refusal
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
@@ -42,12 +46,17 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # The engine's sources and jobs are the owner's and his chief's to see (E21).
+    (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
     (NoSuchReviewCard, 404),
+    (NoSuchItem, 404),
+    (NoSuchSearchJob, 404),
+    (NoCachedPage, 404),
     (PhotoTooLarge, 413),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.

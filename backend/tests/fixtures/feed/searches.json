@@ -1,0 +1,44 @@
+{
+  "explainer:warfarin": [
+    {
+      "domain": "hsa.gov.sg",
+      "url": "https://www.hsa.gov.sg/consumer-safety/articles/warfarin-and-food",
+      "title": "Warfarin and your food",
+      "published_at": "2025-03-04",
+      "text": "Warfarin is an anticoagulant used to prevent blood clots. Its effect is influenced by vitamin K, which is found in green leafy vegetables such as kailan, spinach and broccoli. Patients do not need to avoid these foods, but should keep their intake consistent from week to week so that the INR stays stable. Tell your doctor or pharmacist before starting any new medicine, supplement or herbal product, as many interact with warfarin. Attend INR monitoring as scheduled."
+    },
+    {
+      "domain": "hsa.gov.sg",
+      "url": "https://www.hsa.gov.sg/consumer-safety/articles/warfarin-inr",
+      "title": "Warfarin and INR",
+      "published_at": "2025-03-04",
+      "text": "Some patients on warfarin may be advised to skip a dose if the INR is above the target range. Do not change the dose yourself; contact the anticoagulation clinic."
+    },
+    {
+      "domain": "supplement-shop.example",
+      "url": "https://supplement-shop.example/natural-blood-thinners",
+      "title": "Natural blood thinners",
+      "published_at": "2025-01-01",
+      "text": "Try our natural blood thinner instead of warfarin."
+    }
+  ],
+  "explainer:blood pressure": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/measuring-blood-pressure-at-home",
+      "title": "Measuring your blood pressure at home",
+      "published_at": "2024-11-20",
+      "text": "Measuring your blood pressure at home. Rest for five minutes before measuring. Sit with your back supported, feet flat on the floor and arm resting on a table at heart level. Measure at the same time each day, ideally in the morning before medication and food. Record both the systolic and diastolic readings in your log book and bring it to your next appointment."
+    }
+  ],
+  "safety:warfarin": [
+    {
+      "domain": "hsa.gov.sg",
+      "url": "https://www.hsa.gov.sg/announcements/product-recall/warfarin-240077",
+      "title": "Product recall: Warfarin Sodium 5 mg, batch 240077",
+      "published_at": "2026-09-01",
+      "text": "Product recall: Warfarin Sodium 5 mg tablets, batch 240077, manufactured by Example Pharma. Some tablets in this batch may contain a lower amount of active ingredient. Patients with tablets from this batch should return them to the pharmacy for a replacement. Tablets from other batches are not affected.",
+      "batch": "240077"
+    }
+  ]
+}
