@@ -40,6 +40,7 @@ class ConfirmSubject(StrEnum):
     PROPOSAL = "appointment_proposal"
     ATTACH = "attach"
     DRIVE = "drive"
+    COUNT_CORRECTION = "count_correction"
 
 
 @dataclass(frozen=True, slots=True)
@@ -480,6 +481,28 @@ class AttachDraft:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class CountCorrectionDraft:
+    """More of one medicine found at home, about to be added to its count (E04-05, "I have
+    more at home"): which line, and how many. The yes binds to the number, so a yes for 20
+    tablets cannot add 30. The count moves as a supply on the line, resting on a fact that
+    rests on the moment he said so; no dose, no line and no instruction changes."""
+
+    line_id: uuid.UUID
+    quantity: int
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.COUNT_CORRECTION
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.line_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"line_id": self.line_id, "quantity": self.quantity}
+
+
 Draft = (
     FactDraft
     | AppointmentDraft
@@ -496,6 +519,7 @@ Draft = (
     | ProposalDraft
     | AttachDraft
     | DriveDraft
+    | CountCorrectionDraft
 )
 
 

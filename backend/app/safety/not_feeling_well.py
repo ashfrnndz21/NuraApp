@@ -584,6 +584,12 @@ def notice_lines(notice: Notice, *, patient: str, language: str | None = None) -
     and for the tests. Every line verified."""
     lang = language_of(language or notice.language)
     slots = notice.slots
+    if notice.kind is NoticeKind.REORDER:
+        # Not a health alert: he asked the family to order more (E04-05). The medicines'
+        # words, so a reorder notice can never be read out as "not feeling well".
+        from app.medicines.reorder import reorder_notice_lines
+
+        return reorder_notice_lines(notice, patient=patient, language=lang)
     if notice.kind is NoticeKind.CHECK_IN:
         return [render("notice.check_in", lang)]
     lines = [render("notice.not_well", lang, patient=patient)]
