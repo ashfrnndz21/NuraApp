@@ -116,6 +116,8 @@ class Why:
     artifact_id: str | None = None
     visit_id: str | None = None
     note_id: str | None = None
+    photo_id: str | None = None
+    """A family photo a story card shows (E21-05): the client reads it through the thread."""
     memo_id: str | None = None
     memo_ids: tuple[str, ...] = ()
     brief_id: str | None = None

@@ -86,6 +86,8 @@ CLASSES: dict[str, str] = {
     "source.id": OPERATIONAL,
     "feed_page.id": OPERATIONAL,
     "thread_message.id": HEALTH,
+    "thread_photo.id": HEALTH,
+    "whatsapp_group.id": HEALTH,
     "task.id": HEALTH,
     "scheduled_push.id": HEALTH,
     "document.id": HEALTH,
@@ -582,6 +584,14 @@ CLASSES: dict[str, str] = {
     "thread_message.state_id": HEALTH,
     "thread_message.card_kind": HEALTH,
     "thread_message.task_id": HEALTH,
+    # A photo the family shared: which message, which artefact, who shared it, and their own
+    # yes to its being on his story cards — and taking it back — which is a consent.
+    "thread_photo.message_id": HEALTH,
+    "thread_photo.artifact_id": HEALTH,
+    "thread_photo.author_person_id": IDENTIFIER,
+    "thread_photo.on_his_feed": CONSENT,
+    "thread_photo.posted_at": OPERATIONAL,
+    "thread_photo.withdrawn_at": CONSENT,
     "task.what": HEALTH,
     "task.assigned_person_id": IDENTIFIER,
     "task.due_at": OPERATIONAL,
@@ -686,6 +696,10 @@ CLASSES: dict[str, str] = {
     "whatsapp_message.template_name": OPERATIONAL,
     "whatsapp_message.catalogue_key": HEALTH,
     "whatsapp_message.state_id": HEALTH,
+    # The family's WhatsApp group: the provider's handle names a group of people around him.
+    "whatsapp_group.provider_group_id": IDENTIFIER,
+    "whatsapp_group.opened_by_person_id": IDENTIFIER,
+    "whatsapp_group.opened_at": OPERATIONAL,
     # A proposal is what was heard, waiting for the poster's yes: a reading, not yet a fact.
     "whatsapp_proposal.thread_id": HEALTH,
     "whatsapp_proposal.message_id": HEALTH,
