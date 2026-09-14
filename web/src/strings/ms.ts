@@ -394,21 +394,33 @@ export const ms = {
         "10:00": "Pukul 10 pagi",
       },
       // @patient
-      sightSelf: "Adakah tulisan kecil susah untuk anda baca?",
+      switchSelf: {
+        large_text: "Adakah tulisan yang lebih besar membantu anda?",
+        high_contrast: "Adakah tulisan yang lebih gelap membantu anda membaca?",
+        voice_on: "Patutkah Nura membacakan sesuatu kepada anda?",
+        big_targets: "Adakah butang yang lebih besar membantu anda?",
+        one_thing_per_screen: "Patutkah Nura tunjuk satu perkara pada satu masa?",
+        read_back: "Patutkah Nura ulang apa yang ia faham?",
+        repeat_prompts: "Patutkah Nura ingatkan anda sekali lagi?",
+      },
       // @patient
-      sightOther: "Adakah tulisan kecil susah untuk {name} baca?",
+      switchOther: {
+        large_text: "Adakah tulisan yang lebih besar membantu {name}?",
+        high_contrast: "Adakah tulisan yang lebih gelap membantu {name} membaca?",
+        voice_on: "Patutkah Nura membacakan sesuatu kepada {name}?",
+        big_targets: "Adakah butang yang lebih besar membantu {name}?",
+        one_thing_per_screen: "Patutkah Nura tunjuk {name} satu perkara pada satu masa?",
+        read_back: "Patutkah Nura ulang kepada {name} apa yang ia faham?",
+        repeat_prompts: "Patutkah Nura ingatkan {name} sekali lagi?",
+      },
       // @patient
-      hearingSelf: "Adakah telefon susah untuk anda dengar?",
+      densitySelf: "Berapa banyak patut Nura tunjuk kepada anda sekali gus?",
       // @patient
-      hearingOther: "Adakah telefon susah untuk {name} dengar?",
-      // @patient
-      handsSelf: "Adakah butang kecil susah untuk anda tekan?",
-      // @patient
-      handsOther: "Adakah butang kecil susah untuk {name} tekan?",
-      // @patient
-      memorySelf: "Adakah anda lebih mudah lupa sekarang?",
-      // @patient
-      memoryOther: "Adakah {name} lebih mudah lupa sekarang?",
+      densityOther: "Berapa banyak patut Nura tunjuk kepada {name} sekali gus?",
+      // @patient phrase
+      densitySimple: "Sedikit, dengan mudah",
+      // @patient phrase
+      densityDetailed: "Semuanya, dengan penuh",
       // @patient phrase
       yes: "Ya",
       // @patient phrase
@@ -473,6 +485,8 @@ export const ms = {
       photo: "Ambil gambar",
       // @patient phrase
       file: "Pilih dokumen pula",
+      // @patient phrase
+      allPapers: "Itu sahaja surat-surat saya",
       // @patient phrase
       allDone: "Itu sahaja untuk hari ini",
       // @patient
@@ -654,6 +668,14 @@ export const ms = {
   // @patient
   refusals: {
     default: "Nura tidak dapat buat itu sekarang.",
+    CardsStillOpen: "Satu surat masih menunggu persetujuan anda.",
+    NotAtThisStep: "Langkah itu datang sedikit kemudian.",
+    BiographyClosed: "Persediaan ini sudah selesai.",
+    PaperAlreadyAdded: "Surat itu sudah bersama yang lain.",
+    NotTheirsToSetUp: "Hanya pemilik atau keluarganya boleh menyediakan ini.",
+    NotADecade: "Sila pilih satu dekad daripada senarai.",
+    NotALanguage: "Nura belum bercakap bahasa itu.",
+    NoPlan: "Nura belum ada apa-apa untuk diminta.",
     NotPlainEnough: "Sila tulis soalan itu dengan perkataan mudah.",
     HolderNeedsAName: "Sila taip nama orang yang anda benarkan.",
     NotAPdf: "Nura tidak dapat membaca dokumen itu.",

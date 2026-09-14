@@ -3,9 +3,9 @@ import type {
   AnswerOut,
   AppointmentOut,
   AskMode,
-  BiographyIn,
   BiographyOut,
   ClaimableOut,
+  ClosedOut,
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
@@ -18,6 +18,7 @@ import type {
   KeyOut,
   LineOut,
   MeOut,
+  PaperAddedOut,
   PlanOut,
   ProfileOut,
   ProudOut,
@@ -222,42 +223,52 @@ export const confirmReviewCard = (
     body: { decisions, confirmation_id },
   });
 
-// --- E01: onboarding (mocked by `src/api/mock/` under VITE_API_MOCK=1 until the backend lands) ---
+// --- E01: onboarding, as #117 defines it ("Client contract"); answered by `src/api/mock/` in dev
+// and tests (VITE_API_MOCK=1) until it merges ---------------------------------------------------
 
+/** The word cloud: public, in his language. */
 export const conditions = (token: string, language: string) =>
   api<ConditionsOut>("/onboarding/conditions", { token, query: { language } });
 
 export const settings = (token: string, profileId: string) =>
   api<SettingsOut>(`/profiles/${profileId}/settings`, { token });
 
+/** The settings screen, whole: a PUT replaces it, and the words he tapped go in as `conditions`. */
 export const putSettings = (token: string, profileId: string, body: SettingsIn) =>
   api<SettingsOut>(`/profiles/${profileId}/settings`, { method: "PUT", token, body });
+
+/** Open the sitting (no body). One already open is `BiographyAlreadyOpen` (409): read it instead. */
+export const openBiography = (token: string, profileId: string) =>
+  api<BiographyOut>(`/profiles/${profileId}/biography`, { method: "POST", token });
 
 export const biography = (token: string, profileId: string, language: string) =>
   api<BiographyOut>(`/profiles/${profileId}/biography`, { token, query: { language } });
 
-/** Open, or update, the biography with the words he tapped; the read-back lines come back. */
-export const tellBiography = (token: string, profileId: string, body: BiographyIn) =>
-  api<BiographyOut>(`/profiles/${profileId}/biography`, { method: "POST", token, body });
+/** A card made through capture (`/photos`, `/imports`) joins the sitting. */
+export const attachPaper = (token: string, profileId: string, card_id: string) =>
+  api<PaperAddedOut>(`/profiles/${profileId}/biography/papers`, { method: "POST", token, body: { card_id } });
 
-export const answerReadBack = (token: string, profileId: string, line_id: string, answer: "yes" | "no") =>
-  api<BiographyOut>(`/profiles/${profileId}/biography/read-back`, { method: "POST", token, body: { line_id, answer } });
-
-/** A paper the person confirmed: the biography takes it in and answers with the next prompt. */
-export const addPaper = (token: string, profileId: string, card_id: string, language: string) =>
-  api<BiographyOut>(`/profiles/${profileId}/biography/papers`, { method: "POST", token, body: { card_id, language } });
+/** One read-back line a screen: the fact it reads back, and his yes or no. */
+export const answerReadBack = (token: string, profileId: string, fact_id: string, answer: "yes" | "no") =>
+  api<BiographyOut>(`/profiles/${profileId}/biography/read-back`, {
+    method: "POST",
+    token,
+    body: { line_id: fact_id, answer },
+  });
 
 export const answerQuestion = (token: string, profileId: string, question_id: string, keep: boolean) =>
   api<BiographyOut>(`/profiles/${profileId}/biography/questions`, { method: "POST", token, body: { question_id, keep } });
 
+/** Close the sitting: where it stands, the summary in his words and the first week come back. */
 export const closeBiography = (token: string, profileId: string) =>
-  api<BiographyOut>(`/profiles/${profileId}/biography/close`, { method: "POST", token });
+  api<ClosedOut>(`/profiles/${profileId}/biography/close`, { method: "POST", token });
 
 export const plan = (token: string, profileId: string, language: string) =>
   api<PlanOut>(`/profiles/${profileId}/plan`, { token, query: { language } });
 
-export const laterOnPlan = (token: string, profileId: string, gap_id: string, language: string) =>
-  api<PlanOut>(`/profiles/${profileId}/plan/later`, { method: "POST", token, body: { gap_id, language } });
+/** Later, on one prompt: the first sends it to the back of the week, the second retires it. */
+export const laterOnPlan = (token: string, profileId: string, gap_id: string) =>
+  api<PlanOut>(`/profiles/${profileId}/plan/later`, { method: "POST", token, body: { gap_id } });
 
 /** A PDF to be read (E02-03), the same review card back. `source` is where it came from, in
  *  the backend's words; a file picked on the phone is sent as a share. */

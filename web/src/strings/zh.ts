@@ -394,21 +394,33 @@ export const zh = {
         "10:00": "早上 10 点",
       },
       // @patient
-      sightSelf: "小字您看起来吃力吗？",
+      switchSelf: {
+        large_text: "字大一点对您有帮助吗？",
+        high_contrast: "字深一点，您会看得更清楚吗？",
+        voice_on: "要Nura把内容读给您听吗？",
+        big_targets: "按钮大一点对您有帮助吗？",
+        one_thing_per_screen: "要Nura一次只显示一件事吗？",
+        read_back: "要Nura把它的理解说给您听吗？",
+        repeat_prompts: "要Nura再提醒您一次吗？",
+      },
       // @patient
-      sightOther: "小字 {name} 看起来吃力吗？",
+      switchOther: {
+        large_text: "字大一点对{name}有帮助吗？",
+        high_contrast: "字深一点，{name}会看得更清楚吗？",
+        voice_on: "要Nura把内容读给{name}听吗？",
+        big_targets: "按钮大一点对{name}有帮助吗？",
+        one_thing_per_screen: "要Nura给{name}一次只显示一件事吗？",
+        read_back: "要Nura把它的理解说给{name}听吗？",
+        repeat_prompts: "要Nura再提醒{name}一次吗？",
+      },
       // @patient
-      hearingSelf: "手机的声音您听起来吃力吗？",
+      densitySelf: "Nura一次要给您看多少？",
       // @patient
-      hearingOther: "手机的声音 {name} 听起来吃力吗？",
-      // @patient
-      handsSelf: "小按钮您按起来吃力吗？",
-      // @patient
-      handsOther: "小按钮 {name} 按起来吃力吗？",
-      // @patient
-      memorySelf: "您比以前更容易忘事吗？",
-      // @patient
-      memoryOther: "{name} 比以前更容易忘事吗？",
+      densityOther: "Nura一次要给{name}看多少？",
+      // @patient phrase
+      densitySimple: "少一点，简单一点",
+      // @patient phrase
+      densityDetailed: "全部都看",
       // @patient phrase
       yes: "是",
       // @patient phrase
@@ -473,6 +485,8 @@ export const zh = {
       photo: "拍一张照片",
       // @patient phrase
       file: "改为选一个文件",
+      // @patient phrase
+      allPapers: "我的文件就这些",
       // @patient phrase
       allDone: "今天就到这里",
       // @patient
@@ -654,6 +668,14 @@ export const zh = {
   // @patient
   refusals: {
     default: "Nura 现在做不了这件事。",
+    CardsStillOpen: "还有一份文件在等您同意。",
+    NotAtThisStep: "这一步要晚一点才到。",
+    BiographyClosed: "这次的设置已经完成了。",
+    PaperAlreadyAdded: "那份文件已经和其他文件在一起了。",
+    NotTheirsToSetUp: "只有主人或他的家人可以设置这个。",
+    NotADecade: "请从列表里选一个年代。",
+    NotALanguage: "Nura还不会说那种语言。",
+    NoPlan: "Nura现在还没有要请您做的事。",
     NotPlainEnough: "请用简单的话写这个问题。",
     HolderNeedsAName: "请输入您要让他看的那个人的名字。",
     NotAPdf: "Nura 看不懂那个文件。",

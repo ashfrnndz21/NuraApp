@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { tell, tellThenPlan } from "../../onboarding/actions";
+import { saveWordsAndGoOn } from "../../onboarding/actions";
 import { asksFor } from "../../onboarding/cloud";
 import { answers, conditions, picked, to } from "../../onboarding/state";
 import { density } from "../../store/session";
@@ -15,7 +15,7 @@ export function AsksStep({ only }: { only?: string }): JSX.Element {
   const s = t();
   // A gap card's reopened question is one question, on its own screen, in either density.
   const patient = density() === "patient" || only !== undefined;
-  const list = asksFor(conditions.value?.words ?? [], only ? [only] : picked.value);
+  const list = asksFor(conditions.value?.conditions ?? [], only ? [only] : picked.value);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +24,7 @@ export function AsksStep({ only }: { only?: string }): JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      await (only ? tellThenPlan() : tell());
+      await saveWordsAndGoOn();
     } catch (failure) {
       setError(failure);
     } finally {
@@ -47,16 +47,16 @@ export function AsksStep({ only }: { only?: string }): JSX.Element {
     <main class="screen onboarding" data-stage="asks">
       <StepTitle title={s.onboarding.asks.lead} />
       {shown.map((word) => (
-        <Sheet key={word.id} caption={word.word} title={word.ask!.question} testId={`ask-${word.id}`}>
+        <Sheet key={word.code} caption={word.name} title={word.ask!.question} testId={`ask-${word.code}`}>
           <div class="choices" role="group">
             {word.ask!.options.map((option) => (
-              <Pill key={option.id} onClick={() => choose(word.id, option.id)} chosen={answers.value[word.id] === option.id} disabled={busy} testId={`option-${option.id}`}>
+              <Pill key={option.id} onClick={() => choose(word.code, option.id)} chosen={answers.value[word.code] === option.id} disabled={busy} testId={`option-${option.id}`}>
                 {option.text}
               </Pill>
             ))}
           </div>
           {patient && (
-            <Pill quiet onClick={() => (only ? to({ name: "plan" }) : choose(word.id, null))} testId="ask-not-now">
+            <Pill quiet onClick={() => (only ? to({ name: "plan" }) : choose(word.code, null))} testId="ask-not-now">
               {s.onboarding.notNow}
             </Pill>
           )}

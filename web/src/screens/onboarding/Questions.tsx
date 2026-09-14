@@ -2,34 +2,45 @@ import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { QuestionOut } from "../../api/types";
-import { who } from "../../onboarding/actions";
-import { biography, say, to } from "../../onboarding/state";
+import { closeSitting, who } from "../../onboarding/actions";
+import { biography, say } from "../../onboarding/state";
 import { density } from "../../store/session";
 import { fill, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
 import { Sheet, Status, StepTitle } from "./parts";
 
-/** Questions from the records: the backend's list, each whole, spoken on Hear, with Keep or
- *  Not this one. The patient sees one per screen; the caregiver, the list. Keep puts the line
- *  on the next visit's questions (E05) when a visit is booked; the sitting records the answer
- *  either way. */
+/** Questions from the papers (#117): the backend's list, each one whole line, spoken on Hear,
+ *  with Keep or Not this one, and the backend's own line for how many more wait for later.
+ *  Keep puts the line on the next visit's questions (E05) when a visit is booked; the sitting
+ *  records the answer either way, and moves a kept one to a visit's list once one is booked.
+ *  Then the sitting closes. The patient sees one per screen; the caregiver, the list. */
 export function QuestionsStep(): JSX.Element {
   const s = t();
   const q = s.onboarding.questions;
   const patient = density() === "patient";
-  const questions = biography.value?.questions ?? [];
+  const bio = biography.value;
+  const questions = bio?.questions ?? [];
   const [ack, setAck] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
-  const decide = async (question: QuestionOut, keep: boolean) => {
+  const act = async (work: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
+      await work();
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decide = (question: QuestionOut, keep: boolean) =>
+    act(async () => {
       const { bearer, profileId } = who();
       if (keep) {
         // E05: a kept question goes on the next visit's list, as his yes on exactly this line.
-        // With no visit yet, the sitting keeps it (E01) until one is booked.
         const next = (await nura.upcomingAppointments(bearer, profileId))[0];
         if (next) {
           const yes = await nura.mintQuestionYes(bearer, profileId, next.appointment_id, question.line);
@@ -39,26 +50,22 @@ export function QuestionsStep(): JSX.Element {
       const updated = await nura.answerQuestion(bearer, profileId, question.question_id, keep);
       biography.value = updated;
       setAck(keep ? q.kept : q.dropped);
-      if (patient && !updated.questions.some((each) => each.kept === null)) to({ name: "plan" });
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setBusy(false);
-    }
-  };
+      if (patient && !updated.questions.some((each) => each.kept === null)) await closeSitting();
+    });
 
+  const title = bio?.step === "questions" ? bio.prompt.headline : say(q.titleSelf, q.titleOther);
   const next = (
-    <Pill plum onClick={() => to({ name: "plan" })} disabled={busy} testId="questions-next">
+    <Pill plum onClick={() => void act(closeSitting)} disabled={busy} testId="questions-next">
       {s.onboarding.next}
     </Pill>
   );
-  const title = say(q.titleSelf, q.titleOther);
 
   if (questions.length === 0) {
     return (
       <main class="screen onboarding" data-stage="questions">
         <StepTitle title={title} />
         <Sheet lines={[q.none]} testId="questions-none" />
+        <Notice error={error} />
         {next}
       </main>
     );
@@ -90,6 +97,11 @@ export function QuestionsStep(): JSX.Element {
           </div>
         </Sheet>
       ))}
+      {bio?.more && (
+        <p class="lead" data-testid="questions-more">
+          {bio.more}
+        </p>
+      )}
       <Notice error={error} />
       {(!patient || !current) && next}
     </main>

@@ -394,21 +394,33 @@ export const en = {
         "10:00": "At 10 in the morning",
       },
       // @patient
-      sightSelf: "Is small print hard for you to read?",
+      switchSelf: {
+        large_text: "Would bigger writing help you?",
+        high_contrast: "Would darker writing help you read?",
+        voice_on: "Should Nura read things out loud to you?",
+        big_targets: "Would bigger buttons help you?",
+        one_thing_per_screen: "Should Nura show one thing at a time?",
+        read_back: "Should Nura say back what it understood?",
+        repeat_prompts: "Should Nura remind you a second time?",
+      },
       // @patient
-      sightOther: "Is small print hard for {name} to read?",
+      switchOther: {
+        large_text: "Would bigger writing help {name}?",
+        high_contrast: "Would darker writing help {name} read?",
+        voice_on: "Should Nura read things out loud to {name}?",
+        big_targets: "Would bigger buttons help {name}?",
+        one_thing_per_screen: "Should Nura show {name} one thing at a time?",
+        read_back: "Should Nura say back to {name} what it understood?",
+        repeat_prompts: "Should Nura remind {name} a second time?",
+      },
       // @patient
-      hearingSelf: "Is the phone hard for you to hear?",
+      densitySelf: "How much should Nura show you at once?",
       // @patient
-      hearingOther: "Is the phone hard for {name} to hear?",
-      // @patient
-      handsSelf: "Are small buttons hard for you to tap?",
-      // @patient
-      handsOther: "Are small buttons hard for {name} to tap?",
-      // @patient
-      memorySelf: "Do you forget things more than before?",
-      // @patient
-      memoryOther: "Does {name} forget things more than before?",
+      densityOther: "How much should Nura show {name} at once?",
+      // @patient phrase
+      densitySimple: "A little, kept simple",
+      // @patient phrase
+      densityDetailed: "Everything, in full",
       // @patient phrase
       yes: "Yes",
       // @patient phrase
@@ -473,6 +485,8 @@ export const en = {
       photo: "Take a photo",
       // @patient phrase
       file: "Choose a file instead",
+      // @patient phrase
+      allPapers: "That is all my papers",
       // @patient phrase
       allDone: "That is all for today",
       // @patient
@@ -658,6 +672,14 @@ export const en = {
   // @patient
   refusals: {
     default: "Nura could not do that right now.",
+    CardsStillOpen: "A paper still waits for your yes.",
+    NotAtThisStep: "That step comes a little later.",
+    BiographyClosed: "This setting-up is already finished.",
+    PaperAlreadyAdded: "That paper is already with the others.",
+    NotTheirsToSetUp: "Only the owner or his family can set this up.",
+    NotADecade: "Please choose a decade from the list.",
+    NotALanguage: "Nura does not speak that language yet.",
+    NoPlan: "Nura has nothing to ask for yet.",
     NotPlainEnough: "Please write the question in plain words.",
     HolderNeedsAName: "Please type the name of the person you are letting in.",
     NotAPdf: "That file is not one Nura can read.",

@@ -1,11 +1,13 @@
+import { Refused } from "../api/client";
 import * as nura from "../api/nura";
 import type { ReviewCardOut } from "../api/types";
-import { profile, token } from "../store/session";
+import { profile, setDensity, token } from "../store/session";
 import { language } from "../strings";
-import { answers, biography, picked, plan, to } from "./state";
+import { deviceEffects, startingSettings, tidy } from "./about";
+import { biography, closed, draft, picked, plan, returnTo, settings, to } from "./state";
 
-/** The calls more than one step makes. Each throws what the API threw; the screen that
- *  called it shows it (`Notice`) — a refusal is never swallowed here. */
+/** The calls more than one step makes, on #117's routes. Each throws what the API threw; the
+ *  screen that called it shows it (`Notice`) — a refusal is never swallowed here. */
 
 function who(): { bearer: string; profileId: string } {
   const bearer = token.value;
@@ -14,32 +16,63 @@ function who(): { bearer: string; profileId: string } {
   return { bearer, profileId: papers.profile_id };
 }
 
-/** Open (or update) the biography with the words he tapped and his answers; the backend
- *  answers with the read-back lines, whole. */
-export async function tell(): Promise<void> {
+/** Open the sitting, or read the one already open (`BiographyAlreadyOpen`). */
+export async function openSitting(): Promise<void> {
   const { bearer, profileId } = who();
-  biography.value = await nura.tellBiography(bearer, profileId, {
-    language: language.value,
-    words: picked.value,
-    answers: answers.value,
-  });
-  to({ name: "readBack" });
+  try {
+    biography.value = await nura.openBiography(bearer, profileId);
+  } catch (failure) {
+    if (!(failure instanceof Refused) || failure.refusal !== "BiographyAlreadyOpen") throw failure;
+    biography.value = await nura.biography(bearer, profileId, language.value);
+  }
 }
 
-/** The same, from a gap card's reopened question: then back to the Ready screen, whose
- *  gap the answer has closed. */
-export async function tellThenPlan(): Promise<void> {
+export async function refreshBiography(): Promise<void> {
   const { bearer, profileId } = who();
-  biography.value = await nura.tellBiography(bearer, profileId, {
-    language: language.value,
-    words: picked.value,
-    answers: answers.value,
-  });
+  biography.value = await nura.biography(bearer, profileId, language.value);
+}
+
+export async function refreshPlan(): Promise<void> {
+  const { bearer, profileId } = who();
   plan.value = await nura.plan(bearer, profileId, language.value);
+}
+
+/** The settings screen, whole, with the words he tapped as `conditions`: one PUT. His density
+ *  follows at once on his own phone; the sitting moves on to his papers. */
+export async function saveSettings(): Promise<void> {
+  const { bearer, profileId } = who();
+  const base = draft.value ?? startingSettings(settings.value, profile.value, language.value);
+  const body = tidy({ ...base, conditions: picked.value });
+  settings.value = await nura.putSettings(bearer, profileId, body);
+  draft.value = body;
+  const effects = deviceEffects(body, profile.value?.standing);
+  if (effects.density) await setDensity(effects.density);
+  if (biography.value && !biography.value.closed_at) await refreshBiography();
+}
+
+/** After the cloud (or its follow-ups): save the words, then on to the papers — or back to the
+ *  Ready screen when a tap gap sent him to the cloud. */
+export async function saveWordsAndGoOn(): Promise<void> {
+  await saveSettings();
+  if (returnTo.value === "plan") {
+    await refreshPlan();
+    to({ name: "plan" });
+  } else {
+    to({ name: "records" });
+  }
+}
+
+/** Close the sitting: its summary and the first week come back with it. */
+export async function closeSitting(): Promise<void> {
+  const { bearer, profileId } = who();
+  const done = await nura.closeBiography(bearer, profileId);
+  closed.value = done;
+  biography.value = done.biography;
+  plan.value = done.plan;
   to({ name: "plan" });
 }
 
-/** The bytes of a photo or a file, base64, as `PhotoIn` takes them. */
+/** The bytes of a photo or a file, base64, as `PhotoIn` and `ImportIn` take them. */
 export function base64Of(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -49,8 +82,7 @@ export function base64Of(file: Blob): Promise<string> {
   });
 }
 
-/** A PDF is read by `POST /imports` (E02-03); anything else is a photo for `POST /photos`.
- *  Either way the answer is the review card. */
+/** A PDF is read by `POST /imports` (E02-03); anything else is a photo for `POST /photos`. */
 export function isPdf(file: Pick<File, "type" | "name">): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }

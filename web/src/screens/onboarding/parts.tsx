@@ -67,17 +67,27 @@ interface CaptureProps {
   photoLabel: string;
   plum?: boolean;
   withFile?: boolean;
+  /** One button that opens the file picker only, labelled `photoLabel` (a PDF gap). */
+  fileOnly?: boolean;
 }
 
 /** The camera, and a file instead. `capture="environment"` asks the phone for the back
  *  camera straight away; the second button opens the picker, where a PDF can be chosen. */
-export function Capture({ onFile, busy, photoLabel, plum = true, withFile = true }: CaptureProps): JSX.Element {
+export function Capture({ onFile, busy, photoLabel, plum = true, withFile = true, fileOnly = false }: CaptureProps): JSX.Element {
   const chosen = (event: Event) => {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
     if (file) onFile(file);
   };
+  if (fileOnly) {
+    return (
+      <label class={plum ? "pill plum" : "pill"} data-testid="choose-file" aria-disabled={busy}>
+        {photoLabel}
+        <input type="file" accept="application/pdf,image/*" disabled={busy} onChange={chosen} data-testid="file-input" />
+      </label>
+    );
+  }
   return (
     <>
       <label class={plum ? "pill plum" : "pill"} data-testid="take-photo" aria-disabled={busy}>

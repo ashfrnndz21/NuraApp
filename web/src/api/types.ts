@@ -356,84 +356,103 @@ export interface ReviewConfirmedOut {
   facts: FactOut[];
 }
 
-// --- E01: onboarding — the shapes the web client codes against ---------------------------
+// --- E01: onboarding — #117's contract (branch E01-biography-profile, "Client contract") --
 //
-// The backend half (branch E01-biography-profile) is being built beside this client. Until
-// it lands these routes are answered by `src/api/mock/` when `VITE_API_MOCK=1`; the shapes
-// here are the contract the mock keeps and the real client must match at merge.
+// The real client speaks these shapes. Until #117 merges, `src/api/mock/` answers them in dev
+// and in tests (VITE_API_MOCK=1); nothing here is the mock's own invention.
 
-/** One word of the cloud (`GET /onboarding/conditions?language=`). The plain word is what he
- *  reads; the medical term is in brackets on tap; the weight is how common it is. A word
- *  with a `parent` appears only once the parent is picked; `related` are the words that
- *  gain weight when this one is picked. */
-export interface ConditionWordOut {
-  id: string;
-  word: string;
-  term: string | null;
-  weight: 1 | 2 | 3;
-  parent: string | null;
+/** One word of the cloud (`GET /onboarding/conditions`): its code, his name for it, how large
+ *  it sits, the words that appear once it is tapped, and whether the cloud shows it first. A
+ *  word can appear under two picked words (a kidney number under pressure and sugar). */
+export interface ConditionOut {
+  code: string;
+  name: string;
+  weight: number;
   related: string[];
-  ask: { question: string; options: { id: string; text: string }[] } | null;
+  top: boolean;
+  /** Not modelled by E01 yet (its open question): the clinic's word, shown in brackets. */
+  term?: string | null;
+  /** Not modelled by E01 yet: a follow-up question and its options. */
+  ask?: { question: string; options: { id: string; text: string }[] } | null;
 }
 
 export interface ConditionsOut {
   language: string;
-  version: string;
-  words: ConditionWordOut[];
+  version: number;
+  top: string[];
+  conditions: ConditionOut[];
 }
 
-/** `GET/PUT /profiles/{id}/settings` — E01-03. Every yes/no is a plain fact about how he
- *  reads, hears and holds the phone; the density and the voice follow at once. */
-export interface SettingsOut {
-  profile_id: string;
-  preferred_name: string | null;
+export type Density = "detailed" | "simple";
+
+/** The settings screen, whole (`PUT /profiles/{id}/settings` replaces it). The words he
+ *  tapped go here, as `conditions`. */
+export interface SettingsIn {
   language: string;
-  birth_decade: number | null;
-  doctor: string | null;
-  /** "07:30", the anchor every morning reminder ties to. */
+  conditions: string[];
+  density: Density;
+  large_text: boolean;
+  high_contrast: boolean;
+  voice_on: boolean;
+  big_targets: boolean;
+  one_thing_per_screen: boolean;
+  read_back: boolean;
+  repeat_prompts: boolean;
+  preferred_name: string | null;
+  doctor_name: string | null;
+  /** "07:30" on his wall clock. */
   breakfast_time: string | null;
-  sight: boolean;
-  hearing: boolean;
-  hands: boolean;
-  cognitive: boolean;
-  updated_at: string | null;
+  /** The decade he was born in, by its first year: 1950. */
+  birth_decade: number | null;
 }
 
-export type SettingsIn = Omit<SettingsOut, "profile_id" | "updated_at">;
-
-/** One line of the read-back: the backend's whole sentence, with the State it was rendered
- *  under and where it came from. The client never composes one. */
-export interface ReadBackLineOut {
-  line_id: string;
-  text: string;
-  answer: "yes" | "no" | null;
-  state_id: string;
-  source: string;
+/** The settings as the caller's key reads them; `withheld` names what it does not open. */
+export interface SettingsOut extends Omit<SettingsIn, "conditions" | "doctor_name" | "birth_decade"> {
+  settings_id: string | null;
+  profile_id: string;
+  conditions: string[] | null;
+  doctor_name: string | null;
+  birth_decade: number | null;
+  set_by_person_id: string | null;
+  set_at: string | null;
+  withheld: string[];
 }
 
-/** The assistant's next prompt in the records step: whole lines to show and speak, and
- *  what it is asking for. `kind: "done"` is the closing line. */
-export interface PromptOut {
-  prompt_id: string;
-  kind: "paper" | "done";
+/** The words of the step he is at, in his language. */
+export interface ScriptOut {
+  headline: string;
   lines: string[];
-  state_id: string;
-  source: string;
 }
 
-/** A paper the biography has taken in, and the whole lines the backend learned from it. */
+export type PaperKind = "discharge_letter" | "lab_result" | "medicine" | "clinic_card" | "insurance_card" | "other";
+
 export interface PaperOut {
   paper_id: string;
-  card_id: string;
+  position: number;
+  paper: PaperKind;
   artifact_id: string;
-  document_kind: ReviewCardOut["document_kind"];
-  learned: string[];
-  source: string;
+  card_id: string;
+  document_kind: string;
+  confirmed: boolean;
 }
 
-/** A question the papers raised, as E01's sitting holds it: one whole line, spoken as
- *  written, with Keep or Not this one. E01's shape carries no State id and no source line;
- *  the card shows them when the backend sends them. */
+/** A paper joined to the sitting, and the review card it was read into. */
+export interface PaperAddedOut {
+  paper: PaperOut;
+  card: ReviewCardOut;
+}
+
+/** A read-back line: the confirmed fact it reads back (its own source), the words, and his
+ *  answer once given. E01 renders these from facts, not from State, so there is no State id. */
+export interface ReadBackLineOut {
+  fact_id: string;
+  line: string;
+  answer: "yes" | "no" | null;
+  dispute_fact_id: string | null;
+}
+
+/** A question the papers raised: the gap it would fill, one whole line, Keep or Not this one.
+ *  E01 will add a State id and a source line; the card shows them when present. */
 export interface QuestionOut {
   question_id: string;
   line: string;
@@ -442,49 +461,87 @@ export interface QuestionOut {
   source?: string;
 }
 
+export type BiographyStep = "about_you" | "papers" | "read_back" | "questions" | "closed";
+
+/** Where the sitting stands (`POST`/`GET /profiles/{id}/biography`): its step, the one call to
+ *  make next, the step's words, its papers, the read-back and the questions. */
 export interface BiographyOut {
   biography_id: string;
   profile_id: string;
+  step: BiographyStep;
+  next: string | null;
   language: string;
   opened_at: string;
+  opened_by_person_id: string;
+  read_back_at: string | null;
   closed_at: string | null;
-  words: string[];
-  answers: Record<string, string>;
-  read_back: ReadBackLineOut[];
-  next_prompt: PromptOut | null;
+  prompt: ScriptOut;
   papers: PaperOut[];
+  open_cards: number;
+  read_back: ReadBackLineOut[];
   questions: QuestionOut[];
+  /** After a "no" on the read-back: who looks at the paper again. */
+  after_no: string | null;
+  /** How many more questions wait for later. */
+  more: string | null;
 }
 
-export interface BiographyIn {
-  language: string;
-  words: string[];
-  answers: Record<string, string>;
+export interface SummaryOut {
+  papers: number;
+  facts: number;
+  conditions: number;
+  medicines: number;
+  disputes: number;
+  questions: number;
+  prompts: number;
+  first_prompt_at: string | null;
+  lines: string[];
 }
 
-/** One gap card (`GET /profiles/{id}/plan`, docs/gaps-and-unlocks.md §1): three whole lines
- *  from the backend, the one action, the day it is for, and its State and source. */
-export interface PlanCardOut {
-  gap_id: string;
-  day: string;
-  tier: 1 | 2 | 3;
-  missing: string;
-  unlock: string;
-  action: string;
-  /** What "do it now" opens: the camera, the follow-up question of `word`, the invite
-   *  (E12: a sharing consent, then a key), or nothing. `word` and `"invite"` are proposed
-   *  to E01; the mock answers with them. */
-  capture: "photo" | "tap" | "invite" | "none";
-  word?: string | null;
-  state_id: string;
-  source: string;
+export type PromptCapture = "photo" | "pdf" | "tap" | "invite";
+
+/** One day's prompt of the first week: the gap it fills, when it is due, how it is filled,
+ *  and its words. E01 carries no State id or source line on a prompt; shown when present. */
+export interface PromptOut {
+  prompt: string;
+  day: number;
+  tier: number;
+  capture: PromptCapture;
+  /** The cloud word the gap is about, in his language (a name, not a code), or null. */
+  word: string | null;
   deferred: number;
+  due_at: string;
+  due_local: string;
+  status: "pending" | "done" | "skipped";
+  done_at: string | null;
+  done_by_fact_id: string | null;
+  skipped_at: string | null;
+  headline: string | null;
+  line: string | null;
+  action: string | null;
+  state_id?: string;
+  source?: string;
 }
 
 export interface PlanOut {
+  plan_id: string;
   profile_id: string;
-  state_id: string;
-  cards: PlanCardOut[];
+  biography_id: string | null;
+  created_at: string;
+  first_day: string;
+  breakfast_time: string;
+  timezone: string;
+  stopped: boolean;
+  stopped_because: string[];
+  prompts: PromptOut[];
+  due: PromptOut[];
+}
+
+/** The close of a sitting: where it stands, the summary in his words, and the first week. */
+export interface ClosedOut {
+  biography: BiographyOut;
+  summary: SummaryOut;
+  plan: PlanOut;
 }
 
 // --- E12: letting one person in (sharing consent, then a key), from the Ready screen ---

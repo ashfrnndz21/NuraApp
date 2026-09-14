@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
-import { tell } from "../../onboarding/actions";
+import { saveWordsAndGoOn } from "../../onboarding/actions";
 import { asksFor, cloudView, toggle, type CloudWord } from "../../onboarding/cloud";
 import { answers, conditions, picked, say, to } from "../../onboarding/state";
 import { speak } from "../../speech/speak";
@@ -10,11 +10,11 @@ import { fill, language, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
 import { Sheet, Status, StepTitle } from "./parts";
 
-/** The word cloud (E01-02): the backend's condition graph as plain words, the most common
- *  biggest and first, so they are on the screen without scrolling. A tap picks a word,
- *  shows the clinic's term in brackets, says the word aloud (its spoken twin — audio only
- *  ever on a tap), and brings in the words that often go with it, which grow with every
- *  pick that points at them. Nothing here is a diagnosis; the lines say so. */
+/** The word cloud (#117's graph): plain words, the most common biggest and first, so they are
+ *  on the screen without scrolling. A tap picks a word, says it aloud (its spoken twin — audio
+ *  only ever on a tap), and brings in the words that often go with it, which grow with every
+ *  pick that points at them. The clinic's word shows in brackets when the backend sends one.
+ *  "That is everything" saves the words with About you's answers, in one PUT. */
 export function CloudStep(): JSX.Element {
   const s = t();
   const c = s.onboarding.cloud;
@@ -30,19 +30,17 @@ export function CloudStep(): JSX.Element {
     nura.conditions(bearer, language.value).then((found) => (conditions.value = found), setError);
   }, [bearer, language.value]);
 
-  const words = conditions.value?.words ?? [];
+  const words = conditions.value?.conditions ?? [];
   const view = cloudView(words, picked.value, { showAll, lastPicked });
 
   const tap = (word: CloudWord) => {
-    const next = toggle(words, picked.value, word.id);
-    const nowPicked = next.includes(word.id);
+    const next = toggle(words, picked.value, word.code);
+    const nowPicked = next.includes(word.code);
     picked.value = next;
-    answers.value = Object.fromEntries(Object.entries(answers.value).filter(([id]) => next.includes(id)));
-    setLastPicked(nowPicked ? word.id : null);
+    answers.value = Object.fromEntries(Object.entries(answers.value).filter(([code]) => next.includes(code)));
+    setLastPicked(nowPicked ? word.code : null);
     setStatus(nowPicked ? c.noted : c.removed);
-    if (nowPicked) {
-      speak({ lines: word.term ? [word.word, fill(c.term, { term: word.term })] : [word.word], language: language.value });
-    }
+    if (nowPicked) speak({ lines: word.term ? [word.name, fill(c.term, { term: word.term })] : [word.name], language: language.value });
   };
 
   const done = async () => {
@@ -50,7 +48,7 @@ export function CloudStep(): JSX.Element {
     setBusy(true);
     setError(null);
     try {
-      await tell();
+      await saveWordsAndGoOn();
     } catch (failure) {
       setError(failure);
     } finally {
@@ -66,15 +64,15 @@ export function CloudStep(): JSX.Element {
       <div class="cloud" role="group" aria-label={title} data-testid="cloud">
         {view.map((word) => (
           <button
-            key={word.id}
+            key={word.code}
             type="button"
             class={`word s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
             aria-pressed={word.picked}
-            data-testid={`word-${word.id}`}
+            data-testid={`word-${word.code}`}
             data-size={word.size}
             onClick={() => tap(word)}
           >
-            {word.word}
+            {word.name}
             {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
           </button>
         ))}

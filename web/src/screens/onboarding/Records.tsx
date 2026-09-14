@@ -1,11 +1,12 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { Refused } from "../../api/client";
 import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
-import { sendPaper, who } from "../../onboarding/actions";
+import { closeSitting, refreshBiography, refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
 import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
-import { biography, lastPaper, plan, returnTo, say, to } from "../../onboarding/state";
+import { biography, lastPaper, returnTo, say, to } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
 import { Hear, Notice, Pill } from "../../ui/components";
@@ -18,8 +19,6 @@ export function RecordsStep(): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const bio = biography.value;
-  const prompt = bio?.next_prompt ?? null;
-  const learned = bio?.papers.find((paper) => paper.card_id === lastPaper.value) ?? null;
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,13 +36,16 @@ export function RecordsStep(): JSX.Element {
     }
   };
 
-  const close = async () => {
+  /** No more papers: the read-back when there are papers to read back, else the close. */
+  const enough = async () => {
     setBusy(true);
     setError(null);
     try {
-      const { bearer, profileId } = who();
-      biography.value = await nura.closeBiography(bearer, profileId);
-      to({ name: "questions" });
+      await refreshBiography();
+      const now = biography.value;
+      if (now && now.open_cards > 0) setError(new Refused("CardsStillOpen", 409));
+      else if (now && now.papers.length === 0) await closeSitting();
+      else to({ name: "readBack" });
     } catch (failure) {
       setError(failure);
     } finally {
@@ -51,16 +53,17 @@ export function RecordsStep(): JSX.Element {
     }
   };
 
+  const inPapers = bio?.step === "papers";
   return (
     <main class="screen onboarding" data-stage="records">
-      <StepTitle title={say(r.titleSelf, r.titleOther)} />
-      {learned && <Sheet settled title={r.learnedTitle} lines={learned.learned} source={learned.source} testId="learned" />}
-      {prompt && <Sheet lines={prompt.lines} source={prompt.source} stateId={prompt.state_id} testId="prompt" />}
+      <StepTitle title={inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther)} />
+      <Status text={lastPaper.value ? r.saved : null} testId="saved" />
+      {inPapers && bio.prompt.lines.length > 0 && <Sheet lines={bio.prompt.lines} testId="prompt" />}
       {busy && <Status text={r.looking} testId="looking" />}
       <Notice error={error} />
       <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
-      <Pill onClick={() => void close()} disabled={busy} testId="all-done">
-        {r.allDone}
+      <Pill onClick={() => void enough()} disabled={busy} testId="all-done">
+        {r.allPapers}
       </Pill>
     </main>
   );
@@ -126,9 +129,15 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
         await nura.confirmReviewCard(bearer, profileId, card.card_id, decisions, yes.confirmation_id);
         setConfirmed(true);
       }
-      biography.value = await nura.addPaper(bearer, profileId, card.card_id, language.value);
+      if (returnTo.value === "records") {
+        // The sitting takes the paper in; its read-back will read the card's facts back to him.
+        await nura.attachPaper(bearer, profileId, card.card_id);
+        await refreshBiography();
+      } else {
+        // From the Ready screen the sitting is closed: the gap closes as the fact arrives.
+        await refreshPlan();
+      }
       lastPaper.value = card.card_id;
-      if (returnTo.value === "plan") plan.value = await nura.plan(bearer, profileId, language.value);
       to({ name: returnTo.value });
     } catch (failure) {
       setError(failure);

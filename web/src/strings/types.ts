@@ -204,14 +204,13 @@ export interface Strings {
       breakfastHint: string;
       /** One whole phrase per breakfast time the About step offers (`onboarding/about.ts`). */
       times: Record<"06:00" | "06:30" | "07:00" | "07:30" | "08:00" | "08:30" | "09:00" | "10:00", string>;
-      sightSelf: string;
-      sightOther: string;
-      hearingSelf: string;
-      hearingOther: string;
-      handsSelf: string;
-      handsOther: string;
-      memorySelf: string;
-      memoryOther: string;
+      /** One question per settings switch (#117), for his own papers and in the name of someone else's. */
+      switchSelf: Record<"large_text" | "high_contrast" | "voice_on" | "big_targets" | "one_thing_per_screen" | "read_back" | "repeat_prompts", string>;
+      switchOther: Record<"large_text" | "high_contrast" | "voice_on" | "big_targets" | "one_thing_per_screen" | "read_back" | "repeat_prompts", string>;
+      densitySelf: string;
+      densityOther: string;
+      densitySimple: string;
+      densityDetailed: string;
       yes: string;
       no: string;
     };
@@ -246,6 +245,7 @@ export interface Strings {
       titleOther: string;
       photo: string;
       file: string;
+      allPapers: string;
       allDone: string;
       looking: string;
       reviewTitle: string;

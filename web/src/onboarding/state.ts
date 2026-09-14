@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals";
-import type { BiographyOut, ConditionsOut, PlanOut, ProfileOut, ReviewCardOut, SettingsOut } from "../api/types";
+import type { BiographyOut, ClosedOut, ConditionsOut, PlanOut, ProfileOut, ReviewCardOut, SettingsIn, SettingsOut } from "../api/types";
 import { go } from "../flow";
 import { clearProfileData } from "../offline/todayCache";
 import { chooseProfile, profile } from "../store/session";
@@ -26,6 +26,10 @@ export type Stage =
 
 export const stage = signal<Stage>({ name: "about" });
 export const settings = signal<SettingsOut | null>(null);
+/** About you's answers, kept until the cloud saves them with the words he tapped (one PUT). */
+export const draft = signal<SettingsIn | null>(null);
+/** The close: the summary in his words and the first week, for the Ready screen. */
+export const closed = signal<ClosedOut | null>(null);
 export const conditions = signal<ConditionsOut | null>(null);
 /** The words he tapped, in the order he tapped them. */
 export const picked = signal<string[]>([]);
@@ -44,6 +48,8 @@ export const planNote = signal<string | null>(null);
 export function reset(): void {
   stage.value = { name: "about" };
   settings.value = null;
+  draft.value = null;
+  closed.value = null;
   conditions.value = null;
   picked.value = [];
   answers.value = {};
@@ -78,7 +84,10 @@ export function finish(): void {
 /** Whose papers these are, for the lines that say "you" or name him. */
 export function whose(): { self: boolean; name: string } {
   const papers = profile.value;
-  return { self: papers?.standing === "owner", name: settings.value?.preferred_name || papers?.display_name || "" };
+  return {
+    self: papers?.standing === "owner",
+    name: draft.value?.preferred_name || settings.value?.preferred_name || papers?.display_name || "",
+  };
 }
 
 /** The line for his own papers, or the one naming the person they are for. */
