@@ -1,0 +1,350 @@
+"""The data inventory for docs/trust/pdpa-data-map.md, generated from the models (E16-05).
+
+    python3 -m scripts.data_map            # print the table
+    python3 -m scripts.data_map --check    # exit 1 if the document's table is out of date
+
+Every table on `app.db.Base.metadata` and every column of it, with the classification the
+PDPA data map needs — identifier, health, consent, audit, operational — from `CLASSES` below.
+The walk is the code's; the classification is a person's, written here once per column, and
+the script refuses to run with a column nobody has classified, so a new column cannot reach
+the data map unlabelled. Test-only tables (`test_*`, from tests/support.py) are left out.
+
+The generated block sits between `<!-- data-map:begin -->` and `<!-- data-map:end -->` in the
+document; `tests/test_data_map.py` runs `--check` so the document cannot drift from the models.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from collections.abc import Iterator
+from pathlib import Path
+
+from sqlalchemy import Table
+
+# Every module that declares a table, so the metadata is whole.
+import app.audit.models
+import app.consent.models
+import app.identity.models
+import app.ingestion.models
+import app.keys.confirm
+import app.keys.models
+import app.medicines.models
+import app.memory.models
+import app.notes.models
+import app.state.models  # noqa: F401
+from app.db import Base
+
+DOCUMENT = Path(__file__).resolve().parents[2] / "docs" / "trust" / "pdpa-data-map.md"
+BEGIN = "<!-- data-map:begin -->"
+END = "<!-- data-map:end -->"
+
+IDENTIFIER = "identifier"
+HEALTH = "health"
+CONSENT = "consent"
+AUDIT = "audit"
+OPERATIONAL = "operational"
+CLASSIFICATIONS = (IDENTIFIER, HEALTH, CONSENT, AUDIT, OPERATIONAL)
+
+# The classification of every column, by "table.column". A row-level default is given as
+# "table.*" and a column overrides it. `profile_id` on every profile-scoped table is the
+# link from a row to the person it is about: an identifier wherever it appears.
+CLASSES: dict[str, str] = {
+    "*.id": OPERATIONAL,
+    "*.profile_id": IDENTIFIER,
+    "*.region": OPERATIONAL,
+    # --- accounts and the graph's ownership -------------------------------------------------
+    "person.display_name": IDENTIFIER,
+    "person.language": OPERATIONAL,
+    "person.phone_e164": IDENTIFIER,
+    "person.email": IDENTIFIER,
+    "person.created_at": OPERATIONAL,
+    "profile.display_name": IDENTIFIER,
+    "profile.language": OPERATIONAL,
+    "profile.owner_person_id": IDENTIFIER,
+    "profile.patient_phone_e164": IDENTIFIER,
+    "profile.created_at": OPERATIONAL,
+    "stewardship.steward_person_id": IDENTIFIER,
+    "stewardship.key_id": CONSENT,
+    "stewardship.consent_id": CONSENT,
+    "stewardship.basis": CONSENT,
+    "stewardship.relationship": IDENTIFIER,
+    "stewardship.opened_at": OPERATIONAL,
+    "stewardship.closed_at": OPERATIONAL,
+    "stewardship.claimed_by_person_id": IDENTIFIER,
+    # --- signing in ---------------------------------------------------------------------------
+    "login_challenge.channel": OPERATIONAL,
+    "login_challenge.phone_e164": IDENTIFIER,
+    "login_challenge.email": IDENTIFIER,
+    "login_challenge.code_hash": OPERATIONAL,
+    "login_challenge.display_name": IDENTIFIER,
+    "login_challenge.language": OPERATIONAL,
+    "login_challenge.issued_at": OPERATIONAL,
+    "login_challenge.expires_at": OPERATIONAL,
+    "login_challenge.attempts": OPERATIONAL,
+    "login_challenge.consumed_at": OPERATIONAL,
+    "login_challenge.person_id": IDENTIFIER,
+    "session.person_id": IDENTIFIER,
+    "session.token_hash": OPERATIONAL,
+    "session.created_at": OPERATIONAL,
+    "session.expires_at": OPERATIONAL,
+    "session.revoked_at": OPERATIONAL,
+    # --- keys, consent, confirmations, audit --------------------------------------------------
+    "key.holder_person_id": IDENTIFIER,
+    "key.role": CONSENT,
+    "key.scopes": CONSENT,
+    "key.consent_id": CONSENT,
+    "key.granted_by_person_id": IDENTIFIER,
+    "key.granted_at": CONSENT,
+    "key.expires_at": CONSENT,
+    "key.revoked_at": CONSENT,
+    "consent.person_id": IDENTIFIER,
+    "consent.purpose": CONSENT,
+    "consent.holder_person_id": IDENTIFIER,
+    "consent.scopes": CONSENT,
+    "consent.text_version": CONSENT,
+    "consent.language": CONSENT,
+    "consent.wording_text": CONSENT,
+    "consent.captured_via": CONSENT,
+    "consent.basis": CONSENT,
+    "consent.basis_artifact_id": CONSENT,
+    "consent.witness_person_id": IDENTIFIER,
+    "consent.granted_at": CONSENT,
+    "consent.revoked_at": CONSENT,
+    "consent.revoked_by_person_id": IDENTIFIER,
+    "confirmation.person_id": IDENTIFIER,
+    "confirmation.subject": OPERATIONAL,
+    "confirmation.subject_id": OPERATIONAL,
+    "confirmation.content_digest": OPERATIONAL,
+    "confirmation.created_at": OPERATIONAL,
+    "confirmation.expires_at": OPERATIONAL,
+    "confirmation.consumed_at": OPERATIONAL,
+    "confirmation.channel": OPERATIONAL,
+    "audit_entry.at": AUDIT,
+    "audit_entry.actor_person_id": IDENTIFIER,
+    "audit_entry.actor_role": AUDIT,
+    "audit_entry.key_id": AUDIT,
+    "audit_entry.action": AUDIT,
+    "audit_entry.scope": AUDIT,
+    "audit_entry.channel": AUDIT,
+    "audit_entry.target": AUDIT,
+    "audit_entry.target_id": AUDIT,
+    "audit_entry.rows": AUDIT,
+    "audit_entry.outcome": AUDIT,
+    "audit_entry.refused_because": AUDIT,
+    "audit_entry.shared_with_person_id": IDENTIFIER,
+    "audit_entry.shared_with_label": IDENTIFIER,
+    # --- the health graph: memory ---------------------------------------------------------------
+    "artifact.kind": HEALTH,
+    "artifact.storage_key": HEALTH,
+    "artifact.content_type": OPERATIONAL,
+    "artifact.sha256": OPERATIONAL,
+    "artifact.captured_at": HEALTH,
+    "artifact.source_channel": OPERATIONAL,
+    "artifact.stored_at": OPERATIONAL,
+    "event.kind": HEALTH,
+    "event.occurred_at": HEALTH,
+    "event.source_channel": OPERATIONAL,
+    "event.label": HEALTH,
+    "event.artifact_id": HEALTH,
+    "event.episode_id": HEALTH,
+    "event.recorded_at": OPERATIONAL,
+    "fact.subject": HEALTH,
+    "fact.attribute": HEALTH,
+    "fact.value": HEALTH,
+    "fact.unit": HEALTH,
+    "fact.confidence": OPERATIONAL,
+    "fact.confidence_state": OPERATIONAL,
+    "fact.artifact_id": HEALTH,
+    "fact.event_id": HEALTH,
+    "fact.episode_id": HEALTH,
+    "fact.valid_from": HEALTH,
+    "fact.valid_to": HEALTH,
+    "fact.asserted_at": OPERATIONAL,
+    "fact.supersedes_id": OPERATIONAL,
+    "fact.superseded_at": OPERATIONAL,
+    "fact.confirmed_by_person_id": IDENTIFIER,
+    "episode.kind": HEALTH,
+    "episode.label": HEALTH,
+    "episode.opened_at": HEALTH,
+    "episode.closed_at": HEALTH,
+    "provider.name": HEALTH,
+    "provider.kind": HEALTH,
+    "provider.phone_e164": HEALTH,
+    "provider.address": HEALTH,
+    "provider.added_at": OPERATIONAL,
+    "appointment.provider_id": HEALTH,
+    "appointment.scheduled_at": HEALTH,
+    "appointment.status": HEALTH,
+    "appointment.purpose": HEALTH,
+    "appointment.episode_id": HEALTH,
+    "appointment.confirmed_by_person_id": IDENTIFIER,
+    "appointment.status_changed_by_person_id": IDENTIFIER,
+    "appointment.booked_at": OPERATIONAL,
+    # --- State --------------------------------------------------------------------------------
+    "state_snapshot.sequence": OPERATIONAL,
+    "state_snapshot.computed_at": OPERATIONAL,
+    "state_snapshot.posture": HEALTH,
+    "state_snapshot.trigger": OPERATIONAL,
+    "state_snapshot.trigger_fact_id": HEALTH,
+    "state_snapshot.supersedes_id": OPERATIONAL,
+    "state_snapshot.clinical": HEALTH,
+    "state_snapshot.functional": HEALTH,
+    "state_snapshot.cognitive": HEALTH,
+    "state_snapshot.situational": HEALTH,
+    "state_snapshot.preference": HEALTH,
+    "state_snapshot.family": IDENTIFIER,
+    "state_snapshot.computed_from": HEALTH,
+    "state_snapshot.stale_after": OPERATIONAL,
+    # --- ingestion: review cards ----------------------------------------------------------------
+    "review_card.artifact_id": HEALTH,
+    "review_card.document_kind": HEALTH,
+    "review_card.document_date": HEALTH,
+    "review_card.high_risk_class": HEALTH,
+    "review_card.created_at": OPERATIONAL,
+    "review_card.confirmed_at": OPERATIONAL,
+    "review_card.confirmed_by_person_id": IDENTIFIER,
+    "review_field.card_id": HEALTH,
+    "review_field.position": OPERATIONAL,
+    "review_field.subject": HEALTH,
+    "review_field.attribute": HEALTH,
+    "review_field.value": HEALTH,
+    "review_field.unit": HEALTH,
+    "review_field.confidence": OPERATIONAL,
+    "review_field.span": OPERATIONAL,
+    "review_field.state": OPERATIONAL,
+    "review_field.corrected_value": HEALTH,
+    "review_field.fact_id": HEALTH,
+    "review_field.decided_at": OPERATIONAL,
+    # --- medicines ----------------------------------------------------------------------------
+    "medication_line.fact_id": HEALTH,
+    "medication_line.generic": HEALTH,
+    "medication_line.brand": HEALTH,
+    "medication_line.strength": HEALTH,
+    "medication_line.form": HEALTH,
+    "medication_line.registration_no": HEALTH,
+    "medication_line.drug_class": HEALTH,
+    "medication_line.high_risk": HEALTH,
+    "medication_line.dose": HEALTH,
+    "medication_line.prescriber": HEALTH,
+    "medication_line.source_kind": OPERATIONAL,
+    "medication_line.lead_time_days": OPERATIONAL,
+    "medication_line.reorder_threshold_days": OPERATIONAL,
+    "medication_line.source_artifact_id": HEALTH,
+    "medication_line.source_event_id": HEALTH,
+    "medication_line.confidence": OPERATIONAL,
+    "medication_line.confidence_state": OPERATIONAL,
+    "medication_line.status": HEALTH,
+    "medication_line.change_kind": HEALTH,
+    "medication_line.started_at": HEALTH,
+    "medication_line.stopped_at": HEALTH,
+    "medication_line.supersedes_id": OPERATIONAL,
+    "medication_line.superseded_at": OPERATIONAL,
+    "medication_line.confirmed_by_person_id": IDENTIFIER,
+    "medication_line.asserted_at": OPERATIONAL,
+    "medication_supply.line_id": HEALTH,
+    "medication_supply.fact_id": HEALTH,
+    "medication_supply.quantity": HEALTH,
+    "medication_supply.dispensed_at": HEALTH,
+    "medication_supply.artifact_id": HEALTH,
+    "medication_supply.confirmed_by_person_id": IDENTIFIER,
+    "medication_supply.recorded_at": OPERATIONAL,
+    "dose_taken.line_id": HEALTH,
+    "dose_taken.event_id": HEALTH,
+    "dose_taken.anchor": HEALTH,
+    "dose_taken.amount": HEALTH,
+    "dose_taken.taken_at": HEALTH,
+    "dose_taken.by_person_id": IDENTIFIER,
+    "interaction_flag.line_id": HEALTH,
+    "interaction_flag.other_line_id": HEALTH,
+    "interaction_flag.severity": HEALTH,
+    "interaction_flag.text_id": HEALTH,
+    "interaction_flag.flagged_at": OPERATIONAL,
+    # --- notes --------------------------------------------------------------------------------
+    "note.text": HEALTH,
+    "note.written_at": HEALTH,
+}
+
+
+class Unclassified(RuntimeError):
+    """A column reached the data map without a classification. Add it to CLASSES."""
+
+
+def classification_of(table: str, column: str) -> str:
+    for key in (f"{table}.{column}", f"*.{column}"):
+        if key in CLASSES:
+            return CLASSES[key]
+    raise Unclassified(f"{table}.{column} has no classification in scripts/data_map.py")
+
+
+def tables() -> list[Table]:
+    """Every table of the app, in the order the metadata sorts them (dependencies first)."""
+    return [t for t in Base.metadata.sorted_tables if not t.name.startswith("test_")]
+
+
+def rows() -> Iterator[tuple[str, str, str, str, str]]:
+    """(table, column, type, nullable, classification) for every column. The type is the
+    SQLAlchemy type's name (`Uuid`, `String`, `JSON`), the same on SQLite and Postgres."""
+    for table in tables():
+        for column in table.columns:
+            yield (
+                table.name,
+                column.name,
+                type(column.type).__name__,
+                "yes" if column.nullable else "no",
+                classification_of(table.name, column.name),
+            )
+
+
+def render() -> str:
+    """The Markdown block: the counts, then the table."""
+    listed = list(rows())
+    counts = {c: sum(1 for r in listed if r[4] == c) for c in CLASSIFICATIONS}
+    lines = [
+        BEGIN,
+        f"{len(tables())} tables, {len(listed)} columns: "
+        + ", ".join(f"{counts[c]} {c}" for c in CLASSIFICATIONS)
+        + ". Generated by `python3 -m scripts.data_map`; do not edit by hand.",
+        "",
+        "| Table | Column | Type | Nullable | Classification |",
+        "|---|---|---|---|---|",
+    ]
+    lines.extend(f"| `{t}` | `{c}` | {ty} | {n} | {cl} |" for t, c, ty, n, cl in listed)
+    lines.append(END)
+    return "\n".join(lines)
+
+
+def block_in(document: str) -> str | None:
+    match = re.search(re.escape(BEGIN) + r".*?" + re.escape(END), document, re.DOTALL)
+    return match.group(0) if match else None
+
+
+def check(document_path: Path = DOCUMENT) -> list[str]:
+    """What is wrong with the document's block, if anything: a list of problems, empty if none."""
+    if not document_path.is_file():
+        return [f"{document_path} does not exist"]
+    found = block_in(document_path.read_text(encoding="utf-8"))
+    if found is None:
+        return [f"{document_path} has no {BEGIN} … {END} block"]
+    if found != render():
+        return [f"{document_path}: the data-map block is out of date; run python3 -m scripts.data_map"]
+    return []
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="data_map", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--check", action="store_true", help="compare with the document")
+    parser.add_argument("--document", type=Path, default=DOCUMENT)
+    args = parser.parse_args(argv)
+    if args.check:
+        problems = check(args.document)
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        return 1 if problems else 0
+    print(render())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

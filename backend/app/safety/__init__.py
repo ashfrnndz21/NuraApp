@@ -10,5 +10,9 @@ registry's class on the line; one table, one refusal (`HighRiskNeedsLabelPhoto`)
 string tagged `@patient` passes the standard or does not ship, and `plain_words.verify` is the
 same check for the memos and cards the backend writes at run time.
 
-The boundary copy and the red-flag rules arrive with their own stories.
+`boundary` is the boundary copy (E16-01): the register of inferring surfaces and the line each
+carries, in every language. `recording` is the recording consent pattern (E16-02): the notice
+spoken before a recording starts and `may_record`, the gate on the RECORDING consent.
+
+The red-flag rules arrive with their own story.
 """

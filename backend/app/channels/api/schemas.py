@@ -1060,7 +1060,9 @@ class StateOut(BaseModel):
     Each dimension is the snapshot's own JSON — short codes, ids and the values of the facts
     folded in — or null where the key does not cover it. `stale` is false when the record
     was checked against this snapshot, true when it has moved on, null when the key was too
-    narrow to check. `state_id` is what every card names.
+    narrow to check. `state_id` is what every card names. `boundary` is the line the
+    posture is shown under (E16-01, `app.safety.boundary`): what Nura did, that it is not
+    a doctor's advice, and whom to ask — in the profile's language, or the one asked for.
     """
 
     state_id: uuid.UUID
@@ -1074,10 +1076,12 @@ class StateOut(BaseModel):
     stale_after: datetime | None
     dimensions: dict[Dimension, dict[str, Any] | None]
     withheld: WithheldOut
+    boundary: str
 
     @classmethod
-    def of(cls, view: StateView) -> StateOut:
+    def of(cls, view: StateView, *, boundary: str) -> StateOut:
         return cls(
+            boundary=boundary,
             state_id=view.id,
             profile_id=view.profile_id,
             sequence=view.sequence,
