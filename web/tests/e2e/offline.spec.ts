@@ -46,7 +46,10 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await expect(page.getByTestId("now-card")).toHaveCount(0);
   await expect(page.getByTestId("missed-card")).toHaveCount(0);
   await expect(page.getByTestId("taken")).toHaveCount(0);
-  await expect(page.getByTestId("state-card")).toContainText("This is from earlier today.");
+  // Both clocks stand at 10:00 (the backend's is frozen for the run), so the kept page carries
+  // the feed's cards for today, and they stand in "For you today" in place of the State card.
+  await expect(page.getByTestId("feed-card").first()).toContainText("Your tablets today");
+  await expect(page.getByTestId("state-card")).toHaveCount(0);
   await expect(page.getByTestId("proud-number")).toBeVisible();
   expect(await page.locator("[role=progressbar], .spinner").count()).toBe(0);
   await shot(page, "offline-kept");

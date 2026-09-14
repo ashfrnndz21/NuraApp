@@ -1,8 +1,12 @@
-import { api } from "./client";
+import { api, apiBlob } from "./client";
 import type {
   ClaimableOut,
   ConfirmationOut,
   DoorsOut,
+  AnswerOut,
+  AskMode,
+  EngagementEvent,
+  EngagementOut,
   FeedPageOut,
   KeyOut,
   LineOut,
@@ -14,6 +18,8 @@ import type {
   SlotOut,
   StateOut,
   TakenOut,
+  ThreadCardKind,
+  ThreadEntryOut,
   WordingOut,
 } from "./types";
 
@@ -127,6 +133,36 @@ export const proud = (token: string, profileId: string) =>
 /** The first page of the feed: today's cards, rendered by the backend from a State. */
 export const feed = (token: string, profileId: string) =>
   api<FeedPageOut>(`/profiles/${profileId}/feed`, { token });
+
+/** One page of the feed (E21): no cursor makes today's cards and answers the first page; a
+ *  cursor answers the page it names, as of when it was minted — the same cursor, the same page. */
+export const feedPage = (token: string, profileId: string, cursor?: string) =>
+  api<FeedPageOut>(`/profiles/${profileId}/feed`, { token, query: { cursor } });
+
+/** The last first page rendered for this person, as it was: the page kept for offline. */
+export const feedCached = (token: string, profileId: string) =>
+  api<FeedPageOut>(`/profiles/${profileId}/feed/cached`, { token });
+
+/** What he did with a card: heard, tapped, shared, or "Not for me" (`dismissed`). */
+export const engage = (token: string, profileId: string, itemId: string, event: EngagementEvent) =>
+  api<EngagementOut>(`/profiles/${profileId}/feed/${itemId}/engagement`, {
+    method: "POST",
+    token,
+    body: { event, channel: "app" },
+  });
+
+/** A card into the family thread, by reference (E12): the thread renders it from the State. */
+export const shareCard = (token: string, profileId: string, card_kind: ThreadCardKind) =>
+  api<ThreadEntryOut>(`/profiles/${profileId}/thread`, { method: "POST", token, body: { card_kind } });
+
+/** A question about his own record (E03): his words go to the backend as they are; the answer
+ *  comes back as cited lines, the honest line when nothing answers, and the boundary last. */
+export const ask = (token: string, profileId: string, question: string, mode: AskMode, language: string) =>
+  api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
+
+/** A card's pre-rendered voice (E11), when the backend has the route. */
+export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/voice`, { token, query: { language } });
 
 /** The keys on the profile with their holders' names: the owner reads whom to call. */
 export const keys = (token: string, profileId: string) =>

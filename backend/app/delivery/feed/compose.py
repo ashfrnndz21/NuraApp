@@ -41,6 +41,7 @@ from app.delivery.feed.search import Engine, create_job, run_job
 from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
+    CAREGIVER_DUTY_LINES_ONE,
     CAREGIVER_DUTY_WHY,
     CAREGIVER_HEARD_HEADLINE,
     CAREGIVER_HEARD_LINE,
@@ -52,6 +53,7 @@ from app.delivery.strings import (
     EMERGENCY_NUMBER,
     YOUR_DOCTOR,
     Lines,
+    counted,
     feeling_words,
     language_for,
     render,
@@ -297,9 +299,7 @@ async def refresh(
     )
     await _reorder(make, day=day, house=house, medicines=medicines)
     await _readings(make, day=day, house=house, readings=readings)
-    await _visit(
-        make, session, context=context, engine=engine, state=state, day=day, house=house
-    )
+    await _visit(make, session, context=context, engine=engine, state=state, day=day, house=house)
     await _memos(make, session, context=context, day=day, house=house)
     await make(
         type=CardType.GATE,
@@ -327,7 +327,9 @@ async def refresh(
             )
             + tuple(
                 line.format(count=house.holding_now, name=house.profile.display_name)
-                for line in CAREGIVER_DUTY_LINES
+                for line in (
+                    CAREGIVER_DUTY_LINES_ONE if house.holding_now == 1 else CAREGIVER_DUTY_LINES
+                )
             )
             + (() if house.on_duty else (CAREGIVER_NO_ROSTER_LINE,)),
             voice=(),
@@ -611,6 +613,7 @@ async def _reorder(make: Any, *, day: Day, house: Household, medicines: Sequence
             house.language,
             body=(),
             extra=tuple(count.reorder),
+            why=counted("reorder", count.days_left),
             medicine=view.name,
             days=count.days_left,
         )
@@ -755,7 +758,9 @@ async def _visit(
         and is_boundary_line(Surface.BRIEF, brief.boundary)
         and brief.boundary is not None
     ):
-        carried = [str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD]
+        carried = [
+            str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD
+        ]
         if carried:
             surface = Surface.BRIEF
             lines = _ending_on(
@@ -932,7 +937,12 @@ async def _story(
             expires_at=until,
         )
     if readings:
-        lines = render("story_count", house.language, body=("story_count",), count=len(readings))
+        lines = render(
+            "story_count",
+            house.language,
+            body=(counted("story_count", len(readings)),),
+            count=len(readings),
+        )
         await make(
             type=CardType.STORY,
             lines=lines,
