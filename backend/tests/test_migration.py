@@ -53,6 +53,7 @@ from app.reasoning.visits.models import (
     SummaryItem,
     VisitSummary,
 )
+from app.safety.models import EmergencyCard, Notice, WhatToDoCard
 from app.safety.red_flags import Escalation, Flag
 from app.state.models import StateSnapshot
 
@@ -105,6 +106,9 @@ TABLES: tuple[Table, ...] = (
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
+    Notice.__table__,
+    WhatToDoCard.__table__,
+    EmergencyCard.__table__,
     Attachment.__table__,
     ProviderNote.__table__,
     LastLooked.__table__,
@@ -238,6 +242,9 @@ def test_the_migrations_build_the_tables_the_models_declare(
             ThreadMessage,
             ScheduledPush,
             Document,
+            Notice,
+            WhatToDoCard,
+            EmergencyCard,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

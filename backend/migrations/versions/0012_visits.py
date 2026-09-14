@@ -17,9 +17,9 @@ amount), the transcript `artifact_id`, the `appointment_id` and `resolved_at` �
 SYMPTOM event. Rows already there are flags from the cloud: `kind` red_flag, `subject`
 symptom, `code` the word-table code of their feeling.
 
-Follows E03's timeline revision (0016_timeline), main's head when this story was merged back
-(0013_family → 0014_rendered_boundary → 0011_whatsapp → 0018_capture_extras → 0016_timeline →
-this); the number stays this story's own. After E16's boundary revision the brief, a question, a memo and a summary are
+Follows E13/E14's revision (0014_emergency_symptoms), main's head when this story was merged
+back (0013_family → 0014_rendered_boundary → 0011_whatsapp → 0018_capture_extras →
+0016_timeline → 0014_emergency_symptoms → this); the number stays this story's own. After E16's boundary revision the brief, a question, a memo and a summary are
 inferring surfaces, so each carries `boundary`, the line it was shown under, beside
 `state_id`. `whatsapp_message` and `safety_escalation` (0011) point at `red_flag`; widening it
 changes neither.
@@ -27,7 +27,7 @@ changes neither.
 constraint, so no schema change there. `artifact_kind` gains `transcript` the same way.
 
 Revision ID: 0012_visits
-Revises: 0016_timeline
+Revises: 0014_emergency_symptoms
 Create Date: 2026-09-14
 """
 
@@ -37,7 +37,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0012_visits"
-down_revision = "0016_timeline"
+down_revision = "0014_emergency_symptoms"
 branch_labels = None
 depends_on = None
 

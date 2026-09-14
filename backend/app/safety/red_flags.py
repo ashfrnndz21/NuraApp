@@ -34,6 +34,16 @@ it is written with `suppressed_because` so the caregiver sees the suppression (s
 Nothing here diagnoses. The sentences live with the surfaces that say them
 (`app.delivery.strings`, `app.channels.whatsapp`, `app.reasoning.visits.strings`) and name a
 person and a day, never a condition.
+
+The not-feeling-well button and the symptom log (E13/E14) hear the same words (`detect`) and
+raise the same flag, on the SYMPTOM event `record_the_moment` writes under the emergency scope.
+Their flag is written through `write_flag_kept`: `raise_flag`, and a keeper on the session
+(`app.db.keep_on_refusal`, the mechanism refused audit lines use) that writes the flag, the
+event it rests on and their lines on the trail again if something later in the same request
+is refused and the unit of work is rolled back. "This one we do not wait for" has to survive
+a template that fails, a State that is stale, or a door that refuses further on. A flag heard
+at a visit (`write_red_flag`) is kept by the same keeper (`_keep_flag`), and `keep_row` does
+the same for the notices and the ladder written beside a flag.
 """
 
 from __future__ import annotations
@@ -62,14 +72,16 @@ from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.models import (
+    ConfidenceState,
     Event,
     EventKind,
+    Fact,
     SourceChannel,
     _row_of_profile,
     _tied_to_profile,
 )
-from app.memory.semantic import current_facts
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 # --- the feeling cloud -----------------------------------------------------------------------
@@ -112,7 +124,15 @@ RED_FLAGS: frozenset[Feeling] = frozenset(
 
 SUGAR_CONDITIONS = frozenset({"diabetes", "type_2_diabetes", "type2_diabetes", "blood_sugar"})
 """Subjects a clinician's control word about sugar is recorded under. Shaky-and-sweaty is a
-red flag on sugar medicines; without one of these on the record it is suppressed, visibly."""
+red flag on one of these, or on an active medicine that can drop his sugar
+(`HYPOGLYCAEMIC_CLASSES`); with neither on the record it is written suppressed, visibly, and
+`suppressed_because` stays "no_sugar_condition_on_record" for both."""
+
+HYPOGLYCAEMIC_CLASSES = frozenset({"insulin", "sulfonylurea"})
+"""The licensed register's classes (`drug_class`, carried on the medication line from the
+register) whose medicines can drop his sugar: insulin, and the sulfonylureas — gliclazide,
+glibenclamide. On one of them shaky-and-sweaty escalates whether or not a sugar condition is
+written down. A class, never a list of names; widening it (meglitinides) is the pharmacist's."""
 
 FLAG_TARGET = "red_flag"
 
@@ -123,8 +143,11 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"chest (?:is )?(?:tight|pain|hurt|hurts|pressure)",
         r"tight(?:ness)? in (?:his|her|my|the) chest",
         r"sakit dada",
-        r"dada (?:sakit|sesak|ketat)",
+        r"dada (?:saya |dia )?(?:sakit|sesak|ketat|berat)",
         r"胸[口]?(?:痛|闷|紧)",
+        r"pain in (?:his|her|my|the) chest",
+        r"heart pain",
+        r"心口(?:痛|闷)",
     ),
     Feeling.BREATHLESS_AT_REST: (
         r"breathless",
@@ -135,6 +158,9 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"sesak nafas",
         r"susah bernafas",
         r"(?:喘不过气|呼吸困难|气喘)",
+        r"tak boleh bernafas",
+        r"\bsemput\b",
+        r"透不过气",
     ),
     Feeling.ONE_SIDED_SWELLING: (
         r"one (?:leg|arm|foot|side) (?:is )?swollen",
@@ -142,6 +168,8 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"(?:left|right) (?:leg|foot|arm) (?:is )?(?:swollen|swelling)",
         r"(?:kaki|tangan) (?:sebelah|kiri|kanan) bengkak",
         r"(?:一边|一只)(?:腿|脚|手)肿",
+        r"sebelah (?:kaki|tangan) bengkak",
+        r"bengkak sebelah",
     ),
     Feeling.WORST_HEADACHE: (
         r"worst headache",
@@ -156,6 +184,7 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"mata (?:kabur|tiba-tiba kabur)",
         r"tiba-tiba (?:kabur|tak nampak)",
         r"(?:突然|忽然)?(?:看不清|眼睛模糊|视线模糊)",
+        r"kabur tiba-tiba",
     ),
     Feeling.FALL: (
         r"\bfell\b",
@@ -164,6 +193,7 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"\bjatuh\b",
         r"terjatuh",
         r"(?:跌倒|摔倒|摔了|跌了|摔跤)",
+        r"\btergolek\b",
     ),
     Feeling.CONFUSION: (
         r"\bconfused\b",
@@ -172,6 +202,9 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"\bkeliru\b",
         r"tak (?:kenal|ingat) (?:kami|saya|orang)",
         r"(?:糊涂|认不出|说话不清|神志不清)",
+        r"\bconfusion\b",
+        r"(?:don'?t|do not) know where (?:i|he|she) (?:am|is)",
+        r"\bkebingungan\b",
     ),
     Feeling.SHAKY_SWEATY: (
         r"shak(?:y|ing) and sweat(?:y|ing)",
@@ -510,21 +543,82 @@ def is_red(feeling: Feeling) -> bool:
     return feeling in RED_FLAGS
 
 
+async def _system_read(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    model: Any,
+    scope: Scope,
+    where: Sequence[Any],
+) -> Sequence[Any]:
+    """A safety rule's own read of the record: the system's view, not the key of whoever raised
+    the flag. A helper who saw him shaking must start the ladder when the record says he is on
+    a sugar medicine, though her key opens neither his conditions nor his medicines. The rows
+    are for the rule alone — nothing read reaches the caller, only whether the flag was held
+    back — and the read is written down as the system's (`Channel.SYSTEM`), in the raiser's
+    name, under the scope the rows sit in."""
+    rows = list(
+        await session.scalars(select(model).where(model.profile_id == context.profile_id, *where))
+    )
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=scope,
+        target=model.__tablename__,
+        rows=len(rows),
+        channel=Channel.SYSTEM,
+    )
+    return rows
+
+
 async def _missing_fact(
     session: AsyncSession, *, context: KeyContext, feeling: Feeling
 ) -> str | None:
-    """For the two flags that depend on the record: what is missing, or None."""
+    """For the two flags that depend on the record: what is missing, or None.
+
+    The record is read as the system (`_system_read`), whoever raised the flag: a safety rule
+    is evaluated on what the record holds, not on what the raiser's key opens. Shaky-and-sweaty
+    stands on a sugar condition or an active medicine the register classes as lowering sugar;
+    a kilo in two days on a recent discharge."""
+    moment = utcnow()
     if feeling is Feeling.SHAKY_SWEATY:
-        facts = await current_facts(session, context=context, attribute=CONTROL)
-        if not any(fact.subject in SUGAR_CONDITIONS for fact in facts):
-            return "no_sugar_condition_on_record"
-    if feeling is Feeling.WEIGHT_GAIN:
-        moment = utcnow()
-        discharges = await audited_read(
+        conditions = await _system_read(
             session,
-            Event,
-            context,
-            Scope.RECORDS,
+            context=context,
+            model=Fact,
+            scope=Scope.RECORDS,
+            where=(
+                Fact.attribute == CONTROL,
+                Fact.subject.in_(SUGAR_CONDITIONS),
+                Fact.superseded_at.is_(None),
+                Fact.confidence_state != ConfidenceState.DISPUTED,
+                Fact.valid_from <= moment,
+                or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
+            ),
+        )
+        if conditions:
+            return None
+        medicines = await _system_read(
+            session,
+            context=context,
+            model=MedicationLine,
+            scope=Scope.MEDICINES,
+            where=(
+                MedicationLine.superseded_at.is_(None),
+                MedicationLine.status == LineStatus.ACTIVE,
+                MedicationLine.drug_class.in_(HYPOGLYCAEMIC_CLASSES),
+            ),
+        )
+        if medicines:
+            return None
+        return "no_sugar_condition_on_record"
+    if feeling is Feeling.WEIGHT_GAIN:
+        discharges = await _system_read(
+            session,
+            context=context,
+            model=Event,
+            scope=Scope.RECORDS,
             where=(
                 Event.kind == EventKind.DISCHARGE,
                 Event.occurred_at > moment - AFTER_DISCHARGE_WINDOW,
@@ -672,32 +766,22 @@ async def write_red_flag(
     written down again. On success the keeper is dropped, the row already there. Written
     under the record's scope, where the transcript it was heard in is kept.
     """
-    flag_id = uuid.uuid4()
     values.setdefault("raised_by_person_id", context.person_id)
     if tell_the_family:
         values["told"] = await _emergency_holders(session, context=context)
-    told = [uuid.UUID(person) for person in values.get("told", [])]
-
-    async def tell(on: AsyncSession) -> None:
-        for person in told:
-            await record_share(
-                on,
-                context=context,
-                scope=Scope.EMERGENCY,
-                target=FLAG_TARGET,
-                channel=Channel.APP,
-                shared_with_person_id=person,
-                target_id=flag_id,
-            )
-
-    async def keep(again: AsyncSession) -> None:
-        if await again.get(Flag, flag_id) is None:  # only if the rollback took it
-            await audited_write(again, Flag, context, Scope.RECORDS, id=flag_id, **values)
-            await tell(again)
-
-    flag = await audited_write(session, Flag, context, Scope.RECORDS, id=flag_id, **values)
-    await tell(session)
-    keep_on_refusal(session, keep)
+    flag = await audited_write(session, Flag, context, Scope.RECORDS, **values)
+    for person in flag.told:
+        await record_share(
+            session,
+            context=context,
+            scope=Scope.EMERGENCY,
+            target=FLAG_TARGET,
+            channel=Channel.APP,
+            shared_with_person_id=uuid.UUID(person),
+            target_id=flag.id,
+        )
+    # Kept the way every flag is kept, the button's included (`write_flag_kept`).
+    _keep_flag(session, context, flag, scope=Scope.RECORDS)
     return flag
 
 
@@ -802,8 +886,126 @@ async def escalate(
     )
 
 
+# --- a flag that stays written (E13/E14) ------------------------------------------------------
+
+FLAG_SCOPE = Scope.EMERGENCY
+"""The door a flag is written through: the one every role holds, because the person who hears
+the words — a helper, a neighbour — must be able to raise the flag whoever he is."""
+
+
+def _columns(row: Any) -> dict[str, Any]:
+    """The column values of a row, for writing the same row again after a rollback."""
+    return {column.key: getattr(row, column.key) for column in row.__table__.columns}
+
+
+async def write_flag_kept(
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    feeling: Feeling,
+    event: Event,
+    channel: Channel = Channel.APP,
+) -> Flag:
+    """Raise the flag on the SYMPTOM event it was said in (`raise_flag`), and keep it.
+
+    A keeper is registered on the session (`app.db.keep_on_refusal`): if the unit of work this
+    flag was written in is rolled back on a later refusal, the channel replays the keeper,
+    which writes the event the flag rests on and the flag again — the same ids, the same
+    moment — with their WRITE lines and a share line for each person on `told`. On success
+    the keeper is dropped: the rows are already there.
+    """
+    flag = await raise_flag(
+        session, context=context, feeling=feeling, event_id=event.id, channel=channel
+    )
+    _keep_flag(session, context, flag, event=event, scope=FLAG_SCOPE, channel=channel)
+    return flag
+
+
+def _keep_flag(
+    session: AsyncSession,
+    context: KeyContext,
+    flag: Flag,
+    *,
+    scope: Scope,
+    event: Event | None = None,
+    channel: Channel = Channel.APP,
+) -> None:
+    """The one way a flag is kept, whichever door raised it: a keeper on the session
+    (`app.db.keep_on_refusal`) that, if the unit of work the flag was written in is rolled back
+    on a later refusal, writes the event it rests on (when there is one) and the flag again —
+    the same ids, the same moment — with their WRITE lines under `scope` and a share line for
+    each person on `told`. On success the keeper is dropped: the rows are already there."""
+    event_values = None if event is None else _columns(event)
+    flag_values = _columns(flag)
+
+    async def keep(again: AsyncSession) -> None:
+        if event_values is not None and await again.get(Event, event_values["id"]) is None:
+            again.add(Event(**event_values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=scope,
+                target=Event.__tablename__,
+                target_id=event_values["id"],
+                rows=1,
+                channel=channel,
+            )
+        if await again.get(Flag, flag_values["id"]) is None:
+            again.add(Flag(**flag_values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=scope,
+                target=FLAG_TARGET,
+                target_id=flag_values["id"],
+                rows=1,
+                channel=channel,
+            )
+            for person in flag_values["told"]:
+                await record_share(
+                    again,
+                    context=context,
+                    scope=Scope.EMERGENCY,
+                    target=FLAG_TARGET,
+                    channel=channel,
+                    shared_with_person_id=uuid.UUID(person),
+                    target_id=flag_values["id"],
+                )
+
+    keep_on_refusal(session, keep)
+
+
+def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Scope) -> None:
+    """Keep one already-written row the way `write_flag_kept` keeps the flag: written again,
+    with its WRITE line, if the unit it was written in is rolled back. For the notices and
+    the ladder that go with a flag."""
+    values = _columns(row)
+    model = type(row)
+
+    async def keep(again: AsyncSession) -> None:
+        if await again.get(model, values["id"]) is None:
+            again.add(model(**values))
+            await again.flush()
+            await record(
+                again,
+                context=context,
+                action=Action.WRITE,
+                scope=scope,
+                target=model.__tablename__,
+                target_id=values["id"],
+                rows=1,
+            )
+
+    keep_on_refusal(session, keep)
+
+
 __all__ = [
     "FEELING_CODE",
+    "FLAG_SCOPE",
     "FLAG_TARGET",
     "FLAG_WINDOW",
     "RED_FLAGS",
@@ -821,11 +1023,13 @@ __all__ = [
     "escalate",
     "find_red_flags",
     "is_red",
+    "keep_row",
     "open_flags",
     "raise_flag",
     "record_the_moment",
     "red_flags_heard",
     "red_flags_in",
     "roster_for",
+    "write_flag_kept",
     "write_red_flag",
 ]

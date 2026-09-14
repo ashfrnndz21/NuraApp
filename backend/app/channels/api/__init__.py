@@ -38,6 +38,7 @@ from app.channels.api import (
     feed,
     medicines,
     profiles,
+    safety,
     timeline,
     visits,
 )
@@ -68,6 +69,7 @@ def _api() -> APIRouter:
     api.include_router(feed.router)
     api.include_router(medicines.router)
     api.include_router(visits.router)
+    api.include_router(safety.router)
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
     api.include_router(family.router)

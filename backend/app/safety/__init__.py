@@ -14,13 +14,21 @@ same check for the memos and cards the backend writes at run time.
 carries, in every language. `recording` is the recording consent pattern (E16-02): the notice
 spoken before a recording starts and `may_record`, the gate on the RECORDING consent.
 
-`red_flags` is the list of the things we do not wait for (docs/smart-nudges.md §2), and the one
-`Flag` row they raise, whichever way one comes in: a feeling tapped on the cloud (E21), raised
-on the SYMPTOM event before any ranking or cap and telling every live key with the emergency
-scope — a flag that depends on a fact not on the record is written with why it was
-suppressed, so the caregiver sees it was considered; the same flags heard in free text on
-WhatsApp (E19-05), with the escalation ladder written beside a flag raised there; and a word
-heard in a visit transcript (E05), found with its span and written before the summary card is
-composed. The same row carries a medicine change heard at a visit for E04's reconcile, never
-an amount.
+`red_flags` is the list of the things we do not wait for (docs/smart-nudges.md §2), one
+module and one table (`red_flag`): a word tapped on the feeling cloud (E21), free text on
+WhatsApp (E19-05), the words said or typed to the not-feeling-well button and the symptom
+log (E13/E14) all raise the same `Flag` on the SYMPTOM event they were said in, before any
+ranking or cap, telling every live key with the emergency scope; the words are one table
+(`RED_FLAG_WORDS`, `detect`), in three languages. A word heard in a visit transcript (E05) is
+found with its span (`RED_FLAG_TERMS`, `red_flags_heard`), written before the summary card is
+composed and tells the same keys; the same row carries a medicine change heard at a visit for
+E04's reconcile, never an amount. A flag that depends on a fact not on the record is written
+with why it was suppressed, so the caregiver sees it was considered. Every flag is kept the
+same way (`write_flag_kept`, `write_red_flag`): a refusal later in the same request cannot
+take it back, and the escalation ladder (`Escalation`) is written beside it.
+
+`emergency_card`, `not_feeling_well` and `symptom_log` are E13/E14: the card a stranger is
+handed, the one button, and how he feels in his words (ADR 0002). `people` is the two narrow,
+audited reads of a Person row they make. They hear a voice note through the region-pinned
+speech port, `app.ingestion.transcribe`.
 """

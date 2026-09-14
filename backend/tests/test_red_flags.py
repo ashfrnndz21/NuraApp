@@ -1,10 +1,12 @@
 """Red flags, one module (`app/safety/red_flags.py`): the feeling cloud's words (E21), the same
-flags heard in free text on WhatsApp (E19-05), and the words heard at a visit with their spans
-(E05) — one `Flag` table, one vocabulary of codes, one ladder."""
+flags heard in free text on WhatsApp (E19-05), the words the not-feeling-well button and the
+symptom log hear (E13/E14), and the words heard at a visit with their spans (E05) — one `Flag`
+table, one vocabulary of codes, one ladder, one way a flag is kept. Then the symptom tables,
+the transcriber port and the strings catalogue: pure tables and a fixture."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -13,16 +15,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import read_audit
+from app.channels import safety_strings as strings
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.identity.service import register_person
+from app.ingestion.transcribe import NOTHING_HEARD, FixtureTranscriber
+from app.ingestion.voice import NotAVoiceNote, VoiceNoteTooLong, check_voice_note
 from app.keys.context import KeyContext
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
 from app.memory.models import Artifact, Event, EventKind, Fact, SourceChannel
-from app.regions import Region
+from app.regions import OutOfRegion, Region
+from app.safety.plain_words import verify
 from app.safety.red_flags import (
     FEELING_CODE,
     FLAG_TARGET,
@@ -42,8 +48,16 @@ from app.safety.red_flags import (
     red_flags_in,
     write_red_flag,
 )
+from app.safety.symptoms import (
+    Duration,
+    Symptom,
+    parse_symptoms,
+    severity_level,
+    severity_word,
+)
 from tests.support import agree_to_family_sharing, refused_unit
 from tests.visits import pa
+from tests.voice import CHEST_PAIN, UNHEARD, VOICE, digest_of, fixture, placeholder_voice
 from tests.whatsapp_support import KIT, MEI, family
 
 # --- the words ---------------------------------------------------------------------------------
@@ -386,3 +400,160 @@ async def test_a_feeling_tapped_and_a_word_heard_raise_the_same_row_and_only_the
     # The feed's emergency card is for what he said he feels; the visit's flags are the
     # summary card's and the doctor's questions.
     assert [flag.id for flag in await open_flags(sg, context=context)] == [tapped.id]
+
+
+# --- the words the button hears (E13/E14) ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "rule"),
+    [
+        ("I have chest pain", Feeling.CHEST_TIGHTNESS),
+        ("pain in my chest", Feeling.CHEST_TIGHTNESS),
+        ("dada saya sakit", Feeling.CHEST_TIGHTNESS),
+        ("我胸口闷", Feeling.CHEST_TIGHTNESS),
+        ("I cannot breathe sitting down", Feeling.BREATHLESS_AT_REST),
+        ("semput", Feeling.BREATHLESS_AT_REST),
+        ("sebelah kaki bengkak", Feeling.ONE_SIDED_SWELLING),
+        ("everything suddenly blur", Feeling.SUDDEN_BLURRING),
+        ("I fell down in the bathroom", Feeling.FALL),
+        ("saya jatuh", Feeling.FALL),
+        ("I feel confused, not making sense", Feeling.CONFUSION),
+        ("shaky and sweaty", Feeling.SHAKY_SWEATY),
+    ],
+)
+def test_the_words_the_button_hears_are_the_same_table(text: str, rule: Feeling) -> None:
+    """One table of words for every channel: what E13's own table heard is heard here."""
+    assert detect(text) is rule
+
+
+# --- the symptom tables ---------------------------------------------------------------------
+
+
+def test_a_symptom_is_read_with_how_much_and_since_when() -> None:
+    parsed = parse_symptoms("dizzy, quite a lot, since this morning")
+    assert parsed.symptoms == (Symptom.DIZZY,)
+    assert parsed.severity == 2
+    assert parsed.duration is Duration.THIS_MORNING
+
+
+def test_the_worst_severity_word_wins_and_nothing_is_guessed() -> None:
+    assert parse_symptoms("very tired and a bit dizzy").severity == 3
+    quiet = parse_symptoms("headache")
+    assert quiet.symptoms == (Symptom.HEADACHE,)
+    assert quiet.severity is None and quiet.duration is None
+    assert not parse_symptoms("").heard_anything
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+@pytest.mark.parametrize("level", [1, 2, 3])
+def test_severity_words_map_both_ways(language: str, level: int) -> None:
+    """The word the table hears for a level is the level again, and the words the catalogue
+    says back ("a little / quite a lot / very bad") are heard as that level too."""
+    assert severity_level(severity_word(level, language)) == level
+    said_back = strings.SEVERITY_WORDS[language][level]
+    assert severity_level(said_back) == level, said_back
+
+
+def test_malay_and_chinese_words_are_read_too() -> None:
+    assert Symptom.DIZZY in parse_symptoms("saya pening sikit").symptoms
+    assert parse_symptoms("saya pening sikit").severity == 1
+    assert Symptom.TIRED in parse_symptoms("我很累").symptoms
+    assert parse_symptoms("我很累").severity == 3
+
+
+# --- the transcriber port -------------------------------------------------------------------
+
+
+async def test_the_fixture_transcriber_answers_by_digest_and_hears_nothing_otherwise() -> None:
+    transcriber = FixtureTranscriber(VOICE, Region.SG)
+    note = placeholder_voice(CHEST_PAIN)
+    assert transcriber.path_of(note).name == f"{digest_of(CHEST_PAIN)}.json"
+    heard = await transcriber.transcribe(note, "audio/m4a", "en", Region.SG)
+    assert heard.text == fixture(CHEST_PAIN)["text"] == "I have chest pain"
+    assert heard.confidence == 0.94 and heard.heard
+    silent = await transcriber.transcribe(placeholder_voice(UNHEARD), "audio/m4a", "en", Region.SG)
+    assert silent == NOTHING_HEARD and not silent.heard
+
+
+async def test_the_transcriber_is_pinned_to_its_region() -> None:
+    """A voice note is health data: a Singapore note never reaches a Malaysian transcriber."""
+    transcriber = FixtureTranscriber(VOICE, Region.MY)
+    assert transcriber.region is Region.MY
+    with pytest.raises(OutOfRegion):
+        await transcriber.transcribe(placeholder_voice(CHEST_PAIN), "audio/m4a", "en", Region.SG)
+
+
+def test_a_voice_note_is_audio_and_not_a_recording_of_a_whole_visit() -> None:
+    assert check_voice_note(b"abc", "Audio/M4A; codecs=mp4a") == "audio/m4a"
+    with pytest.raises(NotAVoiceNote):
+        check_voice_note(b"abc", "image/jpeg")
+    with pytest.raises(NotAVoiceNote):
+        check_voice_note(b"", "audio/m4a")
+    with pytest.raises(VoiceNoteTooLong):
+        check_voice_note(b"x" * (5 * 1024 * 1024 + 1), "audio/m4a")
+
+
+# --- the catalogue --------------------------------------------------------------------------
+
+FILLERS = {
+    "name": "Pa",
+    "chief": "Mei",
+    "patient": "Pa",
+    "who": "Mei",
+    "speaks": "Malay",
+    "band": "70 to 79",
+    "condition": "high blood pressure",
+    "medicine": "the water pill (frusemide)",
+    "amount": "1 tablet",
+    "when": "every morning",
+    "thing": "Penicillin",
+    "group": "O positive",
+    "doctor": "Dr Tan",
+    "clinic": "Bedok Clinic",
+    "number": "995",
+    "date": date(2026, 9, 14),  # a Monday; `render` says it in the line's own language
+    "words": "chest pain",
+    "symptom": "dizzy",
+    "severity": "quite bad",
+    "since": "this morning",
+}
+
+
+def test_every_template_in_the_catalogue_passes_the_verifier_filled() -> None:
+    failures: list[str] = []
+    for template_id, language, text in strings.catalogue():
+        rendered = strings.render(template_id, language, **FILLERS)
+        found = [f for f in verify(rendered, language, strings.KIND_OF.get(template_id, "line")) if f.severity == "fail"]
+        failures.extend(f"{template_id} [{language}]: {f.problem} — {text}" for f in found)
+    assert failures == []
+
+
+def test_a_line_that_fails_the_standard_is_refused_not_shown() -> None:
+    with pytest.raises(strings.NotPlainWords):
+        strings.render("nfw.not_taken", "en", medicine="the diuretic 40mg overdue dose")
+    with pytest.raises(strings.NoSuchTemplate):
+        strings.render("nfw.does_not_exist", "en")
+
+
+def test_no_template_tells_him_to_start_stop_or_change_a_medicine() -> None:
+    forbidden = ("stop taking", "start taking", "double", "take 2", "skip", "increase", "reduce", " mg")
+    for template_id, language, text in strings.catalogue():
+        low = text.lower()
+        for word in forbidden:
+            assert word not in low, (template_id, language, text)
+
+
+def test_one_vocabulary_for_the_three_levels() -> None:
+    """What the table hears first for a level is what the catalogue says back."""
+    for language in ("en", "ms", "zh"):
+        for level in (1, 2, 3):
+            assert severity_word(level, language) == strings.SEVERITY_WORDS[language][level]
+            assert strings.severity_said(level, language) == severity_word(level, language)
+
+
+def test_every_what_to_do_line_is_checked_as_an_action() -> None:
+    """Rules 6 and 7 — what to do and when, who does the next thing — run on the one card
+    whose whole job is what happens next."""
+    for template_id in strings.WHAT_TO_DO:
+        assert strings.KIND_OF[template_id] == "action", template_id
