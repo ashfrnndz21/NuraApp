@@ -15,12 +15,7 @@ from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_val
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.voice_schemas import VoiceScriptOut
-from app.channels.strings import (
-    COULD_NOT_HEAR,
-    COULD_NOT_READ,
-    NOT_A_HEALTH_PAPER,
-    NOT_A_MACHINE_SCREEN,
-)
+from app.channels.strings import lines
 from app.consent.models import (
     DOCUMENTED_BASES,
     Consent,
@@ -134,7 +129,11 @@ EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 class PhoneStart(BaseModel):
     phone_e164: str = Field(pattern=PHONE)
     display_name: str | None = Field(default=None, max_length=120)
-    language: str | None = Field(default=None, max_length=16)
+    language: Literal["en", "ms", "zh"] | None = None
+    """The language picked on the sign-in screen, which the code's message is sent in. Only
+    a language Nura's messages are written in (`app.channels.strings.LANGUAGES`); anything
+    else is a 422 at the door. Without one, the message is in his number's last known
+    language (`app.identity.login.start_phone_login`)."""
 
 
 class PhoneVerify(BaseModel):
@@ -1510,7 +1509,7 @@ class ReviewFieldOut(BaseModel):
     fact_id: uuid.UUID | None
 
     @classmethod
-    def of(cls, field: ReviewField) -> ReviewFieldOut:
+    def of(cls, field: ReviewField, *, language: str) -> ReviewFieldOut:
         waiting = (
             field.unreadable
             and field.corrected_value is None
@@ -1518,7 +1517,7 @@ class ReviewFieldOut(BaseModel):
         )
         return cls(
             unreadable=field.unreadable,
-            prompt=list(COULD_NOT_READ) if waiting else None,
+            prompt=list(lines("could_not_read", language)) if waiting else None,
             page=field.page,
             corrected_by_person_id=field.corrected_by_person_id,
             field_id=field.id,
@@ -1536,10 +1535,11 @@ class ReviewFieldOut(BaseModel):
         )
 
 
-NOTICE_LINES: dict[Notice, tuple[str, ...]] = {
-    Notice.NOT_A_HEALTH_PAPER: NOT_A_HEALTH_PAPER,
-    Notice.NOT_A_MACHINE_SCREEN: NOT_A_MACHINE_SCREEN,
+NOTICE_LINES: dict[Notice, str] = {
+    Notice.NOT_A_HEALTH_PAPER: "not_a_health_paper",
+    Notice.NOT_A_MACHINE_SCREEN: "not_a_machine_screen",
 }
+"""The key in `app.channels.strings.TEXT` of the lines each notice is said in."""
 
 
 class ReviewCardOut(BaseModel):
@@ -1563,7 +1563,9 @@ class ReviewCardOut(BaseModel):
     fields: list[ReviewFieldOut]
 
     @classmethod
-    def of(cls, card: ReviewCard, fields: Sequence[ReviewField]) -> ReviewCardOut:
+    def of(cls, card: ReviewCard, fields: Sequence[ReviewField], *, language: str) -> ReviewCardOut:
+        """The card, its notice and its fields' prompts in `language`: his settings' (the
+        channel reads them, `app.channels.api.capture.capture_language`)."""
         return cls(
             card_id=card.id,
             profile_id=card.profile_id,
@@ -1572,18 +1574,18 @@ class ReviewCardOut(BaseModel):
             document_date=card.document_date,
             asked_as=card.asked_as,
             source=card.source,
-            notice=_notice_lines(card),
+            notice=_notice_lines(card, language),
             high_risk_class=card.high_risk_class,
             created_at=utc(card.created_at),
             confirmed_at=None if card.confirmed_at is None else utc(card.confirmed_at),
             confirmed_by_person_id=card.confirmed_by_person_id,
-            fields=[ReviewFieldOut.of(field) for field in fields],
+            fields=[ReviewFieldOut.of(field, language=language) for field in fields],
         )
 
 
-def _notice_lines(card: ReviewCard) -> list[str] | None:
+def _notice_lines(card: ReviewCard, language: str) -> list[str] | None:
     notice = notice_of(card)
-    return None if notice is None else list(NOTICE_LINES[notice])
+    return None if notice is None else list(lines(NOTICE_LINES[notice], language))
 
 
 class ReviewConfirmIn(BaseModel):
@@ -1692,7 +1694,7 @@ class EventNoteOut(BaseModel):
     written_at: datetime
 
     @classmethod
-    def of(cls, view: NoteView) -> EventNoteOut:
+    def of(cls, view: NoteView, *, language: str) -> EventNoteOut:
         note, heard = view.note, view.transcript
         unheard = note.kind is NoteKind.VOICE and heard is None
         return cls(
@@ -1708,7 +1710,7 @@ class EventNoteOut(BaseModel):
             else TranscriptOut(
                 text=heard.text, confidence=heard.confidence, language=heard.language
             ),
-            notice=list(COULD_NOT_HEAR) if unheard else None,
+            notice=list(lines("could_not_hear", language)) if unheard else None,
             written_by_person_id=note.written_by_person_id,
             written_at=utc(note.written_at),
         )
