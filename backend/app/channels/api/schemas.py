@@ -10,7 +10,7 @@ from dataclasses import asdict
 from datetime import UTC, date, datetime, time
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
@@ -377,7 +377,7 @@ class EvidenceIn(BaseModel):
     storage_key: str = Field(min_length=1, max_length=512)
     content_type: str = Field(min_length=1, max_length=128)
     sha256: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
-    captured_at: datetime
+    captured_at: AwareDatetime
 
     def as_evidence(self) -> Evidence:
         return Evidence(
@@ -552,7 +552,7 @@ class AppointmentConfirmIn(BaseModel):
 
     subject: Literal[ConfirmSubject.APPOINTMENT]
     provider_id: uuid.UUID
-    scheduled_at: datetime
+    scheduled_at: AwareDatetime
     purpose: str = Field(min_length=1, max_length=80)
 
 
@@ -630,9 +630,9 @@ class PushComposeIn(BaseModel):
 class PushScheduleIn(PushComposeIn):
     """When, on which channel, and until when a composed message is worth sending."""
 
-    send_at: datetime
+    send_at: AwareDatetime
     channel: PushChannel = PushChannel.APP
-    expires_at: datetime
+    expires_at: AwareDatetime
 
 
 class PushConfirmIn(PushScheduleIn):
@@ -883,7 +883,7 @@ class LabelIn(BaseModel):
     dose_text: str | None = Field(default=None, min_length=1, max_length=120)
     quantity: int | None = Field(default=None, gt=0)
     prescriber: str | None = Field(default=None, min_length=1, max_length=80)
-    dispensed_at: datetime | None = None
+    dispensed_at: AwareDatetime | None = None
     source_kind: SourceKind = SourceKind.RETAIL
     confidence: float = Field(default=1.0, ge=0, le=1)
 
@@ -1313,7 +1313,7 @@ class ReadingIn(BaseModel):
 
     systolic: int = Field(ge=40, le=300)
     diastolic: int = Field(ge=20, le=200)
-    taken_at: datetime | None = None
+    taken_at: AwareDatetime | None = None
     episode_id: uuid.UUID | None = None
     """The open episode this reading was taken during, if any (E03-02)."""
 
@@ -1409,7 +1409,7 @@ class ScreenPhotoIn(BaseModel):
 
     data: str = Field(min_length=1, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
     content_type: str = Field(min_length=1, max_length=128)
-    captured_at: datetime
+    captured_at: AwareDatetime
 
     _base64 = field_validator("data")(classmethod(lambda cls, value: _is_base64(value)))
 
@@ -1441,7 +1441,7 @@ class ImportIn(BaseModel):
 
     data: str = Field(min_length=1, max_length=MAX_PDF_BYTES * 4 // 3 + 4)
     content_type: str = Field(min_length=1, max_length=128)
-    captured_at: datetime
+    captured_at: AwareDatetime
     source: DocumentSource
     document_kind: DocumentKind | None = None
 
@@ -1643,7 +1643,7 @@ class EventNoteIn(BaseModel):
     kind: NoteKind
     data: str = Field(min_length=1, max_length=MAX_VOICE_BYTES * 4 // 3 + 4)
     content_type: str = Field(min_length=1, max_length=128)
-    captured_at: datetime
+    captured_at: AwareDatetime
     private: bool = False
     label: str | None = Field(default=None, max_length=LABEL_LENGTH * 4)
 
@@ -1830,7 +1830,7 @@ class TranscriptIn(BaseModel):
     The text goes to the region's object store; nothing of it is kept on any row."""
 
     data: str = Field(min_length=1, max_length=MAX_TRANSCRIPT_BYTES * 4 // 3 + 4)
-    captured_at: datetime | None = None
+    captured_at: AwareDatetime | None = None
 
     @field_validator("data")
     @classmethod
@@ -2195,7 +2195,7 @@ class TaskIn(BaseModel):
 
     what: str = Field(min_length=1, max_length=80)
     assigned_person_id: uuid.UUID
-    due_at: datetime | None = None
+    due_at: AwareDatetime | None = None
 
 
 class TaskDoneIn(BaseModel):
@@ -2340,7 +2340,7 @@ class DocumentIn(BaseModel):
 
     data: str = Field(min_length=1, max_length=MAX_PHOTO_BYTES * 4 // 3 + 4)
     content_type: str = Field(min_length=1, max_length=128)
-    captured_at: datetime
+    captured_at: AwareDatetime
     tag: DocumentTag
 
     @field_validator("data")

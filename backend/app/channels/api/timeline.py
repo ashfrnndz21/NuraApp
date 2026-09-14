@@ -22,9 +22,9 @@ The yeses — for a visit, a step of its status, and hanging a paper — are min
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
+from pydantic import AwareDatetime
 
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.timeline_schemas import (
@@ -64,8 +64,8 @@ Language = Query(default=None, min_length=2, max_length=16)
 async def get_timeline(
     context: Context,
     session: Db,
-    since: datetime | None = None,
-    until: datetime | None = None,
+    since: AwareDatetime | None = None,
+    until: AwareDatetime | None = None,
     cursor: str | None = Query(default=None, max_length=200),
     episode: uuid.UUID | None = None,
     limit: int = Query(default=PAGE_SIZE, ge=1, le=MAX_PAGE),
