@@ -5,9 +5,10 @@
 The notice is spoken in the patient's language and passes docs/plain-words.md; with no doctor
 named it addresses the doctor plainly, never "your doctor"; `may_record` refuses when the
 RECORDING consent is withheld, withdrawn, or given to older words, and when the key cannot
-keep what the room was told would be kept; `store_artifact` refuses a VOICE artefact without
-that consent whoever writes it; every refusal is on the trail; the steps the code names are
-the steps the document names.
+keep what the room was told would be kept; `store_artifact` refuses a consult recording
+without that consent whoever writes it, keeps a person's own voice note on the consent to hold
+the record, and refuses a voice that does not say which it is (ADR 0003); every refusal is on
+the trail; the steps the code names are the steps the document names.
 """
 
 from __future__ import annotations
@@ -26,8 +27,8 @@ from app.db import utcnow
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.scopes import KeyRole, Scope
-from app.memory.episodic import store_artifact
-from app.memory.models import Artifact, ArtifactKind, SourceChannel
+from app.memory.episodic import RecordingNotDeclared, store_artifact
+from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel
 from app.regions import Region
 from app.safety.boundary import LANGUAGES
 from app.safety.plain_words import verify
@@ -60,7 +61,12 @@ async def _pa(session: AsyncSession, language: str = "en") -> KeyContext:
     )
 
 
-async def _voice(session: AsyncSession, context: KeyContext, kind: ArtifactKind = ArtifactKind.VOICE) -> Artifact:
+async def _voice(
+    session: AsyncSession,
+    context: KeyContext,
+    kind: ArtifactKind = ArtifactKind.VOICE,
+    recording: Recording | None = Recording.CONSULT,
+) -> Artifact:
     digest = uuid.uuid4().hex + uuid.uuid4().hex
     return await store_artifact(
         session,
@@ -72,6 +78,7 @@ async def _voice(session: AsyncSession, context: KeyContext, kind: ArtifactKind 
         captured_at=utcnow(),
         source_channel=SourceChannel.APP,
         region=Region.SG,
+        recording=recording if kind is ArtifactKind.VOICE else None,
     )
 
 
@@ -191,12 +198,12 @@ async def test_the_gate_needs_the_visit_and_the_place_the_recording_goes(sg: Asy
     await _voice(sg, daughter)
 
 
-async def test_the_store_refuses_a_voice_without_the_consent_whoever_writes_it(
+async def test_the_store_refuses_a_consult_without_the_consent_whoever_writes_it(
     sg: AsyncSession,
 ) -> None:
-    """Where the bytes enter: `store_artifact` asks for the RECORDING consent on every VOICE
-    artefact, so a writer that never asked the gate cannot keep a recording either. A photo
-    rests on the consent to hold the record alone."""
+    """Where the bytes enter: `store_artifact` asks for the RECORDING consent, under the visits
+    scope, on every consult recording, so a writer that never asked the gate cannot keep one
+    either. A photo rests on the consent to hold the record alone."""
     owner = await _pa(sg)
     await _voice(sg, owner, ArtifactKind.PHOTO)
     async with refused_unit(sg, ConsentWithheld):
@@ -204,7 +211,7 @@ async def test_the_store_refuses_a_voice_without_the_consent_whoever_writes_it(
     trail = await read_audit(sg, context=owner)
     assert any(
         e.outcome is Outcome.REFUSED
-        and e.scope is Scope.RECORDS
+        and e.scope is Scope.VISITS
         and e.refused_because == "ConsentWithheld"
         for e in trail
     )
@@ -226,3 +233,49 @@ def test_the_checklist_in_the_code_is_the_checklist_in_the_document() -> None:
     for language in LANGUAGES:
         for line in (*SPOKEN_NOTICE[language], *PRINTED_NOTICE[language], *WHEN_NO[language]):
             assert line.replace("{doctor}", "Dr Tan").replace("{who}", "Ash") in document, line
+
+
+async def test_his_own_voice_note_rests_on_holding_the_record_not_on_recording(
+    sg: AsyncSession,
+) -> None:
+    """ADR 0003: the RECORDING consent is for recordings that capture other people. His own
+    voice note about himself — or a caregiver's own on his event — is his words, or hers,
+    kept like typed text on the consent to hold the record, under the writer's key."""
+    owner = await _pa(sg)
+    mine = await _voice(sg, owner, recording=Recording.OWN_NOTE)
+    assert mine.kind is ArtifactKind.VOICE
+    daughter = await let_in(
+        sg, owner, phone="+6591110002", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS}
+    )
+    hers = await _voice(sg, daughter, recording=Recording.OWN_NOTE)
+    assert hers.kind is ArtifactKind.VOICE
+    # A consult still needs the recording consent, and the visits scope under which it is asked.
+    async with refused_unit(sg, ConsentWithheld):
+        await _voice(sg, owner, recording=Recording.CONSULT)
+
+
+async def test_every_voice_says_whose_voices_it_carries_and_nothing_else_does(
+    sg: AsyncSession,
+) -> None:
+    """No writer can leave the decision out: a voice with no `recording`, or a photo with one,
+    is refused where the bytes enter, and the refusal is on the trail."""
+    owner = await _pa(sg)
+    await agree_to_recording(sg, owner)
+    async with refused_unit(sg, RecordingNotDeclared):
+        await _voice(sg, owner, recording=None)
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
+    async with refused_unit(sg, RecordingNotDeclared):
+        await store_artifact(
+            sg,
+            context=owner,
+            kind=ArtifactKind.PHOTO,
+            storage_key=f"sg/{owner.profile_id}/{digest}",
+            content_type="image/jpeg",
+            sha256=digest,
+            captured_at=utcnow(),
+            source_channel=SourceChannel.APP,
+            region=Region.SG,
+            recording=Recording.OWN_NOTE,
+        )
+    trail = await read_audit(sg, context=owner)
+    assert sum(1 for e in trail if e.refused_because == "RecordingNotDeclared") == 2

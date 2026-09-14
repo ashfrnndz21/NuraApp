@@ -24,6 +24,7 @@ from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.transcribe import FixtureTranscriber
 from app.regions import Region
 from app.safety.plain_words import (
     RULES_FILE,
@@ -35,6 +36,7 @@ from app.safety.plain_words import (
 from app.settings import Settings
 from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
 from tests.paper import PAPER
+from tests.voice_notes import VOICE
 
 
 async def test_every_route_answers_under_api_too(client: AsyncClient) -> None:
@@ -102,6 +104,7 @@ def _app(web_dist: str | None) -> AsyncClient:
         code_sender=LoggingCodeSender(reveal=True),
         object_store=LocalObjectStore(root, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        transcriber=FixtureTranscriber(VOICE, Region.SG),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),

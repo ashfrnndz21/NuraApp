@@ -44,6 +44,8 @@ from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.documents import PdfTooLarge
+from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
@@ -102,6 +104,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (PhotoTooLarge, 413),
     # Free text needs the 24-hour window; outside it only a template goes.
     (OutsideTheWindow, 409),
+    # A PDF or a note on an event is not this big (E02-03, E02-06).
+    (PdfTooLarge, 413),
+    (NoteTooLarge, 413),
+    (NoSuchEventNote, 404),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),

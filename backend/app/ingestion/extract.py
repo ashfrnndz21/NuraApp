@@ -3,8 +3,17 @@
 An `Extractor` takes the bytes and answers with an `Extraction`: a guess at what kind of
 document it is, the date on the document, and fields — each a proposed statement (subject,
 attribute, value, unit) with how sure the extractor is and, where it can say, where on the
-page it read it. Nothing here is a fact: a field is a proposal for the review card, and only
-a person's yes turns it into one (`app.ingestion.review`).
+page it read it, and on which page of a document of several. Nothing here is a fact: a field
+is a proposal for the review card, and only a person's yes turns it into one
+(`app.ingestion.review`).
+
+One port reads every kind of paper — a printed lab report, a PDF from a portal, a clinic slip
+in a doctor's hand, the screen of a blood pressure machine (E02-02, E02-03, E02-08). What
+differs is the hint (`Hints.expected`): the kind the person, or the route, says the page is,
+so a real recogniser can choose how to read it. A hint is never an answer: the extraction
+still says what the page looks like, and a page that is not what it was offered as is said
+to be so. A field the recogniser saw but could not read is `unreadable` — no value, never
+guessed — and the card asks a person to type it.
 
 The real extractor — OCR and a vision model in the profile's region — is a later adapter.
 `FixtureExtractor` is what runs in the tests and on a laptop: it knows a handful of redacted
@@ -36,20 +45,53 @@ class DocumentKind(StrEnum):
     MEDICINE_LABEL = "medicine_label"
     DISCHARGE_LETTER = "discharge_letter"
     CLINIC_SLIP = "clinic_slip"
+    HANDWRITTEN_PRESCRIPTION = "handwritten_prescription"
+    """A prescription in a doctor's hand (E02-02): drug, dose and frequency, each asked."""
+    INSURANCE_LETTER = "insurance_letter"
+    DEVICE_SCREEN = "device_screen"
+    """The screen of a blood pressure machine, a glucometer or a scale (E02-08)."""
+    NOT_HEALTH = "not_health"
+    """Read, and not a health paper at all: a receipt, a menu. Nothing is taken off it."""
     UNKNOWN = "unknown"
+
+
+HANDWRITTEN = frozenset({DocumentKind.CLINIC_SLIP, DocumentKind.HANDWRITTEN_PRESCRIPTION})
+"""The papers written by hand (E02-02): the ones where a field may be unreadable."""
+
+PHOTO_HINTS = frozenset(
+    {
+        DocumentKind.LAB_REPORT,
+        DocumentKind.MEDICINE_LABEL,
+        DocumentKind.DISCHARGE_LETTER,
+        DocumentKind.CLINIC_SLIP,
+        DocumentKind.HANDWRITTEN_PRESCRIPTION,
+        DocumentKind.INSURANCE_LETTER,
+    }
+)
+"""What a person may say a photo of a page is. A device screen has its own route."""
+
+DOCUMENT_HINTS = frozenset(
+    {DocumentKind.LAB_REPORT, DocumentKind.DISCHARGE_LETTER, DocumentKind.INSURANCE_LETTER}
+)
+"""What a person may say an imported PDF is (E02-03)."""
 
 
 @dataclass(frozen=True, slots=True)
 class Span:
-    """Where on the page a field was read: a box in fractions of the image, top-left origin."""
+    """Where on the page a field was read: a box in fractions of the image, top-left origin,
+    and — in a document of several pages — which page, counting from 1."""
 
     x0: float
     y0: float
     x1: float
     y1: float
+    page: int | None = None
 
-    def as_json(self) -> dict[str, float]:
-        return {"x0": self.x0, "y0": self.y0, "x1": self.x1, "y1": self.y1}
+    def as_json(self) -> dict[str, float | int]:
+        box: dict[str, float | int] = {"x0": self.x0, "y0": self.y0, "x1": self.x1, "y1": self.y1}
+        if self.page is not None:
+            box["page"] = self.page
+        return box
 
 
 CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -71,6 +113,10 @@ class NotAValue(Refusal):
 
 class NotAConfidence(Refusal):
     """Confidence is a number from nought to one."""
+
+
+class NotAPage(Refusal):
+    """A page number counts from one."""
 
 
 def check_code(code: str) -> str:
@@ -97,7 +143,12 @@ def check_confidence(confidence: float) -> float:
 
 @dataclass(frozen=True, slots=True)
 class ExtractedField:
-    """One proposed statement, and how sure the extractor is of it."""
+    """One proposed statement, and how sure the extractor is of it.
+
+    `unreadable` is the honest answer for a field the recogniser found and could not read —
+    the frequency scrawled on a clinic slip. It carries no value, never a guess; the card
+    shows it as a line for a person to type (E02-02).
+    """
 
     subject: str
     attribute: str
@@ -105,17 +156,24 @@ class ExtractedField:
     unit: str | None
     confidence: float
     span: Span | None = None
+    unreadable: bool = False
 
     def checked(self) -> ExtractedField:
-        """The same field, or a refusal: the codes are codes, the value short, the
-        confidence a confidence. Run on every field before it reaches a card."""
+        """The same field, or a refusal: the codes are codes, the value short — or, for an
+        unreadable field, absent — the confidence a confidence, the page a page. Run on
+        every field before it reaches a card."""
+        if self.unreadable and self.value is not None:
+            raise NotAValue("an unreadable field carries no value")
+        if self.span is not None and self.span.page is not None and self.span.page < 1:
+            raise NotAPage("a page number counts from one")
         return ExtractedField(
             subject=check_code(self.subject),
             attribute=check_code(self.attribute),
-            value=check_value(self.value),
+            value=None if self.unreadable else check_value(self.value),
             unit=None if self.unit is None else str(self.unit)[:32],
             confidence=check_confidence(self.confidence),
             span=self.span,
+            unreadable=self.unreadable,
         )
 
 
@@ -136,10 +194,12 @@ class Extraction:
 @dataclass(frozen=True, slots=True)
 class Hints:
     """What the extractor may be told about the page: the profile's language and region,
-    so a Malay label and a Singapore lab format are expected rather than guessed at."""
+    so a Malay label and a Singapore lab format are expected rather than guessed at, and —
+    where the person or the route says so — the kind of paper it is offered as."""
 
     language: str
     region: Region
+    expected: DocumentKind | None = None
 
 
 class Extractor(Protocol):
@@ -158,7 +218,10 @@ def _field_from(entry: Mapping[str, Any]) -> ExtractedField:
         value=entry["value"],
         unit=entry.get("unit"),
         confidence=entry["confidence"],
-        span=None if span is None else Span(span["x0"], span["y0"], span["x1"], span["y1"]),
+        span=None
+        if span is None
+        else Span(span["x0"], span["y0"], span["x1"], span["y1"], span.get("page")),
+        unreadable=bool(entry.get("unreadable", False)),
     ).checked()
 
 
@@ -183,8 +246,12 @@ class FixtureExtractor:
     """Answers from `tests/fixtures/paper/*.json`, by the sha256 of the bytes it is shown.
 
     Every fixture names the digest of the placeholder bytes that stand in for the redacted
-    photo (`tests/paper.py` makes them; nothing binary is committed). A digest no fixture
-    names is a page this extractor cannot read: `Extraction.nothing()`.
+    photo or PDF (`tests/paper.py` makes them; nothing binary is committed). A digest no
+    fixture names is a page this extractor cannot read: `Extraction.nothing()`. The hint is
+    taken and not needed — a fixture already knows what its page is — which is exactly the
+    answer a real recogniser must also give: the page as it is, whatever it was offered as.
+    The labelled answers beside the fixtures (`*.expected.json`) name no digest and are not
+    read here; they are the accuracy harness's (`tests/paper_accuracy.py`).
     """
 
     def __init__(self, directory: Path) -> None:
