@@ -181,8 +181,10 @@ test("a no to a held tap is said in the backend's words, and nothing of the pape
   await expect(page.getByTestId("held-refused")).toContainText("You cannot see these papers any more.");
   expect(taps.map((tap) => tap.status)).toEqual([403]);
   expect(taps[0]!.body.taken_at).toMatch(/^2026-09-14T/);
-  expect(await medicinesInIndexedDb(page, { card: true })).toEqual([]);
-  expect((await keptKeys(page)).filter((key) => /^(today|feed|queue|emergency)\./.test(key))).toEqual([]);
+  // The held tap's no is said first; then the page is read again, refused, and the phone's copy
+  // goes — wait for that, not for the sentence.
+  await expect.poll(() => medicinesInIndexedDb(page, { card: true })).toEqual([]);
+  await expect.poll(async () => (await keptKeys(page)).filter((key) => /^(today|feed|queue|emergency)\./.test(key))).toEqual([]);
   // The backend wrote nothing for the tap it said no to.
   const lines = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as { count: { taken: number } | null }[];
   expect(lines[0]!.count?.taken).toBe(0);
