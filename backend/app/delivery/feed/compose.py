@@ -60,6 +60,7 @@ from app.delivery.strings import (
     render,
     test_name,
 )
+from app.delivery.voice import voiced
 from app.errors import Refusal
 from app.family.photos import photos_for_his_feed
 from app.family.roster import who_is_on_duty
@@ -383,7 +384,31 @@ async def refresh(
             medicines=medicines,
         )
     )
+    await _say_ahead(engine, context, made)
     return state, made
+
+
+async def _say_ahead(engine: Engine, context: KeyContext, items: Sequence[FeedItem]) -> None:
+    """Each new card's spoken twin, said and kept the moment the card is made (E22-03):
+    through the one voice port, into the region's store, under the digest of the card's voice
+    script — the same lines, language and boundary the twin route says (`twin.spoken_twin`),
+    so the same key, and the first play is a read. A card with no voice in its language yet,
+    or too long to say, is not said ahead; the route answers for it as it always has."""
+    if engine.voice is None or engine.store is None:
+        return
+    for item in items:
+        try:
+            await voiced(
+                engine.store,
+                engine.voice,
+                profile_id=context.profile_id,
+                region=context.region,
+                lines=list(item.voice or item.body),
+                language=item.language,
+                boundary=item.boundary,
+            )
+        except Refusal:
+            continue
 
 
 def _format_of(state: StateView) -> CardFormat:
@@ -1443,9 +1468,18 @@ async def _story_proud(
     )
 
 
+CONDITION_TERMS: Mapping[str, str] = {"high_blood_pressure": "blood pressure"}
+"""What a self-search asks the allowlisted sources about for a condition he told (E01): the
+condition's code in words ("diabetes", "kidneys"), except where the record already searches
+for the same thing under another name — high blood pressure is the blood pressure search."""
+
+
 def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[str, str, list[str]]]:
     """What the record holds that deserves an explainer: (term, scope word, fact ids). A
-    medicine is one E04 reconciled into a line, or one a label card wrote as a fact."""
+    medicine is one E04 reconciled into a line, or one a label card wrote as a fact; a
+    condition is one he told when his profile was set up or on his settings screen (E01,
+    a `condition.<code>` fact that holds), so a learning card can be made for each condition
+    as well as each medicine (E21-06)."""
     clinical = state.dimension(Dimension.CLINICAL) or {}
     facts = clinical.get("facts", {})
     gaps: list[tuple[str, str, list[str]]] = []
@@ -1462,7 +1496,14 @@ def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[st
             if term not in seen:
                 seen.add(term)
                 gaps.append((term, "medicines", [name["fact_id"]]))
-    if "blood_pressure" in facts:
+    for code, entry in sorted(facts.get("condition", {}).items()):
+        if entry.get("value") is not True:
+            continue
+        term = CONDITION_TERMS.get(code, code.replace("_", " "))
+        if term not in seen:
+            seen.add(term)
+            gaps.append((term, "records", [entry["fact_id"]]))
+    if "blood_pressure" in facts and "blood pressure" not in seen:
         ids = [entry["fact_id"] for entry in facts["blood_pressure"].values()]
         gaps.append(("blood pressure", "readings", ids))
     return gaps

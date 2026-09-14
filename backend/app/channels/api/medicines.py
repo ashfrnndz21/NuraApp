@@ -9,6 +9,7 @@
     GET  /profiles/{id}/proud                      the proud number: days with a tablet taken
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
+    GET  /profiles/{id}/medicines/{line}/story/voice?part=   one part of it, as a voice note
 
 The yes for a medicine is minted at `POST /profiles/{id}/confirmations` with subject
 `medicine`, in `app.channels.api.profiles`. A label photo is a photo: it comes in through
@@ -20,8 +21,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from typing import Literal
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.api.deps import Context, Db, providers_of
@@ -37,6 +39,7 @@ from app.channels.api.schemas import (
     TakenIn,
     TakenOut,
 )
+from app.delivery.voice import voiced
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
@@ -51,7 +54,7 @@ from app.medicines.service import (
     story,
     today,
 )
-from app.medicines.story import interaction_question
+from app.medicines.story import STORY_PARTS, interaction_question, story_part
 from app.medicines.strings import PLAIN_NAME, language_of
 from app.memory.episodic import withheld_references
 
@@ -224,3 +227,51 @@ async def medication_story(
         language=language,
     )
     return StoryOut.of(line_id, told)
+
+
+StoryPart = Literal[STORY_PARTS]  # type: ignore[valid-type]
+
+
+@router.get("/{profile_id}/medicines/{line_id}/story/voice")
+async def medication_story_voice(
+    line_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    part: StoryPart = "purpose",
+    language: str | None = Language,
+) -> Response:
+    """One part of the story as a voice note (E04-06): what it is for, how to take it, what to
+    watch for, what to avoid, what to do if he forgot — the last ending on the story's
+    boundary. Each is under thirty seconds, said once through the voice port and kept in the
+    region's store under the digest of its script, the same cache every card's spoken twin is
+    kept in (E11-04), so every later play is a read. Played on a tap; nothing plays by itself.
+    404 when the part says nothing for this medicine, has no voice in the language yet, or
+    would run too long: the phone then says the words with its own voice."""
+    providers = providers_of(request)
+    told = await story(
+        session,
+        context=context,
+        registry=providers.drug_registry,
+        line_id=line_id,
+        language=language,
+    )
+    lines, boundary = story_part(told, part)
+    said = await voiced(
+        providers.object_store,
+        providers.voice,
+        profile_id=context.profile_id,
+        region=context.region,
+        lines=lines,
+        language=told.language,
+        boundary=boundary,
+    )
+    return Response(
+        content=said.spoken.audio,
+        media_type=said.spoken.content_type,
+        headers={
+            "X-Duration-Seconds": f"{said.spoken.duration_seconds:.1f}",
+            "X-Voice-Cache": "hit" if said.cached else "miss",
+            "Cache-Control": "private",
+        },
+    )

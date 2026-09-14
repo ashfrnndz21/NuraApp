@@ -54,6 +54,8 @@ def _engine(request: Request) -> Engine:
         compressor=providers.compressor,
         registry=providers.drug_registry,
         ranges=providers.reference_ranges,
+        voice=providers.voice,
+        store=providers.object_store,
     )
 
 

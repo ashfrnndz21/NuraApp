@@ -81,6 +81,7 @@ from app.language.review import (
     SourceAlreadyListed,
 )
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.story import NothingToSay
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
@@ -202,6 +203,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotInThatLanguage, 404),
     (NoVoiceFor, 404),
     (TooLongToSay, 404),
+    (NothingToSay, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),

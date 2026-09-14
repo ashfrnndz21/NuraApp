@@ -84,7 +84,7 @@ from app.medicines.service import (
     Slot,
 )
 from app.medicines.service import Outcome as MedicineOutcome
-from app.medicines.story import Story
+from app.medicines.story import Story, voice_parts
 from app.memory.episodic import WITHHELD_ARTIFACT, WITHHELD_EVENT
 from app.memory.models import (
     LABEL_LENGTH,
@@ -1253,6 +1253,9 @@ class StoryOut(BaseModel):
     boundary: list[str]
     doctor_question: list[str]
     lines: list[str]
+    voice_parts: list[str]
+    """The parts said as voice notes (E04-06), in order: each is played from
+    `…/medicines/{line}/story/voice?part=`, said once and read from the region's store after."""
 
     @classmethod
     def of(cls, line_id: uuid.UUID, story: Story) -> StoryOut:
@@ -1270,6 +1273,7 @@ class StoryOut(BaseModel):
             boundary=story.boundary,
             doctor_question=story.doctor_question,
             lines=story.lines,
+            voice_parts=voice_parts(story),
         )
 
 

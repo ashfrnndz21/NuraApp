@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from app.drugs.registry import Interaction, Monograph
+from app.errors import Refusal
 from app.medicines import strings
 from app.medicines.dose import Dose, Frequency
 from app.medicines.models import ChangeKind
@@ -51,6 +52,33 @@ class Story:
             *self.if_forgotten,
             *self.boundary,
         ]
+
+
+STORY_PARTS: tuple[str, ...] = ("purpose", "how_to_take", "watch_out", "avoid", "if_forgotten")
+"""The story as voice notes (E04-06): one note per part. The whole story runs near a minute
+said at his pace, longer than one voice note may (`app.delivery.voice.MAX_SECONDS`)."""
+
+
+class NothingToSay(Refusal):
+    """This part of the story says nothing for this medicine, so it has no voice note."""
+
+
+def voice_parts(story: Story) -> list[str]:
+    """The parts of this story that say something, in the order they are told."""
+    return [part for part in STORY_PARTS if getattr(story, part)]
+
+
+def story_part(story: Story, part: str) -> tuple[list[str], str | None]:
+    """One part of the story as it is said, and the boundary it ends on: the last part that
+    says anything ends on the story's boundary lines, with the longer pause before them
+    (`app.language.voice_script`). Pure, like the rest of the story."""
+    parts = voice_parts(story)
+    if part not in parts:
+        raise NothingToSay(f"the story says nothing under {part!r}")
+    lines = list(getattr(story, part))
+    if part == parts[-1] and story.boundary:
+        return [*lines, *story.boundary], "\n".join(story.boundary)
+    return lines, None
 
 
 def how_to_take(dose: Dose, monograph: Monograph, language: str) -> list[str]:

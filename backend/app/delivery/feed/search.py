@@ -41,11 +41,13 @@ from app.delivery.feed.sources import (
     usable_sources,
 )
 from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines
+from app.delivery.voice import Voice
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
-from app.reasoning.ranges import ReferenceRanges
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.reasoning.ranges import ReferenceRanges
 from app.state.models import Dimension
 from app.state.service import StateView
 
@@ -75,6 +77,11 @@ class Engine:
     compressor: Compressor
     registry: DrugRegistry
     ranges: ReferenceRanges | None = None
+    voice: Voice | None = None
+    store: ObjectStore | None = None
+    """Where a card's spoken twin is said and kept the moment the card is made (E22-03): the
+    one voice port, and the region's object store. None, and the twin is said on its first
+    play instead (`app.delivery.feed.twin`)."""
 
 
 @audited(Action.WRITE, Scope.RECORDS, JOB_TARGET)
@@ -192,6 +199,10 @@ async def run_job(
         if key in existing:
             continue
         cite = {
+            # The page the card cites, for the card to show and link (E21-06): who published
+            # it, where, and the passage the lines came from.
+            "publisher": source.name,
+            "domain": source.domain,
             "url": found.url,
             "title": found.title,
             "published_at": found.published_at,
