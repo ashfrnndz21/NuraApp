@@ -9,7 +9,6 @@ make web         # dev server on http://127.0.0.1:5173/app/ (proxies /api to mak
 make build-web   # web/dist, which make dev then serves at http://127.0.0.1:8000/app/
 make web-test    # Vitest: strings, refusal map, Today model, the feed's store/cards/playback, the kept pages, the voice, contrast
 make web-e2e     # Playwright against the built app; starts make dev itself, its clock frozen at 10:00 Singapore
-make web-mock    # make web, with E01's onboarding routes answered by src/api/mock/ until E01 merges
 npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
 ```
 
@@ -33,7 +32,6 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
   cards show), `dates.ts`; `state.ts` is where the session is, in memory only.
 - `src/screens/onboarding/` — one file per step: About, Cloud, Asks, ReadBack, Records (the
   prompt, the capture and the review card), Questions, Plan.
-- `src/api/mock/` — dev only: the stand-in for E01's routes under `VITE_API_MOCK=1`.
 - `src/feed/` — the vertical feed (W2, E21): `store.ts` (pages by cursor, prefetch, the kept
   first page, the side actions), `model.ts` (a card as the pager shows it, from the backend's
   item alone), `playback.ts` (Hear on tap: the backend's voice or the spoken twin), `session.ts`
@@ -197,27 +195,29 @@ deployment brings; on the Mac, `127.0.0.1` counts as secure.
 
 ## Onboarding (W3)
 
-About you → the word cloud → the follow-ups → the read-back → the papers (prompt, photo,
-review card, one yes) → the questions the papers raised → the gaps → Today. It starts after
+About you → the word cloud → the papers (the sitting's prompt, photo or PDF, review card, one
+yes) → the read-back → the questions the papers raised → the first week → Today, in the order
+E01's sitting keeps (`about_you → papers → read_back → questions → closed`). It starts after
 *I agree* on the for-me door and after *Set it up* on the for-someone door; *Set up later*
 skips it and *Set up Nura* under Me starts it again.
 
-**Live and mocked.** E01's backend (branch `E01-biography-profile`) is being built beside this
-client. Until it merges, `make web-mock` (`VITE_API_MOCK=1`) answers its routes from
-`src/api/mock/`, and `src/api/nura.ts` calls the real paths with the same shapes
-(`src/api/types.ts`), so switching over changes nothing but the flag. The mock is in memory
-for the tab, and a build without the flag has none of it (Vite drops the import).
+**Every route is live** — E01 (#117) is on main, and nothing is mocked: the e2e runs against
+the backend itself, both clocks frozen at 10:00 Singapore.
 
-| Route | State |
+| Route | From |
 |---|---|
-| `POST /profiles/{id}/photos`, `POST /profiles/{id}/imports` (a PDF), `POST /profiles/{id}/confirmations` (`review_card`), `POST /profiles/{id}/review-cards/{card}/confirm`, `GET /profiles/{id}/review-cards/{card}` | live (E02) |
-| `POST /profiles/{id}/consents/sharing/preview`, `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys`, `GET /profiles/{id}/keys` | live (E12; the preview is this PR's backend seam) |
-| `GET /onboarding/conditions?language=` | mocked until E01 |
-| `GET` / `PUT /profiles/{id}/settings` | mocked until E01 |
-| `POST /profiles/{id}/biography`, `/biography/read-back`, `/biography/papers`, `/biography/close` | mocked until E01 |
-| `GET /profiles/{id}/plan?language=` | mocked until E01 |
-| `POST /profiles/{id}/biography/questions` (Keep / Not this one), `POST /profiles/{id}/plan/later` | mocked; **assumed** paths — aligned to E01's names when its branch lands; Keep goes to E05's `POST /profiles/{id}/appointments/{appt}/questions` once #105 is on main |
-| `word` and `capture: "invite"` on a gap card | mocked; agreed with E01, which will include them |
+| `GET /onboarding/conditions?language=`, `GET` / `PUT /profiles/{id}/settings` | E01 |
+| `POST` / `GET /profiles/{id}/biography`, `/biography/papers`, `/biography/read-back`, `/biography/questions`, `/biography/close` | E01; a kept question goes on the next visit's list by E01 itself (E05), or waits and moves when one is booked (`handed_over_to`) |
+| `GET /profiles/{id}/plan?language=`, `POST /profiles/{id}/plan/later` | E01 |
+| `POST /profiles/{id}/photos`, `POST /profiles/{id}/imports` (a PDF), `POST /profiles/{id}/confirmations` (`review_card`), `POST /profiles/{id}/review-cards/{card}/confirm` | E02 |
+| `POST /profiles/{id}/consents/sharing/preview`, `POST /profiles/{id}/consents/sharing`, `POST /profiles/{id}/keys` | E12 (the preview is this PR's backend seam) |
+
+**Whose words.** Every line of the sitting — the step's headline and lines, the read-back, the
+questions with their State id and source line, the summary, each prompt — is E01's, in plain
+words; the client composes none. E01's script speaks to him, so a chief setting up her father
+reads the app's own headings in his name (*A few things about Pa*). E01's writes answer in the
+language on his settings; a chief's phone reads the sitting again with `?language=` after each
+one, so choosing Malay for him never turns her screens Malay.
 
 **Papers of every kind.** A PDF goes to `POST /imports` (sent as a `share`), anything else
 to `POST /photos`; both answer with the same review card. A line Nura could not read shows
@@ -227,8 +227,10 @@ them; a page that is not a health paper has nothing to say yes to. In the patien
 every line of the card has its own Hear (what the line is, what was read, how sure Nura is);
 the caregiver density keeps the header's.
 
-**The gap card's three actions.** A photo gap opens the camera; a tap gap reopens its
-word's follow-up question and comes back with the gap closed; the invite gap goes to E12's
+**The gap card's actions.** A photo gap opens the camera and a PDF gap the file picker; the
+breakfast gap asks that one question of About you and comes back with the gap closed. Which
+medicine he is allergic to has no route to write it yet (#117), so that card has *Later* only
+— a tap on the cloud's word would close nothing. The invite gap goes to E12's
 flow — who, which parts, the words, one *I agree*, then `POST /consents/sharing` and a
 caregiver key to the same parts (`POST /keys`). Only on his own papers: the consent route
 takes the owner's own yes. The words are never composed here: the client asks
