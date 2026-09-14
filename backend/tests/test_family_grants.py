@@ -230,4 +230,4 @@ async def test_the_helper_list_says_who_holds_a_helper_key_and_what_she_may_do(
 
     await revoke_key(sg, context=mei, key_id=h.siti_key.id)
     helpers, empty = await helper_list(sg, context=mei, language="en")
-    assert helpers == [] and empty == ["Nobody holds a helper key to your record yet."]
+    assert helpers == [] and empty == ["Nobody holds a helper key to your papers yet."]

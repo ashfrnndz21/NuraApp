@@ -13,7 +13,7 @@ from collections.abc import Mapping
 FOUND: Mapping[str, str] = {
     "en": "Nura found a visit to {provider} in the calendar.",
     "ms": "Nura jumpa lawatan ke {provider} dalam kalendar.",
-    "zh": "Nura 在日历里找到一次见{provider}的时间。",
+    "zh": "Nura 在日历里找到一次看{provider}的时间。",
 }
 
 # @patient

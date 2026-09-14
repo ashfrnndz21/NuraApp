@@ -140,29 +140,29 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
     },
     "not_open_to_you": {
         "en": (
-            "That part of {name}'s record is not open to you.",
+            "That part of {name}'s papers is not open to you.",
             "{name} can change that in the app.",
         ),
         "ms": (
-            "Bahagian rekod {name} itu tidak dibuka untuk anda.",
+            "Bahagian surat-surat {name} itu tidak dibuka untuk anda.",
             "{name} boleh ubah dalam aplikasi.",
         ),
-        "zh": ("{name}记录里的这部分没有开放给您。", "{name}可以在应用里更改。"),
+        "zh": ("{name}文件里的这部分没有开放给您。", "{name}可以在应用里更改。"),
     },
     "red_flag": {
         "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} know now."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
     },
     "red_flag_one": {
         "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} knows now."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
     },
     "red_flag_alone": {
         "en": ("This one we do not wait for.", "Call {doctor} today."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。"),
     },
     # A flag written but held back (it depends on a fact not on his papers): no alarm, and
     # still the next step for a worried family member.
@@ -172,9 +172,9 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
     },
     "taken_patient": {
-        "en": ("Thank you, I wrote it down.", "{who} can see it too."),
-        "ms": ("Terima kasih, saya sudah tulis.", "{who} juga boleh melihatnya."),
-        "zh": ("谢谢，我记下了。", "{who}也能看到。"),
+        "en": ("Thank you, I wrote it down.", "{who} can see you took it."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{who}能看到您吃了。"),
     },
     "taken_alone": {
         "en": ("Thank you, I wrote it down.",),
@@ -209,7 +209,7 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Saya letak ia paling atas dalam aplikasi keluarga.",
             "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
         ),
-        "zh": ("这个不能等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
+        "zh": ("这个我们不等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
     },
     # A red-flag word from someone on more than one family's list: raised on each, then asked.
     "red_flag_which": {
@@ -225,7 +225,7 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Ini tentang siapa?",
             "Hantar nama kepada saya, {either}.",
         ),
-        "zh": ("这个不能等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
+        "zh": ("这个我们不等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
     },
     "red_flag_which_thanks": {
         "en": ("Thank you, it is about {name}.", "I stopped asking the other family."),

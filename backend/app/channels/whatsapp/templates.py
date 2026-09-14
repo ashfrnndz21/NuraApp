@@ -115,9 +115,13 @@ RED_FLAG_NOTICE = Template(
     {
         "en": "This one we do not wait for.\n{who} said {name} is not well.\nCall {doctor} today.",
         "ms": "Yang ini kita tidak tunggu.\n{who} kata {name} tidak sihat.\nTelefon {doctor} hari ini.",
-        "zh": "这个不能等。\n{who}说{name}不舒服。\n今天就打电话给{doctor}。",
+        "zh": "这个不能等。\n{who}说{name}不舒服。\n今天就打电话给{doctor}。",  # approved words; see below
     },
 )
+
+# The Chinese red-flag notice above is the wording submitted for approval: "这个不能等。". The card
+# and the replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02); `make language` notes
+# the difference as a follow-up, and the template changes only when it is submitted again.
 
 # @patient
 DOSE_REMINDER = Template(
@@ -219,7 +223,7 @@ RED_FLAG_NOTICE_SELF = Template(
     ("name", "doctor"),
     {
         "en": "This one we do not wait for.\n{name} is not feeling well.\nCall {doctor} today.",
-        "ms": "Yang ini kita tidak tunggu.\n{name} tidak sihat.\nTelefon {doctor} hari ini.",
+        "ms": "Yang ini kita tidak tunggu.\n{name} rasa tidak sihat.\nTelefon {doctor} hari ini.",
         "zh": "这个不能等。\n{name}不舒服。\n今天就打电话给{doctor}。",
     },
     approved=False,

@@ -30,9 +30,9 @@ Lines = Sequence[str]
 YOU: Mapping[str, str] = {"en": "You", "ms": "Anda", "zh": "您"}
 """The patient, as the subject of his own line."""
 
-# @patient phrase
-NURA: Mapping[str, str] = {"en": "Nura", "ms": "Nura", "zh": "Nura"}
-"""Nura itself, as the subject of a line: the reminders it sends, the checks it makes."""
+NURA = "Nura"
+"""Nura itself, as the subject of a line: the reminders it sends, the checks it makes. A
+name, the same in every language, so not a line of the catalogue."""
 
 # @patient
 SYSTEM_CHECKS: Mapping[str, str] = {
@@ -46,11 +46,11 @@ minutes; one line, not hundreds)."""
 # @patient phrase
 TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
-        "profile": "your record",
-        "audit_entry": "who looked at your record",
-        "key": "the keys to your record",
+        "profile": "your papers",
+        "audit_entry": "who looked at your papers",
+        "key": "the keys to your papers",
         "consent": "what you agreed to",
-        "stewardship": "who set up your record",
+        "stewardship": "who set up your papers",
         "confirmation": "your yes",
         "state_snapshot": "how you are doing",
         "review_card": "the paper Nura read",
@@ -65,15 +65,15 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "delivery_settings": "when Nura sends you things",
         "attachment": "your papers",
         "provider_note": "the notes about your doctors",
-        "last_looked": "what changed in your record",
+        "last_looked": "what changed in your papers",
         "ask": "your questions to Nura",
     },
     "ms": {
-        "profile": "rekod anda",
-        "audit_entry": "siapa yang melihat rekod anda",
-        "key": "kunci rekod anda",
+        "profile": "surat-surat anda",
+        "audit_entry": "siapa yang melihat surat-surat anda",
+        "key": "kunci surat-surat anda",
         "consent": "apa yang anda setuju",
-        "stewardship": "siapa yang membuka rekod anda",
+        "stewardship": "siapa yang membuka surat-surat anda",
         "confirmation": "jawapan ya anda",
         "state_snapshot": "keadaan anda",
         "review_card": "kertas yang Nura baca",
@@ -88,15 +88,15 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "delivery_settings": "bila Nura hantar sesuatu kepada anda",
         "attachment": "surat-surat anda",
         "provider_note": "nota tentang doktor anda",
-        "last_looked": "apa yang berubah dalam rekod anda",
+        "last_looked": "apa yang berubah dalam surat-surat anda",
         "ask": "soalan anda kepada Nura",
     },
     "zh": {
-        "profile": "您的记录",
-        "audit_entry": "谁看过您的记录",
-        "key": "您记录的钥匙",
+        "profile": "您的文件",
+        "audit_entry": "谁看过您的文件",
+        "key": "您文件的钥匙",
         "consent": "您同意过的事",
-        "stewardship": "谁开了您的记录",
+        "stewardship": "谁开了您的文件",
         "confirmation": "您的同意",
         "state_snapshot": "您的近况",
         "review_card": "Nura 读过的纸",
@@ -111,7 +111,7 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "delivery_settings": "Nura 什么时候给您发东西",
         "attachment": "您的病历文件",
         "provider_note": "关于您的医生的留言",
-        "last_looked": "您的记录有什么变化",
+        "last_looked": "您的文件有什么变化",
         "ask": "您问 Nura 的问题",
     },
 }
@@ -158,7 +158,7 @@ REFUSED: Mapping[str, Mapping[str, Lines]] = {
             "Nothing was shown.",
         ),
         KEY_CLOSED: (
-            "{who} tried to open your record on {day}.",
+            "{who} tried to open your papers on {day}.",
             "That key is closed, so nothing was shown.",
         ),
         CANNOT_CHANGE: (
@@ -191,7 +191,7 @@ REFUSED: Mapping[str, Mapping[str, Lines]] = {
             "Tiada apa yang ditunjukkan.",
         ),
         KEY_CLOSED: (
-            "{who} cuba membuka rekod anda pada {day}.",
+            "{who} cuba membuka surat-surat anda pada {day}.",
             "Kunci itu sudah ditutup, jadi tiada apa yang ditunjukkan.",
         ),
         CANNOT_CHANGE: (
@@ -222,7 +222,7 @@ REFUSED: Mapping[str, Mapping[str, Lines]] = {
     "zh": {
         ONLY_YOU: ("{who}在{day}想看{what}。", "只有您能看。"),
         NO_KEY_TO_PART: ("{who}在{day}想看{what}。", "{who}没有那部分的钥匙。", "什么都没有显示。"),
-        KEY_CLOSED: ("{who}在{day}想打开您的记录。", "那把钥匙已经关了，什么都没有显示。"),
+        KEY_CLOSED: ("{who}在{day}想打开您的文件。", "那把钥匙已经关了，什么都没有显示。"),
         CANNOT_CHANGE: ("{who}在{day}想改{what}。", "只有您能同意。", "什么都没有改。"),
         NO_YES: ("{who}在{day}想保存{what}。", "Nura 没有听到新的同意。", "什么都没有改。"),
         NOT_AGREED: ("{who}在{day}想让人进来。", "您还没有同意。", "什么都没有改。"),

@@ -181,7 +181,7 @@ SUBJECT_WORDS: Mapping[str, Mapping[str, str]] = {
         "weight": "您的体重",
         "heart_rate": "您的脉搏",
         "lipid_panel": "您的胆固醇检查",
-        "kidney": "您的肾脏检查",
+        "kidney": "您的肾检查",
         "medicine": "您的药",
         "medication": "您的药",
         "symptom": "您的感觉",
@@ -327,7 +327,7 @@ RED_FLAG_WORDS: Mapping[str, Mapping[str, str]] = {
         "one_sided_swelling": "腿肿",
         "worst_headache": "很厉害的头痛",
         "sudden_blurring": "眼睛模糊",
-        "shaky_and_sweaty": "发抖出汗",
+        "shaky_and_sweaty": "发抖又出汗",
         "fever_on_medicine": "发烧",
     },
 }
@@ -396,7 +396,7 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "visit_with": {
         "en": "You see {doctor} on {day} at {time}.",
         "ms": "Anda berjumpa {doctor} pada {day} pukul {time}.",
-        "zh": "您在{day}{time}见{doctor}。",
+        "zh": "您在{day}{time}看{doctor}。",
     },
     "visit_about": {
         "en": "This visit is about {subject}.",
@@ -506,7 +506,7 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "see_again_on": {
         "en": "You see {doctor} again on {day} at {time}.",
         "ms": "Anda berjumpa {doctor} lagi pada {day} pukul {time}.",
-        "zh": "您在{day}{time}再见{doctor}。",
+        "zh": "您在{day}{time}再看{doctor}。",
     },
     "will_book_it": {
         "en": "{who} will book it.",
@@ -563,7 +563,7 @@ ACTION_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "call_doctor_today": {
         "en": "Call {doctor} today.",
         "ms": "Telefon {doctor} hari ini.",
-        "zh": "今天就给{doctor}打电话。",
+        "zh": "今天就打电话给{doctor}。",
     },
     "tell_carer_today": {
         "en": "Tell {carer} about {what} today.",

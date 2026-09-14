@@ -162,7 +162,7 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
     "ec.boundary": {
         "en": "This card is not a doctor's advice.",
         "ms": "Kad ini bukan nasihat doktor.",
-        "zh": "这张卡不是医生的建议。",
+        "zh": "这张卡不是医生的意见。",
     },
 }
 
@@ -258,13 +258,13 @@ NOTICE: Mapping[str, Mapping[str, str]] = {
     },
     "notice.call_now": {
         "en": "Call {patient} now.",
-        "ms": "Hubungi {patient} sekarang.",
-        "zh": "现在就打给{patient}。",
+        "ms": "Telefon {patient} sekarang.",
+        "zh": "现在就打电话给{patient}。",
     },
     "notice.do_not_wait": {
         "en": "This one we do not wait for.",
         "ms": "Yang ini kita tidak tunggu.",
-        "zh": "这个我们不能等。",
+        "zh": "这个我们不等。",
     },
     "notice.call_today": {
         "en": "Please call {patient} today.",
@@ -529,7 +529,7 @@ SYMPTOM_WORDS: Mapping[str, Mapping[str, str]] = {
         "sudden_blurring": "突然看不清",
         "fall": "跌倒",
         "confusion": "糊涂",
-        "shaky_sweaty": "发抖出汗",
+        "shaky_sweaty": "发抖又出汗",
     },
 }
 """What Nura heard, by code, for the notice ("Nura heard this: a fall."). The same words

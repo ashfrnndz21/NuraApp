@@ -9,14 +9,15 @@ Tamil at T2 (`NoVoiceFor` until then).
 
 Rendered audio is a derived cache, not a record: it is Nura saying its own lines, not anyone's
 voice, so it is never a VOICE artefact and never an Artifact row (ADR 0003, addendum). It is
-kept in the region's object store under the profile, by the digest of which voice said what
-in which language — `voice/<profile_id>/<sha256>` — and read back from there the next time the
-same card is played. The store is pinned to one region, like every byte of his.
+kept in the region's object store under the profile, by the voice that said it and the digest
+of the card's voice script (`app.language.voice_script`, E22-03: the same words and pauses,
+the same digest, wherever they appear) — `voice/<profile_id>/<voice>/<digest>` — and read
+back from there the next time the same card is played. What is said is the script's
+`spoken()` form: numbers and dates as a voice says them, the words otherwise the card's own. The store is pinned to one region, like every byte of his.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 import struct
 import uuid
@@ -26,6 +27,7 @@ from typing import Protocol
 
 from app.errors import Refusal
 from app.ingestion.objects import NoSuchObject, ObjectStore, check_key
+from app.language.voice_script import script_for
 from app.regions import Region, guard_region
 from app.settings import Settings
 
@@ -142,10 +144,10 @@ def voice_for(settings: Settings) -> Voice:
     )
 
 
-def cache_key(profile_id: uuid.UUID, voice_name: str, language: str, text: str) -> str:
-    """Where a rendering is kept: under the profile, by what was said, how and by whom."""
-    digest = hashlib.sha256(f"{voice_name}\n{language}\n{text}".encode()).hexdigest()
-    return check_key(f"voice/{profile_id}/{digest}")
+def cache_key(profile_id: uuid.UUID, voice_name: str, digest: str) -> str:
+    """Where a rendering is kept: under the profile and the voice that said it, by the voice
+    script's digest (its language, its words and its pauses)."""
+    return check_key(f"voice/{profile_id}/{voice_name}/{digest}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,16 +166,18 @@ async def voiced(
     region: Region,
     lines: Sequence[str],
     language: str | None,
+    boundary: str | None = None,
 ) -> Voiced:
     """The spoken twin of these lines: from the region's store when it has been said before,
     otherwise said now and kept there. Refused before anything is said when the lines would
     run past thirty seconds, or when there is no voice in the language yet."""
-    code = voice_language(language)
-    text = "\n".join(line.strip() for line in lines if line.strip())
+    code = voice_language(language)  # before the script: a T2 language is refused, not guessed
+    script = script_for(lines, code, boundary=boundary)
+    text = script.spoken()
     if seconds_to_say(text, code) > MAX_SECONDS:
         raise TooLongToSay(f"{seconds_to_say(text, code)} seconds is over {MAX_SECONDS:g}")
     guard_region(held_in=store.region, asked_from=region)
-    key = cache_key(profile_id, voice.name, code, text)
+    key = cache_key(profile_id, voice.name, script.digest)
     try:
         audio = await store.get(key)
     except NoSuchObject:

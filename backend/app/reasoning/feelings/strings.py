@@ -81,7 +81,7 @@ WORDS: Mapping[str, Mapping[Feeling, str]] = {
         Feeling.WORST_HEADACHE: "最痛的头痛",
         Feeling.SUDDEN_BLURRING: "眼睛突然模糊",
         Feeling.CONFUSION: "糊涂",
-        Feeling.SHAKY_SWEATY: "发抖出汗",
+        Feeling.SHAKY_SWEATY: "发抖又出汗",
         Feeling.WEIGHT_GAIN: "体重增加",
         Feeling.DIZZY: "头晕",
         Feeling.CRAMPS: "抽筋",
@@ -104,8 +104,8 @@ WORDS: Mapping[str, Mapping[Feeling, str]] = {
 # @patient
 PROMPT: Mapping[str, str] = {
     "en": "How are you feeling today?",
-    "ms": "Apa rasa anda hari ini?",
-    "zh": "您今天感觉怎么样？",
+    "ms": "Apa khabar hari ini?",
+    "zh": "今天感觉怎么样？",
 }
 """The one line above the words. Never a form, never a scale."""
 

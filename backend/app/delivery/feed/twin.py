@@ -1,7 +1,9 @@
 """Every card's spoken twin, rendered to audio on request (E11-04).
 
-The twin is the card's voice script (`FeedItem.voice`, the body when a card has none): the
-same words the card says, which passed plain words when the card was made. It is said by the
+The twin is the card's voice script (`app.language.voice_script.script_for` over
+`FeedItem.voice`, the body when a card has none, with its boundary line): the same words the
+card says, which passed plain words when the card was made, and the same digest the feed
+serves as the card's `voice_script`. It is said by the
 one `Voice` port and kept in the region's object store by digest (`app.delivery.voice`), so
 the second play of the same card is a read. A key sees the twin of a card it may see, and
 nothing else: the card's own scope is checked, and a refusal is on the trail.
@@ -58,4 +60,5 @@ async def spoken_twin(
         region=context.region,
         lines=list(item.voice or item.body),
         language=item.language,
+        boundary=item.boundary,
     )

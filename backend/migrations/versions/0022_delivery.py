@@ -8,8 +8,8 @@ rows written before the grammar was a column. The audit actor may be empty for N
 reach (the delivery engine), on the system channel only; and a red flag carries whether the
 person who raised it is on more than one profile.
 
-Revision ID: 0021_delivery
-Revises: 0020_feelings
+Revision ID: 0022_delivery
+Revises: 0021_language
 Create Date: 2026-09-15
 """
 
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0021_delivery"
-down_revision = "0020_feelings"
+revision = "0022_delivery"
+down_revision = "0021_language"
 branch_labels = None
 depends_on = None
 

@@ -109,7 +109,7 @@ async def trail(
 
     async def name_of(person_id: uuid.UUID | None) -> str:
         if person_id is None:
-            return NURA[words]
+            return NURA
         if person_id == profile.owner_person_id:
             return YOU[words]
         if person_id not in names:
@@ -166,7 +166,7 @@ async def trail(
         days.setdefault(local_day, TrailDay(day=local_day, day_words=day_words)).lines.append(
             TrailLine(
                 at=latest,
-                who=NURA[words],
+                who=NURA,
                 sentences=[SYSTEM_CHECKS[words].format(day=day_words, count=len(minutes))],
                 outcome=Outcome.ALLOWED,
                 detail=(

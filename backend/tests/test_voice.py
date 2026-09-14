@@ -171,3 +171,25 @@ async def test_the_morning_card_is_followed_by_its_voice_twin_inside_the_window(
     )
     kinds = [one.kind for one in home.whatsapp.sent if one.to_e164 == PA]
     assert kinds[-2:] == ["text", "audio"]
+
+
+async def test_the_audio_is_said_from_the_voice_script_and_kept_under_its_digest(
+    tmp_path: Path,
+) -> None:
+    """E22-03's voice script is what is said, and its digest is the key: the same words and
+    pauses, the same audio, wherever the card appears."""
+    import uuid
+
+    from app.language.voice_script import script_for
+
+    voice = FixtureVoice()
+    store = LocalObjectStore(tmp_path, Region.SG)
+    profile_id = uuid.uuid4()
+    lines = ["Your blood pressure today was 138 over 84.", "It is in your blood pressure book."]
+    said = await voiced(
+        store, voice, profile_id=profile_id, region=Region.SG, lines=lines, language="en"
+    )
+    script = script_for(lines, "en")
+    assert said.key == f"voice/{profile_id}/{voice.name}/{script.digest}"
+    assert "one hundred and thirty-eight over eighty-four" in script.spoken()
+    assert said.spoken.duration_seconds == seconds_to_say(script.spoken(), "en")

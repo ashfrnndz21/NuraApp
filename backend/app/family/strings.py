@@ -134,9 +134,9 @@ a helper is ever cut a key to; it is left out rather than named."""
 
 # @patient
 NO_HELPER: Mapping[str, str] = {
-    "en": "Nobody holds a helper key to your record yet.",
-    "ms": "Belum ada siapa memegang kunci pembantu untuk rekod anda.",
-    "zh": "还没有人拿着您记录的帮佣钥匙。",
+    "en": "Nobody holds a helper key to your papers yet.",
+    "ms": "Belum ada siapa memegang kunci pembantu untuk surat-surat anda.",
+    "zh": "还没有人拿着您文件的帮佣钥匙。",
 }
 
 # --- the digest ----------------------------------------------------------------------------
@@ -211,7 +211,7 @@ PUSH_TEMPLATES: Mapping[str, Mapping[str, Lines]] = {
         "water_pill_morning": ("Nura kata pil air pada pukul 8.", "Ambil bersama sarapan."),
         "pickup": ("{who} akan ambil anda pada {when}.", "Bawa buku tekanan darah anda."),
         "call_you": ("{who} akan telefon anda {when}.", "Ini bukan satu kebimbangan."),
-        "drink_water": ("Minum segelas air sekarang.", "Air tidak mengapa."),
+        "drink_water": ("Minum segelas air sekarang.", "Air kosong boleh."),
         "weigh_tomorrow": (
             "Esok pagi, naik penimbang sebelum sarapan.",
             "{who} akan baca nombornya.",

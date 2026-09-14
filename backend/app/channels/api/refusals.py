@@ -66,6 +66,12 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
+from app.language.review import (
+    AlreadyReviewed,
+    NoSuchReviewItem,
+    NotStaff,
+    SourceAlreadyListed,
+)
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.memory.attach import AlreadyHangsThere
 from app.memory.providers import NotAPlaceNote, NoteNamesHealth
@@ -100,6 +106,11 @@ from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
+    # The pharmacist's review queue (E22-04): staff only, no profile in it.
+    (NotStaff, 403),
+    (NoSuchReviewItem, 404),
+    (AlreadyReviewed, 409),
+    (SourceAlreadyListed, 409),
     (NoKey, 403),
     (OutOfScope, 403),
     (OutOfRegion, 403),
