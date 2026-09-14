@@ -456,7 +456,7 @@ export const zh = {
     },
     readBack: {
       // @patient headline
-      title: "Nura 是这样理解的",
+      title: "这是 Nura 的理解",
       // @patient
       lead: "请说这对不对。",
       // @patient

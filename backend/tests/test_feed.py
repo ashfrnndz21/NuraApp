@@ -495,7 +495,7 @@ def test_lines_that_would_change_treatment_are_caught() -> None:
 def test_render_fills_the_templates_in_his_language() -> None:
     lines = render("visit", "zh", body=("visit",), doctor="陈医生", day="9月21日星期一")
     assert lines.headline == "9月21日星期一看陈医生"
-    assert lines.body[0] == "您9月21日星期一见陈医生。"
+    assert lines.body[0] == "您9月21日星期一看陈医生。"
     assert lines.voice == lines.body
     english = render(
         "reading", "ta", body=("reading", "reading_alone"), top_number=138, bottom_number=84
