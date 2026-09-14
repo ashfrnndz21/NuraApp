@@ -41,6 +41,7 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
 from app.keys import confirm  # noqa: F401
+from app.reasoning.ranges import FixtureRanges
 from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
@@ -157,6 +158,7 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=whatsapp,
+        reference_ranges=FixtureRanges.load(),
     )
     app = create_app(settings, sessions, providers)
     try:

@@ -262,6 +262,41 @@ TEXTS: tuple[ConsentText, ...] = (
         "zh",
         "每天早上，Nura 会把您的今日页面发到您的 WhatsApp。\n您可以随时停止。",
     ),
+    # --- the calendar (E18-02) ---------------------------------------------------------------
+    # Read for events, never for people: docs/read-only-connectors.md section 2.
+    ConsentText(
+        ConsentPurpose.CALENDAR,
+        "1",
+        "en",
+        "Nura reads your calendar to find visits to the doctor.\n"
+        "Nura keeps only the visits it finds.\n"
+        "Everything else in your calendar is left alone.\n"
+        "Nothing is added until you say yes.\n"
+        "Nura never writes in your calendar.\n"
+        "You can stop this at any time.",
+    ),
+    ConsentText(
+        ConsentPurpose.CALENDAR,
+        "1",
+        "ms",
+        "Nura membaca kalendar anda untuk mencari lawatan ke doktor.\n"
+        "Nura menyimpan lawatan yang dijumpai sahaja.\n"
+        "Yang lain dalam kalendar anda tidak disentuh.\n"
+        "Tiada apa-apa ditambah sehingga anda kata ya.\n"
+        "Nura tidak pernah menulis dalam kalendar anda.\n"
+        "Anda boleh berhenti pada bila-bila masa.",
+    ),
+    ConsentText(
+        ConsentPurpose.CALENDAR,
+        "1",
+        "zh",
+        "Nura 会看您的日历，找出看医生的时间。\n"
+        "Nura 只保存找到的看医生时间。\n"
+        "日历里其他的东西都不碰。\n"
+        "您说好之前，什么都不会加进去。\n"
+        "Nura 从来不会写进您的日历。\n"
+        "您可以随时停止。",
+    ),
 )
 """Append only. Within a purpose, versions are in the order they were introduced, and the
 last one is current. Every version needs its English wording for every region; other
