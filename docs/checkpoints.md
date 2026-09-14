@@ -700,7 +700,7 @@ checkpoint 13 passed: every step did what docs/checkpoints.md says
 
 ## How to run checkpoint 15
 
-The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Three fresh phone numbers every run — Mei, Pa, Kit his son — so it can be run again on the same `dev.db`. The papers are the two redacted samples of checkpoint 5 (`backend/tests/fixtures/paper/`), sent as their placeholder bytes; nothing is a real photo and no model is called.
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Three fresh phone numbers every run — Mei, Pa, Kit his son — so it can be run again on the same `dev.db`. The read-back is answered the way the web's one-thing-a-screen onboarding does it: one line on its own, then the rest. The papers are the two redacted samples of checkpoint 5 (`backend/tests/fixtures/paper/`), sent as their placeholder bytes; nothing is a real photo and no model is called.
 
 ```sh
 make dev                # terminal 1: migrates dev.db (0015 adds the onboarding tables), serves on http://127.0.0.1:8000
@@ -711,22 +711,22 @@ What you will see (the numbers, ids and dates change each run; the words are in 
 
 ```
 ✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
-✓ Mei (+6594449398) registered by phone code and signed in (the code read from the server log)
-✓ Mei set up a profile for Pa (+6593338829) as he asked: she is its steward
-✓ the word cloud answers without signing in (GET /onboarding/conditions?language=ms): 20 words first, 68 in all, in Malay — Darah tinggi, Kolesterol, Kencing manis, Jantung, Buah pinggang …
+✓ Mei (+6594441833) registered by phone code and signed in (the code read from the server log)
+✓ Mei set up a profile for Pa (+6593333196) as he asked: she is its steward
+✓ the word cloud answers without signing in (GET /onboarding/conditions?language=ms): 20 words first, 68 in all, in Malay — Darah tinggi, Kolesterol tinggi, Kencing manis, Sakit jantung, Masalah buah pinggang …
 ✓ Mei opened the biography (POST /profiles/{id}/biography): step about_you, next save_settings; the words of the step, in Pa's Malay:
     Sedikit tentang anda
-    Beritahu kami bahasa anda dan cara yang anda suka.
+    Beritahu kami bahasa yang anda paling suka.
     Tekan apa-apa yang berkaitan dengan kesihatan anda.
-    Ia hanya memberitahu Nura di mana hendak melihat.
-✓ Mei saved Pa's settings (PUT /profiles/{id}/settings): Malay, simple, large text, voice on, breakfast 07:30, Dr Tan, and 5 conditions — Darah tinggi, Kolesterol, Kencing manis, Masuk hospital tahun lepas, Ubat cair darah
+    Ini hanya supaya Nura tahu apa yang perlu diberi perhatian.
+✓ Mei saved Pa's settings (PUT /profiles/{id}/settings): Malay, simple, large text, voice on, breakfast 07:30, Dr Tan, and 5 conditions — Darah tinggi, Kolesterol tinggi, Kencing manis, Masuk hospital tahun lepas, Ubat cair darah
 ✓ State took them at once — snapshot 18: spoken and reading language ms, format density simple and preferred voice (the fact the feed goes voice-first on), vision large_text true, each a fact with Mei's yes on the event of the save; the profile's own language is ms
 ✓ Mei added the lipid report (POST …/biography/papers, paper lab_result): a review card of 7 fields, ldl and triglycerides dotted; the biography waited on it (next confirm_cards), and one tap confirmed it with triglycerides corrected to 54
 ✓ Mei added the warfarin label (paper medicine): read as a medicine_label marked anticoagulant, and confirmed with one tap from its label photo
 ✓ the biography is at the read-back: 12 lines, each a confirmed fact, in Malay:
-    Ini yang kami faham
+    Ini yang Nura faham
     Anda beritahu kami: Darah tinggi.
-    Anda beritahu kami: Kolesterol.
+    Anda beritahu kami: Kolesterol tinggi.
     Anda beritahu kami: Kencing manis.
     Anda beritahu kami: Masuk hospital tahun lepas.
     Anda beritahu kami: Ubat cair darah.
@@ -736,37 +736,38 @@ What you will see (the numbers, ids and dates change each run; the words are in 
     Kolesterol jahat anda 152 pada Khamis 7 September 2023.
     Label ini untuk ubat cair darah anda, Warfarin.
     Label ini menyebut 1 biji sekali sehari waktu malam.
-    Label ini menyebut Dr Lim yang memberi ubat ini.
-✓ Mei answered every line: 11 yes, and no to "Kolesterol jahat anda 152 pada Khamis 7 September 2023." — a dispute (1d692571…) opened beside the fact, which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is overwritten
+    Label ini kata Dr Lim yang beri ubat ini.
+✓ Mei said no to "Kolesterol jahat anda 152 pada Khamis 7 September 2023." on its own (one line, one screen), then yes to the other 11 at once — a dispute (cbcf38e3…) opened beside the fact, which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is overwritten
 ✓ the questions the papers raised, in Malay (step questions):
-    Kertas anda menimbulkan beberapa soalan
-    Mei akan lihat kertas itu sekali lagi.
+    Beberapa soalan tentang surat-surat anda
+    Mei akan lihat surat itu sekali lagi.
     Adakah anda periksa tekanan darah di rumah?
-    Adakah anda ada surat dari hospital?
+    Adakah anda ada surat hospital anda?
     Bila ujian gula anda yang terakhir?
     Bila ujian buah pinggang anda yang terakhir?
     3 lagi boleh tunggu kemudian.
+✓ Mei kept two of them (POST …/biography/questions): bp_numbers, discharge_letter — kept on the sitting, the seam to the visit loop's questions
 ✓ Mei closed the biography: 2 papers, 13 facts, 1 disputed; the summary, in Malay:
-    Kami simpan 2 kertas anda.
-    Kami catat 13 perkara daripada kertas anda.
+    Nura simpan 2 surat anda.
+    Nura catat 13 perkara daripada surat-surat anda.
     Anda kata satu baris tidak betul.
-    Mei akan lihat kertas itu sekali lagi.
+    Mei akan lihat surat itu sekali lagi.
     Esok waktu sarapan, Nura akan minta satu perkara lagi.
     Ada 7 perkara untuk diminta, satu setiap hari.
-    Semua yang anda lihat dibina daripada ini.
-✓ Pa (+6593338829) registered by phone code and signed in (the code read from the server log)
+    Halaman Hari Ini anda datang daripada apa yang anda beritahu kami.
+✓ Pa (+6593333196) registered by phone code and signed in (the code read from the server log)
 ✓ Pa claimed the profile with his OK: he is its owner, Mei his chief
-✓ Pa reads his first week (GET /profiles/{id}/plan): 7 prompts, one a day from tomorrow, 2026-09-15, at 07:30 on his clock (Asia/Singapore); nothing is due yet:
-    day 1  2026-09-15T07:30  pending  Nombor tekanan darah biasa anda — Hari ini, ambil gambar mesin tekanan darah anda.
-    day 2  2026-09-16T07:30  pending  Surat hospital anda — Hari ini, ambil gambar surat hospital anda.
-    day 3  2026-09-17T07:30  pending  Ujian gula anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
-    day 4  2026-09-18T07:30  pending  Ujian buah pinggang anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
-    day 5  2026-09-19T07:30  pending  Lawatan anda yang seterusnya ke Dr Tan — Hari ini, ambil gambar kad temu janji anda.
-    day 6  2026-09-20T07:30  pending  Lawatan terakhir anda ke Dr Tan — Hari ini, ambil gambar slip lawatan terakhir anda.
-    day 7  2026-09-21T07:30  pending  Kad insurans anda — Hari ini, ambil gambar kad insurans anda.
-✓ tomorrow at 07:30 exactly one prompt is due (bp_numbers); Pa said Later to the insurance card: skipped, kept in the plan for Mei's list
+✓ Pa reads his first week (GET /profiles/{id}/plan): 7 prompts, one a day from tomorrow, 2026-09-16, at 07:30 on his clock (Asia/Singapore); nothing is due yet:
+    day 1  2026-09-16T07:30  pending  Nombor tekanan darah biasa anda — Hari ini, ambil gambar mesin tekanan darah anda.
+    day 2  2026-09-17T07:30  pending  Surat hospital anda — Hari ini, ambil gambar surat hospital anda.
+    day 3  2026-09-18T07:30  pending  Ujian gula anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
+    day 4  2026-09-19T07:30  pending  Ujian buah pinggang anda yang terakhir — Hari ini, ambil gambar mana-mana ujian darah.
+    day 5  2026-09-20T07:30  pending  Lawatan anda yang seterusnya ke Dr Tan — Hari ini, ambil gambar kad temu janji anda.
+    day 6  2026-09-21T07:30  pending  Lawatan terakhir anda ke Dr Tan — Hari ini, ambil gambar slip lawatan terakhir anda.
+    day 7  2026-09-22T07:30  pending  Kad insurans anda — Hari ini, ambil gambar kad insurans anda.
+✓ tomorrow at 07:30 exactly one prompt is due (bp_numbers); Pa said Later to the insurance card (POST …/plan/later): it goes to the back of the week, asked once more on 2026-09-23 at 07:30; a second Later would retire it
 ✓ Pa's State shows his settings: cognitive (language ms, density simple, voice), functional (large text), preference (breakfast 07:30, called Pa), and the five conditions he told in the clinical dimension, as told — no posture moved (posture stable, reading language ms)
-✓ Kit (+6595559749) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6595557829) registered by phone code and signed in (the code read from the server log)
 ✓ Kit, his caregiver, reads the settings whole (a key to the record opens the conditions and the doctor); changing them is refused: NotTheirsToSetUp (403), and it is on Pa's trail
 checkpoint 15 passed: every step did what docs/checkpoints.md says
 ```
