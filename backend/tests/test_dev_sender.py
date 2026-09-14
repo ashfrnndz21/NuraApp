@@ -76,15 +76,15 @@ def test_the_words_the_phone_receives() -> None:
     assert phone_code_message("481302").splitlines() == [
         "Your Nura code is 481302.",
         "Type it into the Nura app to sign in.",
-        "The code works for ten minutes.",
+        "The code works for 10 minutes.",
         "Nura will never call you to ask for it.",
     ]
     assert phone_code_message("481302", asked_by="Ash").splitlines() == [
         "Your Nura code is 481302.",
         "Ash asked for this code, to sign you in.",
         "Type it into the Nura app.",
-        "The code works for ten minutes.",
+        "The code works for 10 minutes.",
         "If you did not expect this, call Ash first.",
     ]
-    assert CODE_WORKS_FOR == "The code works for ten minutes."
+    assert CODE_WORKS_FOR == "The code works for 10 minutes."
     assert "481302" not in CODE_WORKS_FOR

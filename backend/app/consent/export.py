@@ -50,21 +50,21 @@ from app.regions import REGION_TZ, Region
 EXPORT_TARGET = "consent_record"
 """What the trail calls the document that leaves."""
 
-# @patient
+# @patient headline
 PURPOSE_TITLES: Mapping[ConsentPurpose, str] = {
     ConsentPurpose.HOLD_HEALTH_RECORD: "Keeping your papers",
     ConsentPurpose.SHARE_WITH_PERSON: "Who can see your papers",
     ConsentPurpose.RECORDING: "Recording when you see the doctor",
     ConsentPurpose.WHATSAPP: "Sending your Today page on WhatsApp",
 }
-# @patient
+# @patient phrase
 CHANNEL_WORDS: Mapping[ConsentChannel, str] = {
     ConsentChannel.APP: "in the app",
     ConsentChannel.WHATSAPP: "on WhatsApp",
     ConsentChannel.PAPER: "on paper",
     ConsentChannel.VERBAL_WITNESSED: "out loud",
 }
-# @patient
+# @patient phrase
 REGION_NAMES: Mapping[Region, str] = {Region.SG: "Singapore", Region.MY: "Malaysia"}
 
 _SENTENCE_END = re.compile(r"(?<=[.!?。！？])\s+")
@@ -228,8 +228,11 @@ class PlainTextRenderer:
                 )
                 if entry["holder"]:
                     holder = voice.who(entry["holder"])
-                    can = "can no longer see" if entry["status"] == "withdrawn" else "can see"
-                    lines.append(cap(f"  {holder} {can} these parts:"))
+                    # Each line whole, never built from pieces: the verifier reads every one.
+                    if entry["status"] == "withdrawn":
+                        lines.append(cap(f"  {holder} can no longer see these parts:"))
+                    else:
+                        lines.append(cap(f"  {holder} can see these parts:"))
                     lines.extend(f"  - {part}" for part in entry["what_lines"])
                 basis = ConsentBasis(entry["basis"])
                 if basis not in (ConsentBasis.OWNER, ConsentBasis.VERBAL_RECORDED):

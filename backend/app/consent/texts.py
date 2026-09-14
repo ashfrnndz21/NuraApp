@@ -29,12 +29,12 @@ from app.consent.models import ConsentPurpose
 from app.keys.scopes import Scope
 from app.regions import Region
 
-# @patient
+# @patient phrase
 LANGUAGES: Mapping[str, str] = {"en": "English", "zh": "Chinese", "ms": "Malay"}
 """The languages Nura speaks today, by code, with the name the page uses. Nothing else is a
 language a consent can be recorded in. Tamil is added here the day its words are in TEXTS."""
 
-# @patient
+# @patient phrase
 SCOPE_WORDS: Mapping[str, Mapping[Scope, str]] = {
     "en": {
         Scope.MEDICINES: "your medicines",
@@ -77,7 +77,7 @@ SCOPE_WORDS: Mapping[str, Mapping[Scope, str]] = {
 `PROFILE` is not a part of the record — it is whose record it is — so it is never a thing
 to see."""
 
-# @patient
+# @patient phrase
 NAMED_WITH_RELATIONSHIP: Mapping[str, str] = {
     "en": "{name}, {relationship},",
     "ms": "{name}, {relationship},",
@@ -176,7 +176,7 @@ TEXTS: tuple[ConsentText, ...] = (
         ConsentPurpose.SHARE_WITH_PERSON,
         "1",
         "en",
-        "You choose who in your family can see your papers. "
+        "You choose who in your family can see your papers. "  # plain-words: history, not shown
         "You can see who looked at them. "
         "You can stop this at any time.",
     ),

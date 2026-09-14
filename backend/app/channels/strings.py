@@ -7,7 +7,7 @@ one idea per line, say what to do and who does the next thing, the same words ev
 
 from __future__ import annotations
 
-CODE_WORKS_FOR = "The code works for ten minutes."
+CODE_WORKS_FOR = "The code works for 10 minutes."
 """@patient The one line every code message and the sign-in screen share."""
 
 PHONE_CODE_SELF = (

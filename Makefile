@@ -19,5 +19,7 @@ reset-db: ; rm -f backend/dev.db backend/dev.db-journal && $(MAKE) migrate
 checkpoint: ; cd backend && python3 -m scripts.checkpoint $(N)
 test: ; cd backend && python3 -m pytest -q
 lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
-plain-words: ; cd backend && if [ -f app/safety/plain_words.py ]; then python3 -m app.safety.plain_words; else echo "plain-words: app/safety/plain_words.py not built yet (Session 6), skipping"; fi
+# Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
+# `python3 -m app.safety.plain_words --explain` says what each rule checks; `--text "..."` checks one line.
+plain-words: ; cd backend && python3 -m app.safety.plain_words
 ios-test: ; cd ios && if [ -d Nura.xcodeproj ]; then DEV=$$(xcrun simctl list devices available | grep -m1 -oE 'iPhone [0-9]+[A-Za-z ]*' | sed 's/ *$$//'); echo "simulator: $$DEV"; xcodebuild test -scheme Nura -destination "platform=iOS Simulator,name=$$DEV"; else echo "ios-test: Nura.xcodeproj not generated yet (Session 10), skipping"; fi
