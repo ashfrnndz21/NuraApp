@@ -279,9 +279,12 @@ def make_engine(url: str) -> AsyncEngine:
     transaction as a reader and upgrades it at its first write, and of two requests that
     each read and then write (every audited read writes its line) one fails at once with
     "database is locked": the 500 a reopened page met while the page before it was still
-    writing its feed cards. Postgres needs none of this."""
+    writing its feed cards. Postgres needs none of this: its writers wait on row locks, not
+    on the whole file, and none of the listeners below is installed on it. A deployment's
+    Postgres sits behind a platform's network, which may close an idle connection; the pool
+    checks a connection is alive before handing it out."""
     if not url.startswith("sqlite"):
-        return create_async_engine(url)
+        return create_async_engine(url, pool_pre_ping=True)
     engine = create_async_engine(url, connect_args={"timeout": SQLITE_LOCK_WAIT_SECONDS})
     event.listen(engine.sync_engine, "connect", _no_implicit_begin)
     event.listen(engine.sync_engine, "begin", _begin_immediate)

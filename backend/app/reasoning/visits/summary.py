@@ -37,6 +37,7 @@ from app.db import as_utc, keep_on_refusal, utcnow
 from app.drafts import AppointmentDraft, DecidedItem, FactDraft, VisitSummaryDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.ingestion.speakers import Aligned
@@ -331,6 +332,7 @@ def draft_from_fixture(fixture: Mapping[str, Any]) -> SummaryDraft:
     return SummaryDraft(actions, changes, follow_ups, facts)
 
 
+@fixture
 class FixtureSummariser:
     """Answers from `tests/fixtures/visits/*.json`, by the sha256 of the transcript text.
 

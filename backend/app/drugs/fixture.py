@@ -21,6 +21,7 @@ from app.drugs.registry import (
     Severity,
     UnknownDrug,
 )
+from app.fixtures import fixture
 from app.safety.high_risk import is_high_risk
 
 FIXTURE_PATH = (
@@ -37,6 +38,7 @@ def _same_strength(a: str | None, b: str) -> bool:
     return _norm(a) == _norm(b)
 
 
+@fixture
 class FixtureRegistry:
     """The fixture, loaded once. Every answer is read from the file, none is computed from
     the name of the drug."""

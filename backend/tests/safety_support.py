@@ -152,17 +152,25 @@ async def clinic(session: AsyncSession, context: KeyContext, name: str = "Dr Tan
     )
 
 
+INSERTION_ORDER = {"sqlite": "audit_entry.rowid", "postgresql": "audit_entry.ctid"}
+"""How a test database orders rows as they went in. SQLite: its implicit rowid. Postgres (the
+`backend-postgres` CI job): the row's place in the table, which is the order of insertion for
+a table nothing updates or deletes — the trail is append-only (`app.db.frozen`) — in a schema
+made for the one test. Postgres has no rowid; asking for one was the first thing this suite
+found when it ran there."""
+
+
 async def trail(session: AsyncSession, profile_id: uuid.UUID) -> Sequence[AuditEntry]:
     """Every line on the profile, in the order it was written.
 
-    The clock is frozen in every test, so `at` cannot order the lines; the test databases
-    are SQLite, whose implicit rowid is the insertion order. This is a test's view of the
-    trail, not the app's: `app.audit.trail.read_audit` orders by `at`.
+    The clock is frozen in every test, so `at` cannot order the lines; the test database's
+    insertion order does (`INSERTION_ORDER`). This is a test's view of the trail, not the
+    app's: `app.audit.trail.read_audit` orders by `at`.
     """
     found = await session.scalars(
         select(AuditEntry)
         .where(AuditEntry.profile_id == profile_id)
-        .order_by(text("audit_entry.rowid"))
+        .order_by(text(INSERTION_ORDER[session.get_bind().dialect.name]))
     )
     return found.all()
 
