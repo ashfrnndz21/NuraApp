@@ -13,6 +13,9 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.profiles import NoSuchHolder
+from app.channels.whatsapp.outbound.level0 import NoPatientYet
+from app.channels.whatsapp.outbound.send import OutsideTheWindow
+from app.channels.whatsapp.provider import NotAWebhook
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
@@ -57,6 +60,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
     (NoSuchHolder, 403),
+    # A webhook body not signed by the provider, or a verify token that is not ours.
+    (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
@@ -85,12 +90,16 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    # A stewarded profile has no patient to send the morning card to yet.
+    (NoPatientYet, 404),
     (NoSuchReviewCard, 404),
     (NoSuchItem, 404),
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
     (PhotoTooLarge, 413),
+    # Free text needs the 24-hour window; outside it only a template goes.
+    (OutsideTheWindow, 409),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),

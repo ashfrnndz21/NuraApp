@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.channels.api import Providers, create_app
 from app.channels.strings import CODE_WORKS_FOR, phone_code_message
+from app.channels.whatsapp.provider import FixtureProvider
 from app.db import make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
@@ -42,6 +43,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
+        whatsapp=FixtureProvider(secret="test"),
     )
 
 

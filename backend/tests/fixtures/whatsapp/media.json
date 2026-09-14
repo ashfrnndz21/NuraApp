@@ -1,0 +1,6 @@
+{
+  "lipid-panel-photo": {"content_type": "image/png", "label": "lipid-panel-2023-09-07"},
+  "warfarin-label-photo": {"content_type": "image/png", "label": "warfarin-label-2024-03-12"},
+  "clinic-letter-pdf": {"content_type": "application/pdf", "label": "clinic-letter-2026-09-01"},
+  "grandkids-photo": {"content_type": "image/jpeg", "label": "not-a-paper"}
+}

@@ -16,6 +16,11 @@ dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
+# The fixture WhatsApp provider (E19): sends into memory, serves media from the fixtures, and
+# signs webhooks with a laptop-only secret. No Meta call is made; see app/channels/whatsapp/.
+dev: export NURA_WHATSAPP_PROVIDER ?= fixture
+dev: export NURA_WHATSAPP_DEV_SECRET ?= nura-dev-webhook-secret
+dev: export NURA_WHATSAPP_FIXTURES ?= tests/fixtures/whatsapp
 migrate: ; cd backend && python3 -m alembic upgrade heads
 # The server log is also written to backend/.dev.log (gitignored, fresh on every start) so
 # that `make checkpoint` in another terminal can read the login codes the sender prints.

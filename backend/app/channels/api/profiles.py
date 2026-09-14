@@ -48,6 +48,7 @@ from app.channels.api.schemas import (
     StateOut,
     StewardshipOut,
     TaskDoneConfirmIn,
+    WhatsAppConsentIn,
 )
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
@@ -375,6 +376,28 @@ async def let_someone_in(
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
             relationship=body.relationship,
         ),
+        text_version=body.wording_version,
+    )
+    return ConsentOut.of(consent)
+
+
+@router.post("/{profile_id}/consents/whatsapp", status_code=status.HTTP_201_CREATED)
+async def agree_to_whatsapp(
+    body: WhatsAppConsentIn, context: Context, session: Db
+) -> ConsentOut:
+    """The owner agrees to WhatsApp: the morning card, the thread, every send (E19).
+
+    Profile-wide and on his own basis; a chief acting for him needs a recorded proxy basis,
+    which is not on this route. Without this in force the number keeps no thread with
+    anyone about him and sends him nothing.
+    """
+    consent = await grant_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.WHATSAPP,
+        captured_via=body.captured_via,
+        basis=ConsentBasis.OWNER,
+        language=body.language,
         text_version=body.wording_version,
     )
     return ConsentOut.of(consent)

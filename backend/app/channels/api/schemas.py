@@ -201,6 +201,18 @@ class SharingConsentIn(BaseModel):
         return self
 
 
+class WhatsAppConsentIn(BaseModel):
+    """The owner agrees to Nura sending him his Today page on WhatsApp (E19): which words,
+    in which language, captured how. Profile-wide, his own basis, and what every WhatsApp
+    thread and every send on this profile rests on."""
+
+    language: str = Field(min_length=2, max_length=16)
+    captured_via: ConsentChannel
+    wording_version: str | None = Field(
+        default=None, min_length=1, max_length=32, pattern=r"^[0-9A-Za-z._-]+$"
+    )
+
+
 class ConsentOut(BaseModel):
     """One agreement on the profile, as the owner or his chief reads it back."""
 

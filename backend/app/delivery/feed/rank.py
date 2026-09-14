@@ -49,6 +49,7 @@ from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.semantic import current_facts
+from app.state.service import StateView, current_state
 
 PAGE_SIZE = 5
 DAILY_CAP = 2
@@ -295,6 +296,33 @@ async def feed_page(
         held_by_caps=dict(held),
         status=status,
     )
+
+
+async def morning_supply(
+    session: AsyncSession, *, context: KeyContext, engine: Engine
+) -> tuple[StateView, list[FeedItem]]:
+    """The now and today cards the patient's feed leads with, and the State they came from.
+
+    What the morning card on WhatsApp says (E19-03), so the thread and the app lead his day
+    with the same things: today's cards are made first, as a first page makes them, then
+    walked in the patient's order with the caps and his "not for me" applied. The flag, the
+    gate and everything past it are left out — a flag is its own message, never a line in a
+    routine card — and so are the quiet hours, which are the sender's clock to keep. Nothing
+    is written as a page: this is not the app's page, and nothing on it is marked sent.
+    """
+    if await can_compose(context):
+        state, _ = await refresh(session, context=context, engine=engine)
+    else:
+        state = await current_state(session, context=context)
+    day = today_for(context)
+    found = await audited_read(
+        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > day.now,)
+    )
+    declined = await _declined_today(session, context=context, day=day)
+    ordered, _ = _patient_supply(
+        _visible_to(found, context), day=day, declined=declined, quiet=False
+    )
+    return state, [item for item in ordered if item.supply in (Supply.NOW, Supply.TODAY)]
 
 
 class NoCachedPage(Refusal):
