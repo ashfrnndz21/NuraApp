@@ -125,7 +125,9 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
           </div>
         </Tile>
       )}
-      {live && nudge && <NudgeTile shown={nudge} busy={busy} onAnswer={(kind) => void answer(kind)} />}
+      {/* A check-in nudge asks what the cloud asks, and a word on the cloud is its answer: while
+          the cloud is on Today, the cloud is the check-in. */}
+      {live && nudge && !(nudge.kind === "check_in" && cloud) && <NudgeTile shown={nudge} busy={busy} onAnswer={(kind) => void answer(kind)} />}
       {records && (
         <Pill onClick={() => go({ name: "symptoms" })} testId="open-symptoms">
           {s.day.symptomsOpen}
