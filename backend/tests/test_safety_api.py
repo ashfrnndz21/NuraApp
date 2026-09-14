@@ -206,7 +206,8 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert body["lines"][0]["text"] == "Mei knows now."
     assert body["lines"][1]["text"] == "Nura has no note that you took the water pill today."
     assert body["lines"][2]["text"] == "Ask Dr Tan before you take the water pill."
-    assert body["lines"][-1]["text"] == "Ask Dr Tan."
+    assert body["lines"][-2]["text"] == "Ask Dr Tan."
+    assert body["lines"][-1]["text"] == "Nura does not decide what is wrong."
     assert body["check_in_at"] is not None and body["notified_person_ids"] == [mei["person_id"]]
     assert body["symptoms"] == ["tired"] and body["red_flags"] == []
 

@@ -530,6 +530,7 @@ FILLERS = {
     "symptom": "dizzy",
     "severity": "quite bad",
     "since": "this morning",
+    "insurer": "Great Eastern",
 }
 
 

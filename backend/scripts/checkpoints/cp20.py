@@ -433,6 +433,22 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"({capped[0]['reason']}) — no second message, and no row at all on the runs after it"
     )
 
+    # 5b. His directory (E03-03): Dr Tan, and Gleneagles marked as the hospital on his insurance.
+    for provider in (
+        {"name": "Dr Tan", "kind": "doctor"},
+        {"name": "Gleneagles", "kind": "hospital", "panel": True},
+    ):
+        check(
+            client.post(f"/profiles/{profile_id}/providers", headers=bearer(mei.token), json=provider),
+            201,
+            f"Mei adds {provider['name']} to his directory",
+        )
+    ok(
+        "Mei added Dr Tan and Gleneagles to his directory (POST /profiles/{id}/providers), "
+        "Gleneagles marked as the hospital on his insurance (panel: true); Dr Tan's hours are not "
+        "set, so his clinic answers 08:00 to 20:00"
+    )
+
     # 6. 22:30, the quiet hours: Pa writes that he fell.
     fell = w.inbound(pa, "I fell in the bathroom", 22, 30)
     if fell["outcome"] != "red_flag" or not fell["flag_id"]:
@@ -448,10 +464,19 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if any(row["to_person_id"] == pa.person_id for row in flagged):
         raise fail("a red flag skips his own rung", why=f"got {flagged}")
     rung = flagged[-1]
+    said = fell["replies"][0]["text"].splitlines() if fell["replies"] else []
+    if said != [
+        "This one we do not wait for.",
+        "Go to the emergency department at Gleneagles now.",
+        "Mei knows now.",
+    ]:
+        raise fail("out of hours, the hospital on his insurance, never the doctor today", why=f"got {said}")
     ok(
         "22:30, inside the quiet hours: a red flag, written first, went straight to the roster — "
         f"{rung['standing']}, {rung['outcome']} by {rung['channel']} ({rung['template_name']}), "
-        f"category {rung['category']}, never capped and never quiet; not to him. His reply:"
+        f"category {rung['category']}, never capped and never quiet; not to him. A fall is the "
+        "same-day tier, and Dr Tan's clinic is closed at 22:30: never \"call your doctor today\" — "
+        "the emergency department of the hospital on his insurance, named (E19-05). His reply:"
     )
     for sent in fell["replies"]:
         for line in sent["text"].splitlines():
@@ -514,6 +539,57 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "the delivery log",
     )})
     ok(f"every attempt is on the delivery log with the rule that fired: {', '.join(rules)}")
+
+    # 8. The pre-visit brief at T-3 (E05-01): a visit with Dr Tan on Friday 18 September; at
+    #    07:40 on Tuesday the 15th — three days before, after his breakfast — the engine
+    #    renders the brief and sends its card, once, under the cap on briefs a day.
+    listed = check(client.get(f"/profiles/{profile_id}/providers", headers=bearer(pa.token)), 200, "his directory")
+    tan = next(one["provider"] for one in listed if one["provider"]["name"] == "Dr Tan")
+    booking = {
+        "provider_id": tan["provider_id"],
+        "scheduled_at": datetime(2026, 9, 18, 10, 0, tzinfo=SGT).isoformat(),
+        "purpose": "blood pressure",
+    }
+    yes = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(pa.token),
+            json={"subject": "appointment", **booking},
+        ),
+        201,
+        "Pa says yes to the booking",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/appointments",
+            headers=bearer(pa.token),
+            json={**booking, "confirmation_id": yes["confirmation_id"]},
+        ),
+        201,
+        "Pa writes down the visit",
+    )
+    w.clock(7, 40, days=1)
+    ran = check(client.post("/dev/run-triggers", json={"profile_id": profile_id}), 200, "the engine runs at 07:40")
+    briefs = [row for row in ran["deliveries"] if row["trigger_type"] == "visit_brief"]
+    if (
+        len(briefs) != 1
+        or briefs[0]["outcome"] != "sent"
+        or briefs[0]["rule"] != "brief_three_days_before"
+        or briefs[0]["template_name"] != "visit_brief"
+    ):
+        raise fail("the brief at T-3", why=f"got {ran['deliveries']}")
+    w.clock(8, 10, days=1)
+    again = check(client.post("/dev/run-triggers", json={"profile_id": profile_id}), 200, "the engine runs at 08:10")
+    if any(row["trigger_type"] == "visit_brief" for row in again["deliveries"]):
+        raise fail("the brief goes once", why=f"got {again['deliveries']}")
+    ok(
+        "07:40 on Tuesday 15 September, three days before his visit with Dr Tan on Friday 18 "
+        "September: the pre-visit brief was rendered then and its card sent — "
+        + _line(briefs[0])
+        + "; 08:10 sends it no second time. What he reads:"
+    )
+    for line in (briefs[0].get("text") or "").splitlines():
+        say(f"→ {line}")
 
 
 def run(base_url: str, dev_log: Path) -> int:

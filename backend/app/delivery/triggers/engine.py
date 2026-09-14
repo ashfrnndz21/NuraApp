@@ -451,13 +451,17 @@ async def _brief(run: Run) -> None:
                     registry=run.via.providers.drug_registry,
                 )
         except Refusal as refused:
-            await write(
-                run,
-                firing,
-                Recipient(run.patient, PATIENT),
-                DeliveryOutcome.SKIPPED,
-                reason=f"no brief: {type(refused).__name__}"[:64],
-            )
+            # Written down once a day, not on every run: the next run tries the brief again.
+            if not any(
+                row.outcome is DeliveryOutcome.SKIPPED and row.day == run.day for row in earlier
+            ):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason=f"no brief: {type(refused).__name__}"[:64],
+                )
             continue
         run.forget_state()
         carried = [

@@ -120,7 +120,7 @@ def test_every_line_has_a_stable_id_of_catalogue_key_and_language(repo: Memory) 
 
 
 def test_twins_share_everything_but_the_language(repo: Memory) -> None:
-    group = repo.groups()[("backend/app/channels/whatsapp/strings", "REPLIES.red_flag.0")]
+    group = repo.groups()[("backend/app/channels/whatsapp/strings", "RED_FLAG_OPENING")]
     assert {code: e.text for code, e in group.items()} == {
         "en": "This one we do not wait for.",
         "ms": "Yang ini kita tidak tunggu.",

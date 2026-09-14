@@ -201,9 +201,9 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
         "zh": "然后再打给{chief}。",
     },
     "nfw.call_clinic": {
-        "en": "Call {who}'s clinic today.",
-        "ms": "Telefon klinik {who} hari ini.",
-        "zh": "今天就打电话给{who}的诊所。",
+        "en": "Call {doctor}'s clinic today.",
+        "ms": "Telefon klinik {doctor} hari ini.",
+        "zh": "今天就打电话给{doctor}的诊所。",
     },
     "nfw.not_taken": {
         "en": "Nura has no note that you took {medicine} today.",

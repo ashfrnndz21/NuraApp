@@ -165,9 +165,12 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
     clock.set(at(22, 30))
     handled = await h.inbound(sg, PA, "I fell in the bathroom")
     assert handled.outcome == "red_flag"
+    # A fall is the same-day tier; at 22:30 his doctor's clinic is closed (no hours in the
+    # directory: 08:00 to 20:00) and no hospital is marked — never "call the doctor today"
+    # at night (E19-05).
     assert handled.replies[0].text.splitlines() == [
         "This one we do not wait for.",
-        "Call your doctor today.",
+        "If it gets worse, call 995 now.",
         "Mei knows now.",
     ]
     ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id.is_not(None)))).one()
@@ -176,11 +179,13 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
         ("on_duty", 0),
         ("key_holder", 5),
     ]
-    # He raised it himself: the notice says his name, not "Pa said Pa is not well."
+    # Out of hours the notice is the night one (pending Meta, sent on a dev run): his name,
+    # call him now, the emergency number if it gets worse — never "call your doctor today".
     assert h.sent_to(h.mei)[-1].splitlines() == [
         "This one we do not wait for.",
-        "Pa is not feeling well.",
-        "Call your doctor today.",
+        "Pa is not well.",
+        "Call Pa now.",
+        "If it gets worse, call 995 now.",
     ]
     # Nobody answered: five minutes on, still at night, the next rung is asked.
     later = await _run(sg, h, clock, at(22, 36))
