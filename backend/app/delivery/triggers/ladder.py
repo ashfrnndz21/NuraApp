@@ -66,6 +66,7 @@ from app.medicines.service import today as doses_today
 from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME
 from app.memory.models import Provider, ProviderKind
 from app.regions import REGION_TZ
+from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 from app.safety.boundary import YOUR_DOCTOR
 from app.safety.red_flags import FLAG_WINDOW, Flag
@@ -599,7 +600,11 @@ async def dose_for_reply(
         generic = generic_of.get(newest.line_id)
         if generic is not None:
             return DoseAsked(line_id=newest.line_id, anchor=newest.anchor, generic=generic)
-    config = config_of(None, await current_routine(session, context=context))
+    config = config_of(
+        None,
+        await current_routine(session, context=context),
+        await breakfast_time(session, context=context),
+    )
     untapped = [slot for slot in slots if not slot.taken]
     for slot in untapped:
         opens, closes = config.window(local.date(), slot.anchor, zone)

@@ -49,10 +49,11 @@ class SettingsIn(BaseModel):
 
 
 class SettingsOut(BaseModel):
-    morning_card_at: time
-    """When the morning card goes: E10-01's routine (`PUT …/routine` sets it), 07:00 until set."""
+    breakfast_at: time
+    """The one breakfast time (his settings, else his routine, else 07:30): the morning card,
+    the first week's prompt and the breakfast tablet all come at it."""
     anchors: dict[str, time]
-    """The routine's anchors the tablets hang on (breakfast 07:30 until set)."""
+    """The routine's anchors the tablets hang on, breakfast the one above."""
     skip_quiet_days: bool
     quiet_from: time
     quiet_until: time
@@ -64,7 +65,7 @@ class SettingsOut(BaseModel):
     @classmethod
     def of(cls, config: Config, row: DeliverySettings | None) -> SettingsOut:
         return cls(
-            morning_card_at=config.day.morning_card_at,
+            breakfast_at=config.day.anchors["breakfast"],
             anchors=dict(config.day.anchors),
             skip_quiet_days=config.skip_quiet_days,
             quiet_from=config.quiet_from,

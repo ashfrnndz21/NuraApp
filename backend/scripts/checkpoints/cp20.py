@@ -8,7 +8,7 @@ the reorder date is reached); Mei, his daughter, holds a chief key and is on the
 weekdays; Siti, the helper, holds a helper key. The day is Monday 14 September on a dev run's
 frozen clock (#118): the checkpoint stands it at 06:00 and steps it (`POST /dev/clock`) to each
 hour the scenario needs, running the engine there (`POST /dev/run-triggers`, the dev door onto
-`run_due`): the morning card at the time his routine sets, as the approved template; the breakfast tablet's window closes with no Taken, and the ladder
+`run_due`): the morning card at his breakfast, as the approved template; the breakfast tablet's window closes with no Taken, and the ladder
 asks Pa, then Siti, then Mei, and stops when Siti replies "sudah beri" on WhatsApp; the reorder
 reaches Mei and is held by the cap the second time that day; at 22:30 Pa writes that he fell,
 and the flag goes straight to the roster, neither quiet nor capped. Then today's top three with
@@ -343,12 +343,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"at 06:00 on {w.day.isoformat()} by the dev run's frozen clock"
     )
 
-    # 3. The morning card at the time his routine sets (E10-01; 07:00 until the family sets
-    #    the day), by WhatsApp, once.
-    assert_none = _of(w.run_due(profile_id, 6, 50), "morning")
+    # 3. The morning card at his breakfast — the one breakfast time his settings, else his
+    #    routine, say; 07:30 until either does — by WhatsApp, once.
+    assert_none = _of(w.run_due(profile_id, 7, 20), "morning")
     if assert_none:
         raise fail("nothing before breakfast", why=f"got {assert_none}")
-    [morning] = _of(w.run_due(profile_id, 7, 1), "morning") or [None]
+    [morning] = _of(w.run_due(profile_id, 7, 31), "morning") or [None]
     if (
         morning is None
         or morning["outcome"] != "sent"
@@ -356,12 +356,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or morning["template_name"] != "morning_card"
     ):
         raise fail("the morning card goes at breakfast", why=f"got {morning}")
-    if _of(w.run_due(profile_id, 7, 15), "morning"):
+    if _of(w.run_due(profile_id, 7, 45), "morning"):
         raise fail("one morning card a day", why="a second one went")
     ok(
-        "06:50: nothing; 07:01, the time his routine sets for it (breakfast is at 07:30): the "
-        "morning card, the approved template (he has not written in 24 hours), once — 07:15 "
-        "sends nothing. "
+        "07:20: nothing; 07:31, his breakfast (the one breakfast time, 07:30 until he says — "
+        "the first week's prompt comes at the same moment): the morning card, the approved "
+        "template (he has not written in 24 hours), once — 07:45 sends nothing. "
         + _line(morning)
         + ". What he reads:"
     )

@@ -21,6 +21,7 @@ from app.delivery.triggers.models import Delivery, DeliverySettings
 from app.delivery.triggers.rules import Config, check_settings, config_of
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
+from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 
 
@@ -46,7 +47,7 @@ async def current(
     )
     row = rows[0] if rows else None
     routine = await current_routine(session, context=context) if context.allows(Scope.MEDICINES) else None
-    return config_of(row, routine), row
+    return config_of(row, routine, await breakfast_time(session, context=context)), row
 
 
 async def change(

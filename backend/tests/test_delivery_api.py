@@ -20,8 +20,8 @@ async def test_the_settings_are_read_changed_and_an_alert_is_never_capped(
     now = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
     assert now.status_code == 200, now.text
     body = now.json()
-    # The times of his day are E10-01's routine: not set yet, its defaults.
-    assert body["morning_card_at"] == "07:00:00" and body["anchors"]["breakfast"] == "07:30:00"
+    # The one breakfast time, not said yet: 07:30, the morning card and the breakfast tablet.
+    assert body["breakfast_at"] == "07:30:00" and body["anchors"]["breakfast"] == "07:30:00"
     assert body["caps"]["flag"] is None
     assert body["channels"]["reorder"] == ["app_push", "whatsapp", "caregiver"]
     assert body["channels"]["flag"] == ["whatsapp", "app_push"]

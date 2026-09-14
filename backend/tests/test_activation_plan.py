@@ -231,7 +231,7 @@ async def test_prompts_stop_once_the_record_has_medicines_last_visit_and_next_vi
     assert by_gap["bp_numbers"] == "pending"  # still in his list; not asked for any more
 
 
-async def test_fewer_gaps_fewer_prompts_and_breakfast_at_eight_until_he_says(
+async def test_fewer_gaps_fewer_prompts_and_breakfast_at_half_past_seven_until_he_says(
     deployment: Deployment,
 ) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
@@ -244,14 +244,15 @@ async def test_fewer_gaps_fewer_prompts_and_breakfast_at_eight_until_he_says(
     )
     closed = await call(deployment, "POST", f"/profiles/{profile_id}/biography/close", his, 200)
     plan = closed["plan"]
-    assert plan["breakfast_time"] == "08:00"
+    # Neither he nor a routine has said: the one breakfast time's default (`app.routines.breakfast`).
+    assert plan["breakfast_time"] == "07:30"
     assert [p["prompt"] for p in plan["prompts"]] == [
         "medicines",
         "insurance",
         "meal_times",
         "someone_to_see",
     ]
-    assert plan["prompts"][0]["due_local"] == "2026-09-04T08:00:00+08:00"
+    assert plan["prompts"][0]["due_local"] == "2026-09-04T07:30:00+08:00"
     assert plan["prompts"][0]["action"] == "Today, take a photo of the medicine bag."
     how = {p["prompt"]: (p["capture"], p["word"]) for p in plan["prompts"]}
     assert how["meal_times"] == ("tap", None) and how["someone_to_see"] == ("invite", None)

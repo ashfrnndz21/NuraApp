@@ -177,9 +177,10 @@ async def _doses(run: Run, lines: Sequence[LineView]) -> None:
 
 
 async def _morning(run: Run) -> None:
-    """The morning card at the time his routine sets for it (E10-01's `morning_card_at`, tied
-    to breakfast), once a day, by his channel (E11-10). Dropped, not sent late, three hours on;
-    skipped on a quiet day if he asked."""
+    """The morning card at his breakfast — the one breakfast time his settings, else his
+    routine, say (`app.routines.breakfast`), which the first week's prompt shares — once a day,
+    by his channel (E11-10). Dropped, not sent late, three hours on; skipped on a quiet day if
+    he asked."""
     if run.patient is None:
         return
     due = run.config.morning(run.local.date(), REGION_TZ[run.acting.region])
@@ -188,7 +189,7 @@ async def _morning(run: Run) -> None:
     firing = Firing(
         type=TriggerType.MORNING,
         dedupe_key=f"morning:{run.day}",
-        why={"morning_card_at": run.config.day.morning_card_at.isoformat(timespec="minutes")},
+        why={"breakfast_at": run.config.day.anchors["breakfast"].isoformat(timespec="minutes")},
     )
     earlier = _about(run, firing, run.patient.id, await run.deliveries())
     if any(row.outcome in (DeliveryOutcome.SENT, DeliveryOutcome.SKIPPED) for row in earlier):

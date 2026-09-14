@@ -33,12 +33,13 @@ from app.delivery.triggers.preferences import change
 from app.delivery.triggers.rules import RULES, AlertsAreNeverHeld, NotASetting, check_settings
 from app.family.models import PushChannel, ScheduledPush
 from app.ingestion.models import DocumentKind, ReviewCard
-from app.keys.confirm import confirm
 from app.keys.scopes import Scope
 from app.onboarding.gaps import BY_CODE
-from app.onboarding.plan import make_plan
+from app.onboarding.plan import current_plan, make_plan
+from app.onboarding.settings import SettingsValues, save_settings
 from app.onboarding.words import prompt as prompt_words
-from app.routines.service import routine_draft_for, set_routine
+from app.routines.breakfast import breakfast_time
+from app.routines.service import due_now
 from app.state.service import render_from_state
 from tests.delivery_support import PA, Home, home
 from tests.medicines_support import add, artefact, label
@@ -67,13 +68,13 @@ async def test_the_morning_card_goes_at_breakfast_once_a_day_by_whatsapp(
 ) -> None:
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    # His routine (E10-01) is not set yet: the morning card's time is its default, 07:00.
+    # Nobody has said when he has breakfast: the one breakfast time's default, 07:30.
     assert _rows(await _run(sg, h, clock, at(6, 50)), TriggerType.MORNING) == []
     report = await _run(sg, h, clock, at(7, 31))
     [card] = _rows(report, TriggerType.MORNING)
     assert card.outcome is DeliveryOutcome.SENT and card.via is DeliveryChannel.WHATSAPP
     assert card.template_name == "morning_card" and card.rule == "breakfast_anchor_reached"
-    assert card.trigger_kind is TriggerKind.RULE and card.why["morning_card_at"] == "07:00"
+    assert card.trigger_kind is TriggerKind.RULE and card.why["breakfast_at"] == "07:30"
     text = h.sent_to(h.pa)[-1].splitlines()
     assert text[:3] == [
         "Good morning, Pa, this is Nura.",
@@ -100,34 +101,33 @@ async def test_the_morning_card_goes_at_breakfast_once_a_day_by_whatsapp(
         assert row.to_person_id == entry.shared_with_person_id and row.scope is entry.scope
 
 
-async def test_the_times_are_his_routines(
+async def test_there_is_one_breakfast_time(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:
-    """E10-01's routine is the clock of his day: the family sets breakfast at 08:15 and the
-    morning card at 08:00, on a yes for exactly that day, and the engine follows it."""
+    """His settings say breakfast is at 07:30: the routine's breakfast, the first week's
+    prompt and the morning card are all at 07:30. He changes it to 08:15: all three move."""
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    day = {
-        "anchors": {
-            "wake": "07:00",
-            "breakfast": "08:15",
-            "lunch": "12:30",
-            "dinner": "18:30",
-            "bed": "22:00",
-        },
-        "reading_prompts": (),
-        "walks": (),
-        "morning_card_at": "08:00",
-    }
-    draft = await routine_draft_for(sg, context=h.owner, **day)  # type: ignore[arg-type]
-    yes = await confirm(sg, h.owner, draft)
-    await set_routine(sg, context=h.owner, confirmation_id=yes.id, **day)  # type: ignore[arg-type]
-    assert _rows(await _run(sg, h, clock, at(7, 31)), TriggerType.MORNING) == []
-    [card] = _rows(await _run(sg, h, clock, at(8, 1)), TriggerType.MORNING)
-    assert card.why["morning_card_at"] == "08:00"
-    # The breakfast tablet hangs on the same anchor: its window closes an hour after 08:15.
-    assert _rows(await _run(sg, h, clock, at(9, 10)), TriggerType.DOSE) == []
-    assert len(_rows(await _run(sg, h, clock, at(9, 16)), TriggerType.DOSE)) == 1
+    await save_settings(sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(7, 30)))
+    await make_plan(sg, context=h.owner, session_id=None, gaps=[BY_CODE["weight"]], breakfast=None)
+
+    async def shared(day: int, hour: int, minute: int) -> None:
+        assert await breakfast_time(sg, context=h.owner) == time(hour, minute)
+        due = await due_now(sg, context=h.owner, at=at(hour, minute, day=day))
+        assert due is not None and due.anchor == "breakfast" and due.at == time(hour, minute)
+        view = await current_plan(sg, context=h.owner)
+        assert view.due_of(view.prompts[0]).astimezone(SGT).time() == time(hour, minute)
+        early = at(hour, minute, day=day) - timedelta(minutes=1)
+        assert _rows(await _run(sg, h, clock, early), TriggerType.MORNING) == []
+        [card] = _rows(await _run(sg, h, clock, at(hour, minute, day=day)), TriggerType.MORNING)
+        assert card.outcome is DeliveryOutcome.SENT
+        assert card.why["breakfast_at"] == f"{hour:02d}:{minute:02d}"
+        assert _rows(report_after := await _run(sg, h, clock, at(hour, minute, day=day)), TriggerType.MORNING) == []
+        assert report_after.day == f"2026-09-{day}"
+
+    await shared(15, 7, 30)
+    await save_settings(sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(8, 15)))
+    await shared(16, 8, 15)
 
 
 async def test_a_quiet_day_is_skipped_only_when_he_asked(
@@ -368,12 +368,10 @@ async def test_the_first_week_prompt_is_one_line_of_the_morning_card(
     of its own, logged with its rule — once a day, under the card's one a day."""
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    await make_plan(
-        sg, context=h.owner, session_id=None, gaps=[BY_CODE["weight"]], breakfast=time(7, 0)
-    )
+    await make_plan(sg, context=h.owner, session_id=None, gaps=[BY_CODE["weight"]], breakfast=None)
     words = prompt_words("weight", "en", None)
     assert words is not None
-    report = await _run(sg, h, clock, at(7, 1, day=15))
+    report = await _run(sg, h, clock, at(7, 31, day=15))
     [card] = _rows(report, TriggerType.MORNING)
     [along] = _rows(report, TriggerType.FIRST_WEEK_PROMPT)
     assert card.outcome is DeliveryOutcome.SENT
@@ -381,4 +379,4 @@ async def test_the_first_week_prompt_is_one_line_of_the_morning_card(
     assert along.rule == "first_week_prompt_due" and along.reason == "in the morning card"
     assert along.message_id == card.message_id and along.why["gap"] == "weight"
     assert words.action in h.sent_to(h.pa)[-1].splitlines()
-    assert _rows(await _run(sg, h, clock, at(7, 20, day=15)), TriggerType.FIRST_WEEK_PROMPT) == []
+    assert _rows(await _run(sg, h, clock, at(7, 50, day=15)), TriggerType.FIRST_WEEK_PROMPT) == []

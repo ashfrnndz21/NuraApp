@@ -9,9 +9,10 @@ it goes first (`channels`: app push, then WhatsApp, then the caregiver, by defau
 a person may have of it in his day (`cap`) and whether it waits out the quiet hours. An
 alert — a red flag — has no cap and no quiet hours, and no setting can give it either.
 
-The clock of his day is E10-01's routine (`app.routines`), not a second one kept here: the
-morning card goes at its `morning_card_at` (07:00 until the family sets the day, E11-10), a
-tablet hangs on its anchor's time (breakfast 07:30 until set), and a tablet's window runs from
+The clock of his day is E10-01's routine (`app.routines`), not a second one kept here, with
+the one breakfast time (`app.routines.breakfast`: his settings, else the routine's anchor,
+else 07:30): the morning card goes at breakfast (E11-10), with the first week's prompt due at
+the same moment; a tablet hangs on its anchor's time; and a tablet's window runs from
 an hour before its anchor to the end of the routine's own "due" for that anchor (`DUE_FOR`,
 or the next anchor if that comes sooner) — untapped then, the ladder starts. A profile changes
 the delivery defaults with `DeliverySettings` (E11-05): the list and the cap per type, the
@@ -209,12 +210,15 @@ class Config:
         return at - WINDOW_BEFORE, closes
 
     def morning(self, day: date, tz: ZoneInfo) -> datetime:
-        """When the morning card goes: the routine's `morning_card_at` on this day of his."""
-        return datetime.combine(day, self.day.morning_card_at, tz)
+        """When the morning card goes: at his breakfast on this day of his — the one
+        breakfast time the first week's prompt and the breakfast tablet share."""
+        return datetime.combine(day, self.day.anchors["breakfast"], tz)
 
 
-def config_of(row: DeliverySettings | None, routine: Routine | None = None) -> Config:
-    day = day_of(routine)
+def config_of(
+    row: DeliverySettings | None, routine: Routine | None = None, breakfast: time | None = None
+) -> Config:
+    day = day_of(routine, breakfast)
     if row is None:
         return Config(day=day)
     return Config(
