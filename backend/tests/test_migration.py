@@ -1,14 +1,18 @@
 """The migrations and the models must agree.
 
 Migrations are never deleted, so the only way the two drift apart is a column added to one
-and not the other. This runs every revision in order against an empty database and checks
-the tables they build against the tables the models declare.
+and not the other. This loads every revision in the directory, runs them in dependency
+order against an empty database, and checks the tables they build against the tables the
+models declare.
+
+Two stories built side by side each branch from the same revision, so the directory can hold
+more than one head at a time. That is allowed here; the operator joins the heads with a merge
+revision. What is not allowed is a revision that names a parent the directory does not hold.
 """
 
 from __future__ import annotations
 
 import importlib.util
-from itertools import pairwise
 from pathlib import Path
 from types import ModuleType
 
@@ -20,55 +24,91 @@ from sqlalchemy import Table, create_engine, inspect
 from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
 from app.keys.models import Key
+from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
-# In order. A revision is appended here when it is written and never taken out again.
-CHAIN = ("0001_accounts_profiles_and_keys", "0002_audit_entry")
 TABLES: tuple[Table, ...] = (
     Person.__table__,
     Profile.__table__,
     Key.__table__,
     AuditEntry.__table__,
+    Artifact.__table__,
+    Event.__table__,
+    Fact.__table__,
+    Episode.__table__,
+    Provider.__table__,
+    Appointment.__table__,
 )
 
 
-def _load(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, VERSIONS / f"{name}.py")
+def _load(path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(path.stem, path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
+def _parents(module: ModuleType) -> tuple[str, ...]:
+    """A merge revision names several parents; every other revision names one or none."""
+    down = module.down_revision
+    if down is None:
+        return ()
+    return (down,) if isinstance(down, str) else tuple(down)
+
+
 @pytest.fixture
-def migrations() -> tuple[ModuleType, ...]:
-    return tuple(_load(name) for name in CHAIN)
+def revisions() -> dict[str, ModuleType]:
+    found = {module.revision: module for module in map(_load, sorted(VERSIONS.glob("*.py")))}
+    assert found, "no migrations found"
+    return found
 
 
-def test_every_revision_links_to_the_one_before_it(migrations: tuple[ModuleType, ...]) -> None:
-    assert migrations[0].down_revision is None
-    for earlier, later in pairwise(migrations):
-        assert later.down_revision == earlier.revision
+def _in_order(revisions: dict[str, ModuleType]) -> tuple[ModuleType, ...]:
+    """Every revision after all of its parents; siblings by file name, so the run is stable."""
+    applied: list[str] = []
+    waiting = dict(revisions)
+    while waiting:
+        ready = sorted(
+            (rev for rev, module in waiting.items() if set(_parents(module)) <= set(applied)),
+            key=lambda rev: revisions[rev].__name__,
+        )
+        assert ready, f"these revisions never become applicable: {sorted(waiting)}"
+        applied.extend(ready)
+        for rev in ready:
+            del waiting[rev]
+    return tuple(revisions[rev] for rev in applied)
+
+
+def test_every_revision_links_to_one_the_directory_holds(
+    revisions: dict[str, ModuleType],
+) -> None:
+    roots = [rev for rev, module in revisions.items() if not _parents(module)]
+    assert roots == ["0001_accounts"]
+    for module in revisions.values():
+        for parent in _parents(module):
+            assert parent in revisions, f"{module.revision} revises {parent}, which is not here"
 
 
 def test_the_migrations_build_the_tables_the_models_declare(
-    migrations: tuple[ModuleType, ...],
+    revisions: dict[str, ModuleType],
 ) -> None:
+    ordered = _in_order(revisions)
     engine = create_engine("sqlite+pysqlite://")
     with engine.begin() as connection:
-        for migration in migrations:
+        for migration in ordered:
             with Operations.context(MigrationContext.configure(connection)):
                 migration.upgrade()
 
         built = inspect(connection)
-        assert set(built.get_table_names()) == {table.name for table in TABLES}
+        assert set(built.get_table_names()) >= {table.name for table in TABLES}
         for table in TABLES:
             assert {column["name"] for column in built.get_columns(table.name)} == {
                 column.name for column in table.columns
-            }
+            }, table.name
 
-        for migration in reversed(migrations):
+        for migration in reversed(ordered):
             with Operations.context(MigrationContext.configure(connection)):
                 migration.downgrade()
         assert inspect(connection).get_table_names() == []
