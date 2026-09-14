@@ -395,7 +395,7 @@ export const en = {
   },
   day: {
     // @patient headline
-    topThree: "Three things for today",
+    topThree: "3 things for today",
     // @patient phrase
     notWell: "I am not feeling well",
     // @patient headline

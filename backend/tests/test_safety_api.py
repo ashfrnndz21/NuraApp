@@ -291,8 +291,8 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
         "If you feel very bad, call the ambulance now on 995.",
         "Nura does not decide what is wrong.",
     ]
-    assert [line["id"] for line in body["red_flag"]][0] == "boundary.opening"
-    assert [line["id"] for line in body["red_flag"]][-1] == "boundary.urgent"
+    assert body["red_flag"][0]["id"] == "boundary.opening"
+    assert body["red_flag"][-1]["id"] == "boundary.urgent"
 
     malay = await deployment.client.get(
         f"/profiles/{profile_id}/not-feeling-well/offline?language=ms", headers=bearer(mei["token"])

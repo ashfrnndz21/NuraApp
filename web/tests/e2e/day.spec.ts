@@ -62,6 +62,32 @@ const nothingCovers = (page: Page) =>
   nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label, blockquote", controls: "button", minTarget: 56 });
 const whatToDoLines = (page: Page) => page.getByTestId("what-to-do-lines").locator("p");
 
+/** A demo deployment (ADR 0008): the banner first on every screen. */
+async function showDemoBanner(page: Page): Promise<void> {
+  await page.route("**/api/deployment", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ region: "SG", demo: true }) }),
+  );
+}
+
+/** With the demo banner shown, the what-to-do card never sits under it: at the top of the page
+ *  every line is below the banner and is what the page hits at its centre. */
+async function notUnderTheBanner(page: Page): Promise<string[]> {
+  await expect(page.locator(".demo-banner")).toBeVisible();
+  return page.evaluate(() => {
+    window.scrollTo(0, 0);
+    const bottom = document.querySelector(".demo-banner")?.getBoundingClientRect().bottom ?? 0;
+    const problems: string[] = [];
+    for (const line of document.querySelectorAll<HTMLElement>("[data-testid=what-to-do-lines] p")) {
+      const box = line.getBoundingClientRect();
+      if (box.top < bottom) problems.push(`under the banner: ${line.textContent}`);
+      if (box.bottom > window.innerHeight) continue;
+      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!(at === line || (at !== null && line.contains(at)))) problems.push(`covered: ${line.textContent}`);
+    }
+    return problems;
+  });
+}
+
 /** Every /api request the page makes, with its order, for the red-flag paths. */
 function apiTrail(page: Page): { log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request }[]; inflight: () => number } {
   const log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request }[] = [];
@@ -123,6 +149,7 @@ async function forgetOfflineCards(page: Page): Promise<number> {
 // --- E13-02: the button -------------------------------------------------------------------------
 
 test("not feeling well, typed: the backend's card, every line in its order — Mei told, a check-in in two hours", async ({ page, request }) => {
+  await showDemoBanner(page);
   const pa = await seedVisitDay(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await page.getByTestId("not-well").click();
@@ -143,6 +170,7 @@ test("not feeling well, typed: the backend's card, every line in its order — M
   await expect(whatToDoLines(page)).toHaveText(texts(card.lines));
   await expect(page.getByTestId("offline-note")).toHaveCount(0);
   expect(await nothingCovers(page)).toEqual([]);
+  expect(await notUnderTheBanner(page)).toEqual([]);
   await shotAs(page, "cp27-rest-card", true);
 });
 
@@ -159,13 +187,16 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
       true,
     );
   });
+  await showDemoBanner(page);
   const pa = await seedVisitDay(request);
+  const trail = apiTrail(page);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await expect(page.getByTestId("not-well")).toBeVisible();
-  const trail = apiTrail(page);
   await page.getByTestId("not-well").click();
   await page.getByTestId("not-well-say").click();
   await expect(page.getByTestId("red-dot")).toBeVisible();
+  // Nothing of Today's reads still on the wire: the next request is his.
+  await expect.poll(trail.inflight).toBe(0);
   const mark = trail.log.length;
   const answered = page.waitForResponse(posted(/\/not-feeling-well$/));
   await page.getByTestId("not-well-stop").click();
@@ -179,6 +210,7 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
   expect(texts(card.lines)).toEqual(urgent);
   await expect(whatToDoLines(page)).toHaveText(urgent);
   expect(await nothingCovers(page)).toEqual([]);
+  expect(await notUnderTheBanner(page)).toEqual([]);
   await shotAs(page, "cp27-urgent-card", true);
 
   // Back on Today, State says act: the wash cross-fades (E15-01), on the typed stops.
@@ -193,6 +225,7 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
 // --- E17-01, E17-02: the feeling cloud ------------------------------------------------------------
 
 test("a red word on the cloud reaches the flag before any other request, the ladder is written, and the strip goes", async ({ page, request }) => {
+  await showDemoBanner(page);
   const pa = await seedVisitDay(request);
   await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 30 });
   const trail = apiTrail(page);
@@ -209,6 +242,8 @@ test("a red word on the cloud reaches the flag before any other request, the lad
   await cloud.locator('[data-word="chest_tightness"]').click();
   const felt = (await (await answered).json()) as { red_flag: boolean; flag_id: string; escalation_id: string; told: string[]; card: WhatToDo };
   await expect(whatToDoLines(page)).toHaveText(texts(felt.card.lines));
+  expect(await nothingCovers(page)).toEqual([]);
+  expect(await notUnderTheBanner(page)).toEqual([]);
 
   // The order: the tap is the first request after it, and no other request completes before it.
   const after = trail.log.slice(mark);
@@ -478,7 +513,7 @@ test("the post-visit card on the web: each line with where it was said, one left
   expect(closed.items.find((item) => item.kind === "medication_change")?.flag_id).toBeTruthy();
 
   // E21-03: the memo card on his feed, each line with the stretch it was said in, played on a tap.
-  await page.getByRole("button", { name: "Today" }).click();
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
@@ -497,11 +532,13 @@ test("the post-visit card on the web: each line with where it was said, one left
   await page.route("**/api/profiles/*/artifacts/*/clip*", (route) =>
     route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ refusal: "OnlyTheFamilyHears" }) }),
   );
-  await page.reload();
+  // Out of the feed and back: the feed opens with a player that has fetched nothing yet.
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   await pageUntil(page, "memo");
-  const again = page.locator("article.feed-card[data-type=memo]").first().getByTestId("card-line").filter({ has: page.getByTestId("hear-clip") }).first();
+  // The same line, by its words: once refused, it has no button to be found by.
+  const again = page.locator("article.feed-card[data-type=memo]").first().getByTestId("card-line").filter({ hasText: caption }).first();
   await again.getByTestId("hear-clip").click();
   await expect(again.getByTestId("clip-refused")).toHaveText("Only the owner and the family he let in can hear this.");
   await expect(again.getByTestId("hear-clip")).toHaveCount(0);
@@ -538,7 +575,7 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
 
   // Me: the number that only goes up, as the backend says it.
   const summary = (await (await request.get(`${API}/profiles/${pa.profileId}/me-summary?language=en`, auth(pa.token))).json()) as { proud_days: number; lines: string[] };
-  await page.getByRole("button", { name: "Me" }).click();
+  await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("me-proud-number")).toHaveText(String(summary.proud_days));
   await expect(page.getByTestId("me-proud-lines").locator("p")).toHaveText(summary.lines);
   expect(summary.lines).toContain("This number only goes up.");

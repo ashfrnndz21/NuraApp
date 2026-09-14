@@ -395,7 +395,7 @@ export const ms = {
   },
   day: {
     // @patient headline
-    topThree: "Tiga perkara untuk hari ini",
+    topThree: "3 perkara untuk hari ini",
     // @patient phrase
     notWell: "Saya rasa tidak sihat",
     // @patient headline

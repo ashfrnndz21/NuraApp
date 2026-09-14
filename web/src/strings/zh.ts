@@ -395,7 +395,7 @@ export const zh = {
   },
   day: {
     // @patient headline
-    topThree: "今天的三件事",
+    topThree: "今天的3件事",
     // @patient phrase
     notWell: "我觉得不舒服",
     // @patient headline
