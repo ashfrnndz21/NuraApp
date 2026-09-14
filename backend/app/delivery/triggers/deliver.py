@@ -151,6 +151,8 @@ class Run:
     _ladders: list[Ladder] | None = None
     _taps: tuple[list[DoseTaken], dict[uuid.UUID, str]] | None = None
     _scopes: dict[uuid.UUID, frozenset[Scope]] = field(default_factory=dict)
+    said_language: str | None = None
+    """His language as his settings say it (`his_language`), read once for the run."""
 
     @property
     def local(self) -> datetime:
@@ -162,7 +164,14 @@ class Run:
 
     @property
     def language(self) -> str:
-        return language_of(self.profile.language)
+        """His language: his settings' (the one read, `onboarding.settings.his_language`)."""
+        return language_of(self.said_language or self.profile.language)
+
+    def language_for(self, person: Person) -> str:
+        """The language to say something to this person in: his for him, anyone else's own."""
+        if self.patient is not None and person.id == self.patient.id:
+            return self.language
+        return language_of(person.language)
 
     async def state(self) -> StateView:
         if self._state is None:
@@ -264,6 +273,13 @@ class Run:
         return self._scopes[person.id]
 
 
+async def _his_language(session: AsyncSession, context: KeyContext) -> str:
+    # Imported here: `app.onboarding` wires its plan at import, and the plan reaches delivery.
+    from app.onboarding.settings import his_language
+
+    return await his_language(session, context=context)
+
+
 async def open_run(
     session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at: datetime
 ) -> Run:
@@ -304,6 +320,7 @@ async def open_run(
     routine = await current_routine(session, context=acting)
     breakfast = await breakfast_time(session, context=acting)
     return Run(
+        said_language=await _his_language(session, acting),
         session=session,
         via=via,
         profile=profile,
@@ -462,7 +479,7 @@ async def deliver(
             if not push.reachable(to.person.id):
                 passed.append("app_push: no device")
                 continue
-            line = PUSH_LINE[language_of(to.person.language)]
+            line = PUSH_LINE[run.language_for(to.person)]
             await push.push(to.person.id, line)
             return await write(
                 run, firing, to, DeliveryOutcome.SENT, via=channel, passed_over=passed,

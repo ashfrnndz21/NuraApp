@@ -109,6 +109,13 @@ class Morning:
     quiet: bool
 
 
+async def _his_language(session: AsyncSession, context: KeyContext) -> str:
+    """His language: the one settings read every message to him goes through."""
+    from app.onboarding.settings import his_language  # the plan reaches delivery at import
+
+    return await his_language(session, context=context)
+
+
 async def compose_morning(
     session: AsyncSession,
     *,
@@ -118,7 +125,7 @@ async def compose_morning(
 ) -> Morning:
     """What the morning card will say, from today's feed and State. Nothing is sent."""
     profile, owner, context = await _owner(session, settings=settings, profile_id=profile_id)
-    language = language_of(profile.language)
+    language = language_of(await _his_language(session, context))
     state, lines, quiet = await _morning_lines(
         session, context=context, providers=providers, language=language
     )
@@ -259,7 +266,7 @@ async def run_visit_card(
 ) -> Delivered | None:
     """The next visit on the spine, or nothing when there is none to remind him of."""
     profile, owner, context = await _owner(session, settings=settings, profile_id=profile_id)
-    language = language_of(profile.language)
+    language = language_of(await _his_language(session, context))
     coming = await upcoming_appointments(session, context=context, limit=1)
     if not coming:
         return None

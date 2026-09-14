@@ -35,7 +35,6 @@ from app.audit.access import audited_read, audited_write
 from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.channels.whatsapp.outbound.send import Delivered, send
-from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
 from app.delivery.strings import theirs
 from app.delivery.triggers.deliver import (
@@ -319,7 +318,7 @@ def dose_message(run: Run, ladder: Ladder, generic: str) -> Say:
     anchor = ladder.anchor or "breakfast"
 
     async def check_on(person: Person) -> Delivered:
-        lang = language_of(person.language)
+        lang = run.language_for(person)
         return await send(
             run.session,
             context=run.acting,
@@ -383,7 +382,7 @@ def flag_message(run: Run, flag: Flag) -> Say:
     otherwise, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
-        lang = language_of(person.language)
+        lang = run.language_for(person)
         raiser = await run.person(flag.raised_by_person_id)
         name = run.profile.display_name
         who = raiser.display_name if raiser is not None else name

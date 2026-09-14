@@ -86,7 +86,7 @@ from app.medicines.service import proud_days
 from app.medicines.strings import say_date
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
-from app.onboarding.settings import clocks_said
+from app.onboarding.settings import reach_of
 from app.reasoning.feelings.cloud import lead_for, weigh
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.record import Situation, read_situation
@@ -481,7 +481,7 @@ async def check_in_time(session: AsyncSession, *, context: KeyContext) -> time:
     written as the fact `setting.checkin_time`, "HH:MM" on his region's clock), or
     `CHECK_IN_AT`. A time inside the quiet hours is not one a nudge may go at: the default
     stands."""
-    at = (await clocks_said(session, context=context)).checkin
+    at = (await reach_of(session, context=context)).checkin
     if at is None or not QUIET_UNTIL <= at < QUIET_FROM:
         return CHECK_IN_AT
     return at

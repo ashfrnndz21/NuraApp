@@ -22,6 +22,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +30,6 @@ from app.audit.access import audited_read
 from app.audit.models import Channel
 from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_card, send_morning
 from app.channels.whatsapp.outbound.send import Delivered, send
-from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.nudges.models import Nudge, NudgeKind
@@ -62,6 +62,7 @@ from app.delivery.triggers.models import DeliveryChannel, DeliveryOutcome, Subje
 from app.delivery.triggers.rules import MORNING_LATEST
 from app.errors import Refusal
 from app.family.models import PushChannel, ScheduledPush
+from app.identity.models import Person
 from app.ingestion.models import ReviewCard
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Dose, Frequency
@@ -289,7 +290,7 @@ async def _reorder(run: Run, lines: Sequence[LineView]) -> None:
 
         async def say(person: object, generic: str = generic, runs_out: object = runs_out) -> Delivered:
             assert hasattr(person, "language")
-            lang = language_of(person.language)
+            lang = run.language_for(cast("Person", person))
             return await send(
                 run.session,
                 context=run.acting,
@@ -347,7 +348,7 @@ async def _pattern(run: Run, lines: Sequence[LineView]) -> None:
 
     async def say(person: object) -> Delivered:
         assert hasattr(person, "language")
-        lang = language_of(person.language)
+        lang = run.language_for(cast("Person", person))
         return await send(
             run.session,
             context=run.acting,
@@ -434,7 +435,7 @@ async def _papers(run: Run) -> None:
 
     async def say(person: object) -> Delivered:
         assert hasattr(person, "language")
-        lang = language_of(person.language)
+        lang = run.language_for(cast("Person", person))
         return await send(
             run.session,
             context=run.acting,

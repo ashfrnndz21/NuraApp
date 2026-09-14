@@ -414,3 +414,30 @@ async def test_the_nudge_goes_at_its_time_and_one_cap_says_how_many_a_day(
     assert _rows(await _run(sg, h, clock, due + timedelta(minutes=5)), TriggerType.NUDGE) == []
     # The planner hands over no more that day, by the same number.
     assert (await plan_nudges(sg, context=h.owner, registry=REGISTRY)).drafts == ()
+
+
+
+async def test_he_is_spoken_to_in_the_language_his_settings_say(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """One settings read for how to reach him (`reach_of`): his settings say Malay and
+    breakfast at 07:30 while his profile still says English. The morning card is in Malay at
+    07:30, and #132's capture lines ask the same read."""
+    from app.channels.api.capture import capture_language
+    from app.identity.models import Profile
+    from app.onboarding.settings import his_language
+
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await save_settings(sg, context=h.owner, values=SettingsValues(language="ms", breakfast_time=time(7, 30)))
+    profile = await sg.get(Profile, h.owner.profile_id)
+    assert profile is not None
+    profile.language = "en"
+    await sg.flush()
+    assert await his_language(sg, context=h.owner) == "ms"
+    assert await capture_language(sg, h.owner) == "ms"
+    assert await breakfast_time(sg, context=h.owner) == time(7, 30)
+    [card] = _rows(await _run(sg, h, clock, at(7, 31)), TriggerType.MORNING)
+    assert card.outcome is DeliveryOutcome.SENT
+    [sent] = [one for one in h.whatsapp.sent if one.template_name == "morning_card"]
+    assert sent.language == "ms"
