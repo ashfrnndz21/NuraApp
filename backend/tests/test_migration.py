@@ -27,6 +27,7 @@ from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
+from app.delivery.nudges.models import Nudge, NudgeResponse
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.connectors.models import AppointmentProposal, Connector
@@ -56,6 +57,7 @@ from app.onboarding.models import (
     PlanPrompt,
     ProfileSettings,
 )
+from app.reasoning.feelings.models import FeelingNote, FeelingTap
 from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
     Brief,
@@ -122,6 +124,10 @@ TABLES: tuple[Table, ...] = (
     ThreadMessage.__table__,
     ScheduledPush.__table__,
     Document.__table__,
+    FeelingTap.__table__,
+    FeelingNote.__table__,
+    Nudge.__table__,
+    NudgeResponse.__table__,
     ProfileSettings.__table__,
     BiographySession.__table__,
     BiographyPaper.__table__,
@@ -265,6 +271,10 @@ def test_the_migrations_build_the_tables_the_models_declare(
             ThreadMessage,
             ScheduledPush,
             Document,
+            FeelingTap,
+            FeelingNote,
+            Nudge,
+            NudgeResponse,
             ProfileSettings,
             BiographySession,
             BiographyPaper,

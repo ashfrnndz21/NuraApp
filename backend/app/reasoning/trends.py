@@ -301,7 +301,11 @@ async def _about_him(
     decade = await birth_decade(session, context)
     said = _newest(await current_facts(session, context=context, subject=PERSON, attribute="sex"))
     sex = None
-    if said is not None and isinstance(said.value, str) and said.value.lower() in {"male", "female"}:
+    if (
+        said is not None
+        and isinstance(said.value, str)
+        and said.value.lower() in {"male", "female"}
+    ):
         sex = Sex(said.value.lower())
     labs: dict[uuid.UUID, str] = {}
     for fact in await current_facts(
@@ -334,7 +338,9 @@ async def doctor_to_ask(session: AsyncSession, context: KeyContext) -> str | Non
                 MedicationLine.status == LineStatus.ACTIVE,
             ),
         )
-        named = sorted((line for line in lines if line.prescriber), key=lambda line: as_utc(line.asserted_at))
+        named = sorted(
+            (line for line in lines if line.prescriber), key=lambda line: as_utc(line.asserted_at)
+        )
         if named:
             return named[-1].prescriber
     return None
@@ -361,7 +367,9 @@ async def trend(
         if state.stale is not False:
             raise StaleState("a trend is rendered from a State checked against the record")
     lang = language_of(
-        language if language is not None else (await audited_profile_read(session, context)).language
+        language
+        if language is not None
+        else (await audited_profile_read(session, context)).language
     )
     zone = REGION_TZ[context.region]
     decade, sex, labs = await _about_him(session, context)

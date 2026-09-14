@@ -6,10 +6,10 @@
     GET  /profiles/{id}/sources                 the allowlist (owner, chief)
     POST /profiles/{id}/search-jobs             a self-search, allowlist-scoped (owner, chief)
     GET  /profiles/{id}/search-jobs/{job}       what it found
-    POST /profiles/{id}/feelings                a tap on the feeling cloud; a red flag escalates
 
 Every route takes the key context. The owner reads the patient's supply; a chief, caregiver
 or steward reads the caregiver's list, narrowed to the parts of the record the key covers.
+The feeling cloud's tap is in `app.channels.api.feelings`, with the rest of E17.
 `?at=` on the feed is a dev-only way to pretend it is another hour for the quiet-hours check
 (`make checkpoint N=8`); on any deployment but a declared dev run it is refused.
 """
@@ -27,8 +27,6 @@ from app.channels.api.feed_schemas import (
     EngagementIn,
     EngagementOut,
     FeedPageOut,
-    FeelingIn,
-    FeelingOut,
     SearchJobIn,
     SearchJobOut,
     SourceOut,
@@ -40,9 +38,6 @@ from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs
 from app.delivery.feed.sources import list_sources
 from app.delivery.strings import language_for
-from app.memory.episodic import record_event
-from app.memory.models import EventKind, SourceChannel
-from app.safety.red_flags import is_red, raise_flag
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 
@@ -154,22 +149,3 @@ async def search_jobs(context: Context, session: Db) -> list[SearchJobOut]:
 @router.get("/{profile_id}/search-jobs/{job_id}")
 async def search_job(job_id: uuid.UUID, context: Context, session: Db) -> SearchJobOut:
     return SearchJobOut.of(await get_job(session, context=context, job_id=job_id))
-
-
-@router.post("/{profile_id}/feelings", status_code=status.HTTP_201_CREATED)
-async def feeling(body: FeelingIn, context: Context, session: Db) -> FeelingOut:
-    """A tap on the feeling cloud. Every word is written down as a SYMPTOM event in his own
-    words; a red flag is raised on it at once — before any ranking or cap — and the family
-    holding the emergency scope is told. Nothing here names a condition."""
-    event = await record_event(
-        session,
-        context=context,
-        kind=EventKind.SYMPTOM,
-        occurred_at=utcnow(),
-        label=body.word.value,
-        source_channel=SourceChannel.APP,
-    )
-    flag = None
-    if is_red(body.word):
-        flag = await raise_flag(session, context=context, feeling=body.word, event_id=event.id)
-    return FeelingOut.of(event.id, body.word, flag)

@@ -212,7 +212,9 @@ class FixtureRanges:
             if printed:
                 row = _pick(printed, age=age, sex=sex)
                 if not isinstance(row, NoRangeBecause):
-                    return RangeAnswer(self._range(analyte, row, RangeSource.LAB, f"lab:{lab}", lab))
+                    return RangeAnswer(
+                        self._range(analyte, row, RangeSource.LAB, f"lab:{lab}", lab)
+                    )
         rows = self._data["analytes"][analyte_id]["bands"]
         row = _pick(rows, age=age, sex=sex)
         if isinstance(row, NoRangeBecause):

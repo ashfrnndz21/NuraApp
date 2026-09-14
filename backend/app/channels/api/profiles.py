@@ -594,9 +594,7 @@ async def audit(
     return [
         AuditOut.of(
             entry,
-            ()
-            if entry.target_id is None or context.allows(entry.scope)
-            else (WITHHELD_TARGET,),
+            () if entry.target_id is None or context.allows(entry.scope) else (WITHHELD_TARGET,),
         )
         for entry in entries
     ]
