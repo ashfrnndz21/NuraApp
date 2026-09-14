@@ -340,7 +340,10 @@ async def morning_supply(
     )
     declined = await _declined_today(session, context=context, day=day)
     ordered, _ = _patient_supply(
-        _visible_to(found, context), day=day, declined=declined, quiet=False
+        await _without_photos_taken_back(session, context, _visible_to(found, context)),
+        day=day,
+        declined=declined,
+        quiet=False,
     )
     return state, [item for item in ordered if item.supply in (Supply.NOW, Supply.TODAY)]
 
@@ -380,7 +383,7 @@ async def top_three(
     found = await audited_read(
         session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > day.now,)
     )
-    visible = _visible_to(found, context)
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
     held: Counter[str] = Counter()
     quiet = False
     if audience is DeliverTo.PATIENT:

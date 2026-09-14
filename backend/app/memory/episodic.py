@@ -367,6 +367,7 @@ async def record_event(
     artifact_id: uuid.UUID | None = None,
     source_channel: SourceChannel | None = None,
     episode_id: uuid.UUID | None = None,
+    scope: Scope | None = None,
 ) -> Event:
     """Record that something happened, naming the artefact and the episode it belongs to.
 
@@ -377,6 +378,8 @@ async def record_event(
 
     The door is the record's; the row is written under its kind's part (`scope_for_event`),
     so a reading taken is the readings' and a key must hold that part to write or read it.
+    `scope` names another part for a moment that belongs to one: a private note's own moment
+    is the notes' (`app.ingestion.notes.keep_voice_message`), so no other key sees it.
     """
     await require_consent(
         session,
@@ -398,7 +401,7 @@ async def record_event(
         session,
         Event,
         context,
-        scope_for_event(kind),
+        scope_for_event(kind) if scope is None else scope,
         kind=kind,
         occurred_at=occurred_at,
         source_channel=came_in_by,

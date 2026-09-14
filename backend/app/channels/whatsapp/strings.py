@@ -90,6 +90,14 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Nura sudah simpan nota suara anda.", "Nura tidak dapat mendengar nota ini."),
         "zh": ("Nura 保存了您的语音留言。", "Nura 听不清这段录音。"),
     },
+    "voice_note_not_fetched": {
+        "en": ("Nura could not hear your voice note.", "If you feel unwell, call your family now."),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": ("Nura 听不到您的语音留言。", "如果您不舒服，现在就打电话给家人。"),
+    },
     "family_said": {
         "en": ("{who} wrote in the family thread:",),
         "ms": ("{who} menulis dalam perbualan keluarga:",),

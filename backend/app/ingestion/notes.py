@@ -319,6 +319,8 @@ async def keep_voice_message(
         kind=EventKind.MESSAGE,
         occurred_at=captured_at,
         artifact_id=artifact.id,
+        # Its moment is the note's own: a private note's is the notes', seen by no other key.
+        scope=note_scope(private),
     )
     words_key = words_digest = None
     if heard is not None and heard.heard:

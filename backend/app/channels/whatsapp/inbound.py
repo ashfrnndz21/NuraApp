@@ -22,7 +22,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime, time
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,7 @@ from app.channels.whatsapp.classifier import (
     Kind,
 )
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.group import group_for, is_member
+from app.channels.whatsapp.group import group_for, is_member, sync_group
 from app.channels.whatsapp.models import (
     Direction,
     MessageKind,
@@ -59,7 +59,7 @@ from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
-from app.db import as_utc, unit_of_work, utcnow
+from app.db import as_utc, nested_unit_of_work, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import Via
 from app.delivery.triggers.ladder import (
@@ -97,7 +97,7 @@ from app.memory.models import (
     ProviderKind,
     SourceChannel,
 )
-from app.memory.semantic import assert_fact
+from app.memory.semantic import assert_fact, current_facts
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
 from app.safety.red_flags import FLAG_WINDOW, Flag, detect, raise_flag, record_the_moment
 from app.settings import Settings
@@ -165,6 +165,8 @@ class _Work:
     voice: Media | None = None
     """A voice note's audio, fetched from the provider and heard in the region (E11-01)."""
     heard: Transcript | None = None
+    voice_missing: bool = False
+    """A voice note whose audio could not be fetched, or ran past its cap: nothing of it heard."""
 
 
 def _handle(person_id: uuid.UUID | None, phone: str) -> str:
@@ -947,7 +949,11 @@ async def _answer(session: AsyncSession, work: _Work, yes: bool) -> Handled:
                     message_id=row.id,
                     artifact_id=artifact.id,
                 )
-        if work.thread.is_patient and CHECK_IN_OK.match(work.message.text or ""):
+        if (
+            work.thread.is_patient
+            and CHECK_IN_OK.match(work.message.text or "")
+            and await _check_in_open(session, work)
+        ):
             # "OK" is one of the three words the check-in offers him ("Answer OK, tired or
             # pain."). With nothing of his open to say yes to, and no flag to acknowledge,
             # it is his answer to that question, written down as his own word (E19-03).
@@ -1049,9 +1055,13 @@ async def _hear(
         return None, NOTHING_HEARD
     kind = media.content_type.split(";", 1)[0].strip().lower()
     guard_region(held_in=providers.transcriber.region, asked_from=region)
-    heard = await providers.transcriber.transcribe(
-        media.data, kind, language_of(person.language), region
-    )
+    try:
+        heard = await providers.transcriber.transcribe(
+            media.data, kind, language_of(person.language), region
+        )
+    except Exception as failed:  # noqa: BLE001 — a transcriber down is a note not heard, never a lost message
+        log.warning("whatsapp: a voice note not heard: %s", type(failed).__name__)
+        return media, NOTHING_HEARD
     return media, heard
 
 
@@ -1094,6 +1104,54 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
     )
 
 
+async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
+    """His voice note that could not be fetched, or ran past its cap: nothing of it is kept,
+    the refusal is on his trail by name, and he is told plainly — with what to do if he feels
+    unwell, since a red word in it could not be read. Anyone else's gets the usual line."""
+    if not work.context.is_owner:
+        return await _other(session, work)
+    await record(
+        session,
+        context=work.context,
+        action=Action.WRITE,
+        scope=Scope.RECORDS,
+        target="event_note",
+        outcome=Outcome.REFUSED,
+        refused_because="VoiceNoteNotHeard",
+        channel=Channel.WHATSAPP,
+    )
+    await _say(session, work, "voice_note_not_fetched")
+    return Handled(
+        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
+    """Whether a feeling check-in went to him in this thread today and no feeling of his has
+    been written down since: then his "OK" is its answer, and at no other time."""
+    zone = REGION_TZ[work.context.region]
+    local_day = as_utc(work.message.at).astimezone(zone).date()
+    start = datetime.combine(local_day, time(0), zone).astimezone(UTC)
+    asked = await audited_read(
+        session,
+        WhatsAppMessage,
+        work.context,
+        Scope.PROFILE,
+        where=(
+            WhatsAppMessage.thread_id == work.thread.id,
+            WhatsAppMessage.direction == Direction.OUTBOUND,
+            WhatsAppMessage.template_name == "feeling_check_in",
+            WhatsAppMessage.at >= start,
+        ),
+        channel=Channel.WHATSAPP,
+    )
+    if not asked:
+        return False
+    asked_at = max(as_utc(one.at) for one in asked)
+    told = await current_facts(session, context=work.context, subject="feeling", attribute="reported")
+    return not any(as_utc(fact.asserted_at) >= asked_at for fact in told)
+
+
 async def _group_message(session: AsyncSession, work: _Work) -> Handled:
     """A message in the family's group (E11-01): it lands in the family thread (E12-02) in its
     poster's name, for a member — someone who reads the thread (`is_member`). Anyone else in
@@ -1102,6 +1160,8 @@ async def _group_message(session: AsyncSession, work: _Work) -> Handled:
     if not is_member(work.context):
         log.info("whatsapp: a group message from someone who does not read the family thread")
         return Handled(outcome="ignored", profile_id=work.profile.id)
+    # Who is in the group is set from the keys again at every post (E11-01).
+    await sync_group(session, context=work.context, provider=work.providers.whatsapp)
     entry = await post_message(session, context=work.context, text=work.message.text or "")
     row = await _keep_row(session, work=work, kind=MessageKind.COORDINATION, artifact=None)
     return Handled(
@@ -1119,14 +1179,25 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
     if detect(work.message.text) is not None:
         flagged = await _red_flag(session, work)
         if work.voice is not None and work.context.is_owner:
-            # The flag first; then his voice note is his own note, like any other.
-            kept = await _keep_voice(session, work)
+            # The flag first; then his voice note is his own note, in a savepoint of its own:
+            # a refusal keeping the note never takes the flag or its ladder with it.
+            try:
+                async with nested_unit_of_work(session):
+                    kept = await _keep_voice(session, work)
+            except Refusal as refused:
+                log.info("whatsapp: a flagged voice note not kept: %s", type(refused).__name__)
+                return flagged
             return replace(flagged, note_id=kept.note.id)
         return flagged
+    if work.voice_missing:
+        return await _voice_not_heard(session, work)
     if work.voice is not None:
         return await _voice_note(session, work)
-    if work.message.group_id is not None and work.message.media_id is None and work.message.text:
-        return await _group_message(session, work)
+    if work.message.group_id is not None:
+        if work.message.media_id is None and work.message.text:
+            return await _group_message(session, work)
+        # A photo or a file in the family's group is the family's, never one of his papers.
+        return Handled(outcome="ignored", profile_id=work.profile.id)
     if what.kind is Kind.DOCUMENT:
         return await _document(session, work)
     if what.kind is Kind.HEALTH_EVENT:
@@ -1294,6 +1365,7 @@ async def handle_inbound(
             language=language_of(person.language),
             voice=voice,
             heard=heard,
+            voice_missing=_is_voice(message) and voice is None,
         )
 
     try:

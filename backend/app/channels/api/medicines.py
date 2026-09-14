@@ -242,8 +242,8 @@ async def medication_story_voice(
     language: str | None = Language,
 ) -> Response:
     """One part of the story as a voice note (E04-06): what it is for, how to take it, what to
-    watch for, what to avoid, what to do if he forgot — the last ending on the story's
-    boundary. Each is under thirty seconds, said once through the voice port and kept in the
+    watch for, what to avoid, what to do if he forgot — each but the first ending on the
+    story's boundary, since each plays on its own. Each is under thirty seconds, said once through the voice port and kept in the
     region's store under the digest of its script, the same cache every card's spoken twin is
     kept in (E11-04), so every later play is a read. Played on a tap; nothing plays by itself.
     404 when the part says nothing for this medicine, has no voice in the language yet, or
@@ -272,6 +272,6 @@ async def medication_story_voice(
         headers={
             "X-Duration-Seconds": f"{said.spoken.duration_seconds:.1f}",
             "X-Voice-Cache": "hit" if said.cached else "miss",
-            "Cache-Control": "private",
+            "Cache-Control": "private, no-store",
         },
     )

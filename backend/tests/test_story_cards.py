@@ -197,6 +197,8 @@ async def test_what_the_doctor_said_is_told_again_once_the_memo_card_has_moved_o
     assert told.headline == "What Dr Tan said"
     assert told.body[0] == "At your visit on Thursday 10 September, Dr Tan said this:"
     assert "Every morning, stand on the scale before breakfast." in told.body
+    # A memo about a medicine is left to the memo card: a later visit may have changed it.
+    assert not any("water pill" in line for line in told.body)
     assert told.boundary == line and list(told.body[-len(line.splitlines()) :]) == line.splitlines()
     assert is_boundary_line(Surface.SUMMARY, told.boundary) and told.scope is Scope.VISITS
     assert told.why["visit_id"] == str(appointment.id) and told.why["memo_ids"]

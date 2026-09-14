@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -188,6 +189,11 @@ async def run_job(
         except SourceNotAllowlisted:
             rejected.append({"url": found.url, "because": "not_allowlisted"})
             continue
+        if not on_its_source(found.url, source.domain):
+            # The page a card links to is on the allowlisted site itself, over https, or the
+            # card is not made: a searcher cannot put another site's link on his card.
+            rejected.append({"url": found.url, "because": "not_on_its_source"})
+            continue
         compressed = engine.compressor.compress(found.text, code, _facts_for(state))
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
@@ -339,6 +345,14 @@ async def run_job(
     }
     await session.flush()
     return [*made, *questions]
+
+
+def on_its_source(url: str, domain: str) -> bool:
+    """Whether a page is on its source's site: https, and the host the domain or under it."""
+    page = urlparse(url)
+    host = (page.hostname or "").lower()
+    site = domain.strip().lower()
+    return page.scheme == "https" and bool(site) and (host == site or host.endswith("." + site))
 
 
 def _batches_on_record(state: StateView) -> set[str]:

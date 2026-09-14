@@ -17,6 +17,7 @@ they are not there at all. The webhook carries no bearer token — the provider 
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
@@ -55,6 +56,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import WITHHELD_ARTIFACT, withheld_references
 from app.settings import Settings
 
+log = logging.getLogger("nura.channels.whatsapp")
 router = APIRouter(tags=["whatsapp"])
 
 CLASSIFIER = RuleClassifier()
@@ -206,14 +208,21 @@ async def webhook(request: Request, session: Db) -> dict[str, int]:
     settings = settings_of(request)
     handled = 0
     for message in providers.whatsapp.parse_inbound(payload):
-        await handle_inbound(
-            session,
-            settings=settings,
-            providers=providers,
-            number=_number(settings),
-            classifier=CLASSIFIER,
-            message=message,
-        )
+        # Each message on its own: one that fails never holds back the rest of the delivery,
+        # a red flag among them least of all.
+        try:
+            await handle_inbound(
+                session,
+                settings=settings,
+                providers=providers,
+                number=_number(settings),
+                classifier=CLASSIFIER,
+                message=message,
+            )
+        except Exception as failed:  # noqa: BLE001 — logged by name; the rest of the batch goes on
+            log.warning("whatsapp: one inbound message not handled: %s", type(failed).__name__)
+            await session.rollback()
+            continue
         handled += 1
     return {"handled": handled}
 

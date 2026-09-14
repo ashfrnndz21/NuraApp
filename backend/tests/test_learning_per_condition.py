@@ -104,3 +104,30 @@ async def test_high_blood_pressure_is_the_blood_pressure_search_not_a_second_one
     await refresh(sg, context=context, engine=ENGINE)
     terms = [list(j.terms) for j in await list_jobs(sg, context=context)]
     assert terms.count(["blood pressure"]) == 1 and ["high blood pressure"] not in terms
+
+
+def test_a_cited_page_is_on_its_sources_own_site_over_https() -> None:
+    from app.delivery.feed.search import on_its_source
+
+    assert on_its_source("https://www.healthhub.sg/a-z/diabetes", "healthhub.sg")
+    assert on_its_source("https://healthhub.sg/x", "healthhub.sg")
+    assert not on_its_source("http://www.healthhub.sg/x", "healthhub.sg")
+    assert not on_its_source("https://healthhub.sg.example.com/x", "healthhub.sg")
+    assert not on_its_source("https://evilhealthhub.sg/x", "healthhub.sg")
+
+
+async def test_a_page_the_searcher_says_is_allowlisted_but_links_elsewhere_makes_no_card(
+    sg: AsyncSession,
+) -> None:
+    from dataclasses import replace
+
+    class Elsewhere(FixtureSearcher):
+        def search(self, kind, terms, domains):  # type: ignore[no-untyped-def]
+            return [replace(page, url="https://supplement-shop.example/diabetes") for page in super().search(kind, terms, domains)]
+
+    context = await pa(sg, language="en")
+    await _told(sg, context, "diabetes", holds=True)
+    await refresh(sg, context=context, engine=Engine(searcher=Elsewhere(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY))
+    assert not [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
+    [job] = [j for j in await list_jobs(sg, context=context) if list(j.terms) == ["diabetes"]]
+    assert {r["because"] for r in job.results["rejected"]} == {"not_on_its_source"}

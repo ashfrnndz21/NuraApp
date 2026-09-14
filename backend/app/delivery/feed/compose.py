@@ -15,6 +15,7 @@ folds it and the next snapshot says why the cards changed shape.
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -101,6 +102,8 @@ from app.safety.red_flags import Flag, open_flags
 from app.state.dimensions import BEFORE_VISIT_WINDOW
 from app.state.models import Dimension
 from app.state.service import RECOMPUTE_SCOPES, StateView, current_state
+
+log = logging.getLogger("nura.delivery.feed")
 
 STORY_LIFETIME = timedelta(days=7)
 """His story regenerates weekly (E21-05): a recall card lives a week, then is made again."""
@@ -407,7 +410,8 @@ async def _say_ahead(engine: Engine, context: KeyContext, items: Sequence[FeedIt
                 language=item.language,
                 boundary=item.boundary,
             )
-        except Refusal:
+        except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
+            log.warning("voice ahead skipped: %s", type(failed).__name__)
             continue
 
 
@@ -1319,7 +1323,8 @@ async def _story_trends(
                     analyte=analyte.id,
                     language=house.language,
                 )
-        except Refusal:
+        except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
+            log.warning("voice ahead skipped: %s", type(failed).__name__)
             continue
         if told.direction_since is None:
             continue
@@ -1366,6 +1371,11 @@ async def _story_doctor(
     if not context.allows(Scope.VISITS):
         return
     for one in [each for each in visits if each.visit.id != on_memo_card][:STORY_VISITS]:
+        # A memo about a medicine may have been changed at a later visit; only the memo card,
+        # which is the latest visit's, carries those. The story tells the rest.
+        told = tuple(memo for memo in one.memos if "medicine" not in (memo.slots or {}))
+        if not told:
+            continue
         lines = render(
             "memo",
             house.language,
@@ -1375,10 +1385,10 @@ async def _story_doctor(
         )
         lines = _ending_on(
             lines,
-            [*lines.body, *(memo.text for memo in one.memos)],
+            [*lines.body, *(memo.text for memo in told)],
             boundary_line(Surface.SUMMARY, house.language, doctor=one.doctor),
         )
-        ids = tuple(str(memo.id) for memo in one.memos)
+        ids = tuple(str(memo.id) for memo in told)
         await make(
             type=CardType.STORY,
             lines=lines,

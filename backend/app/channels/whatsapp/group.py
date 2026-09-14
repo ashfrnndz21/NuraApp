@@ -33,10 +33,11 @@ from app.consent.service import NoConsent, require_consent
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.family.models import ThreadMessage
-from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.models import Key
+from app.keys.privacy import only_me_scopes
 from app.keys.scopes import KeyRole, Scope
+from app.safety.people import key_holder
 
 GROUP_TARGET = WhatsAppGroup.__tablename__
 
@@ -84,20 +85,28 @@ async def group_of(session: AsyncSession, *, context: KeyContext) -> WhatsAppGro
 @audited(Action.READ, Scope.FAMILY, GROUP_TARGET)
 async def members_of(session: AsyncSession, *, context: KeyContext) -> list[Member]:
     """Who is in the family's group, worked out from the keys now: the patient, then every
-    live key holding the family's part, in the order the keys were cut, each with a number.
-    Nobody else — not a helper, a viewer or a caregiver whose key does not read the family."""
+    live key that opens the family's part — its scopes less any part he keeps "only me",
+    exactly as the key resolver narrows it (`app.keys.context`) — in the order the keys were
+    cut, each with a number. Nobody else: not a helper, a viewer, a caregiver whose key does
+    not read the family, nor anyone at all while he keeps the family "only me". Each account
+    is read through the door for a key's holder, with a READ line (`app.safety.people`)."""
     profile = await audited_profile_read(session, context)
     keys = await audited_read(session, Key, context, Scope.FAMILY)
+    kept_to_himself = await only_me_scopes(session, profile_id=profile.id)
     moment = utcnow()
-    wanted: list[uuid.UUID] = []
+    people: list[tuple[uuid.UUID, Scope]] = []
     if profile.owner_person_id is not None:
-        wanted.append(profile.owner_person_id)
+        people.append((profile.owner_person_id, Scope.PROFILE))
     for key in sorted(keys, key=lambda one: as_utc(one.granted_at)):
-        if key.is_active(moment) and Scope.FAMILY.value in key.scopes:
-            wanted.append(key.holder_person_id)
+        if key.is_active(moment) and Scope.FAMILY in key.scopes_held - kept_to_himself:
+            people.append((key.holder_person_id, Scope.FAMILY))
     members: list[Member] = []
-    for person_id in dict.fromkeys(wanted):
-        person = await session.get(Person, person_id)
+    seen: set[uuid.UUID] = set()
+    for person_id, door in people:
+        if person_id in seen:
+            continue
+        seen.add(person_id)
+        person = await key_holder(session, context, person_id, scope=door)
         if person is None or not person.phone_e164:
             continue
         members.append(
@@ -130,13 +139,15 @@ async def sync_group(
     session: AsyncSession, *, context: KeyContext, provider: WhatsAppProvider
 ) -> list[Member]:
     """Set the group's members from the keys, now. Nothing when the family has no group, or
-    this key does not read the family's part (it cannot know who is in it)."""
+    this key does not read the family's part (it cannot know who is in it). While the
+    patient's agreement to WhatsApp is not in force the group is emptied: no number is
+    handed to the provider on his account, and nobody in it hears the family there."""
     if not context.allows(Scope.FAMILY):
         return []
     group = await group_of(session, context=context)
     if group is None:
         return []
-    members = await members_of(session, context=context)
+    members = await members_of(session, context=context) if await _agreed(session, context) else []
     await provider.set_group_members(group.provider_group_id, [m.phone_e164 for m in members])
     await record(
         session,

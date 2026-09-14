@@ -73,7 +73,7 @@ from app.channels.api.schemas import (
     ThreadPostIn,
     TrailDayOut,
 )
-from app.channels.whatsapp.group import mirror_to_group
+from app.channels.whatsapp.group import mirror_to_group, sync_group
 from app.family.documents import add_document, documents
 from app.family.grants import grants, helper_list, role_presets
 from app.family.photos import (
@@ -332,24 +332,27 @@ async def privacy_list(context: Context, session: Db) -> list[PrivacyOut]:
 
 
 @router.post("/profiles/{profile_id}/privacy", status_code=status.HTTP_201_CREATED)
-async def privacy_mark(body: OnlyMeIn, context: Context, session: Db) -> PrivacyOut:
-    """The owner keeps one part to himself, on his yes. Every key stops opening it at once."""
-    return PrivacyOut.of(
-        await mark_only_me(
-            session, context=context, scope=body.scope, confirmation_id=body.confirmation_id
-        )
+async def privacy_mark(
+    body: OnlyMeIn, request: Request, context: Context, session: Db
+) -> PrivacyOut:
+    """The owner keeps one part to himself, on his yes. Every key stops opening it at once —
+    and, the family's part kept to himself, nobody else is in the family's WhatsApp group."""
+    row = await mark_only_me(
+        session, context=context, scope=body.scope, confirmation_id=body.confirmation_id
     )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return PrivacyOut.of(row)
 
 
 @router.post("/profiles/{profile_id}/privacy/{scope}/lift")
 async def privacy_lift(
-    scope: Scope, body: LiftOnlyMeIn, context: Context, session: Db
+    scope: Scope, body: LiftOnlyMeIn, request: Request, context: Context, session: Db
 ) -> PrivacyOut:
-    return PrivacyOut.of(
-        await lift_only_me(
-            session, context=context, scope=scope, confirmation_id=body.confirmation_id
-        )
+    row = await lift_only_me(
+        session, context=context, scope=scope, confirmation_id=body.confirmation_id
     )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return PrivacyOut.of(row)
 
 
 # --- the push composer -----------------------------------------------------------------------

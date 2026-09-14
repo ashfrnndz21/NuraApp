@@ -236,3 +236,101 @@ def test_the_webhook_reads_a_voice_note_as_media_to_fetch_and_hear() -> None:
         OGG,
         None,
     )
+
+
+# --- the privacy and clinical-safety review's fixes ----------------------------------------------
+
+
+async def test_a_flag_in_his_voice_note_stands_when_keeping_the_note_is_refused(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag, its moment and its ladder are never taken back by a refusal to keep the note:
+    the note is kept in a savepoint of its own, and he is not told "not understood"."""
+    from app.channels.whatsapp import inbound
+    from app.errors import Refusal
+
+    class NotKept(Refusal):
+        """The note could not be kept."""
+
+    async def refuse(*args: object, **kwargs: object) -> None:
+        raise NotKept("refused, for the test")
+
+    home = await family(sg, tmp_path)
+    monkeypatch.setattr(inbound, "keep_voice_message", refuse)
+    flagged = await home.inbound(sg, PA, media_id="pa-voice-fell", content_type=OGG)
+    assert flagged.outcome == "red_flag" and flagged.flag_id is not None and flagged.note_id is None
+    assert await sg.get(Flag, flagged.flag_id) is not None
+    assert not any("did not understand" in r.text for r in flagged.replies)
+
+
+async def test_the_group_follows_only_me_and_his_agreement(sg: AsyncSession, tmp_path: Path) -> None:
+    from app.consent.models import ConsentChannel
+    from app.consent.service import revoke_consent
+    from tests.timeline_support import keep_only_me
+
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
+    gid = group.provider_group_id
+    assert home.whatsapp.groups[gid] == tuple(sorted({PA, MEI}))
+    # He keeps the family's part to himself: nobody else is in the group.
+    await keep_only_me(sg, home.owner, Scope.FAMILY)
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)
+    assert home.whatsapp.groups[gid] == (PA,)
+    # His agreement to WhatsApp withdrawn: the group is emptied.
+    await revoke_consent(
+        sg, context=home.owner, purpose=ConsentPurpose.WHATSAPP, captured_via=ConsentChannel.APP
+    )
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)
+    assert home.whatsapp.groups[gid] == ()
+
+
+async def test_a_photo_in_the_group_is_never_one_of_his_papers(sg: AsyncSession, tmp_path: Path) -> None:
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
+    shared = await home.inbound(
+        sg, MEI, media_id="grandkids-photo", content_type="image/jpeg", group_id=group.provider_group_id
+    )
+    assert shared.outcome == "ignored" and shared.review_card_id is None
+    assert not list(await sg.scalars(select(Artifact).where(Artifact.profile_id == home.profile.id)))
+
+
+async def test_his_ok_is_a_check_in_answer_only_while_a_check_in_is_open(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    from app.channels.whatsapp.outbound.level0 import run_feeling_check_in
+
+    home = await family(sg, tmp_path)
+    stray = await home.inbound(sg, PA, "OK")
+    assert stray.outcome == "nothing_open" and stray.fact_id is None
+    await run_feeling_check_in(
+        sg, settings=home.settings, providers=home.providers, number=home.number, profile_id=home.profile.id
+    )
+    answered = await home.inbound(sg, PA, "OK")
+    assert answered.outcome == "check_in_answer" and answered.fact_id is not None
+    again = await home.inbound(sg, PA, "OK")
+    assert again.outcome == "nothing_open"
+
+
+async def test_a_voice_note_that_could_not_be_fetched_is_told_to_him(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.channels.whatsapp import inbound
+
+    home = await family(sg, tmp_path)
+    monkeypatch.setattr(inbound, "VOICE_DOWNLOAD_BYTES", 10)
+    told = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
+    assert told.outcome == "voice_note_not_heard" and told.note_id is None
+    assert [r.text for r in told.replies] == [
+        "Nura could not hear your voice note.\nIf you feel unwell, call your family now."
+    ]
+
+
+async def test_his_private_voice_notes_moment_is_the_notes_own(sg: AsyncSession, tmp_path: Path) -> None:
+    from app.memory.models import Event
+
+    home = await family(sg, tmp_path)
+    kept = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
+    note = await sg.get(EventNote, kept.note_id)
+    assert note is not None
+    moment = await sg.get(Event, note.event_id)
+    assert moment is not None and moment.written_scope is Scope.NOTES

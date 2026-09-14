@@ -69,14 +69,15 @@ def voice_parts(story: Story) -> list[str]:
 
 
 def story_part(story: Story, part: str) -> tuple[list[str], str | None]:
-    """One part of the story as it is said, and the boundary it ends on: the last part that
-    says anything ends on the story's boundary lines, with the longer pause before them
-    (`app.language.voice_script`). Pure, like the rest of the story."""
-    parts = voice_parts(story)
-    if part not in parts:
+    """One part of the story as it is said, and the boundary it ends on. Each part is played
+    on its own tap, so every part that tells him how to take it, what to watch, what to avoid
+    or what to do if he forgot ends on the story's boundary lines, with the longer pause
+    before them (`app.language.voice_script`); what it is for is the one that does not.
+    Pure, like the rest of the story."""
+    if part not in voice_parts(story):
         raise NoSuchStoryPart(f"the story says nothing under {part!r}")
     lines = list(getattr(story, part))
-    if part == parts[-1] and story.boundary:
+    if part != "purpose" and story.boundary:
         return [*lines, *story.boundary], "\n".join(story.boundary)
     return lines, None
 
