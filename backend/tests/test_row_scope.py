@@ -78,7 +78,7 @@ from tests.conftest import Deployment
 from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, placeholder_consult
 from tests.medicines_support import add, label
 from tests.medicines_support import let_in as cut_key
-from tests.paper import LIPID_PANEL
+from tests.paper import LIPID_PANEL, PNG_SIGNATURE
 from tests.test_migration import _in_order, _load
 from tests.timeline_support import artefact, book, hang_on_episode, reading
 from tests.visits import ROUTINE, transcript
@@ -272,6 +272,9 @@ def expected_artifact_scope(artifact: Artifact, whatsapp: dict[uuid.UUID, Messag
     if artifact.kind is ArtifactKind.VOICE and artifact.storage_key.startswith("consults/"):
         # A consult recording (E02-05): the visits' part, like its transcript.
         return Scope.VISITS
+    if artifact.kind is ArtifactKind.PHOTO and artifact.storage_key.startswith("family-photos/"):
+        # A photo the family shared in the thread (E12-02, E21-05): the family's part.
+        return Scope.FAMILY
     return Scope.RECORDS
 
 
@@ -590,6 +593,22 @@ async def _seed(deployment: Deployment) -> Seeded:
     assert recorded.status_code == 201, recorded.text
     consult_voice = recorded.json()["recording"]["artifact_id"]
 
+    # A photo shared with the family (E12-02), with his yes to his story (E21-05): the
+    # family's part, its bytes read through the thread.
+    shared = await _ok(
+        await client.post(
+            f"/profiles/{profile_id}/thread/photos",
+            json={
+                "data": b64(PNG_SIGNATURE + b"nura-family-photo-placeholder"),
+                "content_type": "image/png",
+                "caption": "Lunch on Sunday.",
+                "on_his_feed": True,
+            },
+            headers=his,
+        ),
+        201,
+    )
+
     # Today's top three (E11-02), composed as he opens it: the cards the voice route plays.
     today = await client.get(f"/profiles/{profile_id}/feed/today", headers=his)
     assert today.status_code == 200, today.text
@@ -646,6 +665,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "job_id": [str(uuid.uuid4())],
             "item_id": feed_items or [str(uuid.uuid4())],
             "artifact_id": [consult_voice],
+            "photo_id": [shared["photo"]["photo_id"]],
         }
     return seeded
 
@@ -753,7 +773,9 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/medicines/interactions"),
     Walk("GET", f"{P}/medicines/today"),
     Walk("GET", f"{P}/medicines/{{line_id}}/story"),
+    Walk("GET", f"{P}/medicines/{{line_id}}/story/voice"),
     Walk("GET", f"{P}/whatsapp/thread"),
+    Walk("GET", f"{P}/whatsapp/group"),
     Walk("GET", f"{P}/timeline"),
     Walk("GET", f"{P}/episodes/{{episode_id}}"),
     Walk("GET", f"{P}/providers"),
@@ -785,6 +807,8 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recording/notice"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recordings"),
     Walk("GET", f"{P}/artifacts/{{artifact_id}}/clip", params={"start": "19.8", "end": "28.9"}),
+    Walk("POST", f"{P}/transcripts/search", json={"words": "water pill"}),
+    Walk("GET", f"{P}/thread/photos/{{photo_id}}/content"),
     Walk("GET", f"{P}/memos"),
     Walk("GET", f"{P}/proposals"),
     Walk("GET", f"{P}/routine"),
@@ -887,6 +911,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/feelings/{{tap_id}}/answer"): "answers a tap; returns the note it wrote",
     ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
     ("POST", f"{P}/nudges/{{nudge_id}}/response"): "writes what he did with a nudge",
+    ("POST", f"{P}/thread/photos"): "shares a photo with the family; returns the entry",
+    ("POST", f"{P}/whatsapp/group"): "opens the family's WhatsApp group; returns who is in it",
+    ("POST", f"{P}/thread/photos/{{photo_id}}/take-back"): "takes a photo back; returns it",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""
@@ -1105,7 +1132,7 @@ async def _walk(
                     # (E03-05) for the recording it is cut from.
                     body = (
                         {"spoken": list(combo.values())}
-                        if kind.startswith("audio/")
+                        if kind.startswith(("audio/", "image/"))
                         else response.text
                         if kind.startswith("text/html")
                         else response.json()

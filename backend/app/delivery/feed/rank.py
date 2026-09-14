@@ -46,6 +46,7 @@ from app.delivery.feed.models import (
 )
 from app.delivery.feed.search import Engine
 from app.errors import Refusal
+from app.family.photos import taken_back
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
@@ -124,6 +125,24 @@ def _order_key(item: FeedItem) -> tuple[int, int, datetime]:
 def _visible_to(items: Sequence[FeedItem], context: KeyContext) -> list[FeedItem]:
     """Only the cards built from parts of the record the key covers."""
     return [item for item in items if context.allows(item.scope)]
+
+
+async def _without_photos_taken_back(
+    session: AsyncSession, context: KeyContext, items: Sequence[FeedItem]
+) -> list[FeedItem]:
+    """A story card of a family photo whose sharer has since taken it back is not shown
+    (E21-05): the photo was theirs to share and is theirs to take back, and a card made before
+    is not shown after. A card is never edited, so it is left out here, on every page."""
+    named = {str(item.why.get("photo_id")) for item in items if item.why.get("photo_id")}
+    if not named or not context.allows(Scope.FAMILY):
+        return list(items)
+    gone = {
+        str(ident)
+        for ident in await taken_back(
+            session, context=context, photo_ids=[uuid.UUID(one) for one in sorted(named)]
+        )
+    }
+    return [item for item in items if str(item.why.get("photo_id") or "") not in gone]
 
 
 def _patient_supply(
@@ -260,7 +279,7 @@ async def feed_page(
         Scope.PROFILE,
         where=(FeedItem.created_at <= as_of, FeedItem.expires_at > day.now),
     )
-    visible = _visible_to(found, context)
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
     held: Counter[str] = Counter()
     quiet = False
     if audience is DeliverTo.PATIENT:
@@ -321,7 +340,10 @@ async def morning_supply(
     )
     declined = await _declined_today(session, context=context, day=day)
     ordered, _ = _patient_supply(
-        _visible_to(found, context), day=day, declined=declined, quiet=False
+        await _without_photos_taken_back(session, context, _visible_to(found, context)),
+        day=day,
+        declined=declined,
+        quiet=False,
     )
     return state, [item for item in ordered if item.supply in (Supply.NOW, Supply.TODAY)]
 
@@ -361,7 +383,7 @@ async def top_three(
     found = await audited_read(
         session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > day.now,)
     )
-    visible = _visible_to(found, context)
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
     held: Counter[str] = Counter()
     quiet = False
     if audience is DeliverTo.PATIENT:
@@ -407,7 +429,10 @@ async def cached_page(session: AsyncSession, *, context: KeyContext) -> Page:
         if ids
         else []
     )
-    by_id = {item.id: item for item in _visible_to(items, context)}
+    by_id = {
+        item.id: item
+        for item in await _without_photos_taken_back(session, context, _visible_to(items, context))
+    }
     ordered = tuple(by_id[one] for one in ids if one in by_id)
     return Page(
         audience=kept.audience,

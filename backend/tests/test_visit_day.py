@@ -685,6 +685,90 @@ async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only
     )
 
 
+async def test_the_words_of_a_confirmed_visit_are_searchable_and_land_on_the_clip_for_his_family_only(
+    deployment: Deployment,
+) -> None:
+    """E02-05, transcript searchable: a few words find the sentence where they were said, the
+    visit in his words, and the stretch of the recording to play — once he has confirmed the
+    card, and for him and the family he let in only. The words searched are not kept."""
+    house = await household(deployment)
+    client = deployment.client
+    await agree_to_recording(deployment, house.pa, house.profile_id)
+    kept = await _ok(await _upload(house, house.mei, placeholder_consult(CONSULT)), 201)
+    artifact_id = kept["recording"]["artifact_id"]
+    transcript_id = kept["recording"]["transcript_artifact_id"]
+    summary = kept["summary"]
+    where = house.at("/transcripts/search")
+    search = {"words": "Water pill"}
+
+    # Before his yes, not one word of the visit is found.
+    before = await _ok(await client.post(where, json=search, headers=house.his))
+    assert before["found"] == []
+    assert before["honest"] == ["Nura does not have that written down.", "Ask your doctor."]
+
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    yes = await _ok(
+        await client.post(
+            house.at("/confirmations"),
+            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            headers=house.hers,
+        ),
+        201,
+    )
+    await _ok(
+        await client.post(
+            f"{house.visit}/summary/{summary['summary_id']}/confirm",
+            json={"decisions": decisions, "confirmation_id": yes["confirmation_id"]},
+            headers=house.hers,
+        )
+    )
+
+    after = await _ok(await client.post(where, json=search, headers=house.his))
+    assert after["honest"] == []
+    assert [one["sentence"] for one in after["found"]] == [
+        "From Friday I want you to take the full water pill in the morning instead of half.",
+        "Is the water pill bad for my kidneys?",
+    ]
+    first, second = after["found"]
+    assert first["line"] == "This was said when you saw Dr Tan on Saturday 5 September."
+    _clean([first["line"]])
+    assert first["clip"] == {"artifact_id": artifact_id, "start_s": 19.8, "end_s": 28.9, "doctor": "Dr Tan"}
+    assert (first["speaker"], second["speaker"]) == ("doctor", "patient")
+    assert (second["clip"]["start_s"], second["clip"]["end_s"]) == (55.1, 59.3)
+    assert first["heard_in"] == "en" and first["summary_id"] == summary["summary_id"]
+    cited = {(c["kind"], c["id"]) for c in first["cites"]}
+    assert {("artifact", artifact_id), ("artifact", transcript_id), ("visit_summary", summary["summary_id"])} <= cited
+    # The clip plays at that moment.
+    played = await client.get(
+        house.at(f"/artifacts/{artifact_id}/clip"),
+        params={"start": first["clip"]["start_s"], "end": first["clip"]["end_s"]},
+        headers=house.his,
+    )
+    assert played.status_code == 200 and played.headers["x-media-fragment"] == "t=19.8,28.9"
+    nowhere = await _ok(await client.post(where, json={"words": "grandchildren"}, headers=house.his))
+    assert nowhere["found"] == []
+
+    # His family finds it; a viewer and a clinic holding the visits are refused by name.
+    lim = await _key(house, "+6591210006", "Lim", "caregiver", ["visits", "records", "readings"])
+    heard = await _ok(await client.post(where, json=search, headers=bearer(lim["token"])))
+    assert len(heard["found"]) == 2
+    kit = await _key(house, KIT, "Kit", "viewer", ["visits", "readings"])
+    clinic = await _key(house, "+6591210007", "Clinic", "clinic", ["visits", "records"])
+    for who in (kit, clinic):
+        refused = await client.post(where, json=search, headers=bearer(who["token"]))
+        assert refused.status_code == 403 and refused.json() == {"refusal": "OnlyTheFamilyHears"}
+    siti = await _key(house, SITI, "Siti", "helper", ["medicines"])
+    helper = await client.post(where, json=search, headers=bearer(siti["token"]))
+    assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    blank = await client.post(where, json={"words": "?!"}, headers=house.his)
+    assert blank.status_code == 400 and blank.json() == {"refusal": "NotASearch"}
+
+    # The trail says a search was made; never the words searched.
+    trail = await client.get(house.at("/audit"), params={"limit": 500}, headers=house.his)
+    assert "transcript_search" in trail.text and "water" not in trail.text.lower()
+    assert "OnlyTheFamilyHears" in await refusals(deployment, house.pa, house.profile_id)
+
+
 async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     deployment: Deployment,
 ) -> None:

@@ -91,6 +91,9 @@ export interface CardView {
   boundary: string[];
   /** Why am I seeing this: the backend's plain line. */
   why: string;
+  /** The page a learning card cites (E21-06): who published it, and the link to it, from
+   *  the backend's cite. Null on every other card, and on a cite without an https link. */
+  source: { publisher: string; url: string } | null;
   /** The spoken twin: the backend's voice script; where it wrote none, the lines shown. */
   spoken: string[];
   /** The State the card was rendered from. */
@@ -98,6 +101,16 @@ export interface CardView {
   language: string;
   actions: readonly SideAction[];
   action: CardAction | null;
+}
+
+/** The cited page of a learning card, as the backend's cite names it: its publisher and an
+ *  https link. Nothing for any other card, and nothing the backend did not send. */
+export function sourceOf(item: Pick<FeedItemOut, "type" | "cite">): CardView["source"] {
+  if (item.type !== "learning" || item.cite === null) return null;
+  const { publisher, url } = item.cite as { publisher?: unknown; url?: unknown };
+  if (typeof publisher !== "string" || publisher.trim() === "") return null;
+  if (typeof url !== "string" || !url.startsWith("https://")) return null;
+  return { publisher, url };
 }
 
 export function cardView(item: FeedItemOut): CardView {
@@ -112,6 +125,7 @@ export function cardView(item: FeedItemOut): CardView {
     lines,
     boundary,
     why: whyLine(item),
+    source: sourceOf(item),
     spoken: item.voice.length > 0 ? [...item.voice] : [item.headline, ...item.body].filter((line) => line.trim().length > 0),
     stateId: item.rendered_from_state,
     language: item.language,

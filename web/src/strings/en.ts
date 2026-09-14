@@ -257,6 +257,8 @@ export const en = {
     declinedToday: "You will not see this kind of card again today.",
     // @patient
     shared: "Your family can see this card now.",
+    // @patient phrase
+    fromPublisher: "From {publisher}",
     // @patient
     cannotShare: "Nura cannot send this card to your family yet.",
     // @patient

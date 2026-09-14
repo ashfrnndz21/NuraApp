@@ -20,3 +20,7 @@ grounded model call exist behind the same two ports (`app/delivery/feed/compress
 Nothing here is pharmacology the model wrote: the texts are paraphrases of public consumer
 pages from the seeded sources, and the compressed lines are what a pharmacist would let
 stand. Add a page by adding both files.
+
+- The `explainer:diabetes` page is HealthHub's consumer page on diabetes, for a profile that told
+  the condition when it was set up (E01): the learning supply is made per condition as well as
+  per medicine (E21-06). Its compression speaks English, Malay and Chinese.

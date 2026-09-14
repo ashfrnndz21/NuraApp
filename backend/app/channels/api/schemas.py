@@ -36,6 +36,7 @@ from app.family.models import (
     ScheduledPush,
     Task,
     ThreadMessage,
+    ThreadPhoto,
 )
 from app.family.pushes import Preview
 from app.family.roster import OnDuty
@@ -83,7 +84,7 @@ from app.medicines.service import (
     Slot,
 )
 from app.medicines.service import Outcome as MedicineOutcome
-from app.medicines.story import Story
+from app.medicines.story import Story, voice_parts
 from app.memory.episodic import WITHHELD_ARTIFACT, WITHHELD_EVENT
 from app.memory.models import (
     LABEL_LENGTH,
@@ -1252,6 +1253,9 @@ class StoryOut(BaseModel):
     boundary: list[str]
     doctor_question: list[str]
     lines: list[str]
+    voice_parts: list[str]
+    """The parts said as voice notes (E04-06), in order: each is played from
+    `…/medicines/{line}/story/voice?part=`, said once and read from the region's store after."""
 
     @classmethod
     def of(cls, line_id: uuid.UUID, story: Story) -> StoryOut:
@@ -1269,6 +1273,7 @@ class StoryOut(BaseModel):
             boundary=story.boundary,
             doctor_question=story.doctor_question,
             lines=story.lines,
+            voice_parts=voice_parts(story),
         )
 
 
@@ -2284,6 +2289,37 @@ class ThreadCardIn(BaseModel):
 ThreadPostIn = ThreadMessageIn | ThreadCardIn
 
 
+class ThreadPhotoIn(BaseModel):
+    """A photo shared with the family (E12-02), the words it comes with, and the sharer's own
+    yes or no to its being one of his story cards (E21-05). The yes is asked every time: there
+    is no default."""
+
+    data: str = Field(min_length=1, max_length=8 * 1024 * 1024)
+    content_type: str = Field(min_length=1, max_length=64)
+    caption: str = Field(min_length=1, max_length=280)
+    on_his_feed: bool
+
+
+class ThreadPhotoOut(BaseModel):
+    """A shared photo, by reference: its bytes are at `…/thread/photos/{photo_id}/content`."""
+
+    photo_id: uuid.UUID
+    message_id: uuid.UUID
+    on_his_feed: bool
+    posted_at: datetime
+    taken_back: bool
+
+    @classmethod
+    def of(cls, photo: ThreadPhoto) -> ThreadPhotoOut:
+        return cls(
+            photo_id=photo.id,
+            message_id=photo.message_id,
+            on_his_feed=photo.on_his_feed,
+            posted_at=utc(photo.posted_at),
+            taken_back=photo.withdrawn_at is not None,
+        )
+
+
 class ThreadEntryOut(BaseModel):
     message_id: uuid.UUID
     author_person_id: uuid.UUID
@@ -2292,9 +2328,10 @@ class ThreadEntryOut(BaseModel):
     card_kind: CardKind | None
     state_id: uuid.UUID | None
     task_id: uuid.UUID | None
+    photo: ThreadPhotoOut | None = None
 
     @classmethod
-    def of(cls, entry: ThreadMessage) -> ThreadEntryOut:
+    def of(cls, entry: ThreadMessage, photo: ThreadPhoto | None = None) -> ThreadEntryOut:
         return cls(
             message_id=entry.id,
             author_person_id=entry.author_person_id,
@@ -2303,6 +2340,7 @@ class ThreadEntryOut(BaseModel):
             card_kind=entry.card_kind,
             state_id=entry.state_id,
             task_id=entry.task_id,
+            photo=None if photo is None else ThreadPhotoOut.of(photo),
         )
 
 
