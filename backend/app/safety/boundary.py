@@ -154,7 +154,7 @@ YOU_DID_RIGHT: Mapping[str, str] = {
 FROM_THE_LETTER: Mapping[str, str] = {
     "en": "{doctor} wrote this in your hospital letter.",
     "ms": "{doctor} menulis ini dalam surat hospital anda.",
-    "zh": "这是{doctor}写在您的医院信里的。",
+    "zh": "这是{doctor}写在您的出院信里的。",
 }
 """Where the letter's own words come from (docs/plain-words.md, glossary: "Red flag")."""
 

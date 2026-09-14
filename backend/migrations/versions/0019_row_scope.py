@@ -58,7 +58,7 @@ card he had seen may be shown once more. The downgrade does not bring cards back
 read of the feed renders them.
 
 Revision ID: 0019_row_scope
-Revises: 0017_trends_routines_calendar
+Revises: 0015_biography
 Create Date: 2026-09-15
 """
 
@@ -68,7 +68,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_row_scope"
-down_revision = "0017_trends_routines_calendar"
+down_revision = "0015_biography"
 branch_labels = None
 depends_on = None
 

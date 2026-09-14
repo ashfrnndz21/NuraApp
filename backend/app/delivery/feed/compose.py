@@ -71,6 +71,7 @@ from app.memory.episodic import record_event
 from app.memory.models import (
     Appointment,
     Artifact,
+    ConfidenceState,
     Event,
     EventKind,
     Fact,
@@ -404,7 +405,12 @@ async def _switch_format_if_ignored(
     already = await current_facts(
         session, context=context, subject=FORMAT_SUBJECT, attribute=FORMAT_ATTRIBUTE
     )
-    if any(fact.value == VOICE for fact in already):
+    if any(
+        fact.value == VOICE or fact.confidence_state is not ConfidenceState.EXTRACTED
+        for fact in already
+    ):
+        # Voice already, or a format he chose himself on his settings screen (E01-03): two
+        # unopened cards do not overturn his word, and `ConfirmedFactStands` would refuse it.
         return
     noticed = await record_event(
         session,

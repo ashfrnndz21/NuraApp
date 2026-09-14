@@ -149,6 +149,9 @@ class EventKind(StrEnum):
     ENGAGEMENT = "engagement"
     """What a person did with a card on his feed (E21): seen, heard, tapped, not for me,
     shared. The moment a preference fact can rest on."""
+    ONBOARDING = "onboarding"
+    """What a person said while his profile was being set up (E01): the settings he chose, a
+    read-back line he answered. The moment a setting fact, or a dispute, rests on."""
 
 
 class Event(ProfileScoped, RowScoped, Base):

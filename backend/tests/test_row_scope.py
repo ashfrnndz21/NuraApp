@@ -744,6 +744,9 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/proposals"),
     Walk("GET", f"{P}/routine"),
     Walk("GET", f"{P}/trends/{{analyte}}"),
+    Walk("GET", f"{P}/settings"),
+    Walk("GET", f"{P}/biography"),
+    Walk("GET", f"{P}/plan"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
@@ -806,6 +809,14 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/connectors/{{connector_id}}/scan"): "scans a calendar; returns what it proposes",
     ("POST", f"{P}/proposals/{{proposal_id}}/accept"): "books a proposed visit on a yes",
     ("POST", f"{P}/proposals/{{proposal_id}}/dismiss"): "dismisses a proposed visit",
+    ("PUT", f"{P}/settings"): "sets his settings on a yes; returns them",
+    ("POST", f"{P}/biography"): "starts the biography session; returns it",
+    ("POST", f"{P}/biography/papers"): "keeps a paper for the biography; returns its card",
+    ("POST", f"{P}/biography/read-back"): "reads back what he said, for his yes",
+    ("POST", f"{P}/biography/questions"): "answers a biography question on a yes",
+    ("POST", f"{P}/biography/close"): "closes the biography session",
+    ("POST", f"{P}/plan/later"): "moves the first-week plan to later",
+    ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""
@@ -1025,7 +1036,7 @@ async def _walk(
 
 
 async def _services(
-    deployment: Deployment, holder: Holder, seeded: Seeded, problems: list[str]
+    deployment: Deployment, holder: Holder, seeded: Seeded, seen: set[str], problems: list[str]
 ) -> None:
     """The same property one layer down: every read of the three tables, every door."""
     held = holder.scopes
@@ -1033,6 +1044,8 @@ async def _services(
     def outside(where: str, rows: Any) -> None:
         for row in rows:
             scope = seeded.scopes.get(str(row.id))
+            if scope is not None:
+                seen.add(str(row.id))
             if scope is not None and scope not in held:
                 problems.append(f"{holder.name} {where}: {seeded.kinds[str(row.id)]} under {scope}")
 
@@ -1101,10 +1114,11 @@ async def test_every_read_returns_rows_of_the_keys_scopes_only_and_names_what_it
     for holder in holders:
         seen: set[str] = set()
         await _walk(deployment, holder, seeded, seen, problems)
-        await _services(deployment, holder, seeded, problems)
+        await _services(deployment, holder, seeded, seen, problems)
         seen_by[holder.name] = seen
 
-    # Not vacuous: the owner's walk reaches rows of every scope the leaks were about.
+    # Not vacuous: the owner's walk — the routes and the services — reaches rows of every scope
+    # the leaks were about. No route shows a tablet's moment by id; the doors do.
     reached = {(seeded.kinds[i].split("(")[0], seeded.scopes[i]) for i in seen_by["owner"]}
     for wanted in (
         ("artifact", Scope.RECORDS),

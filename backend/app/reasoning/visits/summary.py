@@ -427,7 +427,8 @@ async def store_transcript(
         # Only if the rollback took it: a keeper registered by an earlier, successful unit
         # of work on the same session finds the row still there and does nothing.
         if not await row_is_there(again, Artifact, artifact.id):
-            await audited_write(again, Artifact, context, Scope.RECORDS, **kept)
+            # Under the scope the transcript was kept under: a consult is the visits'.
+            await audited_write(again, Artifact, context, artifact.written_scope, **kept)
 
     keep_on_refusal(session, keep)
     return artifact
