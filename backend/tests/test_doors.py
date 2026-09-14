@@ -405,6 +405,7 @@ async def test_a_steward_reads_everything_but_the_private_notes(deployment: Depl
         f"/profiles/{profile_id}/consents/sharing",
         json={
             "holder_phone_e164": HELPER,
+            "holder_display_name": "Siti",
             "scopes": ["medicines"],
             "language": "en",
             "captured_via": "app",
@@ -502,6 +503,7 @@ async def test_the_invited_person_lands_with_the_key_already_cut(deployment: Dep
         f"/profiles/{profile_id}/consents/sharing",
         json={
             "holder_phone_e164": MEI,
+            "holder_display_name": "Mei",
             "scopes": ["medicines", "visits"],
             "relationship": "daughter",
             "language": "en",

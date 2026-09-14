@@ -326,6 +326,122 @@ body {
   white-space: nowrap;
 }
 
+/* --- Onboarding (W3) ------------------------------------------------------------------- */
+.lead {
+  font-size: var(--text-body);
+  margin: 0 6px;
+}
+.status {
+  font-size: var(--text-body);
+  margin: 0 6px;
+  min-height: calc(var(--text-body) * var(--line-height));
+}
+/* The word cloud: plain words as paper chips, wrapped, never scrolled sideways. */
+.cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+.word {
+  font: inherit;
+  font-size: var(--word-2);
+  line-height: 1.2;
+  color: var(--ink);
+  min-height: var(--target);
+  max-width: 100%;
+  padding: 6px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid rgba(78, 58, 120, 0.18);
+  background: var(--paper-bg);
+  box-shadow: var(--tile-shadow);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.word.s1 { font-size: var(--word-1); }
+.word.s2 { font-size: var(--word-2); }
+.word.s3 { font-size: var(--word-3); font-weight: 500; }
+.word.fresh {
+  background: var(--chip-fresh);
+  border-color: rgba(78, 58, 120, 0.45);
+  animation: reveal var(--settle);
+}
+.word.picked {
+  background: var(--plum);
+  border-color: var(--plum);
+  color: var(--white);
+}
+.word .term { font-weight: 400; }
+.word:focus-visible { outline: 3px solid var(--plum); outline-offset: 2px; }
+@keyframes reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* Choices: a column of paper pills; two short ones side by side. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.choices.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.pill.chosen {
+  border: 3px solid var(--plum);
+  color: var(--plum);
+}
+.pill.yes[aria-pressed="true"] {
+  background: var(--yes-bg);
+  color: var(--yes-ink);
+  border-color: var(--yes-ink);
+}
+.pill.no[aria-pressed="true"] {
+  background: var(--no-bg);
+  color: var(--no-ink);
+  border-color: var(--no-ink);
+}
+/* A photo or a file: the label is the button; the input inside it is what the phone opens. */
+label.pill { position: relative; }
+label.pill input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.big-line {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  line-height: 1.3;
+}
+/* The review card: solid underline where Nura is sure, dotted where he should check. */
+.read {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.read .value-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.read .unit {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.field.sure { border-bottom: 3px solid var(--ink); }
+.field.unsure { border-bottom: 3px dotted var(--watch); }
+.value.sure { text-decoration: underline solid var(--ink); text-underline-offset: 6px; }
+.value.unsure { text-decoration: underline dotted var(--watch); text-decoration-thickness: 3px; text-underline-offset: 6px; }
+.tile.left-out { opacity: 0.75; }
+/* A gap card: paper, with the watch colour as a rule on its edge, never as a fill. */
+.tile.gap { border-left: 4px solid var(--watch); }
+
 /* Motion answers an action: nothing moves on load, and Reduce Motion leaves only opacity. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -63,12 +63,15 @@ async def let_in(
     holder_phone_e164: str,
     scopes: list[str],
     relationship: str | None = None,
+    holder_display_name: str = "Mei",
 ) -> dict[str, object]:
-    """The owner agrees to let this number in, to these parts; what a key rests on."""
+    """The owner agrees to let this number in, to these parts; what a key rests on. By phone
+    the words need the name he calls the person (`HolderNeedsAName` without it)."""
     agreed = await deployment.client.post(
         f"/profiles/{profile_id}/consents/sharing",
         json={
             "holder_phone_e164": holder_phone_e164,
+            "holder_display_name": holder_display_name,
             "scopes": scopes,
             "relationship": relationship,
             "language": "en",

@@ -9,7 +9,7 @@ reach (the delivery engine), on the system channel only; and a red flag carries 
 person who raised it is on more than one profile.
 
 Revision ID: 0019_delivery
-Revises: 0019_row_scope
+Revises: 0019_person_named_by
 Create Date: 2026-09-15
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0019_delivery"
-down_revision = "0019_row_scope"
+down_revision = "0019_person_named_by"
 branch_labels = None
 depends_on = None
 
