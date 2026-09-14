@@ -492,11 +492,11 @@ def test_name(subject: str, language: str | None) -> str:
 # Not patient strings: the caregiver's screens keep the fuller words (docs/plain-words.md §3).
 
 CAREGIVER_DUTY_HEADLINE = "Who is on duty"
-CAREGIVER_DUTY_LINES = (
-    "{count} people hold a key to {name}'s record today.",
-    "The roster and handover come with the family stories.",
-)
+CAREGIVER_DUTY_LINES = ("{count} people hold a key to {name}'s record today.",)
+CAREGIVER_NO_ROSTER_LINE = "Nobody is on the roster for now; add a slot under Family."
+CAREGIVER_ON_DUTY_LINE = "{who} is on duty for {name} right now, by the roster."
 CAREGIVER_DUTY_WHY = "Who holds a key is in the family dimension of State."
+CAREGIVER_ROSTER_WHY = "The roster says who is on duty now; the keys say who else can step in."
 CAREGIVER_HELD_WHY = "Held for you: nothing for {name} to do, or a question for the doctor."
 CAREGIVER_SUPPRESSED_HEADLINE = "Considered, not raised: {feeling}"
 CAREGIVER_SUPPRESSED_LINE = (

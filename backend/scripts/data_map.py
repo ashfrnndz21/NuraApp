@@ -27,10 +27,12 @@ from sqlalchemy import Table
 import app.audit.models
 import app.consent.models
 import app.delivery.feed.models
+import app.family.models
 import app.identity.models
 import app.ingestion.models
 import app.keys.confirm
 import app.keys.models
+import app.keys.privacy
 import app.medicines.models
 import app.memory.models
 import app.notes.models
@@ -91,6 +93,12 @@ CLASSES: dict[str, str] = {
     "red_flag.id": HEALTH,
     "source.id": OPERATIONAL,
     "feed_page.id": OPERATIONAL,
+    "thread_message.id": HEALTH,
+    "task.id": HEALTH,
+    "scheduled_push.id": HEALTH,
+    "document.id": HEALTH,
+    "roster_slot.id": IDENTIFIER,
+    "privacy.id": CONSENT,
     # --- accounts and the graph's ownership -------------------------------------------------
     "person.display_name": IDENTIFIER,
     "person.language": OPERATIONAL,
@@ -369,6 +377,54 @@ CLASSES: dict[str, str] = {
     "red_flag.raised_at": HEALTH,
     "red_flag.told": IDENTIFIER,
     "red_flag.suppressed_because": HEALTH,
+    # --- the family (E12) ---------------------------------------------------------------------
+    # The thread and the tasks are about his care: their words and what they point at are
+    # health. The roster says who looks after him and when: an identifier, like the family
+    # dimension of State. "Only me" is his choice over who reads a part of his record: consent.
+    "thread_message.author_person_id": IDENTIFIER,
+    "thread_message.posted_at": OPERATIONAL,
+    "thread_message.text": HEALTH,
+    "thread_message.state_id": HEALTH,
+    "thread_message.card_kind": HEALTH,
+    "thread_message.task_id": HEALTH,
+    "task.what": HEALTH,
+    "task.assigned_person_id": IDENTIFIER,
+    "task.due_at": OPERATIONAL,
+    "task.created_by_person_id": IDENTIFIER,
+    "task.created_at": OPERATIONAL,
+    "task.done_at": OPERATIONAL,
+    "task.done_by_person_id": IDENTIFIER,
+    "roster_slot.person_id": IDENTIFIER,
+    "roster_slot.role": IDENTIFIER,
+    "roster_slot.weekdays": OPERATIONAL,
+    "roster_slot.starts_on": OPERATIONAL,
+    "roster_slot.ends_on": OPERATIONAL,
+    "roster_slot.from_time": OPERATIONAL,
+    "roster_slot.to_time": OPERATIONAL,
+    "roster_slot.added_by_person_id": IDENTIFIER,
+    "roster_slot.added_at": OPERATIONAL,
+    "roster_slot.ended_at": OPERATIONAL,
+    # A message a chief composed to him: her words, the State she composed against, and the
+    # boundary column every rendered row has (empty here: her words infer nothing).
+    "scheduled_push.composed_by_person_id": IDENTIFIER,
+    "scheduled_push.composed_at": OPERATIONAL,
+    "scheduled_push.language": OPERATIONAL,
+    "scheduled_push.template_id": OPERATIONAL,
+    "scheduled_push.lines": HEALTH,
+    "scheduled_push.send_at": OPERATIONAL,
+    "scheduled_push.channel": OPERATIONAL,
+    "scheduled_push.expires_at": OPERATIONAL,
+    "scheduled_push.state_id": HEALTH,
+    "scheduled_push.boundary": HEALTH,
+    "document.artifact_id": HEALTH,
+    "document.tag": HEALTH,
+    "document.added_by_person_id": IDENTIFIER,
+    "document.added_at": OPERATIONAL,
+    "privacy.scope": CONSENT,
+    "privacy.marked_by_person_id": IDENTIFIER,
+    "privacy.marked_at": CONSENT,
+    "privacy.lifted_at": CONSENT,
+    "privacy.lifted_by_person_id": IDENTIFIER,
 }
 
 

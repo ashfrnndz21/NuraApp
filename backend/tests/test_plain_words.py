@@ -514,9 +514,11 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         (ROOT / ".claude" / "rules" / "patient-strings.md").read_text(encoding="utf-8")
     )
     assert paths == [
+        "backend/app/audit/**",
         "backend/app/delivery/**",
         "backend/app/channels/**",
         "backend/app/consent/**",
+        "backend/app/family/**",
         "backend/app/medicines/**",
         "backend/app/safety/boundary.py",
         "backend/app/safety/recording.py",

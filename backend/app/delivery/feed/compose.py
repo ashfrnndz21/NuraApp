@@ -41,6 +41,9 @@ from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
     CAREGIVER_DUTY_WHY,
+    CAREGIVER_NO_ROSTER_LINE,
+    CAREGIVER_ON_DUTY_LINE,
+    CAREGIVER_ROSTER_WHY,
     CAREGIVER_SUPPRESSED_HEADLINE,
     CAREGIVER_SUPPRESSED_LINE,
     EMERGENCY_NUMBER,
@@ -51,6 +54,7 @@ from app.delivery.strings import (
     render,
     test_name,
 )
+from app.family.roster import who_is_on_duty
 from app.identity.models import Profile
 from app.keys.context import KeyContext
 from app.keys.grants import list_keys
@@ -168,9 +172,12 @@ class Household:
     profile: Profile
     language: str
     who: str | None
-    """The first live chief or caregiver's name, or None when he is on his own here."""
+    """Who does the next thing: the person on duty by the roster (E12-03), else the first
+    live chief or caregiver, or None when he is on his own here."""
     doctor: str | None
     holding_now: int
+    on_duty: tuple[str, ...] = ()
+    """Everyone the roster puts on duty right now, in roster order; empty with no roster."""
 
 
 async def _household(session: AsyncSession, *, context: KeyContext) -> Household:
@@ -186,12 +193,21 @@ async def _household(session: AsyncSession, *, context: KeyContext) -> Household
         if who is None and key.role in (KeyRole.CHIEF, KeyRole.CAREGIVER):
             name = await person_display_name(session, context, key.holder_person_id)
             who = name or None
+    # The roster, when the family keeps one, says who does the next thing better than the
+    # order the keys were cut in; with no roster (or no slot right now) the keys stand.
+    on_duty: list[str] = []
+    if context.allows(Scope.FAMILY):
+        for duty in await who_is_on_duty(session, context=context, at=moment):
+            name = await person_display_name(session, context, duty.person_id)
+            if name and name not in on_duty:
+                on_duty.append(name)
     return Household(
         profile=profile,
         language=language_for(profile.language),
-        who=who,
+        who=on_duty[0] if on_duty else who,
         doctor=None,
         holding_now=holding,
+        on_duty=tuple(on_duty),
     )
 
 
@@ -270,13 +286,23 @@ async def refresh(
             language=house.language,
             headline=CAREGIVER_DUTY_HEADLINE,
             body=tuple(
+                [
+                    CAREGIVER_ON_DUTY_LINE.format(
+                        who=" and ".join(house.on_duty), name=house.profile.display_name
+                    )
+                ]
+                if house.on_duty
+                else []
+            )
+            + tuple(
                 line.format(count=house.holding_now, name=house.profile.display_name)
                 for line in CAREGIVER_DUTY_LINES
-            ),
+            )
+            + (() if house.on_duty else (CAREGIVER_NO_ROSTER_LINE,)),
             voice=(),
-            why=CAREGIVER_DUTY_WHY,
+            why=CAREGIVER_ROSTER_WHY if house.on_duty else CAREGIVER_DUTY_WHY,
         ),
-        why=Why(kind="duty", plain=CAREGIVER_DUTY_WHY),
+        why=Why(kind="duty", plain=CAREGIVER_ROSTER_WHY if house.on_duty else CAREGIVER_DUTY_WHY),
         scope=Scope.FAMILY,
         deliver_to=DeliverTo.CAREGIVER,
         day=day.key,

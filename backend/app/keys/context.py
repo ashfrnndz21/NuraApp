@@ -20,6 +20,7 @@ from app.db import utcnow
 from app.errors import Refusal
 from app.identity.models import Person, Profile
 from app.keys.models import Key
+from app.keys.privacy import only_me_scopes
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.regions import Region, guard_region
 
@@ -225,11 +226,14 @@ async def resolve_key_context(
 
     for key in keys:
         if key.is_active(moment):
+            # The parts the owner marked "only me" come out of every key here, at the
+            # floor, whatever the key row says (E12-04): a mark made a second ago holds
+            # against a key cut a year ago, and nothing above this can put them back.
             return KeyContext(
                 profile_id=profile.id,
                 region=profile.region,
                 person_id=person_id,
-                scopes=key.scopes_held,
+                scopes=key.scopes_held - await only_me_scopes(session, profile_id=profile.id),
                 role=key.role,
                 key_id=key.id,
                 # A key on a graph nobody owns is the steward's: he holds it for the patient.
