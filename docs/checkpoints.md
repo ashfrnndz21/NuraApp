@@ -21,7 +21,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
 | 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice (his own note, ADR 0003) and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
 | 15 | Biography | Written by its story | — | planned |
-| 16 | Timeline | Written by its story | — | planned |
+| 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Trends, routine and calendar | Written by its story | — | planned |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
@@ -742,3 +742,78 @@ checkpoint 14 passed: every step did what docs/checkpoints.md says
 ```
 
 What to look at by hand: `GET /profiles/{id}/emergency-card.html` in a browser (Pa's or Lin's token as a bearer header, or from the web client once W1 lands) — one page, paper on mist, 20px, no request leaves for anything; `GET /profiles/{id}/state` after "chest pain" — `posture: act`, the situational dimension carrying `feeling.control = act` for 24 hours; `GET /profiles/{id}/audit` as Pa — the SYMPTOM `event` write, then the `red_flag` write, before the `notice`, `safety_escalation`, `fact` and `what_to_do_card` writes of that press, and Lin's `emergency_card` reads under scope `emergency`.
+
+## How to run checkpoint 16
+
+The same two terminals as checkpoint 2; it does not depend on any other checkpoint having run. Two fresh phone numbers every run, Pa and Mei, so it can be run again on the same `dev.db`. Pa is set up in English so every line can be read here; the anchors, what changed and the answers come in Malay and Chinese for a profile in those languages. No model is called: which parts of the record a question is about is decided by the keyword retriever behind its port (`app/search/retrieve.py`), and every line of an answer is a template filled with the values of what it cites.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0016 adds attachment, provider_note, last_looked), serves on http://127.0.0.1:8000
+make checkpoint N=16    # terminal 2: walks the whole scenario, about three seconds
+```
+
+What you will see (the numbers, ids and days change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591117507) registered by phone code and signed in (the code read from the server log)
+✓ Pa's record: Dr Tan in his directory (POST /providers); the chest infection open (POST /episodes); two blood pressures, 146/90 six days ago and 138/84 yesterday during the illness; a check-up with Dr Tan ten days ago, confirmed then attended — each step on its own yes (POST /confirmations, subjects appointment and appointment_status); and a visit to Dr Tan in a week, inside the illness
+✓ Pa added amlodipine 5 mg from the label photo (POST /medicines with the label and his yes): the label names Dr Tan
+✓ Pa's lab paper read and confirmed: 7 facts resting on the photo 47e35e79…, dated on the paper
+✓ GET /profiles/{id}/timeline: the three anchors of the spine, in his words with the day, then the first page newest first — the visit to come, then the illness with the reading taken during it — and the cursor to the check-up:
+    Your last check-up was with Dr Tan on Friday 4 September.
+    Your last visit was to Dr Tan on Friday 4 September.
+    Your next visit is to Dr Tan on Monday 21 September.
+    [appointment] 2026-09-21  Dr Tan  (0 papers, 0 events, 0 facts)
+    [episode    ] 2026-09-14  chest infection  (0 papers, 1 events, 1 facts)
+    [appointment] 2026-09-04  Dr Tan  (0 papers, 0 events, 0 facts)
+✓ Mei (+6592226252) registered by phone code and signed in (the code read from the server log)
+✓ Pa agreed to let Mei, his daughter, in and cut her a chief key; Mei put the lab photo with the chest infection on her own yes (POST /episodes/{e}/attach, subject attach) — the illness now holds 1 paper, 1 event and 8 facts, and the visit to come (1)
+✓ the providers directory (GET /providers): Dr Tan — 2 visits; Dr Tan's history: 2 visits, 1 paper (through the illness), 1 medicine on his name, and Mei's note "parking at B2" — the chief's alone; a note naming a medicine was refused, NoteNamesHealth (400), and nothing of it was kept
+✓ Mei's first look at what changed (GET /changes, 14 lines):
+    This is your first look at what changed.
+    A visit to Dr Tan is booked for Friday 4 September.
+    The visit to Dr Tan on Friday 4 September happened.
+    A visit to Dr Tan is booked for Monday 21 September.
+    Your blood pressure tablet was added on Monday 14 September.
+    A new blood pressure was written down on Monday 14 September.
+    A new cholesterol test was written down on Monday 14 September.
+    A new photo came in on Monday 14 September.
+    Something new going on was written down on Monday 14 September.
+    A paper was put with your visit or your illness.
+    Mei was given a key on Monday 14 September.
+    A new agreement was written down on Monday 14 September.
+    A new agreement was written down on Monday 14 September.
+    Mei wrote a note about Dr Tan on Monday 14 September.
+    (still waiting) One tablet today is not taken yet.
+✓ Pa added 132/80; Mei's second look counts from her first and says only that: "A new blood pressure was written down on Monday 14 September." (fact 61671c7c…)
+✓ Pa asked by voice, "what was my blood pressure" (POST /ask, mode voice): one line, citing fact 61671c7c…, event af919e06…, then the boundary; what he hears:
+    Your blood pressure on Monday 14 September was 132 over 80.
+    Nura looked in your papers.
+    This is not a doctor's advice.
+    Ask Dr Tan.
+✓ Mei asked in text, "what did Dr Tan say": every line cites what it rests on:
+    Your next visit is to Dr Tan on Monday 21 September.  (appointment 5c9daed6…, provider 5bc91eeb…)
+    Dr Tan gave you your blood pressure tablet.  (medication_line 6b841f61…, fact a0afbb9c…, artifact eb36403a…)
+    Your cholesterol test from Thursday 7 September is in your papers.  (artifact 47e35e79…, attachment f3aa927d…, fact 729f907d…, fact 972c5be0…, fact 92c5ce1f…, fact 3eb8cbcc…, fact 4e2eba60…, fact b8de3795…, fact f05d541e…)
+    You saw Dr Tan on Friday 4 September.  (appointment 240be989…, provider 5bc91eeb…)
+    Nura looked in your papers.
+    This is not a doctor's advice.
+    Ask Dr Tan.
+✓ "do I have cancer": nothing on the record answers it, so nothing is guessed:
+    Nura does not have that written down.
+    Ask Dr Tan.
+    Nura looked in your papers.
+    This is not a doctor's advice.
+    Ask Dr Tan.
+✓ Pa reads his trail (374 lines): Mei's refused note by name, the three asks — each naming the question kept as a message by reference, never its words — and Mei's two looks
+checkpoint 16 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 16 passed`. The criteria: the timeline opens on the three anchors of the spine — the last check-up, the last visit, the next visit — each a whole line in his words with the day and the date, then the visits and illnesses newest first, each with what hangs off it, paged by a cursor that answers the same page twice; every visit names its provider, and an illness groups the visits and the events that were part of it (`?episode=` narrows the page to it); a paper hangs off an illness or a visit only on a person's yes for exactly that, in that person's name — or under the card's own yes when a review card is confirmed into an open illness; the providers directory shows each provider's visits, the papers from them and the medicines on its name, and the chief's note about the place, which only the owner and his chief can read or write and which is refused when it names a medicine or a condition; what changed counts from the reader's own last look, says what is new part by part with the ids beside each line, says what is still waiting, and a second look says only what came after the first; an answer is made only of templates and the values it cites, every line citing ids on this profile, voice gives one thing and text a few, a question nothing answers gets "Nura does not have that written down." and never a guess, and the boundary is last on every answer; every question is kept as a message by reference and every ask, look and refusal is on the trail. If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token and the profile id:
+
+1. **A part kept "only me".** Mark the readings only me (`POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "readings"}`, then the only-me route from checkpoint 13), then as Mei `GET /profiles/{profile_id}/timeline`: `withheld` names `readings`, the illness loses the blood pressure and the moment it was taken, and `POST /profiles/{profile_id}/ask` with "what was my blood pressure" answers "Nura does not have that written down." with `readings` withheld. Pa himself still sees it all.
+2. **A question that would change treatment.** As Pa, `POST /profiles/{profile_id}/ask` with `{"question": "should I stop my blood pressure tablet"}`: the answer says what is written down ("Dr Tan gave you your blood pressure tablet.") and then "Ask Dr Tan before you change any medicine." — never an instruction — with the boundary last.
+
