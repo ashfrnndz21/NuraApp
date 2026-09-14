@@ -31,7 +31,7 @@ def _words_in(payload: object) -> str:
             for v in node:
                 walk(v, key)
         elif isinstance(node, (str, int, float)) and not (
-            key == "id" or key.endswith("_id") or key.endswith("_at") or key in {"at", "sha256"}
+            key == "id" or key.endswith(("_id", "_at")) or key in {"at", "sha256"}
         ):
             out.append(str(node))
 
