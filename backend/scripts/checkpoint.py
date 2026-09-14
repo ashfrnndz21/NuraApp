@@ -2268,6 +2268,7 @@ def checkpoint_7(client: httpx.Client) -> None:
             headers=bearer(pa.token),
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
                 "relationship": "daughter",
                 "language": "en",
@@ -3142,6 +3143,7 @@ CHECKPOINTS = {
     16: lambda client: checkpoints.cp16.run(BASE_URL, DEV_LOG) and sys.exit(1),
     17: lambda client: checkpoints.cp17.run(BASE_URL, DEV_LOG) and sys.exit(1),
     18: lambda client: checkpoints.cp18.run(BASE_URL, DEV_LOG) and sys.exit(1),
+    21: lambda client: checkpoints.cp21.run(BASE_URL, DEV_LOG) and sys.exit(1),
 }
 
 

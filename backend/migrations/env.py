@@ -17,6 +17,7 @@ from app.channels.whatsapp import models as whatsapp_models  # noqa: F401
 from app.consent import models as consent_models  # noqa: F401
 from app.db import Base
 from app.delivery.feed import models as feed_models  # noqa: F401
+from app.delivery.nudges import models as nudge_models  # noqa: F401
 from app.family import models as family_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
 from app.ingestion import models as ingestion_models  # noqa: F401
@@ -29,6 +30,7 @@ from app.memory import models as memory_models  # noqa: F401
 from app.notes import models as note_models  # noqa: F401
 from app.onboarding import models as onboarding_models  # noqa: F401
 from app.reasoning import models as reasoning_models  # noqa: F401
+from app.reasoning.feelings import models as feeling_models  # noqa: F401
 from app.reasoning.visits import models as visit_models  # noqa: F401
 from app.routines import models as routine_models  # noqa: F401
 from app.safety import red_flags as red_flag_models  # noqa: F401
