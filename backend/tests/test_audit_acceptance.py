@@ -41,17 +41,16 @@ async def _pa_and_his_daughter(
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
-    await agree_to_family_sharing(session, owner)
     daughter = await register_person(
         session, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
+    await agree_to_family_sharing(session, owner, daughter)
     await grant_key(
         session,
         context=owner,
         holder=daughter,
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.VISITS, Scope.SEND],
-        basis="owner_consent",
     )
     held = await resolve_key_context(
         session, region=Region.SG, person_id=daughter.id, profile_id=profile.id
@@ -140,7 +139,8 @@ async def test_the_patient_and_his_chief_read_the_trail_and_no_other_holder_can(
 ) -> None:
     _, owner, _, held = await _pa_and_his_daughter(sg)
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
-    await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF, basis="owner_consent")
+    await agree_to_family_sharing(sg, owner, son)
+    await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF)
     chief = await resolve_key_context(
         sg, region=Region.SG, person_id=son.id, profile_id=held.profile_id
     )

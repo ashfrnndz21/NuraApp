@@ -21,6 +21,7 @@ from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPur
 from app.consent.service import RecordConsent, grant_consent
 from app.consent.texts import current_version
 from app.db import Base, ProfileScoped, enum_column
+from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 
@@ -63,14 +64,16 @@ OPENING_CONSENT = RecordConsent(
 
 
 async def agree_to_family_sharing(
-    session: AsyncSession, owner: KeyContext, *, now: datetime | None = None
+    session: AsyncSession, owner: KeyContext, holder: Person, *, now: datetime | None = None
 ) -> Consent:
-    """The owner's consent to sharing with family, which every key cut on his graph rests on."""
+    """The owner's consent to sharing with one named person, which that person's key rests on."""
     return await grant_consent(
         session,
         context=owner,
         purpose=ConsentPurpose.SHARE_WITH_FAMILY,
         captured_via=ConsentChannel.APP,
         basis=ConsentBasis.OWNER,
+        language="en",
+        holder_person_id=holder.id,
         now=now,
     )

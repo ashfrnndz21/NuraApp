@@ -1,12 +1,14 @@
 """E00-02: the consent record.
 
-One row per agreement: who gave it, to what, in which version of the words, in which
-language, how it was captured, on what basis, when, and when it was withdrawn. Rows are
-never edited or removed; withdrawing marks one, new words add one. No column can hold
-health content.
+One row per agreement: who gave it, for whom, to what, in which version of the words and
+the words themselves, in which language, how it was captured, on what basis and what is
+behind the basis, when, and when it was withdrawn. Rows are never edited or removed;
+withdrawing marks one, new words add one. No column can hold health content.
+
+It follows the memory stores because a proxy basis points at the artefact behind it.
 
 Revision ID: 0003_consent
-Revises: 0002_audit
+Revises: 0003_memory
 Create Date: 2026-09-14
 """
 
@@ -16,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0003_consent"
-down_revision = "0002_audit"
+down_revision = "0003_memory"
 branch_labels = None
 depends_on = None
 
@@ -61,19 +63,28 @@ def upgrade() -> None:
         ),
         sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
         sa.Column("purpose", PURPOSE, nullable=False),
+        # Set for a per-holder purpose (sharing): the person the agreement is about.
+        sa.Column("holder_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True),
         sa.Column("text_version", sa.String(length=32), nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
+        # The words as read, copied at the moment of agreement.
+        sa.Column("wording_text", sa.Text(), nullable=False),
         sa.Column("captured_via", CHANNEL, nullable=False),
         sa.Column("basis", BASIS, nullable=False),
+        # What is behind a proxy basis: the document or recording, and who heard it.
+        sa.Column("basis_artifact_id", sa.Uuid(), sa.ForeignKey("artifact.id"), nullable=True),
+        sa.Column("witness_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True),
         sa.Column("granted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("revoked_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True),
     )
     op.create_index("ix_consent_profile_id", "consent", ["profile_id"])
     op.create_index("ix_consent_person_id", "consent", ["person_id"])
+    op.create_index("ix_consent_holder_person_id", "consent", ["holder_person_id"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_consent_holder_person_id", table_name="consent")
     op.drop_index("ix_consent_person_id", table_name="consent")
     op.drop_index("ix_consent_profile_id", table_name="consent")
     op.drop_table("consent")

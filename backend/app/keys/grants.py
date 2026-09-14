@@ -46,7 +46,6 @@ async def grant_key(
     context: KeyContext,
     holder: Person,
     role: KeyRole,
-    basis: str,
     scopes: Iterable[Scope] | None = None,
     window: KeyWindow | None = None,
     now: datetime | None = None,
@@ -54,23 +53,24 @@ async def grant_key(
     """Cut a key for one person on the profile in the context.
 
     `scopes` narrows the role's preset; it can never widen past what the granter holds.
-    `basis` is what the grant rests on — the owner's recorded consent, an LPA, a letter.
-    Consent itself is recorded by the consent service (E00-02): no key is cut, whatever
-    its role, unless a consent to `SHARE_WITH_FAMILY` is in force on the profile, given by
+    The basis of the key is the consent it is cut under (E00-02): no key is cut, whatever
+    its role, unless a `SHARE_WITH_FAMILY` consent naming this holder is in force, given by
     the owner or by someone acting for him on a recorded proxy basis, to the current
-    wording. New wording therefore stops the cutting of keys until the patient agrees
-    again; that is what versioned consent means, and shipping new words is paired with
-    asking. The emergency role is not exempt: the emergency card is health data too.
+    wording, and the key records which consent that was. New wording therefore stops the
+    cutting of keys until the patient agrees again; that is what versioned consent means,
+    and shipping new words is paired with asking. The emergency role is not exempt: the
+    emergency card is health data too.
 
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     _may_cut_keys(context)
     moment = now or utcnow()
-    await require_consent(
+    consent = await require_consent(
         session,
         context=context,
         purpose=ConsentPurpose.SHARE_WITH_FAMILY,
         scope=Scope.FAMILY,
+        holder_person_id=holder.id,
         now=moment,
     )
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
@@ -90,7 +90,7 @@ async def grant_key(
         holder_person_id=holder.id,
         role=role,
         scopes=sorted(scope.value for scope in granted),
-        basis=basis,
+        consent_id=consent.consent_id,
         granted_by_person_id=context.person_id,
         granted_at=moment,
         expires_at=window_ends_at(window or DEFAULT_WINDOW[role], moment),

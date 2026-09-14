@@ -15,10 +15,16 @@ name the country, there is one text per region.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from app.consent.models import ConsentPurpose
 from app.regions import Region
+
+# @patient
+LANGUAGES: Mapping[str, str] = {"en": "English", "zh": "Chinese", "ms": "Malay", "ta": "Tamil"}
+"""The languages Nura speaks, by code, with the name the page uses. Nothing else is a
+language a consent can be recorded in."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +60,7 @@ TEXTS: tuple[ConsentText, ...] = (
         ConsentPurpose.SHARE_WITH_FAMILY,
         "1",
         "en",
-        "You choose which of your family can see your papers. "
+        "You choose who in your family can see your papers. "
         "You can see who looked at them. "
         "You can stop this at any time.",
     ),
@@ -62,14 +68,16 @@ TEXTS: tuple[ConsentText, ...] = (
         ConsentPurpose.RECORDING,
         "1",
         "en",
-        "When you see the doctor, you can press the round button to record. "
-        "Nura keeps what the doctor said, so you can hear it again.",
+        "When you see the doctor, Nura can listen and keep what the doctor said. "
+        "You can hear it again later. "
+        "You can stop this at any time.",
     ),
     ConsentText(
         ConsentPurpose.WHATSAPP,
         "1",
         "en",
-        "Every morning, Nura sends your Today page to you on WhatsApp.",
+        "Every morning, Nura sends your Today page to you on WhatsApp. "
+        "You can stop this at any time.",
     ),
 )
 """Append only. Within a purpose, versions are in the order they were introduced, and the
@@ -95,8 +103,11 @@ def current_version(purpose: ConsentPurpose) -> str:
 def wording(purpose: ConsentPurpose, version: str, language: str, region: Region) -> str | None:
     """The words shown for this purpose, version and language in this region, or None.
 
-    Words written for the region win over words written for every region.
+    Words written for the region win over words written for every region. A language Nura
+    does not speak has no words, whatever the catalogue says.
     """
+    if language not in LANGUAGES:
+        return None
     anywhere: str | None = None
     for text in TEXTS:
         if text.purpose is purpose and text.version == version and text.language == language:

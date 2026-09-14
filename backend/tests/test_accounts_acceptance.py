@@ -76,14 +76,14 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
 
-    # Pa agrees to sharing with his family (E00-02); every key cut below rests on that.
-    await agree_to_family_sharing(sg, owner)
-
     # No grant, no reach.
     with pytest.raises(NoKey):
         await resolve_key_context(
             sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id
         )
+
+    # Pa agrees to share with his daughter (E00-02); her key rests on that and names it.
+    hers = await agree_to_family_sharing(sg, owner, daughter)
 
     key = await grant_key(
         sg,
@@ -92,9 +92,9 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.VISITS],
         window=KeyWindow.THIRTY_DAYS,
-        basis="owner_consent",
     )
     assert key.profile_id == profile.id
+    assert key.consent_id == hers.id
     assert key.granted_by_person_id == pa.id
     assert key.expires_at is not None
 
@@ -114,25 +114,26 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     siti = await register_person(
         sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
     )
+    await agree_to_family_sharing(sg, owner, siti)
     with pytest.raises(OutOfScope):
-        await grant_key(sg, context=held, holder=siti, role=KeyRole.HELPER, basis="owner_consent")
+        await grant_key(sg, context=held, holder=siti, role=KeyRole.HELPER)
 
     # A chief may cut one, but never wider than the key he holds.
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
+    await agree_to_family_sharing(sg, owner, son)
     chief_key = await grant_key(
         sg,
         context=owner,
         holder=son,
         role=KeyRole.CHIEF,
         scopes=[Scope.MEDICINES, Scope.FAMILY],
-        basis="owner_consent",
     )
     assert chief_key.expires_at is None
     chief = await resolve_key_context(
         sg, region=Region.SG, person_id=son.id, profile_id=profile.id
     )
     helper_key = await grant_key(
-        sg, context=chief, holder=siti, role=KeyRole.HELPER, basis="owner_consent"
+        sg, context=chief, holder=siti, role=KeyRole.HELPER
     )
     assert helper_key.scopes_held == frozenset({Scope.MEDICINES})
 

@@ -21,7 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
 from app.db import ProfileScoped
+from app.errors import Refusal
+from app.identity.models import Person, Profile
 from app.keys.context import KeyContext, OutOfScope
+from app.keys.models import Key
 from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
 
@@ -134,6 +137,94 @@ async def record_share(
         shared_with_label=shared_with_label,
         now=now,
     )
+
+
+PROFILE_TARGET = Profile.__tablename__
+
+
+async def audited_profile_read(
+    session: AsyncSession,
+    context: KeyContext,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+    now: datetime | None = None,
+) -> Profile:
+    """Read the profile row itself — whose graph, its name and language — and write it down.
+
+    The profile is not a row *of* the graph, it is the graph, so `scoped_select` cannot name
+    it; this is the one read that reaches it, under `Scope.PROFILE`, which every key holds.
+    """
+    try:
+        context.require(Scope.PROFILE)
+    except OutOfScope as refusal:
+        await _refused(
+            session, context, Action.READ, Scope.PROFILE, PROFILE_TARGET, refusal, channel, now
+        )
+        raise
+    profile = await session.get(Profile, context.profile_id)
+    assert profile is not None  # the context was resolved from this row
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.PROFILE,
+        target=PROFILE_TARGET,
+        target_id=profile.id,
+        rows=1,
+        channel=channel,
+        now=now,
+    )
+    return profile
+
+
+class NotOnThisProfile(Refusal):
+    """Neither the owner nor anyone who holds or held a key here: no name to give."""
+
+
+async def person_display_name(
+    session: AsyncSession,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+    now: datetime | None = None,
+) -> str:
+    """The display name of someone on this profile — its owner, or a holder of a key to it.
+
+    A Person row is an account, not profile data, so `scoped_select` cannot reach it; this
+    is the one read that does, and only for people the profile already names. Whether the
+    person is on the profile is itself read through the doors, under `Scope.PROFILE`.
+    """
+    profile = await audited_profile_read(session, context, channel=channel, now=now)
+    if person_id != profile.owner_person_id:
+        held = await audited_read(
+            session,
+            Key,
+            context,
+            Scope.PROFILE,
+            where=(Key.holder_person_id == person_id,),
+            channel=channel,
+            now=now,
+        )
+        if not held:
+            refusal = NotOnThisProfile(f"person {person_id} is not on profile {profile.id}")
+            await record(
+                session,
+                context=context,
+                action=Action.READ,
+                scope=Scope.PROFILE,
+                target=Person.__tablename__,
+                outcome=Outcome.REFUSED,
+                refused_because=type(refusal).__name__,
+                channel=channel,
+                now=now,
+            )
+            raise refusal
+    person = await session.get(Person, person_id)
+    assert person is not None  # a foreign key on the profile or a key names this row
+    return person.display_name
 
 
 async def _refused(

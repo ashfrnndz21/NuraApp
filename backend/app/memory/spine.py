@@ -14,6 +14,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read, audited_write
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
@@ -47,6 +49,11 @@ async def add_provider(
     now: datetime | None = None,
 ) -> Provider:
     """Add a doctor, clinic, hospital or pharmacy to this profile's directory."""
+    # The directory is kept on the same footing as the rest of the record (E00-02).
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.VISITS,
+        now=now,
+    )
     if not name.strip():
         raise NoSuchProvider("a provider needs a name")
     return await audited_write(
@@ -84,6 +91,10 @@ async def book_appointment(
     now: datetime | None = None,
 ) -> Appointment:
     """Write down an appointment a person has arranged with a provider on this profile."""
+    await require_consent(
+        session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.VISITS,
+        now=now,
+    )
     named = short_label(purpose)
     found = await audited_read(
         session, Provider, context, Scope.VISITS, where=(Provider.id == provider_id,), now=now

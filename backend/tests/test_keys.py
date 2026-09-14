@@ -26,7 +26,6 @@ async def _owner(session: AsyncSession) -> KeyContext:
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
-    await agree_to_family_sharing(session, owner, now=GRANTED_AT)
     return owner
 
 
@@ -45,7 +44,6 @@ def test_a_clinic_key_closes_itself_after_three_days() -> None:
     key = Key(
         role=KeyRole.CLINIC,
         scopes=[],
-        basis="owner_consent",
         granted_at=GRANTED_AT,
         expires_at=GRANTED_AT + timedelta(hours=72),
     )
@@ -54,7 +52,7 @@ def test_a_clinic_key_closes_itself_after_three_days() -> None:
 
 
 def test_a_key_with_no_end_runs_until_it_is_closed() -> None:
-    key = Key(role=KeyRole.CHIEF, scopes=[], basis="lpa", granted_at=GRANTED_AT)
+    key = Key(role=KeyRole.CHIEF, scopes=[], granted_at=GRANTED_AT)
     far_off = GRANTED_AT + timedelta(days=3650)
     assert key.is_active(far_off)
     key.revoked_at = GRANTED_AT + timedelta(days=1)
@@ -64,13 +62,13 @@ def test_a_key_with_no_end_runs_until_it_is_closed() -> None:
 async def test_a_second_grant_to_one_person_replaces_the_first(sg: AsyncSession) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
+    await agree_to_family_sharing(sg, owner, mei, now=GRANTED_AT)
 
     first = await grant_key(
         sg,
         context=owner,
         holder=mei,
         role=KeyRole.VIEWER,
-        basis="owner_consent",
         now=GRANTED_AT,
     )
     second = await grant_key(
@@ -78,7 +76,6 @@ async def test_a_second_grant_to_one_person_replaces_the_first(sg: AsyncSession)
         context=owner,
         holder=mei,
         role=KeyRole.CAREGIVER,
-        basis="owner_consent",
         now=GRANTED_AT + timedelta(days=1),
     )
 
@@ -100,7 +97,8 @@ async def test_a_second_grant_to_one_person_replaces_the_first(sg: AsyncSession)
 async def test_a_key_holder_cannot_read_the_family_list(sg: AsyncSession) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
-    key = await grant_key(sg, context=owner, holder=mei, role=KeyRole.CAREGIVER, basis="consent")
+    await agree_to_family_sharing(sg, owner, mei)
+    key = await grant_key(sg, context=owner, holder=mei, role=KeyRole.CAREGIVER)
 
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=mei.id, profile_id=owner.profile_id
