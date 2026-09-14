@@ -263,8 +263,20 @@ export const zh = {
     offlineSub: "这些是您今天早些时候的卡。",
     // @patient headline
     askTitle: "问 Nura",
+    // @patient phrase
+    askAbout: "关于这张卡",
+    // @patient phrase
+    askLabel: "您的问题",
     // @patient
-    askSoon: "以后您可以在这里问 Nura 这张卡的事。",
+    askLead: "打字，或者点键盘上的麦克风。",
+    // @patient
+    sourcePapers: "这来自您的文件。",
+    // @patient
+    sourceMedicines: "这来自您的药单。",
+    // @patient
+    sourceVisits: "这来自您看医生的安排。",
+    // @patient
+    askWithheld: "有些文件没有对您开放。",
     // @patient phrase
     back: "回到您的卡",
     // @patient

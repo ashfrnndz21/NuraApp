@@ -263,8 +263,20 @@ export const en = {
     offlineSub: "These are your cards from earlier today.",
     // @patient headline
     askTitle: "Ask Nura",
+    // @patient phrase
+    askAbout: "About this card",
+    // @patient phrase
+    askLabel: "Your question",
     // @patient
-    askSoon: "Soon you can ask Nura about this card here.",
+    askLead: "Type it, or tap the microphone on the keyboard.",
+    // @patient
+    sourcePapers: "This comes from your papers.",
+    // @patient
+    sourceMedicines: "This comes from your medicines list.",
+    // @patient
+    sourceVisits: "This comes from your visits to the doctor.",
+    // @patient
+    askWithheld: "Some of the papers are not open to you.",
     // @patient phrase
     back: "Back to your cards",
     // @patient

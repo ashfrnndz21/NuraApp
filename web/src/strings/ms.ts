@@ -263,8 +263,20 @@ export const ms = {
     offlineSub: "Ini kad anda dari awal hari ini.",
     // @patient headline
     askTitle: "Tanya Nura",
+    // @patient phrase
+    askAbout: "Tentang kad ini",
+    // @patient phrase
+    askLabel: "Soalan anda",
     // @patient
-    askSoon: "Nanti anda boleh tanya Nura tentang kad ini di sini.",
+    askLead: "Taip, atau tekan mikrofon pada papan kekunci.",
+    // @patient
+    sourcePapers: "Ini datang dari surat-surat anda.",
+    // @patient
+    sourceMedicines: "Ini datang dari senarai ubat anda.",
+    // @patient
+    sourceVisits: "Ini datang dari lawatan anda ke doktor.",
+    // @patient
+    askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
     // @patient phrase
     back: "Kembali ke kad anda",
     // @patient

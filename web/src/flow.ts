@@ -22,7 +22,7 @@ export type Screen =
   | { name: "today"; saved?: boolean }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
-  /** Ask about one card: E03's screen, a placeholder until `POST /ask` is on main. */
+  /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
   | { name: "ask"; item: FeedItemOut }
   | { name: "reading" }
   | { name: "me" };

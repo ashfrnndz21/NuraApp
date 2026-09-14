@@ -30,7 +30,7 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
   first page, the side actions), `model.ts` (a card as the pager shows it, from the backend's
   item alone), `playback.ts` (Hear on tap: the backend's voice or the spoken twin), `session.ts`
   (one store per profile and key). The screen is `src/screens/Feed.tsx`; Ask is
-  `src/screens/Ask.tsx`, a placeholder until E03's `POST /ask`.
+  `src/screens/Ask.tsx`, answered by E03's `POST /profiles/{id}/ask` (`src/feed/ask.ts`).
 - `src/speech/speak.ts` — `speak(card)`: the one seam for the spoken twin.
 - `src/sw/sw.ts` — the service worker; `src/offline/` — its registration, the Today cache and
   the feed's kept first page (`feedCache.ts`).
@@ -61,7 +61,7 @@ where the backend says which dose is due. *Not for me* posts `dismissed` (E21's 
 kind; for the owner the backend then holds that kind of card for the day). *Family* posts a
 card reference to the family thread (E12) for the kinds the thread can carry — a reading, a
 visit — and otherwise says it cannot send the card yet; no card's words are ever posted as a
-message. *Ask* opens a placeholder until E03's `POST /ask` is on main. Heard, tapped and
+message. *Ask* sends his question, word for word, to E03's recall (voice mode in his density, text in hers) and shows the answer's cited lines, each under its source line, then the boundary, last. Heard, tapped and
 shared are written back only by a key that may write events; *Not for me* is always sent,
 and every refusal is said on the screen, never swallowed.
 

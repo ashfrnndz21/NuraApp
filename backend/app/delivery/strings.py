@@ -124,6 +124,10 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "You have written your blood pressure down {count} times.",
             "This number only goes up.",
         ),
+        "story_count_one": (
+            "You have written your blood pressure down 1 time.",
+            "This number only goes up.",
+        ),
         "learning_source": ("This comes from {source_name}.",),
         "flag_family": (
             "You told Nura about {feeling}.",
@@ -185,6 +189,10 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Anda sudah tulis tekanan darah anda {count} kali.",
             "Nombor ini hanya naik.",
         ),
+        "story_count_one": (
+            "Anda sudah tulis tekanan darah anda 1 kali.",
+            "Nombor ini hanya naik.",
+        ),
         "learning_source": ("Ini datang dari {source_name}.",),
         "flag_family": (
             "Anda beritahu Nura tentang {feeling}.",
@@ -221,6 +229,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_paper": ("您{day}的{test_name}在您的文件里。", "您随时可以拿给{doctor}看。"),
         "story_note": ("{day}您写下了这句话：",),
         "story_count": ("您已经记了{count}次血压。", "这个数字只会往上走。"),
+        "story_count_one": ("您已经记了1次血压。", "这个数字只会往上走。"),
         "learning_source": ("这来自{source_name}。",),
         "flag_family": (
             "您告诉Nura您{feeling}。",
@@ -242,6 +251,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "visit": "Your visit to {doctor} is on {day}.",
         "memo": "You saw {doctor} on {day}.",
         "reorder": "You have about {days} days of {medicine} left.",
+        "reorder_one": "You have about 1 day of {medicine} left.",
         "gate": "You have seen everything new for today.",
         "story_reading": "This is from your own blood pressure book.",
         "story_paper": "This is one of your own papers.",
@@ -258,6 +268,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "visit": "Lawatan anda kepada {doctor} pada {day}.",
         "memo": "Anda berjumpa {doctor} pada {day}.",
         "reorder": "{medicine} anda tinggal lebih kurang {days} hari lagi.",
+        "reorder_one": "{medicine} anda tinggal lebih kurang 1 hari lagi.",
         "gate": "Anda sudah lihat semua yang baru hari ini.",
         "story_reading": "Ini dari buku tekanan darah anda sendiri.",
         "story_paper": "Ini salah satu surat anda sendiri.",
@@ -274,6 +285,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "visit": "您{day}要见{doctor}。",
         "memo": "您{day}见了{doctor}。",
         "reorder": "{medicine}大概还够{days}天。",
+        "reorder_one": "{medicine}大概还够1天。",
         "gate": "今天新的您都看过了。",
         "story_reading": "这来自您自己的血压本。",
         "story_paper": "这是您自己的一份文件。",
@@ -401,6 +413,14 @@ class Lines:
     it. None on a card that shows the record back and infers nothing."""
 
 
+def counted(key: str, count: int) -> str:
+    """The template for this many: `<key>_one` for exactly one, else `<key>`. A count agrees
+    with its noun in every line — "1 time", "1 day", never "1 times" — and each language
+    carries both forms (Malay and Chinese say them alike), so a line is looked up, never
+    patched at run time."""
+    return f"{key}_one" if count == 1 else key
+
+
 def _fill(template: str, slots: Mapping[str, Any]) -> str:
     return _sentence(template.format_map(slots))
 
@@ -493,6 +513,7 @@ def test_name(subject: str, language: str | None) -> str:
 
 CAREGIVER_DUTY_HEADLINE = "Who is on duty"
 CAREGIVER_DUTY_LINES = ("{count} people hold a key to {name}'s record today.",)
+CAREGIVER_DUTY_LINES_ONE = ("1 person holds a key to {name}'s record today.",)
 CAREGIVER_NO_ROSTER_LINE = "Nobody is on the roster for now; add a slot under Family."
 CAREGIVER_ON_DUTY_LINE = "{who} is on duty for {name} right now, by the roster."
 CAREGIVER_DUTY_WHY = "Who holds a key is in the family dimension of State."

@@ -284,7 +284,8 @@ test("a learning card: its lines, its boundary, its why, four side actions; Hear
   expect(types).not.toContain("learning");
 });
 
-test("Family sends a reading to the family thread by reference; a card it cannot carry says so; Ask opens and comes back to the same card", async ({ page, request }) => {
+test("Family sends a reading to the family thread by reference; a card it cannot carry says so; Ask answers from his papers and comes back to the same card", async ({ page, request }) => {
+  await captureSpeech(page);
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await expect(page.getByTestId("proud")).toBeVisible();
@@ -310,10 +311,34 @@ test("Family sends a reading to the family thread by reference; a card it cannot
   await expect(card.getByTestId("note")).toHaveText("Nura cannot send this card to your family yet.");
   expect(sent).toBe(0);
 
+  // Ask: his question goes to E03's recall as he typed it, in voice mode (the patient's
+  // density); the answer is the backend's cited lines, each under its source line, the
+  // boundary last; Hear reads it on tap only.
   const headline = await card.locator("h2").textContent();
   await card.getByTestId("action-ask").click();
-  await expect(page.getByTestId("ask-screen")).toContainText(headline!);
-  await expect(page.getByTestId("ask-screen")).toContainText("Soon you can ask Nura about this card here.");
+  const asking = page.getByTestId("ask-screen");
+  await expect(asking).toContainText(headline!);
+  await expect(asking).toHaveAttribute("data-mode", "voice");
+  await asking.getByLabel("Your question").fill("What was my blood pressure?");
+  const [asked, answered] = await Promise.all([
+    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    page.waitForResponse((res) => res.request().method() === "POST" && res.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    asking.getByTestId("ask-send").click(),
+  ]);
+  expect(asked.postDataJSON()).toEqual({ question: "What was my blood pressure?", mode: "voice", language: "en" });
+  const reply = (await answered.json()) as { lines: { text: string }[]; honest: string[]; boundary: string[]; spoken: string[] };
+  const shown = asking.getByTestId("answer");
+  expect(reply.lines.length).toBeGreaterThan(0);
+  await expect(shown.getByTestId("answer-line").locator("p:not(.provenance)")).toHaveText(reply.lines.map((line) => line.text));
+  await expect(shown.getByTestId("answer-source").first()).toHaveText("This comes from your papers.");
+  await expect(shown.getByTestId("boundary")).toHaveText(reply.boundary.join(""));
+  // The boundary is last: below every answer line.
+  const lastLine = (await shown.getByTestId("answer-lines").boundingBox())!;
+  const boundaryBox = (await shown.getByTestId("boundary").boundingBox())!;
+  expect(boundaryBox.y).toBeGreaterThanOrEqual(lastLine.y + lastLine.height - 1);
+  expect(await spoken(page)).toEqual([]);
+  await shown.getByTestId("hear").click();
+  expect(await spoken(page)).toEqual(reply.spoken);
   await page.getByTestId("back-to-cards").click();
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect.poll(async () => (await onScreen(page)).index).toBe(story);
@@ -323,7 +348,7 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   const pa = await seedFeed(request);
   await seedWarfarinLabel(request, pa.token, pa.profileId);
   const mei = freshPhone("+659333");
-  const scopes = ["medicines", "visits", "readings", "records", "emergency"];
+  const scopes = ["medicines", "visits", "readings", "records", "emergency", "ask"];
   await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
     ...auth(pa.token),
     data: { holder_phone_e164: mei, scopes, relationship: "daughter", language: "en", captured_via: "app" },
@@ -359,6 +384,18 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   await expect(page.getByTestId("notice")).toHaveText("This part of the papers is not open to you.");
   await expect(page.getByTestId("notice")).not.toContainText("OutOfScope");
   await expect(reading).toBeVisible();
+
+  // She asks in text mode (the caregiver's density), and reads the backend's lines.
+  await reading.getByTestId("action-ask").click();
+  const asking = page.getByTestId("ask-screen");
+  await expect(asking).toHaveAttribute("data-mode", "text");
+  await asking.getByLabel("Your question").fill("What was his blood pressure?");
+  const [asked] = await Promise.all([
+    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    asking.getByTestId("ask-send").click(),
+  ]);
+  expect(asked.postDataJSON()).toMatchObject({ question: "What was his blood pressure?", mode: "text" });
+  await expect(asking.getByTestId("answer").getByTestId("boundary")).toBeVisible();
 });
 
 test("quiet hours (both clocks at 22:30): the pager says Nura keeps quiet, with no card and no spinner", async ({ page, request }) => {

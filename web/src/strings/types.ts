@@ -139,7 +139,13 @@ export interface Strings {
     nothingMore: string;
     offlineSub: string;
     askTitle: string;
-    askSoon: string;
+    askAbout: string;
+    askLabel: string;
+    askLead: string;
+    sourcePapers: string;
+    sourceMedicines: string;
+    sourceVisits: string;
+    askWithheld: string;
     back: string;
     statusHeld: string;
     statusSent: string;

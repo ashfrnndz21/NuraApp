@@ -3,6 +3,8 @@ import type {
   ClaimableOut,
   ConfirmationOut,
   DoorsOut,
+  AnswerOut,
+  AskMode,
   EngagementEvent,
   EngagementOut,
   FeedPageOut,
@@ -152,6 +154,11 @@ export const engage = (token: string, profileId: string, itemId: string, event: 
 /** A card into the family thread, by reference (E12): the thread renders it from the State. */
 export const shareCard = (token: string, profileId: string, card_kind: ThreadCardKind) =>
   api<ThreadEntryOut>(`/profiles/${profileId}/thread`, { method: "POST", token, body: { card_kind } });
+
+/** A question about his own record (E03): his words go to the backend as they are; the answer
+ *  comes back as cited lines, the honest line when nothing answers, and the boundary last. */
+export const ask = (token: string, profileId: string, question: string, mode: AskMode, language: string) =>
+  api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
 
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
