@@ -39,7 +39,7 @@ A family health app for Malaysia and Singapore: an elderly patient, the adult ch
 - `backend/app/delivery` — feed ranking, cards, voice, triggers, nudges, escalation.
 - `backend/app/channels` — app API, WhatsApp, share links.
 - `backend/app/safety` — boundary copy, high-risk drug rule, red-flag rules, plain-words verifier.
-- `web/` — the web client: `src/ui` (tokens, the two densities), `src/strings` (en, ms, zh, tagged `@patient`), `src/api`, `src/store`, `src/screens`, `src/today`, `src/feed` (the vertical pager's store, cards and playback), `src/speech`, `src/sw`; `tests/unit`, `tests/e2e`.
+- `web/` — the web client: `src/ui` (tokens, the two densities), `src/strings` (en, ms, zh, tagged `@patient`), `src/api`, `src/store`, `src/screens`, `src/today`, `src/onboarding`, `src/feed` (the vertical pager's store, cards and playback), `src/speech`, `src/sw`; `tests/unit`, `tests/e2e`.
 - `ios/Nura/` — Identity, Onboarding, Capture, Feed, Medicines, Visits, Ask, Family, Safety, Settings, DesignSystem.
 
 ## Domain vocabulary

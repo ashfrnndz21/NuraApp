@@ -75,6 +75,21 @@ describe("contrast on decision elements", () => {
   });
 });
 
+describe("onboarding's colours", () => {
+  it("keep a revealed word 7:1 with Ink on its tint", () => {
+    expect(contrast(ink, hex(token("chip-fresh")))).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keep an answered Yes and an answered No 7:1 on their own grounds", () => {
+    expect(contrast(hex(token("yes-ink")), hex(token("yes-bg")))).toBeGreaterThanOrEqual(7);
+    expect(contrast(hex(token("no-ink")), hex(token("no-bg")))).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keep a picked word white on Plum, like the one filled button", () => {
+    expect(contrast(white, plum)).toBeGreaterThanOrEqual(7);
+  });
+});
+
 describe("the two densities", () => {
   const patient = css.slice(css.indexOf('[data-density="patient"]'), css.indexOf("The wash is the status"));
   const caregiver = css.slice(css.indexOf("Caregiver density"), css.indexOf("Patient density"));
@@ -83,6 +98,13 @@ describe("the two densities", () => {
     expect(patient).toMatch(/--text-body:\s*1\.25rem/);
     expect(patient).toMatch(/--target:\s*56px/);
     expect(patient).toMatch(/--card-bg:\s*var\(--paper-bg\)/);
+  });
+
+  it("never size a word in the patient's cloud below his 20px body", () => {
+    for (const size of [1, 2, 3]) {
+      const rem = Number(patient.match(new RegExp(`--word-${size}:\\s*([\\d.]+)rem`))?.[1]);
+      expect(rem, `--word-${size}`).toBeGreaterThanOrEqual(1.25);
+    }
   });
 
   it("give the caregiver a 16px body, 48px targets and glass first", () => {
