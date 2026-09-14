@@ -3,6 +3,9 @@ the dev-only engine run the checkpoint drives."""
 
 from __future__ import annotations
 
+from typing import Any
+
+from app.clock import FrozenClock
 from tests.api import bearer, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.test_feed_api import _caregiver_key
@@ -84,3 +87,42 @@ async def test_the_breakfast_he_saves_on_the_web_is_the_card_s_and_the_routine_s
     delivery = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
     assert delivery.json()["breakfast_at"] == "08:15:00"
     assert delivery.json()["anchors"]["breakfast"] == "08:15:00"
+
+
+async def test_one_reminder_of_a_visit_reaches_him_the_day_before(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """#128's logistics card, #119's anticipation nudge and E11's visit reminder all say the
+    visit is tomorrow. One reaches him: the visit reminder, naming the card on his feed; the
+    nudge handed over before the card was made is skipped, written down once, never sent."""
+    from tests.test_visit_day import FRIDAY_MORNING, household
+
+    house = await household(deployment)
+    clock.set(FRIDAY_MORNING)  # 10:00 on Friday in Singapore, his check-in; the visit is Saturday
+    agreed = await deployment.client.post(
+        house.at("/consents/whatsapp"),
+        json={"language": "en", "captured_via": "app"},
+        headers=house.his,
+    )
+    assert agreed.status_code == 201, agreed.text
+    handed = await deployment.client.post(house.at("/nudges/plan"), headers=house.his)
+    assert handed.status_code == 201, handed.text
+    page = await deployment.client.get(house.at("/feed"), headers=house.his)
+    (card,) = [item for item in page.json()["items"] if item["type"] == "visit_logistics"]
+
+    async def log() -> list[dict[str, Any]]:
+        ran = await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id})
+        assert ran.status_code == 200, ran.text
+        rows = await deployment.client.get(
+            house.at("/deliveries"), params={"day": "2026-09-04"}, headers=house.his
+        )
+        assert rows.status_code == 200, rows.text
+        return [row for row in rows.json() if row["trigger_type"] in ("visit_tomorrow", "nudge")]
+
+    first = await log()
+    (reminder,) = [row for row in first if row["trigger_type"] == "visit_tomorrow"]
+    assert reminder["outcome"] == "sent" and reminder["template_name"] == "visit_reminder"
+    assert reminder["why"] == {"appointment_id": house.appointment_id, "feed_item_id": card["item_id"]}
+    (nudge,) = [row for row in first if row["trigger_type"] == "nudge"]
+    assert nudge["outcome"] == "skipped" and nudge["reason"] == "the visit reminder said it"
+    assert await log() == first
