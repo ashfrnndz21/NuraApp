@@ -95,19 +95,15 @@ durable when something later in the same request is refused.
    checks again in `transcribe`. The fixture adapter declares the region it serves. A
    mismatch is `OutOfRegion`, and nothing is stored.
 
-9. **His own voice note is his record; someone else's recording of him needs RECORDING.** The
-   operator's ruling (ADR 0003, E02 #113): the RECORDING consent gates recordings of other
-   people's voices (a consultation); a person's own voice about himself — the not-feeling-well
-   message, a symptom said aloud — is kept under `HOLD_HEALTH_RECORD`, and E02's
-   `store_artifact` takes `recording=Recording.OWN_NOTE | CONSULT` for a VOICE artefact, these
-   being OWN_NOTE. `capture` asks for RECORDING only when the person sending a voice note is
-   not the patient (review item 6), before a byte is kept or heard — the helper's too, whose
-   key keeps nothing. Until #113 is on main, E16's `store_artifact` still asks RECORDING for
-   every VOICE artefact, so his own voice note needs it for now too; there is no route to give
-   it for a voice note (its only words are a visit's), so over HTTP the button takes typed
-   words, and checkpoint 14 shows the voice note refused (`ConsentWithheld`, 403) and then
-   types. `store_voice` writes the artefact row before the bytes, so that refusal leaves
-   nothing in the object store.
+9. **A voice note is the sender's own words.** The operator's ruling (ADR 0003, E02 #113): the
+   RECORDING consent covers recordings that capture other people's voices — a consult. A
+   not-feeling-well message or a symptom said aloud is the sender's own words, whether the
+   sender is the patient, his chief or his caregiver, and is kept like typed text on
+   `HOLD_HEALTH_RECORD`: `store_voice` declares `Recording.OWN_NOTE`, and `capture` asks no
+   recording consent. This supersedes this ADR's first answer and review item 6's suggestion
+   (RECORDING when the sender is not the patient); a recording of other people is a consult
+   under ADR 0003, and nothing on this surface stores one. The artefact row is written before
+   the bytes, so a refusal at the store leaves nothing in the object store.
 
 10. **Reads the safety layer makes of its own writes go through the door.** The symptom log
     reads the fact it has just written back through `audited_read`, under the fact's own scope

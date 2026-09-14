@@ -48,10 +48,10 @@ def providers_for(settings: Settings) -> Providers:
         code_sender=code_sender_for(settings),
         object_store=LocalObjectStore(Path(settings.object_store_root), settings.region),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
+        transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=FixtureSearcher(Path(settings.feed_fixtures)),
         compressor=FixtureCompressor(Path(settings.feed_fixtures)),
         drug_registry=drug_registry_for(settings),
-        transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         whatsapp=whatsapp_provider_for(settings),
     )
 

@@ -1,0 +1,49 @@
+{
+  "placeholder": "lipid-panel-2023-09-07",
+  "note": "What the paper says, labelled by hand from the redacted original. Triglycerides is 54 on the paper; the fixture extractor reads 64 at low confidence, so the harness counts it as put to a person, not as read right.",
+  "document_kind": "lab_report",
+  "fields": [
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 230,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "hdl",
+      "value": 73,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 152,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "triglycerides",
+      "value": 54,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "vldl",
+      "value": 10.78,
+      "unit": "mg/dL"
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "tc_hdl_ratio",
+      "value": 3.1,
+      "unit": null
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "non_hdl_cholesterol",
+      "value": 156.3,
+      "unit": "mg/dL"
+    }
+  ]
+}

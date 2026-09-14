@@ -10,11 +10,10 @@ what-to-do card is the not-feeling-well surface and carries its line; the emerge
 restates the record, infers nothing, and carries none (ADR 0002). No column holds prose: a
 notice is a template id and codes, a card the ids of its lines.
 
-Follows E19's WhatsApp revision (0011_whatsapp, itself on E16's 0014_rendered_boundary):
-one head.
+Follows E02's capture revision (0018_capture_extras, on E19's 0011_whatsapp): one head.
 
 Revision ID: 0014_emergency_symptoms
-Revises: 0011_whatsapp
+Revises: 0018_capture_extras
 Create Date: 2026-09-14
 """
 
@@ -24,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0014_emergency_symptoms"
-down_revision = "0011_whatsapp"
+down_revision = "0018_capture_extras"
 branch_labels = None
 depends_on = None
 

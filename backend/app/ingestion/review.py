@@ -13,14 +13,26 @@ own to be CONFIRMED_BY_PERSON, so once the card's yes is spent each fact's yes i
 down and used in the same unit of work, from the same person, for exactly the fact being
 written — the way the readings route writes the yes for the number a person typed. The
 card's yes is the evidence; the per-fact yes is how the store records who gave it.
+
+What else a card may be (E02-02, E02-03, E02-08). A page is offered with a hint — the kind
+the person says it is, or the route's, a machine's screen — and the card keeps it
+(`asked_as`) beside what the page was read as; a page that is no health paper, or a photo
+sent as a machine's screen that is not one, is an open card with no fields and a notice
+(`notice_of`) saying so. A field Nura could not read is typed in — by anyone holding the
+record, before the yes (`type_field`) — or rejected; it is never confirmed as read
+(`UnreadableField`), and the field names who typed it. A card from a machine's screen is
+written as one READING event and the facts of the reading (`app.ingestion.readings`); a
+hospital letter or a clinic slip is written as the event it records — a discharge, a visit —
+on the date on the paper, and its facts name that event beside the page.
 """
 
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,21 +43,23 @@ from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import DecidedField, FactDraft, ReviewDraft
 from app.errors import Refusal
-from app.ingestion.extract import Extraction, Extractor, Hints
+from app.ingestion.extract import DocumentKind, Extraction, Extractor, Hints, check_value
 from app.ingestion.models import (
     DECISIONS,
     REVIEW_IN_PROGRESS,
+    DocumentSource,
     FieldState,
     ReviewCard,
     ReviewField,
 )
 from app.ingestion.objects import ObjectStore
+from app.ingestion.readings import reading_from
 from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
-from app.memory.episodic import held_here, require_artifact
-from app.memory.models import Artifact, ConfidenceState, Fact
+from app.memory.episodic import held_here, record_event, require_artifact
+from app.memory.models import Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
 from app.safety.high_risk import high_risk_class
@@ -77,6 +91,49 @@ class NotADecision(Refusal):
     """A field is confirmed, corrected or rejected. A correction says what to."""
 
 
+class UnreadableField(Refusal):
+    """A field Nura could not read is typed in, or rejected. It is never confirmed as read."""
+
+
+class Notice(StrEnum):
+    """What a card says about the page as a whole, where the page is not what it was offered
+    as. The channel turns the code into his words (`app.channels.strings`)."""
+
+    NOT_A_HEALTH_PAPER = "not_a_health_paper"
+    NOT_A_MACHINE_SCREEN = "not_a_machine_screen"
+
+
+def notice_of(card: ReviewCard) -> Notice | None:
+    """The notice a card carries, from what the page was read as and what it was offered as."""
+    if card.document_kind is DocumentKind.NOT_HEALTH:
+        return Notice.NOT_A_HEALTH_PAPER
+    if (
+        card.asked_as is DocumentKind.DEVICE_SCREEN
+        and card.document_kind is not DocumentKind.DEVICE_SCREEN
+    ):
+        return Notice.NOT_A_MACHINE_SCREEN
+    return None
+
+
+def _nothing_to_take(extraction: Extraction, asked_as: DocumentKind | None) -> bool:
+    """A page no field may be taken from: not a health paper, or a photo sent as a machine's
+    screen that is not one — its fields belong to another kind of card, not this one."""
+    if extraction.document_kind is DocumentKind.NOT_HEALTH:
+        return True
+    return (
+        asked_as is DocumentKind.DEVICE_SCREEN
+        and extraction.document_kind is not DocumentKind.DEVICE_SCREEN
+    )
+
+
+DOCUMENT_EVENTS: Mapping[DocumentKind, tuple[EventKind, str]] = {
+    DocumentKind.DISCHARGE_LETTER: (EventKind.DISCHARGE, "hospital letter"),
+    DocumentKind.CLINIC_SLIP: (EventKind.VISIT, "clinic slip"),
+}
+"""The papers that record a moment, and the event each is written as on its date: the
+discharge a hospital letter records, the visit a clinic slip was written at (E02-03)."""
+
+
 @dataclass(frozen=True, slots=True)
 class Decision:
     """What the person said about one field."""
@@ -97,6 +154,38 @@ def _cards_held_here(context: KeyContext) -> Any:
 
 
 @audited(Action.WRITE, Scope.RECORDS, CARD)
+async def review_artifact(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    artifact_id: uuid.UUID,
+    store: ObjectStore,
+    extractor: Extractor,
+    language: str,
+    asked_as: DocumentKind | None = None,
+    source: DocumentSource | None = None,
+) -> ReviewCard:
+    """Read a stored photo or PDF into a review card: one field per extracted statement, the
+    extractor's confidence on each, the kind and date of the paper, and — from the drug the
+    card names — whether the label rule guards it. `asked_as` goes to the extractor as the
+    hint and onto the card; `source` is where an imported PDF came from."""
+    artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
+    data = await store.get(artifact.storage_key)
+    extraction = await extractor.extract(
+        data,
+        artifact.content_type,
+        Hints(language=language, region=context.region, expected=asked_as),
+    )
+    return await card_from(
+        session,
+        context=context,
+        artifact=artifact,
+        extraction=extraction,
+        asked_as=asked_as,
+        source=source,
+    )
+
+
 async def review_photo(
     session: AsyncSession,
     *,
@@ -105,16 +194,18 @@ async def review_photo(
     store: ObjectStore,
     extractor: Extractor,
     language: str,
+    asked_as: DocumentKind | None = None,
 ) -> ReviewCard:
-    """Read a stored photo into a review card: one field per extracted statement, the
-    extractor's confidence on each, the kind and date of the paper, and — from the drug the
-    card names — whether the label rule guards it."""
-    artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
-    data = await store.get(artifact.storage_key)
-    extraction = await extractor.extract(
-        data, artifact.content_type, Hints(language=language, region=context.region)
+    """Read a stored photo into a review card (`review_artifact`)."""
+    return await review_artifact(
+        session,
+        context=context,
+        artifact_id=artifact_id,
+        store=store,
+        extractor=extractor,
+        language=language,
+        asked_as=asked_as,
     )
-    return await card_from(session, context=context, artifact=artifact, extraction=extraction)
 
 
 async def card_from(
@@ -123,10 +214,15 @@ async def card_from(
     context: KeyContext,
     artifact: Artifact,
     extraction: Extraction,
+    asked_as: DocumentKind | None = None,
+    source: DocumentSource | None = None,
 ) -> ReviewCard:
     """Write the card and its fields for an extraction of this artefact. Every field is
-    checked (`ExtractedField.checked`) before it is written: codes are codes, values short."""
+    checked (`ExtractedField.checked`) before it is written: codes are codes, values short.
+    A page no field may be taken from (`_nothing_to_take`) is a card with no fields."""
     fields = [field.checked() for field in extraction.fields]
+    if _nothing_to_take(extraction, asked_as):
+        fields = []
     named = next(
         (field.value for field in fields if (field.subject, field.attribute) == MEDICINE_NAME),
         None,
@@ -140,6 +236,8 @@ async def card_from(
         document_kind=extraction.document_kind,
         document_date=extraction.document_date,
         high_risk_class=high_risk_class(named if isinstance(named, str) else None),
+        asked_as=asked_as,
+        source=source,
         created_at=utcnow(),
     )
     for position, field in enumerate(fields):
@@ -200,8 +298,55 @@ async def card_fields(
     return sorted(found, key=lambda field: field.position)
 
 
-def _decided(fields: Sequence[ReviewField], decisions: Sequence[Decision]) -> list[DecidedField]:
-    """Every field with exactly one decision on it, or a refusal saying which rule broke."""
+@audited(Action.WRITE, Scope.RECORDS, FIELD)
+async def type_field(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card_id: uuid.UUID,
+    field_id: uuid.UUID,
+    value: Any,
+) -> ReviewField:
+    """Type in the value of one field on an open card: a field Nura could not read, or one
+    it read wrong. Anyone holding the record may, before the card is confirmed — a daughter
+    typing what her father's slip says — and the field names who did. The value read stays
+    beside it; nothing is a fact until the card's yes, which binds to the typed value and to
+    who typed it. Typing again replaces the typed value, and names the new typist."""
+    card = await require_review_card(session, context=context, card_id=card_id)
+    if not card.is_open:
+        raise AlreadyConfirmed(f"review card {card_id} was confirmed at {card.confirmed_at}")
+    fields = await card_fields(session, context=context, card_id=card_id)
+    field = next((one for one in fields if one.id == field_id), None)
+    if field is None:
+        raise NoSuchReviewField(f"field {field_id} is not on this card")
+    typed = check_value(value)
+    session.info[REVIEW_IN_PROGRESS] = card.id
+    try:
+        field.corrected_value = typed
+        field.corrected_by_person_id = context.person_id
+        await session.flush()
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=FIELD,
+            target_id=field.id,
+            rows=1,
+        )
+    finally:
+        session.info.pop(REVIEW_IN_PROGRESS, None)
+    return field
+
+
+def _decided(
+    fields: Sequence[ReviewField], decisions: Sequence[Decision], confirmer: uuid.UUID
+) -> list[DecidedField]:
+    """Every field with exactly one decision on it, or a refusal saying which rule broke.
+
+    The value kept is the confirmer's correction where he made one; otherwise a value typed
+    in before the yes, naming who typed it; otherwise what was read. A field Nura could not
+    read and nobody typed is never confirmed as read (`UnreadableField`)."""
     by_id = {field.id: field for field in fields}
     said: dict[uuid.UUID, Decision] = {}
     for decision in decisions:
@@ -220,9 +365,16 @@ def _decided(fields: Sequence[ReviewField], decisions: Sequence[Decision]) -> li
     decided = []
     for field in fields:
         decision = said[field.id]
-        value = (
-            decision.corrected_value if decision.decision is FieldState.CORRECTED else field.value
-        )
+        typed = field.corrected_value is not None
+        corrected_by: uuid.UUID | None = None
+        if decision.decision is FieldState.CORRECTED:
+            value, corrected_by = decision.corrected_value, confirmer
+        elif decision.decision is FieldState.CONFIRMED and typed:
+            value, corrected_by = field.corrected_value, field.corrected_by_person_id
+        elif decision.decision is FieldState.CONFIRMED and field.unreadable:
+            raise UnreadableField(f"field {field.id} could not be read and was not typed in")
+        else:
+            value = field.value
         decided.append(
             DecidedField(
                 field_id=field.id,
@@ -231,6 +383,7 @@ def _decided(fields: Sequence[ReviewField], decisions: Sequence[Decision]) -> li
                 value=value,
                 unit=field.unit,
                 decision=decision.decision.value,
+                corrected_by=corrected_by,
             )
         )
     return decided
@@ -253,7 +406,7 @@ async def review_draft_for(
     return ReviewDraft(
         card_id=card.id,
         artifact_id=card.artifact_id,
-        fields=tuple(_decided(fields, decisions)),
+        fields=tuple(_decided(fields, decisions, context.person_id)),
     )
 
 
@@ -271,19 +424,22 @@ async def _write_fact_for(
     *,
     context: KeyContext,
     card: ReviewCard,
-    field: ReviewField,
+    subject: str,
+    attribute: str,
     value: Any,
+    unit: str | None,
+    event_id: uuid.UUID | None,
     valid_from: datetime,
 ) -> Fact:
     draft = FactDraft(
-        subject=field.subject,
-        attribute=field.attribute,
+        subject=subject,
+        attribute=attribute,
         value=value,
-        unit=field.unit,
+        unit=unit,
         confidence=1.0,
         confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
         artifact_id=card.artifact_id,
-        event_id=None,
+        event_id=event_id,
         episode_id=None,
         supersedes_id=None,
     )
@@ -299,6 +455,7 @@ async def _write_fact_for(
         confidence_state=draft.confidence_state,
         confirmation_id=yes.id,
         artifact_id=draft.artifact_id,
+        event_id=draft.event_id,
         valid_from=valid_from,
     )
 
@@ -321,6 +478,12 @@ async def confirm_review_card(
     rejected field is marked and writes nothing. A rule under the store (the label rule for
     a high-risk dose) that refuses one fact refuses the whole card: the channel rolls the
     unit back, yes included. The card closes last, naming who confirmed it and when.
+
+    A machine's screen is written as one READING event at the time on the screen and the
+    facts of the reading resting on it (`_write_reading`); a hospital letter or a clinic slip
+    as the event it records, on the date on the paper, which its facts name beside the page.
+    A value typed in before the yes, or corrected in it, leaves the field CORRECTED and
+    naming who typed it.
     """
     draft = await review_draft_for(session, context=context, card_id=card_id, decisions=decisions)
     card = await require_review_card(session, context=context, card_id=card_id)
@@ -329,28 +492,29 @@ async def confirm_review_card(
     yes = await consume_confirmation(session, context, confirmation_id, draft)
 
     moment = utcnow()
-    opens = _opens_at(card, artifact, context)
     by_id = {decided.field_id: decided for decided in draft.fields}
-    written: list[Fact] = []
     session.info[REVIEW_IN_PROGRESS] = card.id
     try:
+        if card.document_kind is DocumentKind.DEVICE_SCREEN:
+            fact_of = await _write_reading(
+                session, context=context, card=card, artifact=artifact, draft=draft, now=moment
+            )
+        else:
+            fact_of = await _write_paper(
+                session, context=context, card=card, artifact=artifact, draft=draft
+            )
+        written = list(dict.fromkeys(fact_of.values()))
         for field in fields:
             decided = by_id[field.id]
-            state = FieldState(decided.decision)
-            if state is not FieldState.REJECTED:
-                fact = await _write_fact_for(
-                    session,
-                    context=context,
-                    card=card,
-                    field=field,
-                    value=decided.value,
-                    valid_from=opens,
-                )
-                written.append(fact)
+            said = FieldState(decided.decision)
+            kept = said is not FieldState.REJECTED
+            fact = fact_of.get(field.id)
+            if fact is not None:
                 field.fact_id = fact.id
-            if state is FieldState.CORRECTED:
+            if kept and decided.corrected_by is not None:
                 field.corrected_value = decided.value
-            field.state = state
+                field.corrected_by_person_id = decided.corrected_by
+            field.state = FieldState.CORRECTED if kept and decided.corrected_by else said
             field.decided_at = moment
             await session.flush()
             await record(
@@ -377,3 +541,86 @@ async def confirm_review_card(
     finally:
         session.info.pop(REVIEW_IN_PROGRESS, None)
     return card, fields, written
+
+
+async def _write_paper(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card: ReviewCard,
+    artifact: Artifact,
+    draft: ReviewDraft,
+) -> dict[uuid.UUID, Fact]:
+    """One fact per kept field, valid from the date on the paper; for a paper that records a
+    moment (`DOCUMENT_EVENTS`), the event first, on that date, and every fact names it."""
+    opens = _opens_at(card, artifact, context)
+    kept = [decided for decided in draft.fields if decided.decision != FieldState.REJECTED]
+    event_id: uuid.UUID | None = None
+    shape = DOCUMENT_EVENTS.get(card.document_kind)
+    if shape is not None and kept:
+        kind, label = shape
+        event = await record_event(
+            session,
+            context=context,
+            kind=kind,
+            occurred_at=opens,
+            label=label,
+            artifact_id=artifact.id,
+        )
+        event_id = event.id
+    fact_of: dict[uuid.UUID, Fact] = {}
+    for decided in kept:
+        fact_of[decided.field_id] = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject=decided.subject,
+            attribute=decided.attribute,
+            value=decided.value,
+            unit=decided.unit,
+            event_id=event_id,
+            valid_from=opens,
+        )
+    return fact_of
+
+
+async def _write_reading(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card: ReviewCard,
+    artifact: Artifact,
+    draft: ReviewDraft,
+    now: datetime,
+) -> dict[uuid.UUID, Fact]:
+    """A machine's screen: one READING event at the time on the screen — or when the photo
+    was taken, if that was rejected — and the facts of the reading, each naming the event
+    and the photo, in the shape a typed reading takes. Every number rejected writes nothing."""
+    reading = reading_from(draft.fields, tz=REGION_TZ[context.region], now=now)
+    if not reading.facts:
+        return {}
+    taken_at = reading.taken_at or as_utc(artifact.captured_at)
+    event = await record_event(
+        session,
+        context=context,
+        kind=EventKind.READING,
+        occurred_at=taken_at,
+        label=reading.label,
+        artifact_id=artifact.id,
+    )
+    fact_of: dict[uuid.UUID, Fact] = {}
+    for measured in reading.facts:
+        fact = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject=measured.subject,
+            attribute=measured.attribute,
+            value=measured.value,
+            unit=measured.unit,
+            event_id=event.id,
+            valid_from=taken_at,
+        )
+        for field_id in measured.field_ids:
+            fact_of[field_id] = fact
+    return fact_of

@@ -36,7 +36,7 @@ from app.settings import Settings
 from tests.conftest import FEED, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.support import OPENING_CONSENT, agree_to_family_sharing
-from tests.voice import VOICE
+from tests.voice_notes import VOICE
 
 PA = "+6591110001"
 MEI = "+6591110002"
@@ -98,10 +98,10 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         code_sender=LoggingCodeSender(),
         object_store=LocalObjectStore(tmp_path, region),
         extractor=FixtureExtractor(PAPER),
+        transcriber=FixtureTranscriber(VOICE, region),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
-        transcriber=FixtureTranscriber(VOICE, region),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
     )
     return settings, providers

@@ -32,7 +32,7 @@ from app.regions import Region
 from app.settings import Settings, load_settings
 from tests.conftest import FEED
 from tests.paper import PAPER
-from tests.voice import VOICE
+from tests.voice_notes import VOICE
 
 ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
 
@@ -42,10 +42,10 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         code_sender=sender,
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        transcriber=FixtureTranscriber(VOICE, Region.SG),
         searcher=FixtureSearcher(FEED),
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
-        transcriber=FixtureTranscriber(VOICE, Region.SG),
         whatsapp=FixtureProvider(secret="test"),
     )
 

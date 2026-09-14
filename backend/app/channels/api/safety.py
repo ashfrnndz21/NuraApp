@@ -85,8 +85,8 @@ async def printable(
 async def button(body: SaidIn, request: Request, context: Context, session: Db) -> WhatToDoOut:
     """"I'm not feeling well." His words are kept, heard, read for red flags first, and the
     family is told; the lines say what to do now. Anyone with a key may press it for him —
-    a helper, a caregiver — and a red flag escalates whoever pressed; a voice note of him sent
-    by someone else rests on the RECORDING consent (ADR 0003). Nothing here starts, stops or changes a
+    a helper, a caregiver — and a red flag escalates whoever pressed; a voice note is the sender's
+    own words, kept like typed text (ADR 0003). Nothing here starts, stops or changes a
     medicine."""
     providers = providers_of(request)
     done = await not_feeling_well(

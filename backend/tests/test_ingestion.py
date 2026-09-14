@@ -65,7 +65,21 @@ from app.memory.semantic import current_facts
 from app.regions import OutOfRegion, Region
 from app.state.models import Dimension, StateTrigger
 from app.state.service import current_state
-from tests.paper import LIPID_PANEL, PAPER, WARFARIN_LABEL, fixture, placeholder_png
+from tests.paper import (
+    BP_CUFF,
+    CLINIC_SLIP,
+    DISCHARGE_LETTER,
+    GLUCOMETER,
+    HANDWRITTEN_PRESCRIPTION,
+    LIPID_PANEL,
+    PAPER,
+    RECEIPT,
+    WARFARIN_LABEL,
+    fixture,
+    papers,
+    placeholder_of,
+    placeholder_png,
+)
 from tests.support import OPENING_CONSENT, agree_to_family_sharing, refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
@@ -171,14 +185,27 @@ def _refusals(trail: Any) -> set[tuple[Action, str, str]]:
 
 def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     """The extractor answers by digest, so a fixture whose digest drifted is a page it would
-    never recognise. Two fixtures are here: the lipid panel and the warfarin label."""
-    files = sorted(PAPER.glob("*.json"))
-    assert {path.stem for path in files} == {LIPID_PANEL, WARFARIN_LABEL}
-    for path in files:
-        paper = json.loads(path.read_text())
-        assert paper["placeholder"] == path.stem
-        assert paper["sha256"] == hashlib.sha256(placeholder_png(path.stem)).hexdigest()
+    never recognise. Eight fixtures are here: the lipid panel and the warfarin label (E02-01),
+    the clinic slip and the prescription by hand (E02-02), the hospital letter and the receipt
+    as PDFs (E02-03), and two machines' screens (E02-08). The labelled answers beside them
+    (`*.expected.json`) are the accuracy harness's and name no digest."""
+    labels = papers()
+    assert set(labels) == {
+        LIPID_PANEL,
+        WARFARIN_LABEL,
+        CLINIC_SLIP,
+        HANDWRITTEN_PRESCRIPTION,
+        DISCHARGE_LETTER,
+        RECEIPT,
+        BP_CUFF,
+        GLUCOMETER,
+    }
+    for label in labels:
+        paper = fixture(label)
+        assert paper["placeholder"] == label
+        assert paper["sha256"] == hashlib.sha256(placeholder_of(label)).hexdigest()
         assert "redacted" in paper["note"].lower()
+    assert all("sha256" not in json.loads(p.read_text()) for p in PAPER.glob("*.expected.json"))
 
 
 def test_the_lipid_panel_reads_as_a_lab_report_with_units_and_the_date_on_the_paper() -> None:

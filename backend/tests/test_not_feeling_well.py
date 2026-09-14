@@ -18,8 +18,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import FrozenClock
-from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
-from app.consent.service import NoConsent, grant_consent
 from app.db import utcnow
 from app.family.roster import add_slot
 from app.keys.scopes import KeyRole, Scope
@@ -49,7 +47,7 @@ from tests.safety_support import (
     transcriber_for,
     water_pill,
 )
-from tests.support import agree_to_recording, refused_unit
+from tests.support import refused_unit
 from tests.voice import CHEST_PAIN, CONTENT_TYPE, TIRED_TODAY, UNHEARD, placeholder_voice
 
 CLOSING = ("Nura wrote down how you feel.", "This is not a doctor's advice.", "Ask your doctor.")
@@ -184,7 +182,6 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
 
 async def test_a_red_flag_by_voice_goes_through_the_transcriber(sg: AsyncSession) -> None:
     owner, *_ = await _household(sg)
-    await agree_to_recording(sg, owner)
     done = await _press(sg, owner, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
     assert done.by_voice and done.heard and done.transcript_confidence == 0.94
     assert done.kind is WhatToDoKind.RED_FLAG and done.lines[1].text == "Call the ambulance now on 995."
@@ -255,7 +252,6 @@ async def test_when_every_dose_is_taken_the_card_says_rest(sg: AsyncSession) -> 
 
 async def test_a_voice_note_nobody_could_hear_still_tells_the_family(sg: AsyncSession) -> None:
     owner, mei, *_ = await _household(sg)
-    await agree_to_recording(sg, owner)
     done = await _press(sg, owner, audio=placeholder_voice(UNHEARD), content_type=CONTENT_TYPE)
     assert not done.heard and done.transcript_confidence == 0.0
     texts = [line.text for line in done.lines]
@@ -422,26 +418,24 @@ async def test_the_flag_and_the_notices_survive_a_refusal_later_in_the_same_requ
     assert any(line.target == "red_flag" and line.action.value == "write" for line in lines)
 
 
-async def test_a_voice_note_of_him_pressed_by_someone_else_needs_the_recording_consent(
+async def test_a_voice_note_is_the_senders_own_words_and_asks_no_recording_consent(
     sg: AsyncSession,
 ) -> None:
+    """ADR 0003: the RECORDING consent is for other people's voices (a consult). His voice
+    note, or Mei's about him, is the sender's own words, kept like typed text — no recording
+    consent is asked, and nothing on the trail says one was."""
     owner, mei, *_ = await _household(sg)
-    with pytest.raises(NoConsent):
-        await _press(sg, mei, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
-    assert (await sg.scalars(select(Flag).where(Flag.profile_id == owner.profile_id))).all() == []
-    # Typed words are hers to type; no recording is made.
-    typed = await _press(sg, mei, words="Pa says he is tired")
-    assert typed.kind in (WhatToDoKind.MISSED_DOSE, WhatToDoKind.REST)
-    await grant_consent(
-        sg,
-        context=owner,
-        purpose=ConsentPurpose.RECORDING,
-        captured_via=ConsentChannel.APP,
-        basis=ConsentBasis.OWNER,
-        language="en",
-    )
-    heard = await _press(sg, mei, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
-    assert heard.by_voice and heard.kind is WhatToDoKind.RED_FLAG
+    his = await _press(sg, owner, audio=placeholder_voice(TIRED_TODAY), content_type=CONTENT_TYPE)
+    hers = await _press(sg, mei, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
+    assert his.by_voice and hers.by_voice and hers.kind is WhatToDoKind.RED_FLAG
+    kept = await sg.get(Artifact, hers.artifact_id)
+    assert kept is not None and kept.kind is ArtifactKind.VOICE
+    asked = [
+        line
+        for line in await trail(sg, owner.profile_id)
+        if line.target == "consent" and line.scope is Scope.VISITS
+    ]
+    assert asked == []
 
 
 async def test_a_voice_note_never_reaches_a_transcriber_in_another_region(

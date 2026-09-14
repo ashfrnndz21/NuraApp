@@ -6,12 +6,11 @@ The words themselves live only in the store: a fact about how he feels is a code
 the artefact (`app.safety.symptoms`), and "logged in his words" is kept true by the bytes.
 Keeping them rests on the agreement to hold the record, checked before a byte lands.
 
-His own voice note about how he feels is his record, held under `HOLD_HEALTH_RECORD` (ADR
-0003: `Recording.OWN_NOTE`); a voice note of him sent by someone else is a recording of another
-person's voice and rests on the `RECORDING` consent, which `app.safety.not_feeling_well.capture`
-asks for before a byte is kept or heard. Until E02's `store_artifact(recording=…)` lands,
-E16's store asks `RECORDING` for every VOICE artefact, his own included. The artefact row is
-written before the bytes, so a refusal at the store leaves nothing in the object store.
+A voice note is the sender's own words — his, or his chief's or caregiver's about him — kept
+like typed text on the consent to hold the record: `store_voice` declares it
+`Recording.OWN_NOTE` (ADR 0003). The RECORDING consent is for recordings of other people's
+voices, a consult, and nothing here makes one. The artefact row is written before the bytes,
+so a refusal at the store leaves nothing in the object store.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import store_artifact
-from app.memory.models import Artifact, ArtifactKind, SourceChannel
+from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel
 from app.regions import guard_region
 
 MAX_WORDS_BYTES = 2000
@@ -108,6 +107,7 @@ async def store_voice(
         session,
         context=context,
         kind=ArtifactKind.VOICE,
+        recording=Recording.OWN_NOTE,
         storage_key=key,
         content_type=kind,
         sha256=digest,

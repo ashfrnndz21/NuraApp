@@ -45,6 +45,9 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    transcriber: Transcriber
+    """What hears a voice note, in this deployment's region; the fixture one until a speech
+    provider in the region exists (E02-06)."""
     searcher: Searcher
     """What finds pages for a self-search job, from allowlisted sources only (E21)."""
     compressor: Compressor
@@ -52,9 +55,6 @@ class Providers:
     drug_registry: DrugRegistry
     """The licensed drug data behind its port (`app.drugs`): identification, interactions and
     monographs come from it and from nowhere else."""
-    transcriber: Transcriber
-    """What hears a voice note, in this deployment's region; the fixture one until a speech
-    provider in the region exists (E02-06)."""
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""

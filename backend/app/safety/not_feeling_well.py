@@ -8,8 +8,8 @@ What happens, in order, and the order is the point:
 
 1. **Capture.** His words are kept as an artefact — the voice note, or the text he typed —
    before anything is read from them, when the key holds the record. A voice note is handed
-   only to a transcriber in the profile's region; his own voice note is his record, and one
-   of him sent by someone else rests on the RECORDING consent (ADR 0003).
+   only to a transcriber in the profile's region; a voice note is the sender's own words,
+   kept like typed text (ADR 0003: `Recording.OWN_NOTE`).
 2. **Hear.** A voice note goes through the `Transcriber` port; typed words are heard as
    typed. Nothing heard is still a press of the button: the family is told and he is asked
    to say it again.
@@ -64,8 +64,6 @@ from app.channels.safety_strings import (
     phrase,
     render,
 )
-from app.consent.models import ConsentPurpose
-from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
@@ -363,8 +361,8 @@ async def capture(
     The artefact is written when the key holds the record; a key that does not (a helper's)
     still has the words heard, in memory, so the flag can be raised — the words themselves
     are then not kept, and the flag names no artefact. A voice note is handed to the
-    transcriber only if the transcriber is in the profile's region, and — when the person pressing is not the
-    person recorded — only on the RECORDING consent.
+    transcriber only if the transcriber is in the profile's region, and is kept, like typed
+    words, on the consent to hold the record (ADR 0003).
     """
     if audio is not None and words is not None:
         raise SaidTwice("a voice note or typed words, not both")
@@ -373,17 +371,8 @@ async def capture(
     if audio is not None:
         kind = check_voice_note(audio, content_type or "")
         guard_region(held_in=context.region, asked_from=transcriber.region)
-        if not context.is_owner:
-            # His own voice about himself is his record (HOLD_HEALTH_RECORD; ADR 0003). A voice
-            # note of him that someone else sends is a recording of another person's voice and
-            # rests on the RECORDING consent: asked here, before a byte is kept or heard — the
-            # helper's too, whose key keeps nothing.
-            await require_consent(
-                session,
-                context=context,
-                purpose=ConsentPurpose.RECORDING,
-                scope=BUTTON_SCOPE,
-            )
+        # A voice note is the sender's own words, kept like typed text (ADR 0003): no recording
+        # consent is asked. It is heard only by a transcriber in the profile's region.
         artifact = (
             await store_voice(
                 session,
