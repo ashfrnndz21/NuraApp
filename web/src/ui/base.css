@@ -656,3 +656,16 @@ a.pill {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
 }
+
+/* The demo banner's lines (ADR 0008): under its pinned headline, in the flow of the page, so
+   they scroll away with it and only the headline stays over the screen at any text size. */
+.demo-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 16px 10px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: var(--text-caption);
+  line-height: var(--line-height);
+}

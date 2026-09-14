@@ -12,12 +12,19 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEV_LOG = process.env.NURA_DEV_LOG ?? resolve(HERE, "../../../backend/.dev.log");
 const CODE_LINE = /login code for (\+[0-9]+): ([0-9]{6})/g;
 
+/** A demo deployment (ADR 0008) takes test numbers only (+65 0…) and signs every one in with
+ *  the operator's code, which it never prints. With `NURA_E2E_DEMO_CODE` set to that code the
+ *  suite walks against a demo: its numbers in the test range, its code instead of the log's. */
+const DEMO_CODE = process.env.NURA_E2E_DEMO_CODE;
+
 export function freshPhone(prefix = "+659777"): string {
+  if (DEMO_CODE) return `+650${String(Math.floor(Math.random() * 10_000_000)).padStart(7, "0")}`;
   return `${prefix}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
 }
 
 /** The newest code the server logged for this number, waiting up to five seconds for it. */
 export async function codeFromLog(phone: string, after: number): Promise<string> {
+  if (DEMO_CODE) return DEMO_CODE;
   const deadline = Date.now() + 5000;
   for (;;) {
     if (existsSync(DEV_LOG)) {
@@ -33,7 +40,7 @@ export async function codeFromLog(phone: string, after: number): Promise<string>
 }
 
 export function codesSoFar(phone: string): number {
-  if (!existsSync(DEV_LOG)) return 0;
+  if (DEMO_CODE || !existsSync(DEV_LOG)) return 0;
   return [...readFileSync(DEV_LOG, "utf8").matchAll(CODE_LINE)].filter((m) => m[1] === phone).length;
 }
 

@@ -86,17 +86,46 @@ async function sideways(page: Page): Promise<string[]> {
   });
 }
 
+/** A demo deployment's banner (ADR 0008), first on every screen, as the web client shows it when
+ *  the backend says it is a demo: the backend's `GET /deployment` answer, given to the page. The
+ *  rest of the run is the dev run's, both clocks frozen. */
+async function withDemoBanner(page: Page): Promise<void> {
+  await page.route("**/api/deployment", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ region: "SG", demo: true }) }));
+}
+
+/** The feed at rest fits the phone under whatever sits above it: the page does not scroll, and
+ *  no button of the card on screen is under the tab bar. */
+async function feedFits(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const problems: string[] = [];
+    const page = document.scrollingElement!;
+    if (page.scrollHeight > window.innerHeight + 1) problems.push(`the page scrolls: ${page.scrollHeight} > ${window.innerHeight}`);
+    const bar = document.querySelector("nav.tabbar")!.getBoundingClientRect();
+    const card = document.querySelector<HTMLElement>("article.feed-card")!;
+    for (const button of card.querySelectorAll<HTMLElement>(".feed-controls button")) {
+      if (button.getBoundingClientRect().bottom > bar.top + 0.5) problems.push(`under the tab bar: ${button.textContent}`);
+    }
+    return problems;
+  });
+}
+
 const stageOf = (main: Locator) => main.getAttribute("data-stage");
 /** The text of the element now, or null when it is gone: never waits for it to come back. */
 const textNow = async (locator: Locator) => ((await locator.count()) > 0 ? await locator.first().textContent() : null);
 
-for (const look of ["patient", "caregiver"] as const) {
-  test(`every screen in the ${look} density: no serious or critical axe finding`, async ({ page, request }) => {
+for (const [look, banner] of [
+  ["patient", false],
+  ["caregiver", false],
+  ["patient", true],
+] as const) {
+  test(`every screen in the ${look} density${banner ? ", under the demo banner" : ""}: no serious or critical axe finding`, async ({ page, request }) => {
     test.setTimeout(240_000);
-    const where = (name: string) => `${look}: ${name}`;
+    const where = (name: string) => `${look}${banner ? " + demo banner" : ""}: ${name}`;
     const patient = look === "patient";
+    if (banner) await withDemoBanner(page);
     await lookOnThePhone(page, look);
     await expect(page.locator("html")).toHaveAttribute("data-density", look);
+    if (banner) await expect(page.locator(".demo-banner")).toBeVisible();
 
     // Signing in.
     await expect(page.getByLabel("Your phone number")).toBeVisible();
@@ -173,14 +202,21 @@ for (const look of ["patient", "caregiver"] as const) {
     // The read-back, its answer said in a live region; the questions; the first week.
     await expect(main).toHaveAttribute("data-stage", "readBack");
     await audit(page, where("the read-back"));
+    // The sitting as the backend holds it: the lines and the questions to answer, in its order.
+    const token = await apiToken(request, phone);
+    const me = (await (await request.get(`${API}/me`, auth(token))).json()) as { profile_id: string };
+    const sittingNow = async () =>
+      (await (await request.get(`${API}/profiles/${me.profile_id}/biography?language=en`, auth(token))).json()) as {
+        read_back: { line: string }[];
+        questions: { line: string }[];
+      };
     if (patient) {
+      // One line a screen: each answered once, on its own screen, the answer said in a live region.
       const line = page.getByTestId("readback-line");
-      await line.getByTestId("readback-yes").click();
-      await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
-      for (let n = 0; n < 12 && (await stageOf(main)) === "readBack"; n++) {
-        const said = await textNow(line);
+      for (const [at, each] of (await sittingNow()).read_back.entries()) {
+        await expect(line).toContainText(each.line);
         await line.getByTestId("readback-yes").click();
-        await expect.poll(async () => (await stageOf(main)) !== "readBack" || (await textNow(line)) !== said).toBe(true);
+        if (at === 0) await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
       }
     } else {
       const lines = page.getByTestId("readback-line");
@@ -195,10 +231,9 @@ for (const look of ["patient", "caregiver"] as const) {
     await audit(page, where("the questions"));
     if (patient) {
       const question = page.getByTestId("question");
-      for (let n = 0; n < 12 && (await stageOf(main)) === "questions"; n++) {
-        const asked = await textNow(question);
+      for (const each of (await sittingNow()).questions) {
+        await expect(question).toContainText(each.line);
         await question.getByTestId("keep").click();
-        await expect.poll(async () => (await stageOf(main)) !== "questions" || (await textNow(question)) !== asked).toBe(true);
       }
     } else {
       await page.getByTestId("questions-next").click();
@@ -207,8 +242,6 @@ for (const look of ["patient", "caregiver"] as const) {
     await audit(page, where("Nura is ready"));
 
     // Today, with a reading and a visit written down so every part of it shows.
-    const token = await apiToken(request, phone);
-    const me = (await (await request.get(`${API}/me`, auth(token))).json()) as { profile_id: string };
     await request.post(`${API}/profiles/${me.profile_id}/readings`, { ...auth(token), data: { systolic: 138, diastolic: 84 } });
     await seedVisit(request, token, me.profile_id);
     await page.getByTestId("open-nura").click();
@@ -225,6 +258,7 @@ for (const look of ["patient", "caregiver"] as const) {
     await page.getByTestId("open-feed").click();
     await expect(page.getByTestId("feed-card").first()).toBeVisible();
     await audit(page, where("more for you"));
+    expect.soft(await feedFits(page), where("the feed fits the phone")).toEqual([]);
     await page.getByTestId("action-ask").first().click();
     await audit(page, where("ask"));
     await page.getByLabel("Your question").fill("what papers do I have");
@@ -275,9 +309,10 @@ for (const look of ["patient", "caregiver"] as const) {
   });
 }
 
-test("the writing at 200%, on a 360 px phone: nothing lost, nothing sideways, nothing drawn over a line", async ({ page, request }) => {
+for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone${banner ? ", under the demo banner" : ""}: nothing lost, nothing sideways, nothing drawn over a line`, async ({ page, request }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 360, height: 640 });
+  if (banner) await withDemoBanner(page);
   // The browser's own text size at 200%: every size in the app is rem, so it all grows.
   await page.addInitScript(() => {
     document.addEventListener("DOMContentLoaded", () => {
@@ -309,6 +344,7 @@ test("the writing at 200%, on a 360 px phone: nothing lost, nothing sideways, no
   await page.getByRole("button", { name: "Go back" }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("feed-card").first()).toBeVisible();
+  expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await check("me");

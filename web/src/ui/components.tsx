@@ -241,15 +241,22 @@ export function TabBar({ current, onSelect }: { current: "today" | "me"; onSelec
 
 /** On a demo deployment (ADR 0008), first on every screen: what this is, in the person's
  *  language, and that real health information does not belong in it. */
+/** The demo banner (ADR 0008). Its headline is pinned to the top of every screen; the lines
+ *  under it sit above the screen and scroll away with it, so that at a large text size the part
+ *  that never moves stays one headline tall and is never drawn over his lines (E15-04). */
 export function DemoBanner(): JSX.Element | null {
   if (!demo.value) return null;
   const s = t().demo;
   return (
-    <aside class="demo-banner" role="note" data-testid="demo-banner">
-      <strong>{s.banner}</strong>
-      {s.lines.map((line, index) => (
-        <span key={index}>{line}</span>
-      ))}
-    </aside>
+    <>
+      <aside class="demo-banner" role="note" data-testid="demo-banner">
+        <strong>{s.banner}</strong>
+      </aside>
+      <div class="demo-lines" data-testid="demo-lines">
+        {s.lines.map((line, index) => (
+          <span key={index}>{line}</span>
+        ))}
+      </div>
+    </>
   );
 }
