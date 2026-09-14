@@ -55,6 +55,7 @@ from app.channels.api.schemas import (
     TaskOut,
     TranscriptIn,
 )
+from app.channels.api.uploads import Cap, read_capped
 from app.db import utcnow
 from app.ingestion.consult import (
     CONSULT,
@@ -304,18 +305,21 @@ async def recording(
     began, with its offset (a time without one is a 422, ADR 0009). Kept as a consult
     VOICE artefact in the region, heard, separated by speaker, and read into the post-visit
     card with each line's place in the recording. A body declared bigger than a visit is
-    refused before it is read, on the trail."""
-    declared = request.headers.get("content-length")
-    if declared is not None and declared.isdigit() and int(declared) > MAX_CONSULT_BYTES:
-        # Refused on the trail where the recording would have been kept: a visit's (ADR 0004).
-        async with audited_guard(session, context, Action.WRITE, Scope.VISITS, CONSULT):
-            raise ConsultTooLong(f"a recording is at most {MAX_CONSULT_BYTES} bytes")
+    refused before it is read, and one that runs past the cap is refused as it arrives, with
+    nothing of it kept (#133); both on the trail."""
+    # Refused on the trail where the recording would have been kept: a visit's (ADR 0004).
+    async with audited_guard(session, context, Action.WRITE, Scope.VISITS, CONSULT):
+        data = await read_capped(
+            request.stream(),
+            Cap(MAX_CONSULT_BYTES, ConsultTooLong),
+            declared=request.headers.get("content-length"),
+        )
     served = providers_of(request)
     outcome = await record_consult(
         session,
         context=context,
         appointment_id=appointment_id,
-        data=await request.body(),
+        data=data,
         content_type=request.headers.get("content-type", ""),
         duration_s=duration_s,
         started_at=started_at,
