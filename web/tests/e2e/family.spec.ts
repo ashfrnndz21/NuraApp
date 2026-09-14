@@ -304,7 +304,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     expect(await caregiverScreenOk(page)).toEqual([]);
 
     await openFamilyPart(page, "consents");
-    await page.getByTestId("consent").first().getByTestId("stop").click();
+    await page.getByTestId("consent").filter({ hasText: "Kit" }).getByTestId("stop").click();
     await expect(page.getByTestId("notice")).toContainText("Only the owner can stop this.");
     expect(await caregiverScreenOk(page)).toEqual([]);
 
