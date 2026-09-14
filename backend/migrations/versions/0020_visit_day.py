@@ -17,10 +17,11 @@ part of a visit's logistics, "drive Pa to Dr Tan" (`errand` is `drive`).
 no database constraint, so no schema change for them.
 
 Follows main's head when this story was merged back (0017 → 0015_biography → 0019_row_scope
-→ 0019_person_named_by → this); the operator repoints `down_revision` if another story lands first.
+→ 0019_person_named_by → 0020_feelings
+→ this); the operator repoints `down_revision` if another story lands first.
 
 Revision ID: 0020_visit_day
-Revises: 0019_person_named_by
+Revises: 0020_feelings
 Create Date: 2026-09-15
 """
 
@@ -30,7 +31,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0020_visit_day"
-down_revision = "0019_person_named_by"
+down_revision = "0020_feelings"
 branch_labels = None
 depends_on = None
 

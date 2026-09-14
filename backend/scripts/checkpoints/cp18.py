@@ -270,6 +270,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             headers=his,
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": ["records", "readings"],
                 "relationship": "daughter",
                 "language": "en",

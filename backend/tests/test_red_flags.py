@@ -110,6 +110,13 @@ def test_the_other_words_on_the_cloud_are_not_red() -> None:
         Feeling.TIRED,
         Feeling.ACHES,
         Feeling.HEADACHE,
+        Feeling.PAIN,
+        Feeling.BREATHLESS,
+        Feeling.LOW,
+        Feeling.WORRIED,
+        Feeling.CANT_SLEEP,
+        Feeling.SWOLLEN_ANKLES,
+        Feeling.STOMACH_UPSET,
         Feeling.FINE,
     }
 

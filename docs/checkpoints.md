@@ -16,7 +16,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 8 | Feed (backend) | Call the feed endpoint and see the supply order (now, today, gate, story, learning) with why-am-I-seeing-this on every card; page twice with the cursor; a burst of readings is capped; quiet hours hold everything but a red flag, which jumps the queue; "Not for me" holds that kind of card for the day; Mei sees the caregiver supply; a learning card from an allowlisted source appears after the self-search job runs; a medicine running low makes a reorder card from E04's count | E21 backend (Session 8) | **ready** |
 | 9 | WhatsApp (sandbox) | Mei forwards a photo to the number and it files itself as a review card and replies; she posts "BP 150/90" and gets a read-back that only her own "yes" turns into a Fact; a stranger's number gets one fixed line and nothing is stored; "he fell" writes a Flag first and escalates in-thread; the morning card goes to Pa as an approved template and his "tired" is written down; the thread is by reference and every line is on the trail | E19-01…E19-03, E19-05 | **ready** |
 | 10 | Today on your phone (web) | Open the app URL in Safari on your iPhone, add it to the home screen, sign in with a phone code, see the Today shell with the Now card and Taken; it opens offline | W1 (ADR 0001) | **ready** |
-| 11 | Onboarding on your phone (web) | About you one question at a time, the word cloud that deepens as you tap, the read-back with Yes and No, a paper photographed into a review card you correct and confirm, the questions it raises, the gaps and what each unlocks; the same in the caregiver density for someone you look after | W3 (ADR 0001), E01-02, E01-03, E01-04 | ready — over E01 (#117), nothing mocked |
+| 11 | Onboarding on your phone (web) | About you one question at a time, the word cloud that deepens as you tap, the read-back with Yes and No, a paper photographed into a review card you correct and confirm, the questions it raises, the gaps and what each unlocks; the same in the caregiver density for someone you look after | W3 (ADR 0001), E01-02, E01-03, E01-04 | **ready** |
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2 (ADR 0001), the web half of E21-01, E21-03, E21-04 | **ready** |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
 | 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice (his own note, ADR 0003) and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
@@ -26,12 +26,13 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 22 | Visit day: logistics, recording, clips | For Pa's visit to Dr Tan tomorrow, the logistics card from the record: the time his way, Dr Tan's address, Mei's note about the place under "Mei's note" as she wrote it, who drives him — Mei, the roster says, as a suggestion that waits for a yes, then "Mei will drive you to Dr Tan" — and what to bring (his blood pressure book, his tablets in their boxes, his hospital letter); the card on his feed the day before and on the day; no recording without his agreement to Nura listening, and a viewer refused before the room is told anything; the notice said to Dr Tan by name, one recording sent on Stop, kept as a consult, heard, split by speaker with Dr Tan's yes as the first seconds; the post-visit card with each line's place in the recording; "what did Dr Tan say about the water pill" answered with the clip; the clip playing for a key that reads the visits and refused to a helper; on the phone, the Visit screen: one big *Start recording*, the notice first, a red dot and a timer, *Stop*, "Hear what Dr Tan said"; a no that keeps nothing; a hidden page that stops at once | E05-03, E05-04, E02-05, E03-05 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+| 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the not-feeling-well button runs for him: the flag, the family told, the urgent card, posture act, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
 
 **Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13, 14, 18, 22)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13–18, 21, 22)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **TestFlight (19, last)**: needs your Apple developer account; the operator prepares the build and the steps.
 
@@ -1309,3 +1310,72 @@ checkpoint 16 passed: every step did what docs/checkpoints.md says
 1. **A part kept "only me".** Mark the readings only me (`POST /profiles/{profile_id}/confirmations` with `{"subject": "only_me", "scope": "readings"}`, then the only-me route from checkpoint 13), then as Mei `GET /profiles/{profile_id}/timeline`: `withheld` names `readings`, the illness loses the blood pressure and the moment it was taken, and `POST /profiles/{profile_id}/ask` with "what was my blood pressure" answers "Nura does not have that written down." with `readings` withheld. Pa himself still sees it all.
 2. **A question that would change treatment.** As Pa, `POST /profiles/{profile_id}/ask` with `{"question": "should I stop my blood pressure tablet"}`: the answer says what is written down ("Dr Tan gave you your blood pressure tablet.") and then "Ask Dr Tan before you change any medicine." — never an instruction — with the boundary last.
 
+## How to run checkpoint 21
+
+Two terminals, as before. Checkpoint 21 is a module of its own (`backend/scripts/checkpoints/cp21.py`); `make checkpoint N=21` dispatches to it.
+
+```sh
+make reset-db           # optional: a clean local database (stop `make dev` first)
+make dev                # terminal 1
+make checkpoint N=21    # terminal 2, about two seconds
+```
+
+It registers Pa (in Malay) and Mei (his chief) on fresh numbers; Pa puts Dr Tan in his directory and a visit with him the day after tomorrow at 10, on his own yes (E03's routes); adds amlodipine from a label photo with his OK, taps Taken once, and types in a blood pressure. Then the feeling cloud, a tap and its one question, the note, a red word, the nudge plan, the metrics and the Me page. The dates in the lines are the day you run it.
+
+What you will see (the phone numbers, ids and dates change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8113 (GET /health)
+✓ Pa (+6597119950) registered by phone code (no SMS; the six digits read from the server log)
+✓ Mei (+6597222932) registered by phone code (no SMS; the six digits read from the server log)
+✓ Pa opened his profile in Malay, let Mei, his daughter, in to everything and cut her the chief key
+✓ Pa has Dr Tan in his directory (POST /providers) and a visit with him on Thursday 17 September at 10, written down on his own yes (POST /confirmations subject appointment, POST /appointments)
+✓ Pa added amlodipine 5 mg from a label photo with his OK (POST /medicines, the label naming Dr Tan), tapped Taken once, and typed in a blood pressure (138 over 84)
+✓ the cloud in Malay (GET /feelings/cloud?language=ms) is on Today because State changed, rendered from State 9cd60462…; the question, then the words biggest first — each with its reason code, kept for the audit and never shown to him:
+    Ubat tekanan darah anda baru sejak Selasa 15 September.
+    Apa rasa anda hari ini?
+    Pening                 weight 3  base, new_medicine (amlodipine, monograph rule dizzy_standing)
+    Buku lali bengkak      weight 3  new_medicine
+    Letih                  weight 1  base
+    Sakit                  weight 1  base
+    Sesak nafas            weight 1  base
+    Sedih                  weight 1  base
+    Risau                  weight 1  base
+    Susah tidur            weight 1  base
+    Sakit dada             weight 1  base
+    Sihat hari ini         weight 1  base
+✓ Pa tapped Pening (POST /feelings): a SYMPTOM event in his word, and one question back — "Bila ia bermula?" — with Hari ini, Sejak semalam, Beberapa hari, Seminggu atau lebih
+✓ Pa answered Sejak semalam (POST /feelings/{tap}/answer): the tap read against his medicines, his blood pressure and this week — the new medicine's licensed monograph lists dizziness — into a note kept for the visit, rendered from State 9cd60462…, read aloud as: headline, two things to tell Dr Tan, who does the next thing, and the boundary last:
+    Perkara untuk diberitahu kepada Dr Tan
+    Beritahu Dr Tan bahawa anda rasa pening sejak semalam.
+    Ini boleh berlaku kerana ubat tekanan darah anda, yang baru sejak Selasa 15 September.
+    Nura akan simpan ini untuk lawatan anda ke Dr Tan.
+    Nura perasan ini daripada apa yang anda rasa.
+    Ini bukan nasihat doktor.
+    Tanya Dr Tan.
+✓ the strip is gone after his tap (show false, tapped_today), and stays gone until State changes again
+✓ Pa tapped Sakit dada: the red-flag path before anything else — the moment, the flag (de0fa8eb…, kept), Mei told, a notice to his emergency list and the ladder (a2f050fb…) for delivery — then the not-feeling-well button's whole flow, server-side: the what-to-do card (urgent, card a8a67205…) and the day's posture act (GET /state); no question, and no note (GET /feelings/notes still holds only the one for dizzy); the card he is shown:
+    Mei sudah tahu.
+    Hubungi ambulans sekarang di talian 995.
+    Selepas itu, hubungi Mei.
+    Nura tidak menentukan apa masalahnya.
+✓ no nudge today (GET /nudges/plan): a red flag was raised today, so nothing is planned for it
+✓ tomorrow's plan (GET /nudges/plan?day=2026-09-16): one nudge — anticipation, the visit the day after — no earlier than 10:00 on his wall, cap class one, with why; held, and said so: recognition (one_a_day):
+    Anda berjumpa Dr Tan esok, Khamis 17 September.
+    Sila bawa buku tekanan darah anda.
+    [why] Anda nampak ini kerana lawatan anda esok.
+✓ the nudge was written down and handed to delivery (POST /nudges/plan: nudge d3cfa8b1…, rendered from State 83fe6882…; nothing sent from here — E11 sends), and Pa accepted it (POST /nudges/{id}/response: an ENGAGEMENT event and a row)
+✓ Mei, his chief, read the metrics (GET /nudge-metrics): week 2026-W38 — 2 taps on the cloud, 0 of them Fine today (share 0.0), anticipation handed over 1, accepted 1 (acceptance 1.0); no word he tapped, no line, no id in the answer
+✓ Mei's metrics read is on Pa's trail (GET /audit): a read of nudge_metrics, in her name
+✓ Pa's Me page (GET /me-summary): the days with a tablet taken, counted by the backend, in his words:
+    Nura mengira 1 hari ubat anda sudah diambil.
+    Nombor ini hanya naik.
+checkpoint 21 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 21 passed`. The criteria: the cloud is on Today only after a change and goes after a tap; its words are weighed from State — "Pening" first because the new medicine's licensed monograph lists `dizzy_standing`, never because of a word Nura made up — and every word carries its reason code, which the client never shows; a tap asks one thing back from a fixed table; the note has at most two things to tell Dr Tan, each naming what it rests on, then who does the next thing, and ends on the boundary line for a feeling inference (E16); a red word presses the not-feeling-well button for him, server-side (E13/E14: the moment and the flag first, kept; a notice to his emergency list; the ladder; the day's posture act; the urgent what-to-do card, which is what he is shown) and makes no note; there is no nudge on a day with a red flag, and tomorrow's plan has one nudge, no earlier than his check-in time and never at night, with the rest held and said so; the metrics are counts with no word, line or id in them, for the owner and his chief only, and the read is on his trail; the Me page says the proud number (W1's) in his words, with no streak.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token and the profile id:
+
+1. **A yes that makes a word red.** `POST /profiles/{profile_id}/feelings` with `{"word": "breathless"}`: the one question is "Adakah ia berlaku walaupun anda duduk diam?". Answer it `{"answer": "yes"}` at `POST /profiles/{profile_id}/feelings/{tap_id}/answer`: a flag for breathlessness at rest, the family told, `opens: not_feeling_well`, and `note: null`.
+2. **Two ignored of a kind.** Hand a day's nudge over (`POST /profiles/{profile_id}/nudges/plan?day=…`) on two days and touch neither; on the third, `GET /profiles/{profile_id}/nudges/plan` holds that kind as `resting_after_two_ignored` for a week, and `GET /profiles/{profile_id}/nudge-metrics` shows the ignored streak.

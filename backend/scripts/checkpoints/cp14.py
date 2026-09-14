@@ -177,6 +177,7 @@ def let_in_and_cut(
         headers=bearer(owner.token),
         json={
             "holder_phone_e164": holder.phone_e164,
+            "holder_display_name": holder.name,
             "scopes": scopes,
             "relationship": "daughter" if role == "chief" else "neighbour",
             "language": "en",
