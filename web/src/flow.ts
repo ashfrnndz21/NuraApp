@@ -25,6 +25,8 @@ export type Screen =
   /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
   | { name: "ask"; item: FeedItemOut }
   | { name: "reading" }
+  /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
+  | { name: "visit"; appointmentId: string }
   | { name: "me" }
   | { name: "onboarding" };
 

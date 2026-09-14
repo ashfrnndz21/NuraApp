@@ -29,7 +29,7 @@ from app.db import as_utc, utcnow
 from app.drafts import TaskDoneDraft
 from app.errors import Refusal
 from app.family.common import NotPlainWords, a_chief
-from app.family.models import TASK_DONE_IN_PROGRESS, RosterSlot, Task
+from app.family.models import TASK_DONE_IN_PROGRESS, Errand, RosterSlot, Task
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import KeyRole, Scope
@@ -211,9 +211,15 @@ async def add_task(
     assigned_person_id: uuid.UUID,
     due_at: datetime | None = None,
     language: str = "en",
+    appointment_id: uuid.UUID | None = None,
+    errand: Errand | None = None,
 ) -> Task:
     """Give one person one thing to do. `what` is a label in plain words — it reaches him
-    in the digest and the trail — so it passes the verifier as a phrase before it is kept."""
+    in the digest and the trail — so it passes the verifier as a phrase before it is kept.
+
+    A task that is part of a visit's logistics names the visit and the errand (E05-03); the
+    only caller that does is `app.reasoning.visits.logistics.assign_driver`, on the chief's
+    yes. The visit is on this profile, or the table refuses it."""
     a_chief(context)
     label = short_label(what)
     failures = [str(f) for f in verify(label, language, "phrase") if f.severity == "fail"]
@@ -230,6 +236,8 @@ async def add_task(
         due_at=due_at,
         created_by_person_id=context.person_id,
         created_at=utcnow(),
+        appointment_id=appointment_id,
+        errand=errand,
     )
 
 

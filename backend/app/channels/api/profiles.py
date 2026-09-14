@@ -36,6 +36,7 @@ from app.channels.api.schemas import (
     ConfirmIn,
     ConsentIn,
     ConsentOut,
+    DriveConfirmIn,
     KeyChangeConfirmIn,
     KeyGrant,
     KeyOut,
@@ -96,6 +97,7 @@ from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel, short_label
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
+from app.reasoning.visits.logistics import drive_draft_for
 from app.reasoning.visits.questions import question_draft_for
 from app.reasoning.visits.summary import summary_draft_for
 from app.routines.service import routine_draft_for
@@ -274,6 +276,13 @@ async def mint_confirmation(
         return ConfirmationOut.of(
             await confirm(session, context, only_me_draft(body.scope, only_me=body.only_me))
         )
+    if isinstance(body, DriveConfirmIn):
+        # Who drives him to a visit (E05-03): the chief's yes, recomputed from the visit and
+        # the person, so it cannot be minted for a visit that has been or a stranger.
+        drive = await drive_draft_for(
+            session, context=context, appointment_id=body.appointment_id, person_id=body.person_id
+        )
+        return ConfirmationOut.of(await confirm(session, context, drive))
     if isinstance(body, TaskDoneConfirmIn):
         # The doer's own tap (E12-03): the task must name the person minting.
         done = await task_done_draft_for(session, context=context, task_id=body.task_id)

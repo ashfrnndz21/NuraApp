@@ -39,6 +39,7 @@ from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
 from app.ingestion.extract import check_code, check_confidence, check_value
 from app.ingestion.objects import ObjectStore, sha256_of
+from app.ingestion.speakers import Aligned
 from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.grants import list_keys
@@ -358,6 +359,26 @@ class FixtureSummariser:
         if path is None:
             return SummaryDraft.nothing()
         return draft_from_fixture(json.loads(path.read_text()))
+
+
+# --- where in a recording a thing was said ------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ConsultClips:
+    """The recording a transcript was heard from (E02-05): its VOICE artefact and the speaker
+    segments, each a time in the audio and a place in the transcript. An item heard at
+    characters `span` was said in the segments that overlap it, so it plays from the first
+    one's start to the last one's end — the doctor's own words, not the whole visit."""
+
+    artifact_id: uuid.UUID
+    segments: Sequence[Aligned]
+
+    def window(self, span: Span) -> tuple[float, float] | None:
+        hit = [one for one in self.segments if one.char_start < span.end and span.start < one.char_end]
+        if not hit:
+            return None
+        return min(one.start_s for one in hit), max(one.end_s for one in hit)
 
 
 # --- storing the transcript -------------------------------------------------------------------
@@ -724,6 +745,7 @@ async def post_visit_summary(
     store: ObjectStore,
     summariser: Summariser,
     registry: DrugRegistry,
+    clips: ConsultClips | None = None,
 ) -> VisitSummary:
     """Read the transcript into a card for the person to confirm.
 
@@ -733,7 +755,8 @@ async def post_visit_summary(
     anything else is composed. Then every item is rendered through its template and the
     verifier; a medicine change is a question for the doctor, and a drug the licensed
     register does not know is never named. The card names the transcript, the visit and
-    the State.
+    the State — and, when the transcript was heard from a consult recording (`clips`), the
+    recording, with each item's place in it in seconds, so the card can play what was said.
     """
     may_change_visits(context)
     visit = await require_visit(
@@ -826,8 +849,10 @@ async def post_visit_summary(
         red_flag=red_flag,
         lines=lines,
         created_at=utcnow(),
+        recording_artifact_id=None if clips is None else clips.artifact_id,
     )
     for position, item in enumerate(items):
+        clip = None if clips is None else clips.window(item.span)
         await audited_write(
             session,
             SummaryItem,
@@ -842,6 +867,8 @@ async def post_visit_summary(
             key=item.key,
             text=item.text,
             state=ItemState.PROPOSED,
+            clip_start_s=None if clip is None else clip[0],
+            clip_end_s=None if clip is None else clip[1],
         )
     return summary
 

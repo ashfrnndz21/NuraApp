@@ -1,5 +1,10 @@
-import { api, apiBlob } from "./client";
+import { api, apiBlob, apiUpload } from "./client";
 import type {
+  AppointmentOut,
+  ConsultOut,
+  LogisticsOut,
+  NoticeOut,
+  VisitSummaryOut,
   AnswerOut,
   AskMode,
   BiographyOut,
@@ -188,6 +193,75 @@ export const addReading = (token: string, profileId: string, systolic: number, d
     token,
     body: { systolic, diastolic },
   });
+
+// --- the visit day (E05-03, E05-04, E02-05, E03-05) ---------------------------------------
+
+/** The visits still to come, soonest first. */
+export const appointments = (token: string, profileId: string) =>
+  api<AppointmentOut[]>(`/profiles/${profileId}/appointments`, { token });
+
+/** The logistics card: when, where, the chief's note, who drives him, what to bring. */
+export const logistics = (token: string, profileId: string, appointmentId: string) =>
+  api<LogisticsOut>(`/profiles/${profileId}/appointments/${appointmentId}/logistics`, { token });
+
+/** The chief's yes to one person driving him to one visit (subject `drive`). */
+export const mintDrive = (token: string, profileId: string, appointmentId: string, personId: string) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "drive", appointment_id: appointmentId, person_id: personId },
+  });
+
+/** Spend that yes: the family task "drive Pa to Dr Tan". */
+export const assignDriver = (token: string, profileId: string, appointmentId: string, personId: string, confirmationId: string) =>
+  api<unknown>(`/profiles/${profileId}/appointments/${appointmentId}/driver`, {
+    method: "POST",
+    token,
+    body: { person_id: personId, confirmation_id: confirmationId },
+  });
+
+/** What the Start button asks first: the gate, then the notice. A refusal means nothing is
+ *  said in the room and the microphone is not asked for. */
+export const recordingNotice = (token: string, profileId: string, appointmentId: string) =>
+  api<NoticeOut>(`/profiles/${profileId}/appointments/${appointmentId}/recording/notice`, { token });
+
+/** Today's words for Nura listening at the visit, for the owner to read before his yes. */
+export const recordingWording = (language: string) =>
+  api<WordingOut>("/consent/wording", { query: { purpose: "recording", language } });
+
+/** The owner's yes to those words, exactly as shown. */
+export const agreeToRecording = (token: string, profileId: string, version: string, language: string) =>
+  api<unknown>(`/profiles/${profileId}/consents/recording`, {
+    method: "POST",
+    token,
+    body: { wording_version: version, language, captured_via: "app" },
+  });
+
+/** The recording, once, on Stop: the recorder's own bytes as the body. */
+export const uploadRecording = (token: string, profileId: string, appointmentId: string, audio: Blob, durationS: number, startedAt: string) =>
+  apiUpload<ConsultOut>(`/profiles/${profileId}/appointments/${appointmentId}/recording`, audio, audio.type || "audio/webm", {
+    token,
+    query: { duration_s: durationS.toFixed(1), started_at: startedAt },
+  });
+
+/** The notes by hand, when the doctor says no: E05's typed transcript, read into the card. */
+export const writeNotes = (token: string, profileId: string, appointmentId: string, text: string) =>
+  api<VisitSummaryOut>(`/profiles/${profileId}/appointments/${appointmentId}/transcript`, {
+    method: "POST",
+    token,
+    body: { data: base64OfText(text) },
+  });
+
+/** A stretch of a consult recording: the whole recording, to play from `start` to `end`. */
+export const clip = (token: string, profileId: string, artifactId: string, start: number, end: number) =>
+  apiBlob(`/profiles/${profileId}/artifacts/${artifactId}/clip`, { token, query: { start: String(start), end: String(end) } });
+
+function base64OfText(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
 
 // --- E02: a photo in, a review card out, facts on his yes (live on main) ------------------
 

@@ -178,8 +178,19 @@ export interface AnswerLineOut {
   /** One line the backend made from a template and the values it cites. */
   text: string;
   /** What the line rests on, by kind (`fact`, `event`, `artifact`, `appointment`, `provider`,
-   *  `medication_line`, `attachment`) and id. */
-  cites: { kind: string; id: string }[];
+   *  `medication_line`, `attachment`, `summary_item`) and id; a cite of a consult recording
+   *  carries the stretch of it the line is about, in seconds (E03-05). */
+  cites: { kind: string; id: string; start_s?: number | null; end_s?: number | null }[];
+  /** What "Hear what Dr Tan said" plays, when the line is about a recorded visit. */
+  clip?: ClipOut | null;
+}
+
+/** The stretch of a consult recording a line plays on a tap (E03-05). */
+export interface ClipOut {
+  artifact_id: string;
+  start_s: number;
+  end_s: number;
+  doctor: string;
 }
 
 export interface AnswerOut {
@@ -278,6 +289,121 @@ export interface RefusalBody {
   refusal: string;
   scope?: string;
   drug_class?: string;
+}
+
+/** A visit on the spine (`GET /profiles/{id}/appointments`: the ones still to come). */
+export interface AppointmentOut {
+  appointment_id: string;
+  provider_id: string;
+  scheduled_at: string;
+  status: string;
+  purpose: string;
+}
+
+/** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
+export interface LogisticsLineOut {
+  section: "when" | "place" | "note" | "driver" | "bring" | string;
+  key: string;
+  text: string;
+  spoken: string;
+}
+
+/** The logistics card for one visit, composed by the backend from the record and State. The
+ *  chief's note is hers, as she wrote it, under `label` ("Mei's note"). */
+export interface LogisticsOut {
+  appointment_id: string;
+  provider_id: string;
+  doctor: string;
+  language: string;
+  scheduled_at: string;
+  state_id: string;
+  place: string | null;
+  note: { note_id: string; label: string; text: string; by_person_id: string; by_name: string; written_at: string } | null;
+  driver: {
+    status: "assigned" | "suggested" | "nobody" | "withheld";
+    person_id: string | null;
+    name: string | null;
+    task_id: string | null;
+    needs_yes: boolean;
+    can_say_yes: boolean;
+  };
+  lines: LogisticsLineOut[];
+  spoken: string[];
+  withheld: string[];
+}
+
+/** What the Start button shows and speaks first (E16-02), handed back only once the gate
+ *  (the RECORDING consent in force) has passed. */
+export interface NoticeOut {
+  appointment_id: string;
+  doctor: string;
+  language: string;
+  spoken: string[];
+  printed: string[];
+  when_no: string[];
+  consent_id: string;
+}
+
+export interface SegmentOut {
+  segment_id: string;
+  position: number;
+  speaker: "patient" | "doctor" | "family" | "unknown";
+  start_s: number;
+  end_s: number;
+  char_start: number;
+  char_end: number;
+}
+
+export interface RecordingOut {
+  recording_id: string;
+  appointment_id: string;
+  artifact_id: string;
+  transcript_artifact_id: string | null;
+  consent_id: string;
+  duration_s: number;
+  started_at: string;
+  notice_language: string;
+  doctor_named: boolean;
+  heard: boolean;
+  heard_confidence: number | null;
+  recorded_by_person_id: string;
+  segments: SegmentOut[];
+}
+
+export interface SummaryItemOut {
+  item_id: string;
+  position: number;
+  kind: string;
+  text: string;
+  payload: Record<string, unknown>;
+  confidence: number;
+  state: string;
+  /** Where in the recording this was said (E02-05); null when the notes were typed. */
+  clip_start_s: number | null;
+  clip_end_s: number | null;
+}
+
+/** The post-visit card (E05-05): the lines for him, the boundary last, the items behind them. */
+export interface VisitSummaryOut {
+  summary_id: string;
+  appointment_id: string;
+  artifact_id: string;
+  language: string;
+  red_flag: boolean;
+  state_id: string;
+  lines: string[];
+  spoken: string[];
+  boundary: string | null;
+  items: SummaryItemOut[];
+  created_at: string;
+  recording_artifact_id: string | null;
+}
+
+/** What one upload kept, and the card it ended in, or why there is none yet. */
+export interface ConsultOut {
+  recording: RecordingOut;
+  summary: VisitSummaryOut | null;
+  summary_refused: string | null;
 }
 
 // --- E02: a photo in, a review card out ------------------------------------------------

@@ -332,6 +332,61 @@ export const zh = {
     // @patient phrase
     signOut: "退出登录",
   },
+  // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
+  visit: {
+    // @patient headline
+    title: "您的看诊",
+    // @patient phrase
+    open: "看您下一次看诊",
+    // @patient
+    none: "Nura还没有记下您的看诊。",
+    // @patient
+    fromVisit: "这来自您看医生的安排。",
+    // @patient
+    onDuty: "那天轮到{name}。",
+    // @patient phrase
+    driveYes: "好，{name}开车",
+    // @patient phrase
+    start: "开始录音",
+    // @patient
+    keepOpen: "Nura听的时候，请不要离开这一页。",
+    // @patient
+    consentLead: "Nura听之前，需要您同意。",
+    // @patient phrase
+    saidYes: "{doctor}说可以",
+    // @patient phrase
+    saidNo: "{doctor}说不行",
+    // @patient
+    listening: "Nura正在听。",
+    // @patient phrase
+    stop: "停止",
+    // @patient
+    saving: "Nura正在保存录音。",
+    // @patient
+    saved: "Nura已经保存了录音。",
+    // @patient
+    notHeard: "Nura听不清说了什么。",
+    // @patient
+    notHeardSub: "您可以在您的文件里再听。",
+    // @patient
+    cardLater: "Nura还不能做出这张卡。",
+    // @patient
+    stoppedAway: "您离开这一页时，Nura停止了听。",
+    // @patient phrase
+    keepHeard: "保存Nura听到的",
+    // @patient phrase
+    hearClip: "听{doctor}说了什么",
+    // @patient headline
+    byHandTitle: "写下{doctor}说的话",
+    // @patient phrase
+    byHandLabel: "{doctor}说的话",
+    // @patient phrase
+    byHandSave: "保存笔记",
+    // @patient
+    noMic: "Nura不能使用这部手机的麦克风。",
+    // @patient
+    noMicSub: "您可以自己写下来。",
+  },
   onboarding: {
     // @patient phrase
     next: "下一步",
@@ -730,5 +785,13 @@ export const zh = {
     NoSuchItem: "那张卡已经不在这里了。",
     NoCachedPage: "Nura 还没有为您保存页面。",
     NotACursor: "Nura 找不到下一张卡。",
+    NotAConsultRecording: "Nura不能保存这段录音。",
+    ConsultTooLong: "这段录音对Nura来说太长了。",
+    NoSuchRecording: "这段录音已经不在这里了。",
+    NotAClip: "Nura找不到录音的这一部分。",
+    OnlyTheFamilyHears: "只有本人和他让进来的家人可以听。",
+    NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
+    NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
+    NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
   },
 } satisfies Strings;

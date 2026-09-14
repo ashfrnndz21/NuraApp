@@ -1,11 +1,12 @@
-import { useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut } from "../api/types";
 import { answerView, askMode } from "../feed/ask";
 import { go } from "../flow";
 import { density, profile, token } from "../store/session";
-import { language, t } from "../strings";
+import { fill, language, t } from "../strings";
+import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import { Field, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 
 /** Ask about a card (E21-04), answered by E03's recall (`POST /profiles/{id}/ask`): voice
@@ -21,6 +22,14 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const mode = askMode(density());
+  const clips = useMemo(
+    () =>
+      new ClipPlayer(
+        browserClipDeps((artifactId, start, end) => nura.clip(token.value ?? "", profile.value?.profile_id ?? "", artifactId, start, end)),
+      ),
+    [],
+  );
+  useEffect(() => () => clips.forget(), [clips]);
 
   const send = async () => {
     const bearer = token.value;
@@ -65,6 +74,11 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
                   <p class="provenance" data-testid="answer-source">
                     {s.feed[line.source]}
                   </p>
+                )}
+                {line.clip && (
+                  <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
+                    {fill(s.visit.hearClip, { doctor: line.clip.doctor })}
+                  </Pill>
                 )}
               </div>
             ))}

@@ -38,6 +38,12 @@ npm run plain-words   # the backend's verifier over web/src/strings/*.ts only
   (one store per profile and key). The screen is `src/screens/Feed.tsx`; Ask is
   `src/screens/Ask.tsx`, answered by E03's `POST /profiles/{id}/ask` (`src/feed/ask.ts`).
 - `src/speech/speak.ts` — `speak(card)`: the one seam for the spoken twin.
+- `src/visit/` — the visit day (E05-03, E05-04, E02-05, E03-05): `recorder.ts` (the phone's
+  `MediaRecorder` behind a small seam: opus in webm where it can, Safari's mp4 where not, a
+  screen wake lock, nothing sent from here), `clip.ts` ("Hear what Dr Tan said": the recording
+  fetched once, played as a `#t=start,end` fragment and paused at the end), `model.ts` (the
+  logistics card and the post-visit card as the backend wrote them, each line with its clip).
+  The screen is `src/screens/Visit.tsx`, opened from Today's *See your next visit*.
 - `src/sw/sw.ts` — the service worker; `src/offline/` — its registration, the Today cache and
   the feed's kept first page (`feedCache.ts`).
 
@@ -69,6 +75,23 @@ visit — and otherwise says it cannot send the card yet; no card's words are ev
 message. *Ask* sends his question, word for word, to E03's recall (voice mode in his density, text in hers) and shows the answer's cited lines, each under its source line, then the boundary, last. Heard, tapped and
 shared are written back only by a key that may write events; *Not for me* is always sent,
 and every refusal is said on the screen, never swallowed.
+
+**The Visit screen (E05-03, E05-04, ADR 0006).** The logistics card is the backend's (`GET
+…/appointments/{appt}/logistics`): when, where, the chief's note under her name as she wrote
+it, who drives him — and, for a key that may give the chief's yes, the roster's person on
+duty then with one button, *Yes, Mei drives* — and what to bring. Under it, one big paper
+button, *Start recording*. It asks the backend for the notice first: a key that does not
+change the visits is refused, then the gate (the RECORDING consent in force); with no consent
+in force the owner reads today's words and says *I agree*, and anyone else reads the refusal.
+Only then is the notice shown and said (`speak()`, a voice on the phone only) and the
+microphone opened, so the recording holds the notice and then the doctor's answer. *Dr Tan
+said yes* keeps listening; *Dr Tan said no* throws the audio away on the phone and offers the
+notes by hand (E05's typed transcript). A red dot and a timer while it listens; *Stop* is the
+one thing that uploads, once, the recorder's own bytes as the body; the tab bar is gone while
+listening so nothing leaves the screen by mistake. A hidden page stops at once and says so —
+before the doctor's answer the audio is thrown away, after it one tap, *Keep what Nura heard*,
+sends it. The post-visit card is the backend's, each line with *Hear what Dr Tan said* when
+the recording has that line in it; nothing plays until that tap.
 
 **Voice on tap only.** `feed/playback.ts` is one seam: it warms (fetches, never plays) the
 backend's pre-rendered voice for the card on screen and the two after it

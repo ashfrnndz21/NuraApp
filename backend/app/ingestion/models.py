@@ -234,3 +234,80 @@ class EventNote(ProfileScoped, Base):
 
 
 frozen(EventNote)
+
+
+# --- a consult recording (E02-05, E05-04) ------------------------------------------------------
+
+
+class Speaker(StrEnum):
+    """Who a stretch of a consult recording is, as the separator heard it. Never a name: the
+    doctor is the visit's provider, the patient is the profile, the family is whoever came.
+    `unknown` is honest — the notice the phone spoke, or a voice the separator could not
+    place."""
+
+    PATIENT = "patient"
+    DOCTOR = "doctor"
+    FAMILY = "family"
+    UNKNOWN = "unknown"
+
+
+class ConsultRecording(ProfileScoped, Base):
+    """One recording of one visit, as kept: the VOICE artefact (`Recording.CONSULT`), the
+    transcript the region's transcriber heard in it (a TRANSCRIPT artefact, when it heard
+    anything), and the RECORDING consent it rested on when the bytes landed.
+
+    The row holds no words. `duration_s` is how long the phone says it listened; the notice
+    was spoken in `notice_language`, to the doctor by name (`doctor_named`), and the doctor's
+    answer is the first seconds of the artefact — nothing is trimmed from its start, ever.
+    Written once, never edited (docs/trust/recording-consent.md §1)."""
+
+    __tablename__ = "consult_recording"
+    __table_args__ = (
+        _row_of_profile("consult_recording"),
+        _tied_to_profile("consult_recording", "appointment_id", "appointment"),
+        _tied_to_profile("consult_recording", "artifact_id", "artifact"),
+        _tied_to_profile("consult_recording", "transcript_artifact_id", "artifact"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.id"), index=True)
+    artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifact.id"), index=True)
+    transcript_artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("artifact.id"), default=None
+    )
+    consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("consent.id"))
+    duration_s: Mapped[float] = mapped_column(Float)
+    started_at: Mapped[datetime] = mapped_column(index=True)
+    notice_language: Mapped[str] = mapped_column(String(16))
+    doctor_named: Mapped[bool] = mapped_column(Boolean)
+    heard_confidence: Mapped[float | None] = mapped_column(Float, default=None)
+    recorded_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    stored_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class ConsultSegment(ProfileScoped, Base):
+    """One stretch of a consult: who spoke, from when to when in the recording, and where in
+    the transcript those words are (`char_start`, `char_end`). The words themselves are only
+    in the transcript artefact; a segment is a pointer into it and a time in the audio, so a
+    line of the summary can play exactly what was said (E03-05)."""
+
+    __tablename__ = "consult_segment"
+    __table_args__ = (
+        _row_of_profile("consult_segment"),
+        _tied_to_profile("consult_segment", "recording_id", "consult_recording"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    recording_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("consult_recording.id"), index=True
+    )
+    position: Mapped[int] = mapped_column(Integer)
+    speaker: Mapped[Speaker] = mapped_column(enum_column(Speaker, "consult_speaker"))
+    start_s: Mapped[float] = mapped_column(Float)
+    end_s: Mapped[float] = mapped_column(Float)
+    char_start: Mapped[int] = mapped_column(Integer)
+    char_end: Mapped[int] = mapped_column(Integer)
+
+
+frozen(ConsultRecording)
+frozen(ConsultSegment)
