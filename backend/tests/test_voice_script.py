@@ -246,3 +246,32 @@ def test_no_catalogue_line_leaves_a_digit_for_the_voice_to_guess() -> None:
         if stray.search(said):
             left.append(f"{entry.id}: {said}")
     assert left == []
+
+
+# --- amounts are said as one amount, never digit by digit (clinical-safety review) --------------
+
+
+@pytest.mark.parametrize(
+    ("language", "line", "said"),
+    [
+        ("en", "Take 1,000 mg once a day.", "Take one thousand milligrams once a day."),
+        ("ms", "Ambil 1,000 mg sekali sehari.", "Ambil seribu miligram sekali sehari."),
+        ("zh", "每天吃一次，1,000 mg。", "每天吃一次，一千毫克。"),
+        ("en", "Take 1/2 tablet.", "Take half tablet."),
+        ("ms", "Ambil 1/2 biji.", "Ambil setengah biji."),
+        ("zh", "吃1/2片。", "吃半片。"),
+        ("en", "Take 0.5 mg.", "Take zero point five milligrams."),
+        ("ms", "Ambil 0.5 mg.", "Ambil sifar perpuluhan lima miligram."),
+        ("zh", "吃0.5 mg。", "吃零点五毫克。"),
+    ],
+)
+def test_an_amount_is_said_as_one_amount(language: str, line: str, said: str) -> None:
+    """A spoken amount must be the amount written: "1,000 mg" is never "one, zero milligrams"
+    and "1/2 tablet" never "one, two tablet"."""
+    assert spoken_line(line, language) == said
+
+
+def test_a_fraction_a_voice_cannot_say_plainly_is_left_as_written() -> None:
+    """A voice never guesses at an amount: a fraction with no everyday words stays digits."""
+    for line, language in (("Take 5/8 of it.", "en"), ("Ambil 5/8.", "ms"), ("吃5/8。", "zh")):
+        assert "5/8" in spoken_line(line, language)

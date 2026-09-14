@@ -88,6 +88,16 @@ _PERSON_SLOTS = next(names for label, names in SLOT_CLASSES if label == "person"
 PERSON_WORDS_TABLES = frozenset({"YOUR_DOCTOR", "THE_DOCTOR", "YOU", "SOMEONE"})
 """The catalogue tables of his words for a person who is not named ("your doctor", "You",
 "Someone"): what may fill a person's slot without being a name, and is never taken out."""
+NAME_JOINERS = frozenset(
+    {"and", "dan", "bin", "binti", "bt", "bte", "a/l", "a/p", "s/o", "d/o", "anak", "al", "van", "de"}
+)
+"""Words inside a name that are not capitalised: "Ahmad bin Ali", "Siva a/l Kumar", "Mei and
+Kit"."""
+TEMPLATE_SHARE = 0.4
+"""On a learning card or a notice, a line at least this much of whose letters are a catalogue
+template's own is that template, whatever filled its slots: its person slots are blanked even
+when what filled them does not look like a name. A thinner match ("{name} is {value}.") is a
+compressed page's own sentence and is kept as written."""
 _DOCTOR = re.compile(r"\bDr\.?\s+[A-Z][\w'’-]*(?:\s+[A-Z][\w'’-]*)?")
 _JOINED = re.compile(r",\s*|\s+and\s+|\s+dan\s+|和|、")
 
@@ -183,8 +193,22 @@ def _name_like(value: str, people: frozenset[str]) -> bool:
         return True
     if re.search(r"[㐀-鿿]", said):
         return len(said) <= 6 and not re.search(r"[A-Za-z0-9]", said)
-    words = [w for w in re.split(r"[\s,]+", said) if w and w.lower() not in {"and", "dan"}]
-    return 1 <= len(words) <= 5 and all(w[:1].isupper() for w in words)
+    words = [w for w in re.split(r"[\s,]+", said) if w and w.lower() not in NAME_JOINERS]
+    return 1 <= len(words) <= 6 and all(w[:1].isupper() for w in words)
+
+
+def _plainly_a_template(
+    table: Memory, line: str, language: str
+) -> tuple[Any, dict[str, str]] | None:
+    """The most specific template whose own letters are most of the line's (`TEMPLATE_SHARE`),
+    or None: on a card kept as written, a line that is plainly the catalogue's loses whatever
+    filled its person slots, name-shaped or not."""
+    letters = len(re.findall(r"[^\W\d_]", line))
+    for entry, values in table.fills_of(line, language):
+        own = letters - sum(len(re.findall(r"[^\W\d_]", v)) for v in values.values())
+        if letters and own / letters >= TEMPLATE_SHARE:
+            return entry, values
+    return None
 
 
 def _scrub(text: str, names: set[str], doctors: set[str]) -> str:
@@ -245,6 +269,8 @@ def deidentify(
             ),
             None,
         )
+        if filled is None and card_type in KEPT_AS_WRITTEN:
+            filled = _plainly_a_template(table, line, language)
         if filled is None:
             continue
         entry, values = filled

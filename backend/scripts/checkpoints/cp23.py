@@ -262,6 +262,7 @@ def the_voice(client: httpx.Client, dev_log: Path) -> tuple[Person, str, int, in
             f"/profiles/{profile_id}/consents/sharing",
             json={
                 "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
                 "scopes": scopes,
                 "relationship": "daughter",
                 "language": "en",
@@ -275,7 +276,12 @@ def the_voice(client: httpx.Client, dev_log: Path) -> tuple[Person, str, int, in
     check(
         client.post(
             f"/profiles/{profile_id}/keys",
-            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": scopes},
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "holder_display_name": mei.name,
+                "role": "caregiver",
+                "scopes": scopes,
+            },
             headers=bearer(pa.token),
         ),
         201,

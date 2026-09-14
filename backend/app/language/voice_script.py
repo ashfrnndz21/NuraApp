@@ -307,7 +307,7 @@ UNITS: dict[str, dict[str, tuple[str, str]]] = {
     },
 }
 _UNIT = re.compile(
-    r"(?<![A-Za-z0-9.])(?P<number>\d+(?:\.\d+)?)\s?"
+    r"(?<![A-Za-z0-9.,])(?P<number>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s?"
     r"(?P<unit>mg/dL|mmol/L|mmHg|mcg|mg|mL|ml|kg|cm|%)(?![A-Za-z0-9/])"
 )
 _NUMBER = re.compile(r"(?<![A-Za-z0-9.])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![A-Za-z0-9])")
@@ -353,7 +353,7 @@ def _units(line: str, language: str) -> str:
     table = UNITS[language]
 
     def spoken(match: re.Match[str]) -> str:
-        number, unit = match["number"], match["unit"]
+        number, unit = match["number"].replace(",", ""), match["unit"]
         one, many = table[unit]
         value = float(number)
         if "." in number:
@@ -373,9 +373,34 @@ def _units(line: str, language: str) -> str:
     return _UNIT.sub(spoken, line)
 
 
+FRACTIONS: dict[str, dict[str, str]] = {
+    # How each language says the amounts a label writes as a fraction. Any other fraction is
+    # left as its digits: a voice must never guess at an amount.
+    "1/2": {"en": "half", "ms": "setengah", "zh": "半"},
+    "1/4": {"en": "a quarter", "ms": "suku", "zh": "四分之一"},
+    "3/4": {"en": "three quarters", "ms": "tiga suku", "zh": "四分之三"},
+    "1/3": {"en": "a third", "ms": "satu pertiga", "zh": "三分之一"},
+    "2/3": {"en": "two thirds", "ms": "dua pertiga", "zh": "三分之二"},
+}
+_FRACTION = re.compile(r"(?<![A-Za-z0-9./])(\d{1,2})\s*/\s*(\d{1,2})(?![A-Za-z0-9/])")
+_KEEP = "\u2063"
+"""An invisible mark around digits a voice must read as written, so the number reading after
+it leaves them alone; taken out again before the line is returned."""
+
+
+def _fractions(line: str, language: str) -> str:
+    def spoken(match: re.Match[str]) -> str:
+        said = FRACTIONS.get(f"{match.group(1)}/{match.group(2)}", {}).get(language)
+        return said if said is not None else _KEEP + match.group(0) + _KEEP
+
+    return _FRACTION.sub(spoken, line)
+
+
 def _numbers(line: str, language: str) -> str:
     if language == "zh":
         line = _ZH_TWO.sub("两", line)
+
+    kept = re.split(f"({_KEEP}[^{_KEEP}]*{_KEEP})", line)
 
     def spoken(match: re.Match[str]) -> str:
         whole = match.group(1).replace(",", "")
@@ -385,7 +410,10 @@ def _numbers(line: str, language: str) -> str:
             return _decimal(whole, match.group(2), language)
         return say_number(int(whole), language)
 
-    return _NUMBER.sub(spoken, line)
+    return "".join(
+        part.strip(_KEEP) if part.startswith(_KEEP) else _NUMBER.sub(spoken, part)
+        for part in kept
+    )
 
 
 def spoken_line(line: str, language: str) -> str:
@@ -400,6 +428,7 @@ def spoken_line(line: str, language: str) -> str:
         said = _ms_dates(said)
     else:
         said = _zh_dates(said)
+    said = _fractions(said, code)
     said = _units(said, code)
     said = _numbers(said, code)
     if code == "zh":

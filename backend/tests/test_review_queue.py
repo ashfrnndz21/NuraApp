@@ -460,3 +460,59 @@ async def test_every_card_on_the_feed_carries_its_voice_script(deployment: Deplo
     pauses = [s["pause_ms"] for s in learning[0]["voice_script"]["segments"]]
     closing = len(learning[0]["boundary"].splitlines())
     assert pauses[-closing - 1] == BOUNDARY_PAUSE_MS
+
+
+# --- the clinical-safety review's cases -----------------------------------------------------------
+
+
+def test_a_name_with_a_particle_is_still_a_name() -> None:
+    for name in ("Ahmad bin Ali", "Siti binti Hassan", "Siva a/l Kumar"):
+        sample = deidentify(
+            CardType.READING,
+            "en",
+            headline="Your blood pressure today",
+            body=("Your blood pressure today was 138 over 84.", f"{name} can see it too."),
+            voice=(),
+            why="You took your blood pressure today.",
+        )
+        assert sample.lines["body"][1] == "{name} can see it too.", name
+
+
+def test_on_a_notice_a_line_that_is_plainly_a_template_loses_its_person_whatever_filled_it() -> None:
+    """On a card kept as written, a catalogue line never keeps what filled a person's slot, even
+    when it does not look like a name; a compressed sentence that only brushes a thin template
+    ("{name} is {value}.") is kept."""
+    notice = deidentify(
+        CardType.NOTICE,
+        "en",
+        headline="A safety notice",
+        body=(
+            "My neighbour can see it too.",
+            "Ahmad bin Ali can see it too.",
+            "Blood pressure is how hard your blood pushes.",
+        ),
+        voice=(),
+        why="",
+    )
+    assert notice.lines["body"] == [
+        "{name} can see it too.",
+        "{name} can see it too.",
+        "Blood pressure is how hard your blood pushes.",
+    ]
+
+
+async def test_a_sample_that_fails_never_costs_him_the_card(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sampling runs where every card is written, a red flag's included; whatever goes wrong in
+    it is rolled back and logged, and the card is made."""
+
+    async def broken(session: AsyncSession, item: FeedItem) -> None:
+        raise RuntimeError("the catalogue scan could not read a file")
+
+    monkeypatch.setattr(review, "sample_card", broken)
+    pa, profile_id = await _pa_and_mei(deployment)
+    page = await _feed(deployment, profile_id, pa["token"])
+    assert "reading" in {item["type"] for item in page["items"]}
+    async with deployment.sessions() as session:
+        assert (await session.scalars(select(ReviewItem))).all() == []

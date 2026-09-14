@@ -21,7 +21,6 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard
@@ -207,12 +206,13 @@ async def create_item(
 
 async def _sample(session: AsyncSession, item: FeedItem) -> None:
     """One of the first fifty renderings of its type goes to the pharmacist's queue, de-identified
-    (E22-04, `app.language.review`). In a savepoint of its own: a sample that cannot be kept is
-    written to the log and never costs him the card."""
+    (E22-04, `app.language.review`). In a savepoint of its own, and whatever goes wrong in it —
+    a refusal, the database, a file the catalogue scan cannot read, a bug — is written to the
+    log and rolled back: a sample never costs him the card, a red flag's least of all."""
     from app.language.review import sample_card
 
     try:
         async with nested_unit_of_work(session):
             await sample_card(session, item)
-    except (Refusal, SQLAlchemyError) as skipped:
+    except Exception as skipped:  # noqa: BLE001 — nothing in a sample may cost him the card
         log.warning("review sample skipped: %s", type(skipped).__name__)
