@@ -57,7 +57,7 @@ from app.audit.access import (
 )
 from app.audit.models import Action
 from app.db import as_utc, utcnow
-from app.delivery.feed.models import CapsClass
+from app.delivery.feed.models import CapsClass, CardType, FeedItem
 from app.delivery.feed.rank import QUIET_FROM, QUIET_UNTIL, in_quiet_hours
 from app.delivery.nudges import strings as said
 from app.delivery.nudges.handoff import (
@@ -501,6 +501,29 @@ def _send_after(
 
 
 @audited(Action.READ, Scope.RECORDS, NUDGE)
+async def _logistics_cards(
+    session: AsyncSession, *, context: KeyContext, day: date
+) -> dict[str, str]:
+    """The visits whose logistics card (`CardType.VISIT_LOGISTICS`) is on his feed on `day`, by
+    appointment id, to the card's id. Read under the visits scope, the card's own; a key that
+    does not reach the visits sees no card, and holds nothing for one."""
+    if not context.allows(Scope.VISITS):
+        return {}
+    cards = await audited_read(
+        session,
+        FeedItem,
+        context,
+        Scope.VISITS,
+        where=(FeedItem.type == CardType.VISIT_LOGISTICS, FeedItem.day == day.isoformat()),
+    )
+    prefix = "logistics:"
+    return {
+        card.dedupe_key.removeprefix(prefix).rsplit(":", 1)[0]: str(card.id)
+        for card in cards
+        if card.dedupe_key.startswith(prefix)
+    }
+
+
 async def plan_nudges(
     session: AsyncSession,
     *,
@@ -576,6 +599,10 @@ async def plan_nudges(
             made.append(built)
 
     held: list[Held] = []
+    # One reminder of a visit a day (E05-03): on a day the visit's logistics card is already
+    # on his feed — who, which day, where, what to bring — the anticipation nudge would say it
+    # again, so it is held, and says why. With no card made yet that day it goes as before.
+    carded = await _logistics_cards(session, context=context, day=day)
     resting = resting_kinds(nudges, responses, now=now, until=send_after)
     dismissed: dict[NudgeKind, int] = {}
     by_id = {n.id: n for n in nudges}
@@ -587,7 +614,16 @@ async def plan_nudges(
     for draft in made:
         priority = order[draft.kind] - DISMISSAL_STEP * dismissed.get(draft.kind, 0)
         draft = replace(draft, priority=priority)
-        if draft.kind in resting:
+        if draft.kind is NudgeKind.ANTICIPATION and draft.reason.get("appointment_id") in carded:
+            held.append(
+                Held(
+                    draft.kind,
+                    "logistics_card_says_it",
+                    priority,
+                    {**draft.reason, "feed_item_id": carded[str(draft.reason["appointment_id"])]},
+                )
+            )
+        elif draft.kind in resting:
             held.append(
                 Held(
                     draft.kind,

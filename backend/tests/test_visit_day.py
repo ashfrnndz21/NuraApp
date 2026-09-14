@@ -692,3 +692,23 @@ async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     assert "Your family wrote a note about getting to Dr Tan." in texts
     assert "Nura does not have Dr Tan's address yet." in texts
     _clean(texts)
+
+
+async def test_one_reminder_of_a_visit_a_day_the_logistics_card_holds_the_anticipation_nudge(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """E17's anticipation nudge and E05-03's logistics card say the same thing the day before.
+    Before the card is on his feed the nudge goes as his one reminder; once it is, the nudge is
+    held, and the plan says why."""
+    house = await household(deployment)
+    clock.set(FRIDAY_MORNING)
+    plan = await _ok(await deployment.client.get(house.at("/nudges/plan"), headers=house.his))
+    assert [d["reason"].get("code") for d in plan["drafts"]] == ["visit_tomorrow"]
+    page = await _ok(await deployment.client.get(house.at("/feed"), headers=house.his))
+    (card,) = [item for item in page["items"] if item["type"] == "visit_logistics"]
+    again = await _ok(await deployment.client.get(house.at("/nudges/plan"), headers=house.his))
+    assert all(d["kind"] != "anticipation" for d in again["drafts"])
+    (held,) = [h for h in again["held"] if h["kind"] == "anticipation"]
+    assert held["because"] == "logistics_card_says_it"
+    assert held["reason"]["appointment_id"] == house.appointment_id
+    assert held["reason"]["feed_item_id"] == card["item_id"]
