@@ -267,7 +267,7 @@ WATCH_OUT: Mapping[str, Mapping[str, Lines]] = {
         "muscle_ache": ("Jika otot anda sakit tanpa sebab, beritahu {doctor}.",),
         "bleeding_signs": ("Jika anda mudah lebam atau berdarah, beritahu {doctor} hari ini.",),
         "black_stools": (
-            "Jika najis anda menjadi hitam, ini kita tidak tunggu.",
+            "Jika najis anda menjadi hitam, yang ini kita tidak tunggu.",
             "Telefon {doctor} hari ini.",
         ),
         "shaky_sweaty": (
@@ -502,7 +502,7 @@ INTERACTION: Mapping[str, Mapping[str, Lines]] = {
     },
     "zh": {
         "bleeding_risk": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会更容易流血。"),
-        "bleeding_check": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会影响您的血液检查。"),
+        "bleeding_check": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会影响您的验血结果。"),
         "methotrexate_levels": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃对您可能太强。"),
         "low_pressure_kidney": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃站起来会头晕。"),
         "low_sugar": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃血糖会太低。"),

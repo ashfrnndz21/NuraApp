@@ -48,6 +48,7 @@ from app.delivery.feed.search import Engine
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.language.voice_script import script_for
 from app.memory.semantic import current_facts
 from app.state.service import StateView, current_state
 
@@ -388,6 +389,9 @@ def item_json(item: FeedItem, status: str) -> dict[str, Any]:
         "source_id": None if item.source_id is None else str(item.source_id),
         "cite": None if item.cite is None else dict(item.cite),
         "boundary": item.boundary,
+        # The card as it is said (E22-03): its voice lines, a pause after each and a longer
+        # one before the boundary — the same verified words, never others.
+        "voice_script": script_for(item.voice, item.language, boundary=item.boundary).as_json(),
         "day": item.day,
         "created_at": as_utc(item.created_at).isoformat(),
         "expires_at": as_utc(item.expires_at).isoformat(),
