@@ -25,7 +25,7 @@ from app.channels.strings import language_of, phone_code_message
 from app.db import as_utc, keep_on_refusal, utcnow
 from app.errors import Refusal
 from app.identity.models import LoginChallenge, LoginChannel, LoginSession, Person
-from app.identity.providers import CodeSender
+from app.identity.providers import CodeSender, SharedCode
 from app.identity.service import find_person_by_phone, register_person
 from app.keys.context import profile_for_number
 from app.regions import OutOfRegion, Region, guard_region
@@ -133,8 +133,10 @@ async def start_phone_login(
 
     The message is in the language picked on the sign-in screen; with none picked, in the
     language of the profile set up against this number here (his settings keep it); else,
-    and for a language Nura has no message in, English."""
-    code = _six_digits()
+    and for a language Nura has no message in, English. On a demo the person already holds
+    the code (the operator's), and the sender says what it is — or refuses a number outside
+    the test range before anything is written; the demo sender then sends nothing."""
+    code = sender.shared_code(phone_e164) if isinstance(sender, SharedCode) else _six_digits()
     challenge = await _start(
         session,
         region=region,

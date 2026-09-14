@@ -4,6 +4,12 @@ import type { Strings } from "./types";
 export const ms = {
   // @patient headline
   appName: "Nura",
+  demo: {
+    // @patient headline
+    banner: "Demo — bukan untuk maklumat kesihatan sebenar",
+    // @patient
+    lines: ["Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar.", "Semua di sini dipadam setiap malam."],
+  },
   tabs: {
     // @patient headline
     today: "Hari Ini",
@@ -723,6 +729,7 @@ export const ms = {
   // @patient
   refusals: {
     default: "Nura tidak dapat buat itu sekarang.",
+    NotInTheDemo: ["Demo ini hanya menerima nombor telefon ujian.", "Nombor ujian bermula dengan +65 0."],
     CardsStillOpen: "Satu surat masih menunggu persetujuan anda.",
     NotAtThisStep: "Langkah itu datang sedikit kemudian.",
     BiographyClosed: "Persediaan ini sudah selesai.",

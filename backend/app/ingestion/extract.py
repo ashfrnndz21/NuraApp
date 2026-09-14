@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.objects import sha256_of
 from app.regions import Region
 
@@ -242,6 +243,7 @@ def extraction_from_fixture(fixture: Mapping[str, Any]) -> Extraction:
     )
 
 
+@fixture
 class FixtureExtractor:
     """Answers from `tests/fixtures/paper/*.json`, by the sha256 of the bytes it is shown.
 

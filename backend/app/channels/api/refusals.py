@@ -35,6 +35,7 @@ from app.delivery.triggers.deliver import NoOneToActFor
 from app.delivery.triggers.engine import NothingToSay
 from app.delivery.triggers.ladder import NotOnTheLadder
 from app.delivery.voice import NoVoiceFor, TooLongToSay
+from app.demo import NotInTheDemo
 from app.errors import Refusal
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import NotADocument
@@ -116,6 +117,8 @@ from app.state.service import NoState, StaleState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
+    # A demo takes test numbers only, and signs in by phone (app.demo, ADR 0008).
+    (NotInTheDemo, 403),
     # The pharmacist's review queue (E22-04): staff only, no profile in it.
     (NotStaff, 403),
     (NoSuchReviewItem, 404),

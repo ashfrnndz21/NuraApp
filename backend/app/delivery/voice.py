@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.errors import Refusal
+from app.fixtures import fixture
 from app.ingestion.objects import NoSuchObject, ObjectStore, check_key
 from app.language.voice_script import script_for
 from app.regions import Region, guard_region
@@ -122,6 +123,7 @@ def wav_seconds(audio: bytes) -> float:
     return round(size / (rate * block), 1)
 
 
+@fixture
 class FixtureVoice:
     """Silence as long as the lines. Deterministic: the same lines, the same bytes."""
 
@@ -134,13 +136,14 @@ class FixtureVoice:
 
 
 def voice_for(settings: Settings) -> Voice:
-    """The fixture on a declared dev run; anywhere else there is no speech provider yet, and
-    a process that cannot speak a card must not pretend to with silence."""
-    if settings.dev_code_sender:
+    """The fixture on a declared dev run or demo (ADR 0008, `app.fixtures`); anywhere else
+    there is no speech provider yet, and a process that cannot speak a card must not pretend
+    to with silence."""
+    if settings.fixtures_allowed:
         return FixtureVoice()
     raise NoVoiceProvider(
         "no speech provider is built; the fixture voice runs only on a dev run "
-        "(NURA_DEV_CODE_SENDER=1)"
+        "(NURA_DEV_CODE_SENDER=1) or a demo (NURA_DEMO_MODE=1)"
     )
 
 

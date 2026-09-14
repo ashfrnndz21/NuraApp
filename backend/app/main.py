@@ -33,8 +33,8 @@ from app.delivery.voice import voice_for
 from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
-from app.ingestion.objects import LocalObjectStore
 from app.ingestion.speakers import FixtureSeparator
+from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
@@ -46,9 +46,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(m
 def providers_for(settings: Settings) -> Providers:
     """The outside world for this deployment: the code sender, the region's object store,
     the extractor, and the feed's searcher and compressor. A process with nowhere to keep
-    bytes, or nothing to read them with, refuses to start rather than guess."""
-    if settings.object_store_root is None:
-        raise MissingSetting("NURA_OBJECT_STORE is not set")
+    bytes, or nothing to read them with, refuses to start rather than guess. Every provider
+    here but the store's bucket is a fixture, and `create_app` refuses them all outside a
+    declared dev run or demo (`app.fixtures`)."""
     if settings.paper_fixtures is None:
         raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
     if settings.visit_fixtures is None:
@@ -59,7 +59,7 @@ def providers_for(settings: Settings) -> Providers:
         raise MissingSetting("NURA_FEED_FIXTURES is not set and there is no other searcher yet")
     return Providers(
         code_sender=code_sender_for(settings),
-        object_store=LocalObjectStore(Path(settings.object_store_root), settings.region),
+        object_store=object_store_for(settings),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=FixtureSearcher(Path(settings.feed_fixtures)),

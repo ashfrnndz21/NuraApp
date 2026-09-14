@@ -29,6 +29,7 @@ from typing import Protocol
 
 from app.db import as_utc
 from app.errors import Refusal
+from app.fixtures import fixture
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +95,7 @@ class NotAFixture(Refusal):
     """A recall fixture names its question, the sha256 of it, and the phrases picked out."""
 
 
+@fixture
 class FixtureRetriever:
     """Answers from fixtures keyed by the sha256 of the question.
 
