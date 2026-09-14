@@ -149,6 +149,16 @@ RULES: Mapping[TriggerType, Rule] = {
             cap=2,
             quiet=True,
         ),
+        Rule(
+            TriggerType.NUDGE,
+            TriggerKind.EVENT,
+            Category.CONTEXT,
+            Scope.PROFILE,
+            "nudge_handed_over",
+            cap=1,
+            quiet=True,
+            channels=(DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP),
+        ),
     )
 }
 

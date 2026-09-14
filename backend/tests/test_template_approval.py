@@ -30,7 +30,7 @@ from tests.whatsapp_support import MEI, family
 
 SGT = ZoneInfo("Asia/Singapore")
 LIVE = business_number_for(Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False))
-"""A deployment's number: E19's six approved, E11's eight pending."""
+"""A deployment's number: E19's six approved, E11's nine pending."""
 
 
 def at(hour: int, minute: int = 0) -> datetime:

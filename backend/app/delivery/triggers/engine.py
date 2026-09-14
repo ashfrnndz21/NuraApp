@@ -31,6 +31,7 @@ from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_car
 from app.channels.whatsapp.outbound.send import Delivered, send
 from app.channels.whatsapp.templates import language_of
 from app.db import as_utc, utcnow
+from app.delivery.nudges.models import Nudge
 from app.delivery.strings import theirs
 from app.delivery.triggers.deliver import (
     Firing,
@@ -118,6 +119,7 @@ async def run_due(
     await _visit_tomorrow(run)
     await _papers(run)
     await _family_messages(run)
+    await _nudges(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
 
@@ -482,6 +484,49 @@ async def _family_messages(run: Run) -> None:
         await deliver(
             run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say, channels=channels)
         )
+
+
+
+async def _nudges(run: Run) -> None:
+    """The day's smart nudge (E17-03), handed over by its planner: the `nudge` row is the
+    queue (`app.delivery.nudges.handoff`). It goes to him from its `send_after` until it
+    expires, never in the quiet hours, under the cap on nudges a day — the same cap the
+    planner hands over by (`preferences.daily_cap`). Its lines are exactly the planner's."""
+    if run.patient is None:
+        return
+    nudges = await audited_read(
+        run.session,
+        Nudge,
+        run.acting,
+        Scope.PROFILE,
+        where=(Nudge.day == run.day, Nudge.send_after <= run.at, Nudge.expires_at > run.at),
+        channel=Channel.SYSTEM,
+    )
+    for nudge in sorted(nudges, key=lambda n: (-n.priority, as_utc(n.handed_over_at))):
+        firing = Firing(
+            type=TriggerType.NUDGE,
+            dedupe_key=f"nudge:{nudge.id}",
+            why={
+                "nudge_id": str(nudge.id),
+                "kind": nudge.kind.value,
+                "rendered_from_state": str(nudge.state_id),
+            },
+        )
+
+        async def say(person: object, nudge: Nudge = nudge) -> Delivered:
+            return await send(
+                run.session,
+                context=run.acting,
+                to_person=person,  # type: ignore[arg-type]
+                kind="nudge",
+                params={"message": "\n".join(nudge.lines)},
+                provider=run.via.providers.whatsapp,
+                number=run.via.number,
+                language=nudge.language,
+                state=await run.state(),
+            )
+
+        await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
 
 
 __all__ = ["NothingToSay", "Report", "Via", "run_due"]

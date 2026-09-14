@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write
 from app.audit.trail import NotTheirsToRead
 from app.db import utcnow
-from app.delivery.triggers.models import Delivery, DeliverySettings
+from app.delivery.triggers.models import Delivery, DeliverySettings, TriggerType
 from app.delivery.triggers.rules import Config, check_settings, config_of
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
@@ -48,6 +48,21 @@ async def current(
     row = rows[0] if rows else None
     routine = await current_routine(session, context=context) if context.allows(Scope.MEDICINES) else None
     return config_of(row, routine, await breakfast_time(session, context=context)), row
+
+
+async def daily_cap(session: AsyncSession, *, context: KeyContext, type: TriggerType) -> int | None:
+    """How many of one type may reach him in a day: the delivery settings' cap, else the
+    rule's; None is never capped. The one number the engine sends by, and the smart-nudge
+    planner hands over by (`app.delivery.nudges.engine`): one cap on what reaches him."""
+    rows = await audited_read(
+        session,
+        DeliverySettings,
+        context,
+        Scope.PROFILE,
+        order_by=(DeliverySettings.set_at.desc(),),
+        limit=1,
+    )
+    return config_of(rows[0] if rows else None).cap_for(type)
 
 
 async def change(

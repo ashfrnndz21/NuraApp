@@ -421,7 +421,7 @@ async def _seed(deployment: Deployment) -> Seeded:
         201,
     )
     await _ok(await confirm(deployment, pa["token"], profile_id, card, decide(card)))
-    await _ok(
+    felt = await _ok(
         await client.post(f"/profiles/{profile_id}/feelings", json={"word": "dizzy"}, headers=his),
         201,
     )
@@ -552,6 +552,16 @@ async def _seed(deployment: Deployment) -> Seeded:
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/medicines/{medicine.line.id}/taken", json={}, headers=his
+        ),
+        201,
+    )
+    # The feeling tap's answer (E17): a note read against the new medicine, a RECORDS row that
+    # cites a MEDICINES line — withheld, by count, from a key that holds the record only.
+    await _ok(
+        await client.post(
+            f"/profiles/{profile_id}/feelings/{felt['tap_id']}/answer",
+            json={"answer": "yesterday"},
+            headers=his,
         ),
         201,
     )
@@ -763,6 +773,11 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/settings"),
     Walk("GET", f"{P}/biography"),
     Walk("GET", f"{P}/plan"),
+    Walk("GET", f"{P}/feelings/cloud"),
+    Walk("GET", f"{P}/feelings/notes"),
+    Walk("GET", f"{P}/nudges/plan"),
+    Walk("GET", f"{P}/nudge-metrics"),
+    Walk("GET", f"{P}/me-summary"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
@@ -820,7 +835,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/pushes"): "schedules a push; returns it",
     ("POST", f"{P}/documents"): "keeps a document; returns the document list, as GET does",
     ("POST", f"{P}/appointments/{{appointment_id}}/questions"): "changes a question on a yes",
-    ("POST", f"{P}/appointments/{{appointment_id}}/transcript"): "keeps a transcript; returns its card",
+    (
+        "POST",
+        f"{P}/appointments/{{appointment_id}}/transcript",
+    ): "keeps a transcript; returns its card",
     ("POST", f"{P}/appointments/{{appointment_id}}/summary/{{summary_id}}/confirm"): (
         "writes what the summary card says; returns what it wrote"
     ),
@@ -839,6 +857,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
+    ("POST", f"{P}/feelings/{{tap_id}}/answer"): "answers a tap; returns the note it wrote",
+    ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
+    ("POST", f"{P}/nudges/{{nudge_id}}/response"): "writes what he did with a nudge",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""
@@ -1167,7 +1188,6 @@ async def test_every_read_returns_rows_of_the_keys_scopes_only_and_names_what_it
     assert problems == [], "\n".join(sorted(set(problems)))
 
 
-
 def test_only_the_emergency_card_reads_across_written_scopes() -> None:
     """ADR 0002's projection is the one read not narrowed by the scope a row was written
     under. Anything else reaching for it is a new leak, and fails here."""
@@ -1213,6 +1233,7 @@ def test_no_raw_read_of_the_row_scoped_tables_outside_the_approved_readers() -> 
         if lines:
             found[where] = lines
     assert set(found) == set(APPROVED_RAW_READS), found
+
 
 # --- the migration's backfill ---------------------------------------------------------------------
 
@@ -1320,7 +1341,9 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
         # A card composed before row scope, someone's engagement with it, and the page cache.
         card = uuid.uuid4().hex
         _fill(connection, "feed_item", id=card, profile_id=profile)
-        _fill(connection, "feed_engagement", profile_id=profile, item_id=card, event_id=ids["visit"])
+        _fill(
+            connection, "feed_engagement", profile_id=profile, item_id=card, event_id=ids["visit"]
+        )
         _fill(connection, "feed_page", profile_id=profile)
 
         with Operations.context(MigrationContext.configure(connection)):
@@ -1329,9 +1352,12 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
         # engagement stays on the record.
         for table in ("feed_item", "feed_engagement", "feed_page"):
             assert connection.execute(text(f"SELECT count(*) FROM {table}")).scalar() == 0, table
-        assert connection.execute(
-            text("SELECT count(*) FROM event WHERE id = :id"), {"id": ids["visit"]}
-        ).scalar() == 1
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM event WHERE id = :id"), {"id": ids["visit"]}
+            ).scalar()
+            == 1
+        )
         written = {
             row.id: row.written_scope
             for table in ("artifact", "event")

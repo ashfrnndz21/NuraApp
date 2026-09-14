@@ -84,7 +84,7 @@ async def printable(
 
 @router.post("/{profile_id}/not-feeling-well", status_code=status.HTTP_201_CREATED)
 async def button(body: SaidIn, request: Request, context: Context, session: Db) -> WhatToDoOut:
-    """"I'm not feeling well." His words are kept, heard, read for red flags first, and the
+    """ "I'm not feeling well." His words are kept, heard, read for red flags first, and the
     family is told; the lines say what to do now. Anyone with a key may press it for him —
     a helper, a caregiver — and a red flag escalates whoever pressed; a voice note is the sender's
     own words, kept like typed text (ADR 0003). Nothing here starts, stops or changes a

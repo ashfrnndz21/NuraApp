@@ -7,7 +7,7 @@ said, the routine's own breakfast anchor stands (E10); before either, 07:30 on h
 morning card (`app.delivery.triggers`) all ask it, so the day's prompt and the morning card
 always come at the same moment, and a change to his settings moves all three.
 
-His settings are read through `app.onboarding.settings.breakfast_said`, the same row and the
+His settings are read through `app.onboarding.settings.clocks_said`, the same row and the
 same field `GET /profiles/{id}/settings` serves (the web's About you), under the face of the
 graph every key opens — his breakfast time is how to reach him, not his health; the routine
 under the medicines, where it is kept.
@@ -40,9 +40,9 @@ def _clock(text: str | None) -> time | None:
 async def breakfast_time(session: AsyncSession, *, context: KeyContext) -> time:
     """His settings' breakfast, else the routine's breakfast anchor, else 07:30."""
     # Imported here: `app.onboarding` wires its plan at import, and the plan asks this module.
-    from app.onboarding.settings import breakfast_said
+    from app.onboarding.settings import clocks_said
 
-    said = await breakfast_said(session, context=context)
+    said = (await clocks_said(session, context=context)).breakfast
     if said is not None:
         return said
     if context.allows(Scope.MEDICINES):

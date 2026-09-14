@@ -4,7 +4,7 @@ Outside the 24-hour customer-service window a business may send nothing but a te
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11) — is one of these fourteen, submitted once and named here: its slots, and the words a patient reads in each
+message (E11) — is one of these fifteen, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -250,6 +250,19 @@ RED_FLAG_NOTICE_AMBIGUOUS = Template(
 """A red flag from someone on more than one family's list, before they said which: raised on
 each, and each family told it may be about theirs."""
 
+# @patient
+NUDGE = Template(
+    "nudge",
+    ("message",),
+    {
+        "en": "Nura has a note for you.\n{message}",
+        "ms": "Nura ada nota untuk anda.\n{message}",
+        "zh": "Nura 有一句话要告诉您。\n{message}",
+    },
+    approved=False,
+)
+"""The day's smart nudge (E17-03), sent by E11's engine: the planner's lines, exactly."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -267,10 +280,11 @@ TEMPLATES: Mapping[str, Template] = {
         FAMILY_NOTE,
         RED_FLAG_NOTICE_SELF,
         RED_FLAG_NOTICE_AMBIGUOUS,
+        NUDGE,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All fourteen, in the order they are submitted: E19's six (approved), then E11's eight
+"""All fifteen, in the order they are submitted: E19's six (approved), then E11's nine
 (pending Meta's approval, `approved=False`)."""
 
 

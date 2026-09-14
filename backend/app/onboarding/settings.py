@@ -271,13 +271,25 @@ async def _current_row(
     return max(found, key=lambda row: as_utc(row.set_at)) if found else None
 
 
-async def breakfast_said(session: AsyncSession, *, context: KeyContext) -> time | None:
-    """His breakfast time exactly as the settings screen serves it (`GET …/settings`, the
-    web's About you), or None before he has said: the one breakfast resolver
-    (`app.routines.breakfast`) reads it here, so the card, the routine and the first week
-    never parse the row another way. The face of the graph, as `read_settings` reads it."""
+@dataclass(frozen=True, slots=True)
+class Clocks:
+    """The two times of his day his settings keep, as the settings screen serves them."""
+
+    breakfast: time | None
+    checkin: time | None
+
+
+async def clocks_said(session: AsyncSession, *, context: KeyContext) -> Clocks:
+    """His breakfast and check-in times exactly as `GET …/settings` serves them (the web's
+    About you), None before he has said: the one reader of them. The breakfast resolver
+    (`app.routines.breakfast`) and the nudges' check-in (`app.delivery.nudges.engine`) both
+    ask it, so nothing parses the row another way. The face of the graph, as `read_settings`
+    reads it: these times are how to reach him, not his health."""
     row = await _current_row(session, context=context, scope=SETTINGS_SCOPE)
-    return None if row is None else values_of(row).breakfast_time
+    if row is None:
+        return Clocks(breakfast=None, checkin=None)
+    values = values_of(row)
+    return Clocks(breakfast=values.breakfast_time, checkin=values.checkin_time)
 
 
 @audited(Action.READ, Scope.RECORDS, TARGET)

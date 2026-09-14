@@ -8,8 +8,8 @@ rows written before the grammar was a column. The audit actor may be empty for N
 reach (the delivery engine), on the system channel only; and a red flag carries whether the
 person who raised it is on more than one profile.
 
-Revision ID: 0019_delivery
-Revises: 0019_person_named_by
+Revision ID: 0021_delivery
+Revises: 0020_feelings
 Create Date: 2026-09-15
 """
 
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0019_delivery"
-down_revision = "0019_person_named_by"
+revision = "0021_delivery"
+down_revision = "0020_feelings"
 branch_labels = None
 depends_on = None
 
@@ -54,6 +54,7 @@ TRIGGER_TYPE = _enum(
     "papers",
     "family_message",
     "first_week_prompt",
+    "nudge",
 )
 CATEGORY = _enum("delivery_category", "alert", "reminder", "context")
 CHANNEL = _enum("delivery_channel", "app_push", "whatsapp", "caregiver")

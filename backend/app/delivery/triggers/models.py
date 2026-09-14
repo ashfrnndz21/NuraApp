@@ -46,6 +46,8 @@ class TriggerType(StrEnum):
     FAMILY_MESSAGE = "family_message"
     FIRST_WEEK_PROMPT = "first_week_prompt"
     """The first week's prompt due today (E01-04), carried as one line of the morning card."""
+    NUDGE = "nudge"
+    """The day's smart nudge (E17-03), handed over by its planner; the `nudge` row is the queue."""
 
 
 class Category(StrEnum):

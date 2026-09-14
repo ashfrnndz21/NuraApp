@@ -380,3 +380,37 @@ async def test_the_first_week_prompt_is_one_line_of_the_morning_card(
     assert along.message_id == card.message_id and along.why["gap"] == "weight"
     assert words.action in h.sent_to(h.pa)[-1].splitlines()
     assert _rows(await _run(sg, h, clock, at(7, 50, day=15)), TriggerType.FIRST_WEEK_PROMPT) == []
+
+
+async def test_the_nudge_goes_at_its_time_and_one_cap_says_how_many_a_day(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """E17's planner hands the day's nudge over and the engine sends it from its time, by the
+    one cap on nudges a day (`caps.nudge`, one unless the family sets it): the planner hands
+    over by that number and the engine sends by it, so there is no second cap."""
+    from app.db import as_utc
+    from app.delivery.nudges.engine import hand_over, plan_nudges
+    from app.family.thread import post_message
+    from tests.feelings_support import REGISTRY
+
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    caps = {"skip_quiet_days": False, "quiet_from": None, "quiet_until": None, "channels": {}}
+    await change(sg, context=h.owner, **caps, caps={"nudge": 2})
+    _, first = await hand_over(sg, context=h.owner, registry=REGISTRY)
+    # Mei writes to the family: the day has a second nudge to offer (presence).
+    await post_message(sg, context=await h.ctx(sg, h.mei), text="See you on Saturday, Pa.")
+    _, second = await hand_over(sg, context=h.owner, registry=REGISTRY)
+    early = as_utc(first.send_after) - timedelta(minutes=1)
+    assert _rows(await _run(sg, h, clock, early), TriggerType.NUDGE) == []
+    # The family lowers the cap to one: the engine sends the better one and holds the other.
+    await change(sg, context=h.owner, **caps, caps={"nudge": 1})
+    due = max(as_utc(first.send_after), as_utc(second.send_after)) + timedelta(minutes=1)
+    rows = {row.why["nudge_id"]: row for row in _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)}
+    sent, held = rows[str(first.id)], rows[str(second.id)]
+    assert sent.outcome is DeliveryOutcome.SENT and sent.rule == "nudge_handed_over"
+    assert sent.template_name == "nudge" and sent.why["kind"] == first.kind.value
+    assert held.outcome is DeliveryOutcome.CAPPED
+    assert _rows(await _run(sg, h, clock, due + timedelta(minutes=5)), TriggerType.NUDGE) == []
+    # The planner hands over no more that day, by the same number.
+    assert (await plan_nudges(sg, context=h.owner, registry=REGISTRY)).drafts == ()

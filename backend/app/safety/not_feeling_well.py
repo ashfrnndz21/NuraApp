@@ -98,7 +98,9 @@ from app.safety.red_flags import (
     FLAG_SCOPE,
     Feeling,
     Flag,
+    NotAFeeling,
     detect,
+    is_red,
     keep_row,
     record_the_moment,
     write_flag_kept,
@@ -415,9 +417,7 @@ async def capture(
     raise NothingSaid("say it or type it")
 
 
-async def family_of(
-    session: AsyncSession, *, context: KeyContext, profile: Profile
-) -> Family:
+async def family_of(session: AsyncSession, *, context: KeyContext, profile: Profile) -> Family:
     """Who is told, and who is named on his card.
 
     The emergency list is every active key holder with EMERGENCY but the person pressing,
@@ -626,7 +626,11 @@ async def write_the_moment(
     said_nothing_known = not parsed.symptoms and not heard.flags
     value = {
         "symptoms": [one.value for one in parsed.symptoms]
-        or ([Symptom.NOT_WELL.value] if said_nothing_known and label == NOT_FEELING_WELL_LABEL else []),
+        or (
+            [Symptom.NOT_WELL.value]
+            if said_nothing_known and label == NOT_FEELING_WELL_LABEL
+            else []
+        ),
         "red_flags": [one.value for one in heard.flags],
         "suppressed": [one.value for one in heard.suppressed],
         "severity": parsed.severity,
@@ -702,9 +706,7 @@ async def _missed_dose(
         return None
     slots = await today(session, context=context, registry=registry, language=language)
     hour = utcnow().astimezone(REGION_TZ[context.region]).hour
-    due = [
-        slot for slot in slots if not slot.taken and hour >= ANCHOR_HOURS[Anchor(slot.anchor)]
-    ]
+    due = [slot for slot in slots if not slot.taken and hour >= ANCHOR_HOURS[Anchor(slot.anchor)]]
     return due[0] if due else None
 
 
@@ -781,9 +783,18 @@ async def not_feeling_well(
     audio: bytes | None = None,
     content_type: str | None = None,
     language: str | None = None,
+    feeling: Feeling | None = None,
 ) -> WhatToDoNow:
     """The button. See the module doc for the five steps and their order. `via` is the
-    channels this process sends through: a red flag's ladder sends its first rung at once."""
+    channels this process sends through: a red flag's ladder sends its first rung at once.
+
+    `feeling` is for a caller that already knows the red word — a tap on the feeling cloud
+    (E17), where he chose the word itself: the flag is that word, and the table is not asked
+    to hear it back from the words (weight gain has no words in the table at all). Only a red
+    word may be named (`NotAFeeling`); the words are still kept and read for symptoms.
+    """
+    if feeling is not None and not is_red(feeling):
+        raise NotAFeeling(f"{feeling} is not a red flag")
     profile = await audited_profile_read(session, context)
     lang = language_of(language or profile.language)
     can_record = context.allows(Scope.RECORDS)
@@ -798,7 +809,7 @@ async def not_feeling_well(
         audio=audio,
         content_type=content_type,
     )
-    feeling = detect(captured.text)
+    feeling = feeling if feeling is not None else detect(captured.text)
     parsed = parse_symptoms(captured.text)
     family = await family_of(session, context=context, profile=profile)
 
@@ -815,8 +826,10 @@ async def not_feeling_well(
                 family = Family(chief=first, to_tell=family.to_tell, everyone=family.everyone)
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
 
-    missed = None if heard.any else await _missed_dose(
-        session, context=context, registry=registry, language=lang
+    missed = (
+        None
+        if heard.any
+        else await _missed_dose(session, context=context, registry=registry, language=lang)
     )
     missed_name = None if missed is None else _plain_name(registry, missed.line.generic, lang)
     notices: list[Notice] = list(escalated.notices) if escalated is not None else []

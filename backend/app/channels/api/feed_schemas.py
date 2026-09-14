@@ -20,7 +20,6 @@ from app.delivery.feed.models import (
     SourceKind,
 )
 from app.delivery.feed.rank import Page, item_json
-from app.safety.red_flags import Feeling, Flag
 
 
 class FeedItemOut(BaseModel):
@@ -159,30 +158,4 @@ class SearchJobOut(BaseModel):
             enabled=job.enabled,
             created_at=job.created_at,
             last_run_at=job.last_run_at,
-        )
-
-
-class FeelingIn(BaseModel):
-    """A tap on the feeling cloud: one word from its fixed set."""
-
-    word: Feeling
-
-
-class FeelingOut(BaseModel):
-    event_id: uuid.UUID
-    word: Feeling
-    red_flag: bool
-    flag_id: uuid.UUID | None
-    told: list[uuid.UUID]
-    suppressed_because: str | None
-
-    @classmethod
-    def of(cls, event_id: uuid.UUID, word: Feeling, flag: Flag | None) -> FeelingOut:
-        return cls(
-            event_id=event_id,
-            word=word,
-            red_flag=flag is not None,
-            flag_id=None if flag is None else flag.id,
-            told=[] if flag is None else [uuid.UUID(one) for one in flag.told],
-            suppressed_because=None if flag is None else flag.suppressed_because,
         )
