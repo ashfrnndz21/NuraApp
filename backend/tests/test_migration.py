@@ -1,13 +1,14 @@
-"""The migration and the models must agree.
+"""The migrations and the models must agree.
 
 Migrations are never deleted, so the only way the two drift apart is a column added to one
-and not the other. This runs 0001 against an empty database and checks the tables it builds
-against the tables the models declare.
+and not the other. This runs every revision in order against an empty database and checks
+the tables they build against the tables the models declare.
 """
 
 from __future__ import annotations
 
 import importlib.util
+from itertools import pairwise
 from pathlib import Path
 from types import ModuleType
 
@@ -16,10 +17,20 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import Table, create_engine, inspect
 
+from app.audit.models import AuditEntry
 from app.identity.models import Person, Profile
 from app.keys.models import Key
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
+
+# In order. A revision is appended here when it is written and never taken out again.
+CHAIN = ("0001_accounts_profiles_and_keys", "0002_audit_entry")
+TABLES: tuple[Table, ...] = (
+    Person.__table__,
+    Profile.__table__,
+    Key.__table__,
+    AuditEntry.__table__,
+)
 
 
 def _load(name: str) -> ModuleType:
@@ -31,25 +42,34 @@ def _load(name: str) -> ModuleType:
 
 
 @pytest.fixture
-def migration() -> ModuleType:
-    return _load("0001_accounts_profiles_and_keys")
+def migrations() -> tuple[ModuleType, ...]:
+    return tuple(_load(name) for name in CHAIN)
 
 
-def test_the_first_migration_builds_the_tables_the_models_declare(migration: ModuleType) -> None:
-    tables: tuple[Table, ...] = (Person.__table__, Profile.__table__, Key.__table__)
+def test_every_revision_links_to_the_one_before_it(migrations: tuple[ModuleType, ...]) -> None:
+    assert migrations[0].down_revision is None
+    for earlier, later in pairwise(migrations):
+        assert later.down_revision == earlier.revision
+
+
+def test_the_migrations_build_the_tables_the_models_declare(
+    migrations: tuple[ModuleType, ...],
+) -> None:
     engine = create_engine("sqlite+pysqlite://")
     with engine.begin() as connection:
-        with Operations.context(MigrationContext.configure(connection)):
-            migration.upgrade()
+        for migration in migrations:
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.upgrade()
 
         built = inspect(connection)
-        assert set(built.get_table_names()) == {table.name for table in tables}
-        for table in tables:
+        assert set(built.get_table_names()) == {table.name for table in TABLES}
+        for table in TABLES:
             assert {column["name"] for column in built.get_columns(table.name)} == {
                 column.name for column in table.columns
             }
 
-        with Operations.context(MigrationContext.configure(connection)):
-            migration.downgrade()
+        for migration in reversed(migrations):
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.downgrade()
         assert inspect(connection).get_table_names() == []
     engine.dispose()
