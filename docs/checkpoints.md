@@ -26,6 +26,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
 | 19 | Nura on your phone over https (demo) | Open the Singapore demo's https address in Safari, add it to the home screen, sign in with a test number (`+65 0…`) and the demo code, and see "Demo — not for real health information" at the top of every screen; walk checkpoints 2–6, 14, 16–18 and 21 against the same address. How-to: `docs/deploy.md` | ADR 0001, ADR 0008 | planned — needs a hosting account (Fly.io or Render, Singapore) |
 | 21 | Feeling cloud and smart nudges | Pa, in Malay, adds the blood pressure tablet from a label and types in a blood pressure: the cloud puts "Pening" (dizzy) first, because the new medicine's licensed monograph lists it, with a reason code on every word; Pa taps it and answers "since yesterday", and the note says what to tell Dr Tan and ends on the boundary; the strip goes after the tap; Pa taps "chest pain" — the not-feeling-well button runs for him: the flag, the family told, the urgent card, posture act, no note; no nudge today, tomorrow's is the visit (one a day, in the daytime, the proud number held); Mei reads the metrics, counts only; the Me page says the number that only goes up | E17-01…E17-05, E11-07 | **ready** |
+| 22 | Visit day: logistics, recording, clips | For Pa's visit to Dr Tan tomorrow, the logistics card from the record: the time his way, Dr Tan's address, Mei's note about the place under "Mei's note" as she wrote it, who drives him — Mei, the roster says, as a suggestion that waits for a yes, then "Mei will drive you to Dr Tan" — and what to bring (his blood pressure book, his tablets in their boxes, his hospital letter); the card on his feed the day before and on the day; no recording without his agreement to Nura listening, and a viewer refused before the room is told anything; the notice said to Dr Tan by name, one recording sent on Stop, kept as a consult, heard, split by speaker with Dr Tan's yes as the first seconds; the post-visit card with each line's place in the recording; "what did Dr Tan say about the water pill" answered first with "the card is waiting for your yes", then, once it is confirmed, with the clip; the recording heard by him and the family he let in (his chief, his caregiver) and refused to a viewer, a clinic and a helper; on the phone, the Visit screen: one big *Start recording*, the notice first, a red dot and a timer, *Stop*, "Hear what Dr Tan said"; a no that keeps nothing; a hidden page that stops at once | E05-03, E05-04, E02-05, E03-05 | **ready** |
 | 23 | Same words every time; the pharmacist's queue | `make language` holds every patient string in every catalogue — cards, WhatsApp, the web client — to one Malay and one Chinese line per English line and to the glossary's words (docs/plain-words.md §6), 0 failures; Pa in English (Mei holds a key), Kit in Chinese and Aminah in Malay each write down a blood pressure and every card comes back with its voice script: the numbers as words in the card's language, a pause after each line, a longer one before the boundary; the pharmacist, by staff token, reads the first cards of each type with nobody in them (`{name}`, no profile id), sees each type flagged until its first fifty are decided, rewrites a line as a proposed catalogue change that changes nothing Pa sees, and approves a new source only after a search naming it was refused; Pa's own key is refused on the queue | E22-02, E22-03, E22-04 | **ready** |
 | — | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | later — needs an Apple developer account |
 
@@ -33,7 +34,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 
 ## How a checkpoint is tested
 
-- **Backend checkpoints (1–9, 13–18, 21, 23)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
+- **Backend checkpoints (1–9, 13–18, 21, 22, 23)**: `make dev` in one terminal, `make checkpoint N=<n>` in another. The script runs the scenario against the local server with a fixture provider (no SMS, no real drug database, no WhatsApp) and prints each step with ✓ or ✗; it stops at the first ✗. The FastAPI page at `/docs` lets you repeat any step by hand. `make dev` also writes its log to `backend/.dev.log` (ignored by git), which is where the script reads the login codes from; `make reset-db` gives you a clean local database (stop `make dev` first).
 - **Web checkpoints (10–12, ADR 0001)**: `make dev` and `make web` in two terminals, then the app in a browser — on the Mac at http://127.0.0.1:5173, on the phone at the Mac's address on the same Wi-Fi. The operator walks it first with Playwright (`make web-e2e`) and attaches screenshots to the checkpoint note; you then walk it yourself by hand.
 - **Over https (19)**: needs a hosting account in Singapore, Fly.io or Render, which you create; `docs/deploy.md` is the whole runbook, from the account to the phone. It is a demo (ADR 0008): the fixtures, test numbers only, a banner on every screen, wiped each night. The backend checkpoints walk against it with `NURA_BASE_URL` and `NURA_DEMO_LOGIN_CODE`, except 7, 8, 9, 13 and 15, which step through dev-only routes.
 - **TestFlight (last, unnumbered)**: needs your Apple developer account; the operator prepares the build and the steps.
@@ -909,6 +910,105 @@ What you will see (the operator's walk: `make web-e2e`, with `make dev` serving 
 Both clocks stand at 10:00 in Singapore on Monday 14 September for the whole run: the phone's by Playwright's clock, the backend's by `NURA_FROZEN_CLOCK` — `make web-e2e` starts `make dev` itself with it (`web/playwright.config.ts`, `webServer`), so the dose windows, the quiet hours and "today" are the same whenever and wherever it runs. The quiet-hours test moves the backend to 22:30 with `POST /dev/clock` and puts it back. Build first (`make build-web`) so the backend serves `/app`.
 
 **What "passed" means.** One card fills the screen and the screen snaps to one card at a time, up and down only — nothing moves sideways, there is no pull-to-refresh and no swipe to dismiss; the order is the backend's; the gate is a card with *Keep going*, and past it the feed pages on for as long as you swipe, each page asked for once by the cursor the page before handed back; every card shows its lines, its why, and — on a learning card — the boundary it ends on, and carries the State it was rendered from; *Hear*, *Ask*, *Family* and *Not for me* are visible buttons on every card, at least 56 by 56; nothing speaks until you tap *Hear*, and it stops when the card leaves; *Not for me* holds that kind of card for the rest of the day; a refusal is one plain sentence; and offline the feed opens on the page the phone kept today, and not after midnight. If a step does not do that, tell the operator which one and what you saw instead.
+
+## How to run checkpoint 22
+
+Two parts: the API walk (`make checkpoint N=22`), and the Visit screen in the browser. Neither depends on another checkpoint having run. Four fresh numbers every run — Pa, his chief Mei, Kit with a viewer's key, Siti with a helper's — so it can be run again on the same `dev.db`.
+
+```sh
+make dev                # terminal 1: migrates dev.db (0022 adds consult_recording, consult_segment and the clip columns), serves on http://127.0.0.1:8000
+make checkpoint N=22    # terminal 2: walks the API part, about three seconds
+```
+
+No audio is committed and no speech provider is called. The recording is a placeholder: the four bytes a webm opens with, a marker and a label (`backend/tests/consult_audio.py`). What the fixture transcriber hears in it is in `backend/tests/fixtures/voice/`; who spoke when is in `backend/tests/fixtures/speakers/`; the card is read from `backend/tests/fixtures/visits/consult-bp-review.json` — the in-room notice, Dr Tan's yes, the visit, Pa's question, Mei's word. The bytes go to the local object store under `backend/var/objects/SG/consults/`.
+
+What you will see (the numbers, ids and days change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591222005) registered by phone code and signed in (the code read from the server log)
+✓ Mei (+6592235931) registered by phone code and signed in (the code read from the server log)
+✓ Kit (+6593247044) registered by phone code and signed in (the code read from the server log)
+✓ Siti (+6594255528) registered by phone code and signed in (the code read from the server log)
+✓ Lim (+6595265033) registered by phone code and signed in (the code read from the server log)
+✓ Clinic (+6596273292) registered by phone code and signed in (the code read from the server log)
+✓ Pa opened his profile: Mei his chief (every part), Lim a caregiver (the visits, the record, the readings), Kit a viewer (the visits, the readings), Siti a helper (the medicines), and the clinic (the visits, the record)
+✓ Dr Tan in Pa's directory at Gleneagles Hospital, 6A Napier Road; the visit tomorrow, Wednesday 16 September at 9, on Pa's yes; Mei's note about the place ("parking at B2") and Mei on the roster tomorrow from 7 to 12
+✓ Pa's blood pressure tablet from its label, and his hospital letter confirmed: both are things to bring
+✓ GET …/appointments/{appt}/logistics: the card for tomorrow, from the record and State (state 4ce5d0ad…), every line through the plain-words verifier:
+    [when  ] You see Dr Tan on Wednesday 16 September at 9 in the morning.
+    [place ] Dr Tan is at Gleneagles Hospital, 6A Napier Road.
+    [note  ] Mei wrote a note about getting to Dr Tan.
+    [driver] Mei will tell you who is driving you to Dr Tan on Wednesday 16 September.
+    [bring ] Bring your blood pressure book on Wednesday 16 September.
+    [bring ] Bring your medicines in their boxes on Wednesday 16 September.
+    [bring ] Bring your hospital letter on Wednesday 16 September.
+             Mei's note: "parking at B2"  (as she wrote it)
+    driver: suggested — Mei, on the roster then; needs the chief's yes: True
+✓ the suggestion is nothing until a yes: without one, NotAConfirmerHere (400); Kit's viewer key does not reach the family list, so it cannot mint one, OutOfScope (403, family). Mei's yes (subject drive) made the task "drive Pa to Dr Tan", hers, due at the visit; the card now says: "Mei will drive you to Dr Tan on Wednesday 16 September."
+✓ Mei's list (Pa's feed keeps quiet at night): the visit_logistics card the day before — "Getting to Dr Tan tomorrow", its lines the card's, rendered from state 4ce5d0ad…, no boundary (it infers nothing), never autoplayed
+✓ no recording without Pa's agreement: the notice and the upload are both refused, ConsentWithheld (403), and nothing is kept; Kit's viewer key is refused before the room is told anything, NotTheirsToChangeVisits (403)
+✓ Pa agreed to Nura listening (POST …/consents/recording); the notice Mei's phone says first, to Dr Tan by name:
+    Nura will listen now.
+    Nura keeps what you and Dr Tan say.
+    Only you and the family you let in can hear it.
+    Is that OK, Dr Tan?
+    and on a no: Nura will not listen today. / Mei will write the notes by hand.
+✓ Mei's recording, sent once on Stop (POST …/recording, audio/webm;codecs=opus, 66 s): a consult voice artefact 3c394484… on the RECORDING consent e77a7234…, heard at 0.93, and who spoke when — 11 stretches, no words in any row:
+      0.0–8.6   unknown
+      8.6–10.4  doctor  ← Dr Tan's yes, the first seconds after the notice
+     10.4–19.8  doctor
+     19.8–28.9  doctor
+     28.9–36.2  doctor
+     36.2–39.0  doctor
+     39.0–47.5  doctor
+     47.5–55.1  doctor
+     55.1–59.3  patient
+     59.3–63.0  doctor
+     63.0–65.8  family
+✓ the post-visit card from the transcript (summary 1c93f2aa…), each line with where in the recording Dr Tan said it:
+     19.8–28.9  Ask Dr Tan about the new amount of the water pill (frusemide).
+     28.9–36.2  Every morning, stand on the scale before breakfast.
+     36.2–39.0  Every evening, eat a lighter dinner.
+     39.0–47.5  You have a blood test on Monday 28 September.
+     39.0–47.5  Eat nothing after 12 midnight on Sunday 27 September.
+     39.0–47.5  Water is OK.
+     47.5–55.1  Bring your blood pressure book on Thursday 15 October.
+     47.5–55.1  You see Dr Tan again on Thursday 15 October at 10 in the morning.
+     47.5–55.1  Mei will book it.
+     10.4–19.8  Dr Tan wrote down your blood pressure.
+✓ Mei asks "what did Dr Tan say about the water pill" before the card has a yes: "Your card from Dr Tan on Wednesday 16 September is waiting for your yes." — nothing Dr Tan said is cited yet
+✓ Mei confirms the card on her yes, then asks again: "Dr Tan talked about this on Wednesday 16 September." — citing the recording 3c394484… from 19.8 to 28.9 seconds, the button "Hear what Dr Tan said"
+✓ the clip (GET …/artifacts/{a}/clip?start=19.8&end=28.9): the recording's 47 bytes, audio/webm, X-Media-Fragment t=19.8,28.9 — the phone plays that stretch
+✓ who hears it is what the room was told: Pa and the family he let in — Lim, his caregiver, hears the clip and the whole recording; Kit's viewer key and the clinic's key both hold the visits and are refused, OnlyTheFamilyHears (403); Siti's helper key does not reach the visits, OutOfScope (403); a stretch outside the recording is NotAClip (400)
+✓ Pa reads his trail (500 lines); every refusal of this walk is on it:
+    2026-09-14T19:17:25    Pa  read visits consult_recording  refused NotAClip
+    2026-09-14T19:17:25  Siti  read visits consult_recording  refused OutOfScope
+    2026-09-14T19:17:25  Clin  read visits artifact  refused OnlyTheFamilyHears
+    2026-09-14T19:17:25   Kit  read visits artifact  refused OnlyTheFamilyHears
+    2026-09-14T19:17:24   Kit  read visits consult_recording  refused NotTheirsToChangeVisits
+    2026-09-14T19:17:24   Mei  write visits consult_recording  refused ConsentWithheld
+    2026-09-14T19:17:24   Mei  read visits consent  refused ConsentWithheld
+    2026-09-14T19:17:24   Mei  read visits consult_recording  refused ConsentWithheld
+checkpoint 22 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 22 passed`. The criteria: the logistics card is composed from the record only — the time from the booking, his way; the place from the directory; the chief's note shown as she wrote it under her name, never as Nura's words; who drives from a family task naming this visit, or the roster's person on duty then as a suggestion that is nothing until the chief's yes, which makes the task "drive Pa to Dr Tan"; what to bring from his record — and every line passed the plain-words verifier and the card names its State; the feed carries it the day before and on the day; nothing records without the RECORDING consent in force, a key that does not change the visits is refused before the notice is given, and every refusal is on the trail; the recording is kept as a consult voice artefact in the region, on the consent it rested on, heard, split by speaker with times and no words in any row, and read into the post-visit card with each line's place in the recording; an answer about what the doctor said cites nothing from the recording until the card has his yes, and then cites it from its start to its end; the clip and the whole recording are heard only by him and the family he let in — his chief and his caregivers — and a viewer's key or a clinic's is refused in plain words, on his trail, however much of the visit it can read. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+
+**The Visit screen, on the Mac or the phone.** `make build-web`, then `make dev` serves the app at http://127.0.0.1:8000/app/ (or `make web` for http://127.0.0.1:5173/app/). Sign in with the number the walk printed for Pa. On Today, under *See more for you*, tap *See your next visit*. The screen is the logistics card, in the backend's words, with Mei's note under *Mei's note* and *Hear* to have it read. Under it is one big button, *Start recording*, and the line *Keep this page open while Nura listens.*
+
+1. **Start recording.** On a profile that has not agreed yet, Pa reads today's words for Nura listening and taps *I agree*. Then the notice appears and is said out loud: *Nura will listen now. … Is that OK, Dr Tan?* The phone asks for the microphone once, and a red dot and a timer appear. The recording holds the notice and then Dr Tan's answer.
+2. **Dr Tan said yes** keeps listening. **Stop** sends the recording once. The screen says *Nura kept the recording.* and shows the post-visit card. Under each line Dr Tan said is *Hear what Dr Tan said*, which plays only that stretch.
+3. **Dr Tan said no** stops the microphone and throws the audio away on the phone. Nothing is sent. The screen says *Nura will not listen today. You will write the notes by hand.* and offers a box for the notes, read into the same card.
+4. **Leave the page while it listens** (switch apps, or lock the phone): it stops at once. When you come back it says *Nura stopped listening when you left this page.* One tap, *Keep what Nura heard*, sends what it heard. A browser cannot keep listening in the background (ADR 0006).
+
+The operator's walk of the screen is `make web-e2e` (`web/tests/e2e/visit.spec.ts`): the phone's clock and the backend's frozen at 10 in the morning on Monday 14 September, the recorder a stand-in that hands back the placeholder recording.
+
+```
+✓ tests/e2e/visit.spec.ts:32:1 › the visit screen: logistics from the record, the yes to a driver, consent, the notice first, one upload on Stop, the card with its clips
+✓ tests/e2e/visit.spec.ts:127:1 › a no keeps nothing: the recorder stops, nothing is sent, and the notes are written by hand
+✓ tests/e2e/visit.spec.ts:159:1 › the page hidden while listening stops at once, and what was heard is kept on the phone for one tap
+```
 
 ## Rules the operator follows between checkpoints
 

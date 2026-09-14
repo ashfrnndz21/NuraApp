@@ -27,6 +27,7 @@ primary_region = "sin"     # Singapore
   NURA_VOICE_FIXTURES = "tests/fixtures/voice"
   NURA_FEED_FIXTURES = "tests/fixtures/feed"
   NURA_WHATSAPP_FIXTURES = "tests/fixtures/whatsapp"
+  NURA_SPEAKER_FIXTURES = "tests/fixtures/speakers"
   # Tigris signs as `auto`; an AWS bucket in Singapore says `ap-southeast-1`.
   NURA_OBJECT_BUCKET_REGION = "auto"
 

@@ -48,9 +48,12 @@ from app.family.thread import Digest, DigestEntry
 from app.family.trail import TrailDay, TrailLine
 from app.identity.doors import Claimable, Doors, Evidence
 from app.identity.models import Person, Profile, Stewardship
+from app.ingestion.consult import Notice as RecordingNotice
 from app.ingestion.documents import MAX_PDF_BYTES
 from app.ingestion.extract import DOCUMENT_HINTS, PHOTO_HINTS, DocumentKind
 from app.ingestion.models import (
+    ConsultRecording,
+    ConsultSegment,
     DocumentSource,
     FieldState,
     NoteKind,
@@ -97,6 +100,7 @@ from app.memory.models import (
     Fact,
 )
 from app.notes.models import NOTE_LENGTH, Note
+from app.reasoning.visits.logistics import Logistics
 from app.reasoning.visits.models import (
     LINE_LENGTH,
     Brief,
@@ -604,6 +608,14 @@ class OnlyMeConfirmIn(BaseModel):
     only_me: bool = True
 
 
+class DriveConfirmIn(BaseModel):
+    """The chief's yes to one person driving him to one visit (E05-03)."""
+
+    subject: Literal[ConfirmSubject.DRIVE]
+    appointment_id: uuid.UUID
+    person_id: uuid.UUID
+
+
 class TaskDoneConfirmIn(BaseModel):
     """The doer's yes to her own task being done. Anyone else's finds no task."""
 
@@ -678,7 +690,8 @@ ConfirmIn = Annotated[
     | StatusConfirmIn
     | AttachConfirmIn
     | RoutineConfirmIn
-    | ProposalConfirmIn,
+    | ProposalConfirmIn
+    | DriveConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
@@ -1861,6 +1874,9 @@ class SummaryItemOut(BaseModel):
     appointment_id: uuid.UUID | None
     fact_id: uuid.UUID | None
     flag_id: uuid.UUID | None
+    clip_start_s: float | None = None
+    clip_end_s: float | None = None
+    """Where in the consult recording this was said, in seconds (E02-05); None when typed."""
 
     @classmethod
     def of(cls, item: SummaryItem) -> SummaryItemOut:
@@ -1877,6 +1893,8 @@ class SummaryItemOut(BaseModel):
             appointment_id=item.appointment_id,
             fact_id=item.fact_id,
             flag_id=item.flag_id,
+            clip_start_s=item.clip_start_s,
+            clip_end_s=item.clip_end_s,
         )
 
 
@@ -1900,6 +1918,8 @@ class SummaryOut(BaseModel):
     created_at: datetime
     confirmed_at: datetime | None
     confirmed_by_person_id: uuid.UUID | None
+    recording_artifact_id: uuid.UUID | None = None
+    """The consult recording the transcript was heard from, whose clips the items carry."""
 
     @classmethod
     def of(cls, summary: VisitSummary, items: Sequence[SummaryItem]) -> SummaryOut:
@@ -1922,7 +1942,198 @@ class SummaryOut(BaseModel):
             created_at=utc(summary.created_at),
             confirmed_at=None if summary.confirmed_at is None else utc(summary.confirmed_at),
             confirmed_by_person_id=summary.confirmed_by_person_id,
+            recording_artifact_id=summary.recording_artifact_id,
         )
+
+
+# --- the visit day (E05-03, E05-04, E02-05, E03-05) ----------------------------------------------
+
+
+class LogisticsLineOut(BaseModel):
+    """One line of the logistics card: its part (when, place, note, driver, bring), its
+    template, the words as printed and as spoken."""
+
+    section: str
+    key: str
+    text: str
+    spoken: str
+
+
+class PlaceNoteOut(BaseModel):
+    """The chief's own note about the place, as she wrote it, under "Mei's note"."""
+
+    note_id: uuid.UUID
+    label: str
+    text: str
+    by_person_id: uuid.UUID
+    by_name: str
+    written_at: datetime
+
+
+class DriverOut(BaseModel):
+    """Who drives him: a task given (`assigned`), the roster's person on duty then waiting for
+    the chief's yes (`suggested`, `needs_yes`), nobody, or not read by this key (`withheld`)."""
+
+    status: str
+    person_id: uuid.UUID | None
+    name: str | None
+    task_id: uuid.UUID | None
+    needs_yes: bool
+    can_say_yes: bool
+
+
+class LogisticsOut(BaseModel):
+    """The logistics card for one visit (E05-03), composed from the record and State."""
+
+    appointment_id: uuid.UUID
+    provider_id: uuid.UUID
+    doctor: str
+    language: str
+    scheduled_at: datetime
+    state_id: uuid.UUID
+    place: str | None
+    note: PlaceNoteOut | None
+    driver: DriverOut
+    lines: list[LogisticsLineOut]
+    spoken: list[str]
+    withheld: list[Scope]
+
+    @classmethod
+    def of(cls, found: Logistics) -> LogisticsOut:
+        note = found.note
+        return cls(
+            appointment_id=found.appointment_id,
+            provider_id=found.provider_id,
+            doctor=found.doctor,
+            language=found.language,
+            scheduled_at=utc(found.scheduled_at),
+            state_id=found.state_id,
+            place=found.place,
+            note=None
+            if note is None
+            else PlaceNoteOut(
+                note_id=note.note_id,
+                label=note.label,
+                text=note.text,
+                by_person_id=note.by_person_id,
+                by_name=note.by_name,
+                written_at=utc(note.written_at),
+            ),
+            driver=DriverOut(
+                status=found.driver.status.value,
+                person_id=found.driver.person_id,
+                name=found.driver.name,
+                task_id=found.driver.task_id,
+                needs_yes=found.driver.needs_yes,
+                can_say_yes=found.driver.can_say_yes,
+            ),
+            lines=[LogisticsLineOut(**line.as_json()) for line in found.lines],
+            spoken=found.spoken,
+            withheld=list(found.withheld),
+        )
+
+
+class DriverIn(BaseModel):
+    """The chief's yes, spent: this person drives him to this visit."""
+
+    person_id: uuid.UUID
+    confirmation_id: uuid.UUID
+
+
+class NoticeOut(BaseModel):
+    """What the Start button shows and speaks before the microphone opens (E16-02): the
+    notice in his language to the doctor by name, the printed card for the desk, and what he
+    is told on a no. Handed back only once the gate has passed."""
+
+    appointment_id: uuid.UUID
+    doctor: str
+    language: str
+    spoken: list[str]
+    printed: list[str]
+    when_no: list[str]
+    consent_id: uuid.UUID
+
+    @classmethod
+    def of(cls, notice: RecordingNotice) -> NoticeOut:
+        return cls(
+            appointment_id=notice.appointment_id,
+            doctor=notice.doctor,
+            language=notice.language,
+            spoken=list(notice.spoken),
+            printed=list(notice.printed),
+            when_no=list(notice.when_no),
+            consent_id=notice.consent_id,
+        )
+
+
+class SegmentOut(BaseModel):
+    """One stretch of a recording: who spoke, when in the audio, where in the transcript."""
+
+    segment_id: uuid.UUID
+    position: int
+    speaker: str
+    start_s: float
+    end_s: float
+    char_start: int
+    char_end: int
+
+    @classmethod
+    def of(cls, segment: ConsultSegment) -> SegmentOut:
+        return cls(
+            segment_id=segment.id,
+            position=segment.position,
+            speaker=segment.speaker.value,
+            start_s=segment.start_s,
+            end_s=segment.end_s,
+            char_start=segment.char_start,
+            char_end=segment.char_end,
+        )
+
+
+class RecordingOut(BaseModel):
+    """One recording of a visit as kept: the artefacts, the consent it rested on, how long,
+    whether it was heard, and who spoke when. No words."""
+
+    recording_id: uuid.UUID
+    appointment_id: uuid.UUID
+    artifact_id: uuid.UUID
+    transcript_artifact_id: uuid.UUID | None
+    consent_id: uuid.UUID
+    duration_s: float
+    started_at: datetime
+    notice_language: str
+    doctor_named: bool
+    heard: bool
+    heard_confidence: float | None
+    recorded_by_person_id: uuid.UUID
+    segments: list[SegmentOut]
+
+    @classmethod
+    def of(cls, recording: ConsultRecording, segments: Sequence[ConsultSegment]) -> RecordingOut:
+        return cls(
+            recording_id=recording.id,
+            appointment_id=recording.appointment_id,
+            artifact_id=recording.artifact_id,
+            transcript_artifact_id=recording.transcript_artifact_id,
+            consent_id=recording.consent_id,
+            duration_s=recording.duration_s,
+            started_at=utc(recording.started_at),
+            notice_language=recording.notice_language,
+            doctor_named=recording.doctor_named,
+            heard=recording.transcript_artifact_id is not None,
+            heard_confidence=recording.heard_confidence,
+            recorded_by_person_id=recording.recorded_by_person_id,
+            segments=[SegmentOut.of(one) for one in segments],
+        )
+
+
+class ConsultOut(BaseModel):
+    """What one upload kept, and the post-visit card it ended in — or why there is no card
+    (`summary_refused`, the refusal's name), with the recording kept either way."""
+
+    recording: RecordingOut
+    summary: SummaryOut | None
+    summary_refused: str | None
 
 
 class SummaryConfirmBodyIn(BaseModel):
@@ -2211,6 +2422,9 @@ class TaskOut(BaseModel):
     created_at: datetime
     done_at: datetime | None
     done_by_person_id: uuid.UUID | None
+    appointment_id: uuid.UUID | None = None
+    errand: str | None = None
+    """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); else none."""
 
     @classmethod
     def of(cls, task: Task) -> TaskOut:
@@ -2223,6 +2437,8 @@ class TaskOut(BaseModel):
             created_at=utc(task.created_at),
             done_at=None if task.done_at is None else utc(task.done_at),
             done_by_person_id=task.done_by_person_id,
+            appointment_id=task.appointment_id,
+            errand=None if task.errand is None else task.errand.value,
         )
 
 

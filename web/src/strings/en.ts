@@ -338,6 +338,61 @@ export const en = {
     // @patient phrase
     signOut: "Sign out",
   },
+  // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
+  visit: {
+    // @patient headline
+    title: "Your visit",
+    // @patient phrase
+    open: "See your next visit",
+    // @patient
+    none: "Nura has no visit written down for you.",
+    // @patient
+    fromVisit: "This comes from your visits to the doctor.",
+    // @patient
+    onDuty: "It is {name}'s turn that day.",
+    // @patient phrase
+    driveYes: "Yes, {name} will drive",
+    // @patient phrase
+    start: "Start recording",
+    // @patient
+    keepOpen: "Keep this page open while Nura listens.",
+    // @patient
+    consentLead: "Nura needs you to say yes before it listens.",
+    // @patient phrase
+    saidYes: "{doctor} said yes",
+    // @patient phrase
+    saidNo: "{doctor} said no",
+    // @patient
+    listening: "Nura is listening.",
+    // @patient phrase
+    stop: "Stop",
+    // @patient
+    saving: "Nura is keeping the recording.",
+    // @patient
+    saved: "Nura kept the recording.",
+    // @patient
+    notHeard: "Nura could not hear the words.",
+    // @patient
+    notHeardSub: "You can listen to it in your papers.",
+    // @patient
+    cardLater: "Nura has not made the card yet.",
+    // @patient
+    stoppedAway: "Nura stopped listening when you left this page.",
+    // @patient phrase
+    keepHeard: "Keep what Nura heard",
+    // @patient phrase
+    hearClip: "Hear what {doctor} said",
+    // @patient headline
+    byHandTitle: "Write what {doctor} said",
+    // @patient phrase
+    byHandLabel: "What {doctor} said",
+    // @patient phrase
+    byHandSave: "Keep the notes",
+    // @patient
+    noMic: "Nura cannot use the microphone on this phone.",
+    // @patient
+    noMicSub: "You can write it down yourself instead.",
+  },
   onboarding: {
     // @patient phrase
     next: "Next",
@@ -741,5 +796,13 @@ export const en = {
     NoSuchItem: "That card is not here any more.",
     NoCachedPage: "Nura has not kept a page for you yet.",
     NotACursor: "Nura could not find the next card.",
+    NotAConsultRecording: "Nura could not keep that recording.",
+    ConsultTooLong: "That recording is too long for Nura.",
+    NoSuchRecording: "That recording is not here any more.",
+    NotAClip: "Nura cannot find that part of the recording.",
+    OnlyTheFamilyHears: "Only the owner and the family he let in can hear this.",
+    NotTheirsToChangeVisits: "You can see the visits but not change them.",
+    NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
+    NotOnThisVisit: "Nura cannot give this drive to that person.",
   },
 } satisfies Strings;

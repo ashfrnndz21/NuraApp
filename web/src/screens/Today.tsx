@@ -47,6 +47,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const [error, setError] = useState<unknown>(null);
   const [justTook, setJustTook] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The next visit, when the key reaches the visits: one button to its screen (E05-03).
+  const [nextVisit, setNextVisit] = useState<string | null>(null);
 
   /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
   const forget = async (profileId: string, failure: unknown) => {
@@ -126,6 +128,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   useEffect(() => {
     void load();
   }, [bearer, papers?.profile_id, language.value]);
+
+  useEffect(() => {
+    if (!bearer || !papers || !papers.scopes.includes("visits")) return;
+    nura.appointments(bearer, papers.profile_id).then(
+      (found) => setNextVisit(found[0]?.appointment_id ?? null),
+      () => setNextVisit(null),
+    );
+  }, [bearer, papers?.profile_id]);
 
   // At midnight on the region's clock the page on screen is yesterday's: read today's.
   useEffect(() => {
@@ -293,6 +303,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
                 {s.feed.open}
               </Pill>
+              {nextVisit && !fromPhone && (
+                <Pill onClick={() => go({ name: "visit", appointmentId: nextVisit })} testId="open-visit">
+                  {s.visit.open}
+                </Pill>
+              )}
               {medicines && (
                 <Card
                   title={s.today.supplyTitle}

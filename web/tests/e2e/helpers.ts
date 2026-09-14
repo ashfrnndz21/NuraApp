@@ -322,6 +322,168 @@ export async function seedVisit(request: APIRequestContext, token: string, profi
   if (visit.status() !== 201) throw new Error(`visit: ${visit.status()} ${await visit.text()}`);
 }
 
+/** The consult recording the fixtures know (`backend/tests/consult_audio.py`): the four bytes
+ *  a webm opens with, a marker and a label. Its digest names what the fixture transcriber and
+ *  speaker separator heard (checkpoint 22 sends the same bytes). */
+export const CONSULT_BYTES: number[] = [0x1a, 0x45, 0xdf, 0xa3, ...Buffer.from("nura-consult-placeholder:consult-bp-review\n")];
+
+/** What the stand-ins below write down, for the tests to read. */
+export interface Stand {
+  __recorder: { starts: number; stops: number; types: string[] };
+  __clips: string[];
+  __locks: { taken: number; released: number };
+}
+
+/** A phone that can record: a stand-in `MediaRecorder` that hands back `bytes` when it stops,
+ *  a microphone, a screen wake lock, and an audio element that writes down what it was asked
+ *  to play (Playwright's Chromium has no microphone to give and cannot play the stand-in). */
+export async function fakeRecorder(page: Page, bytes: number[] = CONSULT_BYTES): Promise<void> {
+  await page.addInitScript((data: number[]) => {
+    const stand = window as unknown as {
+      __recorder: { starts: number; stops: number; types: string[] };
+      __clips: string[];
+      __locks: { taken: number; released: number };
+    };
+    stand.__recorder = { starts: 0, stops: 0, types: [] };
+    stand.__clips = [];
+    stand.__locks = { taken: 0, released: 0 };
+    class Recorder {
+      state = "inactive";
+      mimeType: string;
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      static isTypeSupported(type: string): boolean {
+        return type === "audio/webm;codecs=opus" || type === "audio/webm";
+      }
+      constructor(_stream: unknown, options?: { mimeType?: string }) {
+        this.mimeType = options?.mimeType ?? "audio/webm";
+        stand.__recorder.types.push(this.mimeType);
+      }
+      start(): void {
+        this.state = "recording";
+        stand.__recorder.starts += 1;
+      }
+      stop(): void {
+        if (this.state === "inactive") return;
+        this.state = "inactive";
+        stand.__recorder.stops += 1;
+        this.ondataavailable?.({ data: new Blob([new Uint8Array(data)], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    }
+    Object.defineProperty(window, "MediaRecorder", { value: Recorder, configurable: true });
+    Object.defineProperty(navigator, "mediaDevices", {
+      value: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => undefined }] }) },
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "wakeLock", {
+      value: {
+        request: async () => {
+          stand.__locks.taken += 1;
+          return { release: async () => void (stand.__locks.released += 1) };
+        },
+      },
+      configurable: true,
+    });
+    class Audio {
+      src = "";
+      currentTime = 0;
+      private listeners: Record<string, (() => void)[]> = {};
+      addEventListener(type: string, listener: () => void): void {
+        (this.listeners[type] ??= []).push(listener);
+      }
+      play(): Promise<void> {
+        stand.__clips.push(this.src);
+        for (const listener of this.listeners.loadedmetadata ?? []) listener();
+        return Promise.resolve();
+      }
+      pause(): void {}
+    }
+    Object.defineProperty(window, "Audio", { value: Audio, configurable: true });
+  }, bytes);
+}
+
+export async function stand(page: Page): Promise<Stand> {
+  return page.evaluate(() => {
+    const found = window as unknown as Stand;
+    return { __recorder: found.__recorder, __clips: found.__clips, __locks: found.__locks };
+  });
+}
+
+/** `apiToken`, for a person who gives her name when she signs up. */
+async function namedToken(request: APIRequestContext, phone: string, name: string): Promise<string> {
+  const before = codesSoFar(phone);
+  const started = await request.post(`${API}/auth/phone/start`, { data: { phone_e164: phone, display_name: name, language: "en" } });
+  if (started.status() !== 202) throw new Error(`start: ${started.status()} ${await started.text()}`);
+  const code = await codeFromLog(phone, before);
+  const verified = await request.post(`${API}/auth/phone/verify`, { data: { phone_e164: phone, code } });
+  if (!verified.ok()) throw new Error(`verify: ${verified.status()} ${await verified.text()}`);
+  return ((await verified.json()) as { token: string }).token;
+}
+
+const EVERY_PART = ["medicines", "visits", "readings", "records", "notes", "money", "family", "emergency", "ask", "send"];
+
+/** Pa, his visit to Dr Tan at half past 10 this morning (the frozen Monday, on his clock, with
+ *  its offset — kept as that instant since ADR 0009), Dr Tan's
+ *  address, and Mei: his chief, with her note about the place and on the roster this morning.
+ *  With `recording`, Pa has already agreed to Nura listening at the visit. */
+export async function seedVisitDay(
+  request: APIRequestContext,
+  { recording = false, at = "2026-09-14T10:30:00+08:00" }: { recording?: boolean; at?: string } = {},
+): Promise<{ phone: string; token: string; profileId: string; appointmentId: string; meiId: string }> {
+  const phone = freshPhone("+659555");
+  const token = await apiToken(request, phone);
+  const his = { Authorization: `Bearer ${token}` };
+  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const opened = await request.post(`${API}/profiles/mine`, {
+    headers: his,
+    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: "Pa", language: "en" },
+  });
+  if (opened.status() !== 201) throw new Error(`profile: ${opened.status()} ${await opened.text()}`);
+  const profileId = ((await opened.json()) as { profile_id: string }).profile_id;
+  const tan = await request.post(`${API}/profiles/${profileId}/providers`, {
+    headers: his,
+    data: { name: "Dr Tan", kind: "doctor", address: "Gleneagles Hospital, 6A Napier Road" },
+  });
+  if (tan.status() !== 201) throw new Error(`provider: ${tan.status()} ${await tan.text()}`);
+  const provider_id = ((await tan.json()) as { provider_id: string }).provider_id;
+  const booking = { provider_id, scheduled_at: at, purpose: "blood pressure check" };
+  const yes = await request.post(`${API}/profiles/${profileId}/confirmations`, { headers: his, data: { subject: "appointment", ...booking } });
+  const confirmation_id = ((await yes.json()) as { confirmation_id: string }).confirmation_id;
+  const visit = await request.post(`${API}/profiles/${profileId}/appointments`, { headers: his, data: { ...booking, confirmation_id } });
+  if (visit.status() !== 201) throw new Error(`visit: ${visit.status()} ${await visit.text()}`);
+  const appointmentId = ((await visit.json()) as { appointment_id: string }).appointment_id;
+
+  // Mei signs up with her own name, as a chief does: the card names her ("Mei's note").
+  const meiPhone = freshPhone("+659556");
+  const meiToken = await namedToken(request, meiPhone, "Mei");
+  const hers = { Authorization: `Bearer ${meiToken}` };
+  const meiId = ((await (await request.get(`${API}/me`, { headers: hers })).json()) as { person_id: string }).person_id;
+  const letIn = await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
+    headers: his,
+    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, relationship: "daughter", language: "en", captured_via: "app" },
+  });
+  if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
+  const key = await request.post(`${API}/profiles/${profileId}/keys`, { headers: his, data: { holder_phone_e164: meiPhone, role: "chief" } });
+  if (key.status() !== 201) throw new Error(`key: ${key.status()} ${await key.text()}`);
+  const note = await request.post(`${API}/profiles/${profileId}/providers/${provider_id}/notes`, { headers: hers, data: { text: "parking at B2" } });
+  if (note.status() !== 201) throw new Error(`note: ${note.status()} ${await note.text()}`);
+  const slot = await request.post(`${API}/profiles/${profileId}/roster`, {
+    headers: hers,
+    data: { person_id: meiId, role: "chief", weekdays: [0], from_time: "09:00:00", to_time: "12:00:00" },
+  });
+  if (slot.status() !== 201) throw new Error(`roster: ${slot.status()} ${await slot.text()}`);
+  if (recording) {
+    const recordingWords = (await (await request.get(`${API}/consent/wording?purpose=recording&language=en`)).json()) as { version: string };
+    const agreed = await request.post(`${API}/profiles/${profileId}/consents/recording`, {
+      headers: his,
+      data: { wording_version: recordingWords.version, language: "en", captured_via: "app" },
+    });
+    if (agreed.status() !== 201) throw new Error(`recording consent: ${agreed.status()} ${await agreed.text()}`);
+  }
+  return { phone, token, profileId, appointmentId, meiId };
+}
+
 /** Nothing is ever drawn over a line: the rule #118's feed test checks (`everyLineReadable`,
  *  in feed.spec.ts), with its hit test at the centre of each line, for a screen that scrolls
  *  the page itself (onboarding, the review card). Each visible line under `scope` is scrolled

@@ -37,6 +37,8 @@ services:
         value: tests/fixtures/feed
       - key: NURA_WHATSAPP_FIXTURES
         value: tests/fixtures/whatsapp
+      - key: NURA_SPEAKER_FIXTURES
+        value: tests/fixtures/speakers
       # Render has no bucket of its own. A demo may keep bytes on the instance's disk, which
       # the night wipe empties and a restart loses; a deployment with real data sets the
       # NURA_OBJECT_BUCKET_* values to a bucket in Singapore instead (docs/deploy.md).

@@ -82,6 +82,7 @@ jobs:
         -e NURA_PAPER_FIXTURES=tests/fixtures/paper -e NURA_VISIT_FIXTURES=tests/fixtures/visits
         -e NURA_VOICE_FIXTURES=tests/fixtures/voice -e NURA_FEED_FIXTURES=tests/fixtures/feed
         -e NURA_WHATSAPP_FIXTURES=tests/fixtures/whatsapp -e NURA_OBJECT_STORE=/tmp/nura-objects
+        -e NURA_SPEAKER_FIXTURES=tests/fixtures/speakers
     steps:
       - uses: actions/checkout@v4
       - run: docker build --pull -t nura:ci .

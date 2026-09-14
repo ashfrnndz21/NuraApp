@@ -86,7 +86,7 @@ def test_the_notice_is_spoken_in_his_language_and_names_the_doctor() -> None:
     assert recording_notice("en", doctor="Dr Tan").splitlines() == [
         "Nura will listen now.",
         "Nura keeps what you and Dr Tan say.",
-        "Only you and those you let in can hear it.",
+        "Only you and the family you let in can hear it.",
         "Is that OK, Dr Tan?",
     ]
     assert recording_notice("zh", doctor="Dr Tan").splitlines()[-1] == "Dr Tan，可以吗？"

@@ -33,6 +33,13 @@ that stack exists. It runs the same container and the same migrations.
   again, and runs the whole test suite on Postgres 16.
 - **One place for artefact bytes, in Singapore.** That is a bucket (Fly: Tigris; or AWS S3 in
   ap-southeast-1). A demo may use the instance's own disk instead (Render, below).
+  - **The largest thing stored is a consult recording**: up to 48 MiB, sent on Stop as its
+    own bytes (`audio/webm`) in one request.
+    - The app refuses anything larger (`MAX_CONSULT_BYTES`), and nothing in front of it sets a
+      lower limit: uvicorn has none.
+    - The bucket store gives each request two minutes.
+    - Check the platform's own request-size limit allows 48 MiB before recording a visit
+      over https.
 - **Health checks.**
   - `GET /health/ready` answers 200 when the process is up and the database answers, and 503
     when it does not. Both platforms gate traffic on it.
@@ -54,6 +61,7 @@ that is neither a laptop's dev run nor a declared demo (`app/fixtures.py`, ADR 0
 | Photo / PDF / handwriting reader (OCR, vision) | Answers only for the fixture papers | Textract and a vision model in the region | yes |
 | Visit summariser | Answers only for the fixture transcripts | A model endpoint in the region | yes |
 | Speech (voice notes) | Answers only for the fixture recordings | A speech provider in the region | yes |
+| Speaker separation (who spoke when in a consult recording) | Answers only for the fixture recordings | A diarisation model in the region | yes |
 | Feed searcher and compressor | Fixture pages and summaries | The allowlisted fetcher and a grounded model call | yes |
 | Calendar | Real: an uploaded `.ics` is read in memory (the fixture calendar is tests-only) | — | yes (for the fixture) |
 | Ask retriever | Real: keyword retrieval (the fixture retriever is tests-only) | — | yes (for the fixture) |
@@ -91,7 +99,7 @@ the repo, `fly.toml` or `render.yaml`.
 | `NURA_OBJECT_ACCESS_KEY_ID` | **yes** | from the bucket | from the bucket | |
 | `NURA_OBJECT_SECRET_ACCESS_KEY` | **yes** | from the bucket | from the bucket | |
 | `NURA_OBJECT_STORE` | no | Render demo only: `/tmp/nura-objects` | **absent** (refused) | A directory store. The night's wipe empties it and a restart loses it. |
-| `NURA_PAPER_FIXTURES`, `NURA_VISIT_FIXTURES`, `NURA_VOICE_FIXTURES`, `NURA_FEED_FIXTURES`, `NURA_WHATSAPP_FIXTURES` | no | `tests/fixtures/paper`, `…/visits`, `…/voice`, `…/feed`, `…/whatsapp` | absent once real adapters exist | Set in `fly.toml` / `render.yaml`. |
+| `NURA_PAPER_FIXTURES`, `NURA_VISIT_FIXTURES`, `NURA_VOICE_FIXTURES`, `NURA_FEED_FIXTURES`, `NURA_WHATSAPP_FIXTURES`, `NURA_SPEAKER_FIXTURES` | no | `tests/fixtures/paper`, `…/visits`, `…/voice`, `…/feed`, `…/whatsapp`, `…/speakers` | absent once real adapters exist | Set in `fly.toml` / `render.yaml`. |
 | `NURA_WHATSAPP_DEV_SECRET` | **yes** | a long random string | **absent** | The fixture's webhook secret. Render generates it. |
 | `NURA_WHATSAPP_PROVIDER` | no | unset (`fixture`) | the real provider's name, once built | |
 | `NURA_WHATSAPP_NUMBER` | no | unset | the region's business number, E.164 | |

@@ -28,7 +28,9 @@ from app.regions import Region
 ALGORITHM = "AWS4-HMAC-SHA256"
 SERVICE = "s3"
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
-TIMEOUT_SECONDS = 30.0
+TIMEOUT_SECONDS = 120.0
+"""Per request. A consult recording is up to 48 MiB (`app.ingestion.consult.MAX_CONSULT_BYTES`),
+sent in one PUT; two minutes leaves room for that on a slow day, in the region."""
 
 
 class ObjectStoreUnavailable(RuntimeError):
