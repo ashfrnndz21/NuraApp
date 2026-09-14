@@ -30,6 +30,7 @@ from app.memory.models import ArtifactKind, SourceChannel
 from app.regions import Region
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
+from tests.support import agree_to_recording
 
 PA = "+6591110001"
 MEI = "+6591110002"
@@ -71,6 +72,8 @@ async def _not_a_photo(
             person_id=uuid.UUID(who["person_id"]),
             profile_id=uuid.UUID(profile_id),
         )
+        if kind is ArtifactKind.VOICE:
+            await agree_to_recording(session, context)  # a voice note rests on RECORDING (E16-02)
         digest = uuid.uuid4().hex + uuid.uuid4().hex
         artifact = await store_artifact(
             session,

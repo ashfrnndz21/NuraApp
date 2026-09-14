@@ -101,6 +101,12 @@ async def test_a_new_reading_produces_a_card_in_his_language_with_a_voice_twin_a
     assert learning[0]["cite"]["url"].startswith("https://www.healthhub.sg/")
     assert learning[0]["source_id"] is not None
     assert learning[0]["body"][-2:] == ["This is not a doctor's advice.", "Ask your doctor."]
+    # E16-01: the learning card is an inferring surface; the line it ends on is on the card.
+    assert learning[0]["boundary"] == (
+        "Nura explains one thing in simple words.\nThis is not a doctor's advice.\nAsk your doctor."
+    )
+    assert learning[0]["body"][-3:] == learning[0]["boundary"].splitlines()
+    assert card["boundary"] is None, "a reading shows the record back and infers nothing"
     assert (
         learning[0]["why"]["plain"] == "This is about your blood pressure, which is on your papers."
     )

@@ -1,12 +1,15 @@
 """The one way a feed item is written.
 
-Three things happen here and nowhere else. The lines are checked against the plain-words
+Four things happen here and nowhere else. The lines are checked against the plain-words
 standard in the profile's language — headline, body, voice and why, every one — and a card
 with a failing line is not made (`NotPlainWords`, written to the trail). A learning card is
 checked against the allowlist: no source, or one that is not usable, and it is not made
-(`SourceNotAllowlisted`). And the row is written through `render_from_state`, which stamps
-the State it was rendered from and refuses a State the record has moved past. `autoplay`
-is written false, always: the schema carries the promise the pager keeps.
+(`SourceNotAllowlisted`). A card of an inferring surface (`SURFACE_OF`: a learning card, a
+notice) ends on the boundary line it carries, or it is not made (`NoBoundaryLine`, E16-01).
+And the row is written through `render_from_state`, which stamps the State it was rendered
+from, refuses a State the record has moved past, and writes the line on the row — refusing
+it on a card that infers nothing. `autoplay` is written false, always: the schema carries
+the promise the pager keeps.
 """
 
 from __future__ import annotations
@@ -35,8 +38,9 @@ from app.delivery.strings import Lines
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.safety.boundary import Surface
 from app.safety.plain_words import Finding, verify
-from app.state.service import StateView, render_from_state
+from app.state.service import NoBoundaryLine, StateView, render_from_state
 
 FEED_TARGET = FeedItem.__tablename__
 
@@ -56,6 +60,27 @@ PRIORITY: dict[CardType, int] = {
 }
 """The base score by type; `compose` adds State's boosts. Ranking is within a section, so
 the number never lifts a story card above the gate."""
+
+SURFACE_OF: dict[CardType, Surface] = {
+    CardType.LEARNING: Surface.LEARNING_CARD,
+    CardType.NOTICE: Surface.LEARNING_CARD,
+}
+"""The feed's inferring surfaces (E16-01, `app.safety.boundary`). A learning card is an
+explanation chosen for him from State and compressed from an allowlisted page; a notice is
+the same compression of a regulator's page, so it carries the same line. Every other card
+shows the record back — his reading, his tablets, his papers, the count, the gate, the
+reorder date from the count, a red flag raised on his own word — and infers nothing, so it
+names no surface and carries no line. The question a search reroutes is held for the memo
+and never shown by the feed; it is E05's questions surface when it reaches him."""
+
+
+def _ends_on_its_line(lines: Lines) -> bool:
+    """Whether the card's body and voice both end on the boundary line it carries: the line
+    on the row is the line he reads and hears."""
+    if not lines.boundary:
+        return False
+    line = tuple(lines.boundary.splitlines())
+    return tuple(lines.body[-len(line) :]) == line and tuple(lines.voice[-len(line) :]) == line
 
 
 class NotPlainWords(Refusal):
@@ -122,9 +147,11 @@ async def create_item(
     """Write one card, or refuse it.
 
     A card for the patient has every line verified first; a card for the caregiver or the
-    memo keeps her fuller words. A learning card names a usable source or is refused. The
-    row is rendered from `state`, so a snapshot the record has moved past is refused too.
-    Every refusal here is written down under the card's own scope.
+    memo keeps her fuller words. A learning card names a usable source or is refused. A
+    card of an inferring surface ends on its boundary line and carries it (`lines.boundary`);
+    a card that infers nothing carries none. The row is rendered from `state`, so a snapshot
+    the record has moved past is refused too. Every refusal here is written down under the
+    card's own scope.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
         if deliver_to is DeliverTo.PATIENT:
@@ -133,12 +160,17 @@ async def create_item(
                 raise NotPlainWords(failing)
         if type is CardType.LEARNING and (source is None or not usable(source, context.region)):
             raise SourceNotAllowlisted("a learning card names an allowlisted source")
+        surface = SURFACE_OF.get(type)
+        if surface is not None and not _ends_on_its_line(lines):
+            raise NoBoundaryLine(f"a {type.value} card ends on the boundary line it carries")
         return await render_from_state(
             session,
             FeedItem,
             context,
             scope,
             state=state,
+            surface=surface,
+            boundary=lines.boundary,
             type=type,
             supply=SUPPLY_OF[type],
             caps_class=CAPS_OF[type],

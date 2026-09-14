@@ -21,6 +21,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from app.safety.boundary import Surface, boundary_line
+
 # --- what a card says ----------------------------------------------------------------------
 
 # @patient headline
@@ -123,7 +125,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "This number only goes up.",
         ),
         "learning_source": ("This comes from {source_name}.",),
-        "boundary": ("This is not a doctor's advice.", "Ask {doctor}."),
         "flag_family": (
             "You told Nura about {feeling}.",
             "This one we do not wait for.",
@@ -185,7 +186,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nombor ini hanya naik.",
         ),
         "learning_source": ("Ini datang dari {source_name}.",),
-        "boundary": ("Ini bukan nasihat doktor.", "Tanya {doctor}."),
         "flag_family": (
             "Anda beritahu Nura tentang {feeling}.",
             "Yang ini kita tidak tunggu.",
@@ -222,7 +222,6 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_note": ("{day}您写下了这句话：",),
         "story_count": ("您已经记了{count}次血压。", "这个数字只会往上走。"),
         "learning_source": ("这来自{source_name}。",),
-        "boundary": ("这不是医生的建议。", "请问{doctor}。"),
         "flag_family": (
             "您告诉Nura您{feeling}。",
             "这个我们不等。",
@@ -396,6 +395,10 @@ class Lines:
     body: tuple[str, ...]
     voice: tuple[str, ...]
     why: str
+    boundary: str | None = None
+    """The boundary line a card of an inferring surface ends on (E16-01), as one string:
+    the same words as the last lines of `body` and `voice`, kept whole so the row records
+    it. None on a card that shows the record back and infers nothing."""
 
 
 def _fill(template: str, slots: Mapping[str, Any]) -> str:
@@ -453,21 +456,24 @@ def learning_lines(
     doctor: str,
 ) -> Lines:
     """A learning card: the compressed lines, then where they came from, then the boundary
-    line every inferring card carries, then why it is here."""
+    line every inferring card carries, then why it is here.
+
+    The boundary is `app.safety.boundary`'s line for the learning-card surface (E16-01) —
+    what Nura did, "This is not a doctor's advice.", "Ask {doctor}." — the same words as on
+    every inferring surface, never a copy of them kept here. It ends the body and the voice
+    and rides on `Lines.boundary`, so `items.create_item` writes it on the row."""
     code = language_for(language)
     slots = {"source_name": source_name, "doctor": doctor, "topic": topic}
-    tail = tuple(
-        _fill(line, slots)
-        for group in ("learning_source", "boundary")
-        for line in LINES[code][group]
-    )
-    lines = (*body, *tail)
+    source = tuple(_fill(line, slots) for line in LINES[code]["learning_source"])
+    boundary = boundary_line(Surface.LEARNING_CARD, code, doctor=doctor)
+    lines = (*body, *source, *boundary.splitlines())
     return Lines(
         language=code,
         headline=headline,
         body=lines,
         voice=lines,
         why=_fill(WHY[code]["learning"], slots),
+        boundary=boundary,
     )
 
 

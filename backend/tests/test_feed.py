@@ -9,6 +9,7 @@ match the batch on his pack is held for the caregiver and never delivered to him
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -24,7 +25,7 @@ from app.delivery.feed.compress import (
     FixtureSearcher,
     changes_treatment,
 )
-from app.delivery.feed.items import NotPlainWords, Why, create_item
+from app.delivery.feed.items import SURFACE_OF, NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
@@ -46,7 +47,7 @@ from app.delivery.feed.rank import (
 )
 from app.delivery.feed.search import Engine, list_jobs
 from app.delivery.feed.sources import SourceNotAllowlisted
-from app.delivery.strings import Lines, render
+from app.delivery.strings import Lines, learning_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
@@ -55,8 +56,9 @@ from app.memory.episodic import store_artifact
 from app.memory.models import ArtifactKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import Region
+from app.safety.boundary import Surface, boundary_line
 from app.state.models import NotRenderedFromState
-from app.state.service import current_state
+from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
 from tests.support import OPENING_CONSENT
 
@@ -231,6 +233,114 @@ async def test_a_learning_card_from_outside_the_allowlist_is_not_made(sg: AsyncS
         )
     trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.RECORDS)
     assert sum(1 for e in trail if e.refused_because == "SourceNotAllowlisted") == 3
+
+
+async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothing_carry_none(
+    sg: AsyncSession,
+) -> None:
+    """E16-01 on the feed. A learning card is an inferring surface (`Surface.LEARNING_CARD`),
+    and so is a notice, the same compression of a regulator's page: the row carries the line
+    and the body and the voice end on it. Every other card shows the record back and
+    carries no line."""
+    context = await _pa(sg)
+    await _label(sg, context, name="Warfarin", strength=5, batch="240077")
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+    line = boundary_line(Surface.LEARNING_CARD, "en")
+    assert line.splitlines() == [
+        "Nura explains one thing in simple words.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
+    ]
+    inferring = [item for item in made if item.type in SURFACE_OF]
+    assert {item.type for item in inferring} == {CardType.LEARNING, CardType.NOTICE}
+    for item in inferring:
+        assert item.boundary == line, item.type
+        assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
+    plain = [item for item in made if item.type not in SURFACE_OF]
+    assert {CardType.NOW, CardType.STORY, CardType.QUESTION} <= {item.type for item in plain}
+    assert all(item.boundary is None for item in plain), [(i.type, i.boundary) for i in plain]
+
+
+async def test_a_learning_card_without_its_line_is_not_made_nor_a_plain_card_with_one(
+    sg: AsyncSession,
+) -> None:
+    """The line is structure on the feed too: a learning card that does not end on its line,
+    or carries another surface's, is refused; a reading card that carries one is refused;
+    every refusal is on the trail by name."""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    regulator = Source(
+        name="Health Sciences Authority",
+        domain="boundary-test.gov.sg",
+        kind=SourceKind.REGULATOR,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(regulator)
+    await sg.flush()
+    good = learning_lines(
+        "en",
+        headline="Your blood pressure",
+        body=("Sit down and rest for 5 minutes first.",),
+        topic="your blood pressure",
+        source_name=regulator.name,
+        doctor="Dr Tan",
+    )
+    assert good.boundary == boundary_line(Surface.LEARNING_CARD, "en", doctor="Dr Tan")
+    brief = boundary_line(Surface.BRIEF, "en", doctor="Dr Tan")
+    cut = good.body[:-3]
+    refused = (
+        (CardType.LEARNING, replace(good, boundary=None)),
+        (CardType.LEARNING, replace(good, body=cut, voice=cut)),
+        (
+            CardType.LEARNING,
+            replace(
+                good,
+                body=(*cut, *brief.splitlines()),
+                voice=(*cut, *brief.splitlines()),
+                boundary=brief,
+            ),
+        ),
+        (
+            CardType.READING,
+            replace(_lines("Your blood pressure today was 138 over 84."), boundary=good.boundary),
+        ),
+    )
+    for n, (type, lines) in enumerate(refused):
+        with pytest.raises(NoBoundaryLine):
+            await create_item(
+                sg,
+                context=context,
+                state=state,
+                type=type,
+                lines=lines,
+                why=Why(kind=type.value, plain=lines.why),
+                scope=Scope.RECORDS,
+                deliver_to=DeliverTo.PATIENT,
+                day="2026-09-03",
+                dedupe_key=f"boundary:{n}",
+                expires_at=MONDAY,
+                source=regulator if type is CardType.LEARNING else None,
+            )
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.RECORDS)
+    assert sum(1 for e in trail if e.refused_because == "NoBoundaryLine") == len(refused)
+    made = await create_item(
+        sg,
+        context=context,
+        state=state,
+        type=CardType.LEARNING,
+        lines=good,
+        why=Why(kind="learning", plain=good.why),
+        scope=Scope.RECORDS,
+        deliver_to=DeliverTo.PATIENT,
+        day="2026-09-03",
+        dedupe_key="boundary:good",
+        expires_at=MONDAY,
+        source=regulator,
+    )
+    assert made.boundary == good.boundary and made.body[-1] == "Ask Dr Tan."
 
 
 async def _items(session: AsyncSession, context: KeyContext) -> list[FeedItem]:

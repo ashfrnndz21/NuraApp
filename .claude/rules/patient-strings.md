@@ -6,6 +6,8 @@ paths:
   - "backend/app/consent/**"
   - "backend/app/family/**"
   - "backend/app/medicines/**"
+  - "backend/app/safety/boundary.py"
+  - "backend/app/safety/recording.py"
   - "ios/Nura/**"
 ---
 # Patient-facing strings

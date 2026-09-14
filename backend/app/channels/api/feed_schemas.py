@@ -25,7 +25,10 @@ from app.safety.red_flags import Feeling, Flag
 
 class FeedItemOut(BaseModel):
     """One card as the client renders it. `autoplay` is always false; `rendered_from_state`
-    is the snapshot every card names; `why` is the structured reason with its plain line."""
+    is the snapshot every card names; `why` is the structured reason with its plain line.
+    `boundary` is the line a card of an inferring surface is shown under (E16-01, a learning
+    card or a notice), the same words its body and voice end on; null on a card that shows
+    the record back."""
 
     item_id: uuid.UUID
     type: str
@@ -45,6 +48,7 @@ class FeedItemOut(BaseModel):
     autoplay: bool
     source_id: uuid.UUID | None
     cite: dict[str, Any] | None
+    boundary: str | None = None
     day: str
     created_at: datetime
     expires_at: datetime

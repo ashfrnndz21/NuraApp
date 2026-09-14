@@ -48,6 +48,7 @@ from app.memory.models import ArtifactKind, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact, current_facts
 from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto
 from tests.medicines_support import REGISTRY, add, artefact, label, let_in, pa, planned, yes
+from tests.support import agree_to_recording
 
 
 def _refusals(entries: list[AuditEntry]) -> set[tuple[Action, str, str | None]]:
@@ -321,6 +322,7 @@ async def test_a_high_risk_medicine_without_a_label_photo_is_refused_by_class(
     sg: AsyncSession,
 ) -> None:
     owner = await pa(sg)
+    await agree_to_recording(sg, owner)
     voice = await artefact(sg, owner, kind=ArtifactKind.VOICE)
     shown = await planned(sg, owner, label("warfarin", "3 mg", "1 tab ON", quantity=28), voice)
     assert shown.needs_label_photo and shown.match.high_risk
@@ -363,6 +365,7 @@ async def test_the_rule_is_also_a_hook_on_the_memory_store_so_no_other_path_land
     anything, the service's manners aside: `app.safety.high_risk.label_photo_rule` runs on
     `before_fact_write`."""
     owner = await pa(sg)
+    await agree_to_recording(sg, owner)
     voice = await artefact(sg, owner, kind=ArtifactKind.VOICE)
     photo = await artefact(sg, owner)
     high_risk_value = {"generic": "warfarin", "drug_class": "anticoagulant", "dose": {"amount": 1}}
