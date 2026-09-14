@@ -359,6 +359,7 @@ def item_json(item: FeedItem, status: str) -> dict[str, Any]:
         "autoplay": False,
         "source_id": None if item.source_id is None else str(item.source_id),
         "cite": None if item.cite is None else dict(item.cite),
+        "boundary": item.boundary,
         "day": item.day,
         "created_at": as_utc(item.created_at).isoformat(),
         "expires_at": as_utc(item.expires_at).isoformat(),

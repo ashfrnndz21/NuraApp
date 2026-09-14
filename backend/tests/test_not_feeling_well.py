@@ -49,8 +49,11 @@ from tests.safety_support import (
     transcriber_for,
     water_pill,
 )
-from tests.support import refused_unit
+from tests.support import agree_to_recording, refused_unit
 from tests.voice import CHEST_PAIN, CONTENT_TYPE, TIRED_TODAY, UNHEARD, placeholder_voice
+
+CLOSING = ("Nura wrote down how you feel.", "This is not a doctor's advice.", "Ask your doctor.")
+"""The not-feeling-well boundary's last three lines (`app.safety.boundary`), no doctor named."""
 
 FORBIDDEN = ("mg", "tablet", "stop", "start", "double", "half", "skip", "drink")
 """Words no what-to-do card may carry: a dose, or advice about a medicine."""
@@ -120,9 +123,10 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     assert done.kind is WhatToDoKind.RED_FLAG
     assert done.red_flags == [RedFlag.CHEST_PAIN] and done.posture is Posture.ACT
     assert [line.text for line in done.lines] == [
-        "Mei knows already.",
+        "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
+        *CLOSING,
     ]
     _verified(done.lines)
 
@@ -178,6 +182,7 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
 
 async def test_a_red_flag_by_voice_goes_through_the_transcriber(sg: AsyncSession) -> None:
     owner, *_ = await _household(sg)
+    await agree_to_recording(sg, owner)
     done = await _press(sg, owner, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
     assert done.by_voice and done.heard and done.transcript_confidence == 0.94
     assert done.kind is WhatToDoKind.RED_FLAG and done.lines[1].text == "Call the ambulance now on 995."
@@ -200,11 +205,13 @@ async def test_a_dose_not_taken_says_ask_before_you_take_it_and_never_how_much(
     assert done.red_flags == [] and done.symptoms == [Symptom.TIRED]
     texts = [line.text for line in done.lines]
     # The doctor on the label is asked, not the family: a medicine question goes to the doctor.
-    assert texts[:2] == [
+    assert texts[0] == "Mei knows now."
+    assert texts[1:3] == [
         "Nura has no note that you took the water pill today.",
         "Ask Dr Tan before you take the water pill.",
     ]
-    assert texts[-1] == "Nura will ask you again in 2 hours."
+    assert texts[-4] == "Nura will ask you again in 2 hours."
+    assert texts[-3:] == [*CLOSING[:2], "Ask Dr Tan."]  # the doctor on the label
     for text in texts:
         assert not any(word in text.lower() for word in FORBIDDEN), text
     _verified(done.lines)
@@ -235,26 +242,29 @@ async def test_when_every_dose_is_taken_the_card_says_rest(sg: AsyncSession) -> 
     done = await _press(sg, owner, words="tired today")
     assert done.kind is WhatToDoKind.REST
     assert [line.text for line in done.lines] == [
+        "Mei knows now.",
         "Sit down and rest now.",
         "Mei will call you today.",
         "Nura will ask you again in 2 hours.",
+        *CLOSING,
     ]
     _verified(done.lines)
 
 
 async def test_a_voice_note_nobody_could_hear_still_tells_the_family(sg: AsyncSession) -> None:
     owner, mei, *_ = await _household(sg)
+    await agree_to_recording(sg, owner)
     done = await _press(sg, owner, audio=placeholder_voice(UNHEARD), content_type=CONTENT_TYPE)
     assert not done.heard and done.transcript_confidence == 0.0
     texts = [line.text for line in done.lines]
-    assert texts[:3] == [
+    assert texts[1:4] == [
         "Nura could not hear you.",
         "Please tell Nura again.",
         "You can type it to Nura instead.",
     ]
     # The water pill was not tapped, so the row is still the dose not taken — after saying so.
     assert done.kind is WhatToDoKind.MISSED_DOSE
-    assert texts[3] == "Nura has no note that you took the water pill today."
+    assert texts[4] == "Nura has no note that you took the water pill today."
     assert mei.person_id in done.notified_person_ids
     told = next(n for n in done.notices if n.to_person_id == mei.person_id)
     assert notice_lines(told, patient="Pa")[:2] == [
@@ -280,18 +290,24 @@ async def test_malaysia_is_told_999(my: AsyncSession) -> None:
         registry=REGISTRY,
         words="dada saya sakit",
     )
-    assert [line.text for line in done.lines][:2] == ["Mei knows already.", "Call the ambulance now on 999."]
+    assert [line.text for line in done.lines][:2] == ["Mei knows now.", "Call the ambulance now on 999."]
 
 
 async def test_with_nobody_to_call_the_first_line_is_the_ambulance(sg: AsyncSession) -> None:
     owner = await pa(sg, phone="+6591110049")
     done = await _press(sg, owner, words="chest pain")
-    assert [line.text for line in done.lines] == ["Call the ambulance now on 995."]
+    assert [line.text for line in done.lines] == [
+        "You did right to say so.",
+        "Call the ambulance now on 995.",
+        *CLOSING,
+    ]
     assert done.notified_person_ids == []
     rest = await _press(sg, owner, words="tired")
     assert [line.text for line in rest.lines] == [
+        "You did right to say so.",
         "Sit down and rest now.",
         "Nura will ask you again in 2 hours.",
+        *CLOSING,
     ]
 
 
@@ -332,9 +348,10 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
     assert done.kind is WhatToDoKind.RED_FLAG and done.posture is Posture.ACT
     assert done.flag_id is not None
     assert [line.text for line in done.lines] == [
-        "Mei knows already.",
+        "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
+        *CLOSING,
     ]
     assert set(done.notified_person_ids) == {mei.person_id, lin.person_id}
     assert done.artifact_id is None and done.event_id is None and done.fact_id is None
@@ -463,11 +480,12 @@ async def test_the_roster_names_who_is_on_duty_and_a_red_flag_still_tells_everyo
     assert chest.notified_person_ids[0] == lin.person_id
     assert set(chest.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}
     assert [line.text for line in chest.lines] == [
-        "Lin knows already.",
+        "Lin knows now.",
         "Call the ambulance now on 995.",
         "After that, call Lin.",
+        *CLOSING,
     ]
     ana = await let_in(sg, owner, phone="+6595550042", name="Ana", role=KeyRole.CAREGIVER)
     theirs = await _press(sg, ana, words="chest pain")
-    assert theirs.lines[0].text == "Mei knows already."
+    assert theirs.lines[0].text == "Mei knows now."
     assert set(theirs.notified_person_ids) == {mei.person_id, lin.person_id, siti.person_id}

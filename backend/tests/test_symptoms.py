@@ -30,6 +30,7 @@ from app.safety.symptoms import Duration, Symptom
 from app.state.models import Posture
 from app.state.service import current_state
 from tests.safety_support import REGISTRY, TRANSCRIBER, assert_plain, let_in, pa, trail
+from tests.support import agree_to_recording
 from tests.voice import CONTENT_TYPE, DIZZY, SAKIT_DADA, placeholder_voice
 
 
@@ -59,6 +60,7 @@ async def test_a_symptom_by_voice_is_logged_in_his_words_with_how_much_and_since
     sg: AsyncSession,
 ) -> None:
     owner = await pa(sg, phone="+6591110051")
+    await agree_to_recording(sg, owner)
     logged = await _log(sg, owner, audio=placeholder_voice(DIZZY), content_type=CONTENT_TYPE)
     entry = logged.entry
 
@@ -136,6 +138,7 @@ async def test_the_chief_reads_the_log_in_plain_words_and_a_viewer_is_refused(
     empty = nothing_since_line(before.since, language="en", region=Region.SG)
     assert empty == "Nobody wrote anything down since Thursday 27 August."
 
+    await agree_to_recording(sg, owner)
     await _log(sg, owner, audio=placeholder_voice(DIZZY), content_type=CONTENT_TYPE)
     clock.step(timedelta(minutes=5))
     await _log(sg, owner, words="no appetite")
@@ -161,6 +164,7 @@ async def test_the_chief_reads_the_log_in_plain_words_and_a_viewer_is_refused(
 async def test_a_red_flag_word_in_a_symptom_escalates_like_the_button(sg: AsyncSession) -> None:
     owner = await pa(sg, phone="+6591110054")
     mei = await let_in(sg, owner, phone="+6592220054", name="Mei", role=KeyRole.CHIEF)
+    await agree_to_recording(sg, owner)
     logged = await _log(sg, owner, audio=placeholder_voice(SAKIT_DADA), content_type=CONTENT_TYPE)
     assert logged.entry.red_flags == [RedFlag.CHEST_PAIN]
     assert logged.posture is Posture.ACT and logged.flag_id is not None

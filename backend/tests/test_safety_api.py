@@ -16,11 +16,14 @@ from __future__ import annotations
 import base64
 import html as html_module
 import re
+import uuid
 
 from app.channels.printable import BODY_PX, TOKENS
+from app.keys.context import resolve_key_context
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.paper import placeholder_png
+from tests.support import agree_to_recording
 from tests.voice import CHEST_PAIN, CONTENT_TYPE, DIZZY, placeholder_voice
 
 PA = "+6591110061"
@@ -203,11 +206,29 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert tired.status_code == 201, tired.text
     body = tired.json()
     assert body["kind"] == "missed_dose" and body["posture"] == "watch"
-    assert body["lines"][0]["text"] == "Nura has no note that you took the water pill today."
-    assert body["lines"][1]["text"] == "Ask Dr Tan before you take the water pill."
+    assert body["lines"][0]["text"] == "Mei knows now."
+    assert body["lines"][1]["text"] == "Nura has no note that you took the water pill today."
+    assert body["lines"][2]["text"] == "Ask Dr Tan before you take the water pill."
+    assert body["lines"][-1]["text"] == "Ask Dr Tan."
     assert body["check_in_at"] is not None and body["notified_person_ids"] == [mei["person_id"]]
     assert body["symptoms"] == ["tired"] and body["red_flags"] == []
 
+    # A voice note is refused until Pa agrees to recording (E16-02); nothing is kept.
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/not-feeling-well",
+        json={"audio": base64.b64encode(placeholder_voice(CHEST_PAIN)).decode(), "content_type": CONTENT_TYPE},
+        headers=his,
+    )
+    assert refused.status_code == 403 and refused.json() == {"refusal": "ConsentWithheld"}
+    async with deployment.sessions() as db:
+        owner = await resolve_key_context(
+            db,
+            region=deployment.region,
+            person_id=uuid.UUID(pa["person_id"]),
+            profile_id=uuid.UUID(profile_id),
+        )
+        await agree_to_recording(db, owner)
+        await db.commit()
     chest = await deployment.client.post(
         f"/profiles/{profile_id}/not-feeling-well",
         json={"audio": base64.b64encode(placeholder_voice(CHEST_PAIN)).decode(), "content_type": CONTENT_TYPE},
@@ -217,9 +238,12 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     body = chest.json()
     assert body["kind"] == "red_flag" and body["posture"] == "act" and body["flag_id"]
     assert [line["text"] for line in body["lines"]] == [
-        "Mei knows already.",
+        "Mei knows now.",
         "Call the ambulance now on 995.",
         "After that, call Mei.",
+        "Nura wrote down how you feel.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
     ]
     assert body["by_voice"] and body["transcript_confidence"] == 0.94
 

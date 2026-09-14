@@ -2188,12 +2188,21 @@ def checkpoint_8(client: httpx.Client) -> None:
     )
     if learning[0]["source_id"] not in {source["source_id"] for source in sources}:
         raise fail("Pa reads the allowlist", why="the learning card's source is not on it")
+    # E16-01: a learning card is an inferring surface; it ends on the boundary line and the
+    # line is on the card. A card that shows the record back carries none.
+    boundary = (learning[0].get("boundary") or "").splitlines()
+    if not boundary or learning[0]["body"][-len(boundary) :] != boundary:
+        raise fail("Pa reads the learning card", why="it does not end on the boundary line")
+    shown = [item for page in (first, second, third) for item in page["items"]]
+    if any(item.get("boundary") for item in shown if item["type"] not in {"learning", "notice"}):
+        raise fail("Pa reads the learning card", why="a card that infers nothing carries a line")
     ok(
         f"self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, "
         f"{len(jobs)} jobs, all done against the fixture searcher); the explainer made a learning card "
         f'"{learning[0]["headline"]}" citing {learning[0]["cite"]["url"]} — a source on the allowlist '
         f"(GET …/sources, {len(sources)} sources) — and rerouted the page that would change a dose "
-        f"as a question for the memo ({len(explainer['results']['questions'])}), never a card:"
+        f"as a question for the memo ({len(explainer['results']['questions'])}), never a card; "
+        "it ends on the boundary line it carries (E16-01), and no other card carries one:"
     )
     for line in learning[0]["body"]:
         print(f"    {line}")

@@ -26,6 +26,11 @@ This is the one document to start from. It consolidates everything designed in t
 - `read-only-connectors.md` — email, photos, calendar, SMS, WhatsApp export: what can be read, the allowlist design, compliance.
 - `design-system.md` — tokens, glass and paper, state washes, type, components, accessibility.
 
+**Trust and regulatory (`docs/trust/`)**
+- `trust/samd-boundary-review.md` — the HSA and MDA boundary review: every T1 inference surface, what it computes, where its rule comes from, the line it shows, the test that proves it; what would cross the line.
+- `trust/recording-consent.md` — the consult recording pattern: the notice spoken and printed in three languages, how consent is captured and stored, the no path, the questions for counsel in SG and MY.
+- `trust/pdpa-data-map.md` — the PDPA data inventory generated from the models, lawful basis per purpose, retention, cross-border, the breach process with both countries' windows, the DPO, data subject requests.
+
 **Prototypes (open in a browser)**
 - `onboarding.html` — sign-in, about you, dynamic word cloud, read-back, records with the assistant, questions from records, gaps and unlocks, ready.
 - `setup-bind-probe.html` — set up the patient, bind family with scoped keys and consent, a bound caregiver probing.

@@ -1,7 +1,7 @@
 # ADR 0002 — What the EMERGENCY scope opens, and how the safety layer sets the day's posture
 
-**Date** 2026-09-14 · **Status** accepted · **Decided by** the E13 builder; decisions 6–11 added
-after the safety review of #111, on the operator's calls
+**Date** 2026-09-14 · **Status** accepted · **Decided by** the E13 builder; decisions 6–12 added
+after the safety review of #111 and the merges of E16 and E19, on the operator's calls
 
 ## Context
 
@@ -92,11 +92,16 @@ durable when something later in the same request is refused.
    checks again in `transcribe`. The fixture adapter declares the region it serves. A
    mismatch is `OutOfRegion`, and nothing is stored.
 
-9. **A voice note of him made by someone else rests on the RECORDING consent.** His own voice
-   note is his words on his own record, held under `HOLD_HEALTH_RECORD`. A voice note sent by
-   anyone else — a chief, a caregiver, a clinic — is a recording of him by another person, so
-   `capture` asks for `RECORDING` before the bytes are kept or heard, on both routes. Typed
-   words need no recording consent.
+9. **Every voice note rests on the RECORDING consent.** E16 (#108) made it a rule of the store:
+   `store_artifact` asks for `RECORDING` as well as `HOLD_HEALTH_RECORD` for every VOICE
+   artefact, the patient's own included — which supersedes this ADR's first answer ("his own
+   voice note is his words on his own record"). `capture` asks for it before a byte is kept
+   or heard, whoever pressed, so the helper's voice note (which is heard and not kept) is held
+   to it too. Typed words need no recording consent. The only RECORDING wording today is for a
+   visit ("When you see the doctor, Nura listens."), and there is no route to give it for a
+   voice note, so until the operator and counsel settle the words the button takes typed
+   words over HTTP and a voice note is refused (`ConsentWithheld`, 403) — nothing kept, nothing
+   heard. Checkpoint 14 shows the refusal and then types.
 
 10. **Reads the safety layer makes of its own writes go through the door.** The symptom log
     reads the fact it has just written back through `audited_read`, under the fact's own scope
@@ -109,6 +114,21 @@ durable when something later in the same request is refused.
     and logged, and the rest of the card is shown. A card the stranger is holding is never
     taken away whole for one bad template. (The what-to-do card still refuses whole: its
     lines are few and each carries an instruction.)
+
+12. **The not-feeling-well card carries the boundary; the emergency card does not infer.**
+    E16's `render_from_state(surface=, boundary=)` refuses a row of an inferring surface
+    without its line. The what-to-do card is `Surface.NOT_FEELING_WELL`: the lines he sees open
+    with the boundary's reassurance — "Mei knows now." (`told` is the person the card names:
+    whoever is on duty, else the chief) or "You did right to say so." when nobody is named —
+    then the decision row, then "Nura wrote down how you feel." and the closing "This is not a
+    doctor's advice." / "Ask Dr Tan." (the doctor on the label, else "your doctor"). The row
+    stores the decision ids in `line_ids` and the boundary text in `boundary`. The red-flag row
+    no longer says "Mei knows already." itself: the boundary's opening line is that reassurance.
+    The emergency card is **not** an inferring surface: it restates the record — a projection
+    of facts, medicines, contacts and a date — for a stranger, works nothing out, and carries
+    its own disclaimer line ("This card is not a doctor's advice."). It names no `Surface` and
+    its `boundary` column stays empty; adding it to the register would put "Ask your doctor."
+    on a card handed to a paramedic.
 
 ## Consequences
 

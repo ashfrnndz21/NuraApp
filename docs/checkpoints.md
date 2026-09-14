@@ -19,12 +19,14 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 11 | Onboarding on your phone (web) | Run onboarding with the word cloud and read-back | W2–W3 (ADR 0001) | planned |
 | 12 | Feed on your phone (web) | Page the vertical feed, hear a card on tap, hit the gate card | W2–W3 (ADR 0001) | planned |
 | 13 | Family, roster and Dad's trail | Mei adds Siti as a helper and narrows her to the medicines; widening is refused; Pa marks his notes "only me" and Mei's next read is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task only Siti can tap done; the family thread with a message and a reading card; Kit's digest; a message to Pa previewed in Malay and scheduled; the LPA uploaded and shown backing the stewardship | E12-01, E12-02, E12-03, E12-04, E12-06, E12-09 | **ready** |
-| 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; Pa says "chest pain" by voice and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows already." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
+| 14 | Emergency card, not feeling well, symptoms | Read Pa's emergency card as JSON and as the printable page (self-contained, paper, 20px, high contrast); a neighbour with an emergency-only key reads the same card; Pa says "tired today" and is told to rest with Mei told and a check-in in two hours; a voice note is refused without the recording consent (E16), so Pa types "chest pain" and the flag is written first, State is ACT, Mei is told, and the card says "Mei knows now." then "Call the ambulance now on 995."; Pa logs "dizzy, quite a lot, since this morning" and Mei reads it in plain words; Kit with no key is refused | E13-01, E13-02, E14-01 | **ready** |
 | 15 | Biography | Written by its story | — | planned |
 | 16 | Timeline | Written by its story | — | planned |
 | 17 | Trends, routine and calendar | Written by its story | — | planned |
 | 18 | Capture | Written by its story | — | planned |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
+
+**Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
 
 ## How a checkpoint is tested
 

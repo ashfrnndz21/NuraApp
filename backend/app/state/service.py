@@ -63,6 +63,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import NoSuchFact, current_facts
 from app.memory.working import open_episodes
+from app.safety.boundary import Surface, is_boundary_line
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, AFTER_VISIT_WINDOW, derive
 from app.state.models import (
     Dimension,
@@ -116,6 +117,10 @@ class TriggerWithoutItsFact(Refusal):
 
 class FactWithoutItsTrigger(Refusal):
     """A fact is named only by a recompute that a fact caused."""
+
+
+class NoBoundaryLine(Refusal):
+    """A row of an inferring surface reached the store without the boundary line for it."""
 
 
 class NotRenderable(Refusal):
@@ -466,22 +471,41 @@ async def render_from_state[Row: ProfileScoped](
     *,
     state: StateView | None = None,
     channel: Channel = Channel.APP,
+    surface: Surface | None = None,
+    boundary: str | None = None,
     **values: Any,
 ) -> Row:
     """Write a card, a clip or a nudge, stamped with the State it was rendered from.
 
     Pass the `state` the content was composed from. If the record has moved past it the row
     is refused: what is on the card and what State said must be the same reading of the day.
+
+    A row of an inferring surface names its `surface` and carries `boundary`, the line from
+    `app.safety.boundary.boundary_line` for that surface; a row that names a surface without
+    that line, or with some other text, is refused (`NoBoundaryLine`), and a row that names
+    no surface carries none. The boundary is structure, like the State id: there is no way
+    to write a brief or a learning card and forget its line.
     """
     if not issubclass(model, RenderedFromState):
         raise NotRenderable("this table does not record the state it was rendered from")
+    if surface is not None and not is_boundary_line(surface, boundary):
+        raise NoBoundaryLine(f"a {surface.value} row carries the boundary line for it")
+    if surface is None and boundary is not None:
+        raise NoBoundaryLine("a row that infers nothing names no surface and carries no line")
     rendered_from = state or await current_state(session, context=context)
     if state is not None:
         await _still_current(session, context=context, state=state)
     if rendered_from.stale is not False:
         raise StaleState("state is behind the record, or could not be checked against it")
     return await audited_write(
-        session, model, context, scope, channel=channel, state_id=rendered_from.id, **values
+        session,
+        model,
+        context,
+        scope,
+        channel=channel,
+        state_id=rendered_from.id,
+        boundary=boundary,
+        **values,
     )
 
 

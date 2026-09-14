@@ -8,8 +8,8 @@ What happens, in order, and the order is the point:
 
 1. **Capture.** His words are kept as an artefact — the voice note, or the text he typed —
    before anything is read from them, when the key holds the record. A voice note is handed
-   only to a transcriber in the profile's region, and a voice note of him pressed by someone
-   else rests on the RECORDING consent.
+   only to a transcriber in the profile's region, and every voice note rests on the
+   RECORDING consent (E16-02), whoever pressed.
 2. **Hear.** A voice note goes through the `Transcriber` port; typed words are heard as
    typed. Nothing heard is still a press of the button: the family is told and he is asked
    to say it again.
@@ -25,7 +25,10 @@ What happens, in order, and the order is the point:
    for a red flag, `watch` otherwise, for the next 24 hours — which is how the safety layer
    sets the day's posture: through a fact State folds in, never by writing a snapshot itself.
 5. **The card.** One row of a fixed decision table (`DECISION_TABLE`), every line from
-   `app.channels.safety_strings` and verified as an action. A key that can compute State
+   `app.channels.safety_strings` and verified as an action, inside the not-feeling-well
+   boundary (`app.safety.boundary`, `Surface.NOT_FEELING_WELL`): the reassurance first —
+   "Mei knows now." — then the row, then "Nura wrote down how you feel." and the two closing
+   lines. The card row carries that boundary, as every inferring surface's row must (E16). A key that can compute State
    (the owner, the chief) has the card rendered from the State those facts produced and
    written down as a `WhatToDoCard`; a narrower key gets the same lines to show him and no
    card row, since nothing rendered is stored without the State it came from.
@@ -33,7 +36,7 @@ What happens, in order, and the order is the point:
 The boundary holds throughout. No line says what is wrong with him; no line tells him to
 start, stop or change a medicine — a medicine nobody tapped Taken on gets "Nura has no note
 that you took the water pill today. Ask Dr Tan before you take the water pill.", never an
-amount; a red flag gets "Mei knows already. Call the ambulance now on 995. After that, call Mei." and
+amount; a red flag gets "Mei knows now. Call the ambulance now on 995. After that, call Mei." and
 nothing about what it might mean. Nothing tells him to drink. The check-in two hours on is a
 question, not a judgement.
 """
@@ -79,6 +82,7 @@ from app.memory.episodic import record_event
 from app.memory.models import Artifact, ConfidenceState, Event, EventKind, Fact, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ, Region, guard_region
+from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.emergency_card import EMERGENCY_NUMBER
 from app.safety.models import Flag, Notice, NoticeKind, WhatToDoCard, WhatToDoKind
 from app.safety.people import key_holder, owner_of
@@ -249,15 +253,16 @@ class WhatToDoNow:
 
 
 def _red_flag_lines(s: Situation) -> tuple[str, ...]:
-    """The chief knows already, call the ambulance now, after that call the chief: one order,
-    the reassurance first, and nothing that contradicts the notice she was sent."""
+    """Call the ambulance now, after that call the chief: one order, and nothing that
+    contradicts the notice she was sent. The reassurance that she knows is the boundary's
+    opening line ("Mei knows now.", `app.safety.boundary`), said before these."""
     number = EMERGENCY_NUMBER[s.region]
     if s.chief is None:
         lines: tuple[str, ...] = (f"nfw.call_{number}",)
         if s.others_told:
             lines += ("nfw.family_knows",)
         return lines
-    return ("nfw.chief_knows", f"nfw.call_{number}", "nfw.then_call_chief")
+    return (f"nfw.call_{number}", "nfw.then_call_chief")
 
 
 def _not_heard(s: Situation) -> tuple[str, ...]:
@@ -287,7 +292,7 @@ DECISION_TABLE: tuple[Row, ...] = (
 )
 """The whole of what the button can say, top row wins. (kind, applies, lines, check-in.)
 
-Red flag: the chief knows already, call the ambulance now, after that call the chief.
+Red flag: call the ambulance now, after that call the chief.
 A dose nobody tapped Taken on: Nura has no note you took it, ask the doctor before you take
 it, rest, the chief will call today, a check-in in two hours. Otherwise: rest, the chief will
 call today, a check-in in two hours. Nothing else exists, and nothing says what is wrong.
@@ -322,7 +327,7 @@ async def capture(
     still has the words heard, in memory, so the flag can be raised — the words themselves
     are then not kept, and the flag names no artefact. A voice note is handed to the
     transcriber only if the transcriber is in the profile's region, and only on the RECORDING
-    consent when the person pressing is not the person recorded.
+    consent.
     """
     if audio is not None and words is not None:
         raise SaidTwice("a voice note or typed words, not both")
@@ -331,14 +336,15 @@ async def capture(
     if audio is not None:
         kind = check_voice_note(audio, content_type or "")
         guard_region(held_in=context.region, asked_from=transcriber.region)
-        if not context.is_owner:
-            # His voice, recorded by someone else: the recording consent, not the record's.
-            await require_consent(
-                session,
-                context=context,
-                purpose=ConsentPurpose.RECORDING,
-                scope=BUTTON_SCOPE,
-            )
+        # Every voice note is a recording of him and rests on the RECORDING consent (E16-02;
+        # `store_artifact` asks again when the bytes land): asked here, before a byte is kept
+        # or heard, whoever pressed — the helper's too, whose key keeps nothing.
+        await require_consent(
+            session,
+            context=context,
+            purpose=ConsentPurpose.RECORDING,
+            scope=BUTTON_SCOPE,
+        )
         artifact = (
             await store_voice(
                 session,
@@ -721,6 +727,25 @@ def compose(
     return [Line(line_id, render(line_id, lang, **slots)) for line_id in decision.line_ids]
 
 
+BOUNDARY_PREFIX = "boundary."
+BOUNDARY_IDS = ("boundary.opening", "boundary.did", "boundary.not_advice", "boundary.ask")
+"""The not-feeling-well boundary's four lines as he sees them (no letter is carried yet)."""
+
+
+def within_the_boundary(
+    lines: list[Line], *, language: str, doctor: str | None, told: str | None
+) -> list[Line]:
+    """The row's lines inside the not-feeling-well boundary (E16-01): the reassurance first
+    ("Mei knows now." — or "You did right to say so." when nobody was named), then the row,
+    then what Nura did and the two closing lines. The words are `app.safety.boundary`'s; the
+    card row keeps the same text in its `boundary` column and the row's ids in `line_ids`."""
+    said = boundary_lines(Surface.NOT_FEELING_WELL, language, doctor=doctor, told=told)
+    opening, *closing = (
+        Line(line_id, text) for line_id, text in zip(BOUNDARY_IDS, said, strict=True)
+    )
+    return [opening, *lines, *closing]
+
+
 @audited(Action.WRITE, BUTTON_SCOPE, CARD_TARGET)
 async def not_feeling_well(
     session: AsyncSession,
@@ -799,12 +824,19 @@ async def not_feeling_well(
         region=context.region,
     )
     decision = decide(situation)
-    lines = compose(
-        decision,
+    doctor = None if missed is None else missed.line.prescriber
+    told = None if family.chief is None else family.chief.display_name
+    lines = within_the_boundary(
+        compose(
+            decision,
+            language=lang,
+            chief=family.chief,
+            missed_medicine=missed_name,
+            doctor=doctor,
+        ),
         language=lang,
-        chief=family.chief,
-        missed_medicine=missed_name,
-        doctor=None if missed is None else missed.line.prescriber,
+        doctor=doctor,
+        told=told,
     )
 
     check_in_at: datetime | None = None
@@ -840,9 +872,11 @@ async def not_feeling_well(
             context,
             Scope.RECORDS,
             state=state,
+            surface=Surface.NOT_FEELING_WELL,
+            boundary=boundary_line(Surface.NOT_FEELING_WELL, lang, doctor=doctor, told=told),
             kind=decision.kind,
             language=lang,
-            line_ids=[line.id for line in lines],
+            line_ids=[line.id for line in lines if not line.id.startswith(BOUNDARY_PREFIX)],
             flag_id=None if escalated is None or escalated.first is None else escalated.first.id,
             event_id=event.id,
             check_in_at=check_in_at,

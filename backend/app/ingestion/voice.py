@@ -6,12 +6,10 @@ The words themselves live only in the store: a fact about how he feels is a code
 the artefact (`app.safety.symptoms`), and "logged in his words" is kept true by the bytes.
 Keeping them rests on the agreement to hold the record, checked before a byte lands.
 
-A voice note about how he feels, recorded by him, is his own words on his own record: it is
-not a recording of a consultation, so it is held under `HOLD_HEALTH_RECORD` and does not ask
-for the `RECORDING` consent that a consult recording (E05) does. A voice note of him that
-someone else sends — a chief, a caregiver, a clinic — is a recording of him made by another
-person and rests on the `RECORDING` consent as well: `app.safety.not_feeling_well.capture`,
-the one caller, checks it before a byte is kept or heard, on both routes (ADR 0002).
+A voice note is a recording of him, whoever sends it, and rests on the `RECORDING` consent as
+well as `HOLD_HEALTH_RECORD` (E16-02: `store_artifact` asks both for every VOICE artefact).
+`app.safety.not_feeling_well.capture`, the one caller, asks for it before a byte is kept or
+heard, on both routes — the helper's too, whose key keeps nothing (ADR 0002).
 """
 
 from __future__ import annotations

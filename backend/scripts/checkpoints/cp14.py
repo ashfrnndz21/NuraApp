@@ -11,7 +11,8 @@ stopping at the first `✗`. Fresh phone numbers every run.
 The story: Pa (Singapore) with Mei as chief, Lin holding an emergency-only key, Kit holding
 nothing; the water pill and a blood pressure on the record. Pa's emergency card as JSON and as
 the printable page; Mei and Lin read it. Pa says "tired today" and is told to rest; Pa says
-"chest pain" by voice and the flag is written first, the posture is ACT, Mei is told, and the
+"chest pain" — a voice note first, refused without the recording consent (E16), then typed —
+and the flag is written first, the posture is ACT, Mei is told, and the
 card says she knows already and to call the ambulance on 995. Pa logs "dizzy, quite a lot, since this morning" and Mei
 reads it back in plain words. Kit is refused.
 """
@@ -373,8 +374,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     for line in lines:
         say(line)
 
-    # 6. Pa says "chest pain" by voice: the flag first, posture ACT, Mei told, the call line first.
-    chest = check(
+    # 6. A voice note rests on the RECORDING consent (E16-02), which Pa has not given: refused,
+    #    nothing kept. There is no route to give it yet (its words are for a visit, not a voice
+    #    note), so Pa types "chest pain": the flag first, posture ACT, Mei told, then the call.
+    refused(
         client.post(
             f"/profiles/{profile_id}/not-feeling-well",
             headers=his,
@@ -383,8 +386,18 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 "content_type": VOICE_CONTENT_TYPE,
             },
         ),
+        403,
+        "ConsentWithheld",
+        'Pa says "chest pain" by voice without the recording consent',
+    )
+    ok(
+        'Pa said "chest pain" as a voice note and was refused: ConsentWithheld (403) — every voice '
+        "note rests on the recording consent (E16-02), Pa has not given it, and nothing was kept or heard"
+    )
+    chest = check(
+        client.post(f"/profiles/{profile_id}/not-feeling-well", headers=his, json={"words": "chest pain"}),
         201,
-        'Pa says "chest pain" by voice',
+        'Pa types "chest pain"',
     )
     lines = [line["text"] for line in chest["lines"]]
     if (
@@ -392,14 +405,14 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or chest["red_flags"] != ["chest_pain"]
         or chest["posture"] != "act"
         or not chest["flag_id"]
-        or not chest["by_voice"]
         or mei.person_id not in chest["notified_person_ids"]
-        or lines[:2] != ["Mei knows already.", "Call the ambulance now on 995."]
+        or lines[:3] != ["Mei knows now.", "Call the ambulance now on 995.", "After that, call Mei."]
+        or lines[-2:] != ["This is not a doctor's advice.", "Ask your doctor."]
     ):
-        raise fail('Pa says "chest pain" by voice', why=f"got {chest}")
+        raise fail('Pa types "chest pain"', why=f"got {chest}")
     ok(
-        'Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, '
-        f"heard at {chest['transcript_confidence']}): the flag was written first ({chest['flag_id'][:8]}…), "
+        'Pa pressed the button and typed "chest pain" (POST /profiles/{id}/not-feeling-well): the flag '
+        f"was written first ({chest['flag_id'][:8]}…), "
         f"the posture is ACT, Mei and Lin were told (notices to {len(chest['notified_person_ids'])} people, "
         '"Nura heard this: chest pain. Call Pa now."), and the card says who knows and what to do:'
     )
@@ -410,15 +423,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("State is ACT after the red flag", why=f"posture {state['posture']}")
     ok("State's posture is act (GET /profiles/{id}/state): the wash on his screen shifts to coral")
 
-    # 7. Pa logs a symptom by voice; Mei reads the log in plain words.
+    # 7. Pa logs a symptom in his words; Mei reads the log in plain words.
     dizzy = check(
         client.post(
             f"/profiles/{profile_id}/symptoms",
             headers=his,
-            json={
-                "audio": base64.b64encode(placeholder_voice("dizzy-quite-a-lot")).decode(),
-                "content_type": VOICE_CONTENT_TYPE,
-            },
+            json={"words": "dizzy, quite a lot, since this morning"},
         ),
         201,
         'Pa logs "dizzy, quite a lot, since this morning"',
@@ -427,9 +437,9 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if entry["symptoms"] != ["dizzy"] or entry["severity"] != 2 or entry["duration"] != "this_morning":
         raise fail('Pa logs "dizzy, quite a lot, since this morning"', why=f"got {entry}")
     ok(
-        'Pa logged a symptom by voice (POST /profiles/{id}/symptoms): "dizzy, quite a lot, since this '
-        f"morning\" heard as dizzy, severity 2 ({entry['severity_words']}), since this morning; a "
-        "SYMPTOM event and a fact with a seven-day window, his words kept in the voice note"
+        'Pa logged a symptom in his words (POST /profiles/{id}/symptoms): "dizzy, quite a lot, since '
+        f"this morning\" read as dizzy, severity 2 ({entry['severity_words']}), since this morning; a "
+        "SYMPTOM event and a fact with a seven-day window, his words kept as typed"
     )
     log = check(
         client.get(f"/profiles/{profile_id}/symptoms", headers=bearer(mei.token)),

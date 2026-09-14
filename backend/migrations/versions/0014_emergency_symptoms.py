@@ -7,12 +7,15 @@ profile's flag. The two cards carry `state_id`, not nullable: nothing rendered r
 database without the State it was rendered from (0006). No column holds prose: a flag is a
 code from the red-flag table, a notice a template id and codes, a card the ids of its lines.
 
-Follows E12's family revision (0013), which follows E21's feed (0010): one head. The
+Follows E16's boundary revision (0014_rendered_boundary, on E12's 0013 and E21's 0010): one
+head. Both cards carry `boundary` like every `RenderedFromState` table (E16): the
+what-to-do card is the not-feeling-well surface and carries its line; the emergency card
+restates the record, infers nothing, and carries none (ADR 0002). The
 `flag` table here is the flag heard in his words by the not-feeling-well button and the
 symptom log (E13/E14); E21's `red_flag` (0010) is the flag tapped on the feeling cloud.
 
 Revision ID: 0014_emergency_symptoms
-Revises: 0013_family
+Revises: 0014_rendered_boundary
 Create Date: 2026-09-14
 """
 
@@ -22,7 +25,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0014_emergency_symptoms"
-down_revision = "0013_family"
+down_revision = "0014_rendered_boundary"
 branch_labels = None
 depends_on = None
 
@@ -108,6 +111,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), primary_key=True),
         _profile_id(),
         sa.Column("state_id", sa.Uuid(), sa.ForeignKey("state_snapshot.id"), nullable=False),
+        sa.Column("boundary", sa.Text(), nullable=True),
         sa.Column("kind", WHAT_TO_DO_KIND, nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
         # The template ids of the lines shown, in order. The words come from the templates.
@@ -126,6 +130,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), primary_key=True),
         _profile_id(),
         sa.Column("state_id", sa.Uuid(), sa.ForeignKey("state_snapshot.id"), nullable=False),
+        sa.Column("boundary", sa.Text(), nullable=True),
         sa.Column("format", CARD_FORMAT, nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
         sa.Column("fact_ids", sa.JSON(), nullable=False),
