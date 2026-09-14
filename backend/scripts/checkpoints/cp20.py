@@ -455,13 +455,20 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     for sent in fell["replies"]:
         for line in sent["text"].splitlines():
             say(f"→ {line}")
-    held = _of(w.run_due(profile_id, 22, 36), "reorder")
-    if held and held[0]["outcome"] == "sent":
-        raise fail("a reminder waits out the quiet hours", why=f"got {held}")
-    ok(
-        f"22:36, the engine again: the flag's next rung ({len(_of(w.run_due(profile_id, 22, 37), 'flag'))} "
-        "new) goes whatever the hour; a reminder would wait out the quiet hours"
-    )
+    later = w.run_due(profile_id, 22, 36)
+    nights = _of(later, "flag")
+    if any(row["outcome"] != "sent" for row in nights):
+        raise fail("the flag's next rung goes at night too", why=f"got {nights}")
+    if any(row["outcome"] == "sent" for row in later if row["trigger_type"] != "flag"):
+        raise fail("a reminder waits out the quiet hours", why=f"got {later}")
+    if nights:
+        ok(
+            "22:36, nobody had answered: the next rung, still at night — "
+            + "; ".join(_line(row) for row in nights)
+            + "; nothing else went: a reminder waits out the quiet hours"
+        )
+    else:
+        ok("22:36, nobody left to ask on the ladder; nothing else went in the quiet hours")
 
     # 7. Today's top three, with why, the next morning (at 22:37 the quiet hours hold every
     #    card but the flag); one card played as voice.
@@ -478,7 +485,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("every card explains itself", why=f"got {items}")
     ok(
         "07:30 the next morning, the flag still inside its day: today's top three "
-        "(GET /profiles/{id}/feed/today), alert, then reminder, then insight:"
+        "(GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:"
     )
     for item in items:
         say(

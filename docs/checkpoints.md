@@ -24,7 +24,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 16 | Timeline, providers, what changed, Ask | Pa with readings, a medicine on Dr Tan's name, a check-up that happened, a visit to come inside an open illness; the timeline's three anchors and first page; Mei, his chief, puts the lab photo with the illness on her yes; the providers directory with Mei's note "parking at B2" (a note naming a medicine is refused); Mei's what changed, read twice with a write between; Pa asks by voice and hears one cited line; Mei asks in text and reads lines with their citations; "do I have cancer" gets the honest line and the boundary | E03-01, E03-02, E03-03, E03-04, E03-05 | **ready** |
 | 17 | Lab trends, the day's routine, calendar | Pa, born 1951, confirms two lipid reports through the review card and reads his cholesterol trend in Malay — each result against the range that fits him (the lab's own when the paper names it), the direction in words, the boundary last; Mei sets the day once on her yes and it renders to Pa as one line per moment and to her as a table; Mei uploads a small .ics with three events, gets two proposals (the lunch stored nowhere), dismisses one, and Pa's yes books the other as a planned visit; the trail shows it | E09-01, E10-01, E18-02 | **ready** |
 | 18 | Handwriting, PDFs, notes, device screens | Photograph a handwritten clinic slip and see drug, dose and the rest with their confidence, the frequency asking to be typed ("Nura could not read this. Please type it."); confirming it as read is refused, Mei types it, Pa confirms; import a two-page hospital letter and see each field's page and the discharge recorded on the letter's date; a receipt says it is not a health paper; leave a voice note on a reading — his own words, so no recording consent is asked (ADR 0003) — hear it back, see it is not a fact; photograph the blood pressure machine and confirm 138/84, pulse 72, with no typing, and see State recompute; the accuracy harness over the labelled papers | E02-02, E02-03, E02-06, E02-08 | **ready** |
-| 20 | Delivery: triggers, the ladder, the morning ritual | Pa with his blood pressure tablet and a roster (Siti the helper, Mei on duty weekdays); at breakfast the morning card goes to him as the approved WhatsApp template, once; the breakfast tablet's window closes with no Taken and the ladder asks Pa, then Siti, then Mei, and stops when Siti replies "sudah beri" on WhatsApp; the reorder date reached goes to Mei and is capped the second time that day; at 22:30 Pa writes that he fell and the flag goes straight to the roster, neither quiet nor capped; today's top three with why; one card played as voice | E00-05, E11-01, E11-02, E11-03, E11-04, E11-05, E11-06, E11-10 | **ready** |
+| 20 | Delivery: triggers, the ladder, the morning ritual | On a dev run's frozen clock (`NURA_FROZEN_CLOCK`, stepped with `POST /dev/clock`): Pa with his blood pressure tablet and a roster (Siti the helper, Mei on duty weekdays); at the time his routine sets for it, the morning card goes to him as the approved WhatsApp template, once; the breakfast tablet's window closes with no Taken and the ladder asks Pa, then Siti, then Mei — the third ask goes to the roster — and stops when Siti replies "sudah beri" on WhatsApp, which writes the Taken tap; the reorder date reached goes to Mei, held for the quiet hours before 7 and capped the second time that day; at 22:30 Pa writes that he fell and the flag goes straight to the roster, neither quiet nor capped; today's top three with why; one card played as voice | E00-05, E11-01, E11-02, E11-03, E11-04, E11-05, E11-06, E11-10 | **ready** |
 | 19 | Your family on TestFlight | The app on your phone and your dad's, against the pilot backend in-region | build-plan §6, weeks 2–8 | planned |
 
 **Trust documents.** Not checkpoints, but read before CP7 and CP19: `docs/trust/` holds the SaMD boundary review (signed off before any flag ships), the recording consent pattern (counsel's sign-off before a visit is recorded on a real profile) and the PDPA data map, breach runbook and DPO (the tabletop is owed before CP19). E16.
@@ -870,6 +870,69 @@ Both clocks stand at 10:00 in Singapore on Monday 14 September for the whole run
 - Stories merge when CI is green, the safety and plain-words reviewers pass, and the operator has read the diff. `risk:high` stories get a written note in the PR saying what was checked.
 - A checkpoint is not declared ready until `make checkpoint` passes end to end on a clean database.
 - Anything that needs a real credential (SMS provider, licensed drug data, WhatsApp BSP, Apple) is a fixture until you say otherwise; the checkpoint says so where it applies.
+
+## How to run checkpoint 20
+
+Delivery (E11): the trigger engine, the ladder, the morning ritual. It runs on a dev run's frozen clock (#118), so what the backend says about the hour does not drift with the hour you run it at: start the server with the clock standing at 06:00 on Monday 14 September, Pa's wall clock, and the checkpoint steps it (`POST /dev/clock`) to each hour it needs, running the engine there (`POST /dev/run-triggers`, the dev door onto `run_due`; a deployment's scheduler calls it every five minutes). Three fresh phone numbers every run — Pa, Mei, Siti — so it can be run again on the same `dev.db`.
+
+```sh
+NURA_FROZEN_CLOCK=2026-09-14T06:00:00+08:00 make dev    # terminal 1: migrates (0019 adds the delivery tables), a frozen clock
+make checkpoint N=20                                     # terminal 2: about five seconds
+```
+
+What you will see (the numbers and ids change each run):
+
+```
+✓ the dev server answers at http://127.0.0.1:8112 (GET /health)
+✓ Pa (+6591207822), Mei (+6592209967) and Siti (+6597208235) registered by phone code (the codes read from the server log)
+✓ Pa opened his profile and agreed to WhatsApp; Mei (his daughter) holds a chief key and is on duty weekdays 6 in the morning to 11 at night; Siti holds a helper key (medicines, emergency, send)
+✓ Pa added amlodipine 5 mg, one every morning, two tablets left (checkpoint 6's route), at 06:00 on 2026-09-14 by the dev run's frozen clock
+✓ 06:50: nothing; 07:01, the time his routine sets for it (breakfast is at 07:30): the morning card, the approved template (he has not written in 24 hours), once — 07:15 sends nothing. Pa (patient): sent by whatsapp, template morning_card; rule breakfast_anchor_reached. What he reads:
+    → Good morning, Pa, this is Nura.
+    → Today is Monday 14 September.
+    → Take 1 tablet of your blood pressure tablet with breakfast.
+    → Your blood pressure tablet runs out on Wednesday 16 September.
+    → Ask your family to order more.
+    → When you can, take your blood pressure.
+    → Send me the 2 numbers.
+✓ 08:31, the window closed untapped: rung 0, Pa — Pa (patient, rung 0): sent by whatsapp, template dose_reminder; rule dose_window_closed_untapped
+    → Pa, this is Nura.
+    → Have you had your blood pressure tablet with breakfast?
+    → When you have, reply Taken.
+✓ 09:01, nobody answered: rung 1, the helper — Siti (helper, rung 1): sent by whatsapp, template dose_check; rule dose_window_closed_untapped, in Malay:
+    → Pa belum kata Sudah ambil untuk ubat tekanan darah Pa bersama sarapan.
+    → Tolong tengok Pa.
+    → Bila Pa sudah ambil, balas sudah beri.
+✓ 09:31, still nobody: the third ask goes to the roster, not to him — Mei (on_duty, rung 2): sent by whatsapp, template dose_check; rule dose_window_closed_untapped
+✓ Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast tablet — on the medicines key she holds, on the WhatsApp channel — and the ladder stopped; 10:05 asks nobody. Her reply in the thread:
+    → Terima kasih, saya sudah tulis.
+    → Pa sudah ambil ubat tekanan darah Pa.
+✓ 06:50, before 7 in the morning: the reorder was held for the quiet hours
+✓ 07:01, the first run of the day, the reorder date reached: Mei (on_duty): sent by whatsapp, template reorder_family; rule reorder_date_reached:
+    → Pa's tablets are running low.
+    → Pa's blood pressure tablet runs out on Wednesday 16 September.
+    → Can you order more for Pa?
+✓ 07:15, the same rule the second time that day: capped (once a day) — no second message, and no row at all on the runs after it
+✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice), category alert, never capped and never quiet; not to him. His reply:
+    → This one we do not wait for.
+    → Call your doctor today.
+    → Mei knows now.
+✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
+✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
+    [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
+    [reminder] Your tablets today — one action: taken, on the stable wash. Why: You have medicines on your list.
+    [reminder] Your blood pressure tablet is running low — one action: ask_to_order, on the stable wash. Why: You have about 1 day of your blood pressure tablet left.
+✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache miss — the fixture voice is silence as long as the words take to say
+✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
+checkpoint 20 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at the time his routine sets for it (E10-01; 07:00 until the family sets the day), as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him; today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds. Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
+
+1. **Change the channel for a type.** As Pa, `PUT /profiles/{profile_id}/delivery-settings` with `{"channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}}`; the next day's reorder goes by WhatsApp only, and twice before the cap holds it. `{"caps": {"flag": 3}}` is refused: an alert is never capped.
+2. **Hear a card.** `GET /profiles/{profile_id}/feed/{item_id}/voice` for any card on his feed: `audio/wav`, `X-Duration-Seconds` under 30, `X-Voice-Cache: hit` the second time; `?language=ta` is a 404 (Tamil comes at T2) and the web client says it with the phone's voice.
 
 ## How to run checkpoint 13
 
