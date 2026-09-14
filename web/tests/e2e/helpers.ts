@@ -178,3 +178,32 @@ export async function shot(page: Page, name: string): Promise<void> {
   if (!dir) return;
   await page.screenshot({ path: `${dir}/w1-review-${name}.png`, fullPage: true });
 }
+
+/** Ten in the morning in Singapore on Monday 14 September. */
+export const TEN_AM_IN_SINGAPORE = new Date("2026-09-14T02:00:00Z");
+
+/** Every test that is not about the time runs at the same hour on the phone, whatever the
+ *  hour on the runner. What the backend says about the day is read from the backend. */
+export async function fixClock(page: Page, at: Date = TEN_AM_IN_SINGAPORE): Promise<void> {
+  await page.clock.install({ time: at });
+}
+
+/** When the kept Today page expires, as the phone holds it (the first one found). */
+export async function keptExpiry(page: Page): Promise<string | null> {
+  return page.evaluate(
+    () =>
+      new Promise<string | null>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const cursor = opened.result.transaction("kv", "readonly").objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return resolve(null);
+            if (typeof at.key === "string" && at.key.startsWith("today.")) return resolve((at.value as { expiresAt: string }).expiresAt);
+            at.continue();
+          };
+        };
+        opened.onerror = () => resolve(null);
+      }),
+  );
+}

@@ -1,6 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { BASE_URL } from "../../playwright.config";
-import { API, apiToken, expireKeptPages, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+import { API, apiToken, expireKeptPages, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+
+test.beforeEach(async ({ page }) => {
+  await fixClock(page);
+});
 
 /** With the network gone, the app opens on the page the phone kept: the service worker serves
  *  the shell, IndexedDB holds today's page under the key that read it, and the page says when

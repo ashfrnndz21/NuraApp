@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ProfileOut } from "../../src/api/types";
-import { bindingOf, clearAllProfileData, isFresh, loadToday, midnightAfter, saveToday, zoneOf } from "../../src/offline/todayCache";
+import { bindingOf, clearAllProfileData, isFresh, loadToday, midnightAfter, saveToday, shownUntil, zoneOf } from "../../src/offline/todayCache";
 import { kvGet, kvKeys } from "../../src/store/kv";
 import type { TodayModel } from "../../src/today/model";
 
@@ -43,6 +43,12 @@ describe("the expiry", () => {
     expect(midnightAfter(new Date("2026-09-14T15:59:59Z"), zoneOf("MY")).toISOString()).toBe("2026-09-14T16:00:00.000Z");
     expect(zoneOf("MY")).toBe("Asia/Kuala_Lumpur");
     expect(zoneOf(undefined)).toBe("Asia/Singapore");
+  });
+
+  it("shows a page read at 23:59 in Singapore until 00:00 there, and a kept page until its own expiry", () => {
+    expect(shownUntil("2026-09-14T15:59:00Z", null, SG).toISOString()).toBe("2026-09-14T16:00:00.000Z");
+    expect(shownUntil("2026-09-14T15:59:00Z", "2026-09-14T16:00:00.000Z", SG).toISOString()).toBe("2026-09-14T16:00:00.000Z");
+    expect(shownUntil("2026-09-14T16:00:30Z", null, SG).toISOString()).toBe("2026-09-15T16:00:00.000Z");
   });
 
   it("drops the page once midnight has passed: the phone keeps nothing it may not show", async () => {

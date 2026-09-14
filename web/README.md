@@ -105,8 +105,13 @@ caregiver cards, with no State card and no refusal.
 
 **Reopening.** The app opens on the remembered Today at once and checks who is signed in in
 the background; only a refused session sends him back to sign-in (`src/restore.ts`). A lost
-network or a server error keeps him where he was. The kept page expires at midnight on the
-profile's region clock (Singapore, Kuala Lumpur), whatever zone the phone is set to.
+network or a server error keeps him where he was, and on Today a server that could not answer
+(a 5xx) leaves the kept page in place, dated, under "Nura cannot reach your papers right now."
+(`readFailure` in `src/restore.ts`); only a refusal deletes it. No page — kept or fresh — is
+shown past the midnight after it was read on the profile's region clock (Singapore, Kuala
+Lumpur), whatever zone the phone is set to, and Today reads the new day's page at that
+midnight by itself. The Playwright suite runs the phone in Asia/Singapore at a fixed 10:00
+(`fixClock`), and `midnight.spec.ts` crosses midnight on purpose.
 
 **Offline.** The worker precaches the shell on install (the Vite plugin in `vite.config.ts`
 lists the built files into it) and answers navigations from the cache when the network is

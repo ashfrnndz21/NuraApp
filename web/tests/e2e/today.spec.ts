@@ -1,5 +1,9 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, apiToken, captureSpeech, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+import { API, apiToken, captureSpeech, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+
+test.beforeEach(async ({ page }) => {
+  await fixClock(page);
+});
 
 interface Slot {
   line_id: string;

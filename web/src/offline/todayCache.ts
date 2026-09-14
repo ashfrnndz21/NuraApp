@@ -62,6 +62,12 @@ export function midnightAfter(now: Date, zone: string): Date {
   return new Date(Date.UTC(get("year"), get("month") - 1, get("day") + 1) - offset);
 }
 
+/** Until when a page may be shown: a kept page's expiry, or the midnight after it was read on
+ *  the region's clock. Past it, the page is yesterday's and shows no dose. */
+export function shownUntil(fetchedAt: string, keptExpiresAt: string | null, zone: string): Date {
+  return keptExpiresAt ? new Date(keptExpiresAt) : midnightAfter(new Date(fetchedAt), zone);
+}
+
 export function isFresh(entry: TodayEntry, now: Date): boolean {
   return new Date(entry.expiresAt).getTime() > now.getTime();
 }

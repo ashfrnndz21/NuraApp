@@ -19,6 +19,9 @@ export default defineConfig({
     ...devices["Pixel 5"],
     // The patient's phone: a small screen, touch, and the service worker allowed.
     serviceWorkers: "allow",
+    // The phone is in Singapore, whatever zone the runner is in; the tests that are not
+    // about the time also fix its clock (`fixClock`), and midnight has its own test.
+    timezoneId: "Asia/Singapore",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

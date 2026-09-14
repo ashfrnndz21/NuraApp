@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { Unreachable } from "../api/client";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
-import { bindingOf, clearProfileData, isFresh, loadToday, sameBinding, saveToday, zoneOf, type TodayEntry } from "../offline/todayCache";
+import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type TodayEntry } from "../offline/todayCache";
+import { readFailure } from "../restore";
 import { wantsHomeScreenHint } from "../offline/register";
 import { chooseProfile, density, me, posture, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
@@ -40,7 +40,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const papers = profile.value;
   const [model, setModel] = useState<TodayModel | null>(null);
   const [kept, setKept] = useState<TodayEntry | null>(null);
-  const [offline, setOffline] = useState(false);
+  // Why the last read did not land: no network, or a server that could not answer.
+  const [unreached, setUnreached] = useState<"network" | "server" | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [justTook, setJustTook] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,7 +95,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     };
     setModel(fresh);
     setKept(null);
-    setOffline(false);
+    setUnreached(null);
     posture.value = fresh.posture;
     await saveToday(id, fresh, binding, new Date(), zoneOf(current.region));
   };
@@ -111,14 +112,23 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     try {
       await refresh();
     } catch (failure) {
-      if (failure instanceof Unreachable) setOffline(true);
-      else await forget(papers.profile_id, failure);
+      const kind = readFailure(failure);
+      if (kind === "refused") await forget(papers.profile_id, failure);
+      else setUnreached(kind);
     }
   };
 
   useEffect(() => {
     void load();
   }, [bearer, papers?.profile_id, language.value]);
+
+  // At midnight on the region's clock the page on screen is yesterday's: read today's.
+  useEffect(() => {
+    if (!model) return;
+    const until = shownUntil(model.fetchedAt, kept?.expiresAt ?? null, zoneOf(papers?.region));
+    const timer = setTimeout(() => void load(), Math.max(0, until.getTime() - Date.now()) + 1000);
+    return () => clearTimeout(timer);
+  }, [model, kept]);
 
   const take = async (lineId: string, anchor: string) => {
     if (!bearer || !papers || busy) return;
@@ -129,8 +139,10 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
       setJustTook(tookLine(new Date().getHours(), s));
       await refresh();
     } catch (failure) {
-      if (failure instanceof Unreachable) setOffline(true);
-      else await forget(papers.profile_id, failure);
+      const kind = readFailure(failure);
+      if (kind === "refused") await forget(papers.profile_id, failure);
+      else if (kind === "network") setUnreached("network");
+      else setError(failure); // the tap did not land; the page stays, and he is told
     } finally {
       setBusy(false);
     }
@@ -139,11 +151,13 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const now = new Date();
   const locale = LOCALE[language.value];
   const name = papers?.display_name || me.value?.display_name || "";
-  // What is on screen came from the phone's copy, not the network, while `kept` is set; a
-  // copy that has passed its midnight is never shown, even if the app stayed open.
+  // What is on screen came from the phone's copy, not the network, while `kept` is set. No
+  // page is shown past the midnight after it was read, on the region's clock — kept or
+  // fresh, even if the app stayed open (the timer above reads the new day's page).
   const fromPhone = kept !== null;
-  const page = kept && !isFresh(kept, now) ? null : model;
-  const blank = offline && page === null;
+  const until = model ? shownUntil(model.fetchedAt, kept?.expiresAt ?? null, zoneOf(papers?.region)) : null;
+  const page = model && until && now < until ? model : null;
+  const blank = unreached !== null && page === null;
 
   const feed = page ? feedCards(page.feed) : { flags: [], forYou: [] };
   const act = page?.posture === "act";
@@ -196,9 +210,9 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         </>
       ) : (
         <>
-          {offline && kept && page && (
+          {unreached && kept && page && (
             <Tile glass testId="offline">
-              <p>{s.today.offline}</p>
+              <p>{unreached === "network" ? s.today.offline : s.today.cannotReach}</p>
               <p>{s.today.offlineSub}</p>
               <p class="caption">
                 {fill(s.today.asOf, { date: dateLine(new Date(kept.fetchedAt), locale), time: timeLine(new Date(kept.fetchedAt), locale) })}
