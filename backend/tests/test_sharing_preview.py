@@ -238,3 +238,85 @@ async def test_a_chief_key_does_not_preview_words_it_cannot_give(deployment: Dep
     )
     assert refused.status_code == 403
     assert refused.json() == {"refusal": "NotTheirConsentToGive"}
+
+
+BROTHER = "+6591130004"
+
+
+async def test_a_refused_caller_leaves_no_account_behind(deployment: Deployment) -> None:
+    pa, profile_id = await _pa(deployment)
+    # A caregiver's key has no family scope: refused at the door.
+    await let_in(
+        deployment,
+        pa,
+        profile_id,
+        MEI,
+        ["medicines"],
+        relationship="daughter",
+        holder_display_name="Mei",
+    )
+    carer = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": ["medicines"]},
+        headers=bearer(pa["token"]),
+    )
+    assert carer.status_code == 201, carer.text
+    mei = await register_by_phone(deployment, MEI, display_name="Mei")
+    refused = await _agree(
+        deployment,
+        mei["token"],
+        profile_id,
+        holder_phone_e164=NEW_NUMBER,
+        holder_display_name="Siti",
+    )
+    assert refused.status_code == 403
+    assert refused.json()["refusal"] == "OutOfScope"
+    assert await _person(deployment, NEW_NUMBER) is None
+
+    # A chief holds the family scope, but this route is the owner's own yes: refused too.
+    await let_in(
+        deployment,
+        pa,
+        profile_id,
+        BROTHER,
+        EVERYTHING,
+        relationship="son",
+        holder_display_name="Kit",
+    )
+    chief = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": BROTHER, "role": "chief"},
+        headers=bearer(pa["token"]),
+    )
+    assert chief.status_code == 201, chief.text
+    kit = await register_by_phone(deployment, BROTHER, display_name="Kit")
+    refused = await _agree(
+        deployment,
+        kit["token"],
+        profile_id,
+        holder_phone_e164=NEW_NUMBER,
+        holder_display_name="Siti",
+    )
+    assert refused.status_code == 403
+    assert refused.json() == {"refusal": "NotTheirConsentToGive"}
+    assert await _person(deployment, NEW_NUMBER) is None
+
+    # Both refusals are on the owner's trail, and the owner himself still can.
+    async with deployment.sessions() as db:
+        refusals = (
+            await db.scalars(
+                select(AuditEntry.refused_because).where(
+                    AuditEntry.profile_id == uuid.UUID(profile_id),
+                    AuditEntry.outcome == Outcome.REFUSED,
+                )
+            )
+        ).all()
+    assert {"OutOfScope", "NotTheirConsentToGive"} <= set(refusals)
+    agreed = await _agree(
+        deployment,
+        pa["token"],
+        profile_id,
+        holder_phone_e164=NEW_NUMBER,
+        holder_display_name="Siti",
+    )
+    assert agreed.status_code == 201, agreed.text

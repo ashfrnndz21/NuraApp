@@ -358,6 +358,18 @@ async def grant_consent(
 CONSENT = Consent.__tablename__
 
 
+@audited(Action.WRITE, Scope.FAMILY, CONSENT)
+async def may_invite(session: AsyncSession, *, context: KeyContext) -> None:
+    """The door on letting someone in, before anyone is named: the family scope (checked at
+    the door) and the owner's own footing — `POST /consents/sharing` agrees on the owner's
+    basis only, so anyone else is refused, on the trail, before an account is made for the
+    person he would let in."""
+    if context.standing is not Standing.OWNER:
+        raise NotTheirConsentToGive(
+            f"letting someone in here is the owner's own yes, not a {context.role}'s"
+        )
+
+
 @audited(Action.READ, Scope.FAMILY, CONSENT)
 async def preview_sharing(
     session: AsyncSession,

@@ -66,6 +66,7 @@ from app.consent.service import (
     SharingWords,
     all_consents,
     grant_consent,
+    may_invite,
     preview_sharing,
 )
 from app.db import utcnow
@@ -461,6 +462,9 @@ async def let_someone_in(
     (`ConsentWithheld`) until it is in force. The owner agrees for himself; anyone else
     needs a recorded proxy basis, which is not on this route.
     """
+    # Who may let someone in, and whether the words have a name, are settled before anything
+    # is written: a refused caller leaves no account behind for the number he gave.
+    await may_invite(session, context=context)
     named = (body.holder_display_name or "").strip()
     if body.holder_phone_e164 is not None and not named:
         # The words name the person; nothing is made for the number without that name.
