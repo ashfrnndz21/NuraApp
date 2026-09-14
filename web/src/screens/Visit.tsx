@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { Refused } from "../api/client";
 import * as nura from "../api/nura";
-import type { ConsultOut, LogisticsOut, NoticeOut, SummaryOut, WordingOut } from "../api/types";
+import type { ConsultOut, LogisticsOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
 import { go } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
@@ -35,7 +35,7 @@ type Stage =
   | { kind: "saving"; notice: NoticeOut }
   | { kind: "done"; notice: NoticeOut; outcome: ConsultOut }
   | { kind: "no"; notice: NoticeOut }
-  | { kind: "notes"; notice: NoticeOut; summary: SummaryOut };
+  | { kind: "notes"; notice: NoticeOut; summary: VisitSummaryOut };
 
 export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.Element {
   const s = t();
@@ -223,7 +223,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   const view = card ? logisticsView(card) : null;
   const elapsed = timer(recorder.elapsed.value);
 
-  const summaryCard = (summary: SummaryOut, testId: string) => {
+  const summaryCard = (summary: VisitSummaryOut, testId: string) => {
     const shown = summaryView(summary);
     return (
       <Tile paper testId={testId}>

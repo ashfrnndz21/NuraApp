@@ -54,6 +54,7 @@ from app.reasoning.visits.models import MemoKind
 from app.reasoning.visits.questions import Visit, require_visit
 from app.reasoning.visits.strings import (
     DRIVE_TASK,
+    FAMILY_NOTE_LABEL,
     NOTE_LABEL,
     NotASlotValue,
     NotPlainEnough,
@@ -163,16 +164,23 @@ def _place_line(visit: Visit) -> Line:
     return _line("place", "logistics_no_place", visit.language, doctor=visit.doctor)
 
 
+async def _name_of(session: AsyncSession, context: KeyContext, person_id: uuid.UUID) -> str | None:
+    """A person's name as the profile knows it, or None when the account has none yet — a
+    line then says "your family", never a line with an empty slot, and never no card."""
+    name = (await person_display_name(session, context, person_id) or "").strip()
+    return name or None
+
+
 async def _chief_name(session: AsyncSession, context: KeyContext) -> str | None:
     """His chief's name, when the key reaching can read the family list."""
     if not context.allows(Scope.FAMILY):
         return None
     if context.role is KeyRole.CHIEF:
-        return await person_display_name(session, context, context.person_id)
+        return await _name_of(session, context, context.person_id)
     moment = utcnow()
     for key in await list_keys(session, context=context):
         if key.role is KeyRole.CHIEF and key.is_active(moment):
-            return await person_display_name(session, context, key.holder_person_id)
+            return await _name_of(session, context, key.holder_person_id)
     return None
 
 
@@ -197,7 +205,7 @@ async def _driver(session: AsyncSession, context: KeyContext, visit: Visit) -> D
         return Driver(
             DriverStatus.ASSIGNED,
             person_id=assigned.assigned_person_id,
-            name=await person_display_name(session, context, assigned.assigned_person_id),
+            name=await _name_of(session, context, assigned.assigned_person_id),
             task_id=assigned.id,
         )
     on_duty = await who_is_on_duty(session, context=context, at=visit.appointment.scheduled_at)
@@ -206,7 +214,7 @@ async def _driver(session: AsyncSession, context: KeyContext, visit: Visit) -> D
         return Driver(
             DriverStatus.SUGGESTED,
             person_id=first.person_id,
-            name=await person_display_name(session, context, first.person_id),
+            name=await _name_of(session, context, first.person_id),
             can_say_yes=chief,
         )
     return Driver(DriverStatus.NOBODY, can_say_yes=chief)
@@ -260,23 +268,29 @@ async def logistics_for(
         notes = await chief_notes(session, context=context, provider_id=visit.provider.id)
         if notes:
             newest = notes[0]
-            by = await person_display_name(session, context, newest.written_by_person_id)
+            by = await _name_of(session, context, newest.written_by_person_id)
             note = PlaceNote(
                 note_id=newest.id,
                 text=newest.text,
-                label=NOTE_LABEL[lang].format(who=by),
+                label=NOTE_LABEL[lang].format(who=by) if by else FAMILY_NOTE_LABEL[lang],
                 by_person_id=newest.written_by_person_id,
-                by_name=by,
+                by_name=by or "",
                 written_at=newest.written_at,
             )
-            lines.append(_line("note", "logistics_note_by", lang, who=by))
+            lines.append(
+                _line("note", "logistics_note_by", lang, who=by)
+                if by
+                else _line("note", "logistics_note_family", lang)
+            )
     else:
         withheld.append(Scope.FAMILY)
 
     driver = await _driver(session, context, visit)
-    if driver.status is DriverStatus.ASSIGNED and driver.name:
+    if driver.status is DriverStatus.ASSIGNED:
         lines.append(
             _line("driver", "logistics_driver", lang, who=driver.name, doctor=visit.doctor, day=day)
+            if driver.name
+            else _line("driver", "logistics_driver_family", lang, doctor=visit.doctor, day=day)
         )
     elif driver.status is not DriverStatus.WITHHELD:
         # Nobody is asked yet — a suggestion is not an answer until the chief says yes — so

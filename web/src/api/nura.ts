@@ -4,7 +4,7 @@ import type {
   ConsultOut,
   LogisticsOut,
   NoticeOut,
-  SummaryOut,
+  VisitSummaryOut,
   AnswerOut,
   AskMode,
   BiographyOut,
@@ -246,7 +246,7 @@ export const uploadRecording = (token: string, profileId: string, appointmentId:
 
 /** The notes by hand, when the doctor says no: E05's typed transcript, read into the card. */
 export const writeNotes = (token: string, profileId: string, appointmentId: string, text: string) =>
-  api<SummaryOut>(`/profiles/${profileId}/appointments/${appointmentId}/transcript`, {
+  api<VisitSummaryOut>(`/profiles/${profileId}/appointments/${appointmentId}/transcript`, {
     method: "POST",
     token,
     body: { data: base64OfText(text) },

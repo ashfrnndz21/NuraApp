@@ -384,7 +384,7 @@ export interface SummaryItemOut {
 }
 
 /** The post-visit card (E05-05): the lines for him, the boundary last, the items behind them. */
-export interface SummaryOut {
+export interface VisitSummaryOut {
   summary_id: string;
   appointment_id: string;
   artifact_id: string;
@@ -402,7 +402,7 @@ export interface SummaryOut {
 /** What one upload kept, and the card it ended in, or why there is none yet. */
 export interface ConsultOut {
   recording: RecordingOut;
-  summary: SummaryOut | null;
+  summary: VisitSummaryOut | null;
   summary_refused: string | null;
 }
 

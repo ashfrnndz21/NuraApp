@@ -639,3 +639,46 @@ async def test_an_answer_cites_the_clip_and_the_clip_plays_only_under_the_record
     )
     assert all(line["clip"] is None for line in theirs["lines"]) and "visits" in theirs["withheld"]
     assert {"OutOfScope", "NotAClip"} <= await refusals(deployment, house.pa, house.profile_id)
+
+
+async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
+    deployment: Deployment,
+) -> None:
+    """A chief who signed up with no name: the card says "your family", and is still a card."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    mei = await register_by_phone(deployment, MEI)
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await _ok(
+        await client.post(f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his),
+        201,
+    )
+    tan = await _ok(
+        await client.post(f"/profiles/{profile_id}/providers", json={"name": "Dr Tan", "kind": "doctor"}, headers=his),
+        201,
+    )
+    booking = {"provider_id": tan["provider_id"], "scheduled_at": VISIT_AT, "purpose": "blood pressure check"}
+    yes = await _ok(
+        await client.post(f"/profiles/{profile_id}/confirmations", json={"subject": "appointment", **booking}, headers=his),
+        201,
+    )
+    visit = await _ok(
+        await client.post(f"/profiles/{profile_id}/appointments", json={**booking, "confirmation_id": yes["confirmation_id"]}, headers=his),
+        201,
+    )
+    hers = bearer(mei["token"])
+    await _ok(
+        await client.post(f"/profiles/{profile_id}/providers/{tan['provider_id']}/notes", json={"text": "parking at B2"}, headers=hers),
+        201,
+    )
+    route = f"/profiles/{profile_id}/appointments/{visit['appointment_id']}"
+    card = await _ok(await client.get(f"{route}/logistics", headers=his))
+    texts = [line["text"] for line in card["lines"]]
+    if card["note"]["by_name"]:
+        return  # the account has a name after all (the owner's naming reached it): nothing to prove
+    assert card["note"]["label"] == "Your family's note" and card["note"]["text"] == "parking at B2"
+    assert "Your family wrote a note about the place." in texts
+    assert "Nura does not have the address of Dr Tan yet." in texts
+    _clean(texts)

@@ -1,4 +1,4 @@
-import type { LogisticsOut, SummaryOut } from "../api/types";
+import type { LogisticsOut, VisitSummaryOut } from "../api/types";
 import type { ClipRef } from "./clip";
 
 /** The visit day as the Visit screen shows it, from the backend's answers alone: the phone
@@ -48,7 +48,7 @@ export interface SummaryView {
 
 /** The card's lines in the backend's order, each with the clip of the item it says, and the
  *  boundary last. An item is matched to its line by its words, once each. */
-export function summaryView(summary: SummaryOut): SummaryView {
+export function summaryView(summary: VisitSummaryOut): SummaryView {
   const boundary = summary.boundary ? summary.boundary.split("\n") : [];
   const body = summary.lines.slice(0, Math.max(0, summary.lines.length - boundary.length));
   const unused = [...summary.items];

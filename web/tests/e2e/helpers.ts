@@ -410,6 +410,17 @@ export async function stand(page: Page): Promise<Stand> {
   });
 }
 
+/** `apiToken`, for a person who gives her name when she signs up. */
+async function namedToken(request: APIRequestContext, phone: string, name: string): Promise<string> {
+  const before = codesSoFar(phone);
+  const started = await request.post(`${API}/auth/phone/start`, { data: { phone_e164: phone, display_name: name, language: "en" } });
+  if (started.status() !== 202) throw new Error(`start: ${started.status()} ${await started.text()}`);
+  const code = await codeFromLog(phone, before);
+  const verified = await request.post(`${API}/auth/phone/verify`, { data: { phone_e164: phone, code } });
+  if (!verified.ok()) throw new Error(`verify: ${verified.status()} ${await verified.text()}`);
+  return ((await verified.json()) as { token: string }).token;
+}
+
 const EVERY_PART = ["medicines", "visits", "readings", "records", "notes", "money", "family", "emergency", "ask", "send"];
 
 /** Pa, his visit to Dr Tan at half past 10 this morning (the frozen Monday), Dr Tan's
@@ -442,13 +453,14 @@ export async function seedVisitDay(
   if (visit.status() !== 201) throw new Error(`visit: ${visit.status()} ${await visit.text()}`);
   const appointmentId = ((await visit.json()) as { appointment_id: string }).appointment_id;
 
+  // Mei signs up with her own name, as a chief does: the card names her ("Mei's note").
   const meiPhone = freshPhone("+659556");
-  const meiToken = await apiToken(request, meiPhone);
+  const meiToken = await namedToken(request, meiPhone, "Mei");
   const hers = { Authorization: `Bearer ${meiToken}` };
   const meiId = ((await (await request.get(`${API}/me`, { headers: hers })).json()) as { person_id: string }).person_id;
   const letIn = await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: meiPhone, scopes: EVERY_PART, relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, relationship: "daughter", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${profileId}/keys`, { headers: his, data: { holder_phone_e164: meiPhone, role: "chief" } });

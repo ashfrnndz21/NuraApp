@@ -554,6 +554,11 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "{who} menulis nota tentang tempat itu.",
         "zh": "{who}写了一条关于这个地方的备注。",
     },
+    "logistics_note_family": {
+        "en": "Your family wrote a note about the place.",
+        "ms": "Keluarga anda menulis nota tentang tempat itu.",
+        "zh": "您的家人写了一条关于这个地方的备注。",
+    },
 }
 """Every line the visit loop can say that is not a thing for him to do, by key and language."""
 
@@ -623,6 +628,11 @@ ACTION_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "{who} akan menghantar anda ke {doctor} pada {day}.",
         "zh": "{who}会在{day}开车送您去见{doctor}。",
     },
+    "logistics_driver_family": {
+        "en": "Your family will drive you to {doctor} on {day}.",
+        "ms": "Keluarga anda akan menghantar anda ke {doctor} pada {day}.",
+        "zh": "您的家人会在{day}开车送您去见{doctor}。",
+    },
     "logistics_driver_ask": {
         "en": "{who} will tell you who drives you on {day}.",
         "ms": "{who} akan beritahu anda siapa yang menghantar anda pada {day}.",
@@ -642,6 +652,14 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {**LINE_TEMPLATES, **ACTION_TEMPLAT
 # @patient phrase
 NOTE_LABEL: Mapping[str, str] = {"en": "{who}'s note", "ms": "Nota {who}", "zh": "{who}的备注"}
 """The label over the chief's own note about a place, shown as she wrote it (E05-03)."""
+
+# @patient phrase
+FAMILY_NOTE_LABEL: Mapping[str, str] = {
+    "en": "Your family's note",
+    "ms": "Nota keluarga anda",
+    "zh": "您家人的备注",
+}
+"""The same label when the writer's account has no name to show yet: never an empty slot."""
 
 # @patient phrase
 DRIVE_TASK: Mapping[str, str] = {

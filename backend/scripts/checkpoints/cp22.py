@@ -207,6 +207,7 @@ def let_in(client: httpx.Client, pa: Person, profile_id: str, who: Person, role:
             headers=his,
             json={
                 "holder_phone_e164": who.phone_e164,
+                "holder_display_name": who.name,
                 "scopes": scopes,
                 "relationship": "family",
                 "language": "en",

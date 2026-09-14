@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LogisticsOut, SummaryOut } from "../../src/api/types";
+import type { LogisticsOut, VisitSummaryOut } from "../../src/api/types";
 import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../../src/visit/model";
 
 const card = (driver: Partial<LogisticsOut["driver"]> = {}): LogisticsOut => ({
@@ -31,7 +31,7 @@ describe("the logistics card", () => {
   });
 });
 
-const summary: SummaryOut = {
+const summary: VisitSummaryOut = {
   summary_id: "c1",
   appointment_id: "a1",
   artifact_id: "t1",
