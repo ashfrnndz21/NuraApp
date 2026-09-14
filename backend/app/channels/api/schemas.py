@@ -1563,9 +1563,7 @@ class ReviewCardOut(BaseModel):
     fields: list[ReviewFieldOut]
 
     @classmethod
-    def of(
-        cls, card: ReviewCard, fields: Sequence[ReviewField], *, language: str
-    ) -> ReviewCardOut:
+    def of(cls, card: ReviewCard, fields: Sequence[ReviewField], *, language: str) -> ReviewCardOut:
         """The card, its notice and its fields' prompts in `language`: his settings' (the
         channel reads them, `app.channels.api.capture.capture_language`)."""
         return cls(
