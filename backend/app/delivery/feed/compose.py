@@ -957,6 +957,14 @@ class VisitMemos:
     doctor: str | None
     memos: tuple[Memo, ...]
     until: datetime
+    clips: tuple[dict[str, Any], ...] = ()
+    """Where each memo was said in the consult recording, when there is one (E21-03): the
+    phone plays that stretch on a tap under the memo's own line, and nothing else."""
+
+    def clips_for(self, memos: Sequence[Memo]) -> list[dict[str, Any]]:
+        """The clips of these memos only, by their lines."""
+        said = {memo.text for memo in memos}
+        return [clip for clip in self.clips if clip["line"] in said]
 
 
 async def _visit_memos(
@@ -1027,9 +1035,32 @@ async def _visit_memos(
             where=(Provider.id.in_(sorted({booked[one].provider_id for one in by_visit})),),
         )
     }
+    recording_of = {summary.id: summary.recording_artifact_id for summary in summaries}
+    item_of = {item.id: item for item in items}
     found: list[VisitMemos] = []
     for visit_id, kept in by_visit.items():
         visit = booked[visit_id]
+        doctor = doctors.get(visit.provider_id)
+        clips: list[dict[str, Any]] = []
+        for memo in kept:
+            item = item_of.get(memo.source_id) if memo.source_id is not None else None
+            heard_in = None if item is None else recording_of.get(item.summary_id)
+            if (
+                item is None
+                or heard_in is None
+                or item.clip_start_s is None
+                or item.clip_end_s is None
+            ):
+                continue
+            clips.append(
+                {
+                    "line": memo.text,
+                    "artifact_id": str(heard_in),
+                    "start_s": item.clip_start_s,
+                    "end_s": item.clip_end_s,
+                    "doctor": doctor or YOUR_DOCTOR[house.language],
+                }
+            )
         until = max(
             [
                 as_utc(visit.scheduled_at) + MEMO_CARD_DAYS,
@@ -1040,7 +1071,7 @@ async def _visit_memos(
                 ),
             ]
         )
-        found.append(VisitMemos(visit, doctors.get(visit.provider_id), tuple(kept), until))
+        found.append(VisitMemos(visit, doctor, tuple(kept), until, tuple(clips)))
     return sorted(found, key=lambda one: as_utc(one.visit.scheduled_at), reverse=True)
 
 
@@ -1090,6 +1121,7 @@ async def _memos(
         day=day.key,
         dedupe_key=f"memo:{latest.visit.id}:{digest}:{day.key}",
         expires_at=day.ends_at,
+        cite={"clips": list(latest.clips)} if latest.clips else None,
     )
     return latest.visit.id
 
@@ -1405,6 +1437,8 @@ async def _story_doctor(
             day=day.key,
             dedupe_key=f"story:doctor:{one.visit.id}:{day.week}",
             expires_at=until,
+            # The same clips the memo card carries (E21-03), for the memos this card tells.
+            cite={"clips": one.clips_for(told)} if one.clips_for(told) else None,
         )
 
 

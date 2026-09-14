@@ -235,6 +235,33 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
         "ms": "Anda boleh taip kepada Nura pula.",
         "zh": "您也可以打字告诉Nura。",
     },
+    # The phone could not reach Nura (the web client keeps these, W7): nothing was written
+    # and nobody was told, so the card says so and gives him the calls himself.
+    "nfw.offline_not_sent": {
+        "en": "Nura could not send this to your family.",
+        "ms": "Nura tidak dapat menghantar ini kepada keluarga anda.",
+        "zh": "Nura无法把这个发给您的家人。",
+    },
+    "nfw.offline_call_chief": {
+        "en": "Call {chief} now.",
+        "ms": "Telefon {chief} sekarang.",
+        "zh": "现在就打电话给{chief}。",
+    },
+    "nfw.offline_call_family": {
+        "en": "Call your family now.",
+        "ms": "Telefon keluarga anda sekarang.",
+        "zh": "现在就打电话给您的家人。",
+    },
+    "nfw.offline_bad_995": {
+        "en": "If you feel very bad, call the ambulance now on 995.",
+        "ms": "Jika anda rasa sangat teruk, hubungi ambulans sekarang di talian 995.",
+        "zh": "如果您觉得很难受，现在就打995叫救护车。",
+    },
+    "nfw.offline_bad_999": {
+        "en": "If you feel very bad, call the ambulance now on 999.",
+        "ms": "Jika anda rasa sangat teruk, hubungi ambulans sekarang di talian 999.",
+        "zh": "如果您觉得很难受，现在就打999叫救护车。",
+    },
 }
 
 # --- the notice to the family ---------------------------------------------------------------
