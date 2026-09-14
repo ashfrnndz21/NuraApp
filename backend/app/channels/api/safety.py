@@ -14,10 +14,9 @@ holding a URL sees nothing without a key.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import HTMLResponse
+from pydantic import AwareDatetime
 
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
@@ -136,7 +135,7 @@ async def add_symptom(
 async def symptoms(
     context: Context,
     session: Db,
-    since: datetime | None = Since,
+    since: AwareDatetime | None = Since,
     language: str | None = Language,
 ) -> SymptomLogOut:
     """The symptoms written down since `since` (default the last seven days), oldest first,

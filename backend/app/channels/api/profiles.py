@@ -15,9 +15,9 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, status
+from pydantic import AwareDatetime
 
 from app.audit.access import audited_profile_read, person_display_name
 from app.audit.models import Action
@@ -576,7 +576,7 @@ async def audit(
     action: Action | None = None,
     scope: Scope | None = None,
     actor_person_id: uuid.UUID | None = None,
-    since: datetime | None = None,
+    since: AwareDatetime | None = None,
     limit: int = Query(default=200, ge=1, le=500),
 ) -> list[AuditOut]:
     """Who touched what on this profile, newest first. Read by the owner, or by someone he

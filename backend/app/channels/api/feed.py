@@ -20,9 +20,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import AwareDatetime
 
 from app.audit.access import audited_profile_read
 from app.channels.api.deps import Context, Db, providers_of, settings_of
@@ -62,7 +62,7 @@ async def feed(
     context: Context,
     session: Db,
     cursor: str | None = Query(default=None, max_length=200),
-    at: datetime | None = None,
+    at: AwareDatetime | None = None,
 ) -> FeedPageOut:
     """One page of the feed. No cursor makes today's cards and answers the first page, which
     is also kept for `…/feed/cached`; a cursor answers the page it names, as of when it was
