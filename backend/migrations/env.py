@@ -20,6 +20,7 @@ from app.delivery.feed import models as feed_models  # noqa: F401
 from app.family import models as family_models  # noqa: F401
 from app.identity import models as identity_models  # noqa: F401
 from app.ingestion import models as ingestion_models  # noqa: F401
+from app.ingestion.connectors import models as connector_models  # noqa: F401
 from app.keys import confirm as key_confirm  # noqa: F401
 from app.keys import models as key_models  # noqa: F401
 from app.keys import privacy as key_privacy  # noqa: F401
@@ -27,7 +28,9 @@ from app.medicines import models as medicine_models  # noqa: F401
 from app.memory import models as memory_models  # noqa: F401
 from app.notes import models as note_models  # noqa: F401
 from app.onboarding import models as onboarding_models  # noqa: F401
+from app.reasoning import models as reasoning_models  # noqa: F401
 from app.reasoning.visits import models as visit_models  # noqa: F401
+from app.routines import models as routine_models  # noqa: F401
 from app.safety import red_flags as red_flag_models  # noqa: F401
 from app.settings import load_settings
 from app.state import models as state_models  # noqa: F401

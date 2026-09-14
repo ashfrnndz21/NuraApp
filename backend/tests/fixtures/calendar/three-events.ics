@@ -1,0 +1,35 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Nura tests//Three events//EN
+BEGIN:VEVENT
+UID:dr-tan-2026-09-24@nura.test
+SUMMARY:Dr Tan follow-up
+DTSTART;TZID=Asia/Singapore:20260924T100000
+DTEND;TZID=Asia/Singapore:20260924T103000
+LOCATION:Tan Family Clinic\, Bishan
+ORGANIZER;CN=Mei Lim:mailto:mei@example.com
+ATTENDEE;CN=Mei Lim;ROLE=REQ-PARTICIPANT:mailto:mei@example.com
+DESCRIPTION:Bring the blood pressure book and the tablets. Mei drives\, Kit 
+ collects the refill after.
+BEGIN:VALARM
+ACTION:DISPLAY
+SUMMARY:Alarm for Kit Lim
+DESCRIPTION:Remind Kit Lim
+TRIGGER:-PT1H
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:dialysis-2026-09-18@nura.test
+SUMMARY:Dialysis SGH
+DTSTART:20260918T020000Z
+LOCATION:Singapore General Hospital
+END:VEVENT
+BEGIN:VEVENT
+UID:lunch-2026-09-20@nura.test
+SUMMARY:Lunch with Ah Kow
+DTSTART;TZID=Asia/Singapore:20260920T123000
+LOCATION:Maxwell Food Centre
+ATTENDEE;CN=Ah Kow:mailto:ahkow@example.com
+DESCRIPTION:Ah Kow says his knee is better
+END:VEVENT
+END:VCALENDAR

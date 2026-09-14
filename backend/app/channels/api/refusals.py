@@ -45,6 +45,13 @@ from app.family.thread import NoSuchTask as NoSuchTaskForCard
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.connectors.service import (
+    AlreadyDecided,
+    NoSuchConnector,
+    NoSuchProposal,
+    NotTheirsToConnect,
+    NotTheirsToDecide,
+)
 from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
@@ -71,12 +78,14 @@ from app.onboarding.biography import (
 from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
+from app.reasoning.trends import NoSuchAnalyte
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
 from app.reasoning.visits.questions import NoSuchQuestion
 from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
 from app.reasoning.visits.summary import DrugNamedInAFact, NoSuchSummary, TranscriptTooLarge
 from app.regions import OutOfRegion
+from app.routines.service import NotTheirsToSet
 from app.safety.high_risk import HighRiskNeedsLabelPhoto
 from app.search.ask import NotAQuestion
 from app.state.service import NoState, StaleState
@@ -102,6 +111,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheClaimant, 403),
     # A key to read the medicines is not a key to change them.
     (NotTheirsToChange, 403),
+    # The day, and a calendar's proposals (E10-01, E18-02): reading them is not setting them.
+    (NotTheirsToSet, 403),
+    (NotTheirsToConnect, 403),
+    (NotTheirsToDecide, 403),
     # The family's arrangements (E12): the owner's and his chief's; a key is never widened
     # in place; a task is done by the person it names; only me is the owner's alone.
     (NotAChief, 403),
@@ -151,6 +164,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchSearchJob, 404),
     (NoCachedPage, 404),
     (NoSuchLine, 404),
+    (NoSuchAnalyte, 404),
+    (NoSuchConnector, 404),
+    (NoSuchProposal, 404),
     # The timeline (E03): a visit, an episode or a provider not on this profile; a paper
     # hangs somewhere once; one episode of a kind open at a time; a status goes one way.
     (NoSuchEpisode, 404),
@@ -179,6 +195,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (SummaryAlreadyConfirmed, 409),
     # The same label twice, or one that adds nothing, changes nothing.
     (AlreadyRecorded, 409),
+    # A proposal has one yes or one no; a trend is not rendered from a State the record has
+    # moved past, or one the key cannot check (compose again).
+    (AlreadyDecided, 409),
+    (StaleState, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
     # up for, are answered by name and nothing else.
