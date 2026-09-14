@@ -752,6 +752,7 @@ _ACTOR_WORDS = re.compile(r"\b(?:Nura|you|your|yourself|Dr\s+[A-Z]\w*|the doctor
 
 # Fillers for `{slots}`: by exact slot name, then by a word the name contains.
 FILLERS: dict[str, str] = {
+    "doctor": "Dr Tan",
     "me": "you",
     "you": "you",
     "mine": "your",
@@ -1223,13 +1224,20 @@ _MEDICINE_NOUNS: dict[str, re.Pattern[str]] = {
     "ms": re.compile(r"\b(?:ubat|pil|tablet|kapsul|insulin|suntikan|aspirin)\b", re.IGNORECASE),
     "zh": re.compile(r"药|片|胰岛素|阿司匹林"),
 }
+_CLINICIAN = r"(?:dr\.?\s|doctor|doktor|pharmacist|ahli farmasi)"
 _ASKING = re.compile(
-    r"^\W*(?:ask|tell|tanya|beritahu)\b|^\W*(?:问一问|问|告诉)|\?|？", re.IGNORECASE
+    r"^\W*(?:ask|tell)\b.{0,16}?" + _CLINICIAN
+    + r"|^\W*(?:tanya|beritahu)\b.{0,16}?" + _CLINICIAN
+    + r"|^\W*(?:问一问|问|告诉).{0,10}?(?:医生|大夫|药剂师|dr\.?\s)",
+    re.IGNORECASE,
 )
 """The boundary (CLAUDE.md): no line the patient reads starts, stops or changes a medicine.
-A treatment-changing verb beside a medicine noun fails unless the line is a question for
-the doctor — one that begins by asking or telling — in any language. Kept tight: a verb
-alone ("You can tell Nura to stop at any time.") or a noun alone passes."""
+A treatment-changing verb beside a medicine noun fails unless the line is a question put to
+the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask Dr Tan about…",
+"Tell Dr Tan about…", "Tanya doktor anda…", "问一问陈医生…". A line that tells someone else
+("Tell Ash to stop the water pill.") or merely ends in a question mark is not one. Kept
+tight the other way too: a verb alone ("You can tell Nura to stop at any time.") or a noun
+alone passes."""
 
 
 def _check_boundary(line: _Line) -> None:

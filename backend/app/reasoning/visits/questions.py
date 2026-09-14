@@ -17,8 +17,10 @@ import json
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read
@@ -31,7 +33,7 @@ from app.errors import Refusal
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
-from app.memory.models import Appointment, Provider
+from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
 from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import current_memos
@@ -251,6 +253,25 @@ def question_from_memo(memo: Memo) -> Proposed:
     )
 
 
+async def _previous_visit_at(
+    session: AsyncSession, *, context: KeyContext, visit: Visit
+) -> datetime | None:
+    """When the last visit before this one was — one that has happened and was not
+    cancelled — or None when this is the first."""
+    earlier = await audited_read(
+        session,
+        Appointment,
+        context,
+        Scope.VISITS,
+        where=(
+            Appointment.scheduled_at < visit.appointment.scheduled_at,
+            Appointment.scheduled_at <= utcnow(),
+            Appointment.status != AppointmentStatus.CANCELLED,
+        ),
+    )
+    return max((as_utc(one.scheduled_at) for one in earlier), default=None)
+
+
 async def propose_questions(
     session: AsyncSession, *, context: KeyContext, visit: Visit
 ) -> list[Proposed]:
@@ -259,16 +280,28 @@ async def propose_questions(
     Flags first — a red flag before anything else, then a medicine change heard — then the
     gaps, then the memos that ask the doctor something.
     """
-    # The flags a visit wrote — a red-flag word heard, a medicine change heard. A flag from
-    # the feeling cloud (no transcript, a feeling) is the feed's to escalate (E21), not a
-    # question here.
+    # The flags a visit wrote — a red-flag word heard, a medicine change heard: this visit's
+    # own, and the ones still open raised since the visit before it (older ones were told to
+    # that doctor, or are resolved when a summary is confirmed). A flag from the feeling cloud
+    # (no transcript, a feeling) is the feed's to escalate (E21), not a question here.
     flags = await audited_read(
         session,
         Flag,
         context,
         Scope.RECORDS,
-        where=(Flag.resolved_at.is_(None), Flag.feeling.is_(None)),
+        where=(
+            Flag.feeling.is_(None),
+            or_(Flag.appointment_id == visit.appointment.id, Flag.resolved_at.is_(None)),
+        ),
     )
+    since = await _previous_visit_at(session, context=context, visit=visit)
+    flags = [
+        flag
+        for flag in flags
+        if flag.appointment_id == visit.appointment.id
+        or since is None
+        or as_utc(flag.raised_at) > since
+    ]
     if visit.registry is None:
         raise NoRegistry("proposing questions needs the licensed drug data for his names")
     gaps = await find_gaps(

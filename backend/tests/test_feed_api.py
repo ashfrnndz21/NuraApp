@@ -19,7 +19,9 @@ from typing import Any
 from sqlalchemy import select
 
 from app.clock import FrozenClock
-from app.delivery.feed.models import FeedItem, ReviewStatus, Source, SourceKind
+from app.delivery.feed import items
+from app.delivery.feed.models import CardType, FeedItem, ReviewStatus, Source, SourceKind
+from app.safety.boundary import Surface
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
@@ -653,3 +655,35 @@ async def test_a_medicine_running_low_makes_a_reorder_card_from_the_count(
     await _caregiver_key(deployment, pa, profile_id, MEI, ["readings", "records"])
     hers = await _feed(deployment, profile_id, mei["token"])
     assert "reorder" not in _types(hers) and "now" not in _types(hers)
+
+
+async def test_a_card_that_is_refused_is_skipped_and_never_takes_the_red_flag_with_it(
+    deployment: Deployment, monkeypatch: Any
+) -> None:
+    """Review 3: the flag card is made first and on its own; every other card in its own
+    savepoint. A card refused later — here a reading card made to look like it needs a
+    boundary line it does not carry — is written down and skipped, and the flag stands."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = pa["token"]
+    felt = await deployment.client.post(
+        f"/profiles/{profile_id}/feelings", json={"word": "chest_tightness"}, headers=bearer(his)
+    )
+    assert felt.status_code == 201 and felt.json()["red_flag"] is True
+    await _reading(deployment, profile_id, his, 138, 84)
+    monkeypatch.setitem(items.SURFACE_OF, CardType.READING, Surface.LEARNING_CARD)
+
+    page = await _feed(deployment, profile_id, his)
+    assert _types(page)[0] == "flag"
+    assert "reading" not in _types(page)
+    trail = (
+        await deployment.client.get(
+            f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=bearer(his)
+        )
+    ).json()
+    assert any(
+        e["outcome"] == "refused"
+        and e["refused_because"] == "NoBoundaryLine"
+        and e["target"] == "feed_item"
+        for e in trail
+    )

@@ -21,7 +21,7 @@ from types import ModuleType
 import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
+from sqlalchemy import Connection, Inspector, Table, create_engine, inspect, text
 
 from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
@@ -327,4 +327,51 @@ def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
         assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
         _apply(connection, review, "upgrade")
         assert connection.execute(Artifact.__table__.select()).one().id == photo
+    engine.dispose()
+
+
+def test_0012_widens_a_red_flag_already_raised_and_keeps_it_on_the_way_down(
+    revisions: dict[str, ModuleType],
+) -> None:
+    """A flag raised from the feeling cloud before the visit loop existed is kept whole: 0012
+    gives it its kind, the code its feeling has in the word table, the subject and empty
+    lists, and the way down leaves it as it was."""
+    ordered = _in_order(revisions)
+    visits = revisions["0012_visits"]
+    engine = create_engine("sqlite+pysqlite://")
+    with engine.begin() as connection:
+        for migration in ordered:
+            if migration is not visits:
+                _apply(connection, migration, "upgrade")
+        ids = {name: uuid.uuid4().hex for name in ("flag", "profile", "event", "person")}
+        connection.execute(
+            text(
+                "INSERT INTO red_flag (id, profile_id, feeling, event_id, raised_by_person_id, "
+                "raised_at, told) VALUES (:flag, :profile, 'chest_tightness', :event, :person, "
+                "'2026-09-03 08:00:00', '[]')"
+            ),
+            ids,
+        )
+        _apply(connection, visits, "upgrade")
+        row = connection.execute(
+            text(
+                "SELECT kind, code, subject, fact_ids, payload, feeling, resolved_at FROM red_flag"
+            )
+        ).one()
+        assert tuple(row) == (
+            "red_flag",
+            "chest_pain",
+            "symptom",
+            "[]",
+            "{}",
+            "chest_tightness",
+            None,
+        )
+
+        _apply(connection, visits, "downgrade")
+        assert (
+            connection.execute(text("SELECT feeling FROM red_flag")).scalar_one()
+            == "chest_tightness"
+        )
+        assert "kind" not in {c["name"] for c in inspect(connection).get_columns("red_flag")}
     engine.dispose()

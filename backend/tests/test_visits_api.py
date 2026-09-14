@@ -17,11 +17,15 @@ import base64
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
+
 from app.clock import FrozenClock
 from app.consent.models import ConsentPurpose
 from app.consent.texts import current_version
+from app.reasoning.visits.models import Memo
 from app.safety.boundary import Surface, boundary_lines
 from app.safety.plain_words import verify
+from app.safety.red_flags import Flag, FlagKind
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.visits import RED_FLAG, ROUTINE, transcript
@@ -449,7 +453,11 @@ async def test_after_the_visit_the_memo_card_on_his_feed_repeats_what_was_agreed
     decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
     minted = await deployment.client.post(
         f"/profiles/{profile_id}/confirmations",
-        json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+        json={
+            "subject": "visit_summary",
+            "summary_id": summary["summary_id"],
+            "decisions": decisions,
+        },
         headers=his,
     )
     assert minted.status_code == 201, minted.text
@@ -480,3 +488,159 @@ async def test_after_the_visit_the_memo_card_on_his_feed_repeats_what_was_agreed
     again = bearer((await register_by_phone(deployment, PA))["token"])  # a month on: sign in again
     later = await _feed(deployment, profile_id, again)
     assert "memo" not in [item["type"] for item in later["items"]]
+
+
+KIT = "+6591110003"
+
+
+async def _confirm_all(
+    deployment: Deployment, his: dict[str, str], profile_id: str, appointment_id: str, label: str
+) -> dict[str, Any]:
+    """Upload a transcript and keep every item on its card, with the yes for exactly that."""
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json=_transcript(label),
+        headers=his,
+    )
+    assert posted.status_code == 201, posted.text
+    summary = posted.json()
+    decisions = [{"item_id": item["item_id"], "decision": "confirmed"} for item in summary["items"]]
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={
+            "subject": "visit_summary",
+            "summary_id": summary["summary_id"],
+            "decisions": decisions,
+        },
+        headers=his,
+    )
+    assert minted.status_code == 201, minted.text
+    confirmed = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/summary/{summary['summary_id']}/confirm",
+        json={"decisions": decisions, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=his,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    result: dict[str, Any] = confirmed.json()
+    return result
+
+
+async def _key(
+    deployment: Deployment,
+    owner: dict[str, str],
+    profile_id: str,
+    phone: str,
+    role: str,
+    scopes: list[str],
+) -> None:
+    await let_in(deployment, owner, profile_id, phone, scopes, "family")
+    granted = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": phone, "role": role, "scopes": scopes},
+        headers=bearer(owner["token"]),
+    )
+    assert granted.status_code == 201, granted.text
+
+
+async def test_a_helper_refreshing_the_feed_supersedes_no_memo(deployment: Deployment) -> None:
+    """Review 3: a key that may not change the visits never consolidates the memos, whatever
+    reads them — here a helper opening the feed after the visit."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _recording(deployment, his, profile_id)
+    appointment_id = await _visit(deployment, his, profile_id)
+    await _confirm_all(deployment, his, profile_id, appointment_id, ROUTINE)
+    kit = await register_by_phone(deployment, KIT, "Kit")
+    await _key(deployment, pa, profile_id, KIT, "helper", ["medicines", "emergency"])
+
+    async def memo_rows() -> list[tuple[Any, Any]]:
+        async with deployment.sessions() as session:
+            return [(m.id, m.superseded_at) for m in (await session.scalars(select(Memo))).all()]
+
+    before = await memo_rows()
+    assert before
+    await _feed(deployment, profile_id, bearer(kit["token"]))
+    assert await memo_rows() == before
+
+
+async def test_a_red_flag_heard_at_the_visit_tells_the_family_on_their_feed(
+    deployment: Deployment,
+) -> None:
+    """Review 3: a word heard at the visit tells what a tapped one tells — every live key with
+    the emergency scope is on the flag, with a share line each — and the caregiver's feed
+    carries it; his own summary card leads with calling the doctor, and his feed has no
+    emergency card for it."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _recording(deployment, his, profile_id)
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await _key(
+        deployment,
+        pa,
+        profile_id,
+        MEI,
+        "caregiver",
+        ["medicines", "visits", "readings", "records", "emergency"],
+    )
+    appointment_id = await _visit(deployment, his, profile_id)
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/transcript",
+        json=_transcript(RED_FLAG),
+        headers=his,
+    )
+    assert posted.status_code == 201, posted.text
+    assert posted.json()["lines"][0] == "Call Dr Tan today."
+
+    async with deployment.sessions() as session:
+        [flag] = (await session.scalars(select(Flag).where(Flag.kind == FlagKind.RED_FLAG))).all()
+    assert mei["person_id"] in flag.told
+    trail = (
+        await deployment.client.get(
+            f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his
+        )
+    ).json()
+    assert any(e["action"] == "share" and e["target"] == "red_flag" for e in trail)
+
+    his_page = await _feed(deployment, profile_id, his)
+    assert "flag" not in [item["type"] for item in his_page["items"]]
+    hers = await _feed(deployment, profile_id, bearer(mei["token"]))
+    assert hers["audience"] == "caregiver"
+    [card] = [item for item in hers["items"] if item["type"] == "flag"]
+    assert card["headline"] == "Heard at the visit: chest pain"
+    assert card["why"]["flag_id"] == str(flag.id)
+
+
+async def test_a_brief_that_is_refused_leaves_the_visit_card_to_its_template(
+    deployment: Deployment, monkeypatch: Any
+) -> None:
+    """Review 3: a brief the feed cannot build is refused inside its own savepoint — the
+    refusal on the trail, nothing of it kept — and the visit card falls back to the template,
+    which infers nothing and names no brief."""
+    monkeypatch.setattr(
+        "app.reasoning.visits.brief.boundary_line", lambda *args, **kwargs: "Not the line."
+    )
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _visit(deployment, his, profile_id)
+
+    page = await _feed(deployment, profile_id, his)
+    [card] = [item for item in page["items"] if item["type"] == "visit"]
+    assert card["body"] == [
+        "You see Dr Tan on Thursday 10 September.",
+        "Bring your blood pressure book and your tablets.",
+    ]
+    assert card["why"]["brief_id"] is None
+    trail = (
+        await deployment.client.get(
+            f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his
+        )
+    ).json()
+    assert any(
+        e["outcome"] == "refused"
+        and e["refused_because"] == "NoBoundaryLine"
+        and e["target"] == "brief"
+        for e in trail
+    )

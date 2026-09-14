@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
-from app.db import ImmutableRow, as_utc
+from app.db import ImmutableRow, as_utc, utcnow
 from app.drafts import QuestionDraft
 from app.ingestion.objects import LocalObjectStore
 from app.keys.confirm import NotWhatWasConfirmed, confirm
@@ -89,7 +89,7 @@ from app.reasoning.visits.summary import (
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.plain_words import verify
-from app.safety.red_flags import Flag, FlagKind
+from app.safety.red_flags import Flag, FlagKind, write_red_flag
 from app.state.service import current_state
 from tests.medicines_support import REGISTRY
 from tests.support import agree_to_family_sharing, refused_unit
@@ -1425,3 +1425,112 @@ def test_no_template_in_any_language_starts_stops_or_changes_a_medicine() -> Non
 
 
 __all__ = ["uuid"]
+
+
+async def test_a_key_that_reads_the_visits_reads_the_memos_and_supersedes_none(
+    sg: AsyncSession,
+) -> None:
+    """Review 3: consolidating is a write. A clinic's key reads the memo card as it stands —
+    two memos saying the same thing stay two rows, neither superseded — and a consolidation
+    through it is refused by name."""
+    from app.reasoning.visits.guard import NotTheirsToChangeVisits
+
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    for _ in range(2):
+        await write_memo(
+            sg,
+            context=context,
+            kind=MemoKind.ACTION,
+            key="lighter_dinners",
+            slots={},
+            source=MemoSource.CONVERSATION,
+            appointment_id=appointment.id,
+        )
+    clinic = await __import__("app.identity.service", fromlist=["register_person"]).register_person(
+        sg, region=Region.SG, display_name="Clinic", phone_e164="+6592220019"
+    )
+    await agree_to_family_sharing(sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS})
+    await grant_key(
+        sg,
+        context=context,
+        holder=clinic,
+        role=KeyRole.CLINIC,
+        scopes={Scope.VISITS, Scope.RECORDS},
+    )
+    theirs = await resolve_key_context(
+        sg, region=Region.SG, person_id=clinic.id, profile_id=context.profile_id
+    )
+
+    card = await memo_card(sg, context=theirs)
+    assert card[:2] == ["Every evening, eat a lighter dinner."] * 2
+    assert [m.superseded_at for m in (await sg.scalars(select(Memo))).all()] == [None, None]
+    async with refused_unit(sg, NotTheirsToChangeVisits):
+        await consolidate_memos(sg, context=theirs)
+    assert [m.superseded_at for m in (await sg.scalars(select(Memo))).all()] == [None, None]
+
+
+async def test_the_questions_carry_the_flags_since_the_last_visit_and_a_confirmed_summary_closes_them(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Review 3: the next visit's questions carry this visit's flags and the open ones raised
+    since the visit before it, not every flag ever raised; confirming the next visit's
+    summary resolves the flags raised before it — the doctor has now been told."""
+    context = await pa(sg, language="en")
+    _provider, first = await visit(sg, context)
+    _provider, second = await visit(sg, context, when=VISIT_AT + timedelta(days=35))
+    clock.set(VISIT_AT - timedelta(days=5))
+    before = await write_red_flag(
+        sg,
+        context=context,
+        kind=FlagKind.RED_FLAG,
+        code="fall",
+        subject="symptom",
+        raised_at=utcnow(),
+    )
+    clock.set(VISIT_AT + timedelta(hours=1))
+    since = await write_red_flag(
+        sg,
+        context=context,
+        kind=FlagKind.RED_FLAG,
+        code="chest_pain",
+        subject="symptom",
+        appointment_id=first.id,
+        raised_at=utcnow(),
+    )
+
+    clock.set(VISIT_AT + timedelta(days=30))
+    found = await questions_for(sg, context=context, appointment_id=second.id, registry=REGISTRY)
+    texts = [q.text for q in found]
+    assert "Tell Dr Tan about the chest pain today." in texts
+    assert "Tell Dr Tan about the fall today." not in texts  # before the first visit
+
+    clock.set(as_utc(second.scheduled_at) + timedelta(hours=1))
+    store = LocalObjectStore(tmp_path, Region.SG)
+    artifact = await store_transcript(
+        sg, context=context, store=store, text=transcript(ROUTINE), captured_at=second.scheduled_at
+    )
+    summary = await post_visit_summary(
+        sg,
+        context=context,
+        appointment_id=second.id,
+        artifact_id=artifact.id,
+        store=store,
+        summariser=FixtureSummariser(VISITS),
+        registry=REGISTRY,
+    )
+    items = await summary_items(sg, context=context, summary_id=summary.id)
+    decisions = [Decision(item.id, ItemState.REJECTED) for item in items]
+    draft = await summary_draft_for(sg, context=context, summary_id=summary.id, decisions=decisions)
+    yes = await confirm(sg, context, draft)
+    await confirm_summary(
+        sg,
+        context=context,
+        summary_id=summary.id,
+        decisions=decisions,
+        confirmation_id=yes.id,
+        registry=REGISTRY,
+    )
+    await sg.refresh(before)
+    await sg.refresh(since)
+    assert before.resolved_at is not None and since.resolved_at is not None

@@ -616,7 +616,7 @@ def test_rule_5_is_keyed_by_the_lines_language() -> None:
 
 
 def test_rule_10_counts_a_chinese_date_as_one_number() -> None:
-    """"9月14日" is one day, as "14 September" is: the Chinese twin of "On Monday 14 September
+    """ "9月14日" is one day, as "14 September" is: the Chinese twin of "On Monday 14 September
     your blood pressure was 138 over 84." has three numbers too, not four."""
     story = "9月14日星期一您的血压是138比84。"
     assert [f for f in verify(story, "zh") if f.rule == 10] == []
@@ -625,14 +625,16 @@ def test_rule_10_counts_a_chinese_date_as_one_number() -> None:
 
 
 def test_the_fillers_speak_the_lines_language() -> None:
+    """A slot is filled as the line's language says it, and `{doctor}` with a doctor, so rule
+    14's exemption — a question put to the doctor — is checked against one."""
     from app.safety.plain_words import fill
 
     assert fill("Sejak {day}, {count} perkara berubah.", "ms") == (
         "Sejak Isnin 14 September, 2 perkara berubah."
     )
-    assert fill("您在{day}{time}见{doctor}。", "zh") == "您在9月14日星期一上午10点见Ash。"
+    assert fill("您在{day}{time}见{doctor}。", "zh") == "您在9月14日星期一上午10点见Dr Tan。"
     assert fill("You see {doctor} on {day} at {time}.") == (
-        "You see Ash on Monday 14 September at 10 in the morning."
+        "You see Dr Tan on Monday 14 September at 10 in the morning."
     )
 
 
@@ -660,3 +662,22 @@ def test_rule_14_the_boundary_holds_in_every_language() -> None:
     assert rule_14("从星期五开始停吃去水药。", "zh")
     assert not rule_14("问一问陈医生，去水药要不要停。", "zh")
     assert not rule_14("您可以随时叫 Nura 停下来。", "zh")
+
+
+def test_rule_14_the_exemption_is_a_question_put_to_the_doctor() -> None:
+    """Review 3: a treatment verb beside a medicine passes only in a line that asks or tells
+    the doctor (or the pharmacist). Telling someone else, or ending in a question mark, is
+    not that."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Tell Ash to stop the water pill.", "en")
+    assert rule_14("Should you stop the water pill?", "en")
+    assert not rule_14("Ask your doctor before you stop the water pill.", "en")
+    assert not rule_14("Tell Dr Tan that you stopped the water pill.", "en")
+    assert rule_14("Beritahu Ash supaya berhenti makan pil air.", "ms")
+    assert not rule_14("Tanya doktor anda tentang berhenti makan pil air.", "ms")
+    assert rule_14("告诉阿明停吃去水药。", "zh")
+    assert not rule_14("问一问陈医生，去水药要不要停。", "zh")

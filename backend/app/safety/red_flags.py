@@ -46,7 +46,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
-from sqlalchemy import JSON, ForeignKey, String, select
+from sqlalchemy import JSON, ForeignKey, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -555,6 +555,16 @@ async def _live_keys(session: AsyncSession, *, context: KeyContext) -> Sequence[
     return keys
 
 
+async def _emergency_holders(session: AsyncSession, *, context: KeyContext) -> list[str]:
+    """Everyone holding a live key with the emergency scope right now: who a red flag tells."""
+    moment = utcnow()
+    return [
+        str(key.holder_person_id)
+        for key in await _live_keys(session, context=context)
+        if key.is_active(moment) and Scope.EMERGENCY in key.scopes_held
+    ]
+
+
 @audited(Action.WRITE, Scope.EMERGENCY, FLAG_TARGET)
 async def record_the_moment(
     session: AsyncSession,
@@ -614,11 +624,7 @@ async def raise_flag(
         raise NotAFeeling(f"{feeling} is not a red flag")
     suppressed = await _missing_fact(session, context=context, feeling=feeling)
     moment = utcnow()
-    told: list[str] = []
-    if suppressed is None:
-        for key in await _live_keys(session, context=context):
-            if key.is_active(moment) and Scope.EMERGENCY in key.scopes_held:
-                told.append(str(key.holder_person_id))
+    told = [] if suppressed is not None else await _emergency_holders(session, context=context)
     flag = await audited_write(
         session,
         Flag,
@@ -648,8 +654,15 @@ async def raise_flag(
     return flag
 
 
-async def write_red_flag(session: AsyncSession, *, context: KeyContext, **values: Any) -> Flag:
+async def write_red_flag(
+    session: AsyncSession, *, context: KeyContext, tell_the_family: bool = False, **values: Any
+) -> Flag:
     """A flag heard at a visit that outlives the request it was written in.
+
+    With `tell_the_family` (a red-flag word heard, not a change heard) the flag tells what a
+    tapped one tells: everyone holding a live key with the emergency scope is on `told`, with
+    a share line each, and the caregiver's feed shows it (`open_flags`); the patient's own
+    summary card leads with calling the doctor today.
 
     The request is one savepoint (`app.db.unit_of_work`): a refusal later in the same
     request — a line the verifier will not pass, a slot value that is not one — rolls the
@@ -661,27 +674,42 @@ async def write_red_flag(session: AsyncSession, *, context: KeyContext, **values
     """
     flag_id = uuid.uuid4()
     values.setdefault("raised_by_person_id", context.person_id)
+    if tell_the_family:
+        values["told"] = await _emergency_holders(session, context=context)
+    told = [uuid.UUID(person) for person in values.get("told", [])]
+
+    async def tell(on: AsyncSession) -> None:
+        for person in told:
+            await record_share(
+                on,
+                context=context,
+                scope=Scope.EMERGENCY,
+                target=FLAG_TARGET,
+                channel=Channel.APP,
+                shared_with_person_id=person,
+                target_id=flag_id,
+            )
 
     async def keep(again: AsyncSession) -> None:
         if await again.get(Flag, flag_id) is None:  # only if the rollback took it
             await audited_write(again, Flag, context, Scope.RECORDS, id=flag_id, **values)
+            await tell(again)
 
     flag = await audited_write(session, Flag, context, Scope.RECORDS, id=flag_id, **values)
+    await tell(session)
     keep_on_refusal(session, keep)
     return flag
 
 
 @audited(Action.READ, Scope.EMERGENCY, FLAG_TARGET)
 async def open_flags(session: AsyncSession, *, context: KeyContext) -> Sequence[Flag]:
-    """The red flags raised on a feeling — tapped on the cloud or heard on WhatsApp — inside
-    the window, newest first, suppressed ones included: the caller decides who sees which
-    (`compose`).
-
-    A red-flag word heard in a visit transcript is not one of these. It was escalated on the
-    summary card itself — "Call Dr Tan today." and what to tell him — because the doctor
-    was in the room and a word in a transcript can be one said in passing ("no chest pain");
-    the feed's card says to call the emergency number. A medicine change heard is a question
-    for the doctor, never a card here.
+    """The red flags inside the window, newest first, suppressed ones included: raised on a
+    feeling — tapped on the cloud or heard on WhatsApp — or a word heard in a visit
+    transcript. The caller decides who sees which (`compose`): a word heard at a visit is the
+    caregiver's card only, since his own summary card already leads with calling the doctor
+    today and a word in a transcript can be one said in passing ("no chest pain"), while the
+    patient's flag card says to call the emergency number. A medicine change heard is a
+    question for the doctor, never a card here.
     """
     moment = utcnow()
     found = await audited_read(
@@ -692,7 +720,7 @@ async def open_flags(session: AsyncSession, *, context: KeyContext) -> Sequence[
         where=(
             Flag.raised_at > moment - FLAG_WINDOW,
             Flag.kind == FlagKind.RED_FLAG,
-            Flag.feeling.is_not(None),
+            or_(Flag.feeling.is_not(None), Flag.artifact_id.is_not(None)),
         ),
         order_by=(Flag.raised_at.desc(),),
     )

@@ -17,7 +17,13 @@ class NotTheirsToChangeVisits(Refusal):
     """A viewer, a helper or a clinic key reads the visits; it does not change them."""
 
 
+def can_change_visits(context: KeyContext) -> bool:
+    """Whether this key may change the visits — the question a reader asks before it chooses
+    between consolidating the memos and reading them as they stand."""
+    return context.is_owner or context.is_steward or context.role in CHANGERS
+
+
 def may_change_visits(context: KeyContext) -> None:
-    if context.is_owner or context.is_steward or context.role in CHANGERS:
+    if can_change_visits(context):
         return
     raise NotTheirsToChangeVisits(f"a {context.role} key reads the visits; it does not change them")

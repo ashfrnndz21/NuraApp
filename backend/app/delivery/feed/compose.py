@@ -42,6 +42,8 @@ from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
     CAREGIVER_DUTY_WHY,
+    CAREGIVER_HEARD_HEADLINE,
+    CAREGIVER_HEARD_LINE,
     CAREGIVER_NO_ROSTER_LINE,
     CAREGIVER_ON_DUTY_LINE,
     CAREGIVER_ROSTER_WHY,
@@ -69,12 +71,16 @@ from app.memory.semantic import assert_fact, current_facts
 from app.notes.models import Note
 from app.notes.service import list_notes
 from app.reasoning.visits.brief import brief_for, latest_brief
-from app.reasoning.visits.guard import NotTheirsToChangeVisits, may_change_visits
-from app.reasoning.visits.memos import consolidate_memos
+from app.reasoning.visits.guard import (
+    NotTheirsToChangeVisits,
+    can_change_visits,
+    may_change_visits,
+)
+from app.reasoning.visits.memos import consolidate_memos, current_memos
 from app.reasoning.visits.models import Brief, Memo, MemoSource, SummaryItem, VisitSummary
 from app.reasoning.visits.strings import spoken
 from app.regions import REGION_TZ
-from app.safety.boundary import Surface, boundary_line
+from app.safety.boundary import Surface, boundary_line, is_boundary_line
 from app.safety.red_flags import Flag, open_flags
 from app.state.dimensions import BEFORE_VISIT_WINDOW
 from app.state.models import Dimension
@@ -253,10 +259,24 @@ async def refresh(
     async def make(**values: Any) -> FeedItem | None:
         if values["dedupe_key"] in keys:
             return None
-        try:
-            item = await create_item(session, context=context, state=state, format=format, **values)
-        except NotPlainWords:
-            return None
+        if values["type"] is CardType.FLAG:
+            # A flag card is made first, on its own: nothing made after it can take it back.
+            try:
+                item = await create_item(
+                    session, context=context, state=state, format=format, **values
+                )
+            except NotPlainWords:
+                return None
+        else:
+            # Every other card in its own savepoint: a refusal is written down, that card is
+            # skipped, and the flag cards made before it stand.
+            try:
+                async with nested_unit_of_work(session):
+                    item = await create_item(
+                        session, context=context, state=state, format=format, **values
+                    )
+            except Refusal:
+                return None
         keys.add(item.dedupe_key)
         made.append(item)
         return item
@@ -403,7 +423,32 @@ async def _flags(
         return
     number = EMERGENCY_NUMBER[context.region.value]
     for flag in await open_flags(session, context=context):
-        if flag.feeling is None:  # `open_flags` returns the cloud's flags; one never lacks it
+        if flag.feeling is None:
+            # A word heard at a visit (E05): his summary card already leads with calling the
+            # doctor today; the family is told here, in the caregiver's fuller words.
+            word = str(flag.payload.get("word") or flag.code)
+            heard = CAREGIVER_HEARD_LINE.format(word=word, name=house.profile.display_name)
+            await make(
+                type=CardType.FLAG,
+                lines=Lines(
+                    language=house.language,
+                    headline=CAREGIVER_HEARD_HEADLINE.format(word=word),
+                    body=(heard,),
+                    voice=(),
+                    why=heard,
+                ),
+                why=Why(
+                    kind="flag",
+                    plain="",
+                    flag_id=str(flag.id),
+                    artifact_id=None if flag.artifact_id is None else str(flag.artifact_id),
+                ),
+                scope=Scope.EMERGENCY,
+                deliver_to=DeliverTo.CAREGIVER,
+                day=day.key,
+                dedupe_key=f"flag:{flag.id}",
+                expires_at=as_utc(flag.raised_at) + timedelta(hours=24),
+            )
             continue
         feeling = feeling_words(flag.feeling.value, house.language)
         if flag.suppressed_because is not None:
@@ -702,7 +747,14 @@ async def _visit(
     brief = await _brief(
         session, context=context, engine=engine, appointment_id=uuid.UUID(visit["id"])
     )
-    if brief is not None and brief.boundary and brief.language == house.language:
+    # A stored brief is used only if it carries the brief's own boundary line: one written
+    # before the line existed, or with other words, leaves the card to its template.
+    if (
+        brief is not None
+        and brief.language == house.language
+        and is_boundary_line(Surface.BRIEF, brief.boundary)
+        and brief.boundary is not None
+    ):
         carried = [str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD]
         if carried:
             surface = Surface.BRIEF
@@ -744,7 +796,11 @@ async def _memos(
         return
     memos = [
         memo
-        for memo in await consolidate_memos(session, context=context)
+        for memo in (
+            await consolidate_memos(session, context=context)
+            if can_change_visits(context)
+            else await current_memos(session, context=context)
+        )
         if memo.source is MemoSource.VISIT
         and memo.source_id is not None
         and memo.language == house.language

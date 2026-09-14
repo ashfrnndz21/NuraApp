@@ -26,6 +26,7 @@ from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.reasoning.visits.guard import can_change_visits, may_change_visits
 from app.reasoning.visits.models import MEMO_LENGTH, Memo, MemoKind, MemoSource
 from app.reasoning.visits.strings import language_for, say, verified
 from app.safety.boundary import Surface, boundary_line, boundary_lines
@@ -120,7 +121,13 @@ async def current_memos(
 @audited(Action.WRITE, Scope.VISITS, MEMO)
 async def consolidate_memos(session: AsyncSession, *, context: KeyContext) -> Sequence[Memo]:
     """Collapse duplicates into the current list: of two memos saying the same thing, the
-    newer stands and the older is marked superseded by it. Returns the current list."""
+    newer stands and the older is marked superseded by it. Returns the current list.
+
+    A write: only a key that may change the visits does it (`guard.may_change_visits`), so no
+    caller can supersede a memo through a key that only reads them — a viewer's, a clinic's.
+    Readers take `current_memos`.
+    """
+    may_change_visits(context)
     current = list(await current_memos(session, context=context))
     moment = utcnow()
     newest: dict[tuple[str, str, str, str], Memo] = {}
@@ -149,7 +156,11 @@ async def consolidate_memos(session: AsyncSession, *, context: KeyContext) -> Se
 async def memo_card(session: AsyncSession, *, context: KeyContext) -> list[str]:
     """The memo card at the end of every conversation: the current memos, each line verified
     again on the way out, in card order, ending on the summary's boundary line (E16-01)."""
-    memos = await consolidate_memos(session, context=context)
+    memos = (
+        await consolidate_memos(session, context=context)
+        if can_change_visits(context)
+        else await current_memos(session, context=context)
+    )
     card = [verified(memo.text, memo.language) for memo in memos]
     if memos:
         doctor = next((d for d in (_doctor_in(m.slots) for m in memos) if d), None)

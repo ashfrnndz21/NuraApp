@@ -45,7 +45,8 @@ from app.channels.api.schemas import (
 from app.db import utcnow
 from app.memory.spine import add_provider, book_appointment, list_providers, upcoming_appointments
 from app.reasoning.visits.brief import brief_for
-from app.reasoning.visits.memos import consolidate_memos, memo_card
+from app.reasoning.visits.guard import can_change_visits
+from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card
 from app.reasoning.visits.questions import (
     change_questions,
     current_questions,
@@ -232,7 +233,11 @@ async def confirm_card(
 async def memos(context: Context, session: Db) -> MemoCardOut:
     """The memo card at the end of every conversation: the current memos, duplicates
     collapsed, every line verified on the way out."""
-    current = await consolidate_memos(session, context=context)
+    current = (
+        await consolidate_memos(session, context=context)
+        if can_change_visits(context)
+        else await current_memos(session, context=context)
+    )
     card = await memo_card(session, context=context)
     return MemoCardOut(
         memos=[MemoOut.of(one) for one in current], card=card, spoken_card=spoken_card(card)

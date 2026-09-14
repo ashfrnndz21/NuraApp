@@ -774,6 +774,7 @@ async def post_visit_summary(
             await write_red_flag(
                 session,
                 context=context,
+                tell_the_family=True,
                 kind=FlagKind.RED_FLAG,
                 code=code,
                 subject="symptom",
@@ -1028,6 +1029,40 @@ async def _write_fact_heard(
     )
 
 
+async def _resolve_flags_told(
+    session: AsyncSession, *, context: KeyContext, visit: Visit, moment: datetime
+) -> None:
+    """The doctor has now been told. A visit's summary is confirmed, so every flag a visit
+    wrote before this one — a word heard, a change heard — still open is resolved
+    (`resolved_at`, the one change a flag takes), and the next visit's questions start here.
+    A flag from the feeling cloud is the feed's, and this visit's own flags stay open."""
+    earlier = await audited_read(
+        session,
+        Flag,
+        context,
+        Scope.RECORDS,
+        where=(
+            Flag.feeling.is_(None),
+            Flag.resolved_at.is_(None),
+            Flag.raised_at < visit.appointment.scheduled_at,
+        ),
+    )
+    for flag in earlier:
+        if flag.appointment_id == visit.appointment.id:
+            continue
+        flag.resolved_at = moment
+        await session.flush()
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=Flag.__tablename__,
+            target_id=flag.id,
+            rows=1,
+        )
+
+
 @audited(Action.WRITE, Scope.VISITS, SUMMARY)
 async def confirm_summary(
     session: AsyncSession,
@@ -1203,4 +1238,5 @@ async def confirm_summary(
         )
     finally:
         session.info.pop(SUMMARY_IN_PROGRESS, None)
+    await _resolve_flags_told(session, context=context, visit=visit, moment=moment)
     return outcome
