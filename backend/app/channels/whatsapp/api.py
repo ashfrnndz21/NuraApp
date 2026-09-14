@@ -43,9 +43,13 @@ from app.channels.whatsapp.inbound import Handled, handle_inbound
 from app.channels.whatsapp.models import WhatsAppGroup, WhatsAppMessage
 from app.channels.whatsapp.outbound.level0 import run_feeling_check_in, run_morning
 from app.channels.whatsapp.outbound.send import Delivered, thread_messages
-from app.channels.whatsapp.provider import DevInbound, FixtureProvider, NotAWebhook
+from app.channels.whatsapp.provider import (
+    DevInbound,
+    FixtureProvider,
+    NotAWebhook,
+    WebhookTooLarge,
+)
 from app.db import utcnow
-from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import WITHHELD_ARTIFACT, withheld_references
@@ -174,10 +178,6 @@ WEBHOOK_BYTES = 1024 * 1024
 """The most one webhook delivery may carry: a megabyte. A delivery is text and handles — a
 photo, a PDF or a voice note comes as the provider's id and is fetched by it, against its
 own cap — so a megabyte holds a long batch; a body past it is not a delivery (#136)."""
-
-
-class WebhookTooLarge(Refusal):
-    """A webhook delivery is at most a megabyte; this one was longer, or said it would be."""
 
 
 @router.post("/whatsapp/webhook")

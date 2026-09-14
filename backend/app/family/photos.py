@@ -28,7 +28,7 @@ from app.errors import Refusal
 from app.family.models import ThreadMessage, ThreadPhoto
 from app.family.thread import post_message
 from app.ingestion.objects import NoSuchObject, ObjectStore, check_key, sha256_of
-from app.ingestion.photos import PHOTO_CONTENT_TYPES
+from app.ingestion.photos import MAX_PHOTO_BYTES, PHOTO_CONTENT_TYPES, PhotoTooLarge
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import require_artifact_under, store_family_photo
@@ -36,12 +36,8 @@ from app.regions import guard_region
 
 PHOTO_TARGET = ThreadPhoto.__tablename__
 
-MAX_PHOTO_BYTES = 5 * 1024 * 1024
-"""Five megabytes: a phone's photo of the family, not a scan."""
-
-
 class NotAPhoto(Refusal):
-    """The bytes offered were empty, too big, or of a kind that is not an image."""
+    """The bytes offered were empty, or of a kind that is not an image."""
 
 
 class NoSuchPhoto(Refusal):
@@ -63,7 +59,8 @@ def check_photo(data: bytes, content_type: str) -> str:
     if not data:
         raise NotAPhoto("the photo was empty")
     if len(data) > MAX_PHOTO_BYTES:
-        raise NotAPhoto(f"a photo is at most {MAX_PHOTO_BYTES} bytes")
+        # The same cap as any photo he keeps, read against as it arrives (`UploadCaps`).
+        raise PhotoTooLarge(f"a photo is at most {MAX_PHOTO_BYTES} bytes")
     return kind
 
 

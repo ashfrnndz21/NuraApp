@@ -132,6 +132,10 @@ class NotAWebhook(Refusal):
     """The webhook body was not signed by the provider, or was not shaped like one."""
 
 
+class WebhookTooLarge(Refusal):
+    """A webhook delivery is at most a megabyte; this one was longer, or said it would be."""
+
+
 class NoWhatsAppProvider(RuntimeError):
     """No provider can carry a WhatsApp message. The process must not start on this setting."""
 

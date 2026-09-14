@@ -15,11 +15,10 @@ from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
-from app.channels.whatsapp.api import WebhookTooLarge
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
 from app.channels.whatsapp.outbound.send import OutsideTheWindow
-from app.channels.whatsapp.provider import NotAWebhook
+from app.channels.whatsapp.provider import NotAWebhook, WebhookTooLarge
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
