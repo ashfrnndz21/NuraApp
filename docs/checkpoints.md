@@ -12,7 +12,7 @@ Statuses: `planned` → `ready` (you can run it) → `passed` (you ran it and it
 | 4 | Three doors, proxy, claim | Set up a profile *for someone* by phone number, try to create a second one for the same number (refused, in words that name nobody), then claim it as the patient and see the steward key become the chief key with consent recorded | E01-01, E01-02 | **ready** |
 | 5 | Paper in, facts out | Upload the sample lipid report from `backend/tests/fixtures/paper/`, get a review card with per-field confidence (the unsure fields dotted), correct one value, confirm with one OK, and see Facts with provenance appear; upload the warfarin label and see the high-risk class on the card; a key without the record cannot see a card | E02-01, E02-07, E16-04 | **ready** |
 | 6 | Medicines | Add three drugs from a label, see the reconciliation (refill vs dose change), the interaction check, the running count and reorder date, and the medication story in plain words; a high-risk drug refuses a dose without a label photo | E04-01…E04-07, E16-04 | planned |
-| 7 | Plain words and the visit loop | Paste a visit transcript, get a post-visit memo in the profile's language that passes the plain-words verifier; see a fragment example fail it | E22-01, E05-01…E05-06 | planned |
+| 7 | Plain words and the visit loop | Book a visit with Dr Tan; read the pre-visit brief in Malay (every line passes the plain-words verifier) and the questions card (three lines); paste the visit transcript and get the summary card with the dose change as a question for the doctor; confirm it and see the memos, the planned follow-up and the facts citing the transcript; paste a red-flag transcript and see the card carry the flag and "Telefon Dr Tan hari ini."; see a fragment refused | E22-01, E05-01, E05-02, E05-05, E05-06 | **ready** |
 | 8 | Feed and WhatsApp (sandbox) | Call the feed endpoint and see the supply order (now, today, gate, story, learning); send a photo to the WhatsApp sandbox number and watch it file itself and reply | E21 backend, E19-01…E19-03 | planned |
 | 9 | iOS Today on the simulator | Open `ios/Nura.xcodeproj`, run on iPhone simulator, sign in with a phone code, see the Today shell with the Now card and Taken, and the medium widget | Session 10 | planned |
 | 10 | iOS feed and onboarding | Page the vertical feed, hear a card on tap, hit the gate card; run onboarding with the word cloud and read-back | Sessions 11–12 | planned |
@@ -257,6 +257,88 @@ checkpoint 5 passed: every step did what docs/checkpoints.md says
 2. **The yes is the confirmer's own.** Take an open card's `card_id` (upload the lipid report again: the same bytes make a new card), mint an OK as Pa with `POST /profiles/{profile_id}/confirmations` and `{"subject": "review_card", "card_id": …, "decisions": [{"field_id": …, "decision": "confirmed"}, …]}` naming every field. Then, as Mei (her token, with the key to `readings` and `records` the run cut her), call `POST /profiles/{profile_id}/review-cards/{card_id}/confirm` with those decisions and Pa's `confirmation_id`: `403 {"refusal": "NotAConfirmerHere"}` — a yes is spent only by the person who said it. As Pa, the same call goes through, and `GET /profiles/{profile_id}/audit?scope=records&limit=500` shows Mei's refused write of `review_card` beside it.
 
 The high-risk refusal is at the service, not over HTTP: the only way to write a medicine dose over the API is a card made from a photo, so there is no request that could offer a WhatsApp message or a PDF as the provenance of a warfarin dose. The rule (`NotFromALabelPhoto`, which the API would answer with 400) lives in `backend/app/safety/high_risk.py` as a hook the memory store runs before any fact is written, and is proven from a message, a PDF and a screenshot in `backend/tests/test_high_risk.py`.
+
+## How to run checkpoint 7
+
+The same two terminals as checkpoint 2; it does not depend on any earlier checkpoint having been run.
+
+```sh
+make setup              # once, if you have not
+make dev                # terminal 1: migrates dev.db (0009 adds the visit loop), serves on http://127.0.0.1:8000
+make checkpoint N=7     # terminal 2: walks the whole scenario, about four seconds
+```
+
+Two fresh phone numbers every run, Pa and Mei, so it can be run again on the same `dev.db`. No recording is sent: the two transcripts in `backend/tests/fixtures/visits/` are written examples (the docs' example names, no real person), each with the structure a summariser would hear in it; the fixture summariser answers by the digest of the transcript text, and a model in the profile's region is a later adapter behind the same interface. The transcript text goes to the local object store under `backend/var/objects/SG/transcripts/` (ignored by git); no row holds a word of it. The script checks every patient line a second time itself, running `python3 -m app.safety.plain_words --text … --lang ms` as a command, the way you would by hand.
+
+What you will see (the numbers, ids, dates and times change each run; the visit is booked three days from today):
+
+```
+✓ the dev server answers at http://127.0.0.1:8000 (GET /health)
+✓ Pa (+6591118242) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa opened his own profile (wording 1, in the app); as its owner every part is open to him
+✓ Pa opened his profile in Malay, added a blood pressure reading (138/84, taken twenty days ago) and a medicine line: the warfarin label through the review card (E02), five medicine facts, no purpose recorded
+✓ Pa booked a visit with Dr Tan (POST /profiles/{id}/appointments) for 2026-09-17 at 10 in the morning, on a yes minted for exactly that booking (subject appointment): status planned
+✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 77aa60dc…: purpose, what changed, the open questions, what to bring — 8 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
+    [purpose  ] Anda berjumpa Dr Tan pada Khamis 17 September.
+    [purpose  ] Lawatan ini tentang tekanan darah.
+    [changed  ] Sejak Isnin 14 September, ada 1 nombor baru dalam buku tekanan darah anda.
+    [changed  ] Sejak Isnin 14 September, 5 perkara berubah tentang ubat anda.
+    [questions] Tanya Dr Tan untuk apa Warfarin.
+    [questions] Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
+    [bring    ] Bawa buku tekanan darah anda.
+    [bring    ] Bawa ubat anda dalam kotaknya.
+✓ the questions (GET …/questions): 3 for the caregiver, each naming its source — Pa's own (with his yes, subject question), a medicine line with no purpose, a reading with nothing recent (the gaps, with the facts each rests on); one card for Pa, one screen — the first three by priority and one reassurance — every line verifier-clean:
+    Adakah pil air ini buruk untuk buah pinggang saya?
+    Tanya Dr Tan untuk apa Warfarin.
+    Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
+    Anda tidak perlu ingat semua ini.
+      from person typed: 1 id(s) — Adakah pil air ini buruk untuk buah pinggang saya?
+      from gap medicine_no_purpose: 5 id(s) — Tanya Dr Tan untuk apa Warfarin.
+      from gap reading_stale: 1 id(s) — Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
+✓ a fragment offered as a question ("hanya bahagian untuk anda": no capital, no full stop, docs/plain-words.md rule 1) is refused by the verifier: NotPlainEnough (400), nothing written, the refusal on the trail. The English fragment ("Only the part for you.") and a memo from a deliberately bad template are refused the same way in backend/tests/test_visits.py (test_a_fragment_typed_by_a_person_is_refused_by_the_verifier, test_a_memo_from_a_template_that_is_not_plain_is_refused)
+✓ Pa uploaded the routine transcript (POST …/transcript): stored as artefact 323a622a… in the SG object store, read by the fixture summariser, and answered with the summary card — 9 items, each with its span in the transcript and its confidence; the dose change is a question for the doctor, never an amount ("Tanya Dr Tan tentang jumlah baru pil air." — in English, "Ask Dr Tan about the new amount of the water pill."); nothing is a memo, a booking or a fact yet:
+    Dr Tan berkata begini pada Khamis 17 September.
+    Tanya Dr Tan tentang jumlah baru pil air.
+    Setiap pagi, timbang berat sebelum sarapan.
+    Makan malam lebih ringan.
+    Anda ada ujian darah pada Isnin 28 September.
+    Jangan makan selepas 12 tengah malam pada Ahad 27 September.
+    Air kosong boleh.
+    Bawa buku tekanan darah anda lain kali.
+    Jumpa Dr Tan lagi pada Khamis 15 Oktober.
+    Dr Tan mencatat tekanan darah anda.
+✓ one OK saved the card: 7 memos filed against the next visit; the follow-up appears as a planned visit with Dr Tan on 2026-10-15 (GET …/appointments), needing its own confirm to be confirmed; the fact heard (blood_pressure.reading) carries the transcript artefact 323a622a… as provenance, confirmed by Pa; the dose change became a flag for the medicines reconcile (ask the doctor) and no medicine fact — his medicines are as they were
+✓ the memo card (GET /profiles/{id}/memos): the current memos, one line each, in his words, verified:
+    Setiap pagi, timbang berat sebelum sarapan.
+    Makan malam lebih ringan.
+    Anda ada ujian darah pada Isnin 28 September.
+    Jangan makan selepas 12 tengah malam pada Ahad 27 September.
+    Air kosong boleh.
+    Bawa buku tekanan darah anda lain kali.
+    Tanya Dr Tan tentang jumlah baru pil air.
+✓ the red-flag transcript ("chest pain", app/safety/red_flags.py): a Flag row was written before the card was composed (on the trail as a write of flag), the card carries red_flag=true and its first line is "Telefon Dr Tan hari ini." (the English template: "Call Dr Tan today.") — a person and a day, never a diagnosis:
+    Telefon Dr Tan hari ini.
+    Dr Tan berkata begini pada Khamis 17 September.
+    Makan ubat anda seperti biasa sehingga jumpa Dr Tan.
+    Dr Tan mencatat keadaan anda.
+    Dr Tan mencatat tekanan darah anda.
+✓ Mei (+6592220013) registered by phone code: asked (202, no code in the answer), read the six digits from backend/.dev.log — no SMS — and signed in (200, token issued)
+✓ Pa cut Mei a caregiver key to the readings and the record; the brief and the memos refuse her: OutOfScope visits (403) — briefs, questions, summaries and memos are the visits'
+✓ Pa reads his audit trail (399 lines); the refusals are on it:
+    2026-09-14T10:08:20  Mei  write visits memo  refused OutOfScope
+    2026-09-14T10:08:20  Mei  read visits brief  refused OutOfScope
+    2026-09-14T10:08:19   Pa  write visits question  refused NotPlainEnough
+checkpoint 7 passed: every step did what docs/checkpoints.md says
+```
+
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 7 passed`. The criteria: a visit is written down only on a yes minted for exactly that booking; the pre-visit brief is rendered from State in the profile's language — purpose, what changed since the record began (or since the last visit), the open questions from the gaps in the record, what to bring — and every line passes the plain-words verifier, a brief that would not being refused whole (`NotPlainEnough`) rather than shown; the questions carry their source (a gap and the facts it rests on, or the person who typed one, with his yes), and his card is one screen — three lines and a reassurance; a line that is not plain is refused by name and written to the trail; the transcript is an artefact in the region's store, never a column; the summary card renders a medicine change as a question for the doctor and never as an amount; one OK saves the card — actions become memos filed against the next visit, the follow-up becomes a planned visit that still needs its own confirm, facts heard become facts with the transcript as provenance and the person as confirmer, and the medicine change becomes a flag for the medicines reconcile and no medicine fact; the memo card is the current memos, one line each, verified again on the way out; a red-flag word writes a flag before the card is composed and puts the same-day line first, a person and a day and never a diagnosis; and a key without the visits is refused and written down. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+
+**Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it), the profile id and the appointment id from it:
+
+1. **Edit a question with a yes that binds to the words.** `POST /profiles/{profile_id}/confirmations` with `{"subject": "question", "appointment_id": …, "text": "Adakah pil air ini menyebabkan saya pening?"}`, then `POST /profiles/{profile_id}/appointments/{appointment_id}/questions` with `{"text": "Adakah pil air ini menyebabkan saya letih?", "confirmation_id": …}` — different words. The answer is `400 {"refusal": "NotWhatWasConfirmed"}`. Send the words you confirmed and it is `201`, `source: person`; `GET …/questions` lists it, and `card` still has at most three questions and the reassurance.
+2. **A summary is confirmed once, and rejecting writes nothing.** Upload the routine transcript again (`POST …/transcript`; the same text makes a new card). Mint the yes with `{"subject": "visit_summary", "summary_id": …, "decisions": [{"item_id": …, "decision": "rejected"}, …]}` naming every item, and confirm with those decisions: `memos`, `appointments`, `facts` and `flag_ids` are all empty, and `GET /profiles/{profile_id}/memos` is as it was. Confirm the same card again: `409 {"refusal": "AlreadyConfirmed"}`.
+
+The brief that fails the verifier is refused at the service, not over HTTP: every template in `backend/app/reasoning/visits/strings.py` passes `make plain-words`, so there is no request that could ask for a bad line except by typing one (the fragment above). A brief and a memo rendered from a deliberately bad template are refused (`NotPlainEnough`, which the API answers with 400) in `backend/tests/test_visits.py`.
 
 ## Rules the operator follows between checkpoints
 

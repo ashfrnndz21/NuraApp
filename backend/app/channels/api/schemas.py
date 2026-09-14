@@ -32,8 +32,28 @@ from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
-from app.memory.models import ArtifactKind, ConfidenceState, Event, Fact
+from app.memory.models import (
+    Appointment,
+    AppointmentStatus,
+    ArtifactKind,
+    ConfidenceState,
+    Event,
+    Fact,
+    Provider,
+    ProviderKind,
+)
 from app.notes.models import NOTE_LENGTH, Note
+from app.reasoning.visits.models import (
+    LINE_LENGTH,
+    Brief,
+    ItemState,
+    Memo,
+    Question,
+    SummaryItem,
+    VisitSummary,
+)
+from app.reasoning.visits.summary import MAX_TRANSCRIPT_BYTES
+from app.reasoning.visits.summary import Decision as ItemDecision
 from app.regions import Region
 from app.state.models import Dimension, Posture, StateTrigger
 from app.state.service import StateView
@@ -399,7 +419,54 @@ class ReviewCardConfirmIn(BaseModel):
     decisions: list[DecisionIn]
 
 
-ConfirmIn = Annotated[ClaimConfirmIn | ReviewCardConfirmIn, Field(discriminator="subject")]
+class AppointmentConfirmIn(BaseModel):
+    """A yes to booking a visit: with whom, when, why — exactly what `POST /appointments`
+    will write (E05, the spine's `book_appointment`)."""
+
+    subject: Literal[ConfirmSubject.APPOINTMENT]
+    provider_id: uuid.UUID
+    scheduled_at: datetime
+    purpose: str = Field(min_length=1, max_length=80)
+
+
+class QuestionConfirmIn(BaseModel):
+    """A yes to adding, editing or removing one question for a visit (E05-02): the words as
+    typed (none for a removal) and the question they replace, if any. The draft is
+    recomputed from the visit, so the yes binds to the words as shown."""
+
+    subject: Literal[ConfirmSubject.QUESTION]
+    appointment_id: uuid.UUID
+    text: str | None = Field(default=None, min_length=1, max_length=LINE_LENGTH)
+    question_id: uuid.UUID | None = None
+    remove: bool = False
+
+
+class ItemDecisionIn(BaseModel):
+    """What the person said about one item of a post-visit summary: kept, or not."""
+
+    item_id: uuid.UUID
+    decision: Literal[ItemState.CONFIRMED, ItemState.REJECTED]
+
+    def as_decision(self) -> ItemDecision:
+        return ItemDecision(item_id=self.item_id, decision=ItemState(self.decision))
+
+
+class SummaryConfirmIn(BaseModel):
+    """A yes to a whole post-visit summary as shown: every item, decided (E05-05)."""
+
+    subject: Literal[ConfirmSubject.VISIT_SUMMARY]
+    summary_id: uuid.UUID
+    decisions: list[ItemDecisionIn]
+
+
+ConfirmIn = Annotated[
+    ClaimConfirmIn
+    | ReviewCardConfirmIn
+    | AppointmentConfirmIn
+    | QuestionConfirmIn
+    | SummaryConfirmIn,
+    Field(discriminator="subject"),
+]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim, or a review card
 with its decisions. Facts and visits are minted by the surfaces that show them once those
 exist."""
@@ -819,3 +886,281 @@ class ReviewConfirmedOut(BaseModel):
 
     card: ReviewCardOut
     facts: list[FactOut]
+
+
+# --- the visit loop (E05) ------------------------------------------------------------------------
+
+
+class ProviderIn(BaseModel):
+    """A doctor, clinic, hospital or pharmacy to add to the profile's own directory."""
+
+    name: str = Field(min_length=1, max_length=120)
+    kind: ProviderKind = ProviderKind.DOCTOR
+    phone_e164: str | None = Field(default=None, pattern=PHONE)
+    address: str | None = Field(default=None, max_length=300)
+
+
+class ProviderOut(BaseModel):
+    provider_id: uuid.UUID
+    name: str
+    kind: ProviderKind
+    region: Region
+
+    @classmethod
+    def of(cls, provider: Provider) -> ProviderOut:
+        return cls(
+            provider_id=provider.id, name=provider.name, kind=provider.kind, region=provider.region
+        )
+
+
+class AppointmentIn(BaseModel):
+    """Write down a visit a person has arranged, with the yes minted for exactly it."""
+
+    provider_id: uuid.UUID
+    scheduled_at: datetime
+    purpose: str = Field(min_length=1, max_length=80)
+    confirmation_id: uuid.UUID
+
+
+class AppointmentOut(BaseModel):
+    appointment_id: uuid.UUID
+    provider_id: uuid.UUID
+    scheduled_at: datetime
+    status: AppointmentStatus
+    purpose: str
+    confirmed_by_person_id: uuid.UUID
+
+    @classmethod
+    def of(cls, appointment: Appointment) -> AppointmentOut:
+        return cls(
+            appointment_id=appointment.id,
+            provider_id=appointment.provider_id,
+            scheduled_at=utc(appointment.scheduled_at),
+            status=appointment.status,
+            purpose=appointment.purpose,
+            confirmed_by_person_id=appointment.confirmed_by_person_id,
+        )
+
+
+class BriefLineOut(BaseModel):
+    """One line of the brief: which section, which template, the words, what it rests on."""
+
+    section: str
+    key: str
+    text: str
+    sources: list[str]
+
+
+class BriefOut(BaseModel):
+    """The pre-visit brief as rendered: every line passed the plain-words verifier, and the
+    row names the State it was rendered from and the one it was measured against."""
+
+    brief_id: uuid.UUID
+    appointment_id: uuid.UUID
+    language: str
+    state_id: uuid.UUID
+    since_state_id: uuid.UUID | None
+    built_at: datetime
+    lines: list[BriefLineOut]
+
+    @classmethod
+    def of(cls, brief: Brief) -> BriefOut:
+        return cls(
+            brief_id=brief.id,
+            appointment_id=brief.appointment_id,
+            language=brief.language,
+            state_id=brief.state_id,
+            since_state_id=brief.since_state_id,
+            built_at=utc(brief.built_at),
+            lines=[BriefLineOut(**line) for line in brief.lines],
+        )
+
+
+class QuestionOut(BaseModel):
+    """One question to ask, with its source (E05-02: questions carry their source)."""
+
+    question_id: uuid.UUID
+    appointment_id: uuid.UUID
+    text: str
+    language: str
+    source: str
+    source_kind: str | None
+    source_ids: list[str]
+    priority: int
+    added_by_person_id: uuid.UUID | None
+    supersedes_id: uuid.UUID | None
+    removed: bool
+    state_id: uuid.UUID
+    created_at: datetime
+
+    @classmethod
+    def of(cls, question: Question) -> QuestionOut:
+        return cls(
+            question_id=question.id,
+            appointment_id=question.appointment_id,
+            text=question.text,
+            language=question.language,
+            source=question.source.value,
+            source_kind=question.source_kind,
+            source_ids=list(question.source_ids),
+            priority=question.priority,
+            added_by_person_id=question.added_by_person_id,
+            supersedes_id=question.supersedes_id,
+            removed=question.removed,
+            state_id=question.state_id,
+            created_at=utc(question.created_at),
+        )
+
+
+class QuestionsOut(BaseModel):
+    """The current questions for the caregiver, and the one card for him."""
+
+    questions: list[QuestionOut]
+    card: list[str]
+
+
+class QuestionChangeIn(BaseModel):
+    """Add a question (`text`), edit one (`text` and `question_id`) or remove one
+    (`question_id` and `remove`), with the yes minted for exactly that."""
+
+    text: str | None = Field(default=None, min_length=1, max_length=LINE_LENGTH)
+    question_id: uuid.UUID | None = None
+    remove: bool = False
+    confirmation_id: uuid.UUID
+
+
+class TranscriptIn(BaseModel):
+    """A visit's transcript as the app sends it: the text in base64 and when the visit was.
+    The text goes to the region's object store; nothing of it is kept on any row."""
+
+    data: str = Field(min_length=1, max_length=MAX_TRANSCRIPT_BYTES * 4 // 3 + 4)
+    captured_at: datetime | None = None
+
+    @field_validator("data")
+    @classmethod
+    def _base64(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as not_base64:
+            raise ValueError("data is base64") from not_base64
+        return value
+
+    def as_text(self) -> str:
+        return base64.b64decode(self.data, validate=True).decode("utf-8", errors="replace")
+
+
+class SummaryItemOut(BaseModel):
+    """One thing heard: the line for him, the structure behind it, where in the transcript
+    and how sure; once confirmed, what it became."""
+
+    item_id: uuid.UUID
+    position: int
+    kind: str
+    text: str
+    payload: dict[str, Any]
+    span: dict[str, int] | None
+    confidence: float
+    state: ItemState
+    memo_id: uuid.UUID | None
+    appointment_id: uuid.UUID | None
+    fact_id: uuid.UUID | None
+    flag_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, item: SummaryItem) -> SummaryItemOut:
+        return cls(
+            item_id=item.id,
+            position=item.position,
+            kind=item.kind.value,
+            text=item.text,
+            payload=item.payload,
+            span=item.span,
+            confidence=item.confidence,
+            state=item.state,
+            memo_id=item.memo_id,
+            appointment_id=item.appointment_id,
+            fact_id=item.fact_id,
+            flag_id=item.flag_id,
+        )
+
+
+class SummaryOut(BaseModel):
+    """The post-visit summary card: the transcript it was read from, whether a red-flag word
+    was heard, the lines for him, and the items waiting for his yes."""
+
+    summary_id: uuid.UUID
+    appointment_id: uuid.UUID
+    artifact_id: uuid.UUID
+    language: str
+    red_flag: bool
+    state_id: uuid.UUID
+    lines: list[str]
+    items: list[SummaryItemOut]
+    created_at: datetime
+    confirmed_at: datetime | None
+    confirmed_by_person_id: uuid.UUID | None
+
+    @classmethod
+    def of(cls, summary: VisitSummary, items: Sequence[SummaryItem]) -> SummaryOut:
+        return cls(
+            summary_id=summary.id,
+            appointment_id=summary.appointment_id,
+            artifact_id=summary.artifact_id,
+            language=summary.language,
+            red_flag=summary.red_flag,
+            state_id=summary.state_id,
+            lines=[str(line["text"]) for line in summary.lines],
+            items=[SummaryItemOut.of(item) for item in items],
+            created_at=utc(summary.created_at),
+            confirmed_at=None if summary.confirmed_at is None else utc(summary.confirmed_at),
+            confirmed_by_person_id=summary.confirmed_by_person_id,
+        )
+
+
+class SummaryConfirmBodyIn(BaseModel):
+    """Close the summary: the decisions, and the yes minted for exactly them."""
+
+    decisions: list[ItemDecisionIn]
+    confirmation_id: uuid.UUID
+
+
+class MemoOut(BaseModel):
+    memo_id: uuid.UUID
+    appointment_id: uuid.UUID | None
+    kind: str
+    source: str
+    text: str
+    language: str
+    state_id: uuid.UUID
+    created_at: datetime
+
+    @classmethod
+    def of(cls, memo: Memo) -> MemoOut:
+        return cls(
+            memo_id=memo.id,
+            appointment_id=memo.appointment_id,
+            kind=memo.kind.value,
+            source=memo.source.value,
+            text=memo.text,
+            language=memo.language,
+            state_id=memo.state_id,
+            created_at=utc(memo.created_at),
+        )
+
+
+class SummaryConfirmedOut(BaseModel):
+    """What the yes wrote: the card as it stands, the memos, the visits planned, the facts
+    with the transcript as provenance, and the flags — never a medicine."""
+
+    summary: SummaryOut
+    memos: list[MemoOut]
+    appointments: list[AppointmentOut]
+    facts: list[FactOut]
+    flag_ids: list[uuid.UUID]
+
+
+class MemoCardOut(BaseModel):
+    """The memo card: the current memos and the lines as he hears them."""
+
+    memos: list[MemoOut]
+    card: list[str]

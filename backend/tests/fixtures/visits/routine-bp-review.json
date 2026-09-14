@@ -1,0 +1,108 @@
+{
+  "placeholder": "routine-bp-review",
+  "sha256": "5291e2a4ba44d02b443de21d0f9afaebfacfcf5c37e303f59509f55a45f7b681",
+  "note": "A routine blood pressure review with the first family's doctor, as a transcript. Names are the docs' example names; no real person. The summariser hears one dose change (the water pill), which the loop renders only as a question for the doctor (\"Ask Dr Tan about the new amount of the water pill.\") and never as an amount; a follow-up on 15 October; five actions; and one blood pressure reading heard, which becomes a fact citing this transcript on the person's yes.",
+  "transcript": "Dr Tan: Good morning. Your blood pressure book shows the morning numbers drifting up. Last week 138 over 84, this week 142 over 88. From Friday I want you to take the full water pill in the morning instead of half. Keep the blood pressure tablet as it is. Every morning, before breakfast, stand on the scale and write the number in the book. Eat lighter dinners, less salt. We will do a blood test on Monday 28 September. Nothing to eat after midnight the night before, water is fine. I will see you again on Thursday 15 October at ten in the morning. Bring the book.",
+  "summary": {
+    "actions": [
+      {
+        "kind": "weigh_every_morning",
+        "slots": {},
+        "confidence": 0.93,
+        "span": {
+          "start": 256,
+          "end": 341
+        }
+      },
+      {
+        "kind": "lighter_dinners",
+        "slots": {},
+        "confidence": 0.9,
+        "span": {
+          "start": 342,
+          "end": 373
+        }
+      },
+      {
+        "kind": "blood_test_on",
+        "slots": {
+          "day": "2026-09-28"
+        },
+        "confidence": 0.91,
+        "span": {
+          "start": 374,
+          "end": 421
+        }
+      },
+      {
+        "kind": "no_food_after_midnight",
+        "slots": {
+          "day": "2026-09-27"
+        },
+        "confidence": 0.84,
+        "span": {
+          "start": 422,
+          "end": 484
+        }
+      },
+      {
+        "kind": "water_is_ok",
+        "slots": {},
+        "confidence": 0.84,
+        "span": {
+          "start": 470,
+          "end": 483
+        }
+      },
+      {
+        "kind": "bring_bp_book_next_time",
+        "slots": {},
+        "confidence": 0.88,
+        "span": {
+          "start": 552,
+          "end": 567
+        }
+      }
+    ],
+    "medication_changes": [
+      {
+        "drug": "furosemide",
+        "change": "dose",
+        "confidence": 0.86,
+        "span": {
+          "start": 132,
+          "end": 214
+        }
+      }
+    ],
+    "follow_ups": [
+      {
+        "on": "2026-10-15",
+        "at": "10:00",
+        "provider": "Dr Tan",
+        "purpose": "blood pressure check",
+        "confidence": 0.9,
+        "span": {
+          "start": 485,
+          "end": 551
+        }
+      }
+    ],
+    "facts_heard": [
+      {
+        "subject": "blood_pressure",
+        "attribute": "reading",
+        "value": {
+          "systolic": 142,
+          "diastolic": 88
+        },
+        "unit": "mmHg",
+        "confidence": 0.8,
+        "span": {
+          "start": 109,
+          "end": 130
+        }
+      }
+    ]
+  }
+}

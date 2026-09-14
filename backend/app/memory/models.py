@@ -76,6 +76,9 @@ class ArtifactKind(StrEnum):
     MESSAGE = "message"
     READING = "reading"
     SCREENSHOT = "screenshot"
+    TRANSCRIPT = "transcript"
+    """The text of a visit as recorded or typed, kept in the object store like any other
+    artefact; the post-visit summary (E05-05) is read from it and cites it."""
 
 
 class SourceChannel(StrEnum):

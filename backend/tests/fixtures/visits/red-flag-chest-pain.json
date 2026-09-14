@@ -1,0 +1,48 @@
+{
+  "placeholder": "red-flag-chest-pain",
+  "sha256": "722b1856111b5a6013ee1f7fbcb52cc2c103168e34b5679cff933670d09cb4a4",
+  "note": "A visit at which a red-flag word is heard: chest pain (app/safety/red_flags.py). The summariser hears it as a fact about how he feels; the loop writes a Flag before the card is composed, marks the card red_flag, and puts the same-day line first — \"Call Dr Tan today.\" — never a diagnosis. One action and one reading heard.",
+  "transcript": "Dr Tan: You told me you had chest pain twice this week, climbing the stairs, and it went away when you sat down. That is not something we wait on. If it comes back, call the clinic the same day, or go to the emergency department. Keep taking all your medicines as before. Your blood pressure today is 150 over 92.",
+  "summary": {
+    "actions": [
+      {
+        "kind": "take_medicines_as_before",
+        "slots": {},
+        "confidence": 0.92,
+        "span": {
+          "start": 230,
+          "end": 271
+        }
+      }
+    ],
+    "medication_changes": [],
+    "follow_ups": [],
+    "facts_heard": [
+      {
+        "subject": "symptom",
+        "attribute": "reported",
+        "value": "chest pain on the stairs, twice this week",
+        "unit": null,
+        "confidence": 0.88,
+        "span": {
+          "start": 28,
+          "end": 75
+        }
+      },
+      {
+        "subject": "blood_pressure",
+        "attribute": "reading",
+        "value": {
+          "systolic": 150,
+          "diastolic": 92
+        },
+        "unit": "mmHg",
+        "confidence": 0.85,
+        "span": {
+          "start": 301,
+          "end": 312
+        }
+      }
+    ]
+  }
+}

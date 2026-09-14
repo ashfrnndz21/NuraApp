@@ -5,8 +5,9 @@ Settings are read once, here, and nowhere else. The code sender comes from
 (`NURA_DEV_CODE_SENDER=1`, which `make dev` sets), and otherwise the process refuses to
 start, because there is no real provider yet and the fixture prints login codes. The object
 store is the local one under NURA_OBJECT_STORE, pinned to this region; the extractor is the
-fixture one over NURA_PAPER_FIXTURES until the real one exists (E02). Logging is set up so
-that, on a dev run, the code line is seen.
+fixture one over NURA_PAPER_FIXTURES until the real one exists (E02), and the summariser the
+fixture one over NURA_VISIT_FIXTURES until a model in the region does (E05). Logging is set up
+so that, on a dev run, the code line is seen.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from app.db import make_engine, make_session_factory
 from app.identity.providers import code_sender_for
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.reasoning.visits.summary import FixtureSummariser
 from app.settings import MissingSetting, Settings, load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
@@ -32,10 +34,13 @@ def providers_for(settings: Settings) -> Providers:
         raise MissingSetting("NURA_OBJECT_STORE is not set")
     if settings.paper_fixtures is None:
         raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
+    if settings.visit_fixtures is None:
+        raise MissingSetting("NURA_VISIT_FIXTURES is not set and there is no other summariser yet")
     return Providers(
         code_sender=code_sender_for(settings),
         object_store=LocalObjectStore(Path(settings.object_store_root), settings.region),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
+        summariser=FixtureSummariser(Path(settings.visit_fixtures)),
     )
 
 

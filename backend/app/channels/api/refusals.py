@@ -27,6 +27,12 @@ from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
+from app.memory.spine import NoSuchAppointment as NoSuchVisit
+from app.memory.spine import NoSuchProvider
+from app.reasoning.visits.gaps import NoSuchAppointment
+from app.reasoning.visits.questions import NoSuchQuestion
+from app.reasoning.visits.summary import AlreadyConfirmed as SummaryAlreadyConfirmed
+from app.reasoning.visits.summary import NoSuchSummary, TranscriptTooLarge
 from app.regions import OutOfRegion
 from app.state.service import NoState
 
@@ -48,10 +54,17 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoStewardshipHere, 404),
     (NoState, 404),
     (NoSuchReviewCard, 404),
+    (NoSuchAppointment, 404),
+    (NoSuchVisit, 404),
+    (NoSuchProvider, 404),
+    (NoSuchQuestion, 404),
+    (NoSuchSummary, 404),
     (PhotoTooLarge, 413),
+    (TranscriptTooLarge, 413),
     (ProfileAlreadyOwned, 409),
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
+    (SummaryAlreadyConfirmed, 409),
     (AlreadyRegistered, 409),
     # One graph per number: the second setup, and the for-me door on a number already set
     # up for, are answered by name and nothing else.

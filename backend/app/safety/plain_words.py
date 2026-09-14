@@ -306,6 +306,10 @@ _MONTH_DATE = re.compile(
     r"|\b(" + "|".join(MONTHS) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
 )
 _WEEKDAY = re.compile(r"\b(?:" + "|".join(WEEKDAYS) + r")\b")
+WEEKDAYS_MS = ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad")
+"""Rule 5 in Malay: "Isnin 14 September" says the day too. The month names Malay shares with
+English are what `_MONTH_DATE` finds, so the day before them may be in either language."""
+_WEEKDAY_ANY = re.compile(r"\b(?:" + "|".join((*WEEKDAYS, *WEEKDAYS_MS)) + r")\b")
 
 _UUID = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
@@ -913,7 +917,7 @@ def _check_dates(line: _Line) -> None:
     for match in _MONTH_DATE.finditer(line.text):
         before = line.text[: match.start()]
         preceding = " ".join(before.split()[-3:])
-        if not _WEEKDAY.search(preceding) and line.cover(match):
+        if not _WEEKDAY_ANY.search(preceding) and line.cover(match):
             line.add(
                 5,
                 f'the date without the day: "{match.group()}"',

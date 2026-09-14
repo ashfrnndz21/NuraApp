@@ -37,12 +37,16 @@ from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.keys import confirm  # noqa: F401
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
 
 # Imported for the side effect of registering every table on the shared metadata.
 from tests import support  # noqa: F401
 from tests.paper import PAPER
+
+VISITS = Path(__file__).resolve().parent / "fixtures" / "visits"
+"""The visit transcripts the fixture summariser knows (E05-05)."""
 
 
 async def _engine() -> AsyncEngine:
@@ -127,7 +131,10 @@ async def _serve(region: Region) -> AsyncIterator[Deployment]:
     root = Path(tempfile.mkdtemp(prefix="nura-objects-"))
     objects = LocalObjectStore(root, region)
     providers = Providers(
-        code_sender=sender, object_store=objects, extractor=FixtureExtractor(PAPER)
+        code_sender=sender,
+        object_store=objects,
+        extractor=FixtureExtractor(PAPER),
+        summariser=FixtureSummariser(VISITS),
     )
     app = create_app(settings, sessions, providers)
     try:

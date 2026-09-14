@@ -26,6 +26,7 @@ from app.identity.providers import CodeSender
 from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, NoKey, resolve_key_context
+from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
 from app.settings import Settings
 
@@ -41,6 +42,9 @@ class Providers:
     """Where artefact bytes go: one store, pinned to this deployment's region."""
     extractor: Extractor
     """What reads a photo into fields with confidence; the fixture one until the real one."""
+    summariser: Summariser
+    """What reads a visit transcript into actions, changes, follow-ups and facts heard; the
+    fixture one until a model in the region exists (E05-05)."""
 
 
 def settings_of(request: Request) -> Settings:

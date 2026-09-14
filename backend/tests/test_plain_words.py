@@ -517,6 +517,7 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         "backend/app/delivery/**",
         "backend/app/channels/**",
         "backend/app/consent/**",
+        "backend/app/reasoning/visits/strings.py",
         "ios/Nura/**",
     ]
     assert patient_paths("no front matter") == []
@@ -583,3 +584,12 @@ def test_the_command_explains_the_rules(capsys: pytest.CaptureFixture[str]) -> N
 def test_the_command_over_the_repository_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 0
     assert "0 failures" in capsys.readouterr().out
+
+
+def test_rule_5_accepts_the_day_in_malay_before_a_shared_month_name() -> None:
+    """Malay shares "September" with English; "Isnin 14 September" says the day, and the
+    verifier must not ask for an English weekday in a Malay line (E05)."""
+    from app.safety.plain_words import verify
+
+    assert [f.rule for f in verify("Anda berjumpa Dr Tan pada Isnin 14 September.", "ms")] == []
+    assert [f.rule for f in verify("Anda berjumpa Dr Tan pada 14 September.", "ms")] == [5]

@@ -45,13 +45,15 @@ def scope_of(draft: Draft) -> Scope:
     """The scope of the act: a fact's is from its subject, a visit's is the visits scope, a
     claim's is the face of the graph — whose it is — which is all a claimant holds, and a
     review card's is the record, where the card and the photo it came from are kept (the
-    facts it then writes each check their own subject's scope)."""
+    facts it then writes each check their own subject's scope). A question and a post-visit
+    summary hang off a visit, so theirs is the visits scope too."""
     if isinstance(draft, FactDraft):
         return scope_for_subject(draft.subject)
     if isinstance(draft, ClaimDraft):
         return Scope.PROFILE
     if isinstance(draft, ReviewDraft):
         return Scope.RECORDS
+    # A visit's booking, its status, a question for it and its summary are all the visits'.
     return Scope.VISITS
 
 

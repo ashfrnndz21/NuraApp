@@ -24,8 +24,10 @@ from app.identity.providers import (
 )
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
+from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings, load_settings
+from tests.conftest import VISITS
 from tests.paper import PAPER
 
 ENV = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
@@ -36,6 +38,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         code_sender=sender,
         object_store=LocalObjectStore(tmp, Region.SG),
         extractor=FixtureExtractor(PAPER),
+        summariser=FixtureSummariser(VISITS),
     )
 
 

@@ -28,6 +28,10 @@ class Settings:
     """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
     from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
     a later adapter, and without either the process refuses to start."""
+    visit_fixtures: str | None = None
+    """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
+    from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
+    without it the process refuses to start."""
 
 
 class MissingSetting(RuntimeError):
@@ -54,4 +58,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         dev_code_sender=dev_code_sender,
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
+        visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
     )

@@ -21,6 +21,7 @@ from app.keys import confirm as key_confirm  # noqa: F401
 from app.keys import models as key_models  # noqa: F401
 from app.memory import models as memory_models  # noqa: F401
 from app.notes import models as note_models  # noqa: F401
+from app.reasoning.visits import models as visit_models  # noqa: F401
 from app.settings import load_settings
 
 target_metadata = Base.metadata

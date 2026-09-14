@@ -11,6 +11,8 @@ dev migrate: export NURA_DATABASE_URL ?= sqlite+aiosqlite:///./dev.db
 # paper fixtures the fixture extractor reads photos from until the real one exists (E02).
 dev: export NURA_OBJECT_STORE ?= var/objects
 dev: export NURA_PAPER_FIXTURES ?= tests/fixtures/paper
+# The visit transcripts the fixture summariser answers from (E05); no live model call exists.
+dev: export NURA_VISIT_FIXTURES ?= tests/fixtures/visits
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
 migrate: ; cd backend && python3 -m alembic upgrade heads
