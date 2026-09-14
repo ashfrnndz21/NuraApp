@@ -714,20 +714,16 @@ def template(template_id: str, language: str) -> str:
 def render(template_id: str, language: str, **slots: str | date) -> str:
     """One line, filled and verified. Every line that reaches him comes through here.
 
-    A `date` slot is said in his language ("Khamis 3 September", "9月3日星期四") and checked
-    in English ("Thursday 3 September"): the verifier's rule 5 is about the form — the day
-    beside the date — and it knows the English day names; the Malay and Chinese forms are
-    `say_date`'s and come from one table.
+    A `date` slot is said in his language ("Khamis 3 September", "9月3日星期四", `say_date`) and
+    the line is verified exactly as he reads it: rule 5 reads a Malay or Chinese date against
+    that language's own day names (E05 review, P3), so nothing is swapped to English first.
     """
     lang = language_of(language)
     said = {k: say_date(v, lang) if isinstance(v, date) else v for k, v in slots.items()}
-    checked = {k: say_date(v, "en") if isinstance(v, date) else v for k, v in slots.items()}
     text = template(template_id, lang).format(**said)
     failures = [
         f"rule {finding.rule} — {finding.problem}"
-        for finding in verify(
-            template(template_id, lang).format(**checked), lang, KIND_OF.get(template_id, "line")
-        )
+        for finding in verify(text, lang, KIND_OF.get(template_id, "line"))
         if finding.severity == "fail"
     ]
     if failures:

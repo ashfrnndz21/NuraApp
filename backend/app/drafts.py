@@ -30,6 +30,8 @@ class ConfirmSubject(StrEnum):
     APPOINTMENT_STATUS = "appointment_status"
     CLAIM = "claim"
     REVIEW_CARD = "review_card"
+    QUESTION = "question"
+    VISIT_SUMMARY = "visit_summary"
     KEY_CHANGE = "key_change"
     ONLY_ME = "only_me"
     TASK_DONE = "task_done"
@@ -203,6 +205,75 @@ class ReviewDraft:
                     "corrected_by": field.corrected_by,
                 }
                 for field in self.fields
+            ],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class QuestionDraft:
+    """A question a person adds, edits or removes for one visit (E05-02): the visit, the
+    line as he typed it (empty for a removal), the question it replaces when it replaces
+    one, and whether it is a removal. The yes binds to the words, so an edit after the yes
+    was shown is a different yes."""
+
+    appointment_id: uuid.UUID
+    text: str
+    language: str
+    supersedes_id: uuid.UUID | None
+    removed: bool
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.QUESTION
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.appointment_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "appointment_id": self.appointment_id,
+            "text": self.text,
+            "language": self.language,
+            "supersedes_id": self.supersedes_id,
+            "removed": self.removed,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class DecidedItem:
+    """One item of a post-visit summary as the person decided it: kept or not."""
+
+    item_id: uuid.UUID
+    kind: str
+    decision: str
+
+
+@dataclass(frozen=True, slots=True)
+class VisitSummaryDraft:
+    """A post-visit summary about to close (E05-05): which card, which transcript it was read
+    from, and every item with the person's decision on it. One tap saves the card, so the
+    yes binds to all of them at once."""
+
+    summary_id: uuid.UUID
+    artifact_id: uuid.UUID
+    items: tuple[DecidedItem, ...]
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.VISIT_SUMMARY
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.summary_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "summary_id": self.summary_id,
+            "artifact_id": self.artifact_id,
+            "items": [
+                {"item_id": item.item_id, "kind": item.kind, "decision": item.decision}
+                for item in self.items
             ],
         }
 
@@ -393,6 +464,8 @@ Draft = (
     | StatusChange
     | ClaimDraft
     | ReviewDraft
+    | QuestionDraft
+    | VisitSummaryDraft
     | KeyChangeDraft
     | OnlyMeDraft
     | TaskDoneDraft

@@ -8,7 +8,8 @@ store is the local one under NURA_OBJECT_STORE, pinned to this region; the extra
 fixture one over NURA_PAPER_FIXTURES until the real one exists (E02); the transcriber is the
 fixture one over NURA_VOICE_FIXTURES, pinned to this region, until a speech provider exists
 (E02-06); the drug registry is the fixture one (`NURA_DRUG_REGISTRY=fixture`) until a licensed
-client exists (E04); the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`,
+client exists (E04); the summariser is the fixture one over NURA_VISIT_FIXTURES until a model
+in the region does (E05); the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`,
 signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19).
 Logging is set up so that, on a dev run, the code line is seen.
 """
@@ -28,6 +29,7 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.transcribe import FixtureTranscriber
 from app.reasoning.ranges import reference_ranges_for
+from app.reasoning.visits.summary import FixtureSummariser
 from app.settings import MissingSetting, Settings, load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
@@ -41,6 +43,8 @@ def providers_for(settings: Settings) -> Providers:
         raise MissingSetting("NURA_OBJECT_STORE is not set")
     if settings.paper_fixtures is None:
         raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
+    if settings.visit_fixtures is None:
+        raise MissingSetting("NURA_VISIT_FIXTURES is not set and there is no other summariser yet")
     if settings.voice_fixtures is None:
         raise MissingSetting("NURA_VOICE_FIXTURES is not set and there is no other transcriber yet")
     if settings.feed_fixtures is None:
@@ -53,6 +57,7 @@ def providers_for(settings: Settings) -> Providers:
         searcher=FixtureSearcher(Path(settings.feed_fixtures)),
         compressor=FixtureCompressor(Path(settings.feed_fixtures)),
         drug_registry=drug_registry_for(settings),
+        summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
         reference_ranges=reference_ranges_for(settings),
     )

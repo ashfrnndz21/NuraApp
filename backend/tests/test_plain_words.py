@@ -520,6 +520,7 @@ def test_the_paths_come_from_the_rules_files_front_matter() -> None:
         "backend/app/consent/**",
         "backend/app/family/**",
         "backend/app/medicines/**",
+        "backend/app/reasoning/visits/strings.py",
         "backend/app/safety/boundary.py",
         "backend/app/safety/recording.py",
         "ios/Nura/**",
@@ -589,3 +590,95 @@ def test_the_command_explains_the_rules(capsys: pytest.CaptureFixture[str]) -> N
 def test_the_command_over_the_repository_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 0
     assert "0 failures" in capsys.readouterr().out
+
+
+def test_rule_5_is_keyed_by_the_lines_language() -> None:
+    """E05 review P3: Malay is held to all twelve Malay months and its own weekdays, "Jun" and
+    "Mac" are whole month names there, an English line with a Malay weekday still fails, and
+    Chinese says the date then the day."""
+    from app.safety.plain_words import verify
+
+    def rules(text: str, language: str) -> list[int]:
+        return sorted(f.rule for f in verify(text, language) if f.severity != "note")
+
+    assert rules("Anda berjumpa Dr Tan pada Isnin 14 September.", "ms") == []
+    assert rules("Anda berjumpa Dr Tan pada 14 September.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada Isnin 29 Jun.", "ms") == []
+    assert rules("Jumpa Dr Tan lagi pada Selasa 3 Mac.", "ms") == []
+    assert rules("Jumpa Dr Tan lagi pada 29 Oktober.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada 3 Disember.", "ms") == [5]
+    assert rules("Jumpa Dr Tan lagi pada Isnin 29 Okt.", "ms") == [5]
+    assert 5 in rules("You see Dr Tan on Ahad 29 September.", "en")
+    assert rules("You see Dr Tan on Sunday 29 September.", "en") == []
+    assert rules("You see Dr Tan on Monday 29 Jun.", "en") == [5]
+    assert rules("您在9月29日星期一见陈医生。", "zh") == []
+    assert rules("您在星期一9月29日见陈医生。", "zh") == []
+    assert rules("您在9月29日见陈医生。", "zh") == [5]
+
+
+def test_rule_10_counts_a_chinese_date_as_one_number() -> None:
+    """ "9月14日" is one day, as "14 September" is: the Chinese twin of "On Monday 14 September
+    your blood pressure was 138 over 84." has three numbers too, not four."""
+    story = "9月14日星期一您的血压是138比84。"
+    assert [f for f in verify(story, "zh") if f.rule == 10] == []
+    crowded = "9月14日星期一您的血压是138比84，心跳72。"
+    assert [f.rule for f in verify(crowded, "zh") if f.severity == "fail"] == [10]
+
+
+def test_the_fillers_speak_the_lines_language() -> None:
+    """A slot is filled as the line's language says it, and `{doctor}` with a doctor, so rule
+    14's exemption — a question put to the doctor — is checked against one."""
+    from app.safety.plain_words import fill
+
+    assert fill("Sejak {day}, {count} perkara berubah.", "ms") == (
+        "Sejak Isnin 14 September, 2 perkara berubah."
+    )
+    assert fill("您在{day}{time}见{doctor}。", "zh") == "您在9月14日星期一上午10点见Dr Tan。"
+    assert fill("You see {doctor} on {day} at {time}.") == (
+        "You see Dr Tan on Monday 14 September at 10 in the morning."
+    )
+
+
+def test_rule_14_the_boundary_holds_in_every_language() -> None:
+    """E05 review 2: no patient line starts, stops or changes a medicine. A treatment verb
+    beside a medicine noun fails unless the line asks or tells the doctor; a verb alone
+    ("You can tell Nura to stop at any time.") passes, and so do E04's missed-dose lines."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Stop the water pill from Friday.", "en")
+    assert rule_14("From Friday, take more of the water pill.", "en")
+    assert rule_14("Your blood pressure tablet is doubled from Monday 14 September.", "en")
+    assert not rule_14("Ask Dr Tan about stopping the water pill (frusemide).", "en")
+    assert not rule_14("Tell Dr Tan that you stopped the water pill.", "en")
+    assert not rule_14("You can tell Nura to stop at any time.", "en")
+    assert not rule_14("Never take 2 at once.", "en")
+    assert not rule_14("If you forgot, leave it.", "en")
+    assert rule_14("Berhenti makan pil air mulai Jumaat.", "ms")
+    assert not rule_14("Tanya Dr Tan tentang berhenti makan pil air.", "ms")
+    assert not rule_14("Anda boleh minta Nura berhenti pada bila-bila masa.", "ms")
+    assert not rule_14("Jangan ambil lebih untuk ganti.", "ms")
+    assert rule_14("从星期五开始停吃去水药。", "zh")
+    assert not rule_14("问一问陈医生，去水药要不要停。", "zh")
+    assert not rule_14("您可以随时叫 Nura 停下来。", "zh")
+
+
+def test_rule_14_the_exemption_is_a_question_put_to_the_doctor() -> None:
+    """Review 3: a treatment verb beside a medicine passes only in a line that asks or tells
+    the doctor (or the pharmacist). Telling someone else, or ending in a question mark, is
+    not that."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Tell Ash to stop the water pill.", "en")
+    assert rule_14("Should you stop the water pill?", "en")
+    assert not rule_14("Ask your doctor before you stop the water pill.", "en")
+    assert not rule_14("Tell Dr Tan that you stopped the water pill.", "en")
+    assert rule_14("Beritahu Ash supaya berhenti makan pil air.", "ms")
+    assert not rule_14("Tanya doktor anda tentang berhenti makan pil air.", "ms")
+    assert rule_14("告诉阿明停吃去水药。", "zh")
+    assert not rule_14("问一问陈医生，去水药要不要停。", "zh")

@@ -43,6 +43,7 @@ from app.channels.api import (
     safety,
     timeline,
     trends,
+    visits,
 )
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused
@@ -70,6 +71,7 @@ def _api() -> APIRouter:
     api.include_router(capture.router)
     api.include_router(feed.router)
     api.include_router(medicines.router)
+    api.include_router(visits.router)
     api.include_router(safety.router)
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
