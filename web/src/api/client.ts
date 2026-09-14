@@ -26,7 +26,7 @@ export class Unreachable extends Error {
 }
 
 export interface Call {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: unknown;
   token?: string | null;
   query?: Record<string, string | undefined>;

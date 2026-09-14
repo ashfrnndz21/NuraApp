@@ -25,7 +25,8 @@ export type Screen =
   /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
   | { name: "ask"; item: FeedItemOut }
   | { name: "reading" }
-  | { name: "me" };
+  | { name: "me" }
+  | { name: "onboarding" };
 
 export const screen = signal<Screen>({ name: "loading" });
 

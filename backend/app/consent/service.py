@@ -31,7 +31,7 @@ from datetime import datetime
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write
+from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action, Channel, Outcome
 from app.audit.trail import record
 from app.consent.models import (
@@ -47,7 +47,7 @@ from app.consent.texts import current_version, render_sharing, wording
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.identity.models import Person
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.scopes import Scope
 from app.memory.models import Artifact
@@ -89,6 +89,11 @@ class ConsentOutOfDate(NoConsent):
 
 class NotTheirConsentToGive(Refusal):
     """The owner agrees for himself on his own basis; anyone else needs a recorded proxy basis."""
+
+
+class HolderNeedsAName(Refusal):
+    """The words for letting someone in name that person, and there is no name to use: an
+    invite by phone without the name the owner calls them, or a person with none on file."""
 
 
 class NotTheirConsentToWithdraw(Refusal):
@@ -133,6 +138,38 @@ class RecordConsent:
     captured_via: ConsentChannel
 
 
+@dataclass(frozen=True)
+class SharingWords:
+    """Everything the words for letting one person in are rendered from: the name they use,
+    who that person is to him, and the parts. The preview and the consent both render from
+    this through `words_for`, so what he reads first and what is kept cannot differ."""
+
+    name: str
+    relationship: str | None
+    scopes: frozenset[Scope]
+
+
+def words_for(
+    purpose: ConsentPurpose,
+    version: str,
+    language: str,
+    region: Region,
+    about: SharingWords | None = None,
+) -> str | None:
+    """The words at `version`, in `language`, for this region — rendered for one person and
+    their parts when the purpose is per person — or None if they were never on file."""
+    template = wording(purpose, version, language, region)
+    if template is None or about is None:
+        return template
+    return render_sharing(
+        template,
+        name=about.name,
+        relationship=about.relationship,
+        scopes=about.scopes,
+        language=language,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Sharing:
     """Who is being let in, to which parts, and — only if the granter says — who they are to
@@ -143,12 +180,20 @@ class Sharing:
     relationship: str | None = None
     """Who they are to him, in the language of the words, or nothing. The words decide how
     to say it (`app.consent.texts.named_words`); nothing is baked into the name."""
+    named: str | None = None
+    """The name the words use, as the owner typed it when he let the person in by phone. The
+    words then say only what he typed — never whether the number was already an account, or
+    the name that account chose."""
 
     # @patient
     @property
     def name(self) -> str:
         """The person as the words name them, bare: "Ash"."""
-        return self.holder.display_name
+        return (self.named if self.named is not None else self.holder.display_name).strip()
+
+    @property
+    def words(self) -> SharingWords:
+        return SharingWords(name=self.name, relationship=self.relationship, scopes=self.scopes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,12 +313,16 @@ async def grant_consent(
     words = ""  # never written: the door refuses first
     if context.allows(Scope.FAMILY):
         refusal: Refusal | None = None
-        template = wording(purpose, version, language, context.region)
+        rendered = words_for(
+            purpose, version, language, context.region, None if sharing is None else sharing.words
+        )
         if purpose in PER_HOLDER and sharing is None:
             refusal = NoHolderNamed(f"{purpose} names who may hold a key, and to what")
         elif purpose not in PER_HOLDER and sharing is not None:
             refusal = NotAgreedPerPerson(f"{purpose} is for the whole profile")
-        elif template is None:
+        elif sharing is not None and not sharing.name:
+            refusal = HolderNeedsAName(f"{purpose} names the person, and there is no name")
+        elif rendered is None:
             refusal = WordingNotOnFile(f"{purpose} version {version} was never shown in {language}")
         else:
             refusal = await _check_basis(
@@ -282,18 +331,8 @@ async def grant_consent(
         if refusal is not None:
             await _refused_write(session, context, refusal, channel, moment)
             raise refusal
-        assert template is not None
-        words = (
-            render_sharing(
-                template,
-                name=sharing.name,
-                relationship=sharing.relationship,
-                scopes=sharing.scopes,
-                language=language,
-            )
-            if sharing is not None
-            else template
-        )
+        assert rendered is not None
+        words = rendered
 
     return await audited_write(
         session,
@@ -314,6 +353,48 @@ async def grant_consent(
         witness_person_id=witness_person_id,
         granted_at=moment,
     )
+
+
+CONSENT = Consent.__tablename__
+
+
+@audited(Action.WRITE, Scope.FAMILY, CONSENT)
+async def may_invite(session: AsyncSession, *, context: KeyContext) -> None:
+    """The door on letting someone in, before anyone is named: the family scope (checked at
+    the door) and the owner's own footing — `POST /consents/sharing` agrees on the owner's
+    basis only, so anyone else is refused, on the trail, before an account is made for the
+    person he would let in."""
+    if context.standing is not Standing.OWNER:
+        raise NotTheirConsentToGive(
+            f"letting someone in here is the owner's own yes, not a {context.role}'s"
+        )
+
+
+@audited(Action.READ, Scope.FAMILY, CONSENT)
+async def preview_sharing(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    about: SharingWords,
+    language: str,
+    text_version: str | None = None,
+) -> tuple[str, str]:
+    """The words `grant_consent(SHARE_WITH_PERSON, …)` would keep for this person and these
+    parts, and their version — rendered by the same `words_for`, so the preview and the record
+    cannot differ. For the owner, or the steward setting up for him. Writes nothing but the
+    READ on the trail."""
+    if context.standing not in (Standing.OWNER, Standing.STEWARD):
+        raise NotTheirConsentToGive(
+            f"the words are previewed by the one who gives them, not a {context.role}"
+        )
+    if not about.name:
+        raise HolderNeedsAName("the words name the person, and there is no name")
+    version = text_version or current_version(ConsentPurpose.SHARE_WITH_PERSON)
+    words = words_for(ConsentPurpose.SHARE_WITH_PERSON, version, language, context.region, about)
+    if words is None:
+        raise WordingNotOnFile(f"sharing version {version} was never shown in {language}")
+    await record(session, context=context, action=Action.READ, scope=Scope.FAMILY, target=CONSENT)
+    return version, words
 
 
 async def active_consents(

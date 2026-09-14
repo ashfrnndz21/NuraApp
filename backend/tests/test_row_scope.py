@@ -772,6 +772,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("DELETE", f"{P}/keys/{{key_id}}"): "closes a key; returns the key",
     ("PUT", f"{P}/keys/{{key_id}}"): "narrows a key; returns the key",
     ("POST", f"{P}/consents/sharing"): "writes an agreement; returns it",
+    (
+        "POST",
+        f"{P}/consents/sharing/preview",
+    ): "renders the words of an agreement the caller sends; returns no rows",
     ("POST", f"{P}/consents/whatsapp"): "writes an agreement; returns it",
     ("POST", f"{P}/consents/recording"): "writes an agreement; returns it",
     ("POST", f"{P}/notes"): "writes his own note; returns it",
