@@ -479,6 +479,108 @@ export const zh = {
     // @patient phrase
     faster: "快一点",
   },
+  day: {
+    // @patient headline
+    topThree: "今天的3件事",
+    // @patient phrase
+    notWell: "我觉得不舒服",
+    // @patient headline
+    notWellTitle: "告诉Nura您的感觉",
+    // @patient
+    notWellLead: "用您自己的话说出来或打出来。",
+    // @patient phrase
+    wordsLabel: "您的感觉",
+    // @patient phrase
+    send: "告诉Nura",
+    // @patient phrase
+    sayIt: "大声说出来",
+    // @patient phrase
+    stopAndSend: "停下并发送",
+    // @patient
+    sending: "Nura正在发送。",
+    // @patient headline
+    whatToDo: "现在该做什么",
+    // @patient phrase
+    backToday: "回到今天",
+    // @patient phrase
+    symptomsOpen: "记下您的感觉",
+    // @patient headline
+    symptomsTitleSelf: "您最近的感觉",
+    // @patient headline
+    symptomsTitleOther: "{name}最近的感觉",
+    // @patient
+    symptomsLead: "说说您哪里不舒服、有多难受、从什么时候开始。",
+    // @patient phrase
+    symptomsKeep: "保存",
+    // @patient
+    // @patient phrase
+    sendAgain: "再发送一次",
+    symptomsSaved: "Nura已经记下了。",
+    // @patient phrase
+    nudgeOk: "好的",
+    // @patient phrase
+    nudgeWentWell: "很顺利",
+    // @patient phrase
+    nudgeNotToday: "今天不要",
+    // @patient phrase
+    briefOpen: "看诊前先看看",
+    // @patient headline
+    briefTitle: "看诊之前",
+    // @patient phrase
+    questionsOpen: "您要问医生的问题",
+    // @patient headline
+    questionsTitle: "看诊时要问的问题",
+    // @patient phrase
+    questionLabel: "您的问题",
+    // @patient phrase
+    questionAdd: "保存这个问题",
+    // @patient
+    questionCheck: "这是您想问的吗？",
+    // @patient phrase
+    questionYes: "是的，保存",
+    // @patient phrase
+    questionRemove: "去掉这个问题",
+    // @patient
+    questionRemoveCheck: "要从您的问题里去掉这个吗？",
+    // @patient phrase
+    questionRemoveYes: "是的，去掉",
+    // @patient
+    questionKept: "Nura已经保存了您的问题。",
+    // @patient
+    questionRemoved: "Nura已经去掉了这个问题。",
+    // @patient
+    summaryLead: "请看看每一行，然后说好。",
+    // @patient phrase
+    summaryLeaveOut: "不要保存这一条",
+    // @patient
+    summaryLeftOut: "Nura不会保存这一条。",
+    // @patient
+    summaryFromNotes: "这来自您写的笔记。",
+    // @patient phrase
+    summaryYes: "是的，保存这张卡",
+    // @patient
+    summaryKept: "Nura已经保存了{doctor}说的话。",
+    // @patient
+    summaryWaiting: "这张卡在等您说好。",
+    fallback: {
+      // @patient
+      youDidRight: "您说出来是对的。",
+      // @patient action
+      notSent: "Nura无法把这个发给您的家人。",
+      // @patient action
+      call995: "现在就打995叫救护车。",
+      // @patient action
+      call999: "现在就打999叫救护车。",
+      // @patient action
+      callFamily: "现在就打电话给您的家人。",
+      // @patient action
+      bad995: "如果您觉得很难受，现在就打995叫救护车。",
+      // @patient action
+      bad999: "如果您觉得很难受，现在就打999叫救护车。",
+      // @patient
+      closing: "Nura 不判断您出了什么问题。",
+    },
+  },
   onboarding: {
     // @patient phrase
     next: "下一步",

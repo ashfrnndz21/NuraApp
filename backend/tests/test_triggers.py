@@ -441,3 +441,24 @@ async def test_he_is_spoken_to_in_the_language_his_settings_say(
     assert card.outcome is DeliveryOutcome.SENT
     [sent] = [one for one in h.whatsapp.sent if one.template_name == "morning_card"]
     assert sent.language == "ms"
+
+
+async def test_a_nudge_he_answered_in_the_app_is_not_sent_again(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """W7: the web shows the day's nudge and he answers it there. Delivery then does not send
+    him the same nudge: the row says it was skipped, answered in the app."""
+    from app.db import as_utc
+    from app.delivery.nudges.engine import hand_over, respond
+    from app.delivery.nudges.models import ResponseKind
+    from tests.feelings_support import REGISTRY
+
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    _, nudge = await hand_over(sg, context=h.owner, registry=REGISTRY)
+    await respond(sg, context=h.owner, nudge_id=nudge.id, kind=ResponseKind.DISMISSED)
+    due = as_utc(nudge.send_after) + timedelta(minutes=1)
+    [row] = _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)
+    assert row.outcome is DeliveryOutcome.SKIPPED and row.reason == "answered in the app"
+    assert [one for one in h.whatsapp.sent if one.template_name == "nudge"] == []
+    assert _rows(await _run(sg, h, clock, due + timedelta(minutes=5)), TriggerType.NUDGE) == []

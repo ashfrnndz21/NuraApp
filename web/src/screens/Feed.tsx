@@ -1,4 +1,8 @@
-import { useEffect, useLayoutEffect, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "preact/hooks";
+import * as nura from "../api/nura";
+import type { CardClipOut } from "../api/types";
+import { ClipButton } from "../day/components";
+import { clipsOf } from "../day/model";
 import type { JSX } from "preact";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
@@ -11,6 +15,7 @@ import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, TabBar, Tile } from "../ui/components";
 import { PlayerControls } from "../ui/Player";
+import { voice } from "../player/voice";
 import "../ui/feed.css";
 
 /** The vertical feed (E21-01): one card fills the screen; up for the next. The backend's
@@ -31,6 +36,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const notes = store.notes.value;
   const audience = store.audience.value;
   const patient = density() === "patient";
+  // "Hear what Dr Tan said" under a line said at a recorded visit (E21-03): on a tap only.
 
   const cards = (): HTMLElement[] => [...(pager.current?.querySelectorAll<HTMLElement>("article.feed-card") ?? [])];
 
@@ -56,7 +62,11 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
 
   useEffect(() => {
     void store.open();
-    return () => playback.stop();
+    // Leaving the feed: its voice stops, and every recording a clip fetched is let go.
+    return () => {
+      playback.stop();
+      voice.forget();
+    };
   }, [store, playback]);
 
   // Back from Ask: the pager opens on the card he left.
@@ -160,6 +170,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               entry={entry}
               index={index}
               view={cardView(entry.item)}
+              clips={clipsOf(entry.item)}
               note={notes.get(entry.item.item_id) ?? null}
               status={statusLine(entry.item, audience)}
               patient={patient}
@@ -208,6 +219,8 @@ interface FeedCardProps {
   entry: Entry;
   index: number;
   view: CardView;
+  /** Where each line was said at a recorded visit, by the line's words (E21-03). */
+  clips: Map<string, CardClipOut>;
   note: Note | null;
   status: ReturnType<typeof statusLine>;
   patient: boolean;
@@ -230,7 +243,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, playing }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, playing }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -262,9 +275,16 @@ function FeedCard({ entry, index, view, note, status, patient, owner, name, s, o
         {!declined && (
           <>
             <div class="lines" data-testid="lines">
-              {view.lines.map((line, at) => (
-                <p key={at}>{line}</p>
-              ))}
+              {view.lines.map((line, at) => {
+                const clip = clips.get(line);
+                if (!clip) return <p key={at}>{line}</p>;
+                return (
+                  <div key={at} class="clip-line" data-testid="card-line">
+                    <p>{line}</p>
+                    <ClipButton clip={clip} playKey={`${entry.key}:${at}`} />
+                  </div>
+                );
+              })}
             </div>
             {view.boundary.length > 0 && (
               <div class="lines boundary" data-testid="boundary">

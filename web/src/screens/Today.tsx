@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { Refused, Unreachable } from "../api/client";
 import * as nura from "../api/nura";
@@ -33,6 +33,9 @@ import {
 } from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 import { EmergencyCard } from "./Emergency";
+import { ClipCard } from "../day/components";
+import { clipsOf } from "../day/model";
+import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
 
 /** Today: the Now card, a reading prompt, today's cards and the proud number — every line the
  *  backend's or the catalogue's, every card with its source line and its spoken twin.
@@ -66,6 +69,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const [sent, setSent] = useState(false);
   const [heldRefused, setHeldRefused] = useState<Refused[]>([]);
   const [card, setCard] = useState<KeptCard | null>(null);
+  // Today's top three (E11-02), read live; a kept page shows the feed's own cards instead.
+  const [topThree, setTopThree] = useState<FeedItemOut[]>([]);
 
   /** A refusal, or anything that is not a lost network: nothing of these papers stays, and the
    *  no is said — it is not a lost network, whatever the page thought a moment ago. */
@@ -131,6 +136,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     const slots = await nura.dosesToday(bearer, id, language.value);
     const counted = await nura.proud(bearer, id);
     const page = await nura.feed(bearer, id);
+    try {
+      setTopThree((await nura.feedToday(bearer, id)).items);
+    } catch {
+      setTopThree([]);
+    }
     let chief: string | null = null;
     if (state?.posture === "act" && current.standing === "owner") {
       const holders = await nura.keys(bearer, id);
@@ -260,6 +270,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const act = page?.posture === "act";
   const stale = page?.stale === true;
   const useFeed = feed.forYou.length > 0;
+  // Today's top three in the backend's order, less a flag card already shown above.
+  const top = topThree.filter((item) => !feed.flags.some((flag) => flag.item_id === item.item_id));
   // Where the State card goes: first when it says act; in place of the dose card when it is
   // stale; under "For you today" when the feed has nothing for today; else not at all.
   const stateAt = !page || page.stateId === null ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
@@ -275,8 +287,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const proudLine =
     proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
 
-
-  const feedCard = (item: FeedItemOut, testId: string) => (
+  const feedCard = (item: FeedItemOut, testId: string) => {
+    const clips = clipsOf(item);
+    if (clips.size > 0) {
+      return <ClipCard key={item.item_id} item={item} clips={clips} paper={density() === "patient" || item.supply === "flag"} testId={testId} />;
+    }
+    return plainCard(item, testId);
+  };
+  const plainCard = (item: FeedItemOut, testId: string) => (
     <Card
       key={item.item_id}
       title={item.headline}
@@ -304,6 +322,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         <h1 class="greeting">{greeting(now.getHours(), name, s)}</h1>
         <div class="date">{dateLine(now, locale)}</div>
       </header>
+      <NotWellButton />
 
       <Notice error={error} />
       {heldRefused.length > 0 && (
@@ -403,6 +422,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                 </Tile>
               )}
 
+              <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
+
               {!fromPhone && (
                 <Card
                   title={s.today.readingTitle}
@@ -417,7 +438,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               )}
 
               <h2 class="section">{s.today.forYou}</h2>
-              {useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))}
+              {!fromPhone && top.length > 0 ? (
+                <TopThree items={top} />
+              ) : (
+                useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))
+              )}
               {stateAt === "forYou" && stateCard}
               <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
                 {s.feed.open}

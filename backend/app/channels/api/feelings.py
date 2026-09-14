@@ -5,6 +5,7 @@
     POST /profiles/{id}/feelings/{tap}/answer            his one answer; a note, or the red-flag path
     GET  /profiles/{id}/feelings/notes                   the notes, newest first
     GET  /profiles/{id}/nudges/plan?day=                 the day's nudges: what goes, what is held and why
+    GET  /profiles/{id}/nudges?day=                      the nudges handed over that day, and my answers
     POST /profiles/{id}/nudges/plan?day=                 hand the day's nudge to delivery (sends nothing)
     POST /profiles/{id}/nudges/{nudge}/response          seen, accepted, dismissed
     GET  /profiles/{id}/nudge-metrics?weeks=             counts per week, for the owner and his chief
@@ -28,6 +29,8 @@ from app.channels.api.feelings_schemas import (
     AnsweredOut,
     AnswerIn,
     CloudOut,
+    DayNudgeOut,
+    DayNudgesOut,
     FeelingIn,
     FeelingOut,
     HandedOverOut,
@@ -40,7 +43,7 @@ from app.channels.api.feelings_schemas import (
     NudgeResponseIn,
     NudgeResponseOut,
 )
-from app.delivery.nudges.engine import hand_over, plan_nudges, respond
+from app.delivery.nudges.engine import day_nudges, hand_over, plan_nudges, respond
 from app.delivery.nudges.metrics import nudge_metrics
 from app.delivery.nudges.strings import recognition_lines
 from app.medicines.service import proud_days
@@ -121,6 +124,17 @@ async def nudge_plan(
         session, context=context, registry=providers_of(request).drug_registry, day=day
     )
     return NudgePlanOut.of(plan)
+
+
+@router.get("/{profile_id}/nudges")
+async def nudges_of_the_day(context: Context, session: Db, day: date | None = None) -> DayNudgesOut:
+    """The nudges handed over for `day` (today by default), best first, each with what the
+    caller has done with it. A push carries no words, so the app reads the nudge here and
+    answers it at `POST …/nudges/{nudge}/response`. Nothing is planned or sent from here."""
+    shown_day, shown, withheld = await day_nudges(session, context=context, day=day)
+    return DayNudgesOut(
+        day=shown_day, nudges=[DayNudgeOut.of_day(one) for one in shown], withheld=withheld
+    )
 
 
 @router.post("/{profile_id}/nudges/plan", status_code=status.HTTP_201_CREATED)

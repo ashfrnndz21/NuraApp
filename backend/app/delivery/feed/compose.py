@@ -979,6 +979,25 @@ async def _memos(
         session, Provider, context, Scope.VISITS, where=(Provider.id == visit.provider_id,)
     )
     doctor = providers[0].name if providers else None
+    # Where each memo was said in the consult recording, when there is one (E21-03): the phone
+    # plays that stretch on a tap, under its own line, and nothing else.
+    recording_of = {summary.id: summary.recording_artifact_id for summary in summaries}
+    item_of = {item.id: item for item in items}
+    clips: list[dict[str, Any]] = []
+    for memo in kept:
+        item = item_of.get(memo.source_id) if memo.source_id is not None else None
+        heard_in = None if item is None else recording_of.get(item.summary_id)
+        if item is None or heard_in is None or item.clip_start_s is None or item.clip_end_s is None:
+            continue
+        clips.append(
+            {
+                "line": memo.text,
+                "artifact_id": str(heard_in),
+                "start_s": item.clip_start_s,
+                "end_s": item.clip_end_s,
+                "doctor": doctor or YOUR_DOCTOR[house.language],
+            }
+        )
     lines = render(
         "memo",
         house.language,
@@ -1009,6 +1028,7 @@ async def _memos(
         day=day.key,
         dedupe_key=f"memo:{visit.id}:{digest}:{day.key}",
         expires_at=day.ends_at,
+        cite={"clips": clips} if clips else None,
     )
 
 

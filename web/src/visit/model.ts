@@ -38,6 +38,8 @@ export interface SummaryLine {
   text: string;
   /** The stretch of the recording this line was said in, when there is one. */
   clip: ClipRef | null;
+  /** The item this line says, when it says one: what his yes keeps or leaves out. */
+  itemId: string | null;
 }
 
 export interface SummaryView {
@@ -59,7 +61,7 @@ export function summaryView(summary: VisitSummaryOut): SummaryView {
       item && summary.recording_artifact_id && item.clip_start_s != null && item.clip_end_s != null
         ? { artifact_id: summary.recording_artifact_id, start_s: item.clip_start_s, end_s: item.clip_end_s }
         : null;
-    return { text, clip };
+    return { text, clip, itemId: item?.item_id ?? null };
   });
   return { lines, boundary, spoken: [...summary.spoken] };
 }

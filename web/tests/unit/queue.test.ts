@@ -1,112 +1,75 @@
-import { describe, expect, it, vi } from "vitest";
-import { Refused, Unreachable } from "../../src/api/client";
-import { hold, replay, waiting, type Tap } from "../../src/offline/queue";
-import { clearAllProfileData, clearProfileData } from "../../src/offline/todayCache";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** Taps made offline (E00-08): held on the phone, sent once each, in the order he made them,
- *  when the network is back; a refusal is said; nothing outlives the region's midnight. */
+/** The client's one queue (W7): calls go one at a time, and an urgent one — a red word, the
+ *  not-feeling-well button — goes next, ahead of every call still waiting. */
 
-const OWNER = { keyId: "owner", scopes: ["medicines", "records"] };
-const SG = "Asia/Singapore";
-const TEN_AM = new Date("2026-09-14T02:00:00Z"); // 10:00 in Singapore
-let n = 0;
-const profile = () => `p-${++n}`;
-const taken = (id: string, lineId: string, at = TEN_AM.toISOString()): Tap => ({ id, kind: "taken", lineId, anchor: "breakfast", at });
+describe("the queue", () => {
+  afterEach(() => vi.unstubAllGlobals());
 
-describe("held taps", () => {
-  it("are sent once each, oldest first, and then nothing is left to send", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    await hold(id, taken("t2", "line-b"), OWNER, TEN_AM, SG);
-    await hold(id, taken("t3", "line-c"), OWNER, TEN_AM, SG);
-    const send = vi.fn(async (_tap: Tap) => ({}));
-    const done = await replay(id, OWNER, TEN_AM, send);
-    expect(send.mock.calls.map(([tap]) => tap.id)).toEqual(["t1", "t2", "t3"]);
-    expect(done.sent.map((tap) => tap.id)).toEqual(["t1", "t2", "t3"]);
-    expect(await waiting(id, OWNER, TEN_AM)).toEqual([]);
-    await replay(id, OWNER, TEN_AM, send);
-    expect(send).toHaveBeenCalledTimes(3);
+  it("sends an urgent call next, behind only the call already on the wire", async () => {
+    const started: string[] = [];
+    const gates: (() => void)[] = [];
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: URL) => {
+        started.push(new URL(url).pathname);
+        return new Promise<Response>((done) => gates.push(() => done(new Response("{}", { status: 200 }))));
+      }),
+    );
+    const { api } = await import("../../src/api/client");
+    const settle = () => new Promise((done) => setTimeout(done, 0));
+    const calls = [api("/profiles/p/state"), api("/profiles/p/medicines"), api("/profiles/p/feed")];
+    await settle();
+    expect(started).toEqual(["/api/profiles/p/state"]);
+    const red = api("/profiles/p/feelings", { method: "POST", body: { word: "chest_tightness" }, urgent: true });
+    for (let i = 0; i < 4; i += 1) {
+      gates.shift()?.();
+      await settle();
+    }
+    await Promise.all([...calls, red]);
+    expect(started).toEqual(["/api/profiles/p/state", "/api/profiles/p/feelings", "/api/profiles/p/medicines", "/api/profiles/p/feed"]);
   });
 
-  it("stop at a lost network and keep the rest, in order, for next time", async () => {
-    const id = profile();
-    for (const each of ["t1", "t2", "t3"]) await hold(id, taken(each, `line-${each}`), OWNER, TEN_AM, SG);
-    const send = vi.fn(async (tap: Tap) => {
-      if (tap.id === "t2") throw new Unreachable();
-      return {};
-    });
-    const done = await replay(id, OWNER, TEN_AM, send);
-    expect(done).toMatchObject({ stopped: true, refused: [] });
-    expect((await waiting(id, OWNER, TEN_AM)).map((tap) => tap.id)).toEqual(["t2", "t3"]);
-  });
+  it("gives an urgent call up as unreachable at its deadline, whatever is stuck on the wire, and never sends it later", async () => {
+    vi.useFakeTimers();
+    const started: string[] = [];
+    const aborted: string[] = [];
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: URL, init: RequestInit) => {
+        const path = new URL(url).pathname;
+        started.push(path);
+        // Nothing ever answers: the connection is up, the server is not.
+        return new Promise<Response>((_done, fail) =>
+          init.signal?.addEventListener("abort", () => {
+            aborted.push(path);
+            fail(new DOMException("aborted", "AbortError"));
+          }),
+        );
+      }),
+    );
+    const { api, CALL_DEADLINE_MS, Unreachable, URGENT_DEADLINE_MS } = await import("../../src/api/client");
+    const stuck = api("/profiles/p/feed").catch((failure: unknown) => failure);
+    await vi.advanceTimersByTimeAsync(0);
+    const red = api("/profiles/p/feelings", { method: "POST", body: { word: "chest_tightness" }, urgent: true }).catch((failure: unknown) => failure);
+    await vi.advanceTimersByTimeAsync(URGENT_DEADLINE_MS);
+    expect(await red).toBeInstanceOf(Unreachable);
+    expect(started).toEqual(["/api/profiles/p/feed"]);
+    // The stuck read gives up too, and the red word it held back is not sent after all.
+    await vi.advanceTimersByTimeAsync(CALL_DEADLINE_MS);
+    expect(await stuck).toBeInstanceOf(Unreachable);
+    expect(aborted).toEqual(["/api/profiles/p/feed"]);
+    expect(started).toEqual(["/api/profiles/p/feed"]);
 
-  it("stop at a server that could not answer, and keep the tap: the backend takes it twice as once", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    const done = await replay(id, OWNER, TEN_AM, async () => Promise.reject(new Refused("HttpError", 503)));
-    expect(done.stopped).toBe(true);
-    expect((await waiting(id, OWNER, TEN_AM)).map((tap) => tap.id)).toEqual(["t1"]);
-  });
-
-  it("a refusal is reported in the backend's name for it, the tap is let go, and the rest still go", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-gone"), OWNER, TEN_AM, SG);
-    await hold(id, taken("t2", "line-b"), OWNER, TEN_AM, SG);
-    const send = vi.fn(async (tap: Tap) => {
-      if (tap.id === "t1") throw new Refused("NoSuchLine", 404);
-      return {};
-    });
-    const done = await replay(id, OWNER, TEN_AM, send);
-    expect(done.refused.map(({ tap, failure }) => [tap.id, failure.refusal])).toEqual([["t1", "NoSuchLine"]]);
-    expect(done.sent.map((tap) => tap.id)).toEqual(["t2"]);
-    expect(await waiting(id, OWNER, TEN_AM)).toEqual([]);
-  });
-
-  it("are replayed by one run at a time: two calls together send each tap once", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    await hold(id, taken("t2", "line-b"), OWNER, TEN_AM, SG);
-    const send = vi.fn(async () => new Promise((done) => setTimeout(done, 5)));
-    const [first, second] = await Promise.all([replay(id, OWNER, TEN_AM, send), replay(id, OWNER, TEN_AM, send)]);
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(first).toBe(second);
-  });
-
-  it("past the region's midnight are deleted, never sent: yesterday's tap is not today's tablet", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    const nextMorning = new Date("2026-09-14T16:00:01Z"); // one second past midnight in Singapore
-    const send = vi.fn(async () => ({}));
-    expect(await replay(id, OWNER, nextMorning, send)).toMatchObject({ sent: [], refused: [] });
-    expect(send).not.toHaveBeenCalled();
-    expect(await waiting(id, OWNER, TEN_AM)).toEqual([]);
-  });
-
-  it("held under another key, or a narrower scope set, are deleted, never sent", async () => {
-    const id = profile();
-    await hold(id, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    const narrower = { keyId: "owner", scopes: ["medicines"] };
-    expect(await waiting(id, narrower, TEN_AM)).toEqual([]);
-    expect(await waiting(id, OWNER, TEN_AM)).toEqual([]);
-  });
-
-  it("go with the rest of the phone's copy on a refusal, a switch of papers and sign-out", async () => {
-    const one = profile();
-    const two = profile();
-    await hold(one, taken("t1", "line-a"), OWNER, TEN_AM, SG);
-    await hold(two, taken("t2", "line-b"), OWNER, TEN_AM, SG);
-    await clearProfileData(one);
-    expect(await waiting(one, OWNER, TEN_AM)).toEqual([]);
-    expect(await waiting(two, OWNER, TEN_AM)).toHaveLength(1);
-    await clearAllProfileData();
-    expect(await waiting(two, OWNER, TEN_AM)).toEqual([]);
-  });
-
-  it("never include a red feeling word: that is the moment to call, not to wait", async () => {
-    const id = profile();
-    const red: Tap = { id: "f1", kind: "feeling", word: "chest_pain", language: "en", at: TEN_AM.toISOString() };
-    expect(await hold(id, red, OWNER, TEN_AM, SG, true)).toBeNull();
-    const tired: Tap = { id: "f2", kind: "feeling", word: "tired", language: "en", at: TEN_AM.toISOString() };
-    expect(await hold(id, tired, OWNER, TEN_AM, SG)).toEqual([tired]);
+    // An urgent call that is itself on the wire is aborted at its deadline.
+    const alone = api("/profiles/p/not-feeling-well", { method: "POST", body: { words: "chest pain" }, urgent: true }).catch((failure: unknown) => failure);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(started.at(-1)).toBe("/api/profiles/p/not-feeling-well");
+    await vi.advanceTimersByTimeAsync(URGENT_DEADLINE_MS);
+    expect(await alone).toBeInstanceOf(Unreachable);
+    expect(aborted).toContain("/api/profiles/p/not-feeling-well");
+    vi.useRealTimers();
   });
 });

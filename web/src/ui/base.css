@@ -35,8 +35,8 @@ body {
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--wash, var(--wash-stable));
-  transition: background var(--wash-fade);
+  /* Drawn from the wash's typed stops (tokens.css), which cross-fade when State changes. */
+  background: linear-gradient(160deg, var(--wash-a), var(--wash-b) var(--wash-at), var(--wash-c));
 }
 #app::before {
   content: "";
@@ -668,4 +668,22 @@ a.pill {
   color: #ffffff;
   font-size: var(--text-caption);
   line-height: var(--line-height);
+}
+
+/* The patient's day (W7). A feeling word keeps the patient target both ways, however short the
+   word; the top three is one card and its Next; a clip's caption sits under its button, in
+   normal flow like everything else — nothing is drawn over a line. */
+.cloud.feelings .word {
+  min-width: var(--target);
+  text-align: center;
+}
+.top-three {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.clip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

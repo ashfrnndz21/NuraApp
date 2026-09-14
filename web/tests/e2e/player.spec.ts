@@ -49,6 +49,20 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
   await expect(player.getByTestId("speed-0.75")).toHaveAttribute("aria-pressed", "true");
   await expect(player.getByTestId("speed-1")).toHaveAttribute("aria-pressed", "false");
   expect((await speechRates(page)).at(-1)).toBeCloseTo(0.9 * 0.75);
+  // The phone has kept it (IndexedDB, `device.speed`) before the app is opened again.
+  const keptSpeed = () =>
+    page.evaluate(
+      () =>
+        new Promise<unknown>((resolve) => {
+          const opened = indexedDB.open("nura", 1);
+          opened.onsuccess = () => {
+            const read = opened.result.transaction("kv", "readonly").objectStore("kv").get("device.speed");
+            read.onsuccess = () => resolve(read.result);
+          };
+          opened.onerror = () => resolve(null);
+        }),
+    );
+  await expect.poll(keptSpeed).toBe(0.75);
   await page.reload();
   await expect(proud).toBeVisible();
   expect(await spoken(page)).toEqual([]); // reopening plays nothing

@@ -546,7 +546,7 @@ const EVERY_PART = ["medicines", "visits", "readings", "records", "notes", "mone
 export async function seedVisitDay(
   request: APIRequestContext,
   { recording = false, at = "2026-09-14T10:30:00+08:00" }: { recording?: boolean; at?: string } = {},
-): Promise<{ phone: string; token: string; profileId: string; appointmentId: string; meiId: string }> {
+): Promise<{ phone: string; token: string; profileId: string; appointmentId: string; meiId: string; meiPhone: string; meiToken: string }> {
   const phone = freshPhone("+659555");
   const token = await apiToken(request, phone);
   const his = { Authorization: `Bearer ${token}` };
@@ -597,7 +597,7 @@ export async function seedVisitDay(
     });
     if (agreed.status() !== 201) throw new Error(`recording consent: ${agreed.status()} ${await agreed.text()}`);
   }
-  return { phone, token, profileId, appointmentId, meiId };
+  return { phone, token, profileId, appointmentId, meiId, meiPhone, meiToken };
 }
 
 /** Nothing is ever drawn over a line: the rule #118's feed test checks (`everyLineReadable`,

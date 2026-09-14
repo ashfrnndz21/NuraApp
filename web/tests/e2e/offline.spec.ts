@@ -189,3 +189,83 @@ test("a no to a held tap is said in the backend's words, and nothing of the pape
   const lines = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as { count: { taken: number } | null }[];
   expect(lines[0]!.count?.taken).toBe(0);
 });
+
+/** Move the not-feeling-well cards the phone kept (ADR 0012) past their midnight. */
+async function expireOfflineCards(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const tx = opened.result.transaction("kv", "readwrite");
+          let moved = 0;
+          const cursor = tx.objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return;
+            if (typeof at.key === "string" && at.key.startsWith("nfw.")) {
+              at.update({ ...(at.value as object), expiresAt: "2000-01-01T00:00:00.000Z" });
+              moved += 1;
+            }
+            at.continue();
+          };
+          tx.oncomplete = () => resolve(moved);
+        };
+        opened.onerror = () => resolve(-1);
+      }),
+  );
+}
+
+/** The not-feeling-well cards (ADR 0012) under the phone's rules for what it keeps (E00-08):
+ *  read with Today and kept; served with no network when the app opens again from the home
+ *  screen; gone at the region's midnight, when the same words built in stand in — never
+ *  nothing; and gone at sign-out. */
+test("the not-feeling-well cards on the phone: served with no network after a reopen, gone at the region's midnight and at sign-out, never nothing", async ({ page, context, request }) => {
+  test.skip(BASE_URL.includes(":5173"), "needs the built app the backend serves (the worker is not built in dev)");
+  const pa = await seedOwner(request);
+  const read = page.waitForResponse((response) => response.url().includes("/not-feeling-well/offline") && response.ok());
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await read;
+  const cards = (await (await request.get(`${API}/profiles/${pa.profileId}/not-feeling-well/offline?language=en`, auth(pa.token))).json()) as { unknown: { text: string }[] };
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(true);
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
+  await waitForWorker(page);
+  const notWell = async () => {
+    await page.getByTestId("not-well").click();
+    await page.getByTestId("not-well-words").fill("chest pain");
+    await page.getByTestId("not-well-send").click();
+  };
+
+  // No network, the app opened again from the home screen: the button answers with the card the phone kept.
+  await context.setOffline(true);
+  await page.reload();
+  await notWell();
+  await expect(page.getByTestId("offline-note")).toHaveText("Nura cannot reach the internet right now.");
+  await expect(page.getByTestId("what-to-do-lines").locator("p")).toHaveText(cards.unknown.map((line) => line.text));
+
+  // The next morning, still offline: the kept cards are past their midnight and gone, and the
+  // button says the same words built in.
+  await page.getByTestId("back-today").click();
+  expect(await expireOfflineCards(page)).toBe(1);
+  await page.reload();
+  await expect(page.getByTestId("not-well")).toBeVisible();
+  await notWell();
+  await expect(page.getByTestId("what-to-do-lines").locator("p")).toHaveText([
+    "You did right to say so.",
+    "Nura could not send this to your family.",
+    "Call your family now.",
+    "If you feel very bad, call the ambulance now on 995.",
+    "Nura does not decide what is wrong.",
+  ]);
+  expect((await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(false);
+  await context.setOffline(false);
+
+  // Back online Today reads them again; sign-out leaves none of it on the phone.
+  await page.reload();
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(true);
+  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("sign-out").click();
+  await expect(page.getByLabel("Your phone number")).toBeVisible();
+  expect((await keptKeys(page)).filter((key) => /^(today|feed|queue|emergency|nfw)\./.test(key))).toEqual([]);
+});
