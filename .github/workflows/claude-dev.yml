@@ -70,6 +70,7 @@ jobs:
             Do not touch .github/, .claude/ or CLAUDE.md. Files under backend/app/keys, consent, audit, safety and migrations/versions are owned by CODEOWNERS: only change them when the story requires it, and say so in the PR.
             Commit, push the branch, and open a pull request with `gh pr create` whose title starts with the story ID and whose body includes "Closes #${{ steps.pick.outputs.number }}", the acceptance line, and the plain-words output.
             If you run out of turns, push what you have, open a draft PR, and comment on the issue saying what is left.
+            This is a headless run: it ends the moment you stop. If CLAUDE.md asks for the clinical-safety-reviewer, run it in the foreground and wait for its report — never in the background — and put its findings in the PR body. Do not finish until `gh pr create` has run; a pushed branch with no PR is a failed story.
           claude_args: "--max-turns 150 --allowedTools Read,Edit,Write,Glob,Grep,Bash(make:*),Bash(git:*),Bash(gh:*),Bash(pytest:*),Bash(ruff:*),Bash(mypy:*),Bash(python:*)"
       - name: Record the outcome
         if: always() && steps.pick.outputs.number != ''
@@ -78,16 +79,16 @@ jobs:
           GH_REPO: ${{ github.repository }}
           N: ${{ steps.pick.outputs.number }}
         run: |
+          # Whatever happened, a pushed branch with no PR gets a draft PR so the work is visible and CI runs on it.
+          ID=$(gh issue view "$N" --json title -q '.title | split(" ")[0]')
+          BR=$(git ls-remote --heads origin "$ID-*" | head -1 | sed 's#.*refs/heads/##')
+          if [ -n "$BR" ] && ! gh pr list --head "$BR" --state all --json number -q '.[0].number' | grep -q .; then
+            gh pr create --draft --base main --head "$BR" --title "$ID (draft: the agent stopped before opening a PR)" --body "Closes #$N. The dev agent pushed this branch and stopped without opening a PR; see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Needs the operator to finish." || true
+          fi
           if [ "${{ job.status }}" = "success" ]; then
             # PR open: agent:working stays on until the PR merges and closes the issue.
             gh issue edit "$N" --remove-label agent:ready
           else
             gh issue edit "$N" --remove-label agent:working --remove-label agent:ready --add-label agent:failed
-            # If the agent pushed a branch before it died, open a draft PR so the work is visible and CI runs on it.
-            ID=$(gh issue view "$N" --json title -q '.title | split(" ")[0]')
-            BR=$(git ls-remote --heads origin "$ID-*" | head -1 | sed 's#.*refs/heads/##')
-            if [ -n "$BR" ] && ! gh pr list --head "$BR" --json number -q '.[0].number' | grep -q .; then
-              gh pr create --draft --base main --head "$BR" --title "$ID (draft: agent ran out of turns)" --body "Closes #$N. The dev agent pushed this branch and then hit its turn limit; see ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Needs the operator to finish." || true
-            fi
             gh issue comment "$N" --body "Dev agent run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. The orchestrator will not retry twice without a human comment."
           fi
