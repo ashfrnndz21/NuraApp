@@ -25,6 +25,7 @@ from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned
 from app.keys.context import NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NotTheirKeyToCut
 from app.regions import OutOfRegion
+from app.state.service import NoState
 
 STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSession, 401),
@@ -40,6 +41,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirConsentToWithdraw, 403),
     (NoConsentToWithdraw, 404),
     (NoKeyToClose, 404),
+    (NoState, 404),
     (ProfileAlreadyOwned, 409),
     (AlreadyRegistered, 409),
 )

@@ -1,9 +1,13 @@
-"""A stand-in row of profile data, so scope enforcement can be tested before there is any.
+"""Stand-in rows of profile data, so the floor of the platform can be tested above nothing.
 
 The real tables of the health graph — Artifact, Event, Fact — arrive with E00-03. `Note` is
 a test-only table with the same shape: it carries `ProfileScoped` and it is reached only
 through `app.audit.access`, which is how those tables will be reached — the scope check and
 the audit line in the same call.
+
+`RenderedCard` is the same idea one layer up. The real Card and FeedItem arrive with E21;
+this is a table of something shown to a person, carrying `RenderedFromState` exactly as they
+will, so E00-04 can hold them to naming the State they were rendered from.
 """
 
 from __future__ import annotations
@@ -25,6 +29,8 @@ from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext
 from app.keys.scopes import ALL_SCOPES, Scope
+from app.state.models import RenderedFromState
+from app.state.service import StateView, render_from_state
 
 
 @asynccontextmanager
@@ -69,6 +75,29 @@ async def read_notes(
     scope: Scope,
 ) -> Sequence[Note]:
     return await audited_read(session, Note, context, scope, where=(Note.scope == scope,))
+
+
+class RenderedCard(RenderedFromState, ProfileScoped, Base):
+    """A stand-in for the cards of E21: something shown to a person, so it names its State."""
+
+    __tablename__ = "test_rendered_card"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scope: Mapped[Scope] = mapped_column(enum_column(Scope, "scope"))
+    kind: Mapped[str] = mapped_column(String(40))
+
+
+async def render_card(
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    state: StateView | None = None,
+    scope: Scope = Scope.READINGS,
+    kind: str = "reading",
+) -> RenderedCard:
+    return await render_from_state(
+        session, RenderedCard, context, scope, state=state, scope=scope, kind=kind
+    )
 
 
 OPENING_CONSENT = RecordConsent(

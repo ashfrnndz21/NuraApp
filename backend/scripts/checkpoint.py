@@ -383,7 +383,255 @@ def checkpoint_2(client: httpx.Client) -> None:
     ok("Mei signed out (204); her token is refused from then on: NoSession (401)")
 
 
-CHECKPOINTS = {2: checkpoint_2}
+def open_own_profile(client: httpx.Client, person: Person, language: str) -> str:
+    """Register, then open the person's own profile on today's words. Two ✓ lines."""
+    register(client, person, language)
+    opened = check(
+        client.post(
+            "/profiles/mine",
+            headers=bearer(person.token),
+            json={
+                "consent": {
+                    "wording_version": HOLD_WORDING,
+                    "language": language,
+                    "captured_via": "app",
+                },
+                "display_name": person.name,
+                "language": language,
+            },
+        ),
+        201,
+        f"{person.name} opens his own profile",
+    )
+    profile_id: str = opened["profile_id"]
+    ok(
+        f"{person.name} opened his own profile (wording {HOLD_WORDING}, in the app); "
+        "as its owner every part is open to him"
+    )
+    return profile_id
+
+
+def read_state(client: httpx.Client, person: Person, profile_id: str, what: str) -> JSON:
+    state: JSON = check(
+        client.get(f"/profiles/{profile_id}/state", headers=bearer(person.token)), 200, what
+    )
+    return state
+
+
+def checkpoint_3(client: httpx.Client) -> None:
+    pa = Person("Pa", fresh_phone("+659111"))
+    mei = Person("Mei", fresh_phone("+659222"))
+    six = ("clinical", "functional", "cognitive", "situational", "preference", "family")
+
+    # 1. Pa registers and opens his profile; State exists before any fact does.
+    profile_id = open_own_profile(client, pa, "ms")
+    first = read_state(client, pa, profile_id, "Pa reads his State before any fact")
+    if first["sequence"] != 1 or first["trigger"] != {"kind": "first", "fact_id": None}:
+        raise fail(
+            "Pa reads his State before any fact", why=f"expected the first snapshot: {first}"
+        )
+    if tuple(first["dimensions"]) != six or any(first["dimensions"][d] is None for d in six):
+        raise fail("Pa reads his State before any fact", why=f"expected six dimensions: {first}")
+    if first["posture"] != "stable" or first["stale"] is not False:
+        raise fail("Pa reads his State before any fact", why=f"expected stable, checked: {first}")
+    ok(
+        "Pa reads his State (GET /profiles/{id}/state): snapshot 1, trigger first, posture "
+        "stable, all six dimensions computed and empty — clinical, functional, cognitive, "
+        "situational, preference, family"
+    )
+
+    # 2. A blood-pressure reading: one event, one fact resting on it; State recomputes as it lands.
+    posted = check(
+        client.post(
+            f"/profiles/{profile_id}/readings",
+            headers=bearer(pa.token),
+            json={"systolic": 138, "diastolic": 84},
+        ),
+        201,
+        "Pa adds a blood-pressure reading",
+    )
+    if not posted.get("event_id") or not posted.get("fact_id"):
+        raise fail("Pa adds a blood-pressure reading", why=f"no event and fact in {posted}")
+    ok(
+        "Pa added a blood-pressure reading, 138/84 (POST /profiles/{id}/readings): one event "
+        "(a reading, taken now, in the app) and one fact, blood_pressure.reading, that names it"
+    )
+    second = read_state(client, pa, profile_id, "Pa reads his State after the reading")
+    if second["sequence"] != 2 or second["supersedes_id"] != first["state_id"]:
+        raise fail(
+            "Pa reads his State after the reading",
+            why=f"expected snapshot 2 superseding {first['state_id']}: {second}",
+        )
+    if second["trigger"] != {"kind": "new_fact", "fact_id": posted["fact_id"]}:
+        raise fail(
+            "Pa reads his State after the reading", why=f"trigger does not name the fact: {second}"
+        )
+    entry = second["dimensions"]["clinical"]["facts"].get("blood_pressure", {}).get("reading")
+    if entry is None or entry["value"] != {"systolic": 138, "diastolic": 84}:
+        raise fail("Pa reads his State after the reading", why=f"reading not folded in: {second}")
+    if (
+        entry["event_id"] != posted["event_id"]
+        or entry["confidence_state"] != "confirmed_by_person"
+    ):
+        raise fail("Pa reads his State after the reading", why=f"provenance not carried: {entry}")
+    if second["posture"] != "stable" or second["dimensions"]["clinical"]["posture"] != "stable":
+        raise fail(
+            "Pa reads his State after the reading", why=f"a number moved the posture: {second}"
+        )
+    ok(
+        "State recomputed as the fact landed: snapshot 2 supersedes snapshot 1, and records "
+        f"its trigger — new_fact, naming fact {posted['fact_id'][:8]}…"
+    )
+    ok(
+        "the reading is in the clinical dimension with its provenance (the event it came "
+        "from, confirmed by Pa); the posture stays stable — 138/84 is a number State holds, "
+        "not a number State judges"
+    )
+
+    # 3. A second reading supersedes the second snapshot; nothing new leaves it be.
+    again = check(
+        client.post(
+            f"/profiles/{profile_id}/readings",
+            headers=bearer(pa.token),
+            json={"systolic": 142, "diastolic": 88},
+        ),
+        201,
+        "Pa adds a second reading",
+    )
+    third = read_state(client, pa, profile_id, "Pa reads his State after the second reading")
+    if (
+        third["sequence"] != 3
+        or third["supersedes_id"] != second["state_id"]
+        or third["trigger"] != {"kind": "new_fact", "fact_id": again["fact_id"]}
+    ):
+        raise fail(
+            "Pa reads his State after the second reading",
+            why=f"expected snapshot 3 superseding snapshot 2, triggered by the new fact: {third}",
+        )
+    ok(
+        "Pa added a second reading, 142/88: snapshot 3 supersedes snapshot 2 and names the "
+        "new fact; snapshots are rows that are never edited"
+    )
+    same = read_state(client, pa, profile_id, "Pa reads his State again with nothing new")
+    if same["state_id"] != third["state_id"]:
+        raise fail(
+            "Pa reads his State again with nothing new", why=f"a new snapshot was written: {same}"
+        )
+    ok(
+        "reading State again with nothing new returns the same snapshot: no recompute for the same facts"
+    )
+
+    # 4. A fact without provenance: the API has no door that could ask for one.
+    if any(
+        e["event_id"] is None and e["artifact_id"] is None
+        for s in third["dimensions"]["clinical"]["facts"].values()
+        for e in s.values()
+    ):
+        raise fail("every fact in State names where it came from", why=str(third))
+    ok(
+        "every fact in State names the event or artefact it came from; the readings route "
+        "writes the event first and the fact names it, so no request can ask for a fact with "
+        "no provenance — that refusal (NoProvenance, 400) is held at the service and proven in "
+        "backend/tests/test_memory_acceptance.py"
+    )
+
+    # 5. Mei: a key without the record cannot read State; one with it reads it narrowed.
+    register(client, mei, "en")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "scopes": ["readings", "records"],
+                "relationship": "daughter",
+                "language": "en",
+                "captured_via": "app",
+            },
+        ),
+        201,
+        "Pa agrees to let Mei see his readings and his record",
+    )
+    ok("Pa agreed to let Mei, his daughter, see his readings and his record (not his notes)")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_phone_e164": mei.phone_e164, "role": "caregiver", "scopes": ["readings"]},
+        ),
+        201,
+        "Pa cuts Mei a key to the readings only",
+    )
+    narrow = client.get(f"/profiles/{profile_id}/state", headers=bearer(mei.token))
+    body = refused(narrow, 403, "OutOfScope", "Mei reads State with a readings-only key")
+    if body.get("scope") != "records" or "138" in narrow.text:
+        raise fail("Mei reads State with a readings-only key", narrow, "expected scope records")
+    ok(
+        "Pa cut Mei a caregiver key to the readings only; with it State is refused: OutOfScope "
+        "records (403) — a snapshot is the record folded, so it is read under the record's scope"
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={
+                "holder_phone_e164": mei.phone_e164,
+                "role": "caregiver",
+                "scopes": ["readings", "records"],
+            },
+        ),
+        201,
+        "Pa cuts Mei a key to the readings and the record",
+    )
+    hers = read_state(client, mei, profile_id, "Mei reads State with a key to the record")
+    reading = hers["dimensions"]["clinical"]["facts"].get("blood_pressure", {}).get("reading")
+    if reading is None or reading["value"] != {"systolic": 142, "diastolic": 88}:
+        raise fail("Mei reads State with a key to the record", why=f"no reading: {hers}")
+    if (
+        hers["withheld"]
+        != {
+            "dimensions": ["family", "preference", "situational"],
+            "scopes": ["family", "notes", "visits"],
+        }
+        or hers["stale"] is not None
+    ):
+        raise fail(
+            "Mei reads State with a key to the record",
+            why=f"expected family, preference and situational withheld, unchecked: {hers}",
+        )
+    ok(
+        "Pa re-cut the key to readings and records; Mei reads State: the clinical dimension "
+        "with the reading in it; situational, preference and family withheld by name (her key "
+        "covers no visits, notes or family), and she is told it was not checked against the record"
+    )
+    notes = client.get(f"/profiles/{profile_id}/notes", headers=bearer(mei.token))
+    refused(notes, 403, "OutOfScope", "Mei reads Pa's notes")
+    ok("Mei reads Pa's notes: refused, OutOfScope notes (403)")
+
+    # 6. The refused reach is on Pa's trail.
+    trail = check(
+        client.get(f"/profiles/{profile_id}/audit", headers=bearer(pa.token)),
+        200,
+        "Pa reads his audit trail",
+    )
+    by_mei = [
+        row
+        for row in trail
+        if row["outcome"] == "refused" and row["actor_person_id"] == mei.person_id
+    ]
+    if not any(row["scope"] == "records" and row["target"] == "state_snapshot" for row in by_mei):
+        raise fail(
+            "Pa reads his audit trail", why="no refused records read of state_snapshot by Mei"
+        )
+    ok(f"Pa reads his audit trail ({len(trail)} lines); Mei's refused reaches are on it:")
+    for row in by_mei:
+        print(
+            f"    {row['at'][:19]}  Mei  {row['action']} {row['scope']} "
+            f"{row['target']}  refused {row['refused_because']}"
+        )
+
+
+CHECKPOINTS = {2: checkpoint_2, 3: checkpoint_3}
 
 
 def main(argv: list[str]) -> int:

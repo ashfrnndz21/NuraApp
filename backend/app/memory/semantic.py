@@ -93,6 +93,17 @@ raises a `Refusal` to stop the write. The door on `assert_fact` writes that refu
 any other. Nothing is written until every hook has returned.
 """
 
+FactWrittenHook = Callable[[AsyncSession, KeyContext, Fact], Awaitable[None]]
+
+after_fact_write: list[FactWrittenHook] = []
+"""What follows from a fact landing, run once it has, in the same unit of work.
+
+State (E00-04) registers its recompute here, so "State recomputes on any new fact" happens
+at the moment the fact is written and names the fact. A hook runs under the writer's own
+key context; one that raises a `Refusal` stops the write, as the door on `assert_fact`
+writes that refusal down and the channel rolls the unit back.
+"""
+
 
 class ConfirmedFactStands(Refusal):
     """A person's word is not overwritten by a machine's.
@@ -295,6 +306,8 @@ async def _write_fact(
                 target_id=closed.id,
                 rows=1,
             )
+    for followed in after_fact_write:
+        await followed(session, context, new)
     return new
 
 

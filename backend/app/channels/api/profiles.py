@@ -3,7 +3,9 @@
 `/profiles/mine` is the "for me" door: it opens the caller's own graph. The other two doors,
 for someone I care for and I was invited, are E01. Notes and medicines are here so that
 checkpoint 2 has a scoped thing to read and a scoped thing to be refused; the real medicines
-module arrives with E04 and will replace the placeholder read.
+module arrives with E04 and will replace the placeholder read. Readings and State are here
+so that checkpoint 3 has a fact to add and a State to watch recompute; the real capture is
+E02.
 """
 
 from __future__ import annotations
@@ -29,18 +31,27 @@ from app.channels.api.schemas import (
     NoteOut,
     ProfileCreate,
     ProfileOut,
+    ReadingIn,
+    ReadingOut,
     SharingConsentIn,
+    StateOut,
 )
 from app.consent.models import ConsentBasis, ConsentPurpose
 from app.consent.service import Sharing, all_consents, grant_consent
+from app.db import utcnow
+from app.drafts import FactDraft
 from app.errors import Refusal
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
+from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
 from app.keys.grants import grant_key, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
-from app.memory.semantic import current_facts
+from app.memory.episodic import record_event
+from app.memory.models import ConfidenceState, EventKind, SourceChannel
+from app.memory.semantic import assert_fact, current_facts
 from app.notes.service import list_notes, write_note
+from app.state.service import current_state
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 log = logging.getLogger("nura.channels.api")
@@ -231,3 +242,68 @@ async def medicines(context: Context, session: Db) -> list[MedicineOut]:
     before then: attribute codes, units and confidences are not plain words."""
     facts = await current_facts(session, context=context, subject="medicine")
     return [MedicineOut.of(fact) for fact in facts]
+
+
+# --- readings and State ------------------------------------------------------------------
+
+BLOOD_PRESSURE = "blood_pressure"
+READING = "reading"
+"""The fact a typed-in blood pressure becomes: subject `blood_pressure`, attribute `reading`,
+value `{"systolic": …, "diastolic": …}` in mmHg, resting on the event of taking it."""
+
+
+@router.post("/{profile_id}/readings", status_code=status.HTTP_201_CREATED)
+async def add_reading(body: ReadingIn, context: Context, session: Db) -> ReadingOut:
+    """Write down a blood pressure the person typed in.
+
+    The event comes first — a reading, taken then, that came in on the app — and the fact
+    names it, so there is no request that could ask for a fact with no provenance: the
+    service's `NoProvenance` refusal is proven at the service, not reachable from here. The
+    numbers he typed are his own word: the route writes the yes down and uses it in the
+    same request, the way the app's save button does, so a later extraction from a photo
+    cannot overwrite them (`ConfirmedFactStands`). State recomputes as the fact lands.
+    """
+    taken_at = body.taken_at or utcnow()
+    event = await record_event(
+        session,
+        context=context,
+        kind=EventKind.READING,
+        occurred_at=taken_at,
+        label="blood pressure",
+        source_channel=SourceChannel.APP,
+    )
+    draft = FactDraft(
+        subject=BLOOD_PRESSURE,
+        attribute=READING,
+        value={"systolic": body.systolic, "diastolic": body.diastolic},
+        unit="mmHg",
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        artifact_id=None,
+        event_id=event.id,
+        episode_id=None,
+        supersedes_id=None,
+    )
+    yes = await confirm(session, context, draft)
+    fact = await assert_fact(
+        session,
+        context=context,
+        subject=draft.subject,
+        attribute=draft.attribute,
+        value=draft.value,
+        unit=draft.unit,
+        confidence=draft.confidence,
+        confidence_state=draft.confidence_state,
+        confirmation_id=yes.id,
+        event_id=event.id,
+        valid_from=taken_at,
+    )
+    return ReadingOut.of(event, fact)
+
+
+@router.get("/{profile_id}/state")
+async def state(context: Context, session: Db) -> StateOut:
+    """The current State: the six dimensions as the caller's key reads them, the posture,
+    and what triggered the snapshot. Read under the record's scope; recomputed first when
+    the record has moved and the key can recompute."""
+    return StateOut.of(await current_state(session, context=context))

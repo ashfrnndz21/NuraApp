@@ -12,6 +12,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+import app.state  # noqa: F401  — wires State's recompute onto the memory store
 from app.channels.api import auth, profiles
 from app.channels.api.deps import Providers
 from app.channels.api.refusals import refused

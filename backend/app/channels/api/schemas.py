@@ -15,9 +15,11 @@ from app.identity.models import Person, Profile
 from app.keys.context import KeyContext
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, KeyWindow, Scope
-from app.memory.models import ConfidenceState, Fact
+from app.memory.models import ConfidenceState, Event, Fact
 from app.notes.models import NOTE_LENGTH, Note
 from app.regions import Region
+from app.state.models import Dimension, Posture, StateTrigger
+from app.state.service import StateView
 
 PHONE = r"^\+[1-9][0-9]{7,14}$"
 """E.164: a plus, then eight to fifteen digits. Spaces and dashes are the app's to strip."""
@@ -348,4 +350,90 @@ class MedicineOut(BaseModel):
             event_id=fact.event_id,
             valid_from=fact.valid_from,
             valid_to=fact.valid_to,
+        )
+
+
+# --- readings and State ------------------------------------------------------------------
+
+
+class ReadingIn(BaseModel):
+    """A blood pressure the person typed in: the two numbers, and when it was taken.
+
+    Thin on purpose: the real capture — photo of the book, device, review card with
+    confidence per field — is E02. This is what checkpoint 3 needs: one reading, as one
+    event with one fact resting on it, so that State has something to recompute from.
+    """
+
+    systolic: int = Field(ge=40, le=300)
+    diastolic: int = Field(ge=20, le=200)
+    taken_at: datetime | None = None
+
+
+class ReadingOut(BaseModel):
+    """What the reading became: the event it is, and the fact that names it."""
+
+    event_id: uuid.UUID
+    fact_id: uuid.UUID
+    taken_at: datetime
+
+    @classmethod
+    def of(cls, event: Event, fact: Fact) -> ReadingOut:
+        return cls(event_id=event.id, fact_id=fact.id, taken_at=event.occurred_at)
+
+
+class TriggerOut(BaseModel):
+    """Why this snapshot was computed, and the fact that caused it when a fact did."""
+
+    kind: StateTrigger
+    fact_id: uuid.UUID | None
+
+
+class WithheldOut(BaseModel):
+    """What the key did not open: whole dimensions, and the scopes of subjects taken out of
+    the ones it did."""
+
+    dimensions: list[Dimension]
+    scopes: list[Scope]
+
+
+class StateOut(BaseModel):
+    """The current State as the caller's key reads it.
+
+    Each dimension is the snapshot's own JSON — short codes, ids and the values of the facts
+    folded in — or null where the key does not cover it. `stale` is false when the record
+    was checked against this snapshot, true when it has moved on, null when the key was too
+    narrow to check. `state_id` is what every card names.
+    """
+
+    state_id: uuid.UUID
+    profile_id: uuid.UUID
+    sequence: int
+    computed_at: datetime
+    posture: Posture
+    trigger: TriggerOut
+    supersedes_id: uuid.UUID | None
+    stale: bool | None
+    stale_after: datetime | None
+    dimensions: dict[Dimension, dict[str, Any] | None]
+    withheld: WithheldOut
+
+    @classmethod
+    def of(cls, view: StateView) -> StateOut:
+        return cls(
+            state_id=view.id,
+            profile_id=view.profile_id,
+            sequence=view.sequence,
+            computed_at=view.computed_at,
+            posture=view.posture,
+            trigger=TriggerOut(kind=view.trigger, fact_id=view.trigger_fact_id),
+            supersedes_id=view.supersedes_id,
+            stale=view.stale,
+            stale_after=view.stale_after,
+            dimensions={
+                dimension: None if held is None else dict(held)
+                for dimension, held in view.dimensions.items()
+            },
+            withheld=WithheldOut(
+                dimensions=sorted(view.withheld), scopes=sorted(view.withheld_scopes)
+            ),
         )

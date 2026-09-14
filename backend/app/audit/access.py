@@ -21,8 +21,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import Column, ColumnElement, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.visitors import iterate
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
@@ -36,6 +37,18 @@ from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
 
 
+class WidenedRead(Refusal):
+    """A read that would have reached past the one table the scope check was made against."""
+
+
+def _stays_on_one_table(table: str, order_by: Sequence[ColumnElement[Any]]) -> None:
+    """Refuse an ordering that names a column of any table but the one being read."""
+    for element in order_by:
+        for part in iterate(element):
+            if isinstance(part, Column) and part.table.name != table:
+                raise WidenedRead(f"a read of {table} only orders by its own columns")
+
+
 async def audited_read[Row: ProfileScoped](
     session: AsyncSession,
     model: type[Row],
@@ -44,15 +57,26 @@ async def audited_read[Row: ProfileScoped](
     /,
     *,
     where: Sequence[ColumnElement[bool]] = (),
+    order_by: Sequence[ColumnElement[Any]] = (),
+    limit: int | None = None,
     channel: Channel = Channel.APP,
 ) -> Sequence[Row]:
     """Read one profile's rows, and write down that they were read.
 
     `where` narrows within the profile; it can never widen past it, because the profile
-    filter and the scope check come from `scoped_select` in the same expression.
+    filter and the scope check come from `scoped_select` in the same expression. `order_by`
+    and `limit` narrow further still — they can only bring back fewer rows than the profile
+    filter already allows — and the line written down says how many actually came back.
+
+    An `order_by` naming a column of another table would join that table in and let rows the
+    key does not cover decide which row comes back, so the statement is checked for having
+    stayed on the one table before it runs.
     """
     try:
-        statement = scoped_select(model, context, scope).where(*where)
+        statement = scoped_select(model, context, scope).where(*where).order_by(*order_by)
+        if limit is not None:
+            statement = statement.limit(limit)
+        _stays_on_one_table(model.__tablename__, order_by)
     except Refusal as refusal:
         await _refused(session, context, Action.READ, scope, model.__tablename__, refusal, channel)
         raise
