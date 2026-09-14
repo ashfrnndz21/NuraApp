@@ -116,7 +116,7 @@ PAPER: Mapping[str, Mapping[str, str]] = {
     },
     "zh": {
         "lab_report": "验血报告",
-        "medicine_label": "药的标签",
+        "medicine_label": "药盒标签",
         "discharge_letter": "出院信",
         "clinic_slip": "医生的信",
         "unknown": "文件",

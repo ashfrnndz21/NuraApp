@@ -217,7 +217,7 @@ async def test_a_caregiver_outside_scope_gets_the_same_refusal_as_in_the_app(
     handled = await home.inbound(sg, MEI, "BP 150/90 this morning")
     assert handled.outcome == "refused" and handled.refused == "OutOfScope"
     assert handled.replies[0].text == (
-        "That part of Pa's record is not open to you.\nPa can change that in the app."
+        "That part of Pa's papers is not open to you.\nPa can change that in the app."
     )
     assert list(await sg.scalars(select(Proposal))) == []
     assert list(await sg.scalars(select(Artifact))) == []  # the unit rolled back

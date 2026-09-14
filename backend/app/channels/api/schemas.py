@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
+from app.channels.api.voice_schemas import VoiceScriptOut
 from app.channels.strings import (
     COULD_NOT_HEAR,
     COULD_NOT_READ,
@@ -1747,9 +1748,13 @@ class BriefOut(BaseModel):
     lines: list[BriefLineOut]
     boundary: str | None
     """The boundary line the brief ends on (E16-01), whole, as the row records it."""
+    voice_script: VoiceScriptOut
+    """The brief as it is said (E22-03): each line's spoken words, a pause after each, a longer
+    one before the boundary."""
 
     @classmethod
     def of(cls, brief: Brief) -> BriefOut:
+        lines = [BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines]
         return cls(
             brief_id=brief.id,
             appointment_id=brief.appointment_id,
@@ -1757,8 +1762,11 @@ class BriefOut(BaseModel):
             state_id=brief.state_id,
             since_state_id=brief.since_state_id,
             built_at=utc(brief.built_at),
-            lines=[BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines],
+            lines=lines,
             boundary=brief.boundary,
+            voice_script=VoiceScriptOut.of(
+                [line.spoken for line in lines], brief.language, brief.boundary
+            ),
         )
 
 
@@ -1886,6 +1894,8 @@ class SummaryOut(BaseModel):
     spoken: list[str]
     boundary: str | None
     """The boundary line the card ends on (E16-01), whole, as the row records it."""
+    voice_script: VoiceScriptOut
+    """`spoken` as it is said (E22-03)."""
     items: list[SummaryItemOut]
     created_at: datetime
     confirmed_at: datetime | None
@@ -1903,6 +1913,11 @@ class SummaryOut(BaseModel):
             lines=[str(line["text"]) for line in summary.lines],
             spoken=[str(line.get("spoken", line["text"])) for line in summary.lines],
             boundary=summary.boundary,
+            voice_script=VoiceScriptOut.of(
+                [str(line.get("spoken", line["text"])) for line in summary.lines],
+                summary.language,
+                summary.boundary,
+            ),
             items=[SummaryItemOut.of(item) for item in items],
             created_at=utc(summary.created_at),
             confirmed_at=None if summary.confirmed_at is None else utc(summary.confirmed_at),

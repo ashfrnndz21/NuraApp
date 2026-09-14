@@ -140,29 +140,29 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
     },
     "not_open_to_you": {
         "en": (
-            "That part of {name}'s record is not open to you.",
+            "That part of {name}'s papers is not open to you.",
             "{name} can change that in the app.",
         ),
         "ms": (
-            "Bahagian rekod {name} itu tidak dibuka untuk anda.",
+            "Bahagian surat-surat {name} itu tidak dibuka untuk anda.",
             "{name} boleh ubah dalam aplikasi.",
         ),
-        "zh": ("{name}记录里的这部分没有开放给您。", "{name}可以在应用里更改。"),
+        "zh": ("{name}文件里的这部分没有开放给您。", "{name}可以在应用里更改。"),
     },
     "red_flag": {
         "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} know now."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
     },
     "red_flag_one": {
         "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} knows now."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
     },
     "red_flag_alone": {
         "en": ("This one we do not wait for.", "Call {doctor} today."),
         "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
-        "zh": ("这个不能等。", "今天就打电话给{doctor}。"),
+        "zh": ("这个我们不等。", "今天就打电话给{doctor}。"),
     },
     # A flag written but held back (it depends on a fact not on his papers): no alarm, and
     # still the next step for a worried family member.
