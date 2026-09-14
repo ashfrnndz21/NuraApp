@@ -62,7 +62,10 @@ from app.onboarding.biography import (
     BiographyClosed,
     CardsStillOpen,
     NoBiography,
+    NoSuchQuestion,
+    NoSuchReadBackLine,
     NotAtThisStep,
+    PaperAlreadyAdded,
 )
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
@@ -111,6 +114,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoBiography, 404),
     (NoPlan, 404),
     (NoSuchPrompt, 404),
+    (NoSuchQuestion, 404),
+    (NoSuchReadBackLine, 404),
+    (PaperAlreadyAdded, 409),
     (BiographyAlreadyOpen, 409),
     (BiographyClosed, 409),
     (NotAtThisStep, 409),

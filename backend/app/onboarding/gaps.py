@@ -109,6 +109,8 @@ class Gap:
     tier: int
     applies: Rule
     closed: Rule
+    capture: str = "photo"
+    """What doing it now opens: the camera ("photo"), a tap ("tap"), or nothing yet ("none")."""
 
 
 CATALOGUE: tuple[Gap, ...] = (
@@ -130,6 +132,7 @@ CATALOGUE: tuple[Gap, ...] = (
         1,
         _told("allergies", "medicine_allergy"),
         lambda k: "allergy" in k.attributes,
+        capture="tap",
     ),
     Gap(
         # "Thinner tapped, kind unknown": only when he said he takes one, never assumed from
@@ -171,8 +174,8 @@ CATALOGUE: tuple[Gap, ...] = (
         _always,
         lambda k: PaperKind.INSURANCE_CARD.value in k.papers or _holds(INSURANCE_SUBJECTS)(k),
     ),
-    Gap("meal_times", 2, _always, lambda k: k.breakfast_set),
-    Gap("someone_to_see", 3, _always, lambda k: k.someone_holds_a_key),
+    Gap("meal_times", 2, _always, lambda k: k.breakfast_set, capture="tap"),
+    Gap("someone_to_see", 3, _always, lambda k: k.someone_holds_a_key, capture="none"),
 )
 """The document's catalogue, in its order, for what this backend can act on today."""
 

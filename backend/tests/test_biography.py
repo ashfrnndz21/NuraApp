@@ -152,15 +152,21 @@ async def test_the_sitting_walks_its_steps_and_reads_the_papers_back(
         assert dispute.event_id is not None and dispute.value == 152
         assert str(dispute.confirmed_by_person_id) == mei["person_id"]
 
+    assert answered["after_no"] == "Mei akan lihat surat itu sekali lagi."
     assert [q["line"] for q in answered["questions"]] == [
-        "Mei akan lihat surat itu sekali lagi.",
         "Adakah anda periksa tekanan darah di rumah?",
         "Adakah anda ada surat hospital anda?",
         "Bila ujian gula anda yang terakhir?",
         "Bila ujian buah pinggang anda yang terakhir?",
-        "3 lagi boleh tunggu kemudian.",
     ]
-    assert [q["gap"] for q in answered["questions"]][:2] == ["dispute", "bp_numbers"]
+    assert [q["question_id"] for q in answered["questions"]] == [
+        "bp_numbers",
+        "discharge_letter",
+        "sugar_result",
+        "kidney_result",
+    ]
+    assert all(q["kept"] is None for q in answered["questions"])
+    assert answered["more"] == "3 lagi boleh tunggu kemudian."
     await refused(
         deployment,
         "POST",
@@ -278,10 +284,7 @@ async def test_the_papers_can_wait(deployment: Deployment) -> None:
         json={"answers": answers(view, no=lambda line: "Dr Tan" in line)},
     )
     # He said no himself: his answer is kept beside the paper.
-    assert answered["questions"][0] == {
-        "gap": "dispute",
-        "line": "Nura keeps your answer beside the paper.",
-    }
+    assert answered["after_no"] == "Nura keeps your answer beside the paper."
     closed = await call(deployment, "POST", f"/profiles/{profile_id}/biography/close", his, 200)
     assert closed["summary"]["lines"][:3] == [
         "No papers were added this time.",
@@ -409,3 +412,151 @@ async def test_a_pdf_paper_and_a_no_on_the_label_line(deployment: Deployment) ->
         assert str(dispute.artifact_id) == dose["artifact_id"]
     closed = await call(deployment, "POST", f"/profiles/{profile_id}/biography/close", her, 200)
     assert "discharge_letter" not in {p["prompt"] for p in closed["plan"]["prompts"]}
+
+
+async def test_questions_are_kept_or_not_and_one_not_kept_stays_out_of_the_week(
+    deployment: Deployment,
+) -> None:
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    base = f"/profiles/{profile_id}/biography"
+    view = await through_the_papers(deployment, her, profile_id)
+    await refused(
+        deployment,
+        "POST",
+        f"{base}/questions",
+        her,
+        409,
+        "NotAtThisStep",
+        json={"question_id": "bp_numbers", "keep": True},
+    )
+    await call(deployment, "POST", f"{base}/read-back", her, 200, json={"answers": answers(view)})
+    kept = await call(
+        deployment,
+        "POST",
+        f"{base}/questions",
+        her,
+        200,
+        json={"question_id": "bp_numbers", "keep": True},
+    )
+    assert {q["question_id"]: q["kept"] for q in kept["questions"]}["bp_numbers"] is True
+    # He changes his mind on one, and says "not this one" to another the screen did not show.
+    for question_id, keep in (
+        ("sugar_result", True),
+        ("sugar_result", False),
+        ("insurance", False),
+    ):
+        after = await call(
+            deployment,
+            "POST",
+            f"{base}/questions",
+            her,
+            200,
+            json={"question_id": question_id, "keep": keep},
+        )
+    shown = {q["question_id"]: q["kept"] for q in after["questions"]}
+    assert shown["bp_numbers"] is True and shown["sugar_result"] is False
+    await refused(
+        deployment,
+        "POST",
+        f"{base}/questions",
+        her,
+        404,
+        "NoSuchQuestion",
+        json={"question_id": "medicines", "keep": True},
+    )
+    closed = await call(deployment, "POST", f"{base}/close", her, 200)
+    planned = [p["prompt"] for p in closed["plan"]["prompts"]]
+    assert planned == [
+        "bp_numbers",
+        "discharge_letter",
+        "kidney_result",
+        "next_visit",
+        "last_visit",
+    ]
+    assert closed["summary"]["prompts"] == 5
+
+
+async def test_the_read_back_one_line_at_a_time(deployment: Deployment) -> None:
+    """One thing a screen: each line answered on its own; the read-back is done with the last."""
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    path = f"/profiles/{profile_id}/biography/read-back"
+    view = await through_the_papers(deployment, her, profile_id)
+    lines = view["read_back"]
+    first = await call(
+        deployment, "POST", path, her, 200, json={"line_id": lines[0]["fact_id"], "answer": "yes"}
+    )
+    assert first["step"] == "read_back"
+    assert [line["answer"] for line in first["read_back"]] == ["yes"] + [None] * (len(lines) - 1)
+    await refused(
+        deployment,
+        "POST",
+        path,
+        her,
+        404,
+        "NoSuchReadBackLine",
+        json={"line_id": lines[0]["fact_id"], "answer": "no"},
+    )
+    await refused(
+        deployment,
+        "POST",
+        path,
+        her,
+        404,
+        "NoSuchReadBackLine",
+        json={"line_id": str(uuid.uuid4()), "answer": "yes"},
+    )
+    bad = await deployment.client.post(
+        path, json={"line_id": lines[1]["fact_id"]}, headers={"Authorization": f"Bearer {her}"}
+    )
+    assert bad.status_code == 422
+    last: dict[str, Any] = first
+    for line in lines[1:]:
+        said = "no" if line["line"] == LDL_MS else "yes"
+        last = await call(
+            deployment, "POST", path, her, 200, json={"line_id": line["fact_id"], "answer": said}
+        )
+    assert last["step"] == "questions"
+    by_line = {line["line"]: line for line in last["read_back"]}
+    assert by_line[LDL_MS]["answer"] == "no" and by_line[LDL_MS]["dispute_fact_id"]
+    assert last["after_no"] == "Mei akan lihat surat itu sekali lagi."
+
+
+async def test_a_card_made_through_capture_joins_the_sitting(deployment: Deployment) -> None:
+    """The web's capture screen makes the card; the sitting takes it in by its id, and reads
+    back in the language the screen asks for."""
+    from tests.onboarding_support import confirm_card
+
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    base = f"/profiles/{profile_id}/biography"
+    await call(deployment, "POST", base, her, 201)
+    await call(deployment, "PUT", f"/profiles/{profile_id}/settings", her, 200, json=SETTINGS)
+    photo = _paper(LIPID_PANEL, "lab_result")
+    del photo["paper"]
+    card = await call(deployment, "POST", f"/profiles/{profile_id}/photos", her, 201, json=photo)
+    added = await call(
+        deployment, "POST", f"{base}/papers", her, 201, json={"card_id": card["card_id"]}
+    )
+    assert added["paper"]["paper"] == "lab_result" and added["paper"]["confirmed"] is False
+    await refused(
+        deployment,
+        "POST",
+        f"{base}/papers",
+        her,
+        409,
+        "PaperAlreadyAdded",
+        json={"card_id": card["card_id"]},
+    )
+    await confirm_card(deployment, her, profile_id, card, triglycerides=54)
+    view = await call(deployment, "GET", base, her, 200)
+    assert view["step"] == "read_back" and len(view["read_back"]) == 9
+    english = await call(deployment, "GET", base, her, 200, params={"language": "en"})
+    assert (
+        english["language"] == "en"
+        and english["prompt"]["headline"] == "Here is what Nura understood"
+    )
+    assert "Your cholesterol was 230 on Thursday 7 September 2023." in [
+        line["line"] for line in english["read_back"]
+    ]

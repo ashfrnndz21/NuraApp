@@ -312,3 +312,45 @@ async def test_a_narrow_key_writing_a_fact_never_trips_the_plan(deployment: Depl
             view = await current_plan(session, context=chief)
             assert [p.gap for p in view.prompts] == PLAN_GAPS
         await session.commit()
+
+
+async def test_later_sends_a_prompt_to_the_back_of_the_week_then_retires_it(
+    deployment: Deployment,
+) -> None:
+    """docs/gaps-and-unlocks.md §4: Later defers it, and it is asked once more; a second Later
+    retires it from the week, kept in the plan for the caregiver's list."""
+    mei, profile_id, _ = await _closed(deployment)
+    her = mei["token"]
+    path = f"/profiles/{profile_id}/plan"
+    once = await call(deployment, "POST", f"{path}/later", her, 200, json={"gap_id": "bp_numbers"})
+    bp = next(p for p in once["prompts"] if p["prompt"] == "bp_numbers")
+    assert (bp["status"], bp["deferred"], bp["tier"], bp["capture"]) == ("pending", 1, 1, "photo")
+    assert bp["due_local"] == "2026-09-11T07:30:00+08:00"  # the morning after day seven
+    assert [p["prompt"] for p in once["prompts"]][-1] == "bp_numbers"
+    morning = await call(
+        deployment, "GET", path, her, 200, params={"at": FIRST_MORNING.isoformat()}
+    )
+    assert morning["due"] == []
+    twice = await call(deployment, "POST", f"{path}/later", her, 200, json={"gap_id": "bp_numbers"})
+    bp = next(p for p in twice["prompts"] if p["prompt"] == "bp_numbers")
+    assert (bp["status"], bp["deferred"]) == ("skipped", 2) and bp["skipped_at"]
+    await refused(
+        deployment,
+        "POST",
+        f"{path}/later",
+        her,
+        409,
+        "PromptAlreadySettled",
+        json={"gap_id": "bp_numbers"},
+    )
+    await refused(
+        deployment,
+        "POST",
+        f"{path}/later",
+        her,
+        404,
+        "NoSuchPrompt",
+        json={"gap_id": "no_such_gap"},
+    )
+    kinds = {p["prompt"]: p["capture"] for p in twice["prompts"]}
+    assert kinds["insurance"] == "photo"

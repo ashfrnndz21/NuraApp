@@ -13,11 +13,12 @@ import uuid
 from collections.abc import Sequence
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.channels.api.schemas import PhotoIn, ReviewCardOut, utc
 from app.onboarding.biography import BiographyView, LineView, PaperView, Question, Summary
 from app.onboarding.conditions import Condition
+from app.onboarding.gaps import BY_CODE
 from app.onboarding.models import Answer, Density, PaperKind, PlanPrompt, PromptStatus
 from app.onboarding.plan import PlanView
 from app.onboarding.settings import (
@@ -58,7 +59,11 @@ class ConditionOut(BaseModel):
 
 
 class ConditionsOut(BaseModel):
+    """The cloud: the graph's version, the words it shows first (`top`), and every word. A
+    word that is not `top` appears once a word naming it in `related` is picked."""
+
     language: str
+    version: int
     top: list[str]
     conditions: list[ConditionOut]
 
@@ -188,6 +193,14 @@ class PaperIn(PhotoIn):
     paper: PaperKind
 
 
+class AttachIn(BaseModel):
+    """A paper already photographed through capture, joining the sitting by its review card;
+    what he says it is, or what it was read as."""
+
+    card_id: uuid.UUID
+    paper: PaperKind | None = None
+
+
 class PaperAddedOut(BaseModel):
     """The paper, and the review card it was read into: confirm the card where every card is
     confirmed (`POST /profiles/{id}/confirmations`, then `…/review-cards/{card}/confirm`)."""
@@ -216,12 +229,23 @@ class LineOut(BaseModel):
 
 
 class QuestionOut(BaseModel):
-    gap: str
+    """A question the papers raised: its id (the gap it would fill — what `POST …/questions`
+    takes), the line, and what he said: kept, not this one (false), or nothing yet (null)."""
+
+    question_id: str
     line: str
+    kept: bool | None
 
     @classmethod
     def of(cls, question: Question) -> QuestionOut:
-        return cls(gap=question.gap, line=question.line)
+        return cls(question_id=question.gap, line=question.line, kept=question.kept)
+
+
+class QuestionIn(BaseModel):
+    """Keep this question, or not this one."""
+
+    question_id: str = Field(min_length=1, max_length=32)
+    keep: bool
 
 
 class BiographyOut(BaseModel):
@@ -243,6 +267,10 @@ class BiographyOut(BaseModel):
     open_cards: int
     read_back: list[LineOut]
     questions: list[QuestionOut]
+    after_no: str | None
+    """After a "no" on the read-back: who looks at the paper again."""
+    more: str | None
+    """How many more questions wait for later, past the ones shown."""
 
     @classmethod
     def of(cls, view: BiographyView) -> BiographyOut:
@@ -262,6 +290,8 @@ class BiographyOut(BaseModel):
             open_cards=view.open_cards,
             read_back=[LineOut.of(line) for line in view.read_back],
             questions=[QuestionOut.of(question) for question in view.questions],
+            after_no=view.after_no,
+            more=view.more,
         )
 
 
@@ -271,9 +301,20 @@ class AnswerIn(BaseModel):
 
 
 class ReadBackIn(BaseModel):
-    """His answer to every read-back line, once each: yes or no."""
+    """His answer to the read-back: every line still waiting at once (`answers`), or one line
+    (`line_id`, the line's `fact_id`, and `answer`) — one thing a screen."""
 
-    answers: list[AnswerIn]
+    answers: list[AnswerIn] | None = None
+    line_id: uuid.UUID | None = None
+    answer: Answer | None = None
+
+    @model_validator(mode="after")
+    def _one_way(self) -> ReadBackIn:
+        whole = self.answers is not None
+        one = self.line_id is not None and self.answer is not None
+        if whole == one or (not whole and (self.line_id is None) != (self.answer is None)):
+            raise ValueError("answer every line (`answers`) or one line (`line_id` and `answer`)")
+        return self
 
 
 # --- E01-04: the first week -------------------------------------------------------------------
@@ -285,6 +326,11 @@ class PromptOut(BaseModel):
 
     prompt: str
     day: int
+    tier: int
+    capture: str
+    """What doing it now opens: "photo" (the camera), "tap", or "none" yet."""
+    deferred: int
+    """How many times he said Later: once sends it to the back of the week, twice retires it."""
     due_at: datetime
     due_local: str
     status: PromptStatus
@@ -304,6 +350,9 @@ class PromptOut(BaseModel):
         return cls(
             prompt=prompt.gap,
             day=prompt.day,
+            tier=BY_CODE[prompt.gap].tier if prompt.gap in BY_CODE else 3,
+            capture=BY_CODE[prompt.gap].capture if prompt.gap in BY_CODE else "none",
+            deferred=prompt.deferred,
             due_at=due,
             due_local=due.astimezone(REGION_TZ[region]).isoformat(),
             status=prompt.status,
@@ -314,6 +363,12 @@ class PromptOut(BaseModel):
             line=None if words is None else words.line,
             action=None if words is None else words.action,
         )
+
+
+class LaterIn(BaseModel):
+    """Later, on one prompt of the week, by its gap."""
+
+    gap_id: str = Field(min_length=1, max_length=32)
 
 
 class PlanOut(BaseModel):

@@ -50,6 +50,7 @@ from app.onboarding.models import (
     ActivationPlan,
     BiographyLine,
     BiographyPaper,
+    BiographyQuestion,
     BiographySession,
     PlanPrompt,
     ProfileSettings,
@@ -105,6 +106,7 @@ TABLES: tuple[Table, ...] = (
     BiographySession.__table__,
     BiographyPaper.__table__,
     BiographyLine.__table__,
+    BiographyQuestion.__table__,
     ActivationPlan.__table__,
     PlanPrompt.__table__,
     Attachment.__table__,
@@ -239,6 +241,7 @@ def test_the_migrations_build_the_tables_the_models_declare(
             BiographySession,
             BiographyPaper,
             BiographyLine,
+            BiographyQuestion,
             ActivationPlan,
             PlanPrompt,
         ):

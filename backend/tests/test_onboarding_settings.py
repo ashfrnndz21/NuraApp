@@ -48,7 +48,7 @@ async def test_the_word_cloud_is_public_and_named_in_his_language(deployment: De
     answer = await deployment.client.get("/onboarding/conditions", params={"language": "ms"})
     assert answer.status_code == 200, answer.text
     cloud = answer.json()
-    assert cloud["language"] == "ms" and len(cloud["top"]) == 20
+    assert cloud["language"] == "ms" and cloud["version"] == 1 and len(cloud["top"]) == 20
     by_code = {one["code"]: one for one in cloud["conditions"]}
     assert by_code["high_blood_pressure"]["name"] == "Darah tinggi"
     assert by_code["high_blood_pressure"]["weight"] == 3 and by_code["high_blood_pressure"]["top"]

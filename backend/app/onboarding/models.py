@@ -92,6 +92,8 @@ class PaperKind(StrEnum):
     CLINIC_CARD = "clinic_card"
     """A clinic card or an appointment slip."""
     INSURANCE_CARD = "insurance_card"
+    OTHER = "other"
+    """A paper he could not name, or a card attached whose kind the extractor did not know."""
 
 
 class Answer(StrEnum):
@@ -176,6 +178,35 @@ class BiographyLine(ProfileScoped, Base):
     answered_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+QUESTION_IN_PROGRESS = "biography_question_change"
+"""`session.info` key: the id of the one question whose keep a service is changing now."""
+
+
+def _question_is_in_progress(session: Any, row: Any) -> bool:
+    return session is not None and session.info.get(QUESTION_IN_PROGRESS) == row.id
+
+
+class BiographyQuestion(ProfileScoped, Base):
+    """What he said about a question the papers raised: keep it, or not this one. One row a
+    question a sitting; changing his mind is the one change it takes. A kept question is the
+    seam to the visit loop: once E05's questions are on main, a kept one becomes one of them.
+    A question he said "not this one" to is left out of the first week."""
+
+    __tablename__ = "biography_question"
+    __table_args__ = (
+        _row_of_profile("biography_question"),
+        _tied_to_profile("biography_question", "session_id", "biography_session"),
+        UniqueConstraint("session_id", "gap", name="uq_biography_question_session_id_gap"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("biography_session.id"), index=True)
+    gap: Mapped[str] = mapped_column(String(32))
+    kept: Mapped[bool] = mapped_column(Boolean)
+    decided_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    decided_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 # --- E01-04: the first week -------------------------------------------------------------------
 
 
@@ -236,6 +267,8 @@ class PlanPrompt(ProfileScoped, Base):
     status: Mapped[PromptStatus] = mapped_column(
         enum_column(PromptStatus, "plan_prompt_status"), default=PromptStatus.PENDING
     )
+    deferred: Mapped[int] = mapped_column(Integer, default=0)
+    """How many times he said Later: once sends it to the back of the week, twice retires it."""
     done_at: Mapped[datetime | None] = mapped_column(default=None)
     done_by_fact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("fact.id"), default=None)
     skipped_at: Mapped[datetime | None] = mapped_column(default=None)
@@ -261,7 +294,20 @@ frozen(ActivationPlan)
 frozen(
     PlanPrompt,
     except_for=frozenset(
-        {"status", "done_at", "done_by_fact_id", "skipped_at", "skipped_by_person_id"}
+        {
+            "status",
+            "due_at",
+            "deferred",
+            "done_at",
+            "done_by_fact_id",
+            "skipped_at",
+            "skipped_by_person_id",
+        }
     ),
     only_when=_plan_is_in_progress,
+)
+frozen(
+    BiographyQuestion,
+    except_for=frozenset({"kept", "decided_by_person_id", "decided_at"}),
+    only_when=_question_is_in_progress,
 )

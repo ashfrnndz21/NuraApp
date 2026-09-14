@@ -350,32 +350,72 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("Mei reads the read-back", why=f"got {ready}")
     ok(f"the biography is at the read-back: {len(lines)} lines, each a confirmed fact, in Malay:")
     said([ready["prompt"]["headline"], *lines])
-    answers = [
-        {"fact_id": line["fact_id"], "answer": "no" if line["line"] == LDL_LINE else "yes"}
-        for line in ready["read_back"]
-    ]
+    ldl_line = next(line for line in ready["read_back"] if line["line"] == LDL_LINE)
+    one = w.send(
+        mei,
+        "POST",
+        f"{base}/biography/read-back",
+        200,
+        "Mei says no to one line",
+        line_id=ldl_line["fact_id"],
+        answer="no",
+    )
+    waiting = [line for line in one["read_back"] if line["answer"] is None]
     answered = w.send(
         mei,
         "POST",
         f"{base}/biography/read-back",
         200,
-        "Mei answers the read-back",
-        answers=answers,
+        "Mei says yes to the rest",
+        answers=[{"fact_id": line["fact_id"], "answer": "yes"} for line in waiting],
     )
     no = next(line for line in answered["read_back"] if line["answer"] == "no")
     facts = w.get(mei, f"{base}/facts", "Mei reads the lipid facts", subject="lipid_panel")
     ldl = next(f for f in facts if f["attribute"] == "ldl")
-    if not no["dispute_fact_id"] or ldl["fact_id"] != no["fact_id"] or ldl["value"] != 152:
+    if (
+        answered["step"] != "questions"
+        or not no["dispute_fact_id"]
+        or ldl["fact_id"] != no["fact_id"]
+        or ldl["value"] != 152
+    ):
         raise fail("Mei answers the read-back", why=f"got {no} and {ldl}")
     ok(
-        f'Mei answered every line: {len(answers) - 1} yes, and no to "{LDL_LINE}" — a dispute '
-        f"({no['dispute_fact_id'][:8]}…) opened beside the fact, which still holds (152, from the "
-        "photo, confirmed by Mei): nothing anyone confirmed is overwritten"
+        f'Mei said no to "{LDL_LINE}" on its own (one line, one screen), then yes to the other '
+        f"{len(waiting)} at once — a dispute ({no['dispute_fact_id'][:8]}…) opened beside the fact, "
+        "which still holds (152, from the photo, confirmed by Mei): nothing anyone confirmed is "
+        "overwritten"
     )
 
-    # 7. The questions the papers raised.
+    # 7. The questions the papers raised; Mei keeps two of them.
+    shown = answered["questions"]
     ok("the questions the papers raised, in Malay (step questions):")
-    said([answered["prompt"]["headline"], *[q["line"] for q in answered["questions"]]])
+    said(
+        [
+            answered["prompt"]["headline"],
+            *([answered["after_no"]] if answered["after_no"] else []),
+            *[q["line"] for q in shown],
+            *([answered["more"]] if answered["more"] else []),
+        ]
+    )
+    kept: JSON = {}
+    for question in shown[:2]:
+        kept = w.send(
+            mei,
+            "POST",
+            f"{base}/biography/questions",
+            200,
+            "Mei keeps a question",
+            question_id=question["question_id"],
+            keep=True,
+        )
+    kept_ids = [q["question_id"] for q in kept["questions"] if q["kept"]]
+    if kept_ids != [q["question_id"] for q in shown[:2]]:
+        raise fail("Mei keeps a question", why=f"kept {kept_ids}")
+    ok(
+        "Mei kept two of them (POST …/biography/questions): "
+        + ", ".join(kept_ids)
+        + " — kept on the sitting, the seam to the visit loop's questions"
+    )
 
     # 8. The close: the summary and the first week.
     closed = w.send(mei, "POST", f"{base}/biography/close", 200, "Mei closes the biography")
@@ -428,12 +468,21 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     due = w.get(pa, f"{base}/plan", "Pa asks what is due tomorrow at 07:30", at=first_due)
     if [p["prompt"] for p in due["due"]] != [plan["prompts"][0]["prompt"]]:
         raise fail("Pa asks what is due tomorrow at 07:30", why=f"got {due['due']}")
-    skipped = w.send(
-        pa, "POST", f"{base}/plan/insurance/skip", 200, "Pa says Later to the insurance card"
+    later = w.send(
+        pa,
+        "POST",
+        f"{base}/plan/later",
+        200,
+        "Pa says Later to the insurance card",
+        gap_id="insurance",
     )
+    moved = next(p for p in later["prompts"] if p["prompt"] == "insurance")
+    if moved["deferred"] != 1 or moved["status"] != "pending":
+        raise fail("Pa says Later to the insurance card", why=f"got {moved}")
     ok(
-        f"tomorrow at 07:30 exactly one prompt is due ({due['due'][0]['prompt']}); Pa said Later "
-        f"to the insurance card: {skipped['status']}, kept in the plan for Mei's list"
+        f"tomorrow at 07:30 exactly one prompt is due ({due['due'][0]['prompt']}); Pa said Later to "
+        f"the insurance card (POST …/plan/later): it goes to the back of the week, asked once more "
+        f"on {moved['due_local'][:10]} at 07:30; a second Later would retire it"
     )
 
     # 10. His settings in his State, as its owner.

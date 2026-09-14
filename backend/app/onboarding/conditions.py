@@ -51,6 +51,7 @@ class Condition:
 
 @dataclass(frozen=True, slots=True)
 class Graph:
+    version: int
     top: tuple[str, ...]
     conditions: Mapping[str, Condition]
     """Every condition, in the order the file lists them: the top level, then the rest."""
@@ -88,7 +89,7 @@ def _load(path: Path) -> Graph:
     ]
     if unknown:
         raise NotAGraph(f"codes named but not in the graph: {sorted(set(unknown))}")
-    return Graph(top=top, conditions=conditions)
+    return Graph(version=int(raw["version"]), top=top, conditions=conditions)
 
 
 @lru_cache(maxsize=1)

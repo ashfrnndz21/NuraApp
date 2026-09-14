@@ -5,8 +5,9 @@ at most, tier first, one a day from the next morning at his breakfast time on hi
 clock (`REGION_TZ` of the profile's region), 08:00 when he has not said. A prompt is pending
 until what it asks for arrives — by any route: the paper it asks for, a fact from any card, a
 reading he types, a visit booked — and is then done, naming the fact that closed it when a
-fact did; or he says Later and it is skipped. The whole plan stops once the record holds his
-medicines, his last visit and his next visit (the story's acceptance line): nothing is due
+fact did; or he says Later and it is skipped. He can say Later once and be asked
+again at the back of the week; a second Later retires it. The whole plan stops once the
+record holds his medicines, his last visit and his next visit (the story's acceptance line): nothing is due
 after that, whatever is still pending.
 
 `due_prompts(session, context=, at=)` is what a surface that delivers — Today, WhatsApp —
@@ -148,7 +149,7 @@ async def _prompts(
     found = await audited_read(
         session, PlanPrompt, context, PLAN_SCOPE, where=(PlanPrompt.plan_id == plan.id,)
     )
-    return sorted(found, key=lambda prompt: prompt.day)
+    return sorted(found, key=lambda prompt: (as_utc(prompt.due_at), prompt.day))
 
 
 def _known_from(fact: Fact) -> Known:
@@ -242,7 +243,7 @@ def due_in(view: PlanView, at: datetime) -> list[PlanPrompt]:
         for prompt in view.prompts
         if prompt.status is PromptStatus.PENDING and as_utc(prompt.due_at) <= moment
     ]
-    return ready[:1]
+    return sorted(ready, key=lambda prompt: (as_utc(prompt.due_at), prompt.day))[:1]
 
 
 @audited(Action.WRITE, PLAN_SCOPE, PROMPT)
@@ -263,6 +264,54 @@ async def skip_prompt(session: AsyncSession, *, context: KeyContext, gap: str) -
         found.status = PromptStatus.SKIPPED
         found.skipped_at = utcnow()
         found.skipped_by_person_id = context.person_id
+        await session.flush()
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=PLAN_SCOPE,
+            target=PROMPT,
+            target_id=found.id,
+            rows=1,
+        )
+    finally:
+        session.info.pop(PLAN_IN_PROGRESS, None)
+    return found
+
+
+RETIRED_AFTER = 2
+"""A second Later retires the prompt (docs/gaps-and-unlocks.md §4)."""
+
+
+@audited(Action.WRITE, PLAN_SCOPE, PROMPT)
+async def later_prompt(session: AsyncSession, *, context: KeyContext, gap: str) -> PlanPrompt:
+    """He said Later (docs/gaps-and-unlocks.md §4). The first Later sends the prompt to the
+    back of the week — the morning after the last one still pending — so it is asked once
+    more; a second Later retires it (skipped), and it stays in the plan for the caregiver's
+    list."""
+    a_setter(context)
+    plan = await latest_plan(session, context=context)
+    if plan is None:
+        raise NoPlan(f"no first-week plan on profile {context.profile_id}")
+    view = await _view(session, context=context, plan=plan)
+    found = next((prompt for prompt in view.prompts if prompt.gap == gap), None)
+    if found is None:
+        raise NoSuchPrompt(f"the plan has no prompt {gap!r}")
+    if found.status is not PromptStatus.PENDING:
+        raise PromptAlreadySettled(f"prompt {gap!r} is {found.status}")
+    moment = utcnow()
+    last = max(
+        as_utc(prompt.due_at) for prompt in view.prompts if prompt.status is PromptStatus.PENDING
+    )
+    session.info[PLAN_IN_PROGRESS] = plan.id
+    try:
+        found.deferred = found.deferred + 1
+        if found.deferred >= RETIRED_AFTER:
+            found.status = PromptStatus.SKIPPED
+            found.skipped_at = moment
+            found.skipped_by_person_id = context.person_id
+        else:
+            found.due_at = max(last, as_utc(found.due_at)) + timedelta(days=1)
         await session.flush()
         await record(
             session,

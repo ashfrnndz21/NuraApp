@@ -79,10 +79,12 @@ from app.onboarding.conditions import graph, name_of
 from app.onboarding.gaps import ANTICOAGULANT, open_gaps, questions_for_gaps, what_is_known
 from app.onboarding.models import (
     BIOGRAPHY_IN_PROGRESS,
+    QUESTION_IN_PROGRESS,
     ActivationPlan,
     Answer,
     BiographyLine,
     BiographyPaper,
+    BiographyQuestion,
     BiographySession,
     PaperKind,
     PlanPrompt,
@@ -96,6 +98,7 @@ from app.onboarding.settings import (
     parse_clock_time,
     settings_language,
 )
+from app.onboarding.strings import language_for
 from app.onboarding.words import (
     Script,
     after_a_no,
@@ -113,6 +116,7 @@ BIO_SCOPE = Scope.RECORDS
 SESSION = BiographySession.__tablename__
 PAPER = BiographyPaper.__tablename__
 LINE = BiographyLine.__tablename__
+QUESTION = BiographyQuestion.__tablename__
 
 MAX_QUESTIONS = 4
 """The questions shown at once; the rest are a count (docs/gaps-and-unlocks.md §3)."""
@@ -158,6 +162,18 @@ class CardsStillOpen(Refusal):
     """A paper of this sitting waits for its yes on its review card."""
 
 
+class NoSuchReadBackLine(Refusal):
+    """That line is not one of the read-back's lines waiting for an answer."""
+
+
+class NoSuchQuestion(Refusal):
+    """The papers raised no such question on this sitting."""
+
+
+class PaperAlreadyAdded(Refusal):
+    """That review card is already one of this sitting's papers."""
+
+
 class NotEveryLineAnswered(Refusal):
     """The read-back is answered whole: every line once, yes or no, and no line it did not read."""
 
@@ -180,11 +196,12 @@ class LineView:
 
 @dataclass(frozen=True, slots=True)
 class Question:
-    """A question the papers raised, by the gap it would fill ("dispute" for what follows a
-    "no", "more" for the count of the rest)."""
+    """A question the papers raised, by the gap it would fill (its id), and what he said to
+    it: kept, not this one (False), or nothing yet (None)."""
 
     gap: str
     line: str
+    kept: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +215,10 @@ class BiographyView:
     papers: tuple[PaperView, ...]
     read_back: tuple[LineView, ...]
     questions: tuple[Question, ...]
+    after_no: str | None = None
+    """After a "no" on the read-back: who looks at the paper again."""
+    more: str | None = None
+    """How many more questions wait for later, past the ones shown."""
 
     @property
     def open_cards(self) -> int:
@@ -434,6 +455,18 @@ async def _who_checks(
     return await person_display_name(session, context, answerer)
 
 
+async def _decisions(
+    session: AsyncSession, *, context: KeyContext, bio: BiographySession
+) -> Sequence[BiographyQuestion]:
+    return await audited_read(
+        session,
+        BiographyQuestion,
+        context,
+        BIO_SCOPE,
+        where=(BiographyQuestion.session_id == bio.id,),
+    )
+
+
 async def _questions(
     session: AsyncSession,
     *,
@@ -442,53 +475,70 @@ async def _questions(
     doctor: str | None,
     language: str,
     answered: Sequence[LineView],
-) -> tuple[Question, ...]:
-    asked: list[Question] = []
+) -> tuple[tuple[Question, ...], str | None, str | None]:
+    """The questions shown — the first open gaps, with what he said to each — the line after
+    a "no", and the count of the rest."""
+    after = None
     if any(line.answer is Answer.NO for line in answered):
         after = after_a_no(await _who_checks(session, context=context, bio=bio), language)
-        if after is not None:
-            asked.append(Question(gap="dispute", line=after))
     gaps = open_gaps(await what_is_known(session, context=context))
-    for code, line in questions_for_gaps(gaps[:MAX_QUESTIONS], language=language, doctor=doctor):
-        asked.append(Question(gap=code, line=line))
-    if len(gaps) > MAX_QUESTIONS:
-        more = questions_more(len(gaps) - MAX_QUESTIONS, language)
-        if more is not None:
-            asked.append(Question(gap="more", line=more))
-    return tuple(asked)
+    decided = {row.gap: row.kept for row in await _decisions(session, context=context, bio=bio)}
+    asked = tuple(
+        Question(gap=code, line=line, kept=decided.get(code))
+        for code, line in questions_for_gaps(gaps[:MAX_QUESTIONS], language=language, doctor=doctor)
+    )
+    more = (
+        questions_more(len(gaps) - MAX_QUESTIONS, language) if len(gaps) > MAX_QUESTIONS else None
+    )
+    return asked, after, more
 
 
 async def _view(
-    session: AsyncSession, *, context: KeyContext, bio: BiographySession
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    bio: BiographySession,
+    language: str | None = None,
 ) -> BiographyView:
     row = await current_settings(session, context=context)
     profile = await audited_profile_read(session, context)
-    language = settings_language(row, profile.language)
+    words = language_for(language) if language else settings_language(row, profile.language)
     papers = await _papers(session, context=context, bio=bio)
     step = _step(bio, row is not None, papers)
     lines: tuple[LineView, ...] = ()
     questions: tuple[Question, ...] = ()
+    after_no = more = None
     if step in (Step.PAPERS, Step.READ_BACK) and not any(paper.card.is_open for paper in papers):
-        found = await _read_back_lines(session, context=context, papers=papers, language=language)
-        lines = tuple(LineView(fact_id=fact.id, line=line) for fact, line in found)
+        answered = {
+            line.fact_id: line
+            for line in await _answered(
+                session, context=context, bio=bio, papers=papers, language=words
+            )
+        }
+        found = await _read_back_lines(session, context=context, papers=papers, language=words)
+        lines = tuple(
+            answered.get(fact.id) or LineView(fact_id=fact.id, line=line) for fact, line in found
+        )
     elif step in (Step.QUESTIONS, Step.CLOSED):
-        lines = await _answered(session, context=context, bio=bio, papers=papers, language=language)
-        questions = await _questions(
+        lines = await _answered(session, context=context, bio=bio, papers=papers, language=words)
+        questions, after_no, more = await _questions(
             session,
             context=context,
             bio=bio,
             doctor=None if row is None else row.doctor_name,
-            language=language,
+            language=words,
             answered=lines,
         )
     return BiographyView(
         session=bio,
         step=step,
-        language=language,
-        script=script(step.value, language),
+        language=words,
+        script=script(step.value, words),
         papers=papers,
         read_back=lines,
         questions=questions,
+        after_no=after_no,
+        more=more,
     )
 
 
@@ -514,12 +564,15 @@ async def open_biography(session: AsyncSession, *, context: KeyContext) -> Biogr
 
 
 @audited(Action.READ, BIO_SCOPE, SESSION)
-async def biography_view(session: AsyncSession, *, context: KeyContext) -> BiographyView:
-    """The latest sitting — open or closed — and where it stands."""
+async def biography_view(
+    session: AsyncSession, *, context: KeyContext, language: str | None = None
+) -> BiographyView:
+    """The latest sitting — open or closed — and where it stands, in his language or in
+    `language` when the screen asks for another."""
     bio = await latest_biography(session, context=context)
     if bio is None:
         raise NoBiography(f"no biography on profile {context.profile_id}")
-    return await _view(session, context=context, bio=bio)
+    return await _view(session, context=context, bio=bio, language=language)
 
 
 @audited(Action.WRITE, BIO_SCOPE, PAPER)
@@ -611,6 +664,51 @@ def _is_pdf(content_type: str) -> bool:
     return content_type.strip().lower().split(";", 1)[0].strip() == PDF_CONTENT_TYPE
 
 
+DOCUMENT_PAPER: Mapping[DocumentKind, PaperKind] = {
+    DocumentKind.LAB_REPORT: PaperKind.LAB_RESULT,
+    DocumentKind.MEDICINE_LABEL: PaperKind.MEDICINE,
+    DocumentKind.DISCHARGE_LETTER: PaperKind.DISCHARGE_LETTER,
+    DocumentKind.CLINIC_SLIP: PaperKind.CLINIC_CARD,
+    DocumentKind.INSURANCE_LETTER: PaperKind.INSURANCE_CARD,
+}
+"""What a card was read as, as the paper it is when he did not say."""
+
+
+@audited(Action.WRITE, BIO_SCOPE, PAPER)
+async def attach_paper(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card_id: uuid.UUID,
+    paper: PaperKind | None = None,
+) -> tuple[BiographyPaper, ReviewCard]:
+    """A paper already photographed through capture (`POST /profiles/{id}/photos`, or an
+    import) joins the sitting by its review card: the card as it stands — open or confirmed —
+    and what he says it is, or what it was read as."""
+    a_setter(context)
+    bio = await _require_open(session, context=context)
+    card = await require_review_card(session, context=context, card_id=card_id)
+    earlier = await audited_read(
+        session, BiographyPaper, context, BIO_SCOPE, where=(BiographyPaper.session_id == bio.id,)
+    )
+    if any(row.card_id == card.id for row in earlier):
+        raise PaperAlreadyAdded(f"card {card.id} is already a paper of this sitting")
+    written = await audited_write(
+        session,
+        BiographyPaper,
+        context,
+        BIO_SCOPE,
+        session_id=bio.id,
+        position=len(earlier),
+        artifact_id=card.artifact_id,
+        card_id=card.id,
+        paper=paper or DOCUMENT_PAPER.get(card.document_kind, PaperKind.OTHER),
+        added_by_person_id=context.person_id,
+        added_at=utcnow(),
+    )
+    return written, card
+
+
 async def _dispute(session: AsyncSession, *, context: KeyContext, fact: Fact, event: Event) -> Fact:
     """A "no" on a line: a dispute against the fact, carrying the value disputed, resting on
     the paper the fact came from and on the moment of the read-back, with his yes to exactly
@@ -673,11 +771,18 @@ async def _stamped(
 
 @audited(Action.WRITE, BIO_SCOPE, LINE)
 async def answer_read_back(
-    session: AsyncSession, *, context: KeyContext, answers: Sequence[tuple[uuid.UUID, Answer]]
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    answers: Sequence[tuple[uuid.UUID, Answer]],
+    whole: bool = True,
 ) -> BiographyView:
-    """He answers the read-back, every line once: a yes is kept as his confirm of the line;
-    a no opens a dispute against its fact. Refused before the settings, while a card of the
-    sitting waits for its yes, a second time, or with a line missing or one it did not read."""
+    """He answers the read-back: every line still waiting at once (`whole`), or one line at a
+    time — one thing a screen. A yes is kept as his confirm of the line; a no opens a dispute
+    against its fact. The read-back is done when every line has its answer. Refused before
+    the settings, while a card of the sitting waits for its yes, once done, with a line
+    answered twice, a line left out of a whole answer (`NotEveryLineAnswered`), or a line
+    that is not waiting (`NoSuchReadBackLine`)."""
     a_setter(context)
     said = dict(answers)
     if len(said) != len(answers):
@@ -694,11 +799,20 @@ async def answer_read_back(
     profile = await audited_profile_read(session, context)
     language = settings_language(row, profile.language)
     lines = await _read_back_lines(session, context=context, papers=papers, language=language)
-    if set(said) != {fact.id for fact, _ in lines}:
-        raise NotEveryLineAnswered(f"{len(lines)} line(s) to answer, {len(said)} answered")
+    earlier = await audited_read(
+        session, BiographyLine, context, BIO_SCOPE, where=(BiographyLine.session_id == bio.id,)
+    )
+    already = {line.fact_id for line in earlier}
+    waiting = {fact.id for fact, _ in lines if fact.id not in already}
+    if whole and set(said) != waiting:
+        raise NotEveryLineAnswered(f"{len(waiting)} line(s) to answer, {len(said)} answered")
+    if not whole and (not said or not set(said) <= waiting):
+        raise NoSuchReadBackLine("that line is not one waiting for an answer")
     moment = utcnow()
     event: Event | None = None
     for position, (fact, _) in enumerate(lines):
+        if fact.id not in said:
+            continue
         answer = said[fact.id]
         dispute_id = None
         if answer is Answer.NO:
@@ -725,13 +839,67 @@ async def answer_read_back(
             answered_by_person_id=context.person_id,
             answered_at=moment,
         )
-    await _stamped(
-        session,
-        context=context,
-        bio=bio,
-        read_back_at=moment,
-        read_back_by_person_id=context.person_id,
-    )
+    if waiting <= set(said):
+        await _stamped(
+            session,
+            context=context,
+            bio=bio,
+            read_back_at=moment,
+            read_back_by_person_id=context.person_id,
+        )
+    return await _view(session, context=context, bio=bio)
+
+
+@audited(Action.WRITE, BIO_SCOPE, QUESTION)
+async def keep_question(
+    session: AsyncSession, *, context: KeyContext, question_id: str, keep: bool
+) -> BiographyView:
+    """Keep a question the papers raised, or not this one; he may change his mind until the
+    sitting closes. A kept question is the seam to the visit loop: once E05's questions are
+    on main it becomes one of them, and until then it is kept here, on the sitting. A question
+    he said "not this one" to is left out of the first week."""
+    a_setter(context)
+    bio = await _require_open(session, context=context)
+    if bio.read_back_at is None:
+        raise NotAtThisStep("the questions come after the read-back")
+    codes = {gap.code for gap in open_gaps(await what_is_known(session, context=context))}
+    if question_id not in codes:
+        raise NoSuchQuestion(f"no open question {question_id!r} on this sitting")
+    moment = utcnow()
+    found = [
+        row for row in await _decisions(session, context=context, bio=bio) if row.gap == question_id
+    ]
+    if found:
+        row = found[0]
+        session.info[QUESTION_IN_PROGRESS] = row.id
+        try:
+            row.kept = keep
+            row.decided_by_person_id = context.person_id
+            row.decided_at = moment
+            await session.flush()
+            await record(
+                session,
+                context=context,
+                action=Action.WRITE,
+                scope=BIO_SCOPE,
+                target=QUESTION,
+                target_id=row.id,
+                rows=1,
+            )
+        finally:
+            session.info.pop(QUESTION_IN_PROGRESS, None)
+    else:
+        await audited_write(
+            session,
+            BiographyQuestion,
+            context,
+            BIO_SCOPE,
+            session_id=bio.id,
+            gap=question_id,
+            kept=keep,
+            decided_by_person_id=context.person_id,
+            decided_at=moment,
+        )
     return await _view(session, context=context, bio=bio)
 
 
@@ -780,11 +948,14 @@ async def close_biography(session: AsyncSession, *, context: KeyContext) -> Clos
     profile = await audited_profile_read(session, context)
     language = settings_language(row, profile.language)
     gaps = open_gaps(await what_is_known(session, context=context))
+    dropped = {
+        row.gap for row in await _decisions(session, context=context, bio=bio) if not row.kept
+    }
     plan, prompts = await make_plan(
         session,
         context=context,
         session_id=bio.id,
-        gaps=gaps,
+        gaps=[gap for gap in gaps if gap.code not in dropped],
         breakfast=parse_clock_time(row.breakfast_time),
     )
     answered = await _answered(session, context=context, bio=bio, papers=papers, language=language)

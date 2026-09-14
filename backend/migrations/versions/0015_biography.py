@@ -1,12 +1,13 @@
 """E01: onboarding — the profile's settings, the health biography, the first week.
 
-Six tables of profile data, every reference tied to its profile the way the memory tables
+Seven tables of profile data, every reference tied to its profile the way the memory tables
 are (0005). `profile_settings` is one row per save of the settings screen, superseded by the
 next and resting on the event of the save. `biography_session` is one sitting, stamped once
 with its read-back and once with its close. `biography_paper` names a photo and the review
 card it was read into (0008), with the kind of paper the person said it was.
 `biography_line` is one read-back line as answered, naming the fact it read back and, for a
-"no", the dispute it opened. `activation_plan` and `plan_prompt` are the first week: one
+"no", the dispute it opened; `biography_question` is what he said to a question the papers
+raised, keep it or not this one. `activation_plan` and `plan_prompt` are the first week: one
 prompt a day for a gap, due at breakfast on his clock, pending until done or skipped.
 
 `event_kind` gains `onboarding`; it is a non-native enum with no database constraint, so no
@@ -37,7 +38,13 @@ def _enum(name: str, *values: str) -> sa.Enum:
 
 DENSITY = _enum("density", "detailed", "simple")
 PAPER_KIND = _enum(
-    "paper_kind", "discharge_letter", "lab_result", "medicine", "clinic_card", "insurance_card"
+    "paper_kind",
+    "discharge_letter",
+    "lab_result",
+    "medicine",
+    "clinic_card",
+    "insurance_card",
+    "other",
 )
 ANSWER = _enum("read_back_answer", "yes", "no")
 PROMPT_STATUS = _enum("plan_prompt_status", "pending", "done", "skipped")
@@ -74,6 +81,8 @@ _INDEXES = (
     ("ix_biography_paper_session_id", "biography_paper", ["session_id"]),
     ("ix_biography_line_profile_id", "biography_line", ["profile_id"]),
     ("ix_biography_line_session_id", "biography_line", ["session_id"]),
+    ("ix_biography_question_profile_id", "biography_question", ["profile_id"]),
+    ("ix_biography_question_session_id", "biography_question", ["session_id"]),
     ("ix_activation_plan_profile_id", "activation_plan", ["profile_id"]),
     ("ix_activation_plan_created_at", "activation_plan", ["created_at"]),
     ("ix_plan_prompt_profile_id", "plan_prompt", ["profile_id"]),
@@ -153,6 +162,19 @@ def upgrade() -> None:
         _tied("biography_line", "dispute_fact_id", "fact"),
     )
     op.create_table(
+        "biography_question",
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        _profile_id(),
+        sa.Column("session_id", sa.Uuid(), sa.ForeignKey("biography_session.id"), nullable=False),
+        sa.Column("gap", sa.String(length=32), nullable=False),
+        sa.Column("kept", sa.Boolean(), nullable=False),
+        sa.Column("decided_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
+        _when("decided_at"),
+        _row_of_profile("biography_question"),
+        _tied("biography_question", "session_id", "biography_session"),
+        sa.UniqueConstraint("session_id", "gap", name="uq_biography_question_session_id_gap"),
+    )
+    op.create_table(
         "activation_plan",
         sa.Column("id", sa.Uuid(), primary_key=True),
         _profile_id(),
@@ -173,6 +195,7 @@ def upgrade() -> None:
         sa.Column("gap", sa.String(length=32), nullable=False),
         _when("due_at"),
         sa.Column("status", PROMPT_STATUS, nullable=False),
+        sa.Column("deferred", sa.Integer(), nullable=False, server_default="0"),
         _when("done_at", nullable=True),
         sa.Column("done_by_fact_id", sa.Uuid(), sa.ForeignKey("fact.id"), nullable=True),
         _when("skipped_at", nullable=True),
@@ -192,6 +215,7 @@ def downgrade() -> None:
         op.drop_index(name, table_name=table)
     op.drop_table("plan_prompt")
     op.drop_table("activation_plan")
+    op.drop_table("biography_question")
     op.drop_table("biography_line")
     op.drop_table("biography_paper")
     op.drop_table("biography_session")

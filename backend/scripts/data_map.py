@@ -559,6 +559,13 @@ CLASSES: dict[str, str] = {
     "plan_prompt.done_by_fact_id": HEALTH,
     "plan_prompt.skipped_at": OPERATIONAL,
     "plan_prompt.skipped_by_person_id": IDENTIFIER,
+    "plan_prompt.deferred": OPERATIONAL,
+    "biography_question.id": HEALTH,
+    "biography_question.session_id": HEALTH,
+    "biography_question.gap": HEALTH,
+    "biography_question.kept": HEALTH,
+    "biography_question.decided_by_person_id": IDENTIFIER,
+    "biography_question.decided_at": OPERATIONAL,
     # Capture extras (E02-02, E02-03, E02-06, E02-08): the kind a page was offered as and
     # where an imported PDF came from; who typed a field Nura could not read; and a note on
     # an event, whose recording or image is an artefact and whose heard words are in the
