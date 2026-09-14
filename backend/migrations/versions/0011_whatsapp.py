@@ -6,13 +6,13 @@ and its State on the same profile; a proposal names its thread, its message, and
 and event it became; an escalation names its flag. No column holds what anyone wrote: the words are artefacts in
 the region's object store, and the rows point at them.
 
-Follows E12's family revision (0013_family), main's head when this story merged main back;
-the `red_flag` table the message and the ladder point at is E21's (0010_feed), underneath
-both. The number stays this story's own; the operator repoints `down_revision` again if
-another story lands first.
+Follows E16's rendered-boundary revision (0014_rendered_boundary), main's head when this
+story merged main back; the `red_flag` table the message and the ladder point at is E21's
+(0010_feed), underneath it. The number stays this story's own; the operator repoints
+`down_revision` again if another story lands first.
 
 Revision ID: 0011_whatsapp
-Revises: 0013_family
+Revises: 0014_rendered_boundary
 Create Date: 2026-09-14
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0011_whatsapp"
-down_revision = "0013_family"
+down_revision = "0014_rendered_boundary"
 branch_labels = None
 depends_on = None
 

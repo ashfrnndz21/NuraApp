@@ -57,7 +57,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import store_artifact
 from app.memory.models import Artifact, ArtifactKind, SourceChannel
 from app.regions import Region
-from tests.support import OPENING_CONSENT, agree_to_family_sharing
+from tests.support import OPENING_CONSENT, agree_to_family_sharing, agree_to_recording
 
 GIVEN_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 
@@ -359,6 +359,8 @@ async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_record
     await agree_to_family_sharing(sg, owner, daughter)
     await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     clock.set(GIVEN_AT)
+    # A recording of his spoken yes is a recording: it rests on the RECORDING consent (E16-02).
+    await agree_to_recording(sg, owner)
     recording = await store_artifact(
         sg,
         context=chief,

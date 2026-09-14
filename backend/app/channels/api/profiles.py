@@ -77,7 +77,11 @@ from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.notes.service import list_notes, write_note
+from app.safety.boundary import Surface, boundary_line
 from app.state.service import current_state
+
+Language = Query(default=None, min_length=2, max_length=16)
+"""The language a patient-facing line is asked for: one of Nura's, or the profile's own."""
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
 log = logging.getLogger("nura.channels.api")
@@ -497,8 +501,12 @@ async def add_reading(body: ReadingIn, context: Context, session: Db) -> Reading
 
 
 @router.get("/{profile_id}/state")
-async def state(context: Context, session: Db) -> StateOut:
+async def state(context: Context, session: Db, language: str | None = Language) -> StateOut:
     """The current State: the six dimensions as the caller's key reads them, the posture,
     and what triggered the snapshot. Read under the record's scope; recomputed first when
-    the record has moved and the key can recompute."""
-    return StateOut.of(await current_state(session, context=context))
+    the record has moved and the key can recompute. The posture is an inferring surface,
+    so the answer carries the boundary line (E16-01) in `language`, or the profile's own."""
+    view = await current_state(session, context=context)
+    if language is None:
+        language = (await audited_profile_read(session, context)).language
+    return StateOut.of(view, boundary=boundary_line(Surface.STATE_POSTURE, language))
