@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import "./push"; // the Web Push handler, its own module (ADR 0001)
 /** Nura's service worker: keeps the shell, never the health data.
  *
  *  On install it caches every file the build emitted (`__PRECACHE__` is filled in by the

@@ -177,6 +177,11 @@ export interface Strings {
     switchProfile: string;
     setUp: string;
     signOut: string;
+    remindersGet: string;
+    remindersOn: string;
+    remindersStop: string;
+    remindersDenied1: string;
+    remindersDenied2: string;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
