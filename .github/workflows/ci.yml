@@ -15,7 +15,10 @@ jobs:
       - run: make lint
       - run: make plain-words
   ios:
-    if: contains(github.event.pull_request.changed_files, 'ios/') || github.event_name == 'push'
+    # macOS runners are billed at 10x minutes and exhausted the private-repo free tier in a
+    # day while ios/ holds one smoke test. Off until Session 10 generates a real app; flip the
+    # variable NURA_IOS_CI=1 in repo settings to turn it back on.
+    if: vars.NURA_IOS_CI == '1' && (contains(github.event.pull_request.changed_files, 'ios/') || github.event_name == 'push')
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
