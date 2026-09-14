@@ -1,5 +1,13 @@
-.PHONY: dev test lint plain-words ios-test
-dev: ; cd backend && uvicorn app.main:app --reload
+.PHONY: dev migrate test lint plain-words ios-test
+# A local run needs a region and a database. These are the dev defaults, on your Mac only;
+# the app itself has no default for either (see backend/app/settings.py) and a deployment
+# sets both explicitly.
+dev migrate: export NURA_REGION ?= SG
+dev migrate: export NURA_DATABASE_URL ?= sqlite+aiosqlite:///./dev.db
+# The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
+dev: export NURA_DEV_CODE_SENDER = 1
+migrate: ; cd backend && alembic upgrade heads
+dev: migrate ; cd backend && uvicorn app.main:app --reload --no-access-log
 test: ; cd backend && pytest -q
 lint: ; cd backend && ruff check . && mypy app
 plain-words: ; cd backend && if [ -f app/safety/plain_words.py ]; then python -m app.safety.plain_words; else echo "plain-words: app/safety/plain_words.py not built yet (Session 6), skipping"; fi

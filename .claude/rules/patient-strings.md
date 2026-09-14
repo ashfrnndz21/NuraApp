@@ -1,7 +1,8 @@
 ---
 paths:
   - "backend/app/delivery/**"
-  - "backend/app/channels/whatsapp/**"
+  - "backend/app/channels/**"
+  - "backend/app/consent/**"
   - "ios/Nura/**"
 ---
 # Patient-facing strings

@@ -25,7 +25,7 @@ jobs:
             Post one review with `gh pr review ${{ github.event.pull_request.number }}` containing both reports: each check as pass or fail with file and line, and the rewritten lines for any string that failed.
             If any safety check fails, use `--request-changes`; otherwise `--comment`. If the PR touches backend/app/keys, consent, audit, medicines, reasoning, safety, WhatsApp outbound or a migration, add the label risk:high with `gh pr edit` if it is missing.
             This is a headless run: it ends the moment you stop. Run the two reviewer subagents in the foreground and wait for their reports — never in the background — and do not finish until `gh pr review` has posted. If a subagent is unavailable, apply its checklist from .claude/agents/ yourself and say so in the review.
-          claude_args: "--max-turns 60 --allowedTools Read,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(make:*),Bash(pytest:*)"
+          claude_args: "--max-turns 100 --allowedTools Read,Glob,Grep,Bash(git:*),Bash(gh:*),Bash(make:*),Bash(pytest:*)"
       - name: Confirm a review was posted
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

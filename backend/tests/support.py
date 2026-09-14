@@ -9,7 +9,7 @@ the audit line in the same call.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 
 from sqlalchemy import String
@@ -17,10 +17,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
+from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.service import RecordConsent, Sharing, grant_consent
+from app.consent.texts import current_version
 from app.db import Base, ProfileScoped, enum_column, unit_of_work
 from app.errors import Refusal
+from app.identity.models import Person
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
+from app.keys.scopes import ALL_SCOPES, Scope
 
 
 @asynccontextmanager
@@ -65,3 +69,33 @@ async def read_notes(
     scope: Scope,
 ) -> Sequence[Note]:
     return await audited_read(session, Note, context, scope, where=(Note.scope == scope,))
+
+
+OPENING_CONSENT = RecordConsent(
+    text_version=current_version(ConsentPurpose.HOLD_HEALTH_RECORD),
+    language="en",
+    captured_via=ConsentChannel.APP,
+)
+"""What every test's Pa agrees to when he opens his record: today's English words, in the app."""
+
+
+async def agree_to_family_sharing(
+    session: AsyncSession,
+    owner: KeyContext,
+    holder: Person,
+    *,
+    scopes: Iterable[Scope] = ALL_SCOPES,
+    relationship: str | None = None,
+) -> Consent:
+    """The owner lets one person in, to these parts; that person's key rests on this."""
+    return await grant_consent(
+        session,
+        context=owner,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
+        captured_via=ConsentChannel.APP,
+        basis=ConsentBasis.OWNER,
+        language="en",
+        sharing=Sharing(
+            holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE}, relationship=relationship
+        ),
+    )

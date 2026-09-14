@@ -27,6 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.errors import Refusal
@@ -172,13 +174,23 @@ def _check_window(valid_from: datetime, valid_to: datetime | None) -> None:
 
 
 async def _current_fact(session: AsyncSession, *, context: KeyContext, fact_id: uuid.UUID) -> Fact:
-    """The fact by that id on this profile, still current — the only kind that can be replaced."""
+    """The fact by that id on this profile, still current — the only kind that can be replaced.
+
+    The scope is the fact's own subject's, so the row is looked at first to learn it. The
+    audited read below is the one that checks the key and writes the line.
+    """
+    row = await session.get(Fact, fact_id)
+    if row is None or row.profile_id != context.profile_id:
+        raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
     found = await audited_read(
         session,
         Fact,
         context,
-        Scope.RECORDS,
-        where=(Fact.id == fact_id, fact_cites_only_what_is_held_here(context)),
+        scope_for_subject(row.subject),
+        where=(
+            Fact.id == fact_id,
+            fact_cites_only_what_is_held_here(context, scope_for_subject(row.subject)),
+        ),
     )
     if not found:
         raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
@@ -212,6 +224,14 @@ async def _write_fact(
     starts = valid_from or moment
     _check_window(starts, valid_to)
     sure = _check_confidence(confidence)
+    # Keeping a fact rests on the consent to hold the record (E00-02). The gate runs under
+    # the scope of the act it guards, which is the subject's (`app.keys.scopes`).
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=scope_for_subject(subject),
+    )
     await _check_provenance(session, context=context, artifact_id=artifact_id, event_id=event_id)
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id)
@@ -330,7 +350,7 @@ async def assert_fact(
     )
 
 
-@audited(Action.WRITE, Scope.RECORDS, Fact.__tablename__)
+@audited(Action.WRITE, Scope.PROFILE, Fact.__tablename__)
 async def supersede_fact(
     session: AsyncSession,
     *,
@@ -355,8 +375,6 @@ async def supersede_fact(
     that leaves the old fact current: see `ConfirmedFactStands`.
     """
     old = await _current_fact(session, context=context, fact_id=fact_id)
-    # The door checked the records scope; the fact's own subject may ask for more.
-    context.require(scope_for_subject(old.subject))
     carried = artifact_id is None and event_id is None
     return await _write_fact(
         session,
@@ -377,13 +395,7 @@ async def supersede_fact(
     )
 
 
-def _scope_of_the_facts_asked_for(call: dict[str, Any]) -> Scope:
-    """A subject names its scope; asking for every subject is asking for the records."""
-    subject = call.get("subject")
-    return scope_for_subject(subject) if subject else Scope.RECORDS
-
-
-@audited(Action.READ, _scope_of_the_facts_asked_for, Fact.__tablename__)
+@audited(Action.READ, lambda call: scope_for_subject(call.get("subject")), Fact.__tablename__)
 async def current_facts(
     session: AsyncSession,
     *,
@@ -397,6 +409,9 @@ async def current_facts(
     Passing `at` is how the timeline asks what was known on a day; the window is on the
     fact's own validity, so a fact asserted later about an earlier time is still found. An
     open dispute is not a fact that holds: the fact it disputes is (`ConfirmedFactStands`).
+
+    The scope is the subject's, decided in `app.keys.scopes`: medicines under MEDICINES,
+    readings under READINGS, the whole record — no subject named — under RECORDS.
     """
     moment = at or utcnow()
     where: list[ColumnElement[bool]] = [
@@ -404,19 +419,17 @@ async def current_facts(
         Fact.confidence_state != ConfidenceState.DISPUTED,
         Fact.valid_from <= moment,
         or_(Fact.valid_to.is_(None), Fact.valid_to > moment),
-        fact_cites_only_what_is_held_here(context),
+        fact_cites_only_what_is_held_here(context, scope_for_subject(subject)),
     ]
     if subject is not None:
         where.append(Fact.subject == subject)
     if attribute is not None:
         where.append(Fact.attribute == attribute)
-    found = await audited_read(
-        session, Fact, context, _scope_of_the_facts_asked_for({"subject": subject}), where=where
-    )
+    found = await audited_read(session, Fact, context, scope_for_subject(subject), where=where)
     return sorted(found, key=lambda fact: (fact.subject, fact.attribute, as_utc(fact.valid_from)))
 
 
-@audited(Action.READ, Scope.RECORDS, Fact.__tablename__)
+@audited(Action.READ, Scope.PROFILE, Fact.__tablename__)
 async def open_disputes(
     session: AsyncSession,
     *,
@@ -424,16 +437,19 @@ async def open_disputes(
     fact_id: uuid.UUID,
 ) -> Sequence[Fact]:
     """The disputes still open against a fact, oldest first. Empty once a person settled it."""
+    disputed = await session.get(Fact, fact_id)
+    if disputed is None or disputed.profile_id != context.profile_id:
+        raise NoSuchFact(f"no fact {fact_id} on profile {context.profile_id}")
     found = await audited_read(
         session,
         Fact,
         context,
-        Scope.RECORDS,
+        scope_for_subject(disputed.subject),
         where=(
             Fact.supersedes_id == fact_id,
             Fact.confidence_state == ConfidenceState.DISPUTED,
             Fact.superseded_at.is_(None),
-            fact_cites_only_what_is_held_here(context),
+            fact_cites_only_what_is_held_here(context, scope_for_subject(disputed.subject)),
         ),
     )
     return sorted(found, key=lambda dispute: as_utc(dispute.asserted_at))

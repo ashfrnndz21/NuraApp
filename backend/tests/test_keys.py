@@ -14,6 +14,7 @@ from app.keys.grants import NoKeyToClose, grant_key, list_keys, revoke_key
 from app.keys.models import Key
 from app.keys.scopes import ALL_SCOPES, DEFAULT_WINDOW, ROLE_SCOPES, KeyRole, KeyWindow, Scope
 from app.regions import Region
+from tests.support import OPENING_CONSENT, agree_to_family_sharing
 
 GRANTED_AT = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
 
@@ -22,10 +23,11 @@ async def _owner(session: AsyncSession) -> KeyContext:
     pa = await register_person(
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
-    return await resolve_key_context(
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
+    owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
+    return owner
 
 
 def test_private_notes_and_money_are_preset_to_nobody_but_a_chief() -> None:
@@ -43,7 +45,6 @@ def test_a_clinic_key_closes_itself_after_three_days() -> None:
     key = Key(
         role=KeyRole.CLINIC,
         scopes=[],
-        basis="owner_consent",
         granted_at=GRANTED_AT,
         expires_at=GRANTED_AT + timedelta(hours=72),
     )
@@ -52,7 +53,7 @@ def test_a_clinic_key_closes_itself_after_three_days() -> None:
 
 
 def test_a_key_with_no_end_runs_until_it_is_closed() -> None:
-    key = Key(role=KeyRole.CHIEF, scopes=[], basis="lpa", granted_at=GRANTED_AT)
+    key = Key(role=KeyRole.CHIEF, scopes=[], granted_at=GRANTED_AT)
     far_off = GRANTED_AT + timedelta(days=3650)
     assert key.is_active(far_off)
     key.revoked_at = GRANTED_AT + timedelta(days=1)
@@ -64,6 +65,8 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
 ) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
+    clock.set(GRANTED_AT)
+    await agree_to_family_sharing(sg, owner, mei)
 
     clock.set(GRANTED_AT)
     first = await grant_key(
@@ -71,7 +74,6 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
         context=owner,
         holder=mei,
         role=KeyRole.VIEWER,
-        basis="owner_consent",
     )
     clock.set(GRANTED_AT + timedelta(days=1))
     second = await grant_key(
@@ -79,7 +81,6 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
         context=owner,
         holder=mei,
         role=KeyRole.CAREGIVER,
-        basis="owner_consent",
     )
 
     assert first.revoked_at is not None
@@ -100,7 +101,8 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
 async def test_a_key_holder_cannot_read_the_family_list(sg: AsyncSession) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
-    key = await grant_key(sg, context=owner, holder=mei, role=KeyRole.CAREGIVER, basis="consent")
+    await agree_to_family_sharing(sg, owner, mei)
+    key = await grant_key(sg, context=owner, holder=mei, role=KeyRole.CAREGIVER)
 
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=mei.id, profile_id=owner.profile_id

@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
+from app.consent.models import ConsentPurpose
+from app.consent.service import require_consent
 from app.db import utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
@@ -63,20 +65,26 @@ def held_here(context: KeyContext) -> ColumnElement[bool]:
     return Artifact.region == context.region
 
 
-def _artefacts_held_here(context: KeyContext) -> Select[tuple[uuid.UUID]]:
+def _artefacts_held_here(context: KeyContext, scope: Scope) -> Select[tuple[uuid.UUID]]:
     return (
-        scoped_select(Artifact, context, Scope.RECORDS)
+        scoped_select(Artifact, context, scope)
         .with_only_columns(Artifact.id)
         .where(held_here(context))
     )
 
 
-def event_cites_only_what_is_held_here(context: KeyContext) -> ColumnElement[bool]:
-    """The events naming no artefact, or one held here. Part of every query returning events."""
-    return or_(Event.artifact_id.is_(None), Event.artifact_id.in_(_artefacts_held_here(context)))
+def event_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> ColumnElement[bool]:
+    """The events naming no artefact, or one held here. Part of every query returning events.
+
+    `scope` is the scope the surrounding read runs under: the filter asks nothing more of the
+    key than that read already did.
+    """
+    return or_(
+        Event.artifact_id.is_(None), Event.artifact_id.in_(_artefacts_held_here(context, scope))
+    )
 
 
-def fact_cites_only_what_is_held_here(context: KeyContext) -> ColumnElement[bool]:
+def fact_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> ColumnElement[bool]:
     """The facts whose provenance, followed all the way down, is held here.
 
     A fact names an artefact, or an event, or both; an event names an artefact. This follows
@@ -86,12 +94,15 @@ def fact_cites_only_what_is_held_here(context: KeyContext) -> ColumnElement[bool
     served by any reader.
     """
     events_here = (
-        scoped_select(Event, context, Scope.RECORDS)
+        scoped_select(Event, context, scope)
         .with_only_columns(Event.id)
-        .where(event_cites_only_what_is_held_here(context))
+        .where(event_cites_only_what_is_held_here(context, scope))
     )
     return and_(
-        or_(Fact.artifact_id.is_(None), Fact.artifact_id.in_(_artefacts_held_here(context))),
+        or_(
+            Fact.artifact_id.is_(None),
+            Fact.artifact_id.in_(_artefacts_held_here(context, scope)),
+        ),
         or_(Fact.event_id.is_(None), Fact.event_id.in_(events_here)),
     )
 
@@ -115,6 +126,13 @@ async def store_artifact(
     bytes held elsewhere would be exactly that. The refusal is in the trail like any other.
     """
     guard_region(held_in=region, asked_from=context.region)
+    # Keeping anything at all rests on the consent to hold the record (E00-02).
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.RECORDS,
+    )
     digest = sha256.strip().lower()
     if not _DIGEST.match(digest):
         raise NotADigest("sha256 is sixty-four hex characters")
@@ -180,6 +198,12 @@ async def record_event(
     both required: which channel it came in on, and what it was. `label` is a name for the
     moment, one short line. What was said or shown is in the artefact, and only there.
     """
+    await require_consent(
+        session,
+        context=context,
+        purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
+        scope=Scope.RECORDS,
+    )
     named = short_label(label) if label is not None else None
     came_in_by = await _where_it_came_from(
         session,
@@ -239,7 +263,7 @@ async def require_event(
         Event,
         context,
         Scope.RECORDS,
-        where=(Event.id == event_id, event_cites_only_what_is_held_here(context)),
+        where=(Event.id == event_id, event_cites_only_what_is_held_here(context, Scope.RECORDS)),
     )
     if not found:
         raise NoSuchEvent(f"no event {event_id} on profile {context.profile_id}")

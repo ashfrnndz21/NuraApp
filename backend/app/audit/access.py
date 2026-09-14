@@ -21,14 +21,17 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
-from sqlalchemy import ColumnElement
+from sqlalchemy import ColumnElement, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
 from app.audit.trail import record
+from app.consent.models import Consent
 from app.db import ProfileScoped
 from app.errors import Refusal
-from app.keys.context import KeyContext
+from app.identity.models import Person, Profile
+from app.keys.context import KeyContext, OutOfScope
+from app.keys.models import Key
 from app.keys.repository import scoped_new, scoped_select
 from app.keys.scopes import Scope
 
@@ -51,9 +54,7 @@ async def audited_read[Row: ProfileScoped](
     try:
         statement = scoped_select(model, context, scope).where(*where)
     except Refusal as refusal:
-        await _refused(
-            session, context, Action.READ, scope, model.__tablename__, refusal, channel
-        )
+        await _refused(session, context, Action.READ, scope, model.__tablename__, refusal, channel)
         raise
     found = (await session.scalars(statement)).all()
     await record(
@@ -87,9 +88,7 @@ async def audited_write[Row: ProfileScoped](
     try:
         row = scoped_new(model, context, scope, **values)
     except Refusal as refusal:
-        await _refused(
-            session, context, Action.WRITE, scope, model.__tablename__, refusal, channel
-        )
+        await _refused(session, context, Action.WRITE, scope, model.__tablename__, refusal, channel)
         raise
     session.add(row)
     await session.flush()
@@ -221,3 +220,107 @@ async def _refused(
         refused_because=type(refusal).__name__,
         channel=channel,
     )
+
+
+PROFILE_TARGET = Profile.__tablename__
+
+
+async def audited_profile_read(
+    session: AsyncSession,
+    context: KeyContext,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+) -> Profile:
+    """Read the profile row itself — whose graph, its name and language — and write it down.
+
+    The profile is not a row *of* the graph, it is the graph, so `scoped_select` cannot name
+    it; this is the one read that reaches it, under `Scope.PROFILE`, which every key holds.
+    """
+    try:
+        context.require(Scope.PROFILE)
+    except OutOfScope as refusal:
+        await _refused(
+            session, context, Action.READ, Scope.PROFILE, PROFILE_TARGET, refusal, channel
+        )
+        raise
+    profile = await session.get(Profile, context.profile_id)
+    assert profile is not None  # the context was resolved from this row
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.PROFILE,
+        target=PROFILE_TARGET,
+        target_id=profile.id,
+        rows=1,
+        channel=channel,
+    )
+    return profile
+
+
+class NotOnThisProfile(Refusal):
+    """Not the owner, not a key holder, not named by a consent here: no name to give."""
+
+
+async def person_display_name(
+    session: AsyncSession,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+) -> str:
+    """The display name of someone on this profile: its owner, a holder of a key to it, or
+    someone a consent on it names — the person let in, the person who agreed, the witness.
+
+    A Person row is an account, not profile data, so `scoped_select` cannot reach it; this
+    is the one read that does, and only for people the profile already names. Whether the
+    person is on the profile is itself read through the doors, under `Scope.FAMILY`: the
+    key table and the consent table are the family list, and a helper or a clinic holding
+    a key to the medicines holds no key to who else is on the record.
+    """
+    profile = await audited_profile_read(session, context, channel=channel)
+    if person_id != profile.owner_person_id:
+        held = await audited_read(
+            session,
+            Key,
+            context,
+            Scope.FAMILY,
+            where=(Key.holder_person_id == person_id,),
+            channel=channel,
+        )
+        named_by_a_consent = (
+            await audited_read(
+                session,
+                Consent,
+                context,
+                Scope.FAMILY,
+                where=(
+                    or_(
+                        Consent.holder_person_id == person_id,
+                        Consent.person_id == person_id,
+                        Consent.witness_person_id == person_id,
+                    ),
+                ),
+                channel=channel,
+            )
+            if not held
+            else ()
+        )
+        if not held and not named_by_a_consent:
+            refusal = NotOnThisProfile(f"person {person_id} is not on profile {profile.id}")
+            await record(
+                session,
+                context=context,
+                action=Action.READ,
+                scope=Scope.FAMILY,
+                target=Person.__tablename__,
+                outcome=Outcome.REFUSED,
+                refused_because=type(refusal).__name__,
+                channel=channel,
+            )
+            raise refusal
+    person = await session.get(Person, person_id)
+    assert person is not None  # a foreign key on the profile or a key names this row
+    return person.display_name

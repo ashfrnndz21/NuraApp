@@ -18,11 +18,13 @@ event names one; an event with no artefact, or an appointment, that is already i
 has no honest value, and the upgrade stops rather than make one up. Precondition for an
 environment holding rows: none in `appointment`, none in `event` without an artefact.
 
-Every change is a batch operation so it runs on SQLite (the tests) as well as Postgres; on
+This revision follows the login revision, so the chain reads in order: 0001, 0002, 0003_memory,
+0003_consent, 0004_key_consent, 0004_login_and_sessions, 0005_memory_review. Every change is a
+batch operation so it runs on SQLite (the tests) as well as Postgres; on
 Postgres the batch is a plain ALTER TABLE.
 
-Revision ID: 0004_memory_review
-Revises: 0003_memory
+Revision ID: 0005_memory_review
+Revises: 0004_login_and_sessions
 Create Date: 2026-09-14
 """
 
@@ -31,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0004_memory_review"
-down_revision = "0003_memory"
+revision = "0005_memory_review"
+down_revision = "0004_login_and_sessions"
 branch_labels = None
 depends_on = None
 

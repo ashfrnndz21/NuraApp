@@ -19,23 +19,12 @@ class Scope(StrEnum):
     EMERGENCY = "emergency"
     ASK = "ask"
     SEND = "send"
+    PROFILE = "profile"
+    """The profile row itself: whose graph this is, its name and language. Every key holds
+    it, because holding any key means you may see whose graph it opens."""
 
 
 ALL_SCOPES = frozenset(Scope)
-
-
-def scope_for_subject(subject: str) -> Scope:
-    """The scope a fact is held under, from what it is about.
-
-    A medicine is the medicines scope, a reading the readings scope, everything else the
-    records scope — so a key cut for the visits and the readings reaches no dose.
-    """
-    head = subject.split(".", 1)[0].strip().lower()
-    if head in {"medicine", "medicines", "medication", "medications"}:
-        return Scope.MEDICINES
-    if head in {"reading", "readings"}:
-        return Scope.READINGS
-    return Scope.RECORDS
 
 
 class KeyRole(StrEnum):
@@ -53,6 +42,7 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
     KeyRole.CHIEF: ALL_SCOPES,
     KeyRole.CAREGIVER: frozenset(
         {
+            Scope.PROFILE,
             Scope.MEDICINES,
             Scope.VISITS,
             Scope.READINGS,
@@ -63,15 +53,41 @@ ROLE_SCOPES: dict[KeyRole, frozenset[Scope]] = {
         }
     ),
     KeyRole.VIEWER: frozenset(
-        {Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.EMERGENCY}
+        {Scope.PROFILE, Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.EMERGENCY}
     ),
-    KeyRole.HELPER: frozenset({Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}),
-    KeyRole.EMERGENCY: frozenset({Scope.EMERGENCY}),
+    KeyRole.HELPER: frozenset({Scope.PROFILE, Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}),
+    KeyRole.EMERGENCY: frozenset({Scope.PROFILE, Scope.EMERGENCY}),
     KeyRole.CLINIC: frozenset(
-        {Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.RECORDS}
+        {Scope.PROFILE, Scope.MEDICINES, Scope.VISITS, Scope.READINGS, Scope.RECORDS}
     ),
 }
-"""Private notes and money are the patient's own: only a chief is ever preset to them."""
+"""Private notes and money are the patient's own: only a chief is ever preset to them.
+Every role holds PROFILE: a key that opens nothing of whose graph it is opens nothing."""
+
+
+_SUBJECT_SCOPES: dict[str, Scope] = {
+    "medicine": Scope.MEDICINES,
+    "medication": Scope.MEDICINES,
+    "blood_pressure": Scope.READINGS,
+    "blood_sugar": Scope.READINGS,
+    "heart_rate": Scope.READINGS,
+    "oxygen": Scope.READINGS,
+    "temperature": Scope.READINGS,
+    "weight": Scope.READINGS,
+}
+
+
+def scope_for_subject(subject: str | None) -> Scope:
+    """Which scope a fact about `subject` sits under. Decided here, never by the caller.
+
+    A medicine fact is read and written under MEDICINES, a reading under READINGS, and
+    anything else — or the whole record, when no subject is named — under RECORDS.
+    """
+    if subject is None:
+        return Scope.RECORDS
+    if subject.startswith("reading:"):
+        return Scope.READINGS
+    return _SUBJECT_SCOPES.get(subject, Scope.RECORDS)
 
 
 class KeyWindow(StrEnum):

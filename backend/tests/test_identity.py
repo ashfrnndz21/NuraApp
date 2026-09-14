@@ -11,9 +11,7 @@ from app.settings import MissingSetting, Settings, load_settings
 
 
 async def test_two_siblings_setting_up_from_one_number_get_one_account(sg: AsyncSession) -> None:
-    first = await register_person(
-        sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
-    )
+    first = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
     again = await register_person(
         sg, region=Region.SG, display_name="Pa (again)", phone_e164="+6591110001"
     )
@@ -25,9 +23,7 @@ async def test_an_account_keeps_the_region_it_registered_in(sg: AsyncSession) ->
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
     assert pa.region is Region.SG
     with pytest.raises(OutOfRegion):
-        await register_person(
-            sg, region=Region.MY, display_name="Pa", phone_e164="+6591110001"
-        )
+        await register_person(sg, region=Region.MY, display_name="Pa", phone_e164="+6591110001")
 
 
 async def test_an_email_belongs_to_one_account(sg: AsyncSession) -> None:

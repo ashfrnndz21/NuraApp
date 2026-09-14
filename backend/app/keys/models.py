@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
@@ -15,8 +15,10 @@ from app.keys.scopes import KeyRole, Scope
 class Key(ProfileScoped, Base):
     """One person's scoped reach into one profile.
 
-    A key has a role, a scope, a window and a basis, and it names who cut it. The owner of
-    the profile needs no key: the graph is his.
+    A key has a role, a scope, a window and a basis, and it names who cut it. The basis is
+    the consent it was cut under: the patient's own agreement that this person may hold a
+    key, or someone's agreement for him on a recorded footing. The owner of the profile
+    needs no key: the graph is his.
     """
 
     __tablename__ = "key"
@@ -25,7 +27,9 @@ class Key(ProfileScoped, Base):
     holder_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
     role: Mapped[KeyRole] = mapped_column(enum_column(KeyRole, "key_role"))
     scopes: Mapped[list[str]] = mapped_column(JSON)
-    basis: Mapped[str] = mapped_column(String(64))
+    # Nullable only for keys cut before consent was recorded (E00-02); `grant_key` always
+    # sets it, and the consent row says who agreed, on what basis, to which words.
+    consent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("consent.id"), default=None)
     granted_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     granted_at: Mapped[datetime] = mapped_column(default=utcnow)
     expires_at: Mapped[datetime | None] = mapped_column(default=None)

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
+from app.consent.models import Consent
 from app.db import as_utc
 from app.drafts import AppointmentDraft, Draft, FactDraft, StatusChange
 from app.errors import Refusal
@@ -86,7 +87,7 @@ from app.memory.spine import (
 )
 from app.memory.working import close_episode, open_episode
 from app.regions import OutOfRegion, Region
-from tests.support import refused_unit
+from tests.support import OPENING_CONSENT, agree_to_family_sharing, refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -95,7 +96,7 @@ SHA = "c" * 64
 
 async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
     pa = await register_person(session, region=Region.SG, display_name="Pa", phone_e164=phone)
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
@@ -238,7 +239,7 @@ async def test_an_artefact_held_out_of_region_is_refused_and_the_refusal_is_in_t
     assert refused.refused_because == "OutOfRegion"
 
 
-async def test_resolving_a_key_on_a_profile_pinned_elsewhere_is_refused_and_written_down(
+async def test_resolving_a_key_on_a_profile_pinned_elsewhere_is_refused_and_leaves_no_line(
     sg: AsyncSession,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
@@ -250,12 +251,10 @@ async def test_resolving_a_key_on_a_profile_pinned_elsewhere_is_refused_and_writ
     with pytest.raises(OutOfRegion):
         await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=astray.id)
 
-    # Nobody can resolve a context on this profile here, so the trail is read directly.
+    # The owner is told the real reason; nothing about another region's profile is written
+    # into this region's trail. The channel logs the reach by a handle.
     lines = (await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id == astray.id))).all()
-    assert [(e.outcome, e.refused_because, e.actor_person_id, e.action) for e in lines] == [
-        (Outcome.REFUSED, "OutOfRegion", pa.id, Action.READ)
-    ]
-    assert lines[0].key_id is None and lines[0].actor_role is None
+    assert lines == []
 
 
 # --- 2. a predecessor is validated under the key context ----------------------------------
@@ -470,13 +469,13 @@ async def test_a_confirmed_or_disputed_state_is_a_persons_yes_used_once(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
+    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES, Scope.RECORDS])
     await grant_key(
         sg,
         context=owner,
         holder=daughter,
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.RECORDS],
-        basis="owner_consent",
     )
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
@@ -959,7 +958,14 @@ async def test_deleting_a_profile_takes_every_row_of_it_with_it(sg: AsyncSession
     )
     assert reading.artifact_id == photo.id
 
-    # The profile goes (PDPA), and the ties cascade past every composite key.
+    # The consent record outlives everything else by design (E00-02: RESTRICT): while it
+    # stands, the profile cannot go.
+    savepoint = await sg.begin_nested()
+    with pytest.raises(IntegrityError):
+        await sg.execute(delete(Profile).where(Profile.id == owner.profile_id))
+    await savepoint.rollback()
+    await sg.execute(delete(Consent).where(Consent.profile_id == owner.profile_id))
+    # Then the profile goes (PDPA), and the ties cascade past every composite key.
     await sg.execute(delete(Profile).where(Profile.id == owner.profile_id))
     for table in (Artifact, Event, Fact, Episode, Appointment, Confirmation, AuditEntry):
         rows = (await sg.scalars(select(table).where(table.profile_id == owner.profile_id))).all()
@@ -1126,9 +1132,8 @@ async def test_an_appointment_records_the_person_whose_yes_was_used(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
-    key = await grant_key(
-        sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, basis="owner_consent"
-    )
+    await agree_to_family_sharing(sg, owner, daughter)
+    key = await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
     )
@@ -1233,18 +1238,20 @@ async def test_a_medicine_fact_is_held_under_the_medicines_scope(sg: AsyncSessio
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
+    await agree_to_family_sharing(
+        sg, owner, daughter, scopes=[Scope.RECORDS, Scope.READINGS, Scope.VISITS]
+    )
     await grant_key(
         sg,
         context=owner,
         holder=daughter,
         role=KeyRole.CAREGIVER,
-        scopes=[Scope.RECORDS, Scope.VISITS],
-        basis="owner_consent",
+        scopes=[Scope.RECORDS, Scope.READINGS, Scope.VISITS],
     )
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
     )
-    # The records are hers; the medicines are not, however the fact is reached.
+    # The records and the readings are hers; the medicines are not, however reached.
     assert [f.subject for f in await current_facts(sg, context=held, subject="blood_pressure")] == [
         "blood_pressure"
     ]

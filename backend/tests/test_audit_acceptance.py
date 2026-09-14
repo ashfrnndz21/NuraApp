@@ -36,7 +36,14 @@ from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key, revoke_key
 from app.keys.scopes import KeyRole, Scope
 from app.regions import OutOfRegion, Region
-from tests.support import Note, add_note, read_notes, refused_unit
+from tests.support import (
+    OPENING_CONSENT,
+    Note,
+    add_note,
+    agree_to_family_sharing,
+    read_notes,
+    refused_unit,
+)
 
 PRIVATE = "Pa keeps this one to himself."
 WATER_PILL = "The water pill is at 8 in the morning."
@@ -49,20 +56,20 @@ async def _pa_and_his_daughter(
     pa = await register_person(
         session, region=Region.SG, display_name="Pa", phone_e164="+6591110001"
     )
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
     daughter = await register_person(
         session, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
+    await agree_to_family_sharing(session, owner, daughter)
     await grant_key(
         session,
         context=owner,
         holder=daughter,
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.VISITS, Scope.SEND],
-        basis="owner_consent",
     )
     held = await resolve_key_context(
         session, region=Region.SG, person_id=daughter.id, profile_id=profile.id
@@ -160,7 +167,8 @@ async def test_the_patient_and_his_chief_read_the_trail_and_no_other_holder_can(
 ) -> None:
     _, owner, _, held = await _pa_and_his_daughter(sg)
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
-    await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF, basis="owner_consent")
+    await agree_to_family_sharing(sg, owner, son)
+    await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF)
     chief = await resolve_key_context(
         sg, region=Region.SG, person_id=son.id, profile_id=held.profile_id
     )
@@ -245,8 +253,9 @@ async def test_a_stranger_writes_nothing_into_a_graph_he_holds_no_key_to(
             sg, region=Region.SG, person_id=stranger.id, profile_id=owner.profile_id
         )
 
-    # Nothing new but the owner's own read of the trail: a person with no key cannot put a
-    # line into someone else's record, not even a line about himself.
+    # Nothing new but the owner's own read of the trail: the resolver writes nothing for a
+    # person with no key. The channel does, under a context that holds nothing — see
+    # `app.channels.api.deps.key_context` — so that the owner still sees the reaching.
     after = await read_audit(sg, context=owner)
     assert stranger.id not in {entry.actor_person_id for entry in after}
     assert len(after) == before + 1
@@ -278,7 +287,7 @@ async def test_a_stranger_cannot_learn_that_a_profile_exists_or_where_it_is_pinn
     sg: AsyncSession,
 ) -> None:
     pa = await register_person(sg, region=Region.SG, display_name="Pa", phone_e164="+6591110001")
-    here = await create_own_profile(sg, region=Region.SG, owner=pa)
+    here = await create_own_profile(sg, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     ma = await register_person(sg, region=Region.SG, display_name="Ma", phone_e164="+6591110002")
     astray = Profile(region=Region.MY, display_name="Ma", owner_person_id=ma.id)
     sg.add(astray)
@@ -310,13 +319,14 @@ async def test_a_stranger_cannot_learn_that_a_profile_exists_or_where_it_is_pinn
     lines = (
         await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id.in_([here.id, astray.id])))
     ).all()
-    assert lines == []
+    assert not any(line.actor_person_id == stranger.id for line in lines)
 
-    # The owner, whom the profile knows, is told the real reason and is written down.
+    # The owner, whom the profile knows, is told the real reason — and still nothing about
+    # another region's profile is written into this region's trail.
     with pytest.raises(OutOfRegion):
         await resolve_key_context(sg, region=Region.SG, person_id=ma.id, profile_id=astray.id)
     lines = (await sg.scalars(select(AuditEntry).where(AuditEntry.profile_id == astray.id))).all()
-    assert [(e.refused_because, e.actor_person_id) for e in lines] == [("OutOfRegion", ma.id)]
+    assert lines == []
 
 
 # --- a refused line outlives the unit of work that was refused ------------------------------

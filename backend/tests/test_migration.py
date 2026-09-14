@@ -5,9 +5,9 @@ and not the other. This loads every revision in the directory, runs them in depe
 order against an empty database, and checks the tables they build against the tables the
 models declare.
 
-Two stories built side by side each branch from the same revision, so the directory can hold
-more than one head at a time. That is allowed here; the operator joins the heads with a merge
-revision. What is not allowed is a revision that names a parent the directory does not hold.
+Two stories built side by side each branch from the same revision; a merge revision joins
+them, so the directory always has exactly one head and `alembic upgrade head` knows where
+that is. What is not allowed is a revision that names a parent the directory does not hold.
 """
 
 from __future__ import annotations
@@ -24,10 +24,12 @@ from alembic.operations import Operations
 from sqlalchemy import Connection, Inspector, Table, create_engine, inspect
 
 from app.audit.models import AuditEntry
-from app.identity.models import Person, Profile
+from app.consent.models import Consent
+from app.identity.models import LoginChallenge, LoginSession, Person, Profile
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.memory.models import Appointment, Artifact, Episode, Event, Fact, Provider
+from app.notes.models import Note
 
 VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
 
@@ -37,12 +39,16 @@ TABLES: tuple[Table, ...] = (
     Key.__table__,
     Confirmation.__table__,
     AuditEntry.__table__,
+    Consent.__table__,
     Artifact.__table__,
     Event.__table__,
     Fact.__table__,
     Episode.__table__,
     Provider.__table__,
     Appointment.__table__,
+    LoginChallenge.__table__,
+    LoginSession.__table__,
+    Note.__table__,
 )
 
 
@@ -118,6 +124,13 @@ def _tied_by_model(table: Table) -> set[tuple[tuple[str, ...], str, tuple[str, .
     }
 
 
+def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
+    """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
+    parents = {parent for module in revisions.values() for parent in _parents(module)}
+    heads = sorted(rev for rev in revisions if rev not in parents)
+    assert heads == ["0005_memory_review"]
+
+
 def test_the_migrations_build_the_tables_the_models_declare(
     revisions: dict[str, ModuleType],
 ) -> None:
@@ -159,12 +172,12 @@ def _apply(connection: Connection, migration: ModuleType, step: str) -> None:
         getattr(migration, step)()
 
 
-def test_0004_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
+def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_down(
     revisions: dict[str, ModuleType],
 ) -> None:
     """Upgrade, populate, downgrade (refused), clear, downgrade, upgrade again."""
     ordered = _in_order(revisions)
-    review = revisions["0004_memory_review"]
+    review = revisions["0005_memory_review"]
     engine = create_engine("sqlite+pysqlite://")
     with engine.begin() as connection:
         for migration in ordered:

@@ -50,6 +50,11 @@ def now() -> datetime:
     return _clock.now()
 
 
+def current() -> Clock:
+    """The clock in use. Tests reach the frozen one through this to move it from a helper."""
+    return _clock
+
+
 def set_clock(clock: Clock) -> None:
     global _clock
     _clock = clock

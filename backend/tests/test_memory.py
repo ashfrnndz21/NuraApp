@@ -59,7 +59,7 @@ from app.memory.working import (
     open_episodes,
 )
 from app.regions import OutOfRegion, Region
-from tests.support import refused_unit
+from tests.support import OPENING_CONSENT, agree_to_family_sharing, refused_unit
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SEPT_10 = SEPT_3 + timedelta(days=7)
@@ -68,7 +68,7 @@ SHA = "b" * 64
 
 async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
     pa = await register_person(session, region=Region.SG, display_name="Pa", phone_e164=phone)
-    profile = await create_own_profile(session, region=Region.SG, owner=pa)
+    profile = await create_own_profile(session, region=Region.SG, owner=pa, consent=OPENING_CONSENT)
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
@@ -563,7 +563,15 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
     written = {(entry.target, entry.target_id) for entry in trail if entry.action is Action.WRITE}
     for row in rows:
         assert (row.__tablename__, row.id) in written
-    assert {e.scope for e in trail if e.target in {"artifact", "event", "fact", "episode"}} == {
+    assert {e.scope for e in trail if e.target in {"artifact", "event", "episode"}} == {
+        Scope.RECORDS
+    }
+    # A fact is written under its subject's scope — a blood-pressure reading is a reading —
+    # and the whole record, read with no subject named, is read under RECORDS.
+    assert {e.scope for e in trail if e.target == "fact" and e.action is Action.WRITE} == {
+        Scope.READINGS
+    }
+    assert {e.scope for e in trail if e.target == "fact" and e.action is Action.READ} == {
         Scope.RECORDS
     }
     assert {e.scope for e in trail if e.target in {"provider", "appointment"}} == {Scope.VISITS}
@@ -595,13 +603,13 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
     daughter: Person = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
+    await agree_to_family_sharing(sg, owner, daughter)
     await grant_key(
         sg,
         context=owner,
         holder=daughter,
         role=KeyRole.CAREGIVER,
         scopes=[Scope.MEDICINES, Scope.VISITS],
-        basis="owner_consent",
     )
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
@@ -615,6 +623,8 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
     # She holds the visits, so the spine is hers to read.
     assert len(await upcoming_appointments(sg, context=held, at=SEPT_3)) == 1
 
+    # The door on each service checks the scope first, so her reach for the photo is refused
+    # at the artefact, before the consent gate (E00-02) is even asked.
     refused = [e for e in await read_audit(sg, context=owner) if e.outcome is Outcome.REFUSED]
     assert {(e.actor_person_id, e.action, e.scope, e.target) for e in refused} == {
         (daughter.id, Action.READ, Scope.RECORDS, "fact"),
