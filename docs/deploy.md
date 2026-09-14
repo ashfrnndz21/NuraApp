@@ -63,7 +63,7 @@ that is neither a laptop's dev run nor a declared demo (`app/fixtures.py`, ADR 0
 | Speech (voice notes) | Answers only for the fixture recordings | A speech provider in the region | yes |
 | Speaker separation (who spoke when in a consult recording) | Answers only for the fixture recordings | A diarisation model in the region | yes |
 | Voice (a card said aloud, E11) | Silence as long as the lines | A speech provider in the region | yes |
-| App push (E11) | Reaches nobody (`NoDevices`) | A push sender (APNs / web push) | yes: a demo reaches nobody, and a real deployment refuses to start until one is built |
+| App push (E11) | Web Push (`app.delivery.push.WebPush`) when the three `NURA_VAPID_*` settings are set; without them a demo reaches nobody (`NoDevices`) | Built: Web Push to the home-screen app (ADR 0001). Set the VAPID keys | yes without the keys: a demo reaches nobody, and a real deployment refuses to start |
 | Feed searcher and compressor | Fixture pages and summaries | The allowlisted fetcher and a grounded model call | yes |
 | Calendar | Real: an uploaded `.ics` is read in memory (the fixture calendar is tests-only) | — | yes (for the fixture) |
 | Ask retriever | Real: keyword retrieval (the fixture retriever is tests-only) | — | yes (for the fixture) |
@@ -100,6 +100,9 @@ the repo, `fly.toml` or `render.yaml`.
 | `NURA_OBJECT_BUCKET_REGION` | no | `auto` (Tigris) | `ap-southeast-1` | The bucket's signing region. |
 | `NURA_OBJECT_ACCESS_KEY_ID` | **yes** | from the bucket | from the bucket | |
 | `NURA_OBJECT_SECRET_ACCESS_KEY` | **yes** | from the bucket | from the bucket | |
+| `NURA_VAPID_PUBLIC_KEY` | no | optional: set all three to give the demo Web Push | required | Web Push (ADR 0001): the P-256 public key, base64url (65 bytes). The home-screen app subscribes with it (`GET /api/deployment`). |
+| `NURA_VAPID_PRIVATE_KEY` | **yes** | with the public key | required | Its private half, base64url (32 bytes). Signs every push (RFC 8292). Never in the repo, never in a log. |
+| `NURA_VAPID_SUBJECT` | no | with the keys | required | Whom a push service may contact about these pushes: `mailto:…` or `https://…`. The three go together, or none; a wrong pair refuses to start. |
 | `NURA_OBJECT_STORE` | no | Render demo only: `/tmp/nura-objects` | **absent** (refused) | A directory store. The night's wipe empties it and a restart loses it. |
 | `NURA_PAPER_FIXTURES`, `NURA_VISIT_FIXTURES`, `NURA_VOICE_FIXTURES`, `NURA_FEED_FIXTURES`, `NURA_WHATSAPP_FIXTURES`, `NURA_SPEAKER_FIXTURES` | no | `tests/fixtures/paper`, `…/visits`, `…/voice`, `…/feed`, `…/whatsapp`, `…/speakers` | absent once real adapters exist | Set in `fly.toml` / `render.yaml`. |
 | `NURA_WHATSAPP_DEV_SECRET` | **yes** | a long random string | **absent** | The fixture's webhook secret. Render generates it. |
@@ -110,6 +113,11 @@ the repo, `fly.toml` or `render.yaml`.
 | `PORT` | no | `8000` (Fly, in `fly.toml`); Render sets its own | the same | |
 | `NURA_DEV_CODE_SENDER` | — | **must be absent** | **must be absent** | A laptop's dev run: it prints login codes. It is refused alongside demo mode. |
 | `NURA_FROZEN_CLOCK` | — | **must be absent** | **must be absent** | Refused outside a dev run. |
+
+To make the VAPID pair, once per deployment (keep the private half only in the platform's
+secrets; a new pair means every phone subscribes again):
+
+    python3 -c "import base64; from cryptography.hazmat.primitives.asymmetric import ec; from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat; k = ec.generate_private_key(ec.SECP256R1()); b = lambda d: base64.urlsafe_b64encode(d).rstrip(b'=').decode(); print('NURA_VAPID_PUBLIC_KEY=' + b(k.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint))); print('NURA_VAPID_PRIVATE_KEY=' + b(k.private_numbers().private_value.to_bytes(32, 'big')))"
 
 The process refuses to start, with the missing or forbidden setting named, if any of these
 holds:

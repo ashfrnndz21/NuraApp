@@ -343,6 +343,16 @@ export const en = {
     setUp: "Set up Nura",
     // @patient phrase
     signOut: "Sign out",
+    // @patient phrase
+    remindersGet: "Get reminders on this phone",
+    // @patient
+    remindersOn: "Reminders are on for this phone.",
+    // @patient phrase
+    remindersStop: "Stop reminders on this phone",
+    // @patient
+    remindersDenied1: "This phone said no to reminders.",
+    // @patient
+    remindersDenied2: "You can change that in the phone's settings.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
