@@ -52,6 +52,11 @@ jobs:
           python -m alembic downgrade base
           python -m alembic upgrade heads
           python -m alembic current
+      - name: The migrated schema is the one the models declare (alembic check, on Postgres)
+        # #131's test runs the same check on SQLite; Postgres keeps types SQLite does not (uuid,
+        # timestamptz, json, varchar lengths), so drift that SQLite cannot see shows here.
+        working-directory: backend
+        run: python -m alembic check
       - name: The whole suite on Postgres
         working-directory: backend
         run: python -m pytest -q -rfE
