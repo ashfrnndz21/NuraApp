@@ -42,12 +42,24 @@ TARGET = "insurer"
 NAME_LENGTH = 120
 REFERENCE_LENGTH = 40
 
-_IDENTITY_CARD = (
-    re.compile(r"^[STFGM]\d{7}[A-Z]$", re.IGNORECASE),
-    re.compile(r"^\d{6}-\d{2}-\d{4}$"),
-)
-"""A Singapore NRIC or FIN (S1234567D), a Malaysian MyKad written with its dashes
-(520101-14-5678): not a policy reference, and not kept here."""
+_NRIC = re.compile(r"[STFGM]\d{7}[A-Z]")
+"""A Singapore NRIC or FIN, anywhere in the words once spaces and marks are taken out."""
+_TWELVE = re.compile(r"(?<!\d)(\d{2})(\d{2})(\d{2})(\d{2})\d{4}(?!\d)")
+"""Twelve digits whose first six are a date and whose next two a place of birth: a MyKad,
+with its dashes or without."""
+
+
+def looks_like_an_identity_card(text: str) -> bool:
+    """Whether the words hold a Singapore NRIC or FIN, or a Malaysian MyKad — however they are
+    written: with or without dashes, spaces or dots, after "NRIC" or "IC"."""
+    compact = re.sub(r"[\s\-./:#]", "", text).upper()
+    if _NRIC.search(compact):
+        return True
+    for match in _TWELVE.finditer(compact):
+        _year, month, day, place = (int(part) for part in match.groups())
+        if 1 <= month <= 12 and 1 <= day <= 31 and place >= 1:
+            return True
+    return False
 
 
 class Insurer(ProfileScoped, Base):
@@ -101,11 +113,10 @@ def insurer_draft(name: str | None, policy_reference: str | None) -> InsurerDraf
         raise NotAnInsurer("a policy reference needs the insurer's name")
     if said is not None and len(said) > NAME_LENGTH:
         raise NotAnInsurer(f"an insurer's name is at most {NAME_LENGTH} characters")
-    if reference is not None:
-        if len(reference) > REFERENCE_LENGTH:
-            raise NotAnInsurer(f"a policy reference is at most {REFERENCE_LENGTH} characters")
-        if any(pattern.match(reference) for pattern in _IDENTITY_CARD):
-            raise NotAPolicyReference("that is an identity-card number")
+    if reference is not None and len(reference) > REFERENCE_LENGTH:
+        raise NotAnInsurer(f"a policy reference is at most {REFERENCE_LENGTH} characters")
+    if any(one is not None and looks_like_an_identity_card(one) for one in (said, reference)):
+        raise NotAPolicyReference("that holds an identity-card number")
     return InsurerDraft(name=said, policy_reference=reference)
 
 
@@ -152,6 +163,7 @@ __all__ = [
     "NotTheirsToSetInsurer",
     "current_insurer",
     "insurer_draft",
+    "looks_like_an_identity_card",
     "may_set_insurer",
     "set_insurer",
 ]

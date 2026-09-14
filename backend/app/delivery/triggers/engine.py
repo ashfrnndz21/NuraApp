@@ -426,9 +426,17 @@ async def _brief(run: Run) -> None:
     today = run.local.date()
     if run.at < run.config.morning(today, zone):
         return
-    # Imported here: the brief and the feed's card reach back into delivery.
-    from app.delivery.feed.compose import BRIEF_ON_THE_CARD
+    # Imported here: the brief reaches back into delivery.
     from app.reasoning.visits.brief import brief_for
+    from app.reasoning.visits.questions import require_visit
+    from app.reasoning.visits.strings import (
+        YOUR_HEALTH,
+        day_and_date,
+        language_for,
+        purpose_code,
+        time_of_day,
+        visit_subject_words,
+    )
 
     for visit in await upcoming_appointments(run.session, context=run.acting, at=run.at, limit=5):
         days = (as_utc(visit.scheduled_at).astimezone(zone).date() - today).days
@@ -464,23 +472,35 @@ async def _brief(run: Run) -> None:
                 )
             continue
         run.forget_state()
-        carried = [
-            str(line["text"]) for line in brief.lines if line["section"] in BRIEF_ON_THE_CARD
-        ]
-        card = [*carried, *(brief.boundary or "").splitlines()]
+        seen = await require_visit(
+            run.session,
+            context=run.acting,
+            appointment_id=visit.id,
+            registry=run.via.providers.drug_registry,
+        )
+        lang = language_for(brief.language)
+        code = purpose_code(seen.appointment.purpose)
+        # The brief card's own words in the template's fixed lines: one name or one day in
+        # each slot, never a line break (a Meta template parameter holds none).
+        params = {
+            "doctor": seen.doctor,
+            "day": day_and_date(seen.appointment.scheduled_at, lang, run.acting.region),
+            "time": time_of_day(seen.appointment.scheduled_at, lang, run.acting.region),
+            "subject": YOUR_HEALTH[lang] if code is None else visit_subject_words(code, lang),
+        }
         firing = Firing(
             type=TriggerType.BRIEF,
             dedupe_key=firing.dedupe_key,
             why={**firing.why, "brief_id": str(brief.id), "state_id": str(brief.state_id)},
         )
 
-        async def say(person: object, card: list[str] = card, lang: str = brief.language) -> Delivered:
+        async def say(person: object, params: dict[str, str] = params, lang: str = lang) -> Delivered:
             return await send(
                 run.session,
                 context=run.acting,
                 to_person=person,  # type: ignore[arg-type]
                 kind="visit_brief",
-                params={"message": "\n".join(card)},
+                params=params,
                 provider=run.via.providers.whatsapp,
                 number=run.via.number,
                 language=lang,

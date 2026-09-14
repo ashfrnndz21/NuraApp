@@ -59,7 +59,7 @@ from app.channels.whatsapp.strings import (
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
-from app.db import as_utc, unit_of_work, utcnow
+from app.db import as_utc, nested_unit_of_work, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import Via
 from app.delivery.triggers.ladder import (
@@ -394,24 +394,37 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     # What to do now (E19-05): the flag's tier, the doctor's hours and the hospital marked as
     # on his insurance, at the moment the words were written — the ambulance at any hour for
     # chest pain and the signs of a stroke; out of the doctor's hours, never "call the doctor
-    # today". Read under the emergency scope, so a helper's word names the same doctor.
-    step = await escalation_now(
-        session,
-        context=work.context,
-        feeling=feeling,
-        local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
-        emergency_number=EMERGENCY_NUMBER[work.context.region.value],
-        channel=Channel.WHATSAPP,
-    )
-    await _say(
-        session,
-        work,
-        red_flag_reply_key(step.step.value, len(names)),
-        doctor=step.doctor or YOUR_DOCTOR[work.language],
-        hospital=step.hospital or "",
-        emergency_number=step.emergency_number,
-        names=join_names(names, work.language),
-    )
+    # today". Read under the emergency scope, so a helper's word names the same doctor. If
+    # the directory cannot be read, the ambulance: nothing about it may weaken the step.
+    try:
+        step = await escalation_now(
+            session,
+            context=work.context,
+            feeling=feeling,
+            local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
+            emergency_number=EMERGENCY_NUMBER[work.context.region.value],
+            channel=Channel.WHATSAPP,
+        )
+        step_name, doctor, hospital = step.step.value, step.doctor, step.hospital
+    except Refusal as refusal:
+        log.warning("whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__)
+        step_name, doctor, hospital = "ambulance", None, None
+    params = {
+        "doctor": doctor or YOUR_DOCTOR[work.language],
+        "hospital": hospital or "",
+        "emergency_number": EMERGENCY_NUMBER[work.context.region.value],
+        "names": join_names(names, work.language),
+    }
+    # The reply is its own savepoint: the flag and the ladder are written already, and a reply
+    # that cannot go never takes them back. Failing that, the ambulance line, which names
+    # nobody but who knows.
+    for key in (red_flag_reply_key(step_name, len(names)), red_flag_reply_key("ambulance", len(names))):
+        try:
+            async with nested_unit_of_work(session):
+                await _say(session, work, key, **params)
+            break
+        except Refusal as refusal:
+            log.warning("whatsapp: the red-flag reply %s refused %s", key, type(refusal).__name__)
     # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
     # and who is still to be asked; nothing else is written beside it.
     return Handled(

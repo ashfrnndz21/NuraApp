@@ -322,6 +322,15 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
     )
 
 
+def masked(reference: str | None) -> str | None:
+    """A policy reference as a key that is not his or his chief's reads it: the last four
+    letters or digits, the rest hidden ("••••0932")."""
+    if reference is None:
+        return None
+    kept = "".join(ch for ch in reference if ch.isalnum())[-4:]
+    return f"••••{kept}"
+
+
 def age_band(birth_year: int, today_year: int) -> str | None:
     """"70 to 79": the decade, never the year. A band is enough for a stranger."""
     age = today_year - birth_year
@@ -513,10 +522,20 @@ async def emergency_card(
     last_reading_at = (
         None if held.last_reading is None else as_utc(held.last_reading.occurred_at)
     )
+    # The policy reference in full for him, the steward and his chief — the card he prints and
+    # carries; the last four for everyone else holding the emergency card (B1 review).
+    reveal = context.is_owner or context.is_steward or context.role is KeyRole.CHIEF
     insurer = (
         None
         if held.insurer is None or held.insurer.name is None
-        else InsurerOnCard(name=held.insurer.name, policy_reference=held.insurer.policy_reference)
+        else InsurerOnCard(
+            name=held.insurer.name,
+            policy_reference=(
+                held.insurer.policy_reference
+                if reveal
+                else masked(held.insurer.policy_reference)
+            ),
+        )
     )
 
     def lines_in(code: str) -> list[Line]:

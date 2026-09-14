@@ -347,7 +347,8 @@ def _call_clinic_lines(s: Situation) -> tuple[str, ...]:
     will call, and the check-in."""
     lines: tuple[str, ...] = _not_heard(s) + ("nfw.call_clinic",)
     lines += ("nfw.not_taken", "nfw.ask_before") if s.missed is not None else ()
-    lines += ("nfw.rest",)
+    # If it gets worse — tonight, before the clinic opens — the ambulance (B1 review).
+    lines += ("nfw.rest", f"nfw.if_worse_{EMERGENCY_NUMBER[s.region]}")
     lines += ("nfw.will_call",) if s.chief is not None else ()
     return lines + ("nfw.check_in",)
 
@@ -790,14 +791,17 @@ async def _new_medicine(
     return None
 
 
-async def _directory_doctor(session: AsyncSession, *, context: KeyContext) -> str | None:
-    """The doctor, else the clinic, his directory names — read under the emergency scope, the
-    part every role holds and the one his emergency card names the doctor from (ADR 0002)."""
+async def _directory_doctor(
+    session: AsyncSession, *, context: KeyContext
+) -> tuple[str, ProviderKind] | None:
+    """The doctor, else the clinic, his directory names, and which it is — read under the
+    emergency scope, the part every role holds and the one his emergency card names the
+    doctor from (ADR 0002). A clinic is called by its own name, never as "Dr …'s clinic"."""
     providers = await audited_read(session, Provider, context, BUTTON_SCOPE)
     for kind in (ProviderKind.DOCTOR, ProviderKind.CLINIC):
         for provider in sorted(providers, key=lambda one: (as_utc(one.added_at), one.name)):
             if provider.kind is kind:
-                return provider.name
+                return provider.name, kind
     return None
 
 
@@ -815,11 +819,14 @@ def compose(
     chief: Person | None,
     missed_medicine: str | None,
     doctor: str | None,
+    clinic: str | None = None,
 ) -> list[Line]:
     """The card's lines, filled and verified, in the table's order.
 
     The one who is asked before a dose is the doctor on the label first, then the chief,
     then "your doctor": a question about a medicine is rerouted to the doctor, not the family.
+    The clinic called today is a doctor's ("Call Dr Tan's clinic today."), or — when the
+    directory names only a clinic — the clinic by its own name ("Call Bedok Clinic today.").
     """
     lang = language_of(language)
     who = doctor or (chief.display_name if chief is not None else YOUR_DOCTOR[lang])
@@ -829,8 +836,13 @@ def compose(
         "who": who,
         # The clinic is always a doctor's: never the chief's name in "Call …'s clinic today."
         "doctor": doctor or YOUR_DOCTOR[lang],
+        "clinic": clinic or "",
     }
-    return [Line(line_id, render(line_id, lang, **slots)) for line_id in decision.line_ids]
+    ids = [
+        "nfw.call_named" if one == "nfw.call_clinic" and clinic and not doctor else one
+        for one in decision.line_ids
+    ]
+    return [Line(line_id, render(line_id, lang, **slots)) for line_id in ids]
 
 
 BOUNDARY_PREFIX = "boundary."
@@ -977,14 +989,18 @@ async def not_feeling_well(
     decision = decide(situation)
     urgent = decision.kind is WhatToDoKind.RED_FLAG
     doctor = None if missed is None else missed.line.prescriber
+    clinic: str | None = None
     if decision.kind is WhatToDoKind.CALL_CLINIC:
         # The clinic of the doctor on the new medicine's label, else the tablet's, else his
-        # directory's doctor; "your doctor" when none is named.
-        doctor = (
-            (new_line.prescriber if new_line is not None else None)
-            or doctor
-            or await _directory_doctor(session, context=context)
-        )
+        # directory's doctor — or its clinic, by the clinic's own name; "your doctor" when
+        # none is named.
+        doctor = (new_line.prescriber if new_line is not None else None) or doctor
+        if doctor is None:
+            named = await _directory_doctor(session, context=context)
+            if named is not None and named[1] is ProviderKind.DOCTOR:
+                doctor = named[0]
+            elif named is not None:
+                clinic = named[0]
     told = None if family.chief is None else family.chief.display_name
     lines = within_the_boundary(
         compose(
@@ -993,6 +1009,7 @@ async def not_feeling_well(
             chief=family.chief,
             missed_medicine=missed_name,
             doctor=doctor,
+            clinic=clinic,
         ),
         language=lang,
         doctor=doctor,

@@ -34,7 +34,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write
 from app.audit.models import Action, Channel
 from app.audit.trail import record
-from app.channels.whatsapp.outbound.send import Delivered, send
+from app.channels.whatsapp.outbound.send import (
+    Delivered,
+    NotPlainWords,
+    OutsideTheWindow,
+    TemplateNotApproved,
+    send,
+)
 from app.db import as_utc, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import (
@@ -400,46 +406,64 @@ def flag_message(run: Run, flag: Flag) -> Say:
         who = raiser.display_name if raiser is not None else name
         doctor = await _doctor(run, lang)
         approves = run.via.number.approves
+        number = EMERGENCY_NUMBER[run.acting.region.value]
         tiered: tuple[str, dict[str, str]] | None = None
         if flag.feeling is not None and is_red(flag.feeling):
-            step = await escalation_now(
-                run.session,
-                context=run.acting,
-                feeling=flag.feeling,
-                local=run.local,
-                emergency_number=EMERGENCY_NUMBER[run.acting.region.value],
-                channel=Channel.SYSTEM,
-            )
-            if step.step is Step.HOSPITAL_NOW and step.hospital is not None:
-                tiered = (TIERED_NOTICE[step.step], {"name": name, "hospital": step.hospital})
-            elif step.step in TIERED_NOTICE:
-                tiered = (
-                    TIERED_NOTICE[step.step],
-                    {"name": name, "emergency_number": step.emergency_number},
+            try:
+                step = await escalation_now(
+                    run.session,
+                    context=run.acting,
+                    feeling=flag.feeling,
+                    local=run.local,
+                    emergency_number=number,
+                    channel=Channel.SYSTEM,
                 )
-        # The approved notice always goes; its variants go where the number approves them.
-        kind, params = "red_flag_notice", {"name": name, "who": who, "doctor": doctor}
+            except Refusal:
+                # Nothing about his directory may keep a flag from the family: the most
+                # urgent notice, the ambulance's.
+                tiered = (TIERED_NOTICE[Step.AMBULANCE], {"name": name, "emergency_number": number})
+            else:
+                if step.step is Step.HOSPITAL_NOW and step.hospital is not None:
+                    tiered = (
+                        TIERED_NOTICE[step.step],
+                        {"name": name, "hospital": step.hospital, "emergency_number": number},
+                    )
+                elif step.step in TIERED_NOTICE:
+                    tiered = (TIERED_NOTICE[step.step], {"name": name, "emergency_number": number})
+        # In order, the first that goes: the ambiguous notice; the tiered one — its template
+        # where Meta approved it, else the same words as free text inside the window; the
+        # notice he raised himself; the approved notice, which always can.
+        candidates: list[tuple[str, dict[str, str]]] = []
         if flag.ambiguous_profile and approves("red_flag_notice_ambiguous"):
-            kind, params = "red_flag_notice_ambiguous", {"who": who, "name": name}
-        elif tiered is not None and approves(tiered[0]):
-            kind, params = tiered
-        elif (
+            candidates.append(("red_flag_notice_ambiguous", {"who": who, "name": name}))
+        if tiered is not None:
+            kind = tiered[0] if approves(tiered[0]) else f"{tiered[0]}_text"
+            candidates.append((kind, tiered[1]))
+        if (
             raiser is not None
             and raiser.id == run.profile.owner_person_id
             and approves("red_flag_notice_self")
         ):
-            kind, params = "red_flag_notice_self", {"name": name, "doctor": doctor}
-        return await send(
-            run.session,
-            context=run.acting,
-            to_person=person,
-            kind=kind,
-            params=params,
-            provider=run.via.providers.whatsapp,
-            number=run.via.number,
-            language=lang,
-            state=await run.state(),
-        )
+            candidates.append(("red_flag_notice_self", {"name": name, "doctor": doctor}))
+        candidates.append(("red_flag_notice", {"name": name, "who": who, "doctor": doctor}))
+        passed: Refusal | None = None
+        for kind, params in candidates:
+            try:
+                return await send(
+                    run.session,
+                    context=run.acting,
+                    to_person=person,
+                    kind=kind,
+                    params=params,
+                    provider=run.via.providers.whatsapp,
+                    number=run.via.number,
+                    language=lang,
+                    state=await run.state(),
+                )
+            except (NotPlainWords, OutsideTheWindow, TemplateNotApproved) as refused:
+                passed = refused  # the words could not go this way: the next notice
+        assert passed is not None
+        raise passed
 
     return lambda to: Message(whatsapp=notice)
 

@@ -163,7 +163,7 @@ FROM_THE_LETTER: Mapping[str, str] = {
 URGENT_CLOSING: Mapping[str, str] = {
     "en": "Nura does not decide what is wrong.",
     "ms": "Nura tidak menentukan apa masalahnya.",
-    "zh": "Nura 不判断您出了什么问题。",
+    "zh": "Nura不判断是什么病。",
 }
 """The last line of every not-feeling-well card (E13-02). On an urgent card — a red flag — it is
 the one closing line: after "Call the ambulance now on 995." nothing sends him anywhere but the

@@ -360,7 +360,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or texts[0] != "This is Pa's emergency card."
         or card["last_reading_at"] is None
         or card["insurer"] != insurer
-        or "Pa is insured with Great Eastern." not in texts
+        or "Pa's insurance is with Great Eastern." not in texts
         or any("GE-4471" in text for text in texts)
         or card["english_lines"] != []
     ):

@@ -232,7 +232,10 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     lines = handled.replies[0].text.splitlines()
     assert lines[0] == "This one we do not wait for."
     assert lines[1] == "Call your doctor today."
-    assert lines[2] == "Kit knows now."
+    # In his doctor's hours, the doctor today — and the ambulance if it gets worse (E19-05).
+    assert lines[2] == "If it gets worse, call the ambulance now on 995."
+    assert lines[3] == "Kit knows now."
+    assert lines[4] == "Nura does not decide what is wrong."
 
     # The ladder (E11-06), the one record of who is told: never his own rung (he is the one
     # in trouble), never the poster (she knows). Nobody is on duty and the only chief posted

@@ -25,6 +25,7 @@ from app.channels.whatsapp.models import Direction, WhatsAppMessage
 from app.clock import FrozenClock
 from app.db import as_utc
 from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.errors import Refusal
 from app.memory.models import Provider, ProviderKind
 from app.memory.spine import add_provider
 from app.regions import Region
@@ -32,8 +33,10 @@ from app.safety.red_flags import (
     AMBULANCE_FLAGS,
     RED_FLAGS,
     Feeling,
+    Flag,
     Step,
     Urgency,
+    detect,
     escalation_for,
     is_after_hours,
     step_for,
@@ -48,7 +51,10 @@ STROKE_AND_CHEST = {
     Feeling.WORST_HEADACHE,
     Feeling.SUDDEN_BLURRING,
     Feeling.CONFUSION,
+    Feeling.SHAKY_SWEATY,
 }
+"""The ambulance tier, written out: chest pain, breathless at rest, the signs of a stroke, and
+shaky and sweaty on a sugar medicine (it acts in minutes)."""
 
 
 def at(hour: int, minute: int = 0, day: int = 14) -> datetime:
@@ -82,15 +88,18 @@ def test_the_ambulance_tier_is_chest_pain_and_the_signs_of_a_stroke_and_is_never
                 assert step_for(Urgency.AMBULANCE, after_hours=late, hospital=hospital) is Step.AMBULANCE
 
 
-def test_out_of_hours_is_the_directorys_hours_else_20_to_08() -> None:
+def test_out_of_hours_is_the_directorys_hours_else_20_to_08_the_last_hour_included() -> None:
     assert not is_after_hours(time(8, 0), None, None)
-    assert not is_after_hours(time(19, 59), None, None)
+    assert not is_after_hours(time(18, 59), None, None)
+    # The last hour before closing: the clinic cannot see him "today" at 19:45.
+    assert is_after_hours(time(19, 0), None, None)
     assert is_after_hours(time(20, 0), None, None)
     assert is_after_hours(time(7, 59), None, None)
-    assert is_after_hours(time(17, 30), time(9, 0), time(17, 0))
+    assert is_after_hours(time(16, 30), time(9, 0), time(17, 0))
     assert not is_after_hours(time(9, 0), time(9, 0), time(17, 0))
-    # A clinic open from 18:00 to 02:00 is open at one in the morning.
-    assert not is_after_hours(time(1, 0), time(18, 0), time(2, 0))
+    # A clinic open from 18:00 to 02:00 is open at one in the morning, not at half past one.
+    assert not is_after_hours(time(0, 30), time(18, 0), time(2, 0))
+    assert is_after_hours(time(1, 30), time(18, 0), time(2, 0))
     assert is_after_hours(time(3, 0), time(18, 0), time(2, 0))
 
 
@@ -130,26 +139,42 @@ def test_the_step_reads_the_doctors_hours_and_the_hospital_from_the_directory() 
 
 # --- on WhatsApp, end to end -----------------------------------------------------------------
 
+AMBULANCE_IF_WORSE = "If it gets worse, call the ambulance now on 995."
 REPLY_STEP: dict[Step, list[str]] = {
     Step.AMBULANCE: ["Call the ambulance now on 995."],
-    Step.DOCTOR_TODAY: ["Call Dr Tan today."],
+    Step.DOCTOR_TODAY: ["Call Dr Tan today.", AMBULANCE_IF_WORSE],
     Step.DOCTOR_TODAY_HOSPITAL: ["Call Dr Tan today.", "If it gets worse, go to Gleneagles now."],
-    Step.HOSPITAL_NOW: ["Go to the emergency department at Gleneagles now."],
-    Step.NUMBER_IF_WORSE: ["If it gets worse, call 995 now."],
+    Step.HOSPITAL_NOW: [
+        "Go to the emergency department at Gleneagles now.",
+        "Gleneagles is on your insurance.",
+        "If you cannot get there safely, call the ambulance now on 995.",
+    ],
+    Step.NUMBER_IF_WORSE: [
+        "Sit down and rest now.",
+        AMBULANCE_IF_WORSE,
+        "Call Dr Tan in the morning.",
+    ],
 }
 """What the thread says to do now, by step: the reply sits between "This one we do not wait
-for." and "Mei knows now."."""
+for." and "Mei knows now.", and ends "Nura does not decide what is wrong."."""
+
+CLOSING = "Nura does not decide what is wrong."
 
 NOTICE: dict[Step, list[str]] = {
-    Step.AMBULANCE: ["Pa is not well.", "Call Pa now.", "If Pa does not answer, call 995 now."],
+    Step.AMBULANCE: [
+        "Pa is not feeling well.",
+        "Call Pa now.",
+        "If Pa has not called the ambulance, call the ambulance now on 995.",
+    ],
     Step.DOCTOR_TODAY: ["Pa is not feeling well.", "Call Dr Tan today."],
     Step.DOCTOR_TODAY_HOSPITAL: ["Pa is not feeling well.", "Call Dr Tan today."],
     Step.HOSPITAL_NOW: [
-        "Pa is not well.",
+        "Pa is not feeling well.",
         "Call Pa now.",
         "Help Pa get to the emergency department at Gleneagles now.",
+        "If Pa cannot get there safely, call the ambulance now on 995.",
     ],
-    Step.NUMBER_IF_WORSE: ["Pa is not well.", "Call Pa now.", "If it gets worse, call 995 now."],
+    Step.NUMBER_IF_WORSE: ["Pa is not feeling well.", "Call Pa now.", AMBULANCE_IF_WORSE],
 }
 """What the chief on duty is sent, after "This one we do not wait for.": in his hours the
 notice he raised himself names Dr Tan; out of them, or in the ambulance tier, the notice that
@@ -185,6 +210,7 @@ async def test_the_thread_and_the_roster_are_told_what_to_do_now(
         "This one we do not wait for.",
         *REPLY_STEP[step],
         "Mei knows now.",
+        CLOSING,
     ]
     assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[step]]
 
@@ -240,3 +266,89 @@ async def test_the_escalation_goes_within_one_minute_of_the_red_word(
     assert messages and all(as_utc(m.at) - said_at <= timedelta(minutes=1) for m in messages)
     # The hospital on his insurance is named in the escalation, in the thread.
     assert "If it gets worse, go to Gleneagles now." in handled.replies[0].text.splitlines()
+
+
+# --- what the review found ------------------------------------------------------------------
+
+
+async def test_a_hospital_named_by_its_initials_never_loses_the_flag(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """"SGH" is a hospital's name, not an abbreviation in his sentence: the words are checked
+    with every name standing in as a plain name, and the flag, the ladder, the reply and the
+    family's notice all go."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await add_provider(sg, context=h.owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG)
+    await add_provider(sg, context=h.owner, name="SGH", kind=ProviderKind.HOSPITAL, region=Region.SG, panel=True)
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, PA, "I fell in the bathroom")
+    assert handled.outcome == "red_flag" and handled.flag_id is not None
+    assert await sg.get(Flag, handled.flag_id) is not None
+    assert (await sg.scalars(select(Ladder).where(Ladder.flag_id == handled.flag_id))).one()
+    said = handled.replies[0].text.splitlines()
+    assert said[1:3] == ["Go to the emergency department at SGH now.", "SGH is on your insurance."]
+    assert "Help Pa get to the emergency department at SGH now." in h.sent_to(h.mei)[-1].splitlines()
+
+
+@pytest.mark.parametrize(
+    "words",
+    ("I fell and now I am confused", "Pa jatuh dan keliru", "他跌倒了，现在很糊涂", "confused after he fell"),
+)
+def test_a_fall_with_confusion_is_the_ambulance_in_every_language(words: str) -> None:
+    assert detect(words) is Feeling.CONFUSION
+    assert urgency_of(Feeling.CONFUSION) is Urgency.AMBULANCE
+
+
+async def test_a_fall_with_confusion_in_his_hours_is_still_the_ambulance(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    clock.set(at(15))
+    handled = await h.inbound(sg, PA, "I fell and now I am confused")
+    assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+
+
+async def test_if_his_directory_cannot_be_read_the_step_is_the_ambulance(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing about the directory may weaken the step or keep the flag from the family."""
+
+    async def refused(*_: object, **__: object) -> None:
+        raise Refusal("the directory could not be read")
+
+    monkeypatch.setattr("app.channels.whatsapp.inbound.escalation_now", refused)
+    monkeypatch.setattr("app.delivery.triggers.ladder.escalation_now", refused)
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    clock.set(at(15))
+    handled = await h.inbound(sg, PA, "I fell in the bathroom")
+    assert handled.outcome == "red_flag"
+    assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+async def test_inside_her_window_the_tiered_notice_goes_as_free_text_until_meta_approves(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """On a number that carries only the approved templates, Mei wrote an hour ago: the night's
+    notice goes to her as free text, the same words as the pending template; nobody gets
+    "call your doctor today" at 22:30."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    approved = tuple(
+        name
+        for name in h.via.number.templates
+        if name in ("morning_card", "visit_reminder", "reorder", "family_digest", "feeling_check_in", "red_flag_notice")
+    )
+    number = dataclasses.replace(h.via.number, templates=approved)
+    live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
+    clock.set(at(21, 30))
+    await live.inbound(sg, h.mei.phone_e164 or "", "thank you")
+    clock.set(at(22, 30))
+    await live.inbound(sg, PA, "I fell in the bathroom")
+    sent = [
+        row
+        for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
+        if row.outcome is DeliveryOutcome.SENT and row.trigger_type.value == "flag"
+    ]
+    assert [row.template_name for row in sent] == [None]
+    assert live.sent_to(live.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.HOSPITAL_NOW]]

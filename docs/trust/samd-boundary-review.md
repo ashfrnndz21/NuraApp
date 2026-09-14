@@ -72,6 +72,7 @@ The rule that most directly touches treatment is the one that refuses: a dose of
 2. **Questions can carry an implication.** "Ask Dr Tan whether the water pill is right for your kidneys" implies a concern. Mitigation: questions name the fact they come from and never a conclusion; the plain-words verifier refuses red words; the reviewer checks rule 8 (the question he would actually ask).
 3. **A summary can restate a doctor's instruction as Nura's.** Mitigation: the summary names the visit and the recording; the memo is in his words; the line "Nura wrote down what Dr Tan said" is on it.
 4. **The red-flag list looks like triage.** Mitigation: it is the discharge letter's own instructions, surfaced in the letter's name; it bypasses ranking because the letter said "today", not because Nura decided; this is question 4 for the adviser.
+7. **The red-flag tiers.** A fall at night with no hospital marked is told to rest and to call the ambulance if it gets worse; the clinical review would send every out-of-hours same-day flag to the nearest emergency department. Mitigation: every step that is not the ambulance says what to do if it gets worse; a message with two flags is tiered by the more urgent; the table is ADR 0010, awaiting a clinician's sign-off.
 5. **Translation drift.** A Malay or Chinese line could carry a stronger word than the English. Mitigation: a native speaker's pass before the first family; the verifier's shared rules run in every language.
 6. **The learning supply.** An explainer about a condition, shown to a person with that condition, is not advice, but it is close — and E21 compresses the page into a few lines for him, so the words on the card are written per person from a publisher's page. Mitigation: only allowlisted publishers the pharmacist approved; every card cites the passage it came from and an uncited compression is rejected; a line that would change treatment is rerouted as a question for the doctor, never a card; every card names its State and ends on the boundary line; the compressed lines pass the plain-words verifier before the card is made.
 
@@ -84,6 +85,7 @@ The team does not build these without a new review:
 - A dose calculation, a dose suggestion, or an instruction to start, stop, change, skip or double a medicine. A different amount is a question.
 - An individualised risk score, a probability, or a "most likely cause".
 - A recommendation of a level of care ("go to A&E") that is Nura's rather than the hospital letter's own words.
+  The red flag's step on WhatsApp by tier and by the doctor's hours (ADR 0010: the ambulance, the doctor today, the emergency department of the hospital on his insurance out of hours) is such a recommendation. It was built on the operator's instruction of 15 September 2026 and does not ship to a family before question 10 is answered and a clinician signs the table.
 - Booking, rescheduling or messaging a clinic without a person's confirm.
 - Pharmacology, interactions or dosing from a model rather than the licensed data.
 - Closing the loop with a clinic in a way that lets Nura's output stand in for a clinician's decision.
@@ -101,6 +103,7 @@ Any of these changes the intended purpose and therefore the classification; the 
 7. Are there labelling, quality-system or post-market obligations that attach even to software the regulator does not classify as a device, that we should meet from T1?
 8. Does a translation of a boundary line count as a change to labelling that needs recording?
 9. Is repeating the lab's own printed flag ('above the range on your blood test') informational?
+10. A red flag's reply says what to do now by the flag's tier and by the doctor's hours (docs/adr/0010-red-flag-tiers.md): "Call the ambulance now on 995." for chest pain and the signs of a stroke at any hour; "Call Dr Tan today." in his hours; out of them, "Go to the emergency department at {hospital} now." when a hospital on his insurance is marked, else "If it gets worse, call the ambulance now on 995." Is a level-of-care step chosen from a fixed table, the table signed by a clinician, triage in either country's sense? The not-feeling-well card's own call-the-clinic row (a symptom said "quite a lot", or lasting a day or more, or a new medicine's watch-out) asks the same question in a milder form.
 
 ## 8. Sign-off
 

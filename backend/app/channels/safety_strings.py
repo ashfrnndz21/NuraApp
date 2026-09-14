@@ -37,6 +37,15 @@ LANGUAGES = ("en", "ms", "zh")
 DEFAULT_LANGUAGE = "en"
 
 
+NAME_SLOTS: frozenset[str] = frozenset(
+    {"name", "chief", "doctor", "who", "clinic", "insurer", "patient", "hospital"}
+)
+"""Slots that hold a name. The verifier reads the line with each standing in as a plain name
+(`NAME_STAND_IN`); the line is shown with the real one."""
+
+NAME_STAND_IN = "Ash"
+
+
 class NotPlainWords(Refusal):
     """A rendered line failed docs/plain-words.md. It does not reach him; the template is wrong."""
 
@@ -150,7 +159,7 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}去{clinic}看病。",
     },
     "ec.insurer": {
-        "en": "{name} is insured with {insurer}.",
+        "en": "{name}'s insurance is with {insurer}.",
         "ms": "{name} ada insurans dengan {insurer}.",
         "zh": "{name}的保险公司是{insurer}。",
     },
@@ -203,7 +212,22 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
     "nfw.call_clinic": {
         "en": "Call {doctor}'s clinic today.",
         "ms": "Telefon klinik {doctor} hari ini.",
-        "zh": "今天就打电话给{doctor}的诊所。",
+        "zh": "今天就打电话到{doctor}诊所。",
+    },
+    "nfw.call_named": {
+        "en": "Call {clinic} today.",
+        "ms": "Telefon {clinic} hari ini.",
+        "zh": "今天就打电话给{clinic}。",
+    },
+    "nfw.if_worse_995": {
+        "en": "If it gets worse, call the ambulance now on 995.",
+        "ms": "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian 995.",
+        "zh": "如果变得更严重，现在就打995叫救护车。",
+    },
+    "nfw.if_worse_999": {
+        "en": "If it gets worse, call the ambulance now on 999.",
+        "ms": "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian 999.",
+        "zh": "如果变得更严重，现在就打999叫救护车。",
     },
     "nfw.not_taken": {
         "en": "Nura has no note that you took {medicine} today.",
@@ -461,6 +485,168 @@ SYMPTOM_LINES: Mapping[str, Mapping[str, str]] = {
 sleep" — a shared "felt {word}" fits only the adjectives, and "felt like vomiting" for a man
 who vomited changes what his daughter is told."""
 
+# @patient
+SYMPTOM_LINES_YOU: Mapping[str, Mapping[str, str]] = {
+    "not_well": {
+        "en": "You were not feeling well on {date}.",
+        "ms": "Anda rasa tidak sihat pada {date}.",
+        "zh": "您在{date}不舒服。",
+    },
+    "tired": {
+        "en": "You felt tired on {date}.",
+        "ms": "Anda rasa letih pada {date}.",
+        "zh": "您在{date}感到累。",
+    },
+    "dizzy": {
+        "en": "You felt dizzy on {date}.",
+        "ms": "Anda rasa pening pada {date}.",
+        "zh": "您在{date}感到头晕。",
+    },
+    "headache": {
+        "en": "You had a headache on {date}.",
+        "ms": "Anda sakit kepala pada {date}.",
+        "zh": "您在{date}头痛。",
+    },
+    "nausea": {
+        "en": "You felt sick in the stomach on {date}.",
+        "ms": "Anda rasa loya pada {date}.",
+        "zh": "您在{date}感到恶心。",
+    },
+    "vomiting": {
+        "en": "You vomited on {date}.",
+        "ms": "Anda muntah pada {date}.",
+        "zh": "您在{date}吐了。",
+    },
+    "cough": {
+        "en": "You had a cough on {date}.",
+        "ms": "Anda batuk pada {date}.",
+        "zh": "您在{date}咳嗽。",
+    },
+    "fever": {
+        "en": "You had a fever on {date}.",
+        "ms": "Anda demam pada {date}.",
+        "zh": "您在{date}发烧。",
+    },
+    "stomach_pain": {
+        "en": "You had a stomach pain on {date}.",
+        "ms": "Anda sakit perut pada {date}.",
+        "zh": "您在{date}肚子痛。",
+    },
+    "poor_appetite": {
+        "en": "You had no appetite on {date}.",
+        "ms": "Anda tak selera makan pada {date}.",
+        "zh": "您在{date}没胃口。",
+    },
+    "cannot_sleep": {
+        "en": "You could not sleep on {date}.",
+        "ms": "Anda susah tidur pada {date}.",
+        "zh": "您在{date}睡不着。",
+    },
+    "leg_swelling": {
+        "en": "Your legs were swollen on {date}.",
+        "ms": "Kaki anda bengkak pada {date}.",
+        "zh": "您在{date}腿肿。",
+    },
+    "weak": {
+        "en": "You felt weak on {date}.",
+        "ms": "Anda rasa lemah pada {date}.",
+        "zh": "您在{date}感到无力。",
+    },
+    "joint_pain": {
+        "en": "You had pain in the joints on {date}.",
+        "ms": "Anda sakit sendi pada {date}.",
+        "zh": "您在{date}关节痛。",
+    },
+    "diarrhoea": {
+        "en": "You had a runny stomach on {date}.",
+        "ms": "Anda cirit-birit pada {date}.",
+        "zh": "您在{date}拉肚子。",
+    },
+    "constipation": {
+        "en": "You could not pass motion on {date}.",
+        "ms": "Anda sembelit pada {date}.",
+        "zh": "您在{date}便秘。",
+    },
+    "itch": {
+        "en": "You felt itchy on {date}.",
+        "ms": "Anda rasa gatal pada {date}.",
+        "zh": "您在{date}感到痒。",
+    },
+    "chest_tightness": {
+        "en": "You felt chest pain on {date}.",
+        "ms": "Anda rasa sakit dada pada {date}.",
+        "zh": "您在{date}感到胸痛。",
+    },
+    "breathless_at_rest": {
+        "en": "You felt short of breath on {date}.",
+        "ms": "Anda rasa sesak nafas pada {date}.",
+        "zh": "您在{date}感到喘不过气。",
+    },
+    "one_sided_swelling": {
+        "en": "You had swelling on one side on {date}.",
+        "ms": "Anda bengkak sebelah pada {date}.",
+        "zh": "您在{date}一边肿了。",
+    },
+    "worst_headache": {
+        "en": "You had the worst headache ever on {date}.",
+        "ms": "Anda sakit kepala paling teruk pada {date}.",
+        "zh": "您在{date}头痛得最厉害。",
+    },
+    "sudden_blurring": {
+        "en": "Your eyes went blurry all of a sudden on {date}.",
+        "ms": "Mata anda kabur tiba-tiba pada {date}.",
+        "zh": "您在{date}眼睛突然看不清。",
+    },
+    "fall": {
+        "en": "You had a fall on {date}.",
+        "ms": "Anda jatuh pada {date}.",
+        "zh": "您在{date}跌倒了。",
+    },
+    "confusion": {
+        "en": "You felt confused on {date}.",
+        "ms": "Anda rasa keliru pada {date}.",
+        "zh": "您在{date}感到糊涂。",
+    },
+    "shaky_sweaty": {
+        "en": "You felt shaky and sweaty on {date}.",
+        "ms": "Anda rasa menggigil dan berpeluh pada {date}.",
+        "zh": "您在{date}又发抖又出汗。",
+    },
+}
+"""The symptom log's own sentences, said to him: the pre-visit brief speaks to him ("your
+blood pressure book"), so a symptom on it is "You felt dizzy on Monday 14 September.", one
+sentence per code, the same words as the log's but for the person (B1 review)."""
+
+# @patient phrase
+SINCE_THEN_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "just_now": "just then",
+        "this_morning": "that morning",
+        "since_yesterday": "the day before",
+        "few_days": "a few days before",
+        "about_a_week": "about a week before",
+        "longer": "some weeks before",
+    },
+    "ms": {
+        "just_now": "ketika itu",
+        "this_morning": "pagi itu",
+        "since_yesterday": "sehari sebelumnya",
+        "few_days": "beberapa hari sebelumnya",
+        "about_a_week": "kira-kira seminggu sebelumnya",
+        "longer": "beberapa minggu sebelumnya",
+    },
+    "zh": {
+        "just_now": "那时",
+        "this_morning": "那天早上",
+        "since_yesterday": "前一天",
+        "few_days": "之前几天",
+        "about_a_week": "之前大约一个星期",
+        "longer": "之前几个星期",
+    },
+}
+"""Since when, said days later on the brief: anchored to the day in the line above ("It started
+that morning."), never to the day he reads it ("this morning") — B1 review."""
+
 # --- his words for things that fill the slots ---------------------------------------------
 
 # @patient phrase
@@ -708,6 +894,7 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     **NOTICE,
     **SYMPTOM_LOG,
     **{f"sym.{code}": by_language for code, by_language in SYMPTOM_LINES.items()},
+    **{f"you.{code}": by_language for code, by_language in SYMPTOM_LINES_YOU.items()},
 }
 
 KIND_OF: Mapping[str, Kind] = {
@@ -736,9 +923,14 @@ def render(template_id: str, language: str, **slots: str | date) -> str:
     lang = language_of(language)
     said = {k: say_date(v, lang) if isinstance(v, date) else v for k, v in slots.items()}
     text = template(template_id, lang).format(**said)
+    # A name is said as it is written ("AIA", "SGH"): the line is verified with each name
+    # slot standing in as a plain name, and shown with the real one (B1 review).
+    checked = template(template_id, lang).format(
+        **{k: NAME_STAND_IN if k in NAME_SLOTS else v for k, v in said.items()}
+    )
     failures = [
         f"rule {finding.rule} — {finding.problem}"
-        for finding in verify(text, lang, KIND_OF.get(template_id, "line"))
+        for finding in verify(checked, lang, KIND_OF.get(template_id, "line"))
         if finding.severity == "fail"
     ]
     if failures:

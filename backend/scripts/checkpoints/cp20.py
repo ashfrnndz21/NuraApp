@@ -468,7 +468,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if said != [
         "This one we do not wait for.",
         "Go to the emergency department at Gleneagles now.",
+        "Gleneagles is on your insurance.",
+        "If you cannot get there safely, call the ambulance now on 995.",
         "Mei knows now.",
+        "Nura does not decide what is wrong.",
     ]:
         raise fail("out of hours, the hospital on his insurance, never the doctor today", why=f"got {said}")
     ok(

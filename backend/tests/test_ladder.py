@@ -170,8 +170,11 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
     # at night (E19-05).
     assert handled.replies[0].text.splitlines() == [
         "This one we do not wait for.",
-        "If it gets worse, call 995 now.",
+        "Sit down and rest now.",
+        "If it gets worse, call the ambulance now on 995.",
+        "Call your doctor in the morning.",
         "Mei knows now.",
+        "Nura does not decide what is wrong.",
     ]
     ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id.is_not(None)))).one()
     # His own rung is skipped (he is the one in trouble): on duty first, then the rest.
@@ -183,9 +186,9 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
     # call him now, the emergency number if it gets worse — never "call your doctor today".
     assert h.sent_to(h.mei)[-1].splitlines() == [
         "This one we do not wait for.",
-        "Pa is not well.",
+        "Pa is not feeling well.",
         "Call Pa now.",
-        "If it gets worse, call 995 now.",
+        "If it gets worse, call the ambulance now on 995.",
     ]
     # Nobody answered: five minutes on, still at night, the next rung is asked.
     later = await _run(sg, h, clock, at(22, 36))

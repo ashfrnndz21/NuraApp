@@ -1777,10 +1777,21 @@ class BriefOut(BaseModel):
     voice_script: VoiceScriptOut
     """The brief as it is said (E22-03): each line's spoken words, a pause after each, a longer
     one before the boundary."""
+    withheld: list[Scope] = []
+    """The parts of the record this key does not open whose lines were left off: the record's,
+    for the lines about how he feels (B1)."""
 
     @classmethod
-    def of(cls, brief: Brief) -> BriefOut:
-        lines = [BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines]
+    def of(
+        cls,
+        brief: Brief,
+        shown: list[dict[str, Any]] | None = None,
+        withheld: list[Scope] | None = None,
+    ) -> BriefOut:
+        lines = [
+            BriefLineOut(**{"spoken": line["text"], **line})
+            for line in (brief.lines if shown is None else shown)
+        ]
         return cls(
             brief_id=brief.id,
             appointment_id=brief.appointment_id,
@@ -1790,6 +1801,7 @@ class BriefOut(BaseModel):
             built_at=utc(brief.built_at),
             lines=lines,
             boundary=brief.boundary,
+            withheld=list(withheld or []),
             voice_script=VoiceScriptOut.of(
                 [line.spoken for line in lines], brief.language, brief.boundary
             ),

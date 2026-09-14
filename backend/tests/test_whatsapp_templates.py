@@ -87,6 +87,7 @@ FILL = {
     "message": "Mei will pick you up at 9.",
     "emergency_number": "995",
     "hospital": "Gleneagles",
+    "subject": "your blood pressure",
     "both": "Pa and Ma",
     "either": "Pa or Ma",
 }
@@ -164,3 +165,18 @@ def test_e11s_templates_wait_for_meta_and_a_deployment_carries_only_the_approved
     )
     assert live.templates == E19_SIX
     assert live.approves("morning_card") and not live.approves("dose_reminder")
+
+
+def test_the_tiered_notices_say_the_same_words_as_free_text_until_meta_approves() -> None:
+    """The free-text notice sent inside a family member's window is the pending template's
+    words exactly: one wording, whichever way it goes (B1)."""
+    for name in ("red_flag_notice_ambulance", "red_flag_notice_hospital", "red_flag_notice_night"):
+        for language in LANGUAGES:
+            params = {slot: FILL[slot] for slot in TEMPLATES[name].slots}
+            assert render(name, language, params) == reply(f"{name}_text", language, **params)
+
+
+def test_no_template_parameter_carries_a_line_break_for_the_brief() -> None:
+    """A Meta template parameter holds no line break: the brief's slots are a name, a day, a
+    time and a subject, and the lines are the template's own."""
+    assert TEMPLATES["visit_brief"].slots == ("doctor", "day", "time", "subject")

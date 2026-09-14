@@ -57,7 +57,7 @@ import re
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -249,15 +249,19 @@ _PATTERNS: tuple[tuple[Feeling, re.Pattern[str]], ...] = tuple(
 
 
 def detect(text: str | None) -> Feeling | None:
-    """The first red flag the words of a message match, or None: the same `Feeling` a tap on
-    the cloud raises, heard in free text on WhatsApp (E19-05). The weight rule is a fact, not a
-    word, so it is not in the table."""
+    """The most urgent red flag the words of a message match, or None: the same `Feeling` a
+    tap on the cloud raises, heard in free text on WhatsApp (E19-05). Every flag the words
+    match is found, and one in the ambulance tier (`AMBULANCE_FLAGS`) wins over the table's
+    order — "I fell and now I am confused" is confusion, the ambulance, never a fall's "call
+    the doctor today" (B1 review). The weight rule is a fact, not a word, so it is not in the
+    table."""
     if not text:
         return None
-    for rule, pattern in _PATTERNS:
-        if pattern.search(text):
-            return rule
-    return None
+    found = [rule for rule, pattern in _PATTERNS if pattern.search(text)]
+    if not found:
+        return None
+    urgent = [rule for rule in found if rule in AMBULANCE_FLAGS]
+    return (urgent or found)[0]
 
 
 # --- the words heard at a visit (E05) --------------------------------------------------------
@@ -587,18 +591,24 @@ AMBULANCE_FLAGS: frozenset[Feeling] = frozenset(
         Feeling.WORST_HEADACHE,
         Feeling.SUDDEN_BLURRING,
         Feeling.CONFUSION,
+        Feeling.SHAKY_SWEATY,
     }
 )
-"""The red flags that are the ambulance at any hour: chest pain, breathless at rest, and the
-signs of a stroke — the worst headache ever, sudden blurring, confusion. The rest of
-`RED_FLAGS` (a fall, one-sided swelling, shaky and sweaty, the weight after a heart discharge)
-are the same-day tier. A subset of `RED_FLAGS`, never a second list of words: the words are
-`RED_FLAG_WORDS`, above."""
+"""The red flags that are the ambulance at any hour: chest pain, breathless at rest, the signs
+of a stroke — the worst headache ever, sudden blurring, confusion — and shaky and sweaty on a
+medicine that drops his sugar (it acts in minutes). The rest of `RED_FLAGS` (a fall, one-sided
+swelling, the weight after a heart discharge) are the same-day tier. A subset of `RED_FLAGS`,
+never a second list of words: the words are `RED_FLAG_WORDS`, above. Awaiting a clinician's
+sign-off (docs/adr/0010-red-flag-tiers.md)."""
 
 NIGHT_FROM = time(20, 0)
 NIGHT_UNTIL = time(8, 0)
 """Out of the doctor's hours when the directory does not say them: 20:00 to 08:00 on his
 wall clock."""
+
+LAST_HOUR = timedelta(hours=1)
+"""The last hour before the doctor closes counts as out of hours: a clinic closing at 20:00
+cannot see him at 19:45 "today"."""
 
 
 class Step(StrEnum):
@@ -637,15 +647,18 @@ def urgency_of(feeling: Feeling) -> Urgency:
 
 
 def is_after_hours(local: time, opens: time | None, closes: time | None) -> bool:
-    """Whether this moment on his wall clock is outside the doctor's hours: the directory's
-    when it says both ends, 08:00 to 20:00 otherwise. Hours that cross midnight are read as
-    such."""
+    """Whether this moment on his wall clock is outside the doctor's hours, the last hour
+    before closing included (`LAST_HOUR`): the directory's hours when it says both ends,
+    08:00 to 20:00 otherwise (equal ends are read as "not said", on the side of the
+    emergency department). Hours that cross midnight are read as such. Days of the week are
+    not in the directory yet: a Sunday is read like a weekday."""
     if opens is None or closes is None or opens == closes:
         opens, closes = NIGHT_UNTIL, NIGHT_FROM
+    last = (datetime.combine(date(2000, 1, 1), closes) - LAST_HOUR).time()
     at = local.replace(tzinfo=None)
-    if opens < closes:
-        return not opens <= at < closes
-    return closes <= at < opens
+    if opens < last:
+        return not opens <= at < last
+    return last <= at < opens
 
 
 def step_for(urgency: Urgency, *, after_hours: bool, hospital: bool) -> Step:
@@ -673,15 +686,9 @@ def escalation_for(
     insurance."""
     listed = sorted(providers, key=lambda one: (as_utc(one.added_at), one.name))
     doctor = next((p for kind in DOCTOR_FIRST for p in listed if p.kind is kind), None)
-    hours = next(
-        (
-            p
-            for kind in (ProviderKind.DOCTOR, ProviderKind.CLINIC)
-            for p in listed
-            if p.kind is kind and p.opens_at is not None and p.closes_at is not None
-        ),
-        None,
-    )
+    # The hours of the doctor the line names, and no one else's: a clinic's hours never make
+    # another doctor's "call … today" (B1 review).
+    hours = doctor if doctor is not None and doctor.kind is not ProviderKind.HOSPITAL else None
     hospital = next(
         (p for p in reversed(listed) if p.kind is ProviderKind.HOSPITAL and p.panel), None
     )

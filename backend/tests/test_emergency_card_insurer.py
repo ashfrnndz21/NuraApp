@@ -48,7 +48,7 @@ async def test_the_insurer_is_typed_on_a_yes_said_in_a_line_and_carried_as_data(
     assert card.insurer is not None
     assert (card.insurer.name, card.insurer.policy_reference) == ("Great Eastern", "GE-4471-0932")
     said = {line.id: line.text for line in card.lines}
-    assert said["ec.insurer"] == "Pa is insured with Great Eastern."
+    assert said["ec.insurer"] == "Pa's insurance is with Great Eastern."
     assert not any("GE-4471" in line.text for line in card.lines), "a reference is never said"
     assert card.english_lines == []  # an English card is already in English
     assert_plain(card.lines)
@@ -80,17 +80,43 @@ async def test_an_emergency_only_key_reads_the_insurer_and_sets_nothing(sg: Asyn
     await _typed(sg, owner, "Great Eastern", "GE-1")
     mine = await emergency_card(sg, context=owner, registry=REGISTRY)
     theirs = await emergency_card(sg, context=lin, registry=REGISTRY)
-    assert theirs.insurer == mine.insurer and theirs.lines == mine.lines
+    # The lines are the same; the policy reference is his and his chief's to read in full, and
+    # the last four for a key that holds only the emergency card.
+    assert theirs.lines == mine.lines
+    assert mine.insurer is not None and mine.insurer.policy_reference == "GE-1"
+    assert theirs.insurer is not None and theirs.insurer.name == "Great Eastern"
+    assert theirs.insurer.policy_reference == "••••GE1"
     assert theirs.english_lines == mine.english_lines and theirs.state_id == mine.state_id
     with pytest.raises(NotTheirsToSetInsurer):
         insurer_draft("AIA", None)  # the draft itself is anyone's to make…
         await set_insurer(sg, context=lin, name="AIA", policy_reference=None, confirmation_id=mine.card_id)
 
 
-async def test_an_identity_card_number_is_not_a_policy_reference(sg: AsyncSession) -> None:
-    for number in ("S1234567D", "t7654321a", "520101-14-5678"):
-        with pytest.raises(NotAPolicyReference):
-            insurer_draft("AIA", number)
+@pytest.mark.parametrize(
+    "number",
+    (
+        "S1234567D",
+        "t7654321a",
+        "520101-14-5678",
+        "520101145678",
+        "520101 14 5678",
+        "NRIC S1234567D",
+        "S1234567D.",
+    ),
+)
+def test_an_identity_card_number_is_refused_however_it_is_written(number: str) -> None:
+    with pytest.raises(NotAPolicyReference):
+        insurer_draft("AIA", number)
+    with pytest.raises(NotAPolicyReference):
+        insurer_draft(f"AIA {number}", "AIA-1")
+
+
+def test_a_policy_reference_that_is_not_an_identity_card_is_kept() -> None:
+    for reference in ("GE-4471-0932", "PRU 88 1234", "123456789012", "991399001234"):
+        assert insurer_draft("AIA", reference).policy_reference == reference
+
+
+async def test_a_yes_is_for_exactly_the_words(sg: AsyncSession) -> None:
     owner = await pa(sg, phone="+6591110074")
     yes = await confirm(sg, owner, insurer_draft("AIA", "AIA-1"))
     with pytest.raises(NotWhatWasConfirmed):
@@ -109,15 +135,23 @@ async def test_his_language_and_english_are_on_one_card_and_one_page(sg: AsyncSe
     malay = {line.id: line.text for line in card.lines}
     assert english["ec.title"] == "This is Pa's emergency card."
     assert malay["ec.insurer"] == "Pa ada insurans dengan Great Eastern."
-    assert english["ec.insurer"] == "Pa is insured with Great Eastern."
+    assert english["ec.insurer"] == "Pa's insurance is with Great Eastern."
     assert english["ec.medicine"] == "Pa takes the water pill (frusemide)."
     assert english["ec.ambulance"] == "The ambulance number is 995."
     assert_plain(card.lines, "ms")
     assert_plain(card.english_lines, "en")
     page = emergency_card_html(card)
     assert '<html lang="ms">' in page
-    assert '<p class="twin" lang="en">Pa is insured with Great Eastern.</p>' in page
+    assert '<p class="twin" lang="en">Pa&#x27;s insurance is with Great Eastern.</p>' in page
     assert '<p class="twin" lang="en">This is Pa&#x27;s emergency card.</p>' in page
     assert page.count("GE-77") == 1 and "<script" not in page
     zh = await emergency_card(sg, context=owner, registry=REGISTRY, language="zh")
     assert zh.language == "zh" and [one.id for one in zh.english_lines] == [one.id for one in zh.lines]
+
+
+async def test_a_name_in_capitals_is_said_as_it_is_written(sg: AsyncSession) -> None:
+    """"AIA" is an insurer's name, not an abbreviation in his sentence: the line is on the card."""
+    owner = await pa(sg, phone="+6591110076")
+    await _typed(sg, owner, "AIA", "AIA-778")
+    card = await emergency_card(sg, context=owner, registry=REGISTRY)
+    assert {line.id: line.text for line in card.lines}["ec.insurer"] == "Pa's insurance is with AIA."

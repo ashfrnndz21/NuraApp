@@ -30,7 +30,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +61,7 @@ from app.reasoning.visits.strings import (
     time_of_day,
     visit_subject_words,
 )
+from app.regions import REGION_TZ
 from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import MEDICINE_SUBJECTS
 from app.state.dimensions import VISIT_LENGTH
@@ -196,28 +197,50 @@ SYMPTOM_SUBJECT = "symptom"
 module does not import: the safety flow reaches the delivery engine, which reaches the brief)."""
 
 
-def symptom_lines(entries: Sequence[Any], language: str) -> list[list[Line]]:
-    """One group of lines per symptom entry, newest first: a line per thing he felt, in the
-    symptom log's own sentence ("Pa felt dizzy on Monday 14 September."), and one line with how
-    much and since when when he said either ("It was quite bad and it started this morning.").
-    Every line is rendered by the log's catalogue, so verified; the sources are the fact."""
+def symptom_lines(entries: Sequence[Any], language: str, zone: tzinfo) -> list[list[Line]]:
+    """One group of lines per symptom entry — a red flag's first, then newest first: a line per
+    thing he felt, the symptom log's own sentence said to him ("You felt dizzy on Monday 14
+    September."), and one line with how much and since when when he said either ("It was quite
+    bad and it started that morning." — since when anchored to that day, not to the day he
+    reads it). Every line is rendered by the log's catalogue, so verified; the sources are the
+    fact."""
     from app.channels.safety_strings import (
-        SINCE_WORDS,
-        SYMPTOM_LINES,
+        SINCE_THEN_WORDS,
+        SYMPTOM_LINES_YOU,
         phrase,
         render,
         severity_said,
     )
 
+    def order(entry: Any) -> tuple[bool, float, str]:
+        return (not entry.red_flags, -entry.at.timestamp(), str(entry.fact_id))
+
     groups: list[list[Line]] = []
-    for entry in sorted(entries, key=lambda one: (one.at, str(one.fact_id)), reverse=True):
+    for entry in sorted(entries, key=order):
         source = (str(entry.fact_id),)
-        texts = [line.text for line in entry.lines if line.id.startswith("sym.") and (
-            line.id[4:] in SYMPTOM_LINES or line.id == "sym.not_well"
-        )]
-        group = [Line("changed", "symptom", text, source) for text in texts]
+        codes = [
+            *(flag.value for flag in entry.red_flags),
+            *(one.value for one in entry.symptoms if one.value != "not_well"),
+        ] or ["not_well"]
+        group = [
+            Line(
+                "changed",
+                "symptom",
+                render(
+                    f"you.{code}" if code in SYMPTOM_LINES_YOU else "you.not_well",
+                    language,
+                    date=entry.at.astimezone(zone).date(),
+                ),
+                source,
+            )
+            for code in codes
+        ]
         severity = None if entry.severity is None else severity_said(entry.severity, language)
-        since = None if entry.duration is None else phrase(SINCE_WORDS, language, entry.duration.value)
+        since = (
+            None
+            if entry.duration is None
+            else phrase(SINCE_THEN_WORDS, language, entry.duration.value)
+        )
         if severity is not None and since is not None:
             detail = render("sym.severity_since", language, severity=severity, since=since)
         elif severity is not None:
@@ -233,16 +256,38 @@ def symptom_lines(entries: Sequence[Any], language: str) -> list[list[Line]]:
 
 
 def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
-    """The groups that fit in `cap` lines, whole, then `more` — or all of them when they fit."""
+    """The groups that fit in `cap` lines, whole, then `more` — or all of them when they fit.
+    The section is never empty when it has something to say: a first group too long for the
+    page is cut to fit, never dropped (B1 review)."""
     every = [line for group in groups for line in group]
     if len(every) <= cap:
         return every
     shown: list[Line] = []
     for group in groups:
-        if len(shown) + len(group) > cap - 1:
-            break
-        shown.extend(group)
+        room = cap - 1 - len(shown)
+        if len(group) <= room:
+            shown.extend(group)
+            continue
+        if not shown:
+            shown.extend(group[:room])
+        break
     return [*shown, more]
+
+
+SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more"})
+"""The brief's lines about how he feels: the record's (`Scope.RECORDS`, the scope the symptom
+log is read under), not the visits'."""
+
+
+def lines_for(brief: Brief, context: KeyContext) -> tuple[list[dict[str, Any]], list[Scope]]:
+    """The brief's lines as this key may read them, and what was withheld. A symptom is the
+    record's: a key that holds the visits and not the record — a viewer's, a clinic's — reads
+    the brief without the lines about how he feels, and is told the record was withheld
+    (B1 review)."""
+    if context.allows(Scope.RECORDS):
+        return list(brief.lines), []
+    kept = [line for line in brief.lines if line["key"] not in SYMPTOM_KEYS]
+    return kept, ([Scope.RECORDS] if len(kept) != len(brief.lines) else [])
 
 
 def _dimension_of(state: StateView, fact_id: str) -> Dimension | None:
@@ -300,11 +345,13 @@ def compose(
     )
     for key, new_ids in counted:
         if new_ids:
+            # "1 new number is", never "1 new numbers are".
+            said = f"{key}_one" if len(new_ids) == 1 else key
             lines.append(
                 Line(
                     "changed",
-                    key,
-                    say(key, lang, day=since_day, count=len(new_ids)),
+                    said,
+                    say(said, lang, day=since_day, count=len(new_ids)),
                     tuple(new_ids),
                 )
             )
@@ -379,7 +426,7 @@ async def build_brief(
         log = await symptoms_since(
             session, context=context, since=since_moment, language=visit.language
         )
-        symptoms = symptom_lines(log.entries, visit.language)
+        symptoms = symptom_lines(log.entries, visit.language, REGION_TZ[context.region])
     memos = await current_memos(session, context=context)
     bring = [
         (m.key, m.text) for m in memos if m.kind is MemoKind.BRING and m.language == visit.language

@@ -33,6 +33,8 @@ from app.clock import FrozenClock
 from app.identity.models import Person
 from app.keys.scopes import KeyRole
 from app.medicines.service import active_lines, record_dose_taken
+from app.memory.models import ProviderKind
+from app.memory.spine import add_provider
 from app.regions import Region
 from app.safety.boundary import URGENT_CLOSING
 from app.safety.models import WhatToDoKind
@@ -201,6 +203,7 @@ async def test_quite_a_lot_calls_the_clinic_and_keeps_the_tablet_lines(sg: Async
         "Nura has no note that you took the water pill today.",
         "Ask Dr Tan before you take the water pill.",
         "Sit down and rest now.",
+        "If it gets worse, call the ambulance now on 995.",
         "Mei will call you today.",
         "Nura will ask you again in 2 hours.",
         "Nura wrote down how you feel.",
@@ -265,3 +268,23 @@ async def test_the_red_flag_row_stays_first_whatever_else_is_said(sg: AsyncSessi
     ]
     lines = await active_lines(sg, context=owner, registry=REGISTRY)
     assert len(lines) == 1  # nothing here changes a medicine
+
+
+async def test_a_clinic_is_called_by_its_own_name_and_the_card_says_what_if_it_gets_worse(
+    sg: AsyncSession,
+) -> None:
+    """His directory names a clinic and no doctor: "Call Bedok Clinic today.", never "Call
+    Bedok Clinic's clinic today.", and the closing asks his doctor. Every call-the-clinic card
+    says to call the ambulance if it gets worse, tonight before the clinic opens."""
+    owner = await pa(sg, phone="+6591110065")
+    made = await water_pill(sg, owner)
+    assert made.line is not None
+    await record_dose_taken(sg, context=owner, line_id=made.line.id, anchor="breakfast", amount=1)
+    await add_provider(sg, context=owner, name="Bedok Clinic", kind=ProviderKind.CLINIC, region=Region.SG)
+    done = await _press(sg, owner, "tired since yesterday")
+    texts = [line.text for line in done.lines]
+    assert done.kind is WhatToDoKind.CALL_CLINIC
+    assert texts[1] == "Call Bedok Clinic today."
+    assert "If it gets worse, call the ambulance now on 995." in texts
+    assert texts[-2:] == ["Ask your doctor.", "Nura does not decide what is wrong."]
+    assert_plain(done.lines)

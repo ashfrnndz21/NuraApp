@@ -275,46 +275,57 @@ RED_FLAG_NOTICE_AMBULANCE = Template(
     {
         "en": (
             "This one we do not wait for.\n"
-            "{name} is not well.\n"
+            "{name} is not feeling well.\n"
             "Call {name} now.\n"
-            "If {name} does not answer, call {emergency_number} now."
+            "If {name} has not called the ambulance, call the ambulance now on {emergency_number}."
         ),
         "ms": (
             "Yang ini kita tidak tunggu.\n"
-            "{name} tidak sihat.\n"
+            "{name} rasa tidak sihat.\n"
             "Telefon {name} sekarang.\n"
-            "Kalau {name} tidak jawab, telefon {emergency_number} sekarang."
+            "Kalau {name} belum hubungi ambulans, hubungi ambulans sekarang di talian {emergency_number}."
         ),
-        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n如果{name}没有接，现在就打{emergency_number}。",
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "如果{name}还没有叫救护车，现在就打{emergency_number}叫救护车。"
+        ),
     },
     approved=False,
 )
-"""A red flag in the ambulance tier (chest pain, breathless at rest, the signs of a stroke), to
-the family: never "call the doctor today", at any hour (E19-05)."""
+"""A red flag in the ambulance tier (chest pain, breathless at rest, the signs of a stroke,
+shaky and sweaty on a sugar medicine), to the family: call him, and the ambulance if he has not
+— never "call the doctor today", at any hour (E19-05)."""
 
 # @patient
 RED_FLAG_NOTICE_HOSPITAL = Template(
     "red_flag_notice_hospital",
-    ("name", "hospital"),
+    ("name", "hospital", "emergency_number"),
     {
         "en": (
             "This one we do not wait for.\n"
-            "{name} is not well.\n"
+            "{name} is not feeling well.\n"
             "Call {name} now.\n"
-            "Help {name} get to the emergency department at {hospital} now."
+            "Help {name} get to the emergency department at {hospital} now.\n"
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}."
         ),
         "ms": (
             "Yang ini kita tidak tunggu.\n"
-            "{name} tidak sihat.\n"
+            "{name} rasa tidak sihat.\n"
             "Telefon {name} sekarang.\n"
-            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang."
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.\n"
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}."
         ),
-        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n现在就帮{name}去{hospital}的急诊部。",
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "现在就帮{name}去{hospital}的急诊部。\n"
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。"
+        ),
     },
     approved=False,
 )
 """A same-day red flag out of the doctor's hours, with a hospital on his insurance marked in
-the directory: its emergency department, named (E19-05)."""
+the directory: its emergency department, named, and the ambulance if he cannot get there
+safely (E19-05)."""
 
 # @patient
 RED_FLAG_NOTICE_NIGHT = Template(
@@ -323,36 +334,59 @@ RED_FLAG_NOTICE_NIGHT = Template(
     {
         "en": (
             "This one we do not wait for.\n"
-            "{name} is not well.\n"
+            "{name} is not feeling well.\n"
             "Call {name} now.\n"
-            "If it gets worse, call {emergency_number} now."
+            "If it gets worse, call the ambulance now on {emergency_number}."
         ),
         "ms": (
             "Yang ini kita tidak tunggu.\n"
-            "{name} tidak sihat.\n"
+            "{name} rasa tidak sihat.\n"
             "Telefon {name} sekarang.\n"
-            "Kalau jadi lebih teruk, telefon {emergency_number} sekarang."
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}."
         ),
-        "zh": "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n如果变得更严重，现在就打{emergency_number}。",
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "如果变得更严重，现在就打{emergency_number}叫救护车。"
+        ),
     },
     approved=False,
 )
-"""A same-day red flag out of the doctor's hours with no hospital marked: the emergency number
-if it gets worse, never "call the doctor today" at night (E19-05)."""
+"""A same-day red flag out of the doctor's hours with no hospital marked: call him now, the
+ambulance if it gets worse — never "call the doctor today" at night (E19-05)."""
 
 # @patient
 VISIT_BRIEF = Template(
     "visit_brief",
-    ("message",),
+    ("doctor", "day", "time", "subject"),
     {
-        "en": "Your visit is in a few days.\n{message}",
-        "ms": "Lawatan anda beberapa hari lagi.\n{message}",
-        "zh": "再过几天您就要去看医生了。\n{message}",
+        "en": (
+            "Your visit is in a few days.\n"
+            "You see {doctor} on {day} at {time}.\n"
+            "This visit is about {subject}.\n"
+            "Bring your blood pressure book on {day}.\n"
+            "Nura prepared this from your papers.\n"
+            "This is not a doctor's advice.\n"
+            "Ask {doctor}."
+        ),
+        "ms": (
+            "Beberapa hari lagi anda akan berjumpa doktor.\n"
+            "Anda berjumpa {doctor} pada {day} pukul {time}.\n"
+            "Lawatan ini untuk memeriksa {subject}.\n"
+            "Bawa buku tekanan darah anda pada {day}.\n"
+            "Nura menyediakan ini daripada surat-surat anda.\n"
+            "Ini bukan nasihat doktor.\n"
+            "Tanya {doctor}."
+        ),
+        "zh": (
+            "再过几天您就要去看医生了。\n您在{day}{time}看{doctor}。\n这次看医生是为了{subject}。\n"
+            "{day}，带上您的血压本。\n这是 Nura 从您的病历文件准备的。\n这不是医生的意见。\n问{doctor}。"
+        ),
     },
     approved=False,
 )
 """The pre-visit brief three days before a visit (E05-01), sent by E11's engine: the brief
-card's own lines — who and when, what it is about, what to bring — ending on its boundary."""
+card's own lines — who and when, what it is about, what to bring — ending on its boundary.
+Every slot is one word or name on one line: a Meta template parameter holds no line break."""
 
 TEMPLATES: Mapping[str, Template] = {
     template.name: template

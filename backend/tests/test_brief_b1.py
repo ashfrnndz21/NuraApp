@@ -23,19 +23,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import FrozenClock
 from app.delivery.triggers.engine import Report, run_due
 from app.delivery.triggers.models import Delivery, DeliveryOutcome, TriggerType
+from app.keys.scopes import KeyRole, Scope
 from app.reasoning.visits.brief import (
     LINE_BUDGET,
     Changed,
     Line,
+    _fold,
     build_brief,
     compose,
+    lines_for,
 )
 from app.reasoning.visits.models import Brief
 from app.reasoning.visits.questions import require_visit
 from app.regions import Region
 from app.safety.symptom_log import log_symptom, symptoms_since
 from tests.delivery_support import Home, home, via_for
-from tests.safety_support import assert_plain, transcriber_for
+from tests.safety_support import assert_plain, let_in, transcriber_for
 from tests.visits import REGISTRY, pa, reading, visit
 
 SGT = ZoneInfo("Asia/Singapore")
@@ -79,16 +82,15 @@ async def test_a_symptom_since_the_last_visit_is_its_own_line_in_his_words_and_n
     brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     changed = [line for line in brief.lines if line["section"] == "changed"]
     assert [(line["key"], line["text"]) for line in changed] == [
-        ("changed_readings", "Since Thursday 3 September, 1 new numbers are in your blood pressure book."),
-        ("symptom", "Pa felt dizzy on Thursday 3 September."),
-        ("symptom_detail", "It was quite bad and it started this morning."),
+        ("changed_readings_one", "Since Thursday 3 September, 1 new number is in your blood pressure book."),
+        ("symptom", "You felt dizzy on Thursday 3 September."),
+        # Since when, anchored to that day: he reads the brief days later.
+        ("symptom_detail", "It was quite bad and it started that morning."),
     ]
     # Never counted under his papers.
     assert "changed_papers" not in {line["key"] for line in brief.lines}
-    # The same words the symptom log says back: one vocabulary.
     log = await symptoms_since(sg, context=context, language="en")
     [entry] = log.entries
-    assert changed[1]["text"] == entry.lines[0].text
     assert changed[1]["sources"] == [str(entry.fact_id)] == changed[2]["sources"]
     assert_plain([line["text"] for line in brief.lines])
 
@@ -100,10 +102,45 @@ async def test_a_symptom_in_malay_is_said_in_malay(sg: AsyncSession) -> None:
     brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
     said = [line["text"] for line in brief.lines if line["key"].startswith("symptom")]
     assert said == [
-        "Pa rasa pening pada Khamis 3 September.",
-        "Rasanya agak teruk dan ia bermula semalam.",
+        "Anda rasa pening pada Khamis 3 September.",
+        "Rasanya agak teruk dan ia bermula sehari sebelumnya.",
     ]
     assert_plain(said, "ms")
+
+
+async def test_a_key_without_the_record_reads_the_brief_without_how_he_feels(
+    sg: AsyncSession,
+) -> None:
+    """A symptom is the record's: a viewer who holds the visits and not the record reads the
+    brief without the lines about how he feels, and is told the record was withheld."""
+    context = await pa(sg, language="en", phone="+6591110084")
+    await _log(sg, context, "dizzy, quite a lot, since this morning")
+    _provider, appointment = await visit(sg, context)
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    viewer = await let_in(
+        sg, context, phone="+6593330084", name="Kit", role=KeyRole.VIEWER, scopes={Scope.VISITS}
+    )
+    shown, withheld = lines_for(brief, viewer)
+    assert withheld == [Scope.RECORDS]
+    assert not any(line["key"].startswith("symptom") for line in shown)
+    mine, none = lines_for(brief, context)
+    assert none == [] and any(line["key"] == "symptom" for line in mine)
+
+
+async def test_a_red_flag_symptom_comes_first_and_a_long_entry_is_cut_never_dropped(
+    sg: AsyncSession,
+) -> None:
+    context = await pa(sg, language="en", phone="+6591110085")
+    await _log(sg, context, "tired")
+    await _log(sg, context, "chest pain")
+    await _log(sg, context, "dizzy")
+    _provider, appointment = await visit(sg, context)
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    felt = [line["text"] for line in brief.lines if line["key"] == "symptom"]
+    assert felt[0] == "You felt chest pain on Thursday 3 September."
+    group = [Line("changed", "symptom", f"You felt tired on day {n}.", ("s",)) for n in range(5)]
+    more = Line("changed", "symptoms_more", "Nura has more notes about how you feel.")
+    assert _fold([group], 4, more) == [*group[:3], more]
 
 
 # --- E05-01: one page -----------------------------------------------------------------------
@@ -194,9 +231,17 @@ async def test_the_brief_is_rendered_three_days_before_and_its_card_goes_once_un
     assert brief is not None and brief.built_at == at(7, 31)
     assert brief.appointment_id in (first.id, second.id)
     text = h.sent_to(h.pa)[-1].splitlines()
-    assert text[0] == "Your visit is in a few days."
-    assert text[1].startswith("You see Dr ") and text[1].endswith("on Thursday 17 September at 10 in the morning.") or "Thursday 17 September" in text[1]
-    assert text[-2:] == ["This is not a doctor's advice.", "Ask Dr Tan."] or text[-1].startswith("Ask ")
+    doctor = "Dr Tan" if brief.appointment_id == first.id else "Dr Lim"
+    hour = "10 in the morning" if brief.appointment_id == first.id else "3 in the afternoon"
+    assert text == [
+        "Your visit is in a few days.",
+        f"You see {doctor} on Thursday 17 September at {hour}.",
+        "This visit is about your blood pressure.",
+        "Bring your blood pressure book on Thursday 17 September.",
+        "Nura prepared this from your papers.",
+        "This is not a doctor's advice.",
+        f"Ask {doctor}.",
+    ]
     assert_plain(text)
     # Once: later that day nothing more for the first; the next day the second goes.
     assert [r.outcome for r in _briefs(await _run(sg, h, clock, at(9)))] == []
