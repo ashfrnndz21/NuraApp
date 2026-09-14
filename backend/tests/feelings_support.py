@@ -27,6 +27,7 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact
 from app.memory.spine import add_provider, book_appointment
+from app.onboarding.settings import SettingsValues, parse_clock_time, save_settings
 from app.regions import Region
 from tests.medicines_support import add, label
 from tests.safety_support import TRANSCRIBER
@@ -143,38 +144,11 @@ STORE = Store()
 __all__ = ["REGISTRY", "STORE", "TRANSCRIBER"]
 
 
-async def check_in_setting(session: AsyncSession, owner: KeyContext, value: str) -> Fact:
-    """His check-in time as onboarding (E01) will write it: `setting.checkin_time`, "HH:MM"."""
-    event = await record_event(
+async def check_in_setting(session: AsyncSession, owner: KeyContext, value: str) -> None:
+    """His check-in time, saved the way the settings screen saves it (E01's `save_settings`):
+    a settings row, and the fact `setting.checkin_time`, "HH:MM" on his clock."""
+    await save_settings(
         session,
         context=owner,
-        kind=EventKind.MESSAGE,
-        occurred_at=utcnow(),
-        label="check-in time",
-        source_channel=SourceChannel.APP,
-    )
-    draft = FactDraft(
-        subject="setting",
-        attribute="checkin_time",
-        value=value,
-        unit=None,
-        confidence=1.0,
-        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
-        artifact_id=None,
-        event_id=event.id,
-        episode_id=None,
-        supersedes_id=None,
-    )
-    yes = await confirm(session, owner, draft)
-    return await assert_fact(
-        session,
-        context=owner,
-        subject=draft.subject,
-        attribute=draft.attribute,
-        value=draft.value,
-        confidence=draft.confidence,
-        confidence_state=draft.confidence_state,
-        confirmation_id=yes.id,
-        event_id=event.id,
-        valid_from=utcnow(),
+        values=SettingsValues(language="en", checkin_time=parse_clock_time(value)),
     )

@@ -40,7 +40,6 @@ what he did with one.
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -81,7 +80,7 @@ from app.medicines.service import proud_days
 from app.medicines.strings import say_date
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
-from app.memory.semantic import current_facts
+from app.onboarding.settings import current_settings, values_of
 from app.reasoning.feelings.cloud import lead_for, weigh
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.record import Situation, read_situation
@@ -474,27 +473,16 @@ async def _presence(p: _Planner, session: AsyncSession, *, steady: bool) -> Nudg
     return None
 
 
-CHECK_IN_SUBJECT = "setting"
-CHECK_IN_ATTRIBUTE = "checkin_time"
-"""His check-in time, when he has said one: a Fact `setting.checkin_time`, "HH:MM" on his
-region's clock (written by onboarding, E01)."""
-_HH_MM = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
-
-
 async def check_in_time(session: AsyncSession, *, context: KeyContext) -> time:
-    """His check-in time from his latest setting, or `CHECK_IN_AT`. A setting that is not a
-    time, or one inside the quiet hours, is not one a nudge may go at: the default stands,
-    never an older setting he has since changed."""
-    facts = await current_facts(
-        session, context=context, subject=CHECK_IN_SUBJECT, attribute=CHECK_IN_ATTRIBUTE
-    )
-    latest = max(facts, key=lambda one: as_utc(one.asserted_at), default=None)
-    value = latest.value if latest is not None else None
-    found = _HH_MM.match(value.strip()) if isinstance(value, str) else None
-    if found is None:
+    """His check-in time from his settings (E01, `app.onboarding.settings`: `checkin_time`,
+    written as the fact `setting.checkin_time`, "HH:MM" on his region's clock), or
+    `CHECK_IN_AT`. A time inside the quiet hours is not one a nudge may go at: the default
+    stands."""
+    row = await current_settings(session, context=context)
+    at = None if row is None else values_of(row).checkin_time
+    if at is None or not QUIET_UNTIL <= at < QUIET_FROM:
         return CHECK_IN_AT
-    at = time(int(found.group(1)), int(found.group(2)))
-    return at if QUIET_UNTIL <= at < QUIET_FROM else CHECK_IN_AT
+    return at
 
 
 def _send_after(
