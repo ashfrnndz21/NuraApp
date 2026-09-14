@@ -8,4 +8,4 @@
 /backend/app/safety/ @ashfrnndz21
 /backend/app/reasoning/medicines/ @ashfrnndz21
 /backend/app/channels/whatsapp/outbound/ @ashfrnndz21
-/backend/alembic/versions/ @ashfrnndz21
+/backend/migrations/versions/ @ashfrnndz21
