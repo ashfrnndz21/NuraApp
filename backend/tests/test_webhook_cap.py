@@ -121,4 +121,6 @@ async def test_a_voice_notes_download_is_capped_and_past_it_nothing_is_heard_or_
     monkeypatch.setattr(inbound, "VOICE_DOWNLOAD_BYTES", 10)
     handled = await home.inbound(sg, PA, media_id="pa-voice-market", content_type="audio/ogg")
     assert handled.outcome != "voice_note" and handled.note_id is None
-    assert not list(await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id)))
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )

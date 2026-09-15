@@ -78,8 +78,12 @@ async def test_the_twin_is_kept_by_digest_in_the_regions_store_never_as_an_artef
     store = LocalObjectStore(tmp_path, Region.SG)
     profile_id = uuid.uuid4()
     lines = ["Your tablets for today are on your list."]
-    first = await voiced(store, voice, profile_id=profile_id, region=Region.SG, lines=lines, language="en")
-    again = await voiced(store, voice, profile_id=profile_id, region=Region.SG, lines=lines, language="en")
+    first = await voiced(
+        store, voice, profile_id=profile_id, region=Region.SG, lines=lines, language="en"
+    )
+    again = await voiced(
+        store, voice, profile_id=profile_id, region=Region.SG, lines=lines, language="en"
+    )
     assert not first.cached and again.cached and again.spoken.audio == first.spoken.audio
     assert first.key.startswith(f"voice/{profile_id}/")
     assert (tmp_path / "SG" / first.key).is_file()

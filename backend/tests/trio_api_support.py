@@ -19,10 +19,16 @@ def photo(label: str) -> dict[str, str]:
     }
 
 
-async def confirm_paper(deployment: Deployment, token: str, profile_id: str, label: str) -> dict[str, Any]:
+async def confirm_paper(
+    deployment: Deployment, token: str, profile_id: str, label: str
+) -> dict[str, Any]:
     """Upload the paper, confirm every field as read with one yes; the confirmed card."""
     client = deployment.client
-    card = (await client.post(f"/profiles/{profile_id}/photos", json=photo(label), headers=bearer(token))).json()
+    card = (
+        await client.post(
+            f"/profiles/{profile_id}/photos", json=photo(label), headers=bearer(token)
+        )
+    ).json()
     decisions = [{"field_id": f["field_id"], "decision": "confirmed"} for f in card["fields"]]
     minted = await client.post(
         f"/profiles/{profile_id}/confirmations",

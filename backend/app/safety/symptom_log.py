@@ -153,11 +153,16 @@ def _lines(
         lines.append(Line("sym.not_well", render("sym.not_well", lang, name=name, date=day)))
     if severity is not None:
         lines.append(
-            Line("sym.severity", render("sym.severity", lang, severity=severity_said(severity, lang)))
+            Line(
+                "sym.severity", render("sym.severity", lang, severity=severity_said(severity, lang))
+            )
         )
     if duration is not None:
         lines.append(
-            Line("sym.since", render("sym.since", lang, since=phrase(SINCE_WORDS, lang, duration.value)))
+            Line(
+                "sym.since",
+                render("sym.since", lang, since=phrase(SINCE_WORDS, lang, duration.value)),
+            )
         )
     lines.append(
         Line("sym.by_voice", render("sym.by_voice", lang, name=name))
@@ -169,8 +174,12 @@ def _lines(
 
 def _entry(fact: Fact, *, name: str, language: str, region_tz: ZoneInfo) -> Entry:
     value = fact.value if isinstance(fact.value, dict) else {}
-    symptoms = [Symptom(code) for code in value.get("symptoms", []) if code in Symptom.__members__.values()]
-    flags = [Feeling(code) for code in value.get("red_flags", []) if code in Feeling.__members__.values()]
+    symptoms = [
+        Symptom(code) for code in value.get("symptoms", []) if code in Symptom.__members__.values()
+    ]
+    flags = [
+        Feeling(code) for code in value.get("red_flags", []) if code in Feeling.__members__.values()
+    ]
     severity = value.get("severity")
     duration_code = value.get("duration")
     duration = (

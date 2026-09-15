@@ -82,7 +82,13 @@ from app.ingestion.photos import store_photo
 from app.ingestion.review import review_photo
 from app.ingestion.transcribe import NOTHING_HEARD, Transcript
 from app.keys.confirm import confirm
-from app.keys.context import KeyContext, OutOfScope, owned_profile, resolve_key_context
+from app.keys.context import (
+    KeyContext,
+    OutOfScope,
+    closing_since,
+    owned_profile,
+    resolve_key_context,
+)
 from app.keys.models import Key
 from app.keys.scopes import Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
@@ -178,9 +184,10 @@ def _handle(person_id: uuid.UUID | None, phone: str) -> str:
 
 
 async def _profiles_reachable(
-    session: AsyncSession, *, region: Region, person: Person
+    session: AsyncSession, *, region: Region, person: Person, closing: bool = False
 ) -> list[uuid.UUID]:
-    """The profiles this person may act on here: their own, then every live key's."""
+    """The profiles this person may act on here: their own, then every live key's. A profile
+    whose account is closing is nobody's to act on (#143); with `closing`, only those."""
     moment = utcnow()
     found: list[uuid.UUID] = []
     own = await owned_profile(session, region=region, owner_person_id=person.id)
@@ -194,7 +201,62 @@ async def _profiles_reachable(
             profile = await session.get(Profile, key.profile_id)
             if profile is not None and profile.region is region:
                 found.append(key.profile_id)
-    return found
+    return [
+        profile_id
+        for profile_id in found
+        if (await closing_since(session, profile_id=profile_id) is not None) is closing
+    ]
+
+
+async def _not_kept_in_the_group(
+    providers: Providers, message: InboundMessage, *, region: Region, language: str | None
+) -> Handled:
+    """A post in a family's group from a number that is not in that family now — a stranger,
+    a number kept elsewhere, a key closed since (#143). Nothing is kept and nothing is said
+    into the group; a red word is answered to the sender alone, with who to call, because a
+    red word is never met with silence."""
+    if detect(message.text) is not None:
+        return await _stranger(
+            providers,
+            message,
+            key="group_not_kept",
+            language=language,
+            emergency_number=EMERGENCY_NUMBER[region.value],
+        )
+    return Handled(outcome="ignored")
+
+
+async def _answer_while_closing(
+    session: AsyncSession,
+    *,
+    providers: Providers,
+    classifier: Classifier,
+    message: InboundMessage,
+    person: Person,
+    region: Region,
+    closing: Sequence[uuid.UUID],
+) -> Handled | None:
+    """A yes, while a family's closing stands, is the answer to a red flag of theirs raised
+    before the closing that reached this number (the engine still carries those, #143): the
+    ladder asks nobody else. Nothing else is taken in; None when it is not that."""
+    if not message.text:
+        return None
+    heard = classifier.classify(text=message.text, content_type=None)
+    if heard.kind is not Kind.ANSWER or not heard.answer:
+        return None
+    for profile_id in closing:
+        context = await resolve_key_context(
+            session, region=region, person_id=person.id, profile_id=profile_id, while_closing=True
+        )
+        if not context.allows(Scope.EMERGENCY):
+            continue
+        answered = await acknowledge_flag(session, context=context, channel=Channel.WHATSAPP)
+        if answered is not None:
+            await providers.whatsapp.send_text(
+                message.from_e164, reply("flag_seen", person.language)
+            )
+            return Handled(outcome="flag_acknowledged", profile_id=profile_id)
+    return None
 
 
 async def _most_recent_thread(
@@ -221,9 +283,10 @@ async def _stranger(
     *,
     key: str = "unknown_number",
     language: str | None = None,
+    **params: str,
 ) -> Handled:
     """One fixed reply, no health content, nothing stored. Logged by a handle."""
-    text = reply(key, language)
+    text = reply(key, language, **params)
     await providers.whatsapp.send_text(message.from_e164, text)
     log.info("whatsapp: %s reply to %s", key, _handle(None, message.from_e164))
     return Handled(outcome=key, stranger_reply=text)
@@ -957,9 +1020,7 @@ async def _answer(session: AsyncSession, work: _Work, yes: bool) -> Handled:
             # "OK" is one of the three words the check-in offers him ("Answer OK, tired or
             # pain."). With nothing of his open to say yes to, and no flag to acknowledge,
             # it is his answer to that question, written down as his own word (E19-03).
-            return await _check_in_answer(
-                session, work, OK_FEELING, kept=(artifact, row)
-            )
+            return await _check_in_answer(session, work, OK_FEELING, kept=(artifact, row))
         await _say(session, work, "nothing_open")
         return Handled(
             outcome="nothing_open",
@@ -1148,7 +1209,9 @@ async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
     if not asked:
         return False
     asked_at = max(as_utc(one.at) for one in asked)
-    told = await current_facts(session, context=work.context, subject="feeling", attribute="reported")
+    told = await current_facts(
+        session, context=work.context, subject="feeling", attribute="reported"
+    )
     return not any(as_utc(fact.asserted_at) >= asked_at for fact in told)
 
 
@@ -1264,7 +1327,7 @@ async def handle_inbound(
     person = await find_person_by_phone(session, message.from_e164)
     if person is None:
         if group is not None:
-            return Handled(outcome="ignored")
+            return await _not_kept_in_the_group(providers, message, region=region, language=None)
         return await _stranger(providers, message)
     try:
         guard_region(held_in=person.region, asked_from=region)
@@ -1272,7 +1335,9 @@ async def handle_inbound(
         # A number pinned elsewhere is, to this deployment, a stranger: same words, nothing
         # about where it is known written anywhere here.
         if group is not None:
-            return Handled(outcome="ignored")
+            return await _not_kept_in_the_group(
+                providers, message, region=region, language=person.language
+            )
         return await _stranger(providers, message)
     # A voice note is heard first, in the region, so its words are read like a message's: a
     # red word in it is found before anything else, "ignore" and the consent included.
@@ -1291,11 +1356,65 @@ async def handle_inbound(
         log.info("whatsapp: ignored by request %s", _handle(person.id, message.from_e164))
         return Handled(outcome="ignored")
 
+    if group is not None and await closing_since(session, profile_id=group.profile_id) is not None:
+        # The family's group of a closing account (#143) was emptied; a post that still
+        # arrives is not taken in. A red word is answered, to the sender alone, with who to call.
+        if flagged:
+            return await _stranger(
+                providers,
+                message,
+                key="closing",
+                language=person.language,
+                emergency_number=EMERGENCY_NUMBER[region.value],
+            )
+        return Handled(outcome="ignored")
     reachable = (
         [group.profile_id]
         if group is not None
         else await _profiles_reachable(session, region=region, person=person)
     )
+    closing = (
+        []
+        if group is not None
+        else await _profiles_reachable(session, region=region, person=person, closing=True)
+    )
+    if closing:
+        # A family this number belongs to is closing its account (#143). A yes from someone a
+        # red flag raised before the closing reached is still that flag's answer.
+        answered = await _answer_while_closing(
+            session,
+            providers=providers,
+            classifier=classifier,
+            message=message,
+            person=person,
+            region=region,
+            closing=closing,
+        )
+        if answered is not None:
+            return answered
+        recent = (
+            await _most_recent_thread(session, person=person, profiles=[*reachable, *closing])
+            if reachable
+            else None
+        )
+        closing_line = reply(
+            "closing", person.language, emergency_number=EMERGENCY_NUMBER[region.value]
+        )
+        if not reachable or recent in closing:
+            # Every family left is closing, or the last one this number talked about is: one
+            # fixed line with who to call — nothing kept, nothing raised, never guessed onto
+            # another family's papers.
+            return await _stranger(
+                providers,
+                message,
+                key="closing",
+                language=person.language,
+                emergency_number=EMERGENCY_NUMBER[region.value],
+            )
+        if flagged and recent is None:
+            # Nothing says which family: a red word is raised on the families still open, as
+            # any red word on more than one list is, and the sender is told who to call too.
+            await providers.whatsapp.send_text(message.from_e164, closing_line)
     if not reachable:
         return await _stranger(providers, message)
     profile_id = reachable[0]
@@ -1316,8 +1435,12 @@ async def handle_inbound(
                 )
                 if flagged
                 else await _which_one(
-                    session, settings=settings, providers=providers, person=person,
-                    profiles=reachable, message=message,
+                    session,
+                    settings=settings,
+                    providers=providers,
+                    person=person,
+                    profiles=reachable,
+                    message=message,
                 )
             )
             if settled is not None:
@@ -1333,8 +1456,11 @@ async def handle_inbound(
     except Refusal:
         if group is None:
             raise
-        # In the group, but no longer on this family's list: nothing kept, nothing said.
-        return Handled(outcome="ignored")
+        # In the group, but no longer on this family's list: nothing kept; a red word is
+        # answered to the sender alone, with who to call (#143).
+        return await _not_kept_in_the_group(
+            providers, message, region=region, language=person.language
+        )
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
     if flagged and not await _whatsapp_agreed(session, context=context):
         return await _red_flag_unagreed(

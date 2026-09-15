@@ -91,6 +91,17 @@ export const withdrawal = (token: string, profileId: string, consentId: string, 
 export const withdraw = (token: string, profileId: string, consentId: string, language: string) =>
   api<WithdrawnOut>(`/profiles/${profileId}/consents/${consentId}/withdraw`, { method: "POST", token, body: { captured_via: "app", language } });
 
+/** Keeping his papers is stopped by closing his account (#143): his yes to exactly the lines
+ *  the withdrawal showed, then the closing itself. */
+export const closeAccount = async (token: string, profileId: string, language: string) => {
+  const said = await yes(token, profileId, { subject: "close_account", language });
+  return api<{ closing: boolean; delete_after: string | null }>(`/profiles/${profileId}/closure`, {
+    method: "POST",
+    token,
+    body: { confirmation_id: said.confirmation_id, language },
+  });
+};
+
 /** The printable record, as the backend renders it: one self-contained page. */
 export const consentRecord = (token: string, profileId: string) => apiText(`/profiles/${profileId}/consents/record.html`, { token });
 

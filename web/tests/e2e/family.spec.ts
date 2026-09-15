@@ -92,11 +92,14 @@ test("Pa stops letting Kit in after reading what it will do, Kit is out at once,
   await signIn(page, family.pa, true);
   await openFamily(page);
   await page.getByTestId("open-consents").click();
-  // Keeping his papers is not one tap: the button asks how, and the backend says where to write.
+  // Keeping his papers is stopped by closing his account (#143): the backend says what closing
+  // means and when his papers go; he does not say yes here.
   const keeping = page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" });
-  await keeping.getByTestId("how-to-stop").click();
-  await expect(keeping.getByTestId("notice")).toContainText("Nura cannot stop this in the app yet.");
-  await expect(keeping.getByTestId("notice")).toContainText("To stop it, write to Nura's privacy officer at privacy@nura.test.");
+  await keeping.getByTestId("close-account").click();
+  await expect(page.getByTestId("stop-lines")).toContainText("Nura will stop keeping your papers.");
+  await expect(page.getByTestId("stop-lines")).toContainText("Until then, you can change your mind.");
+  await expect(page.getByTestId("close-yes")).toHaveText("Yes, close my account");
+  await page.getByTestId("stop-cancel").click();
   const kits = page.getByTestId("consent").filter({ hasText: "Kit" });
   await expect(kits.getByTestId("consent-words")).toContainText("Kit can see these parts:");
   expect(await patientScreenOk(page)).toEqual([]);

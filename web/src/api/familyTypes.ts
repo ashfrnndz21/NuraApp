@@ -207,6 +207,8 @@ export interface WithdrawalOut {
   consent_id: string;
   purpose: string;
   lines: string[];
+  /** Keeping his papers: these are the closing's lines, and his yes closes his account (#143). */
+  closes_account?: boolean;
 }
 
 export interface WithdrawnOut {

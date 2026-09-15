@@ -620,6 +620,14 @@ class OnlyMeConfirmIn(BaseModel):
     only_me: bool = True
 
 
+class CloseConfirmIn(BaseModel):
+    """The owner's yes to closing his account, to the lines shown in `language` (#143). The
+    draft is recomputed from the words and the day, so nothing here can change them."""
+
+    subject: Literal[ConfirmSubject.CLOSE_ACCOUNT]
+    language: str = Field(min_length=2, max_length=16)
+
+
 class DriveConfirmIn(BaseModel):
     """The chief's yes to one person driving him to one visit (E05-03)."""
 
@@ -697,6 +705,7 @@ ConfirmIn = Annotated[
     | SummaryConfirmIn
     | KeyChangeConfirmIn
     | OnlyMeConfirmIn
+    | CloseConfirmIn
     | TaskDoneConfirmIn
     | PushConfirmIn
     | StatusConfirmIn
@@ -745,6 +754,8 @@ class DoorsOut(BaseModel):
     claimable: list[ClaimableOut]
     invited: list[ProfileOut]
     stewarding: list[ProfileOut]
+    closing: list[uuid.UUID] = []
+    """Graphs of his own or keyed to him whose closing stands (#143), by id: not opened."""
 
     @classmethod
     def of(cls, doors: Doors) -> DoorsOut:
@@ -753,6 +764,7 @@ class DoorsOut(BaseModel):
             claimable=[ClaimableOut.of(each) for each in doors.claimable],
             invited=[ProfileOut.of(each.profile, each.context) for each in doors.invited],
             stewarding=[ProfileOut.of(each.profile, each.context) for each in doors.stewarding],
+            closing=list(doors.closing),
         )
 
 
@@ -765,6 +777,9 @@ class WithdrawalOut(BaseModel):
     consent_id: uuid.UUID
     purpose: ConsentPurpose
     lines: list[str]
+    closes_account: bool = False
+    """Keeping his papers is stopped by closing his account (#143): these are the closing's
+    lines, and his yes goes to `POST /confirmations` (`close_account`), then `/closure`."""
 
 
 class WithdrawIn(BaseModel):

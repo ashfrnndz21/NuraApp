@@ -95,19 +95,28 @@ async def test_the_proud_number_is_his_tablet_days_the_number_the_me_page_shows(
     days = (await proud_days(sg, context=context)).days
     assert days == 2 and card.number == "2" and card.direction == "up"
     assert card.headline == "The number that only goes up"
-    assert list(card.body) == ["You have taken your tablets on 2 days.", "This number only goes up."]
+    assert list(card.body) == [
+        "You have taken your tablets on 2 days.",
+        "This number only goes up.",
+    ]
     assert card.why["plain"] == "Nura counted the days you took your tablets."
     assert card.scope is Scope.MEDICINES
     # A blood pressure written down is not a tablet day, and no card counts one.
-    assert not any("written your blood pressure" in line for c in await _live(sg, context) for line in c.body)
+    assert not any(
+        "written your blood pressure" in line for c in await _live(sg, context) for line in c.body
+    )
 
 
 async def test_a_blood_pressure_that_moved_is_told_by_its_two_numbers_and_its_direction(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
     context = await pa(sg, language="en")
-    first = await reading(sg, context, systolic=138, diastolic=84, when=clock.now() - timedelta(days=2))
-    latest = await reading(sg, context, systolic=146, diastolic=90, when=clock.now() - timedelta(days=1))
+    first = await reading(
+        sg, context, systolic=138, diastolic=84, when=clock.now() - timedelta(days=2)
+    )
+    latest = await reading(
+        sg, context, systolic=146, diastolic=90, when=clock.now() - timedelta(days=1)
+    )
     await refresh(sg, context=context, engine=ENGINE)
 
     [card] = _story(await _live(sg, context), "story:change:")
@@ -133,7 +142,9 @@ async def test_a_lab_result_that_moved_is_told_against_its_range_ending_on_the_t
     assert got.status_code == 200, got.text
 
     async with deployment.sessions() as session:
-        rows = list(await session.scalars(select(FeedItem).where(FeedItem.dedupe_key.like("story:trend:%"))))
+        rows = list(
+            await session.scalars(select(FeedItem).where(FeedItem.dedupe_key.like("story:trend:%")))
+        )
     cholesterol = [r for r in rows if r.dedupe_key.startswith("story:trend:total_cholesterol:")]
     assert len(cholesterol) == 1, [r.dedupe_key for r in rows]
     card = cholesterol[0]
@@ -231,12 +242,19 @@ async def test_a_family_photo_is_on_his_story_with_the_sharers_yes_for_the_famil
     hers = bearer(mei["token"])
     await let_in(deployment, pa_, profile_id, MEI, EVERY_PART, relationship="daughter")
     cut = await client.post(
-        f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": MEI, "role": "chief"},
+        headers=his,
     )
     assert cut.status_code == 201, cut.text
     kit = await register_by_phone(deployment, KIT, "Kit")
     await let_in(
-        deployment, pa_, profile_id, KIT, ["records", "readings"], relationship="son",
+        deployment,
+        pa_,
+        profile_id,
+        KIT,
+        ["records", "readings"],
+        relationship="son",
         holder_display_name="Kit",
     )
     cut = await client.post(
@@ -250,23 +268,37 @@ async def test_a_family_photo_is_on_his_story_with_the_sharers_yes_for_the_famil
     photos = f"/profiles/{profile_id}/thread/photos"
     shared = await client.post(
         photos,
-        json={"data": b64(lunch), "content_type": "image/png", "caption": "Lunch on Sunday.", "on_his_feed": True},
+        json={
+            "data": b64(lunch),
+            "content_type": "image/png",
+            "caption": "Lunch on Sunday.",
+            "on_his_feed": True,
+        },
         headers=hers,
     )
     assert shared.status_code == 201, shared.text
     kept = await client.post(
         photos,
-        json={"data": b64(PNG_SIGNATURE + b"just-us"), "content_type": "image/png", "caption": "Just for us.", "on_his_feed": False},
+        json={
+            "data": b64(PNG_SIGNATURE + b"just-us"),
+            "content_type": "image/png",
+            "caption": "Just for us.",
+            "on_his_feed": False,
+        },
         headers=hers,
     )
     assert kept.status_code == 201, kept.text
     photo_id = shared.json()["photo"]["photo_id"]
     missing = await client.post(
-        photos, json={"data": b64(lunch), "content_type": "image/png", "caption": "No yes."}, headers=hers
+        photos,
+        json={"data": b64(lunch), "content_type": "image/png", "caption": "No yes."},
+        headers=hers,
     )
     assert missing.status_code == 422  # the sharer's yes is asked every time; no default
 
-    cards = [c for c in await _pages(deployment, profile_id, pa_["token"]) if c["why"].get("photo_id")]
+    cards = [
+        c for c in await _pages(deployment, profile_id, pa_["token"]) if c["why"].get("photo_id")
+    ]
     assert {c["why"]["photo_id"] for c in cards} == {photo_id}
     card = cards[0]
     assert card["headline"] == "A photo from Mei" and card["scope"] == "family"
@@ -277,7 +309,10 @@ async def test_a_family_photo_is_on_his_story_with_the_sharers_yes_for_the_famil
     seen = await client.get(content, headers=his)
     assert seen.status_code == 200 and seen.content == lunch
     not_family = await client.get(content, headers=bearer(kit["token"]))
-    assert not_family.status_code == 403 and not_family.json() == {"refusal": "OutOfScope", "scope": "family"}
+    assert not_family.status_code == 403 and not_family.json() == {
+        "refusal": "OutOfScope",
+        "scope": "family",
+    }
     thread = await client.get(f"/profiles/{profile_id}/thread", headers=his)
     on_it = [e for e in thread.json()["entries"] if e["photo"]]
     assert {e["photo"]["photo_id"] for e in on_it} == {photo_id, kept.json()["photo"]["photo_id"]}
@@ -310,7 +345,9 @@ async def test_the_story_supply_regenerates_weekly_from_memory_on_the_frozen_clo
     # A week on, with a new number written down: the week's cards have lapsed, and the story
     # is made again from what memory holds now.
     clock.step(timedelta(days=7))
-    newest = await reading(sg, context, systolic=150, diastolic=92, when=clock.now() - timedelta(days=1))
+    newest = await reading(
+        sg, context, systolic=150, diastolic=92, when=clock.now() - timedelta(days=1)
+    )
     await refresh(sg, context=context, engine=ENGINE)
     second = {c.dedupe_key: c for c in await _live(sg, context) if c.type is CardType.STORY}
     assert second and all(key.endswith(":2026-W39") for key in second)

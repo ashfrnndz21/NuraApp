@@ -59,8 +59,6 @@ class VoiceNoteTooLong(Refusal):
     """A voice note about how he feels is not this big."""
 
 
-
-
 def check_voice_note(data: bytes, content_type: str) -> str:
     """The content type, lower-cased, or a refusal: empty bytes, too many, or not audio."""
     kind = content_type.strip().lower().split(";", 1)[0]

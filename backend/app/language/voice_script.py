@@ -81,7 +81,28 @@ class VoiceScript:
 
 # --- numbers -----------------------------------------------------------------------------------
 
-_EN_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+_EN_ONES = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+]
 _EN_TENS = ["_", "_", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
 _EN_ORDINAL = {
     "one": "first",
@@ -248,8 +269,34 @@ _WEEKDAYS = {
     "ms": ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad"),
 }
 _MONTHS = {
-    "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
-    "ms": ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai", "Ogos", "September", "Oktober", "November", "Disember"],
+    "en": [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ],
+    "ms": [
+        "Januari",
+        "Februari",
+        "Mac",
+        "April",
+        "Mei",
+        "Jun",
+        "Julai",
+        "Ogos",
+        "September",
+        "Oktober",
+        "November",
+        "Disember",
+    ],
 }
 
 
@@ -315,9 +362,7 @@ _NUMBER = re.compile(r"(?<![A-Za-z0-9.])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?![
 Chinese a number sits right against the characters ("是138比84")."""
 EMERGENCY_NUMBERS = frozenset({"995", "999", "112", "911"})
 """Numbers said digit by digit, the way they are dialled: "nine nine five"."""
-_ZH_MEASURE = (
-    "公斤|星期|小时|分钟|个|次|片|粒|天|包|勺|喷|滴|件|位|年|周|杯|瓶|盒|份|种|条"
-)
+_ZH_MEASURE = "公斤|星期|小时|分钟|个|次|片|粒|天|包|勺|喷|滴|件|位|年|周|杯|瓶|盒|份|种|条"
 _ZH_TWO = re.compile(rf"(?<![\d.])2\s*(?=(?:{_ZH_MEASURE}))")
 _CJK = "㐀-鿿　-〿＀-￯"
 _CJK_GAP = re.compile(rf"(?<=[{_CJK}])\s+(?=[{_CJK}])")
@@ -325,9 +370,7 @@ _CJK_GAP = re.compile(rf"(?<=[{_CJK}])\s+(?=[{_CJK}])")
 
 def _en_dates(line: str) -> str:
     def spoken(match: re.Match[str]) -> str:
-        said = (
-            f"{match['weekday']} the {english_ordinal(int(match['day']))} of {match['month']}"
-        )
+        said = f"{match['weekday']} the {english_ordinal(int(match['day']))} of {match['month']}"
         return said + (f" {english_year(int(match['year']))}" if match["year"] else "")
 
     return _DATES["en"].sub(spoken, line)
@@ -411,8 +454,7 @@ def _numbers(line: str, language: str) -> str:
         return say_number(int(whole), language)
 
     return "".join(
-        part.strip(_KEEP) if part.startswith(_KEEP) else _NUMBER.sub(spoken, part)
-        for part in kept
+        part.strip(_KEEP) if part.startswith(_KEEP) else _NUMBER.sub(spoken, part) for part in kept
     )
 
 
@@ -439,9 +481,7 @@ def spoken_line(line: str, language: str) -> str:
     return said
 
 
-def script_for(
-    lines: Sequence[str], language: str, *, boundary: str | None = None
-) -> VoiceScript:
+def script_for(lines: Sequence[str], language: str, *, boundary: str | None = None) -> VoiceScript:
     """The voice script of a card: its lines, said, each followed by a pause, and a longer
     pause before the boundary lines when the card ends on them (`boundary`, the line the row
     carries). The lines are the verified lines; nothing else goes in."""

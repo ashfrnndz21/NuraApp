@@ -960,7 +960,8 @@ export const en = {
     // @patient phrase
     stopYes: "Yes, stop it",
     // @patient phrase
-    howToStop: "How to stop this",
+    closeAccount: "Close my account",
+    closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
     // @patient phrase
@@ -1294,6 +1295,7 @@ export const en = {
     ChallengeExpired: "That code is too old now.",
     ChallengeLocked: "Ask for a new code and start again.",
     NoKey: "You cannot see these papers any more.",
+    AccountClosing: "Nura has stopped keeping these papers.",
     OutOfScope: "This part of the papers is not open to you.",
     OutOfRegion: "These papers are kept in another country.",
     NotTheirsToRead: "Only the owner can see this.",
@@ -1376,8 +1378,7 @@ export const en = {
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
-    NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "Nura's privacy officer can stop it with you."],
-    NotStoppedInTheAppWriteTo: "To stop it, write to Nura's privacy officer at {contact}.",
+    StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",
     DocumentTooLarge: "That file is too big for Nura.",
     CalendarTooLarge: "That calendar file is too big for Nura.",
   },

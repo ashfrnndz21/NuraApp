@@ -49,7 +49,9 @@ def say_clock(moment: time, language: str) -> str:
     part = PART_OF_DAY[language][_part(moment.hour)]
     hour = moment.hour % 12 or 12
     if language == "zh":
-        minutes = "" if moment.minute == 0 else ("半" if moment.minute == 30 else f"{moment.minute}分")
+        minutes = (
+            "" if moment.minute == 0 else ("半" if moment.minute == 30 else f"{moment.minute}分")
+        )
         return f"{part}{hour}点{minutes}"
     if language == "ms":
         clock = f"{hour}" if moment.minute == 0 else f"{hour}.{moment.minute:02d}"

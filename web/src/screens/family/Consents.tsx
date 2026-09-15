@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as family from "../../api/family";
 import type { ConsentOut } from "../../api/types";
-import { go } from "../../flow";
+import { afterSignIn, go } from "../../flow";
 import { inForce, wordingLines } from "../../family/model";
 import { Notice, Pill, Tile } from "../../ui/components";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, whose } from "./common";
 
-/** What the owner stops in the app with one yes (`app.consent.withdrawal.APP_STOPS`). Keeping
- *  his papers and WhatsApp carry the red-flag paths, and are stopped with Nura's privacy
- *  officer: for those the button asks how, and the backend's refusal says where to write. */
-const APP_STOPS: ReadonlySet<string> = new Set(["share_with_family", "recording", "calendar"]);
+/** Keeping his papers is stopped by closing his account (#143): the backend's withdrawal says
+ *  what closing means and when his papers go, and his yes closes it. Everything else — WhatsApp
+ *  among them since #143 — is stopped here with one yes, after the backend says exactly what. */
+const CLOSES = "hold_health_record";
 
 /** E00-02: every agreement in force, in the words he read; stopping one, after the backend
  *  says what stopping will do; and the whole record, withdrawn ones included, to keep. */
@@ -18,7 +18,7 @@ export function ConsentsPart(): JSX.Element | null {
   const here = useHere();
   const words = s();
   const a = useAct();
-  const [asking, setAsking] = useState<{ consent: ConsentOut; lines: string[] } | null>(null);
+  const [asking, setAsking] = useState<{ consent: ConsentOut; lines: string[]; closes: boolean } | null>(null);
   const [stopped, setStopped] = useState<string[] | null>(null);
   const list = useRead(here ? () => family.consents(here.bearer, here.papers.profile_id) : null, [here?.papers.profile_id]);
   if (!here) return null;
@@ -27,11 +27,18 @@ export function ConsentsPart(): JSX.Element | null {
     a.act(consent.consent_id, async () => {
       setStopped(null);
       const said = await family.withdrawal(here.bearer, pid, consent.consent_id, here.lang);
-      setAsking({ consent, lines: said.lines });
+      setAsking({ consent, lines: said.lines, closes: said.closes_account === true });
     });
   const stop = () =>
     a.act("confirm", async () => {
       if (!asking) return;
+      if (asking.closes) {
+        // Closed: nobody opens these papers now, him included; the doors say so.
+        await family.closeAccount(here.bearer, pid, here.lang);
+        setAsking(null);
+        await afterSignIn();
+        return;
+      }
       const done = await family.withdraw(here.bearer, pid, asking.consent.consent_id, here.lang);
       setAsking(null);
       setStopped(done.lines);
@@ -43,8 +50,8 @@ export function ConsentsPart(): JSX.Element | null {
       {asking ? (
         <Tile paper testId="stop-confirm">
           <Lines lines={asking.lines} testId="stop-lines" />
-          <Pill plum onClick={() => void stop()} disabled={a.busy} testId="stop-yes">
-            {words.stopYes}
+          <Pill plum onClick={() => void stop()} disabled={a.busy} testId={asking.closes ? "close-yes" : "stop-yes"}>
+            {asking.closes ? words.closeAccountYes : words.stopYes}
           </Pill>
           <Pill quiet onClick={() => (setAsking(null), a.clear())} testId="stop-cancel">
             {words.notNow}
@@ -61,10 +68,8 @@ export function ConsentsPart(): JSX.Element | null {
           {inForce(list.value ?? []).map((consent) => (
             <Tile paper key={consent.consent_id} testId="consent">
               <Lines lines={wordingLines(consent)} testId="consent-words" />
-              {/* What the app does not stop with one tap still says how: the backend's refusal
-                  names who to write to. */}
-              <Pill onClick={() => void ask(consent)} disabled={a.busy} testId={APP_STOPS.has(consent.purpose ?? "") ? "stop" : "how-to-stop"}>
-                {APP_STOPS.has(consent.purpose ?? "") ? words.stop : words.howToStop}
+              <Pill onClick={() => void ask(consent)} disabled={a.busy} testId={consent.purpose === CLOSES ? "close-account" : "stop"}>
+                {consent.purpose === CLOSES ? words.closeAccount : words.stop}
               </Pill>
               <NoticeAt act={a} where={consent.consent_id} />
             </Tile>

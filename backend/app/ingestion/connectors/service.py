@@ -110,7 +110,9 @@ _DOCTOR_NAMED = re.compile(r"\b(?:Dr|Doctor|Doktor)\.?\s+([A-Z][\w'’-]+)")
 _HOSPITAL_WORDS = re.compile(
     r"(?<![\w-])(?:hospital|" + "|".join(HOSPITALS) + r")(?![\w-])|医院", re.IGNORECASE
 )
-_CLINIC_WORDS = re.compile(r"(?<![\w-])(?:clinic|klinik|polyclinic|poliklinik)(?![\w-])|诊所", re.IGNORECASE)
+_CLINIC_WORDS = re.compile(
+    r"(?<![\w-])(?:clinic|klinik|polyclinic|poliklinik)(?![\w-])|诊所", re.IGNORECASE
+)
 
 
 class NoSuchConnector(Refusal):
@@ -186,8 +188,12 @@ def match_event(event: CalendarEvent, providers: Sequence[Provider]) -> Match | 
         name = location or (found.group(0).upper() if found else event.summary)
         return Match(MatchedBy.KEYWORD, keyword, None, name[:120], ProviderKind.HOSPITAL)
     if _CLINIC_WORDS.search(text):
-        return Match(MatchedBy.KEYWORD, keyword, None, (location or event.summary)[:120], ProviderKind.CLINIC)
-    return Match(MatchedBy.KEYWORD, keyword, None, (location or event.summary)[:120], ProviderKind.OTHER)
+        return Match(
+            MatchedBy.KEYWORD, keyword, None, (location or event.summary)[:120], ProviderKind.CLINIC
+        )
+    return Match(
+        MatchedBy.KEYWORD, keyword, None, (location or event.summary)[:120], ProviderKind.OTHER
+    )
 
 
 def event_digest(event: CalendarEvent) -> str:
@@ -245,7 +251,9 @@ async def connect_calendar(
     )
 
 
-async def _connector(session: AsyncSession, context: KeyContext, connector_id: uuid.UUID) -> Connector:
+async def _connector(
+    session: AsyncSession, context: KeyContext, connector_id: uuid.UUID
+) -> Connector:
     found = await audited_read(
         session, Connector, context, Scope.VISITS, where=(Connector.id == connector_id,)
     )
@@ -331,7 +339,9 @@ async def list_proposals(
     return sorted(found, key=lambda row: (as_utc(row.starts_at), str(row.id)))
 
 
-async def _open(session: AsyncSession, context: KeyContext, proposal_id: uuid.UUID) -> AppointmentProposal:
+async def _open(
+    session: AsyncSession, context: KeyContext, proposal_id: uuid.UUID
+) -> AppointmentProposal:
     found = await audited_read(
         session,
         AppointmentProposal,
@@ -455,7 +465,9 @@ def _passes(lines: Sequence[str], language: str) -> bool:
     )
 
 
-def proposal_lines(proposal: AppointmentProposal, *, zone: ZoneInfo, language: str | None) -> list[str]:
+def proposal_lines(
+    proposal: AppointmentProposal, *, zone: ZoneInfo, language: str | None
+) -> list[str]:
     """What he reads about a proposal, in his language, verified. A name the calendar gave
     that is not a word he can read ("SGH") becomes "your doctor"; nothing unverified leaves.
     A dismissed proposal says nothing to him."""
@@ -470,7 +482,9 @@ def proposal_lines(proposal: AppointmentProposal, *, zone: ZoneInfo, language: s
         if proposal.all_day
         else words.ON_DAY_AT[lang].format(day=day, clock=say_clock(local.time(), lang))
     )
-    closing = words.ADDED[lang] if proposal.status is ProposalStatus.ACCEPTED else words.SAY_YES[lang]
+    closing = (
+        words.ADDED[lang] if proposal.status is ProposalStatus.ACCEPTED else words.SAY_YES[lang]
+    )
     for provider in (proposal.provider_name, words.THE_DOCTOR[lang]):
         lines = [words.FOUND[lang].format(provider=provider), when, closing]
         if _passes(lines, lang):

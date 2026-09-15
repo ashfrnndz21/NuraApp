@@ -113,7 +113,9 @@ async def test_a_voice_note_attaches_to_the_event_is_heard_again_and_is_never_a_
 ) -> None:
     pa, profile_id, event_id = await _reading(deployment)
     his = bearer(pa["token"])
-    facts_before = (await deployment.client.get(f"/profiles/{profile_id}/facts", headers=his)).json()
+    facts_before = (
+        await deployment.client.get(f"/profiles/{profile_id}/facts", headers=his)
+    ).json()
 
     posted = await deployment.client.post(
         _notes(profile_id, event_id), json=voice(AFTER_THE_WALK, label="after my walk"), headers=his
@@ -151,7 +153,10 @@ async def test_a_voice_note_attaches_to_the_event_is_heard_again_and_is_never_a_
     assert facts_after == facts_before
     assert "text" not in EventNote.__table__.c and HEARD not in str(facts_after)
     words = HEARD.encode("utf-8")
-    assert deployment.objects.path_of(f"transcripts/{profile_id}/{sha256_of(words)}").read_bytes() == words
+    assert (
+        deployment.objects.path_of(f"transcripts/{profile_id}/{sha256_of(words)}").read_bytes()
+        == words
+    )
     audio = sha256_of(placeholder_voice(AFTER_THE_WALK))
     assert deployment.objects.path_of(f"voice/{profile_id}/{audio}").is_file()
 
@@ -161,14 +166,18 @@ async def test_his_own_voice_note_needs_no_recording_consent(deployment: Deploym
     for the recording consent, and no refusal of it is written."""
     pa, profile_id, event_id = await _reading(deployment)
     his = bearer(pa["token"])
-    posted = await deployment.client.post(_notes(profile_id, event_id), json=voice(AFTER_THE_WALK), headers=his)
+    posted = await deployment.client.post(
+        _notes(profile_id, event_id), json=voice(AFTER_THE_WALK), headers=his
+    )
     assert posted.status_code == 201, posted.text
     agreed = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=his)
     assert "recording" not in {c["purpose"] for c in agreed.json()}
     assert "ConsentWithheld" not in await refusals(deployment, pa, profile_id)
 
 
-async def test_a_caregivers_voice_note_on_his_event_is_her_own_words(deployment: Deployment) -> None:
+async def test_a_caregivers_voice_note_on_his_event_is_her_own_words(
+    deployment: Deployment,
+) -> None:
     pa, profile_id, event_id = await _reading(deployment)
     mei = await register_by_phone(deployment, MEI, "Mei")
     await key_for(deployment, pa, profile_id, MEI, ["records", "readings"])
@@ -185,7 +194,9 @@ async def test_the_owner_can_give_the_recording_consent_over_http(deployment: De
     """For consults (E02-05, E05): the route stays, owner-only, in today's words."""
     pa, profile_id, _ = await _reading(deployment)
     await agree_to_recording(deployment, pa, profile_id)
-    agreed = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))
+    agreed = await deployment.client.get(
+        f"/profiles/{profile_id}/consents", headers=bearer(pa["token"])
+    )
     assert "recording" in {c["purpose"] for c in agreed.json()}
     stale = await deployment.client.post(
         f"/profiles/{profile_id}/consents/recording",
@@ -195,7 +206,9 @@ async def test_the_owner_can_give_the_recording_consent_over_http(deployment: De
     assert stale.status_code == 400
 
 
-async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(deployment: Deployment) -> None:
+async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(
+    deployment: Deployment,
+) -> None:
     pa, profile_id, event_id = await _reading(deployment)
     posted = await deployment.client.post(
         _notes(profile_id, event_id), json=voice(MUMBLED), headers=bearer(pa["token"])
@@ -253,11 +266,19 @@ async def test_a_private_scribble_is_his_and_a_shared_voice_note_is_the_familys(
     # Mei cannot leave a private note: her key does not open the notes.
     hidden = await deployment.client.post(
         _notes(profile_id, event_id),
-        json={"kind": "scribble", "data": b64(SCRIBBLE), "content_type": "image/png",
-              "captured_at": "2026-09-03T08:00:00Z", "private": True},
+        json={
+            "kind": "scribble",
+            "data": b64(SCRIBBLE),
+            "content_type": "image/png",
+            "captured_at": "2026-09-03T08:00:00Z",
+            "private": True,
+        },
         headers=bearer(mei["token"]),
     )
-    assert hidden.status_code == 403 and hidden.json() == {"refusal": "OutOfScope", "scope": "notes"}
+    assert hidden.status_code == 403 and hidden.json() == {
+        "refusal": "OutOfScope",
+        "scope": "notes",
+    }
 
 
 async def test_what_is_not_a_note_is_refused_and_on_the_trail(deployment: Deployment) -> None:
@@ -268,18 +289,26 @@ async def test_what_is_not_a_note_is_refused_and_on_the_trail(deployment: Deploy
     )
     assert long_label.status_code == 400 and long_label.json() == {"refusal": "NotALabel"}
     not_sound = await deployment.client.post(
-        _notes(profile_id, event_id), json=voice(AFTER_THE_WALK, content_type="image/png"), headers=his
+        _notes(profile_id, event_id),
+        json=voice(AFTER_THE_WALK, content_type="image/png"),
+        headers=his,
     )
     assert not_sound.status_code == 400 and not_sound.json() == {"refusal": "NotAVoiceNote"}
     too_big = await deployment.client.post(
         _notes(profile_id, event_id),
-        json={"kind": "scribble", "data": b64(PNG_SIGNATURE + b"0" * (1024 * 1024)),
-              "content_type": "image/png", "captured_at": "2026-09-03T08:00:00Z"},
+        json={
+            "kind": "scribble",
+            "data": b64(PNG_SIGNATURE + b"0" * (1024 * 1024)),
+            "content_type": "image/png",
+            "captured_at": "2026-09-03T08:00:00Z",
+        },
         headers=his,
     )
     assert too_big.status_code == 413 and too_big.json() == {"refusal": "NoteTooLarge"}
     nowhere = await deployment.client.post(
-        _notes(profile_id, "00000000-0000-0000-0000-000000000001"), json=voice(AFTER_THE_WALK), headers=his
+        _notes(profile_id, "00000000-0000-0000-0000-000000000001"),
+        json=voice(AFTER_THE_WALK),
+        headers=his,
     )
     assert nowhere.status_code == 400 and nowhere.json() == {"refusal": "NoSuchEvent"}
     assert {"NotALabel", "NotAVoiceNote", "NoteTooLarge", "NoSuchEvent"} <= await refusals(

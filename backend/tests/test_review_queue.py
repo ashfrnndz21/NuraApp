@@ -132,7 +132,12 @@ def test_the_staff_list_is_read_strictly() -> None:
     read = load_settings({**base, "NURA_REVIEW_STAFF_TOKENS": "pharmacist:" + "t" * 24})
     assert read.review_staff == (("pharmacist", "t" * 24),)
     assert load_settings(base).review_staff == ()
-    for bad in ("pharmacist", "Pharmacist:" + "t" * 24, "pharmacist:short", "a:" + "t" * 24 + ",a:" + "u" * 24):
+    for bad in (
+        "pharmacist",
+        "Pharmacist:" + "t" * 24,
+        "pharmacist:short",
+        "a:" + "t" * 24 + ",a:" + "u" * 24,
+    ):
         with pytest.raises(BadStaffTokens):
             load_settings({**base, "NURA_REVIEW_STAFF_TOKENS": bad})
     laptop = "pharmacist:nura-dev-pharmacist-token-0001"
@@ -184,7 +189,10 @@ def test_a_doctor_and_a_family_member_become_slots_and_his_own_words_are_left_ou
         CardType.VISIT,
         "en",
         headline="Dr Tan on Monday 21 September",
-        body=("You see Dr Tan on Monday 21 September.", "Bring your blood pressure book and your tablets."),
+        body=(
+            "You see Dr Tan on Monday 21 September.",
+            "Bring your blood pressure book and your tablets.",
+        ),
         voice=("You see Dr Tan on Monday 21 September.",),
         why="Your visit to Dr Tan is on Monday 21 September.",
     )
@@ -207,7 +215,12 @@ def test_a_doctor_and_a_family_member_become_slots_and_his_own_words_are_left_ou
         CardType.FLAG,
         "zh",
         headline="这个我们不等",
-        body=("您告诉Nura您跌倒了。", "这个我们不等。", "美和凯已经知道了。", "请打给美，或者打995。"),
+        body=(
+            "您告诉Nura您跌倒了。",
+            "这个我们不等。",
+            "美和凯已经知道了。",
+            "请打给美，或者打995。",
+        ),
         voice=("您告诉Nura您跌倒了。",),
         why="这是我们从不等的事情之一。",
     )
@@ -237,7 +250,10 @@ def test_a_learning_card_keeps_its_compressed_lines_but_never_a_name() -> None:
 
 
 def _reading_card(n: int, deliver_to: DeliverTo = DeliverTo.PATIENT) -> FeedItem:
-    lines = [f"Your blood pressure today was {100 + n} over 80.", "It is in your blood pressure book."]
+    lines = [
+        f"Your blood pressure today was {100 + n} over 80.",
+        "It is in your blood pressure book.",
+    ]
     return FeedItem(
         type=CardType.READING,
         deliver_to=deliver_to,
@@ -252,9 +268,7 @@ def _reading_card(n: int, deliver_to: DeliverTo = DeliverTo.PATIENT) -> FeedItem
 async def test_fifty_of_a_type_are_queued_and_then_no_more(sg: AsyncSession) -> None:
     for n in range(FIRST + 5):
         await sample_card(sg, _reading_card(n))
-    rows = (
-        await sg.scalars(select(ReviewItem).where(ReviewItem.card_type == "reading"))
-    ).all()
+    rows = (await sg.scalars(select(ReviewItem).where(ReviewItem.card_type == "reading"))).all()
     assert len(rows) == FIRST
     assert sorted(row.sample_number or 0 for row in rows) == list(range(1, FIRST + 1))
 
@@ -316,8 +330,13 @@ async def test_nothing_from_a_new_source_reaches_him_before_review(deployment: D
     source_id = item["source_id"]
 
     # Pending: no job may search it, so no card can come from it.
-    job = {"kind": "explainer", "terms": ["blood pressure"], "source_ids": [source_id],
-           "cadence": "once", "reason": "a new page about his heart"}
+    job = {
+        "kind": "explainer",
+        "terms": ["blood pressure"],
+        "source_ids": [source_id],
+        "cadence": "once",
+        "reason": "a new page about his heart",
+    }
     refused = await deployment.client.post(
         f"/profiles/{profile_id}/search-jobs", json=job, headers=bearer(pa["token"])
     )
@@ -337,7 +356,9 @@ async def test_nothing_from_a_new_source_reaches_him_before_review(deployment: D
     assert accepted.status_code == 201, accepted.text
 
     again = await deployment.client.post(
-        f"/review/items/{item['item_id']}/reject", json={"reason": "second thoughts"}, headers=staff()
+        f"/review/items/{item['item_id']}/reject",
+        json={"reason": "second thoughts"},
+        headers=staff(),
     )
     assert again.status_code == 409 and again.json() == {"refusal": "AlreadyReviewed"}
 
@@ -478,7 +499,9 @@ def test_a_name_with_a_particle_is_still_a_name() -> None:
         assert sample.lines["body"][1] == "{name} can see it too.", name
 
 
-def test_on_a_notice_a_line_that_is_plainly_a_template_loses_its_person_whatever_filled_it() -> None:
+def test_on_a_notice_a_line_that_is_plainly_a_template_loses_its_person_whatever_filled_it() -> (
+    None
+):
     """On a card kept as written, a catalogue line never keeps what filled a person's slot, even
     when it does not look like a name; a compressed sentence that only brushes a thin template
     ("{name} is {value}.") is kept."""
