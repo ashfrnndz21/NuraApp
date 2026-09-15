@@ -88,7 +88,8 @@ export class FeedStore {
 
   private pages: PageMark[] = [];
   private asked = new Set<string>();
-  /** Every page put on screen gets the next number, never reused: what keys its cards. */
+  /** Every page put on screen after the first gets the next number, never reused within a
+   *  list: what keys its cards, so a merge or a page after it never repeats a key. */
   private serial = 0;
   /** Which list a page answer belongs to: a page asked for before the list was replaced (the
    *  fresh page merged in) is dropped when it lands. */
@@ -145,8 +146,11 @@ export class FeedStore {
     this.generation += 1;
     this.pages = [{ cursor: page.cursor, next: page.next_cursor }];
     this.asked = new Set(page.cursor ? [page.cursor] : []);
-    const at = this.serial++;
-    this.entries.value = page.items.map((item, index) => ({ key: `${at}:${index}`, item }));
+    // A whole list starts over at `0:` — the same keys as the list it replaces, so the kept
+    // page's cards on screen are the same elements when the fresh page takes the screen (a
+    // focused card keeps its focus); the pages and merges after it count on from 1.
+    this.serial = 1;
+    this.entries.value = page.items.map((item, index) => ({ key: `0:${index}`, item }));
     this.origin.value = origin;
     this.keptAt.value = origin === "kept" && kept ? kept.fetchedAt : null;
     this.keptUntil.value = kept ? kept.expiresAt : null;
