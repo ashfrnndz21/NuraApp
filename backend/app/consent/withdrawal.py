@@ -26,8 +26,11 @@ APP_STOPS: frozenset[ConsentPurpose] = frozenset(
     }
 )
 """What the owner stops in the app with one yes. WhatsApp is among them since #143: his
-agreement is for messages to him, and his family's red-flag notices rest on their own keys, so
-stopping it stops what reaches him and nothing of theirs — the confirm step says exactly that.
+agreement is for messages to him, and his family's red-flag notices rest on their own keys.
+Stopping it stops what reaches him on WhatsApp, and every other message about him to his
+family there (#163): they are told on WhatsApp only when he is unwell — or in the app, for
+whoever cannot be sent WhatsApp — and get everything else in the app. The confirm step says
+exactly that.
 Keeping his papers is not stopped here: that is closing his account (`app.identity.closing`),
 which says what it stops, and when his papers go (`StopsByClosingTheAccount`)."""
 
@@ -154,13 +157,31 @@ LEFT_GROUP: Mapping[str, str] = {
 
 # @patient
 STILL_TOLD: Mapping[str, str] = {
-    "en": "{named} is still told when you are unwell.",
-    "ms": "{named} masih diberitahu apabila anda tidak sihat.",
-    "zh": "{named}在您不舒服时仍会收到通知。",
+    "en": "{named} is still told on WhatsApp when you are unwell.",
+    "ms": "{named} masih diberitahu di WhatsApp apabila anda tidak sihat.",
+    "zh": "您不舒服时，{named}仍会在 WhatsApp 上收到通知。",
 }
-"""Stopping WhatsApp, for each person a red flag reaches: they are told on their own key, not
-on his agreement (#143). `named` is the person as the words name them — "Mei, your
+"""Stopping WhatsApp, for each person a red flag reaches there: they are told on their own
+key, not on his agreement (#143). `named` is the person as the words name them — "Mei, your
 daughter," — from the relationship code, in his language (`app.consent.texts.named_words`)."""
+
+# @patient
+STILL_TOLD_IN_APP: Mapping[str, str] = {
+    "en": "{named} is still told in the app when you are unwell.",
+    "ms": "{named} masih diberitahu dalam aplikasi apabila anda tidak sihat.",
+    "zh": "您不舒服时，{named}仍会在应用里收到通知。",
+}
+"""The same, for someone a red flag reaches but Nura cannot send WhatsApp: they said no to it,
+or Nura has no number for them (#163)."""
+
+# @patient
+NOTHING_ELSE: Mapping[str, str] = {
+    "en": "Your family gets other messages about you only in the app.",
+    "ms": "Keluarga anda dapat mesej lain tentang anda hanya dalam aplikasi.",
+    "zh": "关于您的其他消息，家人只会在应用里收到。",
+}
+"""Stopping WhatsApp, when he has family on it: nothing but a red flag goes to them about him
+on WhatsApp now (`app.channels.whatsapp.outbound.send._may_message`, #163)."""
 
 
 def language_of(asked: str | None) -> str:
@@ -177,21 +198,30 @@ def stop_lines(
     told: bool = False,
     in_group: bool = False,
     still_told: Sequence[str] = (),
+    told_in_app: Sequence[str] = (),
 ) -> list[str]:
     """What stopping this agreement will do, in his words. `name` is the person let in (for
     an agreement that names one); `told` when that person is one a red flag reaches. For
-    WhatsApp, exactly what changes: `in_group` when he is in his family's group there, and
-    `still_told` names everyone a red flag still reaches (#143)."""
+    WhatsApp, exactly what changes: `in_group` when he is in his family's group there;
+    `still_told` names everyone a red flag still reaches on WhatsApp, `told_in_app` everyone it
+    reaches only in the app (#143, #163); and, with any of them, that nothing else about him
+    goes to them on WhatsApp."""
     words = language_of(language)
     lines = [line.format(name=name) for line in STOP_LINES[words][purpose]]
     if told:
         lines.insert(2, NOT_TOLD[words].format(name=name))
     if purpose is ConsentPurpose.WHATSAPP:
-        extra = ([LEAVES_GROUP[words]] if in_group else []) + [
-            STILL_TOLD[words].format(named=named) for named in still_told
-        ]
-        lines[2:2] = extra
+        lines[2:2] = _what_whatsapp_keeps(words, in_group, still_told, told_in_app)
     return lines
+
+
+def _what_whatsapp_keeps(
+    words: str, in_group: bool, still_told: Sequence[str], told_in_app: Sequence[str]
+) -> list[str]:
+    family = [STILL_TOLD[words].format(named=named) for named in still_told] + [
+        STILL_TOLD_IN_APP[words].format(named=named) for named in told_in_app
+    ]
+    return ([LEAVES_GROUP[words]] if in_group else []) + family + ([NOTHING_ELSE[words]] if family else [])
 
 
 def stopped_lines(
@@ -202,6 +232,7 @@ def stopped_lines(
     told: bool = False,
     in_group: bool = False,
     still_told: Sequence[str] = (),
+    told_in_app: Sequence[str] = (),
 ) -> list[str]:
     """What stopping did, in his words."""
     words = language_of(language)
@@ -211,5 +242,5 @@ def stopped_lines(
     if purpose is ConsentPurpose.WHATSAPP:
         if in_group:
             lines.append(LEFT_GROUP[words])
-        lines += [STILL_TOLD[words].format(named=named) for named in still_told]
+        lines += _what_whatsapp_keeps(words, False, still_told, told_in_app)
     return lines

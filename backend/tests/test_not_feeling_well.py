@@ -186,7 +186,12 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     assert kit.person_id not in done.notified_person_ids
     # His WhatsApp agreement is for messages to him (#143): Mei is told on her own WhatsApp,
     # under the key his agreement to let her in rests on, though he never agreed to WhatsApp.
-    first = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    # Every way she can be reached, and the notice on her family page besides (#162).
+    assert {(row.to_person_id, row.via) for row in rows if row.via is DeliveryChannel.IN_APP} == {
+        (mei.person_id, DeliveryChannel.IN_APP)
+    }
+    first = [row for row in rows if row.via is not DeliveryChannel.IN_APP]
     assert [(row.to_person_id, row.outcome) for row in first] == [
         (mei.person_id, DeliveryOutcome.SENT)
     ]

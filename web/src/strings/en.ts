@@ -1285,7 +1285,6 @@ export const en = {
       thinking_of_you: "Thinking of you",
       weigh_tomorrow: "Stand on the scale tomorrow",
       drink_water: "Drink a glass of water",
-      water_pill_morning: "The water pill at 8",
     },
     // @patient phrase
     ownWords: "My own words",
@@ -1379,6 +1378,7 @@ export const en = {
       app_push: "App",
       whatsapp: "WhatsApp",
       caregiver: "Through the carer",
+      in_app: "On the family page",
     },
     // @patient phrase
     outcomes: {
@@ -1403,6 +1403,8 @@ export const en = {
     saveSettings: "Keep these settings",
     // @patient phrase
     neverHeld: "Never held",
+    // @patient phrase
+    everyWay: "Nura always tells your family about this, every way it can.",
     // @patient headline
     documents: "Papers for the family list",
     // @patient phrase
@@ -1605,6 +1607,8 @@ export const en = {
     NoSuchReviewItem: "That item is not in the queue any more.",
     NotWellFormed: "Nura did not understand that.",
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
+    AlertsGoEveryWay: "Nura always tells your family about this, every way it can.",
+    MessageNamesAMedicine: ["A message cannot name a medicine or say how much to take.", "Nura sends reminders about medicines only from the list."],
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
     StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",

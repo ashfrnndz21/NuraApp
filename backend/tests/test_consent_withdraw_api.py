@@ -429,9 +429,11 @@ async def test_whatsapp_stops_in_the_app_saying_exactly_what_changes(
     assert lines[0] == "If you stop this, Nura stops messaging you on WhatsApp."
     assert lines[-1] == "You can say yes to WhatsApp again later."
     assert any(
-        line.startswith("Mei") and line.endswith("is still told when you are unwell.")
+        line.startswith("Mei") and line.endswith("is still told on WhatsApp when you are unwell.")
         for line in lines
     )
+    # Nothing else about him goes to them on WhatsApp now (#163), and the lines say so.
+    assert "Your family gets other messages about you only in the app." in lines
     done = await client.post(f"{base}/withdraw", json={"language": "en"}, headers=his)
     assert done.status_code == 200, done.text
     assert done.json()["lines"][:2] == [

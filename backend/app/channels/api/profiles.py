@@ -77,6 +77,7 @@ from app.channels.api.schemas import (
 )
 from app.channels.printable import PrintableConsentRenderer
 from app.channels.whatsapp.group import group_of, sync_group
+from app.channels.whatsapp.opt_in import said_no
 from app.consent.export import export_consent_record
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import (
@@ -568,7 +569,7 @@ async def withdrawal(
         return WithdrawalOut(
             consent_id=row.id, purpose=row.purpose, lines=list(draft.lines), closes_account=True
         )
-    in_group, still_told = await _what_whatsapp_changes(session, context, row, words)
+    in_group, still_told, told_in_app = await _what_whatsapp_changes(session, context, row, words)
     return WithdrawalOut(
         consent_id=row.id,
         purpose=row.purpose,
@@ -579,6 +580,7 @@ async def withdrawal(
             told=_told(row),
             in_group=in_group,
             still_told=still_told,
+            told_in_app=told_in_app,
         ),
     )
 
@@ -594,7 +596,9 @@ async def withdraw(
     Keeping his papers is refused here (`StopsByClosingTheAccount`, 409): that is `/closure`."""
     words = body.language or (await audited_profile_read(session, context)).language
     preview = await withdrawal_of(session, context=context, consent_id=consent_id)
-    in_group, still_told = await _what_whatsapp_changes(session, context, preview, words)
+    in_group, still_told, told_in_app = await _what_whatsapp_changes(
+        session, context, preview, words
+    )
     row, withdrawn = await withdraw_consent(
         session, context=context, consent_id=consent_id, captured_via=ConsentChannel.APP
     )
@@ -610,19 +614,21 @@ async def withdraw(
             told=_told(row),
             in_group=in_group,
             still_told=still_told,
+            told_in_app=told_in_app,
         ),
     )
 
 
 async def _what_whatsapp_changes(
     session: AsyncSession, context: KeyContext, row: Consent, language: str
-) -> tuple[bool, list[str]]:
+) -> tuple[bool, list[str], list[str]]:
     """For stopping WhatsApp: whether he is in his family's group there, and everyone a red
     flag still reaches — each live key holding the emergency card, named as the words name
     them, with who they are to him when a stewardship says (the relationship code, in his
-    language). Nothing for any other agreement."""
+    language): first those it reaches on WhatsApp, then those it reaches only in the app,
+    who said no to WhatsApp or have no number (#163). Nothing for any other agreement."""
     if row.purpose is not ConsentPurpose.WHATSAPP:
-        return False, []
+        return False, [], []
     in_group = await group_of(session, context=context) is not None
     moment = utcnow()
     said = {
@@ -632,7 +638,8 @@ async def _what_whatsapp_changes(
             key=lambda one: as_utc(one.opened_at),
         )
     }
-    named: list[str] = []
+    on_whatsapp: list[str] = []
+    in_app: list[str] = []
     seen: set[uuid.UUID] = set()
     for key in sorted(
         await list_keys(session, context=context), key=lambda k: as_utc(k.granted_at)
@@ -643,8 +650,15 @@ async def _what_whatsapp_changes(
             continue
         seen.add(key.holder_person_id)
         name = await person_display_name(session, context, key.holder_person_id)
-        named.append(named_words(name, said.get(key.holder_person_id), language))
-    return in_group, named
+        words = named_words(name, said.get(key.holder_person_id), language)
+        holder = await session.get(Person, key.holder_person_id)
+        reachable = (
+            holder is not None
+            and bool(holder.phone_e164)
+            and not await said_no(session, context=context, person_id=key.holder_person_id)
+        )
+        (on_whatsapp if reachable else in_app).append(words)
+    return in_group, on_whatsapp, in_app
 
 
 def _told(row: Consent) -> bool:

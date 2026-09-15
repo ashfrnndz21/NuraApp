@@ -43,7 +43,13 @@ from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
-from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
+from app.family.pushes import (
+    BadWindow,
+    MessageNamesAMedicine,
+    MissingSlot,
+    NoSuchTemplate,
+    NotAMemo,
+)
 from app.family.roster import (
     AlreadyDone,
     NoSuchSlot,
@@ -295,6 +301,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAMemo,
     MissingSlot,
     BadWindow,
+    # A message to him that names a medicine or a dose (#164): his reminders come only
+    # from his confirmed list.
+    MessageNamesAMedicine,
     NotADocument,
     NotAnAnswer,
     NotAPlanDay,

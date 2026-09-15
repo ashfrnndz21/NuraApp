@@ -774,6 +774,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
+    Walk("GET", f"{P}/reach"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),

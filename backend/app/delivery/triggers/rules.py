@@ -7,7 +7,10 @@ red flag, a paper waiting for a yes, a visit tomorrow, a family message come due
 type, and the type says what it speaks of (`scope`: a recipient's key must cover it), where
 it goes first (`channels`: app push, then WhatsApp, then the caregiver, by default), how many
 a person may have of it in his day (`cap`) and whether it waits out the quiet hours. An
-alert — a red flag — has no cap and no quiet hours, and no setting can give it either.
+alert — a red flag — has no cap and no quiet hours, and no setting can give it either. Nor can
+a setting choose its channels (#162): an alert goes every way each person can be reached —
+an app push when they have a device, WhatsApp where they may be sent it — and the notice on
+their family page is always written, so no list of channels can leave it reaching nobody.
 
 The clock of his day is E10-01's routine (`app.routines`), not a second one kept here, with
 the one breakfast time (`app.routines.breakfast`: his settings, else the routine's anchor,
@@ -111,6 +114,8 @@ RULES: Mapping[TriggerType, Rule] = {
             "red_flag_raised",
             cap=None,
             quiet=False,
+            # Every one of these, not the first that works, and the in-app notice besides
+            # (`deliver`). A stored list for an alert is ignored (`config_of`).
             channels=(DeliveryChannel.WHATSAPP, DeliveryChannel.APP_PUSH),
         ),
         Rule(
@@ -174,6 +179,16 @@ class AlertsAreNeverHeld(Refusal):
     """An alert has no cap and no quiet hours, and no setting can give it either."""
 
 
+class AlertsGoEveryWay(Refusal):
+    """An alert goes every way each person can be reached, and no setting chooses its
+    channels: a list of one channel nobody has would leave a red flag reaching nobody (#162)."""
+
+
+def is_alert(type: TriggerType) -> bool:
+    """An alert — a red flag — is never capped, never quiet and never routed by a setting."""
+    return RULES[type].category is Category.ALERT
+
+
 class NotASetting(Refusal):
     """A setting names a trigger type, a channel on its list at most once, and a cap from 1 to 12."""
 
@@ -189,6 +204,10 @@ class Config:
     caps: Mapping[TriggerType, int] = field(default_factory=dict)
 
     def channels_for(self, type: TriggerType) -> tuple[DeliveryChannel, ...]:
+        """The channels in the order they are tried. An alert's are the rule's, every one of
+        them, whatever is stored."""
+        if is_alert(type):
+            return RULES[type].channels
         return self.channels.get(type) or RULES[type].channels
 
     def cap_for(self, type: TriggerType) -> int | None:
@@ -231,6 +250,7 @@ def config_of(
     day = day_of(routine, breakfast)
     if row is None:
         return Config(day=day)
+    # A row kept before #162 may hold a list or a cap for an alert: neither is read.
     return Config(
         day=day,
         skip_quiet_days=row.skip_quiet_days,
@@ -239,15 +259,21 @@ def config_of(
         channels={
             TriggerType(name): tuple(DeliveryChannel(one) for one in listed)
             for name, listed in row.channels.items()
+            if not is_alert(TriggerType(name))
         },
-        caps={TriggerType(name): int(cap) for name, cap in row.caps.items()},
+        caps={
+            TriggerType(name): int(cap)
+            for name, cap in row.caps.items()
+            if not is_alert(TriggerType(name))
+        },
     )
 
 
 def check_settings(
     channels: Mapping[str, Sequence[str]], caps: Mapping[str, int]
 ) -> tuple[dict[str, list[str]], dict[str, int]]:
-    """The settings as they will be kept, or a refusal naming what is wrong with them."""
+    """The settings as they will be kept, or a refusal naming what is wrong with them. An
+    alert's channels are not a setting (`AlertsGoEveryWay`), and neither is its cap."""
     kept_channels: dict[str, list[str]] = {}
     for name, listed in channels.items():
         try:
@@ -255,6 +281,10 @@ def check_settings(
             chosen = [DeliveryChannel(one) for one in listed]
         except ValueError as unknown:
             raise NotASetting(str(unknown)) from unknown
+        if is_alert(kind):
+            raise AlertsGoEveryWay(f"{kind.value} is an alert: it goes every way it can")
+        if DeliveryChannel.IN_APP in chosen:
+            raise NotASetting("the in-app notice is written for an alert, not chosen")
         if not chosen or len(set(chosen)) != len(chosen):
             raise NotASetting(f"the list for {kind.value} names each channel once, at least one")
         kept_channels[kind.value] = [one.value for one in chosen]
