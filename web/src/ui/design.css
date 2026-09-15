@@ -747,3 +747,13 @@ html.shot-full .shell > .shell-scroll {
 .tile > .pill.compact {
   align-self: flex-end;
 }
+
+/* What changed and its "See all": the button sits under the panel, at its right edge. */
+.panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-half);
+}
+.panel-stack > .pill.compact {
+  align-self: flex-end;
+}

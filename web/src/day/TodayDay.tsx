@@ -148,37 +148,29 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
 }
 
 /** Today's top three (E11-02): the backend's ranking — alerts, then reminders, then insights —
- *  one card at a time with "Next", in its order, each under its why. */
+ *  stacked in its order under "For you today" (docs/ui-mockup-v2.html), each under its why. */
 export function TopThree({ items, player }: { items: FeedItemOut[]; player: ClipPlayer }): JSX.Element | null {
-  const s = t();
-  const [at, setAt] = useState(0);
-  useEffect(() => setAt(0), [items.map((item) => item.item_id).join(",")]);
-  const item = items[Math.min(at, items.length - 1)];
-  if (!item) return null;
-  const clips = clipsOf(item);
-  const paper = density() === "patient" || item.supply === "flag";
-  const card =
-    clips.size > 0 ? (
-      <ClipCard item={item} clips={clips} player={player} paper={paper} testId="top-three-card" />
-    ) : (
-      <Card
-        title={item.headline}
-        lines={feedLines(item).lines}
-        boundary={feedLines(item).boundary}
-        spoken={item.voice.length > 0 ? item.voice : undefined}
-        provenance={whyLine(item)}
-        paper={paper}
-        testId="top-three-card"
-      />
-    );
+  if (items.length === 0) return null;
   return (
-    <div class="top-three" data-testid="top-three" data-at={at} data-count={items.length} data-category={item.category ?? ""}>
-      {card}
-      {at < items.length - 1 && (
-        <Pill onClick={() => setAt(at + 1)} testId="top-three-next">
-          {s.onboarding.next}
-        </Pill>
-      )}
+    <div class="top-three" data-testid="top-three" data-count={items.length}>
+      {items.map((item) => {
+        const clips = clipsOf(item);
+        const paper = density() === "patient" || item.supply === "flag";
+        return clips.size > 0 ? (
+          <ClipCard key={item.item_id} item={item} clips={clips} player={player} paper={paper} testId="top-three-card" />
+        ) : (
+          <Card
+            key={item.item_id}
+            title={item.headline}
+            lines={feedLines(item).lines}
+            boundary={feedLines(item).boundary}
+            spoken={item.voice.length > 0 ? item.voice : undefined}
+            provenance={whyLine(item)}
+            paper={paper}
+            testId="top-three-card"
+          />
+        );
+      })}
     </div>
   );
 }

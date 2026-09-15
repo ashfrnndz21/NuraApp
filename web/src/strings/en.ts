@@ -59,6 +59,10 @@ export const en = {
     bpLabel: "Blood pressure, the top number",
     // @patient headline
     fromName: "From {name}",
+    // @patient phrase
+    showAll: "See all {count}",
+    // @patient phrase
+    showFewer: "See fewer",
   },
   places: {
     // @patient headline

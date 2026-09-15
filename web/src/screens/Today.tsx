@@ -68,7 +68,6 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             ))}
             {stateAt === "top" && <StateCard v={v} />}
             <DoseSection v={v} />
-            <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
               <TopThree items={top} player={v.clipPlayer} />
@@ -91,6 +90,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
+            <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             {nextVisit && !fromPhone && <VisitTile visit={nextVisit} />}
             {!fromPhone && <FamilyNote />}
           </>
@@ -144,6 +144,8 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               </div>
             )}
             {nextVisit && !fromPhone && <GapsTile visit={nextVisit} />}
+            <AskAboutPill />
+            {/* F1: "Watching for {name}" and "Sent to {name} this week" (PanelList) go here. */}
             <DoseSection v={v} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
@@ -397,6 +399,9 @@ function Readings(): JSX.Element | null {
   return <Sparkline values={values} label={s.home.bpLabel} />;
 }
 
+/** How many of what changed Home shows before "See all": the mockup's three, and one more. */
+const CHANGES_SHOWN = 4;
+
 /** What changed since she last looked (reading it is looking): each line the backend's, with the
  *  dot of its tone — Act, Watch, Good, or none. Read once each time Home opens. */
 function WhatChanged(): JSX.Element | null {
@@ -404,6 +409,7 @@ function WhatChanged(): JSX.Element | null {
   const bearer = token.value;
   const papers = profile.value;
   const [found, setFound] = useState<ChangesOut | null>(null);
+  const [all, setAll] = useState(false);
   useEffect(() => {
     if (!bearer || !papers) return;
     nura.changes(bearer, papers.profile_id, language.value).then(setFound, () => setFound(null));
@@ -411,7 +417,30 @@ function WhatChanged(): JSX.Element | null {
   if (!found) return null;
   const rows = [...found.lines, ...found.waiting].map((line, at) => ({ key: `${line.section}:${line.key}:${at}`, text: line.text, tone: toneOf(line.tone ?? null), dotted: true }));
   if (rows.length === 0) return null;
-  return <PanelList title={s.home.whatChanged} rows={rows} paper testId="what-changed" />;
+  const hidden = rows.length - CHANGES_SHOWN;
+  return (
+    <div class="panel-stack">
+      <PanelList title={s.home.whatChanged} rows={all || hidden <= 0 ? rows : rows.slice(0, CHANGES_SHOWN)} paper testId="what-changed" />
+      {hidden > 0 && (
+        <PillButton variant="quiet" compact onClick={() => setAll(!all)} pressed={all} testId="what-changed-all">
+          {all ? s.home.showFewer : fill(s.home.showAll, { count: String(rows.length) })}
+        </PillButton>
+      )}
+    </div>
+  );
+}
+
+/** "Ask about Pa" at the foot of her Home (docs/ui-mockup.html): the ask screen, empty, for a
+ *  question of her own. The bar on top asks too; this is the one her thumb reaches. */
+function AskAboutPill(): JSX.Element | null {
+  const s = t();
+  const papers = profile.value;
+  if (!papers) return null;
+  return (
+    <PillButton icon="search" onClick={() => go({ name: "ask" })} testId="ask-about">
+      {fill(s.shell.askAbout, { name: papers.display_name })}
+    </PillButton>
+  );
 }
 
 /** The next visit as a figure — its day and time — and where, as the logistics card says. */

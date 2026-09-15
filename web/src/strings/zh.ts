@@ -59,6 +59,10 @@ export const zh = {
     bpLabel: "血压，上面的数字",
     // @patient headline
     fromName: "来自{name}",
+    // @patient phrase
+    showAll: "看全部 {count} 项",
+    // @patient phrase
+    showFewer: "看少一些",
   },
   places: {
     // @patient headline

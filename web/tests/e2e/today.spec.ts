@@ -82,8 +82,8 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   if (fromFeed.length > 0) {
     if (top.length > 0) {
       // Today's top three (E11-02) stand in "For you today" on a live page: the backend's first
-      // card, under its own why, one at a time (day.spec.ts walks the rest).
-      const card = page.getByTestId("top-three-card");
+      // card first, under its own why (day.spec.ts reads the rest).
+      const card = page.getByTestId("top-three-card").first();
       await expect(card).toContainText(top[0]!.headline);
       if (top[0]!.why.plain) await expect(card).toContainText(top[0]!.why.plain);
     } else {

@@ -647,7 +647,7 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
   await shotAs(page, "cp27-me", true);
 });
 
-test("today's top three: one card a screen with Next, in the backend's order, each under its why", async ({ page, request }) => {
+test("today's top three: stacked under For you today, in the backend's order, each under its why", async ({ page, request }) => {
   const pa = await seedFeed(request);
   const top = ((await (await request.get(`${API}/profiles/${pa.profileId}/feed/today`, auth(pa.token))).json()) as { items: { headline: string; status: string; why: { plain?: string } }[] }).items.filter(
     (item) => item.status !== "dismissed",
@@ -656,15 +656,13 @@ test("today's top three: one card a screen with Next, in the backend's order, ea
   await signInThroughTheApp(page, pa.phone, "Pa");
   const three = page.getByTestId("top-three");
   await expect(three).toHaveAttribute("data-count", String(top.length));
+  const cards = three.getByTestId("top-three-card");
+  await expect(cards).toHaveCount(top.length);
   for (const [at, item] of top.entries()) {
-    await expect(three).toHaveAttribute("data-at", String(at));
-    await expect(three.getByTestId("top-three-card")).toHaveCount(1);
-    await expect(three.getByTestId("top-three-card")).toContainText(item.headline);
-    if (item.why.plain) await expect(three.getByTestId("top-three-card").locator(".provenance")).toHaveText(item.why.plain);
-    expect(await nothingDrawnOverLines(three, { lines: "h2, p", controls: "button", minTarget: 56 })).toEqual([]);
-    if (at < top.length - 1) await three.getByTestId("top-three-next").click();
+    await expect(cards.nth(at)).toContainText(item.headline);
+    if (item.why.plain) await expect(cards.nth(at).locator(".provenance")).toHaveText(item.why.plain);
   }
-  await expect(three.getByTestId("top-three-next")).toHaveCount(0);
+  expect(await nothingDrawnOverLines(three, { lines: "h2, p", controls: "button", minTarget: 56 })).toEqual([]);
   await shotAs(page, "cp27-top-three", true);
 });
 

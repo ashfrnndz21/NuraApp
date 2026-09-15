@@ -59,6 +59,10 @@ export const ms = {
     bpLabel: "Tekanan darah, nombor atas",
     // @patient headline
     fromName: "Daripada {name}",
+    // @patient phrase
+    showAll: "Lihat semua {count}",
+    // @patient phrase
+    showFewer: "Lihat sedikit",
   },
   places: {
     // @patient headline
