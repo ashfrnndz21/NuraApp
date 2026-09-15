@@ -1,0 +1,434 @@
+"""The two rules that close his day (E11-01, E19-03): the check-in and the family notice.
+
+Their properties one at a time, on the frozen clock over `run_due` and the fixtures: the
+check-in at his check-in time from his settings, else at ten as the nudge planner has it; each
+once a day, never late, never in the quiet hours; by the recipient's own channels; neither on
+a day with an open red flag; the check-in not asked twice in a day (he already said how he
+is, or the day's nudge asked it); the notice a count of only what the chief's key opens, and
+only on a day something was written down.
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import UTC, datetime, time, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.clock import FrozenClock
+from app.db import as_utc
+from app.delivery.triggers.day import (
+    A_FLAG_IS_OPEN,
+    A_QUESTION_IS_OPEN,
+    HE_SAID_TODAY,
+    THE_NUDGE_ASKED,
+)
+from app.delivery.triggers.deliver import Firing, Recipient, open_run, write
+from app.delivery.triggers.engine import Report, run_due
+from app.delivery.triggers.ladder import PATIENT
+from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, TriggerType
+from app.delivery.triggers.preferences import change, log
+from app.identity.service import register_person
+from app.keys.grants import grant_key
+from app.keys.scopes import KeyRole, Scope, scope_for_subject
+from app.memory.semantic import current_facts
+from app.regions import Region
+from tests.delivery_support import KIT, MEI, PA, Home, home
+from tests.feelings_support import check_in_setting
+from tests.support import agree_to_family_sharing
+
+SGT = ZoneInfo("Asia/Singapore")
+CHECK_IN = TriggerType.CHECK_IN
+NOTICE = TriggerType.FAMILY_NOTICE
+ASKED = "How are you feeling today?"
+
+
+def at(hour: int, minute: int = 0, day: int = 14) -> datetime:
+    return datetime(2026, 9, day, hour, minute, tzinfo=SGT).astimezone(UTC)
+
+
+async def _run(sg: AsyncSession, h: Home, clock: FrozenClock, when: datetime) -> Report:
+    clock.set(when)
+    return await run_due(sg, via=h.via, profile_id=h.owner.profile_id, at=when)
+
+
+def _rows(report: Report, kind: TriggerType) -> list[Delivery]:
+    return [sent.delivery for sent in report.sent if sent.delivery.trigger_type is kind]
+
+
+def _asked(h: Home) -> list[str]:
+    return [text for text in h.sent_to(h.pa) if ASKED in text]
+
+
+def _notices(h: Home, phone: str) -> list[str]:
+    return [
+        one.text
+        for one in h.whatsapp.sent
+        if one.to_e164 == phone and one.text.startswith("Nura wrote down")
+    ]
+
+
+async def _he_says(
+    sg: AsyncSession, h: Home, clock: FrozenClock, when: datetime, text: str
+) -> None:
+    clock.set(when)
+    handled = await h.inbound(sg, PA, text)
+    assert handled.outcome == "check_in_answer", handled
+
+
+# --- the check-in ------------------------------------------------------------------------------
+
+
+async def test_the_check_in_goes_at_his_check_in_time_from_his_settings_once_a_day(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+
+    assert not _rows(await _run(sg, h, clock, at(17, 59)), CHECK_IN)
+    [asked] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert asked.outcome is DeliveryOutcome.SENT and asked.to_person_id == h.pa.id
+    assert asked.via is DeliveryChannel.WHATSAPP and asked.template_name == "feeling_check_in"
+    assert asked.rule == "check_in_time_reached" and asked.why == {"check_in_at": "18:00"}
+    assert h.sent_to(h.pa)[-1].splitlines() == [
+        "Hello Pa, this is Nura.",
+        ASKED,
+        "Answer OK, tired or pain.",
+    ]
+    # Once a day: the runs after it that day write nothing more.
+    assert not _rows(await _run(sg, h, clock, at(18, 5)), CHECK_IN)
+    assert not _rows(await _run(sg, h, clock, at(20, 30)), CHECK_IN)
+    assert len(_asked(h)) == 1
+    # The next day, at the same time, again.
+    [again] = _rows(await _run(sg, h, clock, at(18, 1, day=15)), CHECK_IN)
+    assert again.outcome is DeliveryOutcome.SENT and again.day == "2026-09-15"
+
+
+async def test_before_he_says_a_time_he_is_asked_at_ten_and_never_late(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    # Three hours after ten, a check-in that did not go is dropped, not sent late.
+    assert not _rows(await _run(sg, h, clock, at(13, 1)), CHECK_IN)
+    assert not _rows(await _run(sg, h, clock, at(9, 59, day=15)), CHECK_IN)
+    [asked] = _rows(await _run(sg, h, clock, at(10, day=15)), CHECK_IN)
+    assert asked.outcome is DeliveryOutcome.SENT and asked.why == {"check_in_at": "10:00"}
+
+
+async def test_he_is_asked_once_a_day_not_again_after_he_said_or_the_nudge_asked(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    # He said how he is at noon, of his own accord: the evening does not ask again.
+    await _he_says(sg, h, clock, at(12), "tired")
+    [held] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.SKIPPED, HE_SAID_TODAY)
+    assert not _rows(await _run(sg, h, clock, at(18, 30)), CHECK_IN)  # written once
+
+    # The next day the day's smart nudge was the check-in (E17-03): it is not asked twice.
+    clock.set(at(17, day=15))
+    run = await open_run(sg, via=h.via, profile_id=h.owner.profile_id, at=at(17, day=15))
+    await write(
+        run,
+        Firing(type=TriggerType.NUDGE, dedupe_key="nudge:check-in", why={"kind": "check_in"}),
+        Recipient(h.pa, PATIENT),
+        DeliveryOutcome.SENT,
+        via=DeliveryChannel.WHATSAPP,
+    )
+    [held] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.SKIPPED, THE_NUDGE_ASKED)
+    assert _asked(h) == []
+
+
+async def test_the_quiet_hours_hold_the_check_in_and_the_hold_is_written_once(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    await change(
+        sg,
+        context=h.owner,
+        skip_quiet_days=False,
+        quiet_from=time(17),
+        quiet_until=time(7),
+        channels={},
+        caps={},
+    )
+    [held] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.QUIET, "quiet hours")
+    assert not _rows(await _run(sg, h, clock, at(19)), CHECK_IN)
+    assert _asked(h) == []
+
+
+async def test_his_ok_answers_the_question_he_has_open_so_the_check_in_waits(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """His "OK" is also a yes (the classifier's word), and a yes goes to what Nura read back to
+    him first. While a reading of his waits for that yes, the check-in is not asked."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    clock.set(at(12))
+    assert (await h.inbound(sg, PA, "BP 140/90 this morning")).outcome == "proposal"
+    [held] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.SKIPPED, A_QUESTION_IS_OPEN)
+    assert _asked(h) == []
+    # The next day the reading's day is over: he is asked.
+    [asked] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert asked.outcome is DeliveryOutcome.SENT
+
+
+async def test_without_his_whatsapp_yes_the_check_in_never_goes_on_whatsapp(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """His WHATSAPP consent is asked on every message: without it the check-in is logged as
+    not delivered, or goes by the app on his phone when he has it, and never on WhatsApp."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path, whatsapp=False)
+    await check_in_setting(sg, h.owner, "18:00")
+    [row] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert row.outcome is not DeliveryOutcome.SENT and row.via is not DeliveryChannel.WHATSAPP
+    assert _asked(h) == []
+    h.push.register(h.pa.id)
+    [pushed] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert (pushed.outcome, pushed.via) == (DeliveryOutcome.SENT, DeliveryChannel.APP_PUSH)
+    assert _asked(h) == []
+
+
+async def test_the_check_in_is_the_threads_first_even_with_the_app_on_his_phone(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    h.push.register(h.pa.id)
+    [asked] = _rows(await _run(sg, h, clock, at(10)), CHECK_IN)
+    assert asked.via is DeliveryChannel.WHATSAPP and asked.passed_over == []
+    assert [one for one in h.push.sent if one.ref == str(asked.id)] == []
+
+
+# --- the family notice ---------------------------------------------------------------------------
+
+
+async def test_the_notice_goes_to_each_chief_in_the_evening_by_her_own_channels_once(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    h.push.register(h.mei.id)  # Mei has the app on her phone
+    await _he_says(sg, h, clock, at(12), "tired")
+
+    assert not _rows(await _run(sg, h, clock, at(19, 59)), NOTICE)
+    [notice] = _rows(await _run(sg, h, clock, at(20)), NOTICE)
+    # Her own list: the app first, where she has a device; nothing said in the push.
+    assert (notice.to_person_id, notice.standing) == (h.mei.id, "chief")
+    assert (notice.outcome, notice.via, notice.rule) == (
+        DeliveryOutcome.SENT,
+        DeliveryChannel.APP_PUSH,
+        "evening_family_notice",
+    )
+    # (Her phone also hears the breakfast tablet's ladder, which nobody answered here.)
+    [pushed] = [one for one in h.push.sent if one.ref == str(notice.id)]
+    assert pushed.person_id == h.mei.id and "tired" not in pushed.text
+    assert not _rows(await _run(sg, h, clock, at(20, 30)), NOTICE)
+    # Not to him, and not to the helper: the notice is a chief's.
+    assert not [row for row in _rows(await _run(sg, h, clock, at(21)), NOTICE)]
+    assert not any(text.startswith("Nura wrote down") for text in h.sent_to(h.siti))
+
+    # The next day the family asked for WhatsApp for the notice: her list, not the type's.
+    await change(
+        sg,
+        context=h.owner,
+        skip_quiet_days=False,
+        quiet_from=None,
+        quiet_until=None,
+        channels={"family_notice": ["whatsapp"]},
+        caps={},
+    )
+    await _he_says(sg, h, clock, at(12, day=15), "tired")
+    [notice] = _rows(await _run(sg, h, clock, at(20, day=15)), NOTICE)
+    assert (notice.outcome, notice.via, notice.template_name) == (
+        DeliveryOutcome.SENT,
+        DeliveryChannel.WHATSAPP,
+        "family_digest",
+    )
+    assert len(_notices(h, MEI)) == 1
+
+
+async def test_the_notice_counts_only_what_her_key_opens(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    # Kit, a son, a chief over the family list and the readings only.
+    kit = await register_person(
+        sg, region=Region.SG, display_name="Kit", phone_e164=KIT, language="en"
+    )
+    narrow = frozenset({Scope.FAMILY, Scope.READINGS})
+    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
+    await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
+    # Today: a feeling of his (the record) and a blood pressure Mei sent and confirmed.
+    await _he_says(sg, h, clock, at(12), "tired")
+    clock.set(at(12, 5))
+    assert (await h.inbound(sg, MEI, "BP 150/90 this morning")).outcome == "proposal"
+    assert (await h.inbound(sg, MEI, "yes")).outcome == "confirmed"
+
+    clock.set(at(20))
+    week = [
+        fact
+        for fact in await current_facts(sg, context=h.owner)
+        if as_utc(fact.asserted_at) > at(20) - timedelta(days=7)
+    ]
+    kits = [fact for fact in week if scope_for_subject(fact.subject) in narrow]
+    assert 0 < len(kits) < len(week)
+
+    sent = {row.to_person_id: row for row in _rows(await _run(sg, h, clock, at(20)), NOTICE)}
+    assert set(sent) == {h.mei.id, kit.id}
+    # Each count is in its own message only: the log shows `why` to every chief.
+    assert sent[kit.id].why == sent[h.mei.id].why == {"days": 7}
+    assert _notices(h, KIT) == [
+        f"Nura wrote down {len(kits)} things about Pa this week.\nYou can read them in the app."
+    ]
+    assert _notices(h, MEI) == [
+        f"Nura wrote down {len(week)} things about Pa this week.\nYou can read them in the app."
+    ]
+
+
+async def test_the_log_shows_a_notice_only_to_its_chief_and_a_flag_hold_only_to_an_emergency_key(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The family's log (#137) shows each chief her own notice and not another's: whether Mei
+    was told says a part of his record closed to Kit was written today. A hold because a red
+    flag is open is shown only to a key that opens his emergency lines."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    kit = await register_person(
+        sg, region=Region.SG, display_name="Kit", phone_e164=KIT, language="en"
+    )
+    narrow = frozenset({Scope.FAMILY, Scope.READINGS})
+    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
+    await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
+    kits, meis = await h.ctx(sg, kit), await h.ctx(sg, h.mei)
+
+    # Monday: only a feeling of his, which Kit's key does not open. Mei is told; Kit is not,
+    # and his log does not show that she was.
+    await _he_says(sg, h, clock, at(12), "tired")
+    [notice] = _rows(await _run(sg, h, clock, at(20)), NOTICE)
+    assert notice.to_person_id == h.mei.id
+    monday = "2026-09-14"
+    assert notice.id in {row.id for row in await log(sg, context=meis, day=monday)}
+    assert notice.id in {row.id for row in await log(sg, context=h.owner, day=monday)}
+    assert NOTICE not in {row.trigger_type for row in await log(sg, context=kits, day=monday)}
+
+    # Tuesday: a reading Mei sent (Kit's key opens it), then a fall. Both are held, and Kit's
+    # log shows neither hold: his key does not open the emergency lines.
+    clock.set(at(12, day=15))
+    assert (await h.inbound(sg, MEI, "BP 150/90 this morning")).outcome == "proposal"
+    assert (await h.inbound(sg, MEI, "yes")).outcome == "confirmed"
+    clock.set(at(12, 10, day=15))
+    await h.inbound(sg, MEI, "he fell in the bathroom")
+    held = _rows(await _run(sg, h, clock, at(20, day=15)), NOTICE)
+    assert {(row.to_person_id, row.reason) for row in held} == {
+        (h.mei.id, A_FLAG_IS_OPEN),
+        (kit.id, A_FLAG_IS_OPEN),
+    }
+    tuesday = "2026-09-15"
+    theirs = await log(sg, context=kits, day=tuesday)
+    assert not [row for row in theirs if row.reason == A_FLAG_IS_OPEN]
+    hers = await log(sg, context=meis, day=tuesday)
+    assert [row.to_person_id for row in hers if row.trigger_type is NOTICE] == [h.mei.id]
+
+
+async def test_no_notice_on_a_day_nothing_was_written_down(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await _he_says(sg, h, clock, at(12), "tired")
+    assert _rows(await _run(sg, h, clock, at(20)), NOTICE)
+    # Tuesday: nothing new, so nothing to tell her; the week's count is not said again.
+    assert not _rows(await _run(sg, h, clock, at(20, day=15)), NOTICE)
+    assert len(_notices(h, MEI)) == 1
+
+
+# --- a red flag ------------------------------------------------------------------------------
+
+
+async def test_neither_goes_on_a_day_with_an_open_red_flag(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    clock.set(at(12))
+    await h.inbound(sg, MEI, "he fell in the bathroom")
+
+    [held] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.SKIPPED, A_FLAG_IS_OPEN)
+    assert not _rows(await _run(sg, h, clock, at(18, 30)), CHECK_IN)  # written once
+    notices = _rows(await _run(sg, h, clock, at(20)), NOTICE)
+    assert [(row.to_person_id, row.outcome, row.reason) for row in notices] == [
+        (h.mei.id, DeliveryOutcome.SKIPPED, A_FLAG_IS_OPEN)
+    ]
+    assert _asked(h) == [] and _notices(h, MEI) == []
+
+    # The next evening the flag is out of its day: he is asked again.
+    [asked] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert asked.outcome is DeliveryOutcome.SENT
+
+
+# --- a closing account ------------------------------------------------------------------------
+
+
+async def test_neither_goes_once_he_has_closed_his_account(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Closing his account (#143) stops both: the engine sends nothing more about him, and
+    writes no hold for either, since there is no day of his left to close."""
+    from tests.test_account_closure import _close
+
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    await _he_says(sg, h, clock, at(12), "tired")
+    clock.set(at(13))
+    await _close(sg, h)
+
+    for hour in (18, 20):
+        report = await _run(sg, h, clock, at(hour))
+        assert not _rows(report, CHECK_IN) and not _rows(report, NOTICE)
+    assert _asked(h) == [] and _notices(h, MEI) == []
+
+
+# --- the family's log -----------------------------------------------------------------------------
+
+
+def test_the_familys_log_names_both_kinds_and_says_why_one_was_held_in_every_language() -> None:
+    """The delivery log on the web (#137, `family/Delivery.tsx`) labels each kind of message
+    and, for a message held for these rules' reasons, says why rather than "a quiet day": the
+    engine's reasons are the keys it looks them up by, in English, Malay and Chinese."""
+    web = Path(__file__).resolve().parents[2] / "web" / "src"
+    screen = (web / "screens" / "family" / "Delivery.tsx").read_text(encoding="utf-8")
+    codes = {
+        A_FLAG_IS_OPEN: "flagOpen",
+        HE_SAID_TODAY: "saidToday",
+        THE_NUDGE_ASKED: "nudgeAsked",
+        A_QUESTION_IS_OPEN: "questionOpen",
+    }
+    for reason, code in codes.items():
+        assert f'"{reason}": "{code}"' in screen, reason
+    for language in ("en", "ms", "zh"):
+        text = (web / "strings" / f"{language}.ts").read_text(encoding="utf-8")
+        kinds = re.search(r"triggers: \{\n(.*?)\n\s*\},", text, re.DOTALL)
+        held = re.search(r"skippedBecause: \{\n(.*?)\n\s*\},", text, re.DOTALL)
+        assert kinds is not None and held is not None, language
+        for kind in (CHECK_IN, NOTICE):
+            assert f"{kind.value}: " in kinds.group(1), (language, kind)
+        for code in codes.values():
+            assert f'{code}: "' in held.group(1), (language, code)

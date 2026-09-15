@@ -15,6 +15,7 @@ and asks him to say it again.
 | `sakit-dada` | `023ff271d8b2…` | 'dada saya sakit' | 0.88 |
 | `pa-whatsapp-market` | `67b86fc47925…` | 'I walked to the market this morning. My knee felt fine.' | 0.9 |
 | `pa-whatsapp-fell` | `430e9cabf8ac…` | 'I fell in the bathroom this morning.' | 0.92 |
+| `consult-red-flag` (a consult, `tests/consult_audio.py`) | `a8510afcf6aa…` | the words of `tests/fixtures/visits/red-flag-chest-pain.json`: chest pain, heard at the visit (#155) | 0.9 |
 
 The two `pa-whatsapp-*` notes are Pa's voice notes on WhatsApp (E11-01): the fixture provider serves
 the same placeholder for the media ids in `tests/fixtures/whatsapp/media.json`, and `pa-voice-mumbled`

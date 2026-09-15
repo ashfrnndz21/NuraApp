@@ -436,6 +436,19 @@ export interface ConsultOut {
   summary_refused: string | null;
 }
 
+/** A visit's recording on its way in, in chunks (#129): what the server has of it. */
+export interface UploadOut {
+  upload_id: string;
+  /** How many chunks the server has, in order: the number of the next one to send. */
+  chunks: number;
+  /** How many bytes they hold: where in the recording the next chunk starts. */
+  received_bytes: number;
+  doctor_said_yes: boolean;
+  /** Whether it still takes chunks: false once put together, thrown away, or lapsed. */
+  open: boolean;
+  max_chunk_bytes: number;
+}
+
 // --- E02: a photo in, a review card out ------------------------------------------------
 
 export type FieldState = "proposed" | "confirmed" | "corrected" | "rejected";

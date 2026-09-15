@@ -57,6 +57,15 @@ from app.identity.closing import AlreadyClosing, NothingToUndo, NotTheirsToClose
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
+from app.ingestion.chunks import (
+    ChunkOutOfOrder,
+    ChunkTooLarge,
+    NoSuchUpload,
+    NotTheChunkSent,
+    NotYourUpload,
+    NoYesFromTheDoctor,
+    UploadClosed,
+)
 from app.ingestion.connectors.calendar import CalendarTooLarge
 from app.ingestion.connectors.service import (
     AlreadyDecided,
@@ -234,6 +243,16 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A visit's recording (E02-05): too big or too long to be one visit; no recording of that
     # artefact on this profile.
     (ConsultTooLong, 413),
+    # A recording sent in chunks (#129): each chunk against its cap; in order, once each; only
+    # the phone that opened it; kept only after the doctor's yes; closed once put together or
+    # thrown away.
+    (ChunkTooLarge, 413),
+    (NoSuchUpload, 404),
+    (NotYourUpload, 403),
+    (UploadClosed, 410),
+    (ChunkOutOfOrder, 409),
+    (NotTheChunkSent, 409),
+    (NoYesFromTheDoctor, 409),
     # A visit's recording is heard by him and the family he let in, and nobody else.
     (OnlyTheFamilyHears, 403),
     (NoSuchPhoto, 404),

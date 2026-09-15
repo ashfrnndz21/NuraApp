@@ -12,12 +12,15 @@ from the WhatsApp thread and the feeling cloud); the five-minute run is the net 
 the rungs after the first, and a flag whose first word could not go.
 
 The order is the safety order: flags first, before anything is ranked or capped; then the
-ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
+ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events;
+then the close of his day (`day`: the check-in and the family notice), after the nudges so a
+check-in the day's nudge already asked is not asked again.
 Every trigger that fires writes its rule on every `Delivery` row it makes.
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -35,6 +38,7 @@ from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import theirs
+from app.delivery.triggers.day import run_day
 from app.delivery.triggers.deliver import (
     Firing,
     Message,
@@ -76,6 +80,8 @@ from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ
 from app.safety.red_flags import open_flags
 
+logger = logging.getLogger(__name__)
+
 PATTERN_DAYS = 7
 PATTERN_AT_LEAST = 3
 """Three untapped tablets in seven days: a count the family is told, never a diagnosis."""
@@ -111,8 +117,10 @@ async def run_due(
     closing = await closing_since(session, profile_id=profile_id)
     if closing is not None:
         # A closing account (#143): nothing more goes out about him — except a red flag raised
-        # before he closed it, which is never hidden from the day it was raised.
+        # before he closed it, which is never hidden from the day it was raised. No check-in
+        # and no family notice (`day`). A visit's recording on its way in is thrown away.
         await _flags(run, raised_before=closing)
+        await _consult_uploads(run, closing=True)
         return Report(at=run.at, day=run.day, sent=tuple(run.report))
     await _flags(run)
     if run.patient is not None and run.acting.allows(Scope.MEDICINES):
@@ -130,7 +138,9 @@ async def run_due(
     await _papers(run)
     await _family_messages(run)
     await _nudges(run)
+    await run_day(run)
     await _family_group(run)
+    await _consult_uploads(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
 
@@ -630,6 +640,29 @@ async def _nudges(run: Run) -> None:
                 )
             continue
         await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
+
+
+async def _consult_uploads(run: Run, *, closing: bool = False) -> None:
+    """A visit's recording on its way in, in chunks (#129), that can no longer finish — the
+    doctor never answered, the phone never said Stop, no RECORDING consent is in force any
+    more, or the account is closing (#143) — is thrown away here, with every chunk, when the
+    phone could not do it itself. In
+    its own savepoint: a store that fails it is logged, and never costs this run what it
+    already sent (its Delivery rows stand; the next run tries the sweep again)."""
+    # Imported here: the recording reaches the visit's card, and the card reaches delivery.
+    from app.ingestion.chunks import discard_stale
+
+    try:
+        async with run.session.begin_nested():
+            await discard_stale(
+                run.session,
+                context=run.acting,
+                store=run.via.providers.object_store,
+                channel=Channel.SYSTEM,
+                closing=closing,
+            )
+    except Exception as failure:  # noqa: BLE001 — the sweep is never worth the run
+        logger.warning("consult upload sweep failed: %s", type(failure).__name__)
 
 
 __all__ = ["NothingToSay", "Report", "Via", "run_due"]

@@ -21,6 +21,10 @@ CONSULT = "consult-bp-review"
 """Dr Tan's blood pressure review as a recording is heard: the notice, his yes as the first
 seconds after it, the visit, Pa's question and Mei's word — eleven stretches, 66 seconds."""
 
+RED_FLAG_CONSULT = "consult-red-flag"
+"""A visit at which Dr Tan hears of chest pain (#155): heard as the words of
+`tests/fixtures/visits/red-flag-chest-pain.json`, so the card carries the flag."""
+
 CONTENT_TYPE = "audio/webm;codecs=opus"
 DURATION_S = 66.0
 

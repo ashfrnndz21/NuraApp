@@ -16,7 +16,7 @@ const CLASSES = [
   "AlreadySetUp", "WaitingToBeClaimed", "NotTheCurrentWording", "WordingNotOnFile",
   "NotWhatWasConfirmed", "NotAConfirmerHere", "HighRiskNeedsLabelPhoto", "NoProvenance",
   "NoWordsInThatLanguage", "NotAPhoto", "NotForYourself", "ConfirmationExpired", "AlreadySpent",
-  "NotInTheDemo",
+  "NotInTheDemo", "ChunkTooLarge", "UploadClosed", "NotYourUpload", "NoYesFromTheDoctor", "NoSuchUpload",
 ];
 
 const linesOf = (entry: string | readonly string[]): readonly string[] => (typeof entry === "string" ? [entry] : entry);

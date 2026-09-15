@@ -398,7 +398,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     )
     if not any(slot["taken"] for slot in today):
         raise fail("the Taken tap is on his list", why=f"got {today}")
-    if _of(w.run_due(profile_id, 10, 5), "dose"):
+    at_ten = w.run_due(profile_id, 10, 5)
+    if _of(at_ten, "dose"):
         raise fail("the ladder stops at an answer", why="it asked again")
     ok(
         'Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast '
@@ -408,6 +409,23 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     for sent in given["replies"]:
         for line in sent["text"].splitlines():
             say(f"→ {line}")
+
+    # 4b. His check-in time (10:00 until he says, the time the nudges keep): the check-in, once.
+    asked = [row for row in _of(at_ten, "check_in") if row["outcome"] == "sent"]
+    if (
+        len(asked) != 1
+        or asked[0]["to_person_id"] != pa.person_id
+        or asked[0]["template_name"] != "feeling_check_in"
+    ):
+        raise fail("the check-in goes at his check-in time", why=f"got {_of(at_ten, 'check_in')}")
+    if _of(w.run_due(profile_id, 10, 20), "check_in"):
+        raise fail("the check-in goes once a day", why="it went again")
+    ok(
+        "10:05, his check-in time (10:00 until he says, the one time his settings keep): the check-in, "
+        "once — 10:20 sends nothing. " + _line(asked[0]) + ". What he reads:"
+    )
+    for line in (asked[0]["text"] or "").splitlines():
+        say(f"→ {line}")
 
     # 5. The reorder date reached (two tablets): the rule is true all day, so every run above
     #    evaluated it — the first run of the day told Mei, the next was held by the cap, and
@@ -470,6 +488,20 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         )
     else:
         ok("22:36, nobody left to ask on the ladder; nothing else went in the quiet hours")
+    notices = _of(w.seen, "family_notice")
+    if any(row["outcome"] == "sent" for row in notices):
+        raise fail("no family notice on the day of a red flag", why=f"got {notices}")
+    if any(row["reason"] != "a red flag is open" for row in notices):
+        raise fail("the family notice is held by the open flag", why=f"got {notices}")
+    ok(
+        "the evening family notice (from 20:00, a count of what was written down this week): "
+        + (
+            f"held for {notices[0]['to_name']} — {notices[0]['reason']}: on the day of a red flag only its "
+            "ladder reaches the family"
+            if notices
+            else "nothing new was written down today, so there is nothing to tell"
+        )
+    )
 
     # 7. Today's top three, with why, the next morning (at 22:37 the quiet hours hold every
     #    card but the flag); one card played as voice.
