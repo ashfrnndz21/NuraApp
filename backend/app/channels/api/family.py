@@ -100,6 +100,7 @@ from app.family.trail import trail
 from app.keys.context import only_the_owner_while_closing
 from app.keys.grants import narrow_key
 from app.keys.scopes import Scope
+from app.medicines.reorder import order_medicines
 
 router = APIRouter(tags=["family"])
 
@@ -287,9 +288,16 @@ async def task_list(
     """Every task (owner and chief), or with `?mine=true` the ones that name the caller,
     which any key holder reads."""
     if mine:
-        found = await my_tasks(session, context=context)
-        return [TaskOut.of(task) for task in found if not (open_only and task.is_done)]
-    return [TaskOut.of(task) for task in await tasks(session, context=context, open_only=open_only)]
+        found = [
+            task
+            for task in await my_tasks(session, context=context)
+            if not (open_only and task.is_done)
+        ]
+    else:
+        found = await tasks(session, context=context, open_only=open_only)
+    # An order task's medicine, small beside its words, for a key that opens the medicines.
+    named = await order_medicines(session, context=context, tasks=found)
+    return [TaskOut.of(task, medicine=named.get(task.id)) for task in found]
 
 
 @router.post("/profiles/{profile_id}/tasks", status_code=status.HTTP_201_CREATED)

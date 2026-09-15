@@ -61,6 +61,49 @@ PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
 }
 """His name for each medicine, by the monograph's `plain_name_id`."""
 
+# @patient phrase
+THEIR_NAME: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "blood_pressure_tablet": "blood pressure tablet",
+        "sugar_tablet": "sugar tablet",
+        "cholesterol_tablet": "cholesterol tablet",
+        "blood_thinner_tablet": "blood thinner tablet",
+        "insulin": "insulin",
+        "aspirin": "aspirin",
+        "water_pill": "water pill",
+        "stomach_tablet": "stomach tablet",
+        "joint_tablet": "joint tablet",
+        "pain_tablet": "pain tablet",
+    },
+    "ms": {
+        "blood_pressure_tablet": "ubat tekanan darah",
+        "sugar_tablet": "ubat gula",
+        "cholesterol_tablet": "ubat kolesterol",
+        "blood_thinner_tablet": "ubat cair darah",
+        "insulin": "insulin",
+        "aspirin": "aspirin",
+        "water_pill": "pil air",
+        "stomach_tablet": "ubat perut",
+        "joint_tablet": "ubat sendi",
+        "pain_tablet": "ubat sakit",
+    },
+    "zh": {
+        "blood_pressure_tablet": "血压药",
+        "sugar_tablet": "降糖药",
+        "cholesterol_tablet": "降胆固醇药",
+        "blood_thinner_tablet": "薄血药",
+        "insulin": "胰岛素",
+        "aspirin": "阿司匹林",
+        "water_pill": "去水药",
+        "stomach_tablet": "胃药",
+        "joint_tablet": "关节药",
+        "pain_tablet": "止痛药",
+    },
+}
+"""The same names with nobody's "your" on them, for a line someone else reads about him:
+the family's order task says "Pa's blood pressure tablet", never "your blood pressure
+tablet" (E04-05). His own lines keep `PLAIN_NAME`."""
+
 # @patient
 PURPOSE: Mapping[str, Mapping[str, Lines]] = {
     "en": {
@@ -421,7 +464,7 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
 # @patient
 BOUNDARY: Mapping[str, Lines] = {
     "en": (
-        "This helps you take what {doctor} prescribed.",
+        "This helps you take what {doctor} gave you.",
         "Ask {doctor} or the pharmacist before you change anything.",
     ),
     "ms": (
@@ -537,12 +580,25 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
 
 # @patient phrase
 ORDER_TASK: Mapping[str, str] = {
-    "en": "order more of {medicine}",
-    "ms": "pesan lagi {medicine}",
-    "zh": "再订{medicine}",
+    "en": "Order more of {patient}'s {medicine}.",
+    "ms": "Pesan lagi {medicine} untuk {patient}.",
+    "zh": "为{patient}再订{medicine}。",
 }
-"""The task on the family's list when he taps "Ask the family to order." (E04-05): a label in
-his words, since it reaches him in the digest and on his trail."""
+"""The task on the family's list when he says yes to "Ask the family to order." (E04-05), in
+the language of the one it is given to: his name, and the medicine by `THEIR_NAME` — never
+his own "your", which on Kit's list would be hers. The chemical name and strength are not in
+these words: a strength is a unit he does not use (plain words, rule 12) and the label also
+reaches him in the digest, so they travel beside the words as data from the line the task
+names (`TaskOut.medicine`), the way every medicine card shows them small and second."""
+
+# @patient
+ORDER_PREVIEW: Mapping[str, Lines] = {
+    "en": ("Nura will ask {who} to order more of {medicine}.", "Is that OK?"),
+    "ms": ("Nura akan minta {who} pesan lagi {medicine}.", "Boleh begitu?"),
+    "zh": ("Nura会请{who}再订{medicine}。", "这样可以吗？"),
+}
+"""What he reads before his yes to "Ask the family to order.": who will be asked, and for
+which medicine. His yes binds to that person and that line (`app.drafts.OrderDraft`)."""
 
 # @patient
 ASKED_TO_ORDER: Mapping[str, str] = {
@@ -585,15 +641,15 @@ DOSE_CARD: Mapping[str, str] = {
 SOURCE: Mapping[str, Mapping[str, str]] = {
     "en": {
         "label": "This comes from the label you kept on {date}.",
-        "typed": "This comes from what was typed in on {date}.",
+        "typed": "Someone typed this in on {date}.",
     },
     "ms": {
         "label": "Ini daripada label yang anda simpan pada {date}.",
-        "typed": "Ini daripada apa yang ditaip pada {date}.",
+        "typed": "Seseorang taip ini pada {date}.",
     },
     "zh": {
         "label": "这来自您在{date}保存的标签。",
-        "typed": "这来自{date}输入的内容。",
+        "typed": "这是{date}有人输入的。",
     },
 }
 """Where a medicine line came from, and on which day: the source line under every card that

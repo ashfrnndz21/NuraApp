@@ -918,6 +918,8 @@ export const en = {
     storyForgot: "If you forget it",
     // @patient headline
     storyAsk: "To ask your doctor",
+    // @patient phrase
+    hearPart: "Hear {part}",
     // @patient
     addLead: "Take a photo of the label first.",
     // @patient
@@ -939,7 +941,7 @@ export const en = {
     // @patient
     outcomeNew: "This is a new medicine for your list.",
     // @patient
-    outcomeRefill: "This is more of a medicine on your list.",
+    outcomeRefill: "This is more of a medicine you already take.",
     // @patient
     outcomeChange: "This label has a different amount.",
     // @patient headline
@@ -966,6 +968,16 @@ export const en = {
     moreLabel: "How many more",
     // @patient phrase
     moreYes: "Yes, add them",
+    // @patient
+    morePhoto: "Take a photo of the medicine label first.",
+    // @patient
+    morePhotoWhy: "For this medicine, Nura needs to see the label.",
+    // @patient
+    morePhotoKept: "Nura has the photo of the medicine label.",
+    // @patient phrase
+    orderYes: "Yes, ask the family",
+    // @patient phrase
+    orderNo: "Not now",
     // @patient
     papersNone: "No paper is waiting for your yes.",
     // @patient
@@ -1061,7 +1073,7 @@ export const en = {
     // @patient headline
     notesTitle: "Notes about this place",
     // @patient
-    notesOnly: "Only the owner and the chief can read these notes.",
+    notesOnly: "Only the owner and the one who looks after these papers read these notes.",
     // @patient phrase
     noteLabel: "A note about this place",
     // @patient phrase
@@ -1088,19 +1100,28 @@ export const en = {
       tsh: "Your thyroid test",
     },
     // @patient phrase
-    resultOn: "{value} {unit} on {date}",
+    resultOn: "{value} on {date}",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{value} {unit} on {date}",
     // @patient
-    rangeUnder: "The range is under {upper}.",
+    rangeUnder: "For most people this number is under {upper}.",
     // @patient
-    rangeOver: "The range is over {lower}.",
+    rangeOver: "For most people this number is over {lower}.",
     // @patient
-    rangeBetween: "The range is {lower} to {upper}.",
+    rangeBetween: "For most people this number is {lower} to {upper}.",
     // @patient
-    noRange: "Nura has no range for this one.",
+    noRange: "Nura has no usual number for this one.",
     // @patient
-    labRange: "This range is printed on your blood test.",
+    labRange: "The usual number is printed on your blood test.",
     // @patient
-    guideRange: "This range is from a guide for your age.",
+    guideRange: "The usual number comes from a guide for your age.",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura needs your age to find the usual number.",
+      needs_sex: "Nura needs to know if you are a man or a woman.",
+      none_on_file: "Nura has no usual number for this one.",
+    },
     // @patient phrase
     anchors: {
       wake: "When you wake up",
@@ -1118,9 +1139,9 @@ export const en = {
     // @patient phrase
     walk: "A walk",
     // @patient
-    notSet: "Nobody has set the day yet.",
+    notSet: "Nobody has set your day yet.",
     // @patient phrase
-    setDay: "Set the day",
+    setDay: "Set your day",
     // @patient phrase
     timeLabel: "What time",
     // @patient phrase
@@ -1128,13 +1149,13 @@ export const en = {
     // @patient phrase
     walkAfter: "A walk after this",
     // @patient phrase
-    checkDay: "Check the day",
+    checkDay: "Check your day",
     // @patient
-    dayAsk: "Is this the day?",
+    dayAsk: "Is this how your day goes?",
     // @patient phrase
     dayYes: "Yes, set the day",
     // @patient
-    daySaved: "Nura wrote down the day.",
+    daySaved: "Nura wrote down your day.",
     // @patient headline
     tableMoment: "When",
     // @patient headline

@@ -619,6 +619,8 @@ CLASSES: dict[str, str] = {
     # A drive to a visit (E05-03): which visit, and that it is the drive.
     "task.appointment_id": HEALTH,
     "task.errand": HEALTH,
+    # An order for more of a medicine (E04-05): which of his medicine lines.
+    "task.medication_line_id": HEALTH,
     "roster_slot.person_id": IDENTIFIER,
     "roster_slot.role": IDENTIFIER,
     "roster_slot.weekdays": OPERATIONAL,

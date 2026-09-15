@@ -12,6 +12,7 @@ import type {
   RoutineOut,
   TimelineItemOut,
   TrendOut,
+  TrendPointOut,
 } from "../api/types";
 import type { Density } from "../store/session";
 import { fill, type Strings } from "../strings";
@@ -236,19 +237,33 @@ export function numberText(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
 }
 
-/** The range a result was placed against, as a whole line, with its unit. */
-export function rangeLine(range: RangeOut | null, s: Strings): string {
+/** The range a result was placed against, as a whole line in his words ("For most people
+ *  this number is under 200."). The unit is hers, not his (plain words, rule 12): it is added
+ *  only when `units` is asked for, in the caregiver's density. */
+export function rangeLine(range: RangeOut | null, s: Strings, units = false): string {
   if (!range || (range.lower === null && range.upper === null)) return s.record.noRange;
-  const unit = range.unit ? ` ${range.unit}` : "";
+  const unit = units && range.unit ? ` ${range.unit}` : "";
   if (range.lower === null) return fill(s.record.rangeUnder, { upper: `${numberText(range.upper!)}${unit}` });
   if (range.upper === null) return fill(s.record.rangeOver, { lower: `${numberText(range.lower)}${unit}` });
   return fill(s.record.rangeBetween, { lower: numberText(range.lower), upper: `${numberText(range.upper)}${unit}` });
 }
 
-/** Whose range: the lab's own printed on his paper, or the guideline row for his age. */
+/** One result's range line: its range, or — when the backend placed it against none — why
+ *  not, in his words (`no_range_because`: his age or whether he is a man or a woman is
+ *  needed, or there is none on file). A reason the strings do not know says there is none. */
+export function pointRangeLine(point: Pick<TrendPointOut, "range" | "no_range_because">, s: Strings, units = false): string {
+  if (point.range === null && point.no_range_because) {
+    const known = s.record.noRangeBecause as Record<string, string>;
+    return known[point.no_range_because] ?? s.record.noRange;
+  }
+  return rangeLine(point.range, s, units);
+}
+
+/** Whose range: the lab's own printed on his paper, or the guideline row for his age. The
+ *  backend says which in `source`; nothing is read into the id. */
 export function rangeSourceLine(range: RangeOut | null, s: Strings): string | null {
   if (!range) return null;
-  return range.source === "lab" || range.source_id.startsWith("lab:") ? s.record.labRange : s.record.guideRange;
+  return range.source === "lab" ? s.record.labRange : s.record.guideRange;
 }
 
 /** The trend's lines apart from its boundary, and the boundary, last, as the backend wrote

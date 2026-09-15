@@ -142,10 +142,13 @@ class RosterSlot(ProfileScoped, Base):
 
 
 class Errand(StrEnum):
-    """A task that is part of a visit's logistics (E05-03). Only one kind for now: driving
-    him there. Any other task names no errand."""
+    """A task with a purpose Nura knows: driving him to a visit (E05-03), or ordering more of
+    a medicine (E04-05). Any other task names no errand."""
 
     DRIVE = "drive"
+    ORDER = "order"
+    """More of one medicine, on his yes to "Ask the family to order." (E04-05); the task
+    names the medicine line, so one open task a line a day is the most there ever is."""
 
 
 TASK_DONE_IN_PROGRESS = "task_done"
@@ -170,6 +173,7 @@ class Task(ProfileScoped, Base):
     __table_args__ = (
         _row_of_profile("task"),
         _tied_to_profile("task", "appointment_id", "appointment"),
+        _tied_to_profile("task", "medication_line_id", "medication_line"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -186,6 +190,10 @@ class Task(ProfileScoped, Base):
         ForeignKey("appointment.id"), default=None
     )
     errand: Mapped[Errand | None] = mapped_column(enum_column(Errand, "task_errand"), default=None)
+    medication_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("medication_line.id"), default=None, index=True
+    )
+    """The medicine line an order task is for (`Errand.ORDER`); else none."""
 
     @property
     def is_done(self) -> bool:

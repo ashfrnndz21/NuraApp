@@ -869,8 +869,11 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",
     ("POST", f"{P}/medicines/{{line_id}}/taken"): "writes a dose taken; returns it",
+    ("POST", f"{P}/medicines/{{line_id}}/ask-to-order/preview"): (
+        "says who would be asked to order more, in his words; returns no rows"
+    ),
     ("POST", f"{P}/medicines/{{line_id}}/ask-to-order"): (
-        "gives the family a task to order more; returns the task and his lines"
+        "gives the family a task to order more, on his yes; returns the task and his lines"
     ),
     ("POST", f"{P}/medicines/{{line_id}}/more"): (
         "writes tablets found at home on a yes; returns the supply and the count"

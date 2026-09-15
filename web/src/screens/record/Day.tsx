@@ -8,7 +8,7 @@ import {
   dayInOrder,
   dayOf,
   numberText,
-  rangeLine,
+  pointRangeLine,
   rangeSourceLine,
   READINGS,
   trendLines,
@@ -20,7 +20,7 @@ import {
 import { density } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
-import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
+import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead, useTimeOf } from "./parts";
 
 function isAnalyte(code: string | null): code is Analyte {
   return code !== null && (ANALYTES as readonly string[]).includes(code);
@@ -49,6 +49,7 @@ export function TrendsScreen({ analyte }: { analyte: string | null }): JSX.Eleme
 
 function TrendScreen({ analyte }: { analyte: Analyte }): JSX.Element {
   const s = t();
+  const patient = density() === "patient";
   const dateOf = useDateOf();
   const { data: trend, error } = useRead(() => {
     const { bearer, profileId } = session();
@@ -68,8 +69,9 @@ function TrendScreen({ analyte }: { analyte: Analyte }): JSX.Element {
           <div class="lines" data-testid="trend-points">
             {trend.points.map((point) => (
               <div class="lines" key={point.fact_id} data-band={point.band} data-testid="trend-point">
-                <p class="label">{fill(s.record.resultOn, { value: numberText(point.value), unit: point.unit ?? trend.unit, date: dateOf(point.on) })}</p>
-                <p>{rangeLine(point.range, s)}</p>
+                {/* The unit is hers: his line is the number and the day (plain words, rule 12). */}
+                <p class="label">{fill(patient ? s.record.resultOn : s.record.resultOnUnit, { value: numberText(point.value), unit: point.unit ?? trend.unit, date: dateOf(point.on) })}</p>
+                <p data-testid="range">{pointRangeLine(point, s, !patient)}</p>
                 {rangeSourceLine(point.range, s) && <p class="caption">{rangeSourceLine(point.range, s)}</p>}
               </div>
             ))}
@@ -173,6 +175,7 @@ export function RoutineScreen(): JSX.Element {
  *  when his Today page comes; then the day read back, and her yes for exactly it. */
 export function BuilderScreen(): JSX.Element {
   const s = t();
+  const timeOf = useTimeOf();
   const [changed, setDay] = useState<RoutineDayIn | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -241,7 +244,7 @@ export function BuilderScreen(): JSX.Element {
           {ANCHORS.map((anchor) => (
             <div class="lines" key={anchor}>
               <p class="label">
-                {s.record.anchors[anchor]} {day.anchors[anchor]}
+                {s.record.anchors[anchor]} {timeOf(day.anchors[anchor])}
               </p>
               {day.reading_prompts
                 .filter(([, at]) => at === anchor)
@@ -252,7 +255,7 @@ export function BuilderScreen(): JSX.Element {
             </div>
           ))}
           <p class="label">
-            {s.record.morningCard} {day.morning_card_at}
+            {s.record.morningCard} {timeOf(day.morning_card_at)}
           </p>
           <Pill plum onClick={() => void save()} disabled={busy} testId="day-yes">
             {s.record.dayYes}

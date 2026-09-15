@@ -104,6 +104,9 @@ export interface TaskOut {
   done_by_person_id: string | null;
   appointment_id: string | null;
   errand: string | null;
+  /** An order task's medicine by its chemical name and strength ("amlodipine 5 mg"), shown
+   *  small beside the words; only for a key that opens the medicines (E04-05). */
+  medicine?: string | null;
 }
 
 export interface PushCompose {

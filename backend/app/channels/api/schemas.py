@@ -636,12 +636,23 @@ class DriveConfirmIn(BaseModel):
 
 
 class CountCorrectionConfirmIn(BaseModel):
-    """A yes to adding tablets found at home to one medicine's count (E04-05): which line and
-    how many, exactly what `POST /medicines/{line}/more` will write with it."""
+    """A yes to adding tablets found at home to one medicine's count (E04-05): which line,
+    how many, and the photo of the box or the label it rests on — exactly what `POST
+    /medicines/{line}/more` will write with it. A high-risk medicine's count needs the photo."""
 
     subject: Literal[ConfirmSubject.COUNT_CORRECTION]
     line_id: uuid.UUID
     quantity: int = Field(gt=0, le=1000)
+    artifact_id: uuid.UUID | None = None
+
+
+class OrderConfirmIn(BaseModel):
+    """His yes to "Ask the family to order." (E04-05): this line, and the person the preview
+    (`POST /medicines/{line}/ask-to-order/preview`) named — exactly who the task will name."""
+
+    subject: Literal[ConfirmSubject.ORDER]
+    line_id: uuid.UUID
+    person_id: uuid.UUID
 
 
 class TaskDoneConfirmIn(BaseModel):
@@ -719,6 +730,7 @@ ConfirmIn = Annotated[
     | StatusConfirmIn
     | AttachConfirmIn
     | CountCorrectionConfirmIn
+    | OrderConfirmIn
     | RoutineConfirmIn
     | ProposalConfirmIn
     | DriveConfirmIn,
@@ -1269,9 +1281,31 @@ class ReconciledOut(BaseModel):
         )
 
 
+class OrderPreviewOut(BaseModel):
+    """What he reads before his yes to "Ask the family to order." (E04-05): the person the
+    task will name, and the lines, in his words. `already_asked` when the family was asked
+    for this line today and the task is still open: the line then says so, and a yes answers
+    with that task."""
+
+    line_id: uuid.UUID
+    asked_person_id: uuid.UUID
+    already_asked: bool
+    task_id: uuid.UUID | None
+    language: str
+    lines: list[str]
+
+
+class AskIn(BaseModel):
+    """His yes to the preview, minted at `POST /confirmations` with subject `order`. Without
+    one the answer is `NotAConfirmerHere`, and nothing is written."""
+
+    confirmation_id: uuid.UUID | None = None
+
+
 class AskedOut(BaseModel):
     """What "Ask the family to order." did (E04-05): the task on the family's list, who it was
-    given to, who was told, and the lines he reads, in his words."""
+    given to, who was told, and the lines he reads, in his words. `already_asked` when the
+    task was on the list before this yes (one open order task a line a day)."""
 
     line_id: uuid.UUID
     task_id: uuid.UUID
@@ -1279,13 +1313,15 @@ class AskedOut(BaseModel):
     told_person_ids: list[uuid.UUID]
     language: str
     lines: list[str]
+    already_asked: bool = False
 
 
 class MoreIn(BaseModel):
-    """Tablets found at home, with the yes minted for exactly this line and number."""
+    """Tablets found at home, with the yes minted for exactly this line, number and photo."""
 
     quantity: int = Field(gt=0, le=1000)
     confirmation_id: uuid.UUID
+    artifact_id: uuid.UUID | None = None
 
 
 class MoreOut(BaseModel):
@@ -1296,6 +1332,7 @@ class MoreOut(BaseModel):
     supply_id: uuid.UUID
     fact_id: uuid.UUID
     event_id: uuid.UUID
+    artifact_id: uuid.UUID | None = None
     quantity: int
     count: CountOut | None
 
@@ -2556,10 +2593,14 @@ class TaskOut(BaseModel):
     done_by_person_id: uuid.UUID | None
     appointment_id: uuid.UUID | None = None
     errand: str | None = None
-    """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); else none."""
+    """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); `order` for more of a
+    medicine (E04-05); else none."""
+    medicine: str | None = None
+    """For an order task, the chemical name and strength of the line it names
+    ("amlodipine 5 mg"), shown small beside the words — for a key that opens the medicines."""
 
     @classmethod
-    def of(cls, task: Task) -> TaskOut:
+    def of(cls, task: Task, *, medicine: str | None = None) -> TaskOut:
         return cls(
             task_id=task.id,
             what=task.what,
@@ -2571,6 +2612,7 @@ class TaskOut(BaseModel):
             done_by_person_id=task.done_by_person_id,
             appointment_id=task.appointment_id,
             errand=None if task.errand is None else task.errand.value,
+            medicine=medicine,
         )
 
 
