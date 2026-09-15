@@ -323,7 +323,7 @@ export const ms = {
     // @patient phrase
     filterLabel: "Cari di mana",
     // @patient phrase
-    filterRecords: "Rekod",
+    filterRecords: "Surat",
     // @patient phrase
     filterWeb: "Web",
     // @patient phrase
