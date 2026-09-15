@@ -64,7 +64,11 @@ function recordPages(page: Page): { cursor: string | null; body: FeedPage }[] {
   const seen: { cursor: string | null; body: FeedPage }[] = [];
   page.on("response", async (response) => {
     if (!isFeedPage(response) || !response.ok()) return;
-    seen.push({ cursor: new URL(response.url()).searchParams.get("cursor"), body: (await response.json()) as FeedPage });
+    try {
+      seen.push({ cursor: new URL(response.url()).searchParams.get("cursor"), body: (await response.json()) as FeedPage });
+    } catch {
+      // The test ended, or the page went, while this body was still coming: nothing to record.
+    }
   });
   return seen;
 }

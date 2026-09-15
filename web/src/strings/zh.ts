@@ -433,16 +433,16 @@ export const zh = {
   // 离线时点的（E00-08）。
   held: {
     // @patient
-    held: "网络恢复后，Nura 会把它发出去。",
+    held: "网络恢复后，Nura 会把您点的发出去。",
     // @patient
-    tapped: "您在 {time} 点了这个。",
+    tapped: "{time}，您点了这个。",
     // @patient
     sent: "Nura 已经把您点的发出去了。",
   },
   // 手机上的紧急卡（E00-08）。
   emergency: {
     // @patient
-    asOf: "Nura 在 {date} {time} 读了这张卡。",
+    asOf: "Nura 最后一次读这张卡是在 {date}。",
     // @patient
     none: "Nura 还没有把您的紧急卡存在这部手机上。",
     // @patient
@@ -465,13 +465,13 @@ export const zh = {
     // @patient
     lead: "一次选好所有文件的照片。",
     // @patient
-    lead2: "您说好之前，Nura 什么都不发。",
+    lead2: "您点“发”之前，Nura 什么都不发。",
     // @patient phrase
     pick: "选照片",
     // @patient
     gridLead: "点一张照片就不发它。",
     // @patient phrase
-    picture: "第 {count} 张",
+    picture: "第 {count} 份",
     // @patient
     tileIn: "Nura 会发这张。",
     // @patient
@@ -516,7 +516,7 @@ export const zh = {
     // @patient phrase
     nextPart: "下一部分",
     // @patient phrase
-    hearStory: "听听关于{name}",
+    hearStory: "听听{name}的介绍",
   },
   day: {
     // @patient headline

@@ -8,7 +8,7 @@ import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { voice } from "./player/voice";
 import { language } from "./strings";
-import { chooseProfile, me, profile, setToken, token } from "./store/session";
+import { chooseProfile, me, profile, setLargeText, setToken, token } from "./store/session";
 
 /** Which one thing is on the screen. There is no URL routing: the app is one page, opened
  *  from the home screen on the Now card, and every screen is one step from here. */
@@ -112,6 +112,9 @@ export async function afterSignIn(): Promise<void> {
     // the doors.
     await clearProfileData(remembered.profile_id);
     forgetFeed();
+    voice.forget();
+    // His large-text setting came from his State: it goes with the rest.
+    await setLargeText(false);
     await chooseProfile(null);
     const why = closing.includes(remembered.profile_id) ? "AccountClosing" : "NoKey";
     return go({ name: "doors", doors, refusal: why });
@@ -161,10 +164,11 @@ export async function signOutEverywhere(): Promise<void> {
     }
   }
   // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
-  // profile and every cached Today page go.
+  // profile, every cached Today page and his large-text setting (read from his State) go.
   await clearAllProfileData();
   forgetFeed();
   voice.forget();
+  await setLargeText(false);
   // Whose papers were open is forgotten before the token: a sign-out cut short (the app closed
   // half-way) never leaves the next person to sign in on this phone on the last one's papers.
   await chooseProfile(null);

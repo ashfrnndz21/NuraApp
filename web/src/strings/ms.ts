@@ -433,16 +433,16 @@ export const ms = {
   // Tekanan semasa telefon tidak dapat capai Nura (E00-08).
   held: {
     // @patient
-    held: "Nura akan menghantarnya apabila internet kembali.",
+    held: "Nura akan menghantar apa yang anda tekan apabila internet kembali.",
     // @patient
-    tapped: "Anda tekan ini pada pukul {time}.",
+    tapped: "Anda tekan ini pada {time}.",
     // @patient
     sent: "Nura sudah menghantar apa yang anda tekan.",
   },
   // Kad kecemasan di telefon (E00-08).
   emergency: {
     // @patient
-    asOf: "Nura membaca kad ini pada {date}, pukul {time}.",
+    asOf: "Nura terakhir membaca kad ini pada {date}.",
     // @patient
     none: "Nura belum menyimpan kad kecemasan anda di telefon ini.",
     // @patient
@@ -465,13 +465,13 @@ export const ms = {
     // @patient
     lead: "Pilih semua gambar surat sekali gus.",
     // @patient
-    lead2: "Nura tidak hantar apa-apa sehingga anda setuju.",
+    lead2: "Nura tidak hantar apa-apa sehingga anda tekan Hantar.",
     // @patient phrase
     pick: "Pilih gambar",
     // @patient
     gridLead: "Tekan gambar untuk tinggalkannya.",
     // @patient phrase
-    picture: "Gambar {count}",
+    picture: "Surat {count}",
     // @patient
     tileIn: "Nura akan hantar yang ini.",
     // @patient

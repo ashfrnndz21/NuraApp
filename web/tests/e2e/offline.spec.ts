@@ -77,7 +77,7 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await expect(page.getByTestId("cannot-reach")).toContainText("Nura cannot reach your papers right now.");
   await expect(page.getByTestId("emergency-card")).toContainText("Emergency card");
   await expect(page.getByTestId("emergency-card")).toContainText("This is Pa's emergency card.");
-  await expect(page.getByTestId("emergency-read")).toContainText(/Nura read this card on Monday 14 September at \d{1,2}:\d{2}\s?[ap]m\./);
+  await expect(page.getByTestId("emergency-read")).toContainText("Nura last read this card on Monday 14 September.");
   for (const gone of ["today-list", "now-card", "taken", "state-card", "medicines-card", "proud", "offline", "reading-prompt", "emergency-placeholder"]) {
     await expect(page.getByTestId(gone)).toHaveCount(0);
   }
@@ -121,8 +121,8 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   const held = page.getByTestId("held-card");
   await expect(held).toHaveCount(1);
   await expect(held.first().locator("h2")).toHaveText(first);
-  await expect(held.first()).toContainText(/You tapped this at \d{1,2}:\d{2}\s?am\./);
-  await expect(held.first()).toContainText("Nura will send it when the internet is back.");
+  await expect(held.first()).toContainText(/You tapped this at (half past )?\d{1,2}(\.\d{2})? in the morning\./);
+  await expect(held.first()).toContainText("Nura will send what you tapped when the internet is back.");
   // The next dose the backend marked due is the Now card, with its own Taken.
   await expect(now.locator("h2")).not.toHaveText(first);
   const second = (await now.locator("h2").textContent())!;
@@ -132,7 +132,7 @@ test("Taken with no network: held with the moment he tapped, then sent once each
 
   // Held on the phone across a reload with no network, and said.
   await page.reload();
-  await expect(page.getByTestId("held")).toContainText("Nura will send it when the internet is back.");
+  await expect(page.getByTestId("held")).toContainText("Nura will send what you tapped when the internet is back.");
   expect((await keptKeys(page)).some((key) => key.startsWith("queue."))).toBe(true);
 
   // The network is back: each sent once, oldest first, with the moment he tapped.

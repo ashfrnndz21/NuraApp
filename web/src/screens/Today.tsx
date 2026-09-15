@@ -13,24 +13,7 @@ import { readFailure } from "../restore";
 import { wantsHomeScreenHint } from "../offline/register";
 import { chooseProfile, density, me, posture, profile, setLargeText, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
-import {
-  dateLine,
-  boundaryOf,
-  feedCards,
-  feedLines,
-  greeting,
-  largeTextOf,
-  lineTitle,
-  medicinesCard,
-  nowCard,
-  readingLead,
-  stateLines,
-  timeLine,
-  todayList,
-  tookLine,
-  whyLine,
-  type TodayModel,
-} from "../today/model";
+import { clockWords, dateLine, boundaryOf, feedCards, feedLines, greeting, largeTextOf, lineTitle, medicinesCard, nowCard, readingLead, stateLines, timeLine, todayList, tookLine, whyLine, type TodayModel } from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 import { EmergencyCard } from "./Emergency";
 import { ClipCard } from "../day/components";
@@ -77,6 +60,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const forget = async (profileId: string, failure: unknown) => {
     await clearProfileData(profileId);
     forgetFeed();
+    // His large-text setting came from his State: it goes with the rest.
+    await setLargeText(false);
     setModel(null);
     setKept(null);
     setHeld([]);
@@ -386,7 +371,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                   testId="held-card"
                   action={
                     <div class="lines" role="status" data-testid="held">
-                      <p>{fill(s.held.tapped, { time: timeLine(new Date(heldTapOf(slot)!.at), locale) })}</p>
+                      <p>{fill(s.held.tapped, { time: clockWords(new Date(heldTapOf(slot)!.at), language.value, zoneOf(papers?.region)) })}</p>
                       <p>{s.held.held}</p>
                     </div>
                   }

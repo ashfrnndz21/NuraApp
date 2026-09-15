@@ -51,7 +51,7 @@ async function openPapers(page: Page, phone: string): Promise<void> {
   await expect(page.getByTestId("proud")).toBeVisible();
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("open-papers").click();
-  await expect(page.getByTestId("papers-lead")).toContainText("Nura sends nothing until you say yes.");
+  await expect(page.getByTestId("papers-lead")).toContainText("Nura sends nothing until you tap Send.");
 }
 
 test("papers from his photos: many at once, a grid he confirms, nothing sent before his yes, a review card each, a page that is not a health paper said so, no photo left on the phone", async ({ page, request }) => {
@@ -71,7 +71,7 @@ test("papers from his photos: many at once, a grid he confirms, nothing sent bef
   const tiles = page.getByTestId("paper-tile");
   await expect(tiles).toHaveCount(4);
   for (let at = 0; at < 4; at++) await expect(tiles.nth(at)).toHaveAttribute("aria-pressed", "true");
-  await expect(tiles.nth(0)).toContainText("Picture 1");
+  await expect(tiles.nth(0)).toContainText("Paper 1");
   await expect(tiles.nth(0)).toContainText("Nura will send this one.");
   await expect(page.getByTestId("send-papers")).toHaveText("Send 4 papers");
   await tiles.nth(3).click();

@@ -433,7 +433,7 @@ export const en = {
   // Taps made while the phone could not reach Nura (E00-08).
   held: {
     // @patient
-    held: "Nura will send it when the internet is back.",
+    held: "Nura will send what you tapped when the internet is back.",
     // @patient
     tapped: "You tapped this at {time}.",
     // @patient
@@ -442,7 +442,7 @@ export const en = {
   // The emergency card on the phone (E00-08). The card's own lines are the backend's.
   emergency: {
     // @patient
-    asOf: "Nura read this card on {date} at {time}.",
+    asOf: "Nura last read this card on {date}.",
     // @patient
     none: "Nura has not kept your emergency card on this phone yet.",
     // @patient
@@ -463,15 +463,15 @@ export const en = {
     // @patient headline
     title: "Papers from your photos",
     // @patient
-    lead: "Choose every photo of a paper at once.",
+    lead: "Choose all the photos of your papers together.",
     // @patient
-    lead2: "Nura sends nothing until you say yes.",
+    lead2: "Nura sends nothing until you tap Send.",
     // @patient phrase
     pick: "Choose photos",
     // @patient
     gridLead: "Tap a photo to leave it out.",
     // @patient phrase
-    picture: "Picture {count}",
+    picture: "Paper {count}",
     // @patient
     tileIn: "Nura will send this one.",
     // @patient

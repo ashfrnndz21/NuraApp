@@ -9,6 +9,7 @@ import {
   cutKey,
   fixClock,
   freshPhone,
+  keptKeys,
   nothingDrawnOverLines,
   paperPhoto,
   seedFeed,
@@ -514,11 +515,17 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");
   expect(await body()).toBe("20px");
 
-  // Mei's phone, reading his papers, keeps her own writing size.
+  // Signing out takes his setting with everything else of his papers: the next person on this
+  // phone keeps her own writing size — Mei, reading his papers, on her own phone too.
   await put(true);
+  await page.reload();
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-text", "large");
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
+  await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");
+  expect(await keptKeys(page)).not.toContain("device.text");
   await signInThroughTheApp(page, mei.phone, "Mei");
   await page.getByTestId("door-key").click();
   await expect(page.getByTestId("proud")).toBeVisible();

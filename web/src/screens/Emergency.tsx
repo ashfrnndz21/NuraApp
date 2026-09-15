@@ -6,7 +6,7 @@ import { wantsHomeScreenHint } from "../offline/register";
 import { bindingOf } from "../offline/todayCache";
 import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
-import { dateLine, timeLine } from "../today/model";
+import { dateLine } from "../today/model";
 import { Card, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 
 /** Open the backend's printable page for this card in a new tab, from the copy the phone
@@ -51,7 +51,7 @@ export function EmergencyCard({ kept }: { kept: KeptCard }): JSX.Element {
         </Pill>
       )}
       <p class="provenance" data-testid="emergency-read">
-        {fill(s.emergency.asOf, { date: dateLine(read, locale), time: timeLine(read, locale) })}
+        {fill(s.emergency.asOf, { date: dateLine(read, locale) })}
       </p>
       <Hear lines={lines} />
     </Tile>
