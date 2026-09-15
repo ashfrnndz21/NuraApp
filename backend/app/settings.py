@@ -78,11 +78,6 @@ class Settings:
     """NURA_REFERENCE_RANGES: which reference-range table the lab trend reads (E09-01,
     `app.reasoning.ranges`). Only the fixture is built; any other name refuses to start."""
     review_staff: tuple[tuple[str, str], ...] = ()
-    privacy_contact: str | None = None
-    """Where a person writes to stop what the app does not stop with one tap — keeping his
-    papers, WhatsApp (`NotStoppedInTheApp`) — until those paths exist: the data protection
-    officer's address (docs/trust/pdpa-data-map.md). Unset, the refusal names the officer
-    without an address."""
     """NURA_REVIEW_STAFF_TOKENS: who may work the pharmacist's review queue (`/review/*`,
     E22-04, ADR 0007), as `handle:token` pairs separated by commas. Staff are not people on
     anyone's record and hold no patient key; the handle is what a decision is signed with.
@@ -125,6 +120,10 @@ class Settings:
     """NURA_VAPID_SUBJECT: who a push service may contact about these pushes, `mailto:` or
     `https:`. The three VAPID settings go together; with them the deployment pushes by Web
     Push (`app.delivery.push.WebPush`), without them it has no real push sender."""
+    account_retention_days: int = 30
+    """NURA_ACCOUNT_RETENTION_DAYS: how long a closed account's papers wait before they are
+    deleted, while his yes can still undo the closing (#143). 30 until counsel says otherwise
+    (docs/trust/account-closure.md)."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -204,6 +203,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     subject = vapid["SUBJECT"]
     if subject is not None and not subject.startswith(("mailto:", "https://")):
         raise MissingSetting("NURA_VAPID_SUBJECT is a mailto: address or an https: page")
+    retention = source.get("NURA_ACCOUNT_RETENTION_DAYS") or "30"
+    if not retention.isdigit() or int(retention) < 1:
+        raise MissingSetting("NURA_ACCOUNT_RETENTION_DAYS is a whole number of days, at least 1")
     return Settings(
         region=region,
         database_url=database_url,
@@ -231,10 +233,10 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         vapid_public_key=vapid["PUBLIC_KEY"],
         vapid_private_key=vapid["PRIVATE_KEY"],
         vapid_subject=subject,
+        account_retention_days=int(retention),
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
-        privacy_contact=(source.get("NURA_PRIVACY_CONTACT") or "").strip() or None,
     )
 
 
@@ -263,11 +265,15 @@ def _frozen_clock(value: str | None, *, dev_run: bool) -> datetime | None:
     if value is None:
         return None
     if not dev_run:
-        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK is for a declared dev run only (NURA_DEV_CODE_SENDER=1)")
+        raise FrozenClockOutsideDev(
+            "NURA_FROZEN_CLOCK is for a declared dev run only (NURA_DEV_CODE_SENDER=1)"
+        )
     try:
         at = datetime.fromisoformat(value)
     except ValueError as bad:
         raise FrozenClockOutsideDev(f"NURA_FROZEN_CLOCK is not an instant: {value!r}") from bad
     if at.tzinfo is None:
-        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK needs an offset, as in 2026-09-14T10:00:00+08:00")
+        raise FrozenClockOutsideDev(
+            "NURA_FROZEN_CLOCK needs an offset, as in 2026-09-14T10:00:00+08:00"
+        )
     return at

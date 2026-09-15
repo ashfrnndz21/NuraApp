@@ -26,9 +26,7 @@ class VoiceScriptOut(BaseModel):
     segments: list[SegmentOut]
 
     @classmethod
-    def of(
-        cls, lines: Sequence[str], language: str, boundary: str | None = None
-    ) -> VoiceScriptOut:
+    def of(cls, lines: Sequence[str], language: str, boundary: str | None = None) -> VoiceScriptOut:
         script = script_for(lines, language, boundary=boundary)
         return cls(
             language=script.language,

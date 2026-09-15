@@ -28,7 +28,9 @@ from tests.conftest import FEED
 from tests.medicines_support import REGISTRY
 from tests.visits import pa
 
-ENGINE = Engine(searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY)
+ENGINE = Engine(
+    searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
+)
 PAGE = "https://www.healthhub.sg/a-z/diseases-and-conditions/diabetes"
 
 
@@ -126,11 +128,20 @@ async def test_a_page_the_searcher_says_is_allowlisted_but_links_elsewhere_makes
 
     class Elsewhere(FixtureSearcher):
         def search(self, kind, terms, domains):  # type: ignore[no-untyped-def]
-            return [replace(page, url="https://supplement-shop.example/diabetes") for page in super().search(kind, terms, domains)]
+            return [
+                replace(page, url="https://supplement-shop.example/diabetes")
+                for page in super().search(kind, terms, domains)
+            ]
 
     context = await pa(sg, language="en")
     await _told(sg, context, "diabetes", holds=True)
-    await refresh(sg, context=context, engine=Engine(searcher=Elsewhere(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY))
+    await refresh(
+        sg,
+        context=context,
+        engine=Engine(
+            searcher=Elsewhere(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
+        ),
+    )
     assert not [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
     [job] = [
         j

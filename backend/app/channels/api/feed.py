@@ -44,6 +44,7 @@ from app.channels.api.feed_schemas import (
     EngagementOut,
     EventsIn,
     EventsOut,
+    FeedItemOut,
     FeedPageOut,
     FindOut,
     ResultOut,
@@ -53,16 +54,24 @@ from app.channels.api.feed_schemas import (
     SentOut,
     SourceOut,
 )
+from app.db import utcnow
 from app.delivery.feed.area import read_area, set_area
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
 from app.delivery.feed.compose import around_for, today_for
 from app.delivery.feed.engagement import record_engagement, record_events
 from app.delivery.feed.find import find as find_pages
 from app.delivery.feed.models import SearchJob
-from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page, sent_this_week, top_three
+from app.delivery.feed.rank import (
+    NotOnADevRun,
+    cached_page,
+    feed_page,
+    item_json,
+    sent_this_week,
+    top_three,
+)
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
 from app.delivery.feed.sources import list_sources, usable_sources
-from app.delivery.feed.twin import spoken_twin
+from app.delivery.feed.twin import one_card, spoken_twin
 from app.delivery.strings import language_for, watch_label
 from app.keys.context import KeyContext
 
@@ -363,3 +372,11 @@ async def find(
         session, context=context, engine=_engine(request), words=q, where=where, language=language
     )
     return FindOut(where=where, results=[ResultOut.of(one) for one in found])
+
+
+@router.get("/{profile_id}/feed/{item_id}")
+async def feed_card(item_id: uuid.UUID, context: Context, session: Db) -> FeedItemOut:
+    """One card by its id, under the card's own scope: what a push opens (`/app/?open=<id>`,
+    #143). Not on this profile, or not for this key: refused, and the app falls back to Today."""
+    item = await one_card(session, context=context, item_id=item_id)
+    return FeedItemOut(**item_json(item, "generated"))

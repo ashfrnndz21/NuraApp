@@ -14,7 +14,6 @@ MEI = "+6591110002"
 KIT = "+6591110003"
 
 
-
 def _words_in(payload: object) -> str:
     """Every string value in a response except ids and times, joined.
 
@@ -37,6 +36,7 @@ def _words_in(payload: object) -> str:
 
     walk(payload)
     return " ".join(out)
+
 
 async def _pa_on_whatsapp(deployment: Deployment) -> tuple[dict[str, str], str, dict[str, str]]:
     pa = await register_by_phone(deployment, PA, "Pa")

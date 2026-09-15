@@ -121,6 +121,9 @@ class WhatsAppGroup(ProfileScoped, Base):
     provider_group_id: Mapped[str] = mapped_column(String(80))
     opened_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     opened_at: Mapped[datetime] = mapped_column(default=utcnow)
+    members_digest: Mapped[str | None] = mapped_column(String(64), default=None)
+    """A digest of the numbers last told to the provider — never the numbers (#143): a sync
+    that would tell it the same says nothing, and one the provider failed is tried again."""
 
 
 class ProposalStatus(StrEnum):
@@ -183,8 +186,9 @@ class Proposal(ProfileScoped, Base):
 
 
 frozen(WhatsAppMessage)
-# A group is opened once; who is in it is never a column, so there is nothing to edit.
-frozen(WhatsAppGroup)
+# A group is opened once; who is in it is never a column, only the digest of what the
+# provider was last told, which is the one thing a sync changes.
+frozen(WhatsAppGroup, except_for=frozenset({"members_digest"}))
 # A proposal takes one change, its answer, and only while the proposals service is making it.
 frozen(
     Proposal,

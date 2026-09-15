@@ -955,7 +955,9 @@ async def _logistics(
             )
     except Refusal:
         return
-    shown = [line for line in card.lines if line.key in ON_THE_LOGISTICS_CARD or line.section == "memo"]
+    shown = [
+        line for line in card.lines if line.key in ON_THE_LOGISTICS_CARD or line.section == "memo"
+    ]
     lines = render(
         "visit_logistics",
         house.language,

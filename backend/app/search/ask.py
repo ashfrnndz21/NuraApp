@@ -679,7 +679,12 @@ def _compose(
                 and item.clip_end_s is not None
             ):
                 consult_cites.append(
-                    Cite("artifact", summary.recording_artifact_id, item.clip_start_s, item.clip_end_s)
+                    Cite(
+                        "artifact",
+                        summary.recording_artifact_id,
+                        item.clip_start_s,
+                        item.clip_end_s,
+                    )
                 )
                 clip = ClipRef(
                     summary.recording_artifact_id, item.clip_start_s, item.clip_end_s, doctor
@@ -699,7 +704,11 @@ def _compose(
                 date=_day(visit.scheduled_at, context, language),
             )
             groups.append(
-                [AnswerLine(text, (Cite("visit_summary", summary.id), Cite("appointment", visit.id)))]
+                [
+                    AnswerLine(
+                        text, (Cite("visit_summary", summary.id), Cite("appointment", visit.id))
+                    )
+                ]
             )
         elif hit.kind == "note":
             note = corpus.notes[hit.ref].note

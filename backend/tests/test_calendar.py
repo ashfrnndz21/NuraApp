@@ -203,7 +203,9 @@ async def test_his_yes_books_a_planned_visit_and_a_no_books_nothing(sg: AsyncSes
         await proposal_draft_for(sg, context=owner, proposal_id=dialysis.id)
 
     # A yes for the other proposal does not book this one.
-    wrong = await confirm(sg, owner, await proposal_draft_for(sg, context=owner, proposal_id=visit.id))
+    wrong = await confirm(
+        sg, owner, await proposal_draft_for(sg, context=owner, proposal_id=visit.id)
+    )
     with pytest.raises(AlreadyDecided):
         await accept_proposal(sg, context=owner, proposal_id=dialysis.id, confirmation_id=wrong.id)
     assert (await sg.scalars(select(Appointment))).all() == []
@@ -287,7 +289,10 @@ def test_his_words_for_a_proposal_name_the_doctor_or_say_your_doctor() -> None:
     assert proposal_lines(initials, zone=SG, language="en")[0] == (
         "Nura found a visit to your doctor in the calendar."
     )
-    assert proposal_lines(row, zone=SG, language="ms")[1] == "Ia pada Khamis 24 September, pukul 10 pagi."
+    assert (
+        proposal_lines(row, zone=SG, language="ms")[1]
+        == "Ia pada Khamis 24 September, pukul 10 pagi."
+    )
     row.status = ProposalStatus.DISMISSED
     assert proposal_lines(row, zone=SG, language="en") == []
 

@@ -56,6 +56,8 @@ export interface DoorsOut {
   claimable: ClaimableOut[];
   invited: ProfileOut[];
   stewarding: ProfileOut[];
+  /** His own graph, or one keyed to him, whose owner's closing stands (#143): ids, never opened. */
+  closing?: string[];
 }
 
 export interface WordingOut {

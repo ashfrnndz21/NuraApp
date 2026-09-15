@@ -269,6 +269,7 @@ class Run:
                     region=self.acting.region,
                     person_id=person.id,
                     profile_id=self.profile.id,
+                    while_closing=True,
                 )
                 self._scopes[person.id] = context.scopes
         return self._scopes[person.id]
@@ -281,9 +282,7 @@ async def _his_language(session: AsyncSession, context: KeyContext) -> str:
     return await his_language(session, context=context)
 
 
-async def open_run(
-    session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at: datetime
-) -> Run:
+async def open_run(session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at: datetime) -> Run:
     """A run for this profile at this moment, acting as its owner — or, before he claims
     it, as the steward holding it for him (there is then no patient to send to)."""
     profile = await session.get(Profile, profile_id)
@@ -306,7 +305,11 @@ async def open_run(
     # the system's on the trail, never the patient's (`keys.context.as_the_system`).
     acting = as_the_system(
         await resolve_key_context(
-            session, region=via.settings.region, person_id=acting_id, profile_id=profile.id
+            session,
+            region=via.settings.region,
+            person_id=acting_id,
+            profile_id=profile.id,
+            while_closing=True,
         )
     )
     settings = await audited_read(
@@ -332,7 +335,9 @@ async def open_run(
     )
 
 
-def _about(run: Run, firing: Firing, person_id: uuid.UUID, rows: Sequence[Delivery]) -> list[Delivery]:
+def _about(
+    run: Run, firing: Firing, person_id: uuid.UUID, rows: Sequence[Delivery]
+) -> list[Delivery]:
     """Earlier rows of this firing for this person: to them, or meant for them."""
     found = [
         row
@@ -366,9 +371,13 @@ async def stand_in_for(
 
 
 async def _no_whatsapp(run: Run, person: Person) -> str | None:
+    """Why this person cannot be sent this on WhatsApp, if they cannot. His WhatsApp agreement
+    is for messages to him (#143); anyone else is told under the key his agreement to let
+    them in rests on, whose scope was checked for this message before any channel."""
     if not person.phone_e164:
         return "no number"
-    if not await run.whatsapp_agreed():
+    to_him = run.patient is not None and person.id == run.patient.id
+    if to_him and not await run.whatsapp_agreed():
         return "not agreed"
     return None
 
@@ -495,8 +504,16 @@ async def deliver(
                 passed.append("app_push: gone")
                 continue
             return await write(
-                run, firing, to, DeliveryOutcome.SENT, via=channel, passed_over=passed,
-                rung=rung, ladder=ladder, text=line, row_id=row_id,
+                run,
+                firing,
+                to,
+                DeliveryOutcome.SENT,
+                via=channel,
+                passed_over=passed,
+                rung=rung,
+                ladder=ladder,
+                text=line,
+                row_id=row_id,
             )
         if channel is DeliveryChannel.WHATSAPP:
             why_not = await _no_whatsapp(run, to.person)
@@ -509,9 +526,17 @@ async def deliver(
                 passed.append(f"whatsapp: {type(refusal).__name__}")
                 continue
             return await write(
-                run, firing, to, DeliveryOutcome.SENT, via=channel,
-                template_name=sent.template_name, message_id=sent.message_id,
-                passed_over=passed, rung=rung, ladder=ladder, text=sent.text,
+                run,
+                firing,
+                to,
+                DeliveryOutcome.SENT,
+                via=channel,
+                template_name=sent.template_name,
+                message_id=sent.message_id,
+                passed_over=passed,
+                rung=rung,
+                ladder=ladder,
+                text=sent.text,
             )
         # The caregiver: what the patient could not be reached with goes to who stands in.
         if message.stand_in is None or to.standing != "patient":
@@ -531,10 +556,19 @@ async def deliver(
             passed.append(f"caregiver: {type(refusal).__name__}")
             continue
         return await write(
-            run, firing, stand_in, DeliveryOutcome.SENT, via=channel,
-            template_name=sent.template_name, message_id=sent.message_id,
-            reason=f"for the {to.standing}", passed_over=passed, rung=rung, ladder=ladder,
-            for_person=to.person, text=sent.text,
+            run,
+            firing,
+            stand_in,
+            DeliveryOutcome.SENT,
+            via=channel,
+            template_name=sent.template_name,
+            message_id=sent.message_id,
+            reason=f"for the {to.standing}",
+            passed_over=passed,
+            rung=rung,
+            ladder=ladder,
+            for_person=to.person,
+            text=sent.text,
         )
     if any(row.outcome is DeliveryOutcome.NO_CHANNEL for row in earlier):
         return None

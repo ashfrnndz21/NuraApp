@@ -83,7 +83,13 @@ def providers_for(settings: Settings) -> Providers:
 
 
 settings = load_settings()
-if install_frozen(settings.frozen_clock, dev_run=settings.dev_code_sender) is not None and settings.frozen_clock:
-    logging.getLogger("nura.clock").info("dev run: the clock is frozen at %s (POST /dev/clock moves it)", settings.frozen_clock.isoformat())
+if (
+    install_frozen(settings.frozen_clock, dev_run=settings.dev_code_sender) is not None
+    and settings.frozen_clock
+):
+    logging.getLogger("nura.clock").info(
+        "dev run: the clock is frozen at %s (POST /dev/clock moves it)",
+        settings.frozen_clock.isoformat(),
+    )
 engine = make_engine(settings.database_url)
 app = create_app(settings, make_session_factory(engine), providers_for(settings))
