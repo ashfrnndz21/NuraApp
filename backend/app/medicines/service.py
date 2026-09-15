@@ -58,6 +58,7 @@ from app.medicines.story import (
     reorder_lines,
 )
 from app.medicines.strings import (
+    NOW_WORDS,
     PLAIN_NAME,
     REORDER_ACTIONS,
     SOURCE,
@@ -1004,6 +1005,48 @@ async def today(
                 )
             )
     return sorted(slots, key=lambda s: (order.index(s.anchor), s.line.generic))
+
+
+@dataclass(frozen=True, slots=True)
+class DueNow:
+    """The one big number on his Today: how many tablets at the moment of the day that is open
+    now — or, when none is, at the next moment still to come today — and his words for it."""
+
+    count: int
+    anchor: str
+    words: str
+
+
+def due_now(slots: Sequence[Slot], language: str) -> DueNow | None:
+    """Counted from today's cards, never from a clock of its own: the cards the backend marks
+    due now; else the untapped cards at the next moment whose window has not opened yet. None
+    when nothing is left to take today. Nothing here is ranked or judged."""
+    open_now = [slot for slot in slots if slot.due_now and not slot.taken]
+    if open_now:
+        anchor = open_now[0].anchor
+        count = sum(1 for slot in open_now if slot.anchor == anchor)
+    else:
+        ahead = [slot for slot in slots if not slot.taken and not slot.missed]
+        if not ahead:
+            return None
+        anchor = ahead[0].anchor
+        count = sum(1 for slot in ahead if slot.anchor == anchor)
+    one, many = NOW_WORDS[language_of(language)][anchor]
+    return DueNow(count=count, anchor=anchor, words=one if count == 1 else many)
+
+
+async def now_count(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    registry: DrugRegistry,
+    language: str | None = None,
+) -> DueNow | None:
+    """The hero, in `language` or his own: today's cards (`today`, read under the medicines
+    scope) counted by `due_now`."""
+    lang = await _language(session, context, language)
+    slots = await today(session, context=context, registry=registry, language=lang)
+    return due_now(slots, lang)
 
 
 @dataclass(frozen=True, slots=True)

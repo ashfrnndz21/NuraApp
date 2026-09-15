@@ -489,7 +489,9 @@ async def consent_record_page(request: Request, context: Context, session: Db) -
     when and when it stopped, with no health content. Self-contained like the emergency
     card's page. The owner's and his chief's; the page leaving is a share on his trail."""
     record = await export_consent_record(
-        session, context=context, renderer=PrintableConsentRenderer(demo=settings_of(request).demo_mode)
+        session,
+        context=context,
+        renderer=PrintableConsentRenderer(demo=settings_of(request).demo_mode),
     )
     return HTMLResponse(
         record.rendered.body.decode(),
@@ -783,4 +785,6 @@ async def state(context: Context, session: Db, language: str | None = Language) 
     view = await current_state(session, context=context)
     if language is None:
         language = (await audited_profile_read(session, context)).language
-    return StateOut.of(view, boundary=boundary_line(Surface.STATE_POSTURE, language))
+    return StateOut.of(
+        view, boundary=boundary_line(Surface.STATE_POSTURE, language), language=language
+    )

@@ -6,6 +6,7 @@
     GET  /profiles/{id}/medicines/history          every line ever written, the change log
     GET  /profiles/{id}/medicines/interactions     every flag on the list, as questions
     GET  /profiles/{id}/medicines/today            today's dose cards at his anchors, due or missed
+    GET  /profiles/{id}/medicines/now              the one big number on his Today, and its words
     GET  /profiles/{id}/proud                      the proud number: days with a tablet taken
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
@@ -32,6 +33,7 @@ from app.channels.api.schemas import (
     MedicineDraftIn,
     MedicineDraftOut,
     MedicineIn,
+    NowOut,
     ProudOut,
     ReconciledOut,
     SlotOut,
@@ -47,6 +49,7 @@ from app.medicines.service import (
     active_lines,
     history,
     interaction_flags,
+    now_count,
     plan,
     proud_days,
     reconcile,
@@ -182,6 +185,21 @@ async def doses_today(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
     return [SlotOut.of(slot) for slot in slots]
+
+
+@router.get("/{profile_id}/medicines/now")
+async def medicines_now(
+    request: Request, context: Context, session: Db, language: str | None = Language
+) -> NowOut:
+    """The one big number on his Today (the hero, docs/design-system.md §4): how many tablets
+    at the moment of the day that is open now, or the next one still to come today, and his
+    words for what it counts — counted from today's cards, under the medicines scope."""
+    found = await now_count(
+        session, context=context, registry=providers_of(request).drug_registry, language=language
+    )
+    if found is None:
+        return NowOut(count=None, anchor=None, words=None)
+    return NowOut(count=found.count, anchor=found.anchor, words=found.words)
 
 
 @router.get("/{profile_id}/proud")

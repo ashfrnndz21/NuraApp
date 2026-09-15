@@ -452,11 +452,25 @@ class ProviderHistoryOut(BaseModel):
         )
 
 
+CHANGE_TONE: dict[str, str] = {
+    "flags": "act",
+    "waiting": "watch",
+    "medicines": "watch",
+    "family": "good",
+    "notes": "good",
+}
+"""The dot beside a line of what changed on the chief's Home (docs/design-system.md, card
+grammar: Good / Watch / Act on the figure only), by the part it is in: a red flag is Act, a
+changed medicine or something still waiting is Watch, the family's own notes are Good. Visits,
+papers and new facts carry no tone. A presentation of the part, never a judgement of a value."""
+
+
 class ChangeLineOut(BaseModel):
     section: str
     key: str
     text: str
     refs: dict[str, list[str]]
+    tone: str | None = None
 
     @classmethod
     def of(cls, line: ChangeLine) -> ChangeLineOut:
@@ -464,6 +478,7 @@ class ChangeLineOut(BaseModel):
             section=line.section,
             key=line.key,
             text=line.text,
+            tone=CHANGE_TONE.get(line.section),
             refs={name: list(ids) for name, ids in line.refs.items() if ids},
         )
 

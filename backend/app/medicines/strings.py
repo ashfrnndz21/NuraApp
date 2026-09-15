@@ -539,6 +539,30 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
 TAKEN: Mapping[str, str] = {"en": "Taken", "ms": "Sudah ambil", "zh": "吃了"}
 """The one button on a dose card (glossary: adherence is "Taken")."""
 
+# @patient headline
+NOW_WORDS: Mapping[str, Mapping[str, tuple[str, str]]] = {
+    "en": {
+        "breakfast": ("medicine with breakfast", "medicines with breakfast"),
+        "lunch": ("medicine with lunch", "medicines with lunch"),
+        "dinner": ("medicine with dinner", "medicines with dinner"),
+        "bed": ("medicine before bed", "medicines before bed"),
+    },
+    "ms": {
+        "breakfast": ("ubat bersama sarapan", "ubat bersama sarapan"),
+        "lunch": ("ubat bersama makan tengah hari", "ubat bersama makan tengah hari"),
+        "dinner": ("ubat bersama makan malam", "ubat bersama makan malam"),
+        "bed": ("ubat sebelum tidur", "ubat sebelum tidur"),
+    },
+    "zh": {
+        "breakfast": ("早餐时的药", "早餐时的药"),
+        "lunch": ("午餐时的药", "午餐时的药"),
+        "dinner": ("晚餐时的药", "晚餐时的药"),
+        "bed": ("睡前的药", "睡前的药"),
+    },
+}
+"""The words under the one big number on his Today (the hero): what the number counts, for
+one and for more than one. The number is his count; the words are never assembled from it."""
+
 # @patient
 DOSE_CARD: Mapping[str, str] = {
     "en": "Take {amount} of {name} {anchor}.",

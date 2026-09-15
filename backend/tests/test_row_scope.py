@@ -778,6 +778,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/medicines/history"),
     Walk("GET", f"{P}/medicines/interactions"),
     Walk("GET", f"{P}/medicines/today"),
+    Walk("GET", f"{P}/medicines/now"),
     Walk("GET", f"{P}/medicines/{{line_id}}/story"),
     Walk("GET", f"{P}/medicines/{{line_id}}/story/voice"),
     Walk("GET", f"{P}/whatsapp/thread"),
