@@ -1246,6 +1246,30 @@ the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask D
 tight the other way too: a verb alone ("You can tell Nura to stop at any time.") or a noun
 alone passes."""
 
+_KEEP_TAKING: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"^do not stop (?!.*\b(?:until|unless|before|after|for|when|if|and|or|but|then)\b)"
+        r"[a-z' ()-]+ yourself\.?$",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(
+        r"^jangan berhenti (?:makan|ambil) "
+        r"(?!.*\b(?:sehingga|sampai|kecuali|sebelum|selepas|jika|kalau|dan|atau|tetapi|lalu)\b)"
+        r"[a-z' ()-]+ sendiri\.?$",
+        re.IGNORECASE,
+    ),
+    "zh": re.compile(
+        r"^不要自己停(?!.*(?:直到|除非|再|但|改|加|减|和|或|以后|之后|之前|先|然后))"
+        r"[\u4e00-\u9fffA-Za-z ()（）]+。?$"
+    ),
+}
+"""The one line that puts a treatment verb beside a medicine to keep it as it is: "Do not stop
+{medicine} yourself." (#157, `app.reasoning.feelings.strings.DO_NOT_STOP`). It is the opposite
+of a change: he keeps taking it, and the doctor decides. Held to that shape and nothing more:
+one treatment verb in the line, no digit, no punctuation but the full stop, and no word that
+adds a condition or a second thing ("until Friday", "and take less", "再多吃") — those fail
+as before."""
+
 
 def _check_boundary(line: _Line) -> None:
     language = line.language if line.language in _TREATMENT_VERBS else "en"
@@ -1254,6 +1278,8 @@ def _check_boundary(line: _Line) -> None:
     if verb is None or nouns.search(line.text) is None:
         return
     if _ASKING.search(line.text):
+        return
+    if len(verbs.findall(line.text)) == 1 and _KEEP_TAKING[language].search(line.text.strip()):
         return
     line.add(
         14,
@@ -1916,7 +1942,8 @@ plain-words checks every patient string against docs/plain-words.md. By the doc'
      IC are his); units he does not use (mg, mmHg, mmol/L); any id, phone number, IC number.
   13 The same words every time: "the log", "the readings", "discharge summary", "the clinic".
   14 The boundary: no line starts, stops or changes a medicine — a treatment verb beside a
-     medicine noun fails unless the line asks the doctor (en, ms and zh alike).
+     medicine noun fails unless the line asks the doctor, or says "Do not stop {medicine}
+     yourself." and nothing more (en, ms and zh alike).
 Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action.
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.

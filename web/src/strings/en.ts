@@ -461,9 +461,9 @@ export const en = {
     symptomsLead: "Say what you feel, how bad it is and since when.",
     // @patient phrase
     symptomsKeep: "Keep this",
-    // @patient
     // @patient phrase
     sendAgain: "Send it again",
+    // @patient
     symptomsSaved: "Nura wrote this down.",
     // @patient phrase
     nudgeOk: "OK",
@@ -636,7 +636,7 @@ export const en = {
       // @patient
       lead3: "Nura only uses this to know where to look.",
       // @patient
-      noted: "Nura noted that.",
+      noted: "Nura wrote that down.",
       // @patient
       removed: "Nura took that off.",
       // @patient phrase
@@ -817,8 +817,8 @@ export const en = {
       cadence1: "Nura will ask for one thing a day, never more.",
       // @patient
       cadence2: "Tap Later and Nura asks once more.",
-      // @patient phrase
-      missing: "Missing",
+      // @patient
+      missing: "Nura does not have this yet.",
       // @patient
       onDay: "Nura will ask for this on {date}.",
       // @patient phrase
@@ -830,7 +830,7 @@ export const en = {
       // @patient
       more: "There are {count} more after that.",
       // @patient
-      nothing: "Nothing is missing for now.",
+      nothing: "Nura has everything it needs for now.",
       // @patient phrase
       open: "Open Nura",
     },
@@ -1175,6 +1175,7 @@ export const en = {
     stopYes: "Yes, stop it",
     // @patient phrase
     closeAccount: "Close my account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",

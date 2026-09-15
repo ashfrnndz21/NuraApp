@@ -28,7 +28,9 @@ primary_region = "sin"     # Singapore
   NURA_FEED_FIXTURES = "tests/fixtures/feed"
   NURA_WHATSAPP_FIXTURES = "tests/fixtures/whatsapp"
   NURA_SPEAKER_FIXTURES = "tests/fixtures/speakers"
-  # Tigris signs as `auto`; an AWS bucket in Singapore says `ap-southeast-1`.
+  # Tigris signs as `auto`; an AWS bucket in Singapore says `ap-southeast-1`. Either way the
+  # bucket keeps its bytes in Singapore: a Tigris bucket is Global unless it is created
+  # single-region in `sin` (docs/deploy.md, Fly step 3).
   NURA_OBJECT_BUCKET_REGION = "auto"
 
 [http_service]

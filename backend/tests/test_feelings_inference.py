@@ -126,6 +126,8 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
     assert note.lines == [
         "Tell Dr Tan you feel dizzy since yesterday.",
         "This can come from your blood pressure tablet, new since Thursday 3 September.",
+        "Do not stop your blood pressure tablet yourself.",
+        "Tell Dr Tan how you feel.",
     ]
     assert note.then == "Nura will keep this for your visit to Dr Tan."
     assert note.boundary == boundary_line(Surface.FEELING_INFERENCE, "en", doctor="Dr Tan")
@@ -244,7 +246,7 @@ async def test_nothing_to_read_it_against_is_watched_and_asked_again(sg: AsyncSe
     _, owner = await _home(sg)
     note = (await _said(sg, owner, Feeling.LOW, Answer.TODAY)).note
     assert note is not None
-    assert note.lines == ["Tell your doctor you feel low today."]
+    assert note.lines == ["Tell your doctor you feel sad today."]
     assert note.then == "Nura will ask you again in a week."
     assert note.outcome is NoteOutcome.WATCH and note.reasons == []
 
@@ -256,7 +258,10 @@ async def test_at_most_two_things_to_tell_and_every_reason_kept(sg: AsyncSession
     for n, top in enumerate((130, 139, 151)):
         await blood_pressure(sg, owner, top, at=utcnow() - timedelta(days=2 - n))
     note = (await _said(sg, owner, Feeling.DIZZY, Answer.YESTERDAY)).note
-    assert note is not None and len(note.lines) == 2
+    # Two things to tell; the second names a medicine, so the two lines after it follow (#157).
+    assert note is not None and len(note.lines) == 4
+    assert note.lines[2] == "Do not stop your blood pressure tablet yourself."
+    assert note.lines[3].startswith("Tell ") and note.lines[3].endswith(" how you feel.")
     assert [(r["code"], r["shown"]) for r in note.reasons] == [
         ("new_medicine", True),
         ("reading_trend", False),
@@ -455,5 +460,8 @@ async def test_a_tap_asks_one_thing_once_and_takes_only_its_own_answers(sg: Asyn
 def test_no_line_starts_stops_or_changes_a_medicine_or_names_a_condition(language: str) -> None:
     lines = [line for code, line in strings.catalogue() if code == language]
     lines += list(strings.WHEN[language].values())
-    offending = [line for line in lines if FORBIDDEN[language].search(line)]
+    # The one exception is the line that keeps a medicine as it is (#157): "Do not stop
+    # {medicine} yourself." The verifier holds it to that shape (rule 14).
+    keep = strings.DO_NOT_STOP[language][0]
+    offending = [line for line in lines if FORBIDDEN[language].search(line) and line != keep]
     assert offending == []

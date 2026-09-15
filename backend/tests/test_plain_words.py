@@ -679,6 +679,26 @@ def test_rule_14_the_exemption_is_a_question_put_to_the_doctor() -> None:
     assert rule_14("Tell Ash to stop the water pill.", "en")
     assert rule_14("Should you stop the water pill?", "en")
     assert not rule_14("Ask your doctor before you stop the water pill.", "en")
+    # The line that keeps a medicine as it is (#157) passes, held to its shape.
+    assert not rule_14("Do not stop the water pill yourself.", "en")
+    assert not rule_14("Jangan berhenti makan pil air sendiri.", "ms")
+    assert not rule_14("不要自己停去水药。", "zh")
+    assert rule_14("Do not stop the water pill until Friday yourself.", "en")
+    assert rule_14("Do not stop the water pill.", "en")
+    assert rule_14("Jangan berhenti makan pil air sehingga Jumaat sendiri.", "ms")
+    assert not rule_14("不要自己停药。", "zh")
+    for line, language in (
+        ("Do not stop the water pill, start the aspirin yourself.", "en"),
+        ("Do not stop the insulin, take less yourself.", "en"),
+        ("Do not stop the aspirin; halve the water pill yourself.", "en"),
+        ("Do not stop the water pill and take less yourself.", "en"),
+        ("Do not stop 2 tablets yourself.", "en"),
+        ("Jangan berhenti makan ubat, kurangkan insulin sendiri.", "ms"),
+        ("不要自己停药再多吃两片。", "zh"),
+        ("不要自己停药直到星期五。", "zh"),
+        ("不要自己停药,加倍胰岛素。", "zh"),
+    ):
+        assert rule_14(line, language), line
     assert not rule_14("Tell Dr Tan that you stopped the water pill.", "en")
     assert rule_14("Beritahu Ash supaya berhenti makan pil air.", "ms")
     assert not rule_14("Tanya doktor anda tentang berhenti makan pil air.", "ms")

@@ -64,7 +64,7 @@ async def test_the_person_a_flag_reached_says_im_on_it_and_the_ladder_stops(
     assert ladder["subject"] == "flag"
     assert ladder["lines"] == [
         "Nura asked you to check on Pa on Monday 14 September at 10 in the morning.",
-        "Once you say you have it, Nura asks nobody else.",
+        "Once you tap I'm on it, Nura asks nobody else.",
     ]
     # In Malay, for a reader who reads Malay.
     malay = await client.get(
