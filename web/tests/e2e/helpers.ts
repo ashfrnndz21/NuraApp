@@ -646,18 +646,26 @@ export async function nothingDrawnOverLines(
       return ` (under ${at.tagName.toLowerCase()}${named ? `.${String(named.getAttribute("class")).split(" ")[0]}` : ""})`;
     };
     const visible = (element: HTMLElement) => element.offsetParent !== null && element.getBoundingClientRect().height > 0;
+    // Brought to the middle of the screen and tested. A miss is tried again: a screen still
+    // coming in (a card read after the screen opens) moves a line between the scroll and the
+    // test, and only a line still covered after that is a problem.
+    const clear = async (element: HTMLElement) => {
+      for (let tries = 0; tries < 3; tries++) {
+        element.scrollIntoView({ block: "center" });
+        await frame();
+        if (hit(element)) return true;
+      }
+      return false;
+    };
     for (const line of root.querySelectorAll<HTMLElement>(lines)) {
       if (!visible(line) || !line.textContent?.trim()) continue;
-      line.scrollIntoView({ block: "center" });
-      await frame();
-      if (!hit(line)) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}${under(line)}`);
+      if (!(await clear(line))) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}${under(line)}`);
     }
     for (const control of root.querySelectorAll<HTMLElement>(controls)) {
       if (!visible(control)) continue;
-      control.scrollIntoView({ block: "center" });
-      await frame();
+      const covered = !(await clear(control));
       const name = (control.textContent || control.getAttribute("aria-label") || control.tagName).trim().slice(0, 50);
-      if (!hit(control)) problems.push(`control covered: ${name}${under(control)}`);
+      if (covered) problems.push(`control covered: ${name}${under(control)}`);
       const box = control.getBoundingClientRect();
       if (minTarget && (box.height < minTarget - 0.5 || box.width < minTarget - 0.5)) {
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
@@ -682,8 +690,17 @@ export async function underTheTabBar(scope: Locator, options: { lines?: string; 
     const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
     const bar = document.querySelector("nav.tabbar");
     if (!bar) return [];
-    window.scrollTo(0, document.documentElement.scrollHeight);
-    await frame();
+    // To the bottom, and again until the page stops growing there: a screen still reading (the
+    // visit's logistics card comes in after the screen opens) grows under a check that
+    // scrolled once, and would name lines that the page's own room clears.
+    let settled = 0;
+    for (let tries = 0; tries < 40 && settled < 3; tries++) {
+      const height = document.documentElement.scrollHeight;
+      window.scrollTo(0, height);
+      await frame();
+      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+      settled = atBottom && document.documentElement.scrollHeight === height ? settled + 1 : 0;
+    }
     const top = bar.getBoundingClientRect().top;
     const problems: string[] = [];
     for (const element of root.querySelectorAll<HTMLElement>(`${lines}, ${controls}`)) {
