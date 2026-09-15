@@ -28,7 +28,7 @@ A message that matches several flags is tiered by the most urgent (`detect`).
 | same day | in | no | Call Dr Tan today. If it gets worse, call the ambulance now on 995. |
 | same day | in | yes | Call Dr Tan today. If it gets worse, go to {hospital} now. {hospital} is on your insurance. |
 | same day | out | yes | Go to the emergency department at {hospital} now. {hospital} is on your insurance. If you cannot get there safely, call the ambulance now on 995. |
-| same day | out | no | Sit down and rest now. If it gets worse, call the ambulance now on 995. Call Dr Tan on {day} morning. |
+| same day | out | no | Sit down and rest now. If it gets worse, call the ambulance now on 995. Call Dr Tan on {day and date} in the morning. |
 
 **Behind a switch until it is signed.** None of this reaches a family until a clinician signs the table. The table is chosen in one door, `escalation_for` (through `escalation_now`), and only when `Settings.red_flag_tiers` is set (`NURA_RED_FLAG_TIERS=1`). Unset — every deployment until the sign-off — every red flag's step is the ambulance: the thread says "Call the ambulance now on 995.", and the family gets the ambulance notice. That is the stricter step the not-feeling-well card already gives for every red flag, and no level-of-care step of Nura's own. A dev run sets it (`make dev`), so the checkpoints and the tests see the table. `tests/test_red_flag_escalation.py` holds that a build without the switch never says the doctor today, the hospital now, or rest and the morning.
 

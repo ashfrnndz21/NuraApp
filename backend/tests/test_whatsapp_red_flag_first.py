@@ -191,6 +191,42 @@ async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name
     assert closing
 
 
+async def test_on_two_lists_chest_pain_tells_each_family_the_ambulance_before_it_may_be(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The ambiguous notice ("It may be about Pa. Call Mei now.") names no ambulance. In the
+    ambulance tier the family's notice is the ambulance's, even when the ambiguous template is
+    approved: a flag is never told more weakly because its sender is on two lists (B1
+    clinical-safety review)."""
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    ma = await register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6591110009", language="en"
+    )
+    ma_profile = await create_own_profile(sg, region=Region.SG, owner=ma, consent=OPENING_CONSENT)
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    await agree_to_family_sharing(
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+    )
+    await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
+    # The ambiguous template is approved here: a fall on two lists sends it (above).
+
+    handled = await home.inbound(sg, MEI, "he has chest pain")
+    assert handled.outcome == "red_flag_ambiguous"
+    flags = (await sg.scalars(select(Flag))).all()
+    assert all(flag.ambiguous_profile and flag.feeling is Feeling.CHEST_TIGHTNESS for flag in flags)
+    told = [one for one in home.whatsapp.sent if one.to_e164 == KIT]
+    assert told[-1].text.splitlines() == [
+        "This one we do not wait for.",
+        "Pa is not feeling well.",
+        "Call Pa now.",
+        "Ask Pa now if an ambulance is coming.",
+        "If not, call the ambulance now on 995.",
+    ]
+
+
 async def test_on_two_lists_a_fall_said_with_shaky_and_sweaty_is_the_fall_on_each(
     sg: AsyncSession, tmp_path: Path
 ) -> None:

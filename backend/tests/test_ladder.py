@@ -170,7 +170,7 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
         "This one we do not wait for.",
         "Sit down and rest now.",
         "If it gets worse, call the ambulance now on 995.",
-        "Call your doctor on Tuesday morning.",
+        "Call your doctor on Tuesday 15 September in the morning.",
         "Mei knows now.",
         "Nura does not decide what is wrong.",
     ]

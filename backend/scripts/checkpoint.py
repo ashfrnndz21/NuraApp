@@ -2025,7 +2025,7 @@ def checkpoint_7(client: httpx.Client) -> None:
     if not {"purpose", "changed", "questions", "bring"} <= sections:
         raise fail("Pa reads the pre-visit brief", why=f"sections {sections}")
     felt = [line["key"] for line in brief["lines"] if line["key"].startswith("symptom")]
-    if felt != ["symptom", "symptom_detail"] or any(
+    if felt != ["symptom", "symptom_detail", "symptom_detail"] or any(
         line["key"] == "changed_papers" for line in brief["lines"]
     ):
         raise fail(

@@ -19,7 +19,7 @@ Without a thinner, a fall keeps its rows exactly.
 from __future__ import annotations
 
 import dataclasses
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -35,10 +35,10 @@ from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
 from app.drugs.registry import LabelFields
 from app.errors import Refusal
 from app.keys.scopes import KeyRole
+from app.medicines.strings import say_date
 from app.memory.models import Provider, ProviderKind
 from app.memory.spine import add_provider
 from app.reasoning.feelings.service import record_tap
-from app.reasoning.visits.strings import WEEKDAYS
 from app.regions import Region
 from app.safety.high_risk import HIGH_RISK_CLASSES
 from app.safety.not_feeling_well import not_feeling_well
@@ -175,7 +175,7 @@ REPLY_STEP: dict[Step, list[str]] = {
     Step.NUMBER_IF_WORSE: [
         "Sit down and rest now.",
         AMBULANCE_IF_WORSE,
-        "Call Dr Tan on Tuesday morning.",
+        "Call Dr Tan on Tuesday 15 September in the morning.",
     ],
 }
 """What the thread says to do now, by step: the reply sits between "This one we do not wait
@@ -436,7 +436,7 @@ def _step_lines(step: Step, language: str) -> list[str]:
         return REPLY_STEP[step]
     return [
         line.format(
-            doctor="Dr Tan", hospital="Gleneagles", emergency_number="995", day=WEEKDAYS[language][1]
+            doctor="Dr Tan", hospital="Gleneagles", emergency_number="995", day=say_date(date(2026, 9, 15), language)
         )
         for line in RED_FLAG_STEPS[step.value][language]
     ]
@@ -570,6 +570,64 @@ async def test_the_helpers_word_reads_his_list_as_the_system(
     assert handled.replies[0].text.splitlines()[1] == AMBULANCE_NOW["ms"]
     assert not any(word in handled.replies[0].text.lower() for word in ("warfarin", "marevan", "darah"))
     assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+HELPER_SAYS = {"en": "Pa fell in the bathroom", "ms": "Pa jatuh di bilik air", "zh": "Pa在浴室跌倒了"}
+ABOUT_HIM = {
+    (False, "en"): [
+        "Help Pa sit down and rest now.",
+        AMBULANCE_IF_WORSE,
+        "Call Dr Tan on Tuesday 15 September in the morning.",
+    ],
+    (True, "en"): [
+        "Help Pa get to the emergency department at Gleneagles now.",
+        "Gleneagles is on Pa's insurance.",
+        "If Pa cannot get there safely, call the ambulance now on 995.",
+    ],
+    (False, "ms"): [
+        "Bantu Pa duduk dan berehat sekarang.",
+        "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian 995.",
+        "Telefon Dr Tan pada pagi Selasa 15 September.",
+    ],
+    (True, "ms"): [
+        "Bantu Pa pergi ke jabatan kecemasan di Gleneagles sekarang.",
+        "Gleneagles dilindungi insurans Pa.",
+        "Kalau Pa tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian 995.",
+    ],
+    (False, "zh"): ["现在就帮Pa坐下休息。", "如果变得更严重，现在就打995叫救护车。", "9月15日星期二早上再打电话给Dr Tan。"],
+    (True, "zh"): ["现在就帮Pa去Gleneagles的急诊部。", "Gleneagles在Pa的保险范围内。", "如果Pa不能安全地去那里，现在就打995叫救护车。"],
+}
+"""What the thread tells a sender who is not him, out of hours: who does the next thing is
+her, and the hospital is on his insurance (plain words, rule 7)."""
+CLOSING_ABOUT = {
+    "en": "Nura does not decide what is wrong with Pa.",
+    "ms": "Nura tidak menentukan apa masalah Pa.",
+    "zh": "Nura 不判断Pa出了什么问题。",
+}
+
+
+@pytest.mark.parametrize("language", ("en", "ms", "zh"))
+@pytest.mark.parametrize("hospital", (False, True))
+async def test_the_helpers_word_is_answered_about_him_and_never_as_if_she_were_unwell(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, language: str, hospital: bool
+) -> None:
+    """Siti writes at 22:30 that Pa fell, with no blood thinner on his list: never "Sit down
+    and rest now." or "on your insurance" to her — "Help Pa sit down and rest now.", "Gleneagles
+    is on Pa's insurance." (B1 plain-words review). His own word keeps "you"."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=hospital)
+    h.siti.language = language
+    await sg.flush()
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, SITI, HELPER_SAYS[language])
+    assert handled.outcome == "red_flag"
+    said = handled.replies[0].text.splitlines()
+    assert said[0] == OPENING[language]
+    assert said[1:4] == ABOUT_HIM[(hospital, language)]
+    assert said[-1] == CLOSING_ABOUT[language]
+    mine = await h.inbound(sg, PA, FELL["en"])
+    assert mine.replies[0].text.splitlines()[1:4] == REPLY_STEP[
+        Step.HOSPITAL_NOW if hospital else Step.NUMBER_IF_WORSE
+    ]
 
 
 @pytest.mark.parametrize("path", ("button", "log", "cloud"))

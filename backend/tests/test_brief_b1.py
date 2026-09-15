@@ -85,13 +85,14 @@ async def test_a_symptom_since_the_last_visit_is_its_own_line_in_his_words_and_n
         ("changed_readings_one", "Since Thursday 3 September, 1 new number is in your blood pressure book."),
         ("symptom", "You felt dizzy on Thursday 3 September."),
         # Since when, anchored to that day: he reads the brief days later.
-        ("symptom_detail", "It was quite bad from that morning."),
+        ("symptom_detail", "It was quite bad."),
+        ("symptom_detail", "It started that morning."),
     ]
     # Never counted under his papers.
     assert "changed_papers" not in {line["key"] for line in brief.lines}
     log = await symptoms_since(sg, context=context, language="en")
     [entry] = log.entries
-    assert changed[1]["sources"] == [str(entry.fact_id)] == changed[2]["sources"]
+    assert changed[1]["sources"] == [str(entry.fact_id)] == changed[2]["sources"] == changed[3]["sources"]
     assert_plain([line["text"] for line in brief.lines])
 
 
@@ -103,7 +104,8 @@ async def test_a_symptom_in_malay_is_said_in_malay(sg: AsyncSession) -> None:
     said = [line["text"] for line in brief.lines if line["key"].startswith("symptom")]
     assert said == [
         "Anda rasa pening pada Khamis 3 September.",
-        "Rasanya agak teruk sejak sehari sebelumnya.",
+        "Rasanya agak teruk.",
+        "Ia bermula sehari sebelumnya.",
     ]
     assert_plain(said, "ms")
 

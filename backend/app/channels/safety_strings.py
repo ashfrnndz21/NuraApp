@@ -212,7 +212,7 @@ WHAT_TO_DO: Mapping[str, Mapping[str, str]] = {
     "nfw.call_clinic": {
         "en": "Call {doctor}'s clinic today.",
         "ms": "Telefon klinik {doctor} hari ini.",
-        "zh": "今天就打电话到{doctor}诊所。",
+        "zh": "今天就打电话到{doctor}的诊所。",
     },
     "nfw.call_named": {
         "en": "Call {clinic} today.",
@@ -362,11 +362,6 @@ SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
         "en": "It started {since}.",
         "ms": "Ia bermula {since}.",
         "zh": "从{since}开始。",
-    },
-    "sym.severity_since": {
-        "en": "It was {severity} from {since}.",
-        "ms": "Rasanya {severity} sejak {since}.",
-        "zh": "从{since}起感觉{severity}。",
     },
     "sym.by_voice": {
         "en": "{name} said this out loud.",
@@ -666,9 +661,9 @@ SINCE_THEN_WORDS: Mapping[str, Mapping[str, str]] = {
         "just_now": "那时",
         "this_morning": "那天早上",
         "since_yesterday": "前一天",
-        "few_days": "之前几天",
-        "about_a_week": "之前大约一个星期",
-        "longer": "之前几个星期",
+        "few_days": "几天前",
+        "about_a_week": "大约一个星期前",
+        "longer": "几个星期前",
     },
 }
 """Since when, said days later on the brief: anchored to the day in the line above ("It started

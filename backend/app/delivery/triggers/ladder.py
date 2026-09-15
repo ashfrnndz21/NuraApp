@@ -412,6 +412,7 @@ def flag_message(run: Run, flag: Flag) -> Say:
         approves = run.via.number.approves
         number = EMERGENCY_NUMBER[run.acting.region.value]
         tiered: tuple[str, dict[str, str]] | None = None
+        go_now = False  # the ambulance or the hospital now: never traded for a weaker notice
         if flag.feeling is not None and is_red(flag.feeling):
             try:
                 step = await escalation_now(
@@ -427,7 +428,9 @@ def flag_message(run: Run, flag: Flag) -> Say:
                 # Nothing about his directory may keep a flag from the family: the most
                 # urgent notice, the ambulance's.
                 tiered = (TIERED_NOTICE[Step.AMBULANCE], {"name": name, "emergency_number": number})
+                go_now = True
             else:
+                go_now = step.step in (Step.AMBULANCE, Step.HOSPITAL_NOW)
                 if step.step is Step.HOSPITAL_NOW and step.hospital is not None:
                     tiered = (
                         TIERED_NOTICE[step.step],
@@ -437,13 +440,19 @@ def flag_message(run: Run, flag: Flag) -> Say:
                     tiered = (TIERED_NOTICE[step.step], {"name": name, "emergency_number": number})
         # In order, the first that goes: the ambiguous notice; the tiered one — its template
         # where Meta approved it, else the same words as free text inside the window; the
-        # notice he raised himself; the approved notice, which always can.
+        # notice he raised himself; the approved notice, which always can. When the step is
+        # the ambulance or the hospital now, the tiered notice goes before the ambiguous one,
+        # which names no ambulance and no hospital (B1 clinical-safety review).
         candidates: list[tuple[str, dict[str, str]]] = []
+        told_now: tuple[str, dict[str, str]] | None = None
+        if tiered is not None:
+            told_now = (tiered[0] if approves(tiered[0]) else f"{tiered[0]}_text", tiered[1])
+        if told_now is not None and go_now:
+            candidates.append(told_now)
         if flag.ambiguous_profile and approves("red_flag_notice_ambiguous"):
             candidates.append(("red_flag_notice_ambiguous", {"who": who, "name": name}))
-        if tiered is not None:
-            kind = tiered[0] if approves(tiered[0]) else f"{tiered[0]}_text"
-            candidates.append((kind, tiered[1]))
+        if told_now is not None and not go_now:
+            candidates.append(told_now)
         if (
             raiser is not None
             and raiser.id == run.profile.owner_person_id

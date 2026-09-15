@@ -16,7 +16,7 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 
 **Behind a switch.** The table reaches a family only with `NURA_RED_FLAG_TIERS=1`. Unset, every red flag's step is the ambulance; that is the not-feeling-well card's own step. A dev run sets it. Before it is set in a deployment:
 
-- **Blocking question.** Out of the doctor's hours, with no hospital marked, a same-day flag is told "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan on Tuesday morning." The clinical-safety review asks that out of hours every same-day flag say "go to the nearest emergency department now" instead, whether or not a hospital is marked. Which is it?
+- **Blocking question.** Out of the doctor's hours, with no hospital marked, a same-day flag is told "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan on Tuesday 15 September in the morning." The clinical-safety review asks that out of hours every same-day flag say "go to the nearest emergency department now" instead, whether or not a hospital is marked. Which is it?
 - The three tiered family notices must be approved by Meta. Until they are, outside the family member's 24-hour window the approved notice goes, and it says "Call Dr Tan today."
 - Question 10 of the SaMD review must be answered by the regulatory adviser.
 

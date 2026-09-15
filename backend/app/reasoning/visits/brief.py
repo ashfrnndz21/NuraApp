@@ -242,15 +242,13 @@ def symptom_lines(entries: Sequence[Any], language: str, zone: tzinfo) -> list[l
             if entry.duration is None
             else phrase(SINCE_THEN_WORDS, language, entry.duration.value)
         )
-        if severity is not None and since is not None:
-            detail = render("sym.severity_since", language, severity=severity, since=since)
-        elif severity is not None:
+        # How much and since when, one idea a line (plain words, rules 1 and 2): "It was quite
+        # bad." then "It started that morning." — never joined into one.
+        if severity is not None:
             detail = render("sym.severity", language, severity=severity)
-        elif since is not None:
+            group.append(Line("changed", "symptom_detail", detail, source))
+        if since is not None:
             detail = render("sym.since", language, since=since)
-        else:
-            detail = None
-        if detail is not None:
             group.append(Line("changed", "symptom_detail", detail, source))
         groups.append(group)
     return groups

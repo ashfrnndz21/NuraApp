@@ -366,13 +366,14 @@ What you will see (the numbers, ids, dates and times change each run; the visit 
 ✓ Pa opened his profile in Malay, added a blood pressure reading (138/84, taken twenty days ago) and three medicines through E04 (POST /profiles/{id}/medicines, each from a label photo with his yes): amlodipine, warfarin and aspirin — the licensed data flagged aspirin against the warfarin already there, and every monograph says what its medicine is for
 ✓ Pa booked a visit with Dr Tan (POST /profiles/{id}/appointments) for 2026-09-17 at 10 in the morning, on a yes minted for exactly that booking (subject appointment): status planned
 ✓ Pa wrote down how he feels (POST /profiles/{id}/symptoms, typed: "pening, agak banyak, sejak pagi"): heard as dizzy, quite a lot, since this morning — his words kept as an artefact, a symptom fact resting on them
-✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed — his symptom on a line of its own, in the symptom log's words said to him, with how much and since when anchored to that day ("pagi itu", that morning), never a count under his papers — the open questions, what to bring — 13 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
+✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed — his symptom on a line of its own, in the symptom log's words said to him, with how much and since when anchored to that day ("pagi itu", that morning), never a count under his papers — the open questions, what to bring — 14 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
     [purpose  ] Anda berjumpa Dr Tan pada Khamis 17 September pukul 10 pagi.
     [purpose  ] Lawatan ini untuk memeriksa tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, ada 1 nombor baru dalam buku tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, 3 perkara berubah tentang ubat anda.
     [changed  ] Anda rasa pening pada Isnin 14 September.
-    [changed  ] Rasanya agak teruk sejak pagi itu.
+    [changed  ] Rasanya agak teruk.
+    [changed  ] Ia bermula pagi itu.
     [questions] Tanya Dr Tan sama ada aspirin dan ubat cair darah boleh dimakan bersama.
     [questions] Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
     [bring    ] Bawa buku tekanan darah anda pada Khamis 17 September.

@@ -99,6 +99,7 @@ from app.keys.context import (
 from app.keys.models import Key
 from app.keys.scopes import Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
+from app.medicines.strings import say_date
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Artifact,
@@ -111,7 +112,6 @@ from app.memory.models import (
     SourceChannel,
 )
 from app.memory.semantic import assert_fact, current_facts
-from app.reasoning.visits.strings import WEEKDAYS
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
 from app.safety.red_flags import (
     FLAG_WINDOW,
@@ -509,13 +509,14 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             "whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__
         )
         step_name, doctor, hospital = "ambulance", None, None
-    # "Call Dr Tan on Tuesday morning.": the morning he can call, by its day (rule 5) — this
-    # one's before the clinic's hours begin, else tomorrow's.
+    # "Call Dr Tan on Tuesday 15 September in the morning.": the morning he can call, by its
+    # day and date (rule 5) — this one's before the clinic's hours begin, else tomorrow's.
     local = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region])
     morning = local.date() + timedelta(days=0 if local.time() < NIGHT_UNTIL else 1)
     params = {
         "doctor": doctor or YOUR_DOCTOR[work.language],
-        "day": WEEKDAYS[work.language][morning.weekday()],
+        "day": say_date(morning, work.language),
+        "name": work.profile.display_name,
         "hospital": hospital or "",
         "emergency_number": EMERGENCY_NUMBER[work.context.region.value],
         "names": join_names(names, work.language),
@@ -523,9 +524,12 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     # The reply is its own savepoint: the flag and the ladder are written already, and a reply
     # that cannot go never takes them back. Failing that, the ambulance line, which names
     # nobody but who knows.
+    # Written by someone who is not him (his chief, his helper): the words say who does the
+    # next thing — "Help Pa sit down and rest now." — and whose insurance it is (rule 7).
+    about = not work.thread.is_patient
     for key in (
-        red_flag_reply_key(step_name, len(names)),
-        red_flag_reply_key("ambulance", len(names)),
+        red_flag_reply_key(step_name, len(names), about=about),
+        red_flag_reply_key("ambulance", len(names), about=about),
     ):
         try:
             async with nested_unit_of_work(session):
