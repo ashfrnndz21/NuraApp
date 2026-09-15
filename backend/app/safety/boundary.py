@@ -285,3 +285,27 @@ def is_boundary_line(surface: Surface, text: str | None) -> bool:
         if not rest or (len(rest) >= 2 and _pattern(FROM_THE_LETTER[code]).match(rest[-1])):
             return True
     return False
+
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient
+BOUNDARY_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
+    "en": {
+        "posture": ("Nura put your day in order.", "Nura put {patient}'s day in order."),
+        "ask": ("Ask your doctor.", "Ask {patient}'s doctor."),
+    },
+    "ms": {
+        "posture": ("Nura menyusun hari anda.", "Nura menyusun hari {patient}."),
+        "ask": ("Tanya doktor anda.", "Tanya doktor {patient}."),
+    },
+    "zh": {
+        "posture": ("Nura 帮您把今天的事整理好了。", "Nura 帮{patient}把今天的事整理好了。"),
+        "ask": ("问您的医生。", "问{patient}的医生。"),
+    },
+}
+"""Boundary lines that speak to him, each with its twin about him by name (line, twin)."""

@@ -1,6 +1,6 @@
 import { effect, signal } from "@preact/signals";
 import type { MeOut, Posture, ProfileOut } from "../api/types";
-import { deviceLanguage, isLanguage, language, type Language } from "../strings";
+import { aboutWhom, deviceLanguage, isLanguage, language, type Language } from "../strings";
 import { kvDel, kvGet, kvSet } from "./kv";
 
 /** Who is signed in, whose papers are open, and how the app looks — as signals, persisted
@@ -88,3 +88,10 @@ export async function clearSession(): Promise<void> {
   me.value = null;
   await Promise.all([setToken(null), chooseProfile(null)]);
 }
+
+/** Whose papers these are, when not the reader's own: the chrome that speaks to him is said about
+ *  him by name on every screen of hers (strings `aboutWhom`). */
+effect(() => {
+  const papers = profile.value;
+  aboutWhom.value = papers && papers.standing !== "owner" ? papers.display_name || null : null;
+});

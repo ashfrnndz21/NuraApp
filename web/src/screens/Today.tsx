@@ -169,7 +169,8 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {nextVisit && !fromPhone && <GapsTile visit={nextVisit} />}
             <AskAboutPill />
             {/* F1: "Watching for {name}" and "Sent to {name} this week" (PanelList) go here. */}
-            <DoseSection v={v} />
+            {/* His doses, only for a key that may tap Taken for him (one that opens the medicines). */}
+            {v.papers?.scopes.includes("medicines") && <DoseSection v={v} />}
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
               <TopThree items={top} player={v.clipPlayer} />
@@ -283,7 +284,7 @@ function DoseSection({ v }: { v: TodayView }): JSX.Element | null {
           testId="now-card"
           action={
             <PillButton onClick={() => void take(one.lineId, one.anchor)} disabled={busy} testId="taken">
-              {s.today.taken}
+              {v.papers?.standing === "owner" ? s.today.taken : one.takenLabel || s.today.taken}
             </PillButton>
           }
           hear={<Hear lines={[one.title, one.sentence]} />}

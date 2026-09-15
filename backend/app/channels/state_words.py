@@ -193,3 +193,30 @@ def said(
         line=POSTURE_LINE[lang][posture.value],
         drivers=tuple(drivers(dimensions, lang)),
     )
+
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient
+POSTURE_LINE_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "stable": "Nothing needs doing for {patient} today.",
+        "watch": "Nura is keeping an eye on one thing for {patient}.",
+        "act": "There is one thing to do for {patient} today.",
+    },
+    "ms": {
+        "stable": "Tiada apa yang perlu dibuat untuk {patient} hari ini.",
+        "watch": "Nura sedang memerhatikan satu perkara untuk {patient}.",
+        "act": "Ada satu perkara untuk dibuat bagi {patient} hari ini.",
+    },
+    "zh": {
+        "stable": "今天没有需要为{patient}做的事。",
+        "watch": "Nura 在替{patient}留意一件事。",
+        "act": "今天有一件事要为{patient}做。",
+    },
+}
+"""The posture's line about him by name, for a key that is not his."""

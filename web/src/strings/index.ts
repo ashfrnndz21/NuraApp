@@ -25,8 +25,38 @@ export function deviceLanguage(tags: readonly string[]): Language {
 }
 
 /** The current catalogue. Call inside a component so it re-renders on a language change. */
+/** Whose papers these are when they are not the reader's own: his name, set by the session from
+ *  the papers' standing (store/session). On a key that is not his, the few lines of chrome that
+ *  speak to him are said about him by name ("Pa is not feeling well"), as the backend says his
+ *  cards about him (app/channels/about_him.py) — whole catalogue lines, never composed here. */
+export const aboutWhom = signal<string | null>(null);
+
+/** The chrome that speaks to him, each with its "…Other" twin in the catalogue. */
+const TODAY_ABOUT_HIM = ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken"] as const;
+const DAY_ABOUT_HIM = ["notWell", "symptomsOpen"] as const;
+const theirs = new Map<string, Strings>();
+
+/** The catalogue with his chrome said about him by name: `{patient}` is his name. */
+export function aboutHim(s: Strings, name: string): Strings {
+  const said = (template: string) => template.split("{patient}").join(name);
+  const today = { ...s.today } as Record<string, unknown>;
+  for (const key of TODAY_ABOUT_HIM) today[key] = said(s.today[`${key}Other`]);
+  const day = { ...s.day } as Record<string, unknown>;
+  for (const key of DAY_ABOUT_HIM) day[key] = said(s.day[`${key}Other`]);
+  return { ...s, today: today as Strings["today"], day: day as Strings["day"] };
+}
+
 export function t(): Strings {
-  return CATALOGUE[language.value];
+  const s = CATALOGUE[language.value];
+  const name = aboutWhom.value;
+  if (!name) return s;
+  const key = `${language.value}:${name}`;
+  let found = theirs.get(key);
+  if (!found) {
+    found = aboutHim(s, name);
+    theirs.set(key, found);
+  }
+  return found;
 }
 
 export function stringsFor(code: Language): Strings {

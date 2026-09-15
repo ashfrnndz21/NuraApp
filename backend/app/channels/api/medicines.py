@@ -29,6 +29,7 @@ from typing import Literal
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
     AskedOut,
@@ -99,7 +100,8 @@ async def medicines(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
     withheld = await _sources_withheld(session, context, [view.line for view in views])
-    return [LineOut.of(view, withheld.get(view.line.id, ())) for view in views]
+    reader = await reader_of(session, context, language)
+    return [reader.model(LineOut.of(view, withheld.get(view.line.id, ()))) for view in views]
 
 
 @router.post("/{profile_id}/medicines/draft")
@@ -191,7 +193,8 @@ async def doses_today(
     slots = await today(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
-    return [SlotOut.of(slot) for slot in slots]
+    reader = await reader_of(session, context, language)
+    return [reader.model(SlotOut.of(slot)) for slot in slots]
 
 
 @router.get("/{profile_id}/medicines/now")
@@ -340,7 +343,7 @@ async def more_at_home(
     session: Db,
     language: str | None = Language,
 ) -> MoreOut:
-    """"I have more at home.": the tablets found, added to the count on the person's yes for
+    """ "I have more at home.": the tablets found, added to the count on the person's yes for
     exactly this line and number (subject `count_correction`). A helper's key is refused
     (`NotTheirsToChange`, 403); a yes for another number is `NotWhatWasConfirmed` (400)."""
     done = await found_more(

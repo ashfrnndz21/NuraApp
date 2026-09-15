@@ -26,6 +26,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, status
 from pydantic import AwareDatetime
 
+from app.channels.about_him import reader_of
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.feelings_schemas import FeelingOut
@@ -230,7 +231,7 @@ async def changes(
         language=language,
     )
     look = await mark_looked(session, context=context)
-    return ChangesOut.of(found, look.looked_at)
+    return (await reader_of(session, context, language)).model(ChangesOut.of(found, look.looked_at))
 
 
 @router.post("/{profile_id}/ask")

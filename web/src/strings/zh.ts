@@ -265,6 +265,28 @@ export const zh = {
     // @patient
     stateStable: "您今天很平稳。",
     // @patient
+    stateStableOther: "{patient}今天很平稳。",
+    // @patient
+    stateWatchOther: "Nura 在替{patient}留意一件事。",
+    // @patient
+    callFamilyOther: "现在打电话给其他家人。",
+    // @patient
+    offlineSubOther: "这是{patient}早些时候的“今天”页面。",
+    // @patient
+    asOfOther: "Nura 上次读{patient}的文件是{date} {time}。",
+    // @patient
+    cannotReachOther: "Nura 现在打不开{patient}的文件。",
+    // @patient
+    emergencySoonOther: "Nura 会把{patient}的急救卡放在这里。",
+    // @patient headline
+    todayListOther: "{patient}今天的药",
+    // @patient
+    fromTodayOther: "这来自{patient}的“今天”页面。",
+    // @patient
+    tookMorningOther: "{patient}早上吃了。",
+    // @patient
+    allTakenOther: "{patient}今天的药都吃了。",
+    // @patient
     stateWatch: "Nura 在替您留意一件事。",
     // @patient
     stateWatchSub: "今天不用担心。",
@@ -519,6 +541,10 @@ export const zh = {
     backToday: "回到今天",
     // @patient phrase
     symptomsOpen: "记下您的感觉",
+    // @patient phrase
+    notWellOther: "{patient}不舒服",
+    // @patient phrase
+    symptomsOpenOther: "写下{patient}的感觉",
     // @patient headline
     symptomsTitleSelf: "您最近的感觉",
     // @patient headline

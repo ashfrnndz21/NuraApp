@@ -114,7 +114,7 @@ export interface Strings {
     readingLeadEvening: string;
     aTablet: string;
     earlierTitle: string;
-    stateStable: string;
+    stateStable: string; stateStableOther: string; stateWatchOther: string; callFamilyOther: string; offlineSubOther: string; asOfOther: string; cannotReachOther: string; emergencySoonOther: string; todayListOther: string; fromTodayOther: string; tookMorningOther: string; allTakenOther: string;
     stateWatch: string;
     stateWatchSub: string;
     stateAct: string;
@@ -254,7 +254,7 @@ export interface Strings {
     sending: string;
     whatToDo: string;
     backToday: string;
-    symptomsOpen: string;
+    symptomsOpen: string; notWellOther: string; symptomsOpenOther: string;
     symptomsTitleSelf: string;
     symptomsTitleOther: string;
     symptomsLead: string;

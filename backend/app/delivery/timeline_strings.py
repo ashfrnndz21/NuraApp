@@ -460,3 +460,32 @@ __all__ = [
     "waiting_line",
     "what_word",
 ]
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient
+CHANGED_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "first_look": "This is the first look at what changed.",
+        "interaction": "There is a new question for {doctor} about {patient}'s medicines.",
+        "red_flag": "On {date} {patient} told Nura something we do not wait for.",
+        "attached": "A paper was put with {patient}'s visit or illness.",
+    },
+    "ms": {
+        "first_look": "Ini kali pertama melihat apa yang berubah.",
+        "interaction": "Ada soalan baru untuk {doctor} tentang ubat {patient}.",
+        "red_flag": "Pada {date} {patient} beritahu Nura sesuatu yang kita tidak tunggu.",
+        "attached": "Satu surat diletakkan bersama lawatan atau sakit {patient}.",
+    },
+    "zh": {
+        "first_look": "这是第一次看有什么变了。",
+        "interaction": "有一个关于{patient}的药的新问题要问{doctor}。",
+        "red_flag": "{date}{patient}告诉Nura一件我们不等的事。",
+        "attached": "一份文件放到了{patient}看医生或生病的记录里。",
+    },
+}
+"""What changed, said about him by name; the first look is the reader's own, said with no "your"."""

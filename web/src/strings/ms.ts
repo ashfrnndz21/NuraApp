@@ -265,6 +265,28 @@ export const ms = {
     // @patient
     stateStable: "Hari anda tenang.",
     // @patient
+    stateStableOther: "Keadaan {patient} stabil hari ini.",
+    // @patient
+    stateWatchOther: "Nura sedang memerhatikan satu perkara untuk {patient}.",
+    // @patient
+    callFamilyOther: "Telefon ahli keluarga yang lain sekarang.",
+    // @patient
+    offlineSubOther: "Ini halaman Hari Ini {patient} dari awal tadi.",
+    // @patient
+    asOfOther: "Nura kali terakhir membaca surat {patient} pada {date} jam {time}.",
+    // @patient
+    cannotReachOther: "Nura tidak dapat membuka surat {patient} sekarang.",
+    // @patient
+    emergencySoonOther: "Nura akan simpan kad kecemasan {patient} di sini.",
+    // @patient headline
+    todayListOther: "Ubat {patient} untuk hari ini",
+    // @patient
+    fromTodayOther: "Ini daripada halaman Hari Ini {patient}.",
+    // @patient
+    tookMorningOther: "{patient} sudah ambil pagi tadi.",
+    // @patient
+    allTakenOther: "{patient} sudah ambil semua ubat untuk hari ini.",
+    // @patient
     stateWatch: "Nura sedang memerhatikan satu perkara untuk anda.",
     // @patient
     stateWatchSub: "Ia bukan sesuatu yang perlu dirisaukan hari ini.",
@@ -519,6 +541,10 @@ export const ms = {
     backToday: "Kembali ke Hari Ini",
     // @patient phrase
     symptomsOpen: "Catat apa yang anda rasa",
+    // @patient phrase
+    notWellOther: "{patient} rasa tidak sihat",
+    // @patient phrase
+    symptomsOpenOther: "Tulis bagaimana perasaan {patient}",
     // @patient headline
     symptomsTitleSelf: "Bagaimana perasaan anda",
     // @patient headline

@@ -212,6 +212,8 @@ export function timeLine(date: Date, locale: string): string {
 /** One dose tile under "Now" (D1): each dose the backend marks due and not yet tapped, in its
  *  order, with its own sentence and source — as many tiles as the hero's number counts. */
 export interface DueCard {
+  /** The backend's word on the button: "Taken" to him, "Pa took it" to anyone else. */
+  takenLabel: string;
   lineId: string;
   anchor: string;
   title: string;
@@ -228,6 +230,7 @@ export function dueCards(slots: readonly SlotOut[], lines: readonly LineOut[], s
       title: lineTitle(lines.find((each) => each.line_id === slot.line_id), s),
       sentence: slot.card,
       provenance: slot.source,
+      takenLabel: slot.taken_label,
     }));
 }
 

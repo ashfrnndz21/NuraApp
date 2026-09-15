@@ -265,6 +265,28 @@ export const en = {
     // @patient
     stateStable: "Your day is steady.",
     // @patient
+    stateStableOther: "{patient}'s day is steady.",
+    // @patient
+    stateWatchOther: "Nura is keeping an eye on one thing for {patient}.",
+    // @patient
+    callFamilyOther: "Call the rest of the family now.",
+    // @patient
+    offlineSubOther: "This is {patient}'s Today page from earlier.",
+    // @patient
+    asOfOther: "Nura last read {patient}'s papers on {date} at {time}.",
+    // @patient
+    cannotReachOther: "Nura cannot reach {patient}'s papers right now.",
+    // @patient
+    emergencySoonOther: "Nura will keep {patient}'s emergency card here.",
+    // @patient headline
+    todayListOther: "{patient}'s tablets for today",
+    // @patient
+    fromTodayOther: "This comes from {patient}'s Today page.",
+    // @patient
+    tookMorningOther: "{patient} took it this morning.",
+    // @patient
+    allTakenOther: "{patient} has taken every tablet for today.",
+    // @patient
     stateWatch: "Nura is keeping an eye on one thing for you.",
     // @patient
     stateWatchSub: "It is not a worry today.",
@@ -519,6 +541,10 @@ export const en = {
     backToday: "Back to Today",
     // @patient phrase
     symptomsOpen: "Write down how you feel",
+    // @patient phrase
+    notWellOther: "{patient} is not feeling well",
+    // @patient phrase
+    symptomsOpenOther: "Write down how {patient} feels",
     // @patient headline
     symptomsTitleSelf: "How you have felt",
     // @patient headline
