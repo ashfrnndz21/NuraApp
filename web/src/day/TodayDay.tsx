@@ -3,12 +3,12 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
-import { bindingOf } from "../offline/todayCache";
+import { bindingOf, zoneOf } from "../offline/todayCache";
 import { density, profile, token } from "../store/session";
 import { language, t } from "../strings";
 import { feedLines, whyLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
-import type { ClipPlayer } from "../visit/clip";
+
 import { ClipCard, FeelingStrip, NudgeTile } from "./components";
 import { cloudView, clipsOf, nudgeToShow, whatToDoLines, type CloudView, type NudgeShown } from "./model";
 import { keepCards, keptCards, wantsCards } from "./offline";
@@ -62,7 +62,7 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
     try {
       const binding = bindingOf(papers);
       if (wantsCards(await keptCards(id, binding), language.value, new Date())) {
-        await keepCards(id, await nura.offlineCards(bearer, id, language.value), binding, new Date());
+        await keepCards(id, await nura.offlineCards(bearer, id, language.value), binding, new Date(), zoneOf(papers.region));
       }
     } catch {
       /* the phone keeps the cards it had */
@@ -149,7 +149,7 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
 
 /** Today's top three (E11-02): the backend's ranking — alerts, then reminders, then insights —
  *  one card at a time with "Next", in its order, each under its why. */
-export function TopThree({ items, player }: { items: FeedItemOut[]; player: ClipPlayer }): JSX.Element | null {
+export function TopThree({ items }: { items: FeedItemOut[] }): JSX.Element | null {
   const s = t();
   const [at, setAt] = useState(0);
   useEffect(() => setAt(0), [items.map((item) => item.item_id).join(",")]);
@@ -159,7 +159,7 @@ export function TopThree({ items, player }: { items: FeedItemOut[]; player: Clip
   const paper = density() === "patient" || item.supply === "flag";
   const card =
     clips.size > 0 ? (
-      <ClipCard item={item} clips={clips} player={player} paper={paper} testId="top-three-card" />
+      <ClipCard item={item} clips={clips} paper={paper} testId="top-three-card" />
     ) : (
       <Card
         title={item.headline}

@@ -250,6 +250,8 @@ export const zh = {
     fromState: "Nura 在 {date} 算出了这个。",
     // @patient
     fromDays: "Nura 数了您吃药的天数。",
+    // @patient phrase
+    emergencyOpen: "您的紧急卡",
   },
   feed: {
     // @patient headline
@@ -427,6 +429,94 @@ export const zh = {
     noMic: "Nura不能使用这部手机的麦克风。",
     // @patient
     noMicSub: "您可以自己写下来。",
+  },
+  // 离线时点的（E00-08）。
+  held: {
+    // @patient
+    held: "网络恢复后，Nura 会把您点的发出去。",
+    // @patient
+    tapped: "{time}，您点了这个。",
+    // @patient
+    sent: "Nura 已经把您点的发出去了。",
+  },
+  // 手机上的紧急卡（E00-08）。
+  emergency: {
+    // @patient
+    asOf: "Nura 最后一次读这张卡是在 {date}。",
+    // @patient
+    none: "这部手机上还没有您的紧急卡。",
+    // @patient
+    noneSub: "请晚一点在有网络的时候再打开这张卡。",
+    // @patient phrase
+    callChief: "打给{name}",
+    // @patient phrase
+    callAmbulance: "打 {number} 叫救护车",
+    // @patient phrase
+    print: "打印这张卡",
+  },
+  // 照片里的文件（E18-01）。
+  papers: {
+    // @patient phrase
+    open: "从照片里加文件",
+    // @patient phrase
+    chooseMany: "选多张照片",
+    // @patient headline
+    title: "照片里的文件",
+    // @patient
+    lead: "一次选好所有文件的照片。",
+    // @patient
+    lead2: "您点“发”之前，Nura 什么都不发。",
+    // @patient phrase
+    pick: "选照片",
+    // @patient
+    gridLead: "点一张照片就不发它。",
+    // @patient phrase
+    picture: "第 {count} 份文件",
+    // @patient
+    tileIn: "Nura 会发这份。",
+    // @patient
+    tileOut: "Nura 不发这份。",
+    // @patient phrase
+    sendOne: "发 1 份文件",
+    // @patient phrase
+    send: "发 {count} 份文件",
+    // @patient
+    sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient headline
+    found: "Nura 找到的",
+    // @patient
+    read: "Nura 读了这份文件。",
+    // @patient phrase
+    check: "看看这份文件",
+    // @patient
+    notHealth: "这不是看病的文件。",
+    // @patient
+    notSent: "刚才没有网络，这份还没发出去。",
+    // @patient phrase
+    sendRest: "发还没发出去的",
+    // @patient
+    nothingKept: "Nura 没有把照片存在这部手机上。",
+    // @patient phrase
+    backToday: "回到“今天”",
+  },
+  // 播放器（E15-07）。
+  player: {
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    speed: "Nura 说话的快慢",
+    // @patient phrase
+    slower: "慢一点",
+    // @patient phrase
+    usual: "平常的速度",
+    // @patient phrase
+    faster: "快一点",
+    // @patient phrase
+    nextPart: "下一部分",
+    // @patient phrase
+    hearStory: "听听{name}的介绍",
   },
   day: {
     // @patient headline
@@ -1173,6 +1263,7 @@ export const zh = {
     stopYes: "好，停止",
     // @patient phrase
     closeAccount: "关闭我的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
@@ -1283,7 +1374,6 @@ export const zh = {
       thinking_of_you: "想念您",
       weigh_tomorrow: "明天站上秤",
       drink_water: "喝一杯水",
-      water_pill_morning: "8点吃去水药",
     },
     // @patient phrase
     ownWords: "我自己的话",
@@ -1377,6 +1467,7 @@ export const zh = {
       app_push: "应用",
       whatsapp: "WhatsApp",
       caregiver: "通过照顾的人",
+      in_app: "在应用里",
     },
     // @patient phrase
     outcomes: {
@@ -1401,6 +1492,8 @@ export const zh = {
     saveSettings: "保存这些设置",
     // @patient phrase
     neverHeld: "从不暂停",
+    // @patient phrase
+    everyWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
     // @patient headline
     documents: "家人名单的文件",
     // @patient phrase
@@ -1554,6 +1647,9 @@ export const zh = {
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
+    TapNotToday: "Nura 只记下您今天点的。",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "那个文件太大了，Nura 打不开。",
     NoteNamesHealth: "Nura 不能保存写了药名或病名的笔记。",
     NotAPlaceNote: "请写一句简短的话，关于这个地方。",
     NotTheirsToSet: "您可以看这一天，但不能改。",
@@ -1601,6 +1697,8 @@ export const zh = {
     NoSuchReviewItem: "那一项已经不在清单里了。",
     NotWellFormed: "Nura 不明白那个。",
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
+    AlertsGoEveryWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
+    MessageNamesAMedicine: ["消息里不能写药名，也不能写吃多少。", "Nura 只按药单发吃药提醒。"],
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
     StopsByClosingTheAccount: "要让 Nura 停止保存您的文件，请关闭您的账户。",

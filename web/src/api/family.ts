@@ -10,6 +10,7 @@ import type {
   DocumentTag,
   LadderOut,
   OpenLadderOut,
+  ReachOut,
   DigestOut,
   GrantOut,
   KeyRole,
@@ -204,6 +205,9 @@ export const ladders = (token: string, profileId: string, language: string) =>
 
 export const acknowledge = (token: string, profileId: string, ladderId: string, language: string) =>
   api<LadderOut>(`/profiles/${profileId}/ladders/${ladderId}/acknowledge`, { method: "POST", token, query: { language } });
+
+/** Who Nura cannot message on WhatsApp, in the backend's words (owner and chief; #163). */
+export const reach = (token: string, profileId: string, language: string) => api<ReachOut[]>(`/profiles/${profileId}/reach`, { token, query: { language } });
 
 // --- E12-09: the papers behind the family list ----------------------------------------------------
 

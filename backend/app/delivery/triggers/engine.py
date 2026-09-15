@@ -74,6 +74,7 @@ from app.memory.spine import upcoming_appointments
 from app.onboarding.plan import PLAN_SCOPE, due_prompts
 from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ
+from app.safety.health_words import names_medicine_or_dose
 from app.safety.red_flags import open_flags
 
 PATTERN_DAYS = 7
@@ -575,7 +576,9 @@ async def _papers(run: Run) -> None:
 
 async def _family_messages(run: Run) -> None:
     """A chief's message to him, come due (E12-06): delivered between its moment and its
-    end, by the channel she asked for first. The lines are exactly what she previewed."""
+    end, by the channel she asked for first. The lines are exactly what she previewed. One
+    that names a medicine or a dose — scheduled before #164 refused them at the composer — is
+    skipped, and the skip written down: his medicine reminders come only from his list."""
     if run.patient is None:
         return
     pushes = await audited_read(
@@ -602,6 +605,17 @@ async def _family_messages(run: Run) -> None:
             dedupe_key=f"family:{push.id}",
             why={"scheduled_push_id": str(push.id), "composed_from_state": str(push.state_id)},
         )
+        registry = run.via.providers.drug_registry
+        if any(names_medicine_or_dose(line, registry) for line in push.lines):
+            if not any(row.dedupe_key == firing.dedupe_key for row in await run.deliveries()):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason="names a medicine or a dose",
+                )
+            continue
 
         async def say(
             person: object,

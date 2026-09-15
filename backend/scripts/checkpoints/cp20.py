@@ -489,7 +489,9 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("the flag goes straight to the roster", why=f"got {flagged}")
     if any(row["to_person_id"] == pa.person_id for row in flagged):
         raise fail("a red flag skips his own rung", why=f"got {flagged}")
-    rung = flagged[-1]
+    # Every way each person can be reached, and the notice on their family page besides
+    # (#162): the line names the first rung's WhatsApp.
+    rung = next((row for row in reversed(flagged) if row["channel"] == "whatsapp"), flagged[-1])
     said = fell["replies"][0]["text"].splitlines() if fell["replies"] else []
     if said != [
         "This one we do not wait for.",

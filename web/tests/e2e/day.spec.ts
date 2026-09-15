@@ -569,8 +569,16 @@ test("the post-visit card on the web: each line with where it was said, one left
   expect(closed.items.find((item) => item.kind === "medication_change")?.flag_id).toBeTruthy();
 
   // E21-03: the memo card on his feed, each line with the stretch it was said in, played on a tap.
+  // Today reads its own page first; then the pager's fresh first page — the one with the memo
+  // card made since — is waited for, never raced: a page that lands after he has scrolled is
+  // merged in below the card on screen (`feed/store.ts`), and the test does not depend on when.
+  const isFeedPage = (response: { request(): { method(): string }; url(): string }) => response.request().method() === "GET" && /\/profiles\/[^/]+\/feed$/.test(new URL(response.url()).pathname);
+  const todays = page.waitForResponse(isFeedPage);
   await page.getByRole("button", { name: "Today", exact: true }).click();
+  await todays;
+  const fresh = page.waitForResponse(isFeedPage);
   await page.getByTestId("open-feed").click();
+  await fresh;
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   await pageUntil(page, "memo");
@@ -581,7 +589,8 @@ test("the post-visit card on the web: each line with where it was said, one left
   await withClip.getByTestId("hear-clip").click();
   await expect.poll(async () => (await stand(page)).__clips.length).toBe(1);
   expect((await stand(page)).__clips[0]).toMatch(/^blob:.*#t=\d+(\.\d)?,\d+(\.\d)?$/);
-  await expect(withClip.getByTestId("clip-caption")).toHaveText(caption);
+  // The one player (E15-07): its transcript is the card's own line while the stretch plays.
+  await expect(withClip.getByTestId("player-line")).toHaveText(caption);
   await shotAs(page, "cp27-feed-clip");
 
   // A recording this key may not hear: the backend's refusal in words, never an empty player.

@@ -128,6 +128,7 @@ export interface Strings {
     fromToday: string;
     fromState: string;
     fromDays: string;
+    emergencyOpen: string;
   };
   /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
    *  lines it says itself. Every card's own words are the backend's. */
@@ -224,6 +225,45 @@ export interface Strings {
     byHandSave: string;
     noMic: string;
     noMicSub: string;
+  };
+  /** Taps made while the phone could not reach Nura (E00-08): held, then sent once. */
+  held: { held: string; tapped: string; sent: string };
+  /** The emergency card on the phone (E00-08, E13-01): the card's lines are the backend's. */
+  emergency: { asOf: string; none: string; noneSub: string; callChief: string; callAmbulance: string; print: string };
+  /** Papers from the photos (E18-01's web substitute): the grid, the sending, what was found. */
+  papers: {
+    open: string;
+    chooseMany: string;
+    title: string;
+    lead: string;
+    lead2: string;
+    pick: string;
+    gridLead: string;
+    picture: string;
+    tileIn: string;
+    tileOut: string;
+    sendOne: string;
+    send: string;
+    sending: string;
+    found: string;
+    read: string;
+    check: string;
+    notHealth: string;
+    notSent: string;
+    sendRest: string;
+    nothingKept: string;
+    backToday: string;
+  };
+  /** The one player (E15-07): its button, its three speeds and the name of their group. */
+  player: {
+    play: string;
+    pause: string;
+    speed: string;
+    slower: string;
+    usual: string;
+    faster: string;
+    nextPart: string;
+    hearStory: string;
   };
   /** The patient's day (W7): the not-feeling-well button, the symptom log, the nudge's two
    *  buttons, the brief, the questions and the post-visit card's yes. Every card's own lines
@@ -599,7 +639,7 @@ export interface Strings {
     doneChip: string;
     nextVisit: string;
     messagesTitle: string;
-    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water" | "water_pill_morning", string>;
+    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water", string>;
     ownWords: string;
     slots: Record<"who" | "when" | "doctor" | "day", string>;
     memoLabel: string;
@@ -630,7 +670,7 @@ export interface Strings {
     deliveries: string;
     settings: string;
     triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
-    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver" | "in_app", string>;
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
     rule: string;
     quietFrom: string;
@@ -639,6 +679,8 @@ export interface Strings {
     cap: string;
     saveSettings: string;
     neverHeld: string;
+    /** The red-flag row: no setting chooses how it goes (#162). */
+    everyWay: string;
     documents: string;
     tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
     backs: Record<"consent" | "stewardship", string>;

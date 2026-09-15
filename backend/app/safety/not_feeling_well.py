@@ -236,7 +236,8 @@ class Family:
 @dataclass(frozen=True, slots=True)
 class Escalated:
     """What the red-flag path wrote before anything else: the moment, the flag, and — unless
-    the flag was held back — the ladder (E11-06), and who it asked first."""
+    the flag was held back — the ladder (E11-06), and who knows now: whose phone it reached
+    first, or, when no phone was reached, who it asked first (#162)."""
 
     event: Event
     flag: Flag
@@ -556,7 +557,9 @@ async def escalate(
         flag=flag,
         notices=[],
         ladder=escalated.ladder,
-        asked=list(escalated.asked),
+        # Who knows now is whose phone a message reached: someone asked whom only the notice
+        # on their family page reached does not know yet, and the ladder moved on past them.
+        asked=list(escalated.told or escalated.asked),
     )
 
 

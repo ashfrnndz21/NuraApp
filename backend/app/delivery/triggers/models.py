@@ -65,6 +65,16 @@ class DeliveryChannel(StrEnum):
     WHATSAPP = "whatsapp"
     CAREGIVER = "caregiver"
     """The patient could not be reached, so the one standing in for him was."""
+    IN_APP = "in_app"
+    """The notice on their family page: an open red flag and its one button, "I'm on it".
+    Written for every alert, whatever else carried it, so a person no phone can reach still
+    has it where they look (#162)."""
+
+
+PHONE: frozenset[DeliveryChannel] = frozenset(
+    {DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP, DeliveryChannel.CAREGIVER}
+)
+"""The channels that reach a person's phone. The in-app notice waits until they look."""
 
 
 class DeliveryOutcome(StrEnum):
