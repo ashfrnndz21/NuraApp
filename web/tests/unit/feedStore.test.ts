@@ -85,6 +85,22 @@ describe("opening", () => {
     expect(ids(feed)[0]).toBe("flag");
   });
 
+  it("the fresh page takes the first card's place under the same keys, so the cards on screen stay the same elements (a focused card keeps its focus)", async () => {
+    const api = backend(FIRST);
+    let release: () => void = () => undefined;
+    api.first.mockImplementation(() => new Promise((done) => (release = () => done(FIRST))));
+    const { feed, kept } = store({}, api);
+    kept.value = { page: page([item("now", "now", { item_id: "k1" }), item("story", "story", { item_id: "k2" })], null, null), binding: { keyId: "owner", scopes: [] }, fetchedAt: "2026-09-14T01:00:00Z", expiresAt: "2026-09-14T16:00:00Z" };
+    const opening = feed.open();
+    await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2"]));
+    const before = feed.entries.value.map((entry) => entry.key);
+    release();
+    await opening;
+    expect(ids(feed)[0]).toBe("flag");
+    expect(feed.entries.value.slice(0, before.length).map((entry) => entry.key)).toEqual(before);
+    expect(new Set(feed.entries.value.map((entry) => entry.key)).size).toBe(feed.entries.value.length);
+  });
+
   it("uses the backend's cached page when the phone kept none, leaving out what has expired", async () => {
     const api = backend(FIRST);
     let release: () => void = () => undefined;
