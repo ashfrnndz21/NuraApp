@@ -401,7 +401,7 @@ export const ms = {
     // @patient headline
     areaTitle: "Tempat anda tinggal",
     // @patient
-    areaLead: "Nura guna bandar anda hanya untuk beritahu tentang denggi, jerebu atau cuaca panas dekat anda.",
+    areaLead: "Nura guna bandar anda hanya untuk denggi, jerebu atau cuaca panas dekat anda.",
     // @patient
     areaNone: "Nura tidak tahu bandar anda.",
     // @patient

@@ -401,7 +401,7 @@ export const en = {
     // @patient headline
     areaTitle: "Where you live",
     // @patient
-    areaLead: "Nura uses your town only to tell you about dengue, haze or hot weather near you.",
+    areaLead: "Nura uses your town only for dengue, haze or hot weather near you.",
     // @patient
     areaNone: "Nura does not know your town.",
     // @patient
