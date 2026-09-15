@@ -1,5 +1,20 @@
 import { api, apiBlob, apiText, apiUpload } from "./client";
 import type {
+  AskedOut,
+  ChangesOut,
+  EpisodeViewOut,
+  LabelIn,
+  MedicineDraftOut,
+  MoreOut,
+  PlaceNoteOut,
+  ProviderHistoryOut,
+  ProviderSummaryOut,
+  ReconciledOut,
+  RoutineDayIn,
+  RoutineOut,
+  StoryOut,
+  TimelineOut,
+  TrendOut,
   FeedItemOut,
   AnsweredOut,
   BriefOut,
@@ -39,7 +54,6 @@ import type {
   DocumentSource,
   DoorsOut,
   EmergencyCardOut,
-  StoryOut,
   EngagementEvent,
   EngagementOut,
   FeedPageOut,
@@ -186,14 +200,6 @@ export const taken = (token: string, profileId: string, lineId: string, anchor: 
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>
   api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
-
-/** The story of one medicine (E04-06): its sections and the parts said as voice notes. */
-export const story = (token: string, profileId: string, lineId: string, language: string) =>
-  api<StoryOut>(`/profiles/${profileId}/medicines/${lineId}/story`, { token, query: { language } });
-
-/** One part of that story as a voice note; a 404 means the phone says its words itself. */
-export const storyVoice = (token: string, profileId: string, lineId: string, part: string, language: string) =>
-  apiBlob(`/profiles/${profileId}/medicines/${lineId}/story/voice`, { token, query: { part, language } });
 
 /** The emergency card, rendered now from State, in his language (E13-01). */
 export const emergencyCard = (token: string, profileId: string, language: string) =>
@@ -439,6 +445,121 @@ export const cutKey = (token: string, profileId: string, holder_phone_e164: stri
     token,
     body: { holder_phone_e164, role: "caregiver", scopes },
   });
+
+// --- W5: the Record ------------------------------------------------------------------------
+
+/** The spine's three anchors and one page of visits and illnesses, newest first (E03-01). */
+export const timeline = (token: string, profileId: string, language: string, cursor?: string, limit = 10) =>
+  api<TimelineOut>(`/profiles/${profileId}/timeline`, { token, query: { language, cursor, limit: String(limit) } });
+
+/** One illness, what is filed with it, and the visits during it (E03-02). */
+export const episode = (token: string, profileId: string, episodeId: string) =>
+  api<EpisodeViewOut>(`/profiles/${profileId}/episodes/${episodeId}`, { token });
+
+/** The yes to putting this paper with this illness (subject `attach`). */
+export const mintAttach = (token: string, profileId: string, artifactId: string, episodeId: string) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "attach", artifact_id: artifactId, episode_id: episodeId },
+  });
+
+export const attachToEpisode = (token: string, profileId: string, episodeId: string, artifactId: string, confirmationId: string) =>
+  api<unknown>(`/profiles/${profileId}/episodes/${episodeId}/attach`, {
+    method: "POST",
+    token,
+    body: { artifact_id: artifactId, confirmation_id: confirmationId },
+  });
+
+/** The doctors and clinics, with how many visits and the last and the next (E03-03). */
+export const providers = (token: string, profileId: string) =>
+  api<ProviderSummaryOut[]>(`/profiles/${profileId}/providers`, { token });
+
+export const provider = (token: string, profileId: string, providerId: string) =>
+  api<ProviderHistoryOut>(`/profiles/${profileId}/providers/${providerId}`, { token });
+
+/** The chief's one line about a place. A line naming a medicine is `NoteNamesHealth`. */
+export const noteOnProvider = (token: string, profileId: string, providerId: string, text: string) =>
+  api<PlaceNoteOut>(`/profiles/${profileId}/providers/${providerId}/notes`, { method: "POST", token, body: { text } });
+
+/** What changed since this reader last looked; reading it is looking (E03-04). */
+export const changes = (token: string, profileId: string, language: string) =>
+  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language } });
+
+/** One analyte's results against his ranges, the direction in words, the boundary last (E09-01). */
+export const trend = (token: string, profileId: string, analyte: string, language: string) =>
+  api<TrendOut>(`/profiles/${profileId}/trends/${analyte}`, { token, query: { language } });
+
+/** The day: his lines (`patient`) or her table (`caregiver`) (E10-01). */
+export const routine = (token: string, profileId: string, persona: "patient" | "caregiver", language: string) =>
+  api<RoutineOut>(`/profiles/${profileId}/routine`, { token, query: { persona, language } });
+
+/** The yes to setting exactly this day (subject `routine`). */
+export const mintRoutine = (token: string, profileId: string, day: RoutineDayIn) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, { method: "POST", token, body: { subject: "routine", ...day } });
+
+export const setRoutine = (token: string, profileId: string, day: RoutineDayIn, confirmationId: string, persona: "patient" | "caregiver", language: string) =>
+  api<RoutineOut>(`/profiles/${profileId}/routine`, {
+    method: "PUT",
+    token,
+    query: { persona, language },
+    body: { ...day, confirmation_id: confirmationId },
+  });
+
+/** The story of one medicine, in his language (E04-06). */
+export const story = (token: string, profileId: string, lineId: string, language: string) =>
+  api<StoryOut>(`/profiles/${profileId}/medicines/${lineId}/story`, { token, query: { language } });
+
+/** One part of the story as a voice note (E04-06): the audio, or `Refused("NotFound", 404)`
+ *  when the backend has none for this part — then the phone says the words itself. */
+export const storyVoice = (token: string, profileId: string, lineId: string, part: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/medicines/${lineId}/story/voice`, { token, query: { part, language } });
+
+/** What this label would do to the list, screened before anything is saved (E04-03). */
+export const medicineDraft = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
+  api<MedicineDraftOut>(`/profiles/${profileId}/medicines/draft`, { method: "POST", token, body: { label, source_artifact_id: sourceArtifactId } });
+
+export const mintMedicine = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "medicine", label, source_artifact_id: sourceArtifactId },
+  });
+
+export const addMedicine = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string, confirmationId: string) =>
+  api<ReconciledOut>(`/profiles/${profileId}/medicines`, {
+    method: "POST",
+    token,
+    body: { label, source_artifact_id: sourceArtifactId, confirmation_id: confirmationId },
+  });
+
+/** The reorder card's "Ask the family to order." (E04-05): the tap is the yes. */
+export const askToOrder = (token: string, profileId: string, lineId: string, language: string) =>
+  api<AskedOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order`, { method: "POST", token, query: { language } });
+
+/** The yes to adding exactly this many found at home (subject `count_correction`). */
+export const mintMore = (token: string, profileId: string, lineId: string, quantity: number) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "count_correction", line_id: lineId, quantity },
+  });
+
+export const addMore = (token: string, profileId: string, lineId: string, quantity: number, confirmationId: string, language: string) =>
+  api<MoreOut>(`/profiles/${profileId}/medicines/${lineId}/more`, {
+    method: "POST",
+    token,
+    query: { language },
+    body: { quantity, confirmation_id: confirmationId },
+  });
+
+/** The review cards, newest first; `open` for the ones still waiting for a yes (E02-04). */
+export const reviewCards = (token: string, profileId: string, openOnly: boolean) =>
+  api<ReviewCardOut[]>(`/profiles/${profileId}/review-cards`, { token, query: { open: openOnly ? "true" : undefined } });
+
+/** A photo of a machine's screen, read into a review card with no typing (E02-08). */
+export const addScreenPhoto = (token: string, profileId: string, data: string, content_type: string, captured_at: string) =>
+  api<ReviewCardOut>(`/profiles/${profileId}/readings/photo`, { method: "POST", token, body: { data, content_type, captured_at } });
 
 // --- W7: the patient's day (E05-01, E05-02, E05-05, E13-02, E14-01, E17, E11-07) ------------
 

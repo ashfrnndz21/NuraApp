@@ -122,6 +122,7 @@ def fact_cites_only_what_is_held_here(context: KeyContext, scope: Scope) -> Colu
 EVENT_SCOPES: dict[EventKind, Scope] = {
     EventKind.READING: Scope.READINGS,
     EventKind.DOSE_TAKEN: Scope.MEDICINES,
+    EventKind.SUPPLY: Scope.MEDICINES,
 }
 """The scope `record_event` writes an event under: the record's, except a reading taken and a
 tablet taken, which are the readings' and the medicines' parts. A key that does not hold the

@@ -13,6 +13,7 @@ import { FeedScreen } from "./screens/Feed";
 import { MeScreen } from "./screens/Me";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
+import { RecordScreen } from "./screens/record/Record";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
 import { TodayScreen } from "./screens/Today";
 import { VisitScreen } from "./screens/Visit";
@@ -73,6 +74,8 @@ export function App(): JSX.Element | null {
       return <VisitScreen appointmentId={current.appointmentId} />;
     case "me":
       return <MeScreen />;
+    case "record":
+      return <RecordScreen at={current.at ?? { name: "hub" }} />;
     case "onboarding":
       return <OnboardingScreen />;
     case "emergency":

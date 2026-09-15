@@ -3,6 +3,7 @@ import { useEffect, useId, useRef } from "preact/hooks";
 import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
+import type { Tab } from "../flow";
 import { demo } from "../store/deployment";
 import { PlayerControls } from "./Player";
 
@@ -225,10 +226,13 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
   );
 }
 
-export function TabBar({ current, onSelect }: { current: "today" | "family" | "me"; onSelect: (tab: "today" | "family" | "me") => void }): JSX.Element {
+/** The nav entries, in the order Today · Feed · Record · Family · Me; each one screen away
+ *  (the Feed opens from Today's "See more for you"). The Record's entry reads *Papers*. */
+export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Tab) => void }): JSX.Element {
   const s = t();
   const tabs = [
     ["today", s.tabs.today],
+    ["record", s.tabs.record],
     ["family", s.tabs.family],
     ["me", s.tabs.me],
   ] as const;

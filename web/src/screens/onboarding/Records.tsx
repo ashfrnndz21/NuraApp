@@ -104,11 +104,20 @@ export function BatchStep(): JSX.Element {
 /** The capture review card (E02-07): each line of the paper as it was read, how sure Nura
  *  is in words (solid underline, or dotted and "Please check this one."), a box to correct
  *  it, "Leave this one out", and one "Looks right" that mints the yes for exactly these
- *  decisions and spends it. Then the biography takes the paper in and says what it learned.
- *
- *  Outside the sitting (papers from his photos, E18-01) `onDone` takes over after the yes and
- *  `onBack` goes back to the list: the card's facts are written, and nothing joins a sitting. */
-export function ReviewStep({ card, onDone, onBack }: { card: ReviewCardOut; onDone?: () => void; onBack?: () => void }): JSX.Element {
+ *  decisions and spends it. Then the biography takes the paper in and says what it learned. */
+interface ReviewStepProps {
+  card: ReviewCardOut;
+  /** Outside onboarding (the Record's waiting papers, a machine's screen, papers from his
+   *  photos, E18-01): what happens once the card is confirmed, instead of the sitting taking
+   *  the paper in — the card's facts are written, and nothing joins a sitting. */
+  onDone?: (card: ReviewCardOut) => void;
+  /** Outside the sitting: back to the list the card was opened from. */
+  onBack?: () => void;
+  /** Another photo, when the page could not be read: the caller sends it and shows its card. */
+  onPaper?: (file: File) => Promise<void>;
+}
+
+export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const locale = LOCALE[language.value];
@@ -123,7 +132,8 @@ export function ReviewStep({ card, onDone, onBack }: { card: ReviewCardOut; onDo
     setBusy(true);
     setError(null);
     try {
-      to({ name: "review", card: await sendPaper(file) });
+      if (onPaper) await onPaper(file);
+      else to({ name: "review", card: await sendPaper(file) });
     } catch (failure) {
       setError(failure);
     } finally {
@@ -165,7 +175,7 @@ export function ReviewStep({ card, onDone, onBack }: { card: ReviewCardOut; onDo
         setConfirmed(true);
       }
       if (onDone) {
-        onDone();
+        onDone(card);
         return;
       }
       if (returnTo.value === "records" || returnTo.value === "batch") {

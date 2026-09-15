@@ -75,7 +75,7 @@ export function HearStory({ lineId }: { lineId: string }): JSX.Element | null {
         if (!live) return;
         setStory(told);
         const found = new Map<string, Blob | null>();
-        for (const part of told.voice_parts) {
+        for (const part of (told.voice_parts ?? [])) {
           try {
             found.set(part, await nura.storyVoice(bearer, papers.profile_id, lineId, part, language.value));
           } catch (failure) {

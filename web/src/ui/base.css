@@ -676,6 +676,15 @@ a.pill {
   line-height: var(--line-height);
 }
 
+/* The Record (W5): the caregiver's dense table of the day, scrolling sideways inside its tile
+   when the phone is narrow, never the page. */
+.table-scroll { overflow-x: auto; }
+.record-table { width: 100%; border-collapse: collapse; font-size: var(--text-body); }
+.record-table th,
+.record-table td { text-align: left; vertical-align: top; padding: 8px 6px; border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, 0.08)); }
+.record-table th { font-weight: 500; color: var(--ink-soft); }
+.record-table .cell-line { display: block; }
+
 /* Family (W6): data rows readable at 360px in the caregiver density; the patient density
    keeps one column of 56px pills. */
 :root[data-density="caregiver"] .family .choices {

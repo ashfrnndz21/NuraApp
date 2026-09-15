@@ -4,6 +4,7 @@ import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
+import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { voice } from "./player/voice";
 import { language } from "./strings";
@@ -32,6 +33,9 @@ export type Screen =
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   | { name: "me" }
+  /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
+   *  and the family's papers; `at` is the one screen under it. */
+  | { name: "record"; at?: RecordAt }
   | { name: "onboarding" }
   /** His emergency card, one tap from Today, readable with no network (E00-08, E13-01). */
   | { name: "emergency" }
@@ -66,10 +70,11 @@ export type FamilyPart =
   | "settings"
   | "documents";
 
-export type Tab = "today" | "family" | "me";
+export type Tab = "today" | "record" | "family" | "me";
 
-/** The tab bar's three places. */
+/** The tab bar's places: Today, the Record (*Papers*), Family, Me. */
 export function openTab(tab: Tab): void {
+  if (tab === "record") return go({ name: "record", at: { name: "hub" } });
   go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
 }
 

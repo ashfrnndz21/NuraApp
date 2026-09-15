@@ -82,6 +82,9 @@ export interface CountOut {
   /** Patient sentences: "You have 28 tablets of your blood pressure tablet left." */
   lines: string[];
   reorder: string[];
+  /** The reorder card's two buttons in his words, by action (E04-05); empty until the
+   *  count is at the threshold: `ask_to_order`, `i_have_more`. */
+  reorder_actions?: Record<string, string>;
 }
 
 export interface FlaggedOut {
@@ -115,6 +118,16 @@ export interface LineOut {
   missed: boolean;
   /** The backend's source line: where the line came from and on which day, in his words. */
   source: string;
+  /** The `medication` fact the line is the typed view of (a reorder card cites it). */
+  fact_id?: string;
+  /** How sure, as a number and in words (E04-01): a line written on a person's yes is
+   *  `confirmed_by_person`. */
+  confidence?: number;
+  confidence_state?: "extracted" | "confirmed_by_person" | "disputed";
+  /** The other active lines of the same medicine: two strengths in the cupboard. */
+  duplicate_of?: string[];
+  source_artifact_id?: string | null;
+  change_kind?: string;
 }
 
 /** One dose card at one moment of his day (`GET /profiles/{id}/medicines/today`). */
@@ -265,26 +278,6 @@ export interface StateOut {
   /** Each dimension as the snapshot keeps it, or null where the key does not cover it. The
    *  client reads one thing here: his large-text setting (`functional.facts.vision`). */
   dimensions?: Record<string, { facts?: Record<string, Record<string, { value?: unknown }>> } | null>;
-}
-
-/** The medication story (E04-06, `GET /profiles/{id}/medicines/{line}/story`): each section a few
- *  whole sentences; `voice_parts` the parts said as voice notes, in order, each played from
- *  `…/story/voice?part=`. */
-export interface StoryOut {
-  line_id: string;
-  language: string;
-  name: string;
-  generic: string;
-  strength: string;
-  purpose: string[];
-  how_to_take: string[];
-  watch_out: string[];
-  avoid: string[];
-  if_forgotten: string[];
-  boundary: string[];
-  doctor_question: string[];
-  lines: string[];
-  voice_parts: string[];
 }
 
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
@@ -781,6 +774,282 @@ export interface ConsentOut {
   wording_text: string;
   granted_at?: string;
   revoked_at?: string | null;
+}
+
+// --- W5: the Record (E03, E04, E09-01, E10-01, E02-04, E02-08, E12-09) -----------------------
+
+/** One anchor of the spine: the last check-up, the last visit, the next visit, in his words. */
+export interface AnchorOut {
+  key: string;
+  line: string;
+  appointment_id: string | null;
+  provider_id: string | null;
+  at: string | null;
+}
+
+export interface ProviderOut {
+  provider_id: string;
+  name: string;
+  kind: "doctor" | "clinic" | "hospital" | "pharmacy" | "lab" | "other" | string;
+  region: Region;
+  phone_e164: string | null;
+  address: string | null;
+}
+
+export interface EpisodeOut {
+  episode_id: string;
+  kind: string;
+  label: string;
+  opened_at: string;
+  closed_at: string | null;
+}
+
+export interface VisitOut {
+  appointment_id: string;
+  provider_id: string;
+  scheduled_at: string;
+  status: "planned" | "confirmed" | "attended" | "not_attended" | "cancelled" | string;
+  purpose: string;
+  episode_id: string | null;
+}
+
+/** An artefact by reference: what kind, when, how it came in. Never its content. */
+export interface ArtifactRefOut {
+  artifact_id: string;
+  kind: "photo" | "pdf" | "voice" | "message" | "reading" | "screenshot" | "transcript" | string;
+  content_type: string;
+  captured_at: string;
+  source_channel: string;
+}
+
+export interface EventRefOut {
+  event_id: string;
+  kind: string;
+  occurred_at: string;
+  label: string | null;
+  artifact_id: string | null;
+  episode_id: string | null;
+  withheld: string[];
+}
+
+/** One entry on the timeline — a visit or an episode — and what hangs off it. */
+export interface TimelineItemOut {
+  kind: "appointment" | "episode" | string;
+  id: string;
+  at: string;
+  appointment: VisitOut | null;
+  provider: ProviderOut | null;
+  episode: EpisodeOut | null;
+  visits: string[];
+  artifacts: ArtifactRefOut[];
+  events: EventRefOut[];
+  facts: FactOut[];
+  notes: unknown[];
+}
+
+export interface TimelineOut {
+  language: string;
+  header: AnchorOut[];
+  items: TimelineItemOut[];
+  next_cursor: string | null;
+  withheld: string[];
+}
+
+export interface EpisodeViewOut {
+  episode: TimelineItemOut;
+  visits: TimelineItemOut[];
+  withheld: string[];
+}
+
+export interface ProviderSummaryOut {
+  provider: ProviderOut;
+  visits: number;
+  last_visit: VisitOut | null;
+  next_visit: VisitOut | null;
+}
+
+export interface PlaceNoteOut {
+  note_id: string;
+  provider_id: string;
+  text: string;
+  written_by_person_id: string;
+  written_at: string;
+}
+
+export interface ProviderHistoryOut {
+  provider: ProviderOut;
+  visits: VisitOut[];
+  papers: { artifact: ArtifactRefOut; kind: string; via: string; appointment_id: string | null; episode_id: string | null; fact_ids: string[] }[];
+  medicines: { line_id: string; generic: string; strength: string; prescriber: string | null; fact_id: string; started_at: string }[];
+  /** The owner's and his chief's notes about the place; empty for anyone else. */
+  notes: PlaceNoteOut[];
+  withheld: string[];
+}
+
+export interface ChangeLineOut {
+  section: string;
+  key: string;
+  text: string;
+  refs: Record<string, string[]>;
+}
+
+/** What changed since the reader last looked, and what is still waiting (E03-04). */
+export interface ChangesOut {
+  language: string;
+  since: string | null;
+  first_look: boolean;
+  looked_at: string;
+  lines: ChangeLineOut[];
+  waiting: ChangeLineOut[];
+  withheld: string[];
+}
+
+export interface RangeOut {
+  lower: number | null;
+  upper: number | null;
+  unit: string;
+  source: string;
+  source_id: string;
+  lab: string | null;
+}
+
+export interface TrendPointOut {
+  fact_id: string;
+  artifact_id: string | null;
+  value: number;
+  unit: string | null;
+  on: string;
+  lab: string | null;
+  band: string;
+  range: RangeOut | null;
+  no_range_because: string | null;
+}
+
+/** One analyte over time (E09-01): results oldest first, each against its range; the lines
+ *  he reads, ending on the boundary line (`boundary` is that line too). */
+export interface TrendOut {
+  analyte: string;
+  unit: string;
+  language: string;
+  points: TrendPointOut[];
+  direction: string;
+  direction_since: string | null;
+  lines: string[];
+  boundary: string;
+  doctor: string | null;
+  card_id: string;
+  state_id: string;
+}
+
+export interface RoutineMedicineOut {
+  line_id: string;
+  generic: string;
+  strength: string;
+  name: string;
+  amount: number;
+  unit: string;
+  frequency: string;
+}
+
+export interface RoutineMomentOut {
+  anchor: string;
+  at: string;
+  medicines: RoutineMedicineOut[];
+  /** Null when the reader's key does not open the readings. */
+  readings: string[] | null;
+  walk: boolean;
+}
+
+/** The day (E10-01): his lines (one per moment) or her table, and the day as set. */
+export interface RoutineOut {
+  routine_id: string | null;
+  set: boolean;
+  anchors: Record<string, string>;
+  reading_prompts: string[][] | null;
+  walks: string[];
+  morning_card_at: string;
+  persona: "patient" | "caregiver";
+  language: string;
+  lines: string[];
+  table: RoutineMomentOut[];
+  withheld: string[];
+}
+
+export interface RoutineDayIn {
+  anchors: Record<string, string>;
+  reading_prompts: [string, string][];
+  walks: string[];
+  morning_card_at: string;
+}
+
+/** The story of one medicine (E04-06), in his language; `lines` is the voice script. */
+export interface StoryOut {
+  line_id: string;
+  language: string;
+  name: string;
+  generic: string;
+  strength: string;
+  purpose: string[];
+  how_to_take: string[];
+  watch_out: string[];
+  avoid: string[];
+  if_forgotten: string[];
+  boundary: string[];
+  doctor_question: string[];
+  lines: string[];
+  /** The parts said as voice notes (E04-06), in order, each played from
+   *  `…/medicines/{line}/story/voice?part=`. Absent from a backend that has none yet. */
+  voice_parts?: string[];
+}
+
+/** What one label or pack said, as typed or as read off the photo (E04-03). */
+export interface LabelIn {
+  generic?: string | null;
+  brand?: string | null;
+  strength?: string | null;
+  dose_text?: string | null;
+  quantity?: number | null;
+  prescriber?: string | null;
+}
+
+export type MedicineOutcome = "new_line" | "refill" | "dose_change" | "duplicate";
+
+/** What a label would do to the list, before anyone says yes: screened for interactions. */
+export interface MedicineDraftOut {
+  outcome: MedicineOutcome;
+  match: { registration_no: string; brand: string; generic: string; strength: string; form: string; drug_class: string; high_risk: boolean };
+  matched_line_id: string | null;
+  flagged: FlaggedOut[];
+  needs_label_photo: boolean;
+  lead_time_days: number;
+}
+
+export interface ReconciledOut {
+  outcome: MedicineOutcome;
+  line_id: string;
+  generic: string;
+  strength: string;
+  high_risk: boolean;
+}
+
+/** What "Ask the family to order." did (E04-05). */
+export interface AskedOut {
+  line_id: string;
+  task_id: string;
+  asked_person_id: string;
+  told_person_ids: string[];
+  language: string;
+  lines: string[];
+}
+
+/** What "I have more at home." wrote, and the count now (E04-05). */
+export interface MoreOut {
+  line_id: string;
+  supply_id: string;
+  fact_id: string;
+  event_id: string;
+  quantity: number;
+  count: CountOut | null;
 }
 
 // --- W7: the patient's day (E05-01, E05-02, E05-05, E13-02, E14-01, E17, E11-07, E21-03) -----

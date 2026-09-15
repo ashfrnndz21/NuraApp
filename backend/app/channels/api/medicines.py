@@ -10,9 +10,11 @@
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
     GET  /profiles/{id}/medicines/{line}/story/voice?part=   one part of it, as a voice note
+    POST /profiles/{id}/medicines/{line}/ask-to-order  the reorder card: a task for the family
+    POST /profiles/{id}/medicines/{line}/more      the reorder card: more found at home, on a yes
 
 The yes for a medicine is minted at `POST /profiles/{id}/confirmations` with subject
-`medicine`, in `app.channels.api.profiles`. A label photo is a photo: it comes in through
+`medicine` (and for tablets found at home, subject `count_correction`), in `app.channels.api.profiles`. A label photo is a photo: it comes in through
 `POST /profiles/{id}/photos` (E02, `app.channels.api.capture`) and its artefact id is what a
 label here names as its source.
 """
@@ -28,10 +30,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
+    AskedOut,
+    CountOut,
     LineOut,
     MedicineDraftIn,
     MedicineDraftOut,
     MedicineIn,
+    MoreIn,
+    MoreOut,
     ProudOut,
     ReconciledOut,
     SlotOut,
@@ -43,6 +49,7 @@ from app.delivery.voice import voiced
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
+from app.medicines.reorder import ask_to_order, found_more
 from app.medicines.service import (
     active_lines,
     history,
@@ -275,4 +282,64 @@ async def medication_story_voice(
             "X-Voice-Cache": "hit" if said.cached else "miss",
             "Cache-Control": "private, no-store",
         },
+    )
+
+
+@router.post("/{profile_id}/medicines/{line_id}/ask-to-order", status_code=status.HTTP_201_CREATED)
+async def ask_the_family(
+    line_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Language,
+) -> AskedOut:
+    """His tap on the reorder card's "Ask the family to order." (E04-05): a task on the
+    family's list for whoever is on duty now, else his chief, and a notice to his chief. The
+    tap is the yes, as Taken is. Nobody to ask is `NobodyToAsk` (409); a key that does not
+    arrange the family's list is refused by it (`NotAChief`, or `OutOfScope` family)."""
+    asked = await ask_to_order(
+        session,
+        context=context,
+        registry=providers_of(request).drug_registry,
+        line_id=line_id,
+        language=language,
+    )
+    return AskedOut(
+        line_id=asked.line.id,
+        task_id=asked.task.id,
+        asked_person_id=asked.asked.id,
+        told_person_ids=[person.id for person in asked.told],
+        language=asked.language,
+        lines=list(asked.lines),
+    )
+
+
+@router.post("/{profile_id}/medicines/{line_id}/more", status_code=status.HTTP_201_CREATED)
+async def more_at_home(
+    line_id: uuid.UUID,
+    body: MoreIn,
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Language,
+) -> MoreOut:
+    """"I have more at home.": the tablets found, added to the count on the person's yes for
+    exactly this line and number (subject `count_correction`). A helper's key is refused
+    (`NotTheirsToChange`, 403); a yes for another number is `NotWhatWasConfirmed` (400)."""
+    done = await found_more(
+        session,
+        context=context,
+        registry=providers_of(request).drug_registry,
+        line_id=line_id,
+        quantity=body.quantity,
+        confirmation_id=body.confirmation_id,
+        language=language,
+    )
+    return MoreOut(
+        line_id=done.line.id,
+        supply_id=done.supply.id,
+        fact_id=done.fact.id,
+        event_id=done.event.id,
+        quantity=done.supply.quantity,
+        count=None if done.count is None else CountOut.of(done.count),
     )

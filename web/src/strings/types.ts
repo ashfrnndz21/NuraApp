@@ -19,7 +19,7 @@ export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
   demo: { banner: string; lines: readonly string[] };
-  tabs: { today: string; family: string; me: string };
+  tabs: { today: string; record: string; family: string; me: string };
   signIn: {
     title: string;
     phoneLead: string;
@@ -173,6 +173,8 @@ export interface Strings {
     save: string;
     saved: string;
     cancel: string;
+    photo: string;
+    photoLead: string;
   };
   me: {
     title: string;
@@ -464,6 +466,122 @@ export interface Strings {
     /** His words for a paper's lines, by the backend's subject then attribute code. */
     fields: Record<string, Record<string, string>>;
   };
+  /** The Record (W5): the Record screens' own lines — titles, buttons, the few sentences
+   *  a screen says itself. Every card's words are the backend's. */
+  record: {
+    title: string;
+    titleOther: string;
+    medicines: string;
+    papers: string;
+    routine: string;
+    timeline: string;
+    trends: string;
+    providers: string;
+    changes: string;
+    back: string;
+    sureYes: string;
+    sureRead: string;
+    disputed: string;
+    twice: string;
+    aboutIt: string;
+    add: string;
+    storyPurpose: string;
+    storyHow: string;
+    storyWatch: string;
+    storyAvoid: string;
+    storyForgot: string;
+    storyAsk: string;
+    addLead: string;
+    addLead2: string;
+    nameLabel: string;
+    strengthLabel: string;
+    howLabel: string;
+    howHint: string;
+    countLabel: string;
+    doctorLabel: string;
+    checkIt: string;
+    outcomeNew: string;
+    outcomeRefill: string;
+    outcomeChange: string;
+    flaggedTitle: string;
+    flaggedNone: string;
+    severity: Record<"major" | "moderate" | "minor", string>;
+    pair: string;
+    addIt: string;
+    added: string;
+    moreTitle: string;
+    moreLead: string;
+    moreLabel: string;
+    moreYes: string;
+    papersNone: string;
+    paperFrom: string;
+    paperOpen: string;
+    older: string;
+    papersWith: string;
+    paperWith: string;
+    nothingWith: string;
+    factsWith: string;
+    factWith: string;
+    since: string;
+    ended: string;
+    seeIllness: string;
+    seeDoctor: string;
+    endOfList: string;
+    status: Record<"planned" | "confirmed" | "attended" | "not_attended" | "cancelled", string>;
+    illnessPapers: string;
+    illnessVisits: string;
+    illnessMoments: string;
+    moments: Record<"reading" | "dose_taken" | "symptom" | "discharge" | "visit" | "other", string>;
+    photoOn: string;
+    letterOn: string;
+    paperOn: string;
+    putWith: string;
+    putThis: string;
+    putAsk: string;
+    putYes: string;
+    putDone: string;
+    nothingToPut: string;
+    kind: Record<"doctor" | "clinic" | "hospital" | "pharmacy" | "lab" | "other", string>;
+    visitsMany: string;
+    visitsOne: string;
+    lastVisit: string;
+    nextVisit: string;
+    where: string;
+    phone: string;
+    medicinesFrom: string;
+    notesTitle: string;
+    notesOnly: string;
+    noteLabel: string;
+    noteSave: string;
+    noteSaved: string;
+    writtenOn: string;
+    waiting: string;
+    trendsLead: string;
+    analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
+    resultOn: string;
+    rangeUnder: string;
+    rangeOver: string;
+    rangeBetween: string;
+    noRange: string;
+    labRange: string;
+    guideRange: string;
+    anchors: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
+    readings: Record<"blood_pressure" | "blood_sugar" | "weight", string>;
+    walk: string;
+    notSet: string;
+    setDay: string;
+    timeLabel: string;
+    morningCard: string;
+    walkAfter: string;
+    checkDay: string;
+    dayAsk: string;
+    dayYes: string;
+    daySaved: string;
+    tableMoment: string;
+    tableTime: string;
+    tableMedicines: string;
+    tableReadings: string;
+  };
   /** Family (W6): chrome only. Every line about his record on these screens is the backend's. */
   family: {
     title: string;
@@ -570,7 +688,6 @@ export interface Strings {
     chooseDocument: string;
     whatPaper: string;
   };
-  /** The pharmacist's review queue (E22-04): a staff page, never linked from the patient app. */
   review: {
     title: string;
     tokenLabel: string;

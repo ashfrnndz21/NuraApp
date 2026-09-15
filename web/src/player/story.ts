@@ -16,7 +16,7 @@ function isSection(part: string): part is Section {
 }
 
 export function storyParts(story: StoryOut, language: Language, audio: ReadonlyMap<string, Blob | null>): Part[] {
-  return story.voice_parts.filter(isSection).map((part) => ({
+  return (story.voice_parts ?? []).filter(isSection).map((part) => ({
     lines: part === "purpose" ? [...story[part]] : [...story[part], ...story.boundary],
     language,
     audio: audio.get(part) ?? null,

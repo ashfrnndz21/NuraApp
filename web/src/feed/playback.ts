@@ -95,3 +95,30 @@ export class Playback {
     if (this.playing.peek() !== null) this.deps.player.stop();
   }
 }
+
+/** An audio element as the Record's story voice (W5, `record/storyVoice.ts`) plays it: a part of
+ *  a medicine's story, on a tap. Kept for that screen; the feed's cards play through the one
+ *  player (E15-07) above. */
+export interface AudioLike {
+  play(): Promise<void>;
+  pause(): void;
+  onended: (() => void) | null;
+}
+
+export function browserAudio(blob: Blob): AudioLike {
+  const url = URL.createObjectURL(blob);
+  const element = new Audio(url);
+  const audio: AudioLike = {
+    play: () => element.play(),
+    pause: () => {
+      element.pause();
+      URL.revokeObjectURL(url);
+    },
+    onended: null,
+  };
+  element.onended = () => {
+    URL.revokeObjectURL(url);
+    audio.onended?.();
+  };
+  return audio;
+}

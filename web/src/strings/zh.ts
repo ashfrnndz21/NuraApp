@@ -14,6 +14,8 @@ export const zh = {
     // @patient headline
     today: "今天",
     // @patient headline
+    record: "文件",
+    // @patient headline
     me: "我",
     // @patient headline
     family: "家人",
@@ -330,6 +332,10 @@ export const zh = {
     saved: "Nura 记下来了。",
     // @patient phrase
     cancel: "先不要",
+    // @patient phrase
+    photo: "给机器拍照",
+    // @patient
+    photoLead: "或者给机器的屏幕拍一张照片。",
   },
   me: {
     // @patient headline
@@ -954,6 +960,278 @@ export const zh = {
       },
     },
   },
+  // The Record (W5): the screens' own lines. Every card's words are the backend's.
+  record: {
+    // @patient headline
+    title: "您的文件",
+    // @patient headline
+    titleOther: "{name}的文件",
+    // @patient headline
+    medicines: "您的药",
+    // @patient headline
+    papers: "等您确认的文件",
+    // @patient headline
+    routine: "您的一天",
+    // @patient headline
+    timeline: "您的看诊",
+    // @patient headline
+    trends: "您的验血",
+    // @patient headline
+    providers: "您的医生和诊所",
+    // @patient headline
+    changes: "有什么变化",
+    // @patient phrase
+    back: "回到您的文件",
+    // @patient
+    sureYes: "您已经确认了这一条。",
+    // @patient
+    sureRead: "Nura 看得很清楚。",
+    // @patient
+    disputed: "有人说这一条不对。",
+    // @patient
+    twice: "这个药在您的清单上有两次。",
+    // @patient phrase
+    aboutIt: "关于这个药",
+    // @patient phrase
+    add: "加一个药",
+    // @patient headline
+    storyPurpose: "这个药是做什么的",
+    // @patient headline
+    storyHow: "怎么吃",
+    // @patient headline
+    storyWatch: "要注意什么",
+    // @patient headline
+    storyAvoid: "要避开什么",
+    // @patient headline
+    storyForgot: "如果忘了吃",
+    // @patient headline
+    storyAsk: "要问医生的",
+    // @patient
+    addLead: "先拍一张标签的照片。",
+    // @patient
+    addLead2: "然后看看 Nura 读到了什么。",
+    // @patient phrase
+    nameLabel: "标签上的名字",
+    // @patient phrase
+    strengthLabel: "药的强度",
+    // @patient phrase
+    howLabel: "怎么吃",
+    // @patient
+    howHint: "照标签上写的打。",
+    // @patient phrase
+    countLabel: "盒子里有多少",
+    // @patient phrase
+    doctorLabel: "医生的名字",
+    // @patient phrase
+    checkIt: "检查一下",
+    // @patient
+    outcomeNew: "这是您清单上的新药。",
+    // @patient
+    outcomeRefill: "这是您清单上已有的药，又多了一些。",
+    // @patient
+    outcomeChange: "这张标签上的分量不一样。",
+    // @patient headline
+    flaggedTitle: "加之前",
+    // @patient
+    flaggedNone: "Nura 在您的清单上没有找到和它相冲的药。",
+    // @patient
+    severity: {
+      major: "这一点很重要。",
+      moderate: "这一点要注意。",
+      minor: "这一点稍微注意。",
+    },
+    // @patient phrase
+    pair: "{one}和{two}",
+    // @patient phrase
+    addIt: "加到我的清单上",
+    // @patient
+    added: "Nura 已经加到您的清单上了。",
+    // @patient headline
+    moreTitle: "家里还有",
+    // @patient
+    moreLead: "您在家里又找到了多少？",
+    // @patient phrase
+    moreLabel: "又找到多少",
+    // @patient phrase
+    moreYes: "对，加上去",
+    // @patient
+    papersNone: "没有等您确认的文件。",
+    // @patient
+    paperFrom: "这是{date}收到的。",
+    // @patient phrase
+    paperOpen: "看这份文件",
+    // @patient phrase
+    older: "看以前的看诊",
+    // @patient
+    papersWith: "有{count}份文件和它在一起。",
+    // @patient
+    paperWith: "有一份文件和它在一起。",
+    // @patient
+    nothingWith: "还没有东西和它在一起。",
+    // @patient
+    factsWith: "Nura 从中记下了{count}件事。",
+    // @patient
+    factWith: "Nura 从中记下了一件事。",
+    // @patient
+    since: "从{date}开始。",
+    // @patient
+    ended: "在{date}结束。",
+    // @patient phrase
+    seeIllness: "看这次生病",
+    // @patient phrase
+    seeDoctor: "看这位医生",
+    // @patient
+    endOfList: "Nura 就只有这些。",
+    // @patient
+    status: {
+      planned: "这次看诊已安排。",
+      confirmed: "这次看诊已约好。",
+      attended: "您去了这次看诊。",
+      not_attended: "您没有去这次看诊。",
+      cancelled: "这次看诊取消了。",
+    },
+    // @patient headline
+    illnessPapers: "这次生病的文件",
+    // @patient headline
+    illnessVisits: "生病期间的看诊",
+    // @patient headline
+    illnessMoments: "记下了什么",
+    // @patient
+    moments: {
+      reading: "{date}记下了一个新数字。",
+      dose_taken: "{date}吃了一次药。",
+      symptom: "{date}记下了您的感觉。",
+      discharge: "您{date}从医院回家。",
+      visit: "{date}有一次看诊。",
+      other: "{date}记下了一件事。",
+    },
+    // @patient
+    photoOn: "这是{date}的一张照片。",
+    // @patient
+    letterOn: "这是{date}的一封信。",
+    // @patient
+    paperOn: "这是{date}的一份文件。",
+    // @patient phrase
+    putWith: "把文件放在这次生病里",
+    // @patient phrase
+    putThis: "把这份文件放进去",
+    // @patient
+    putAsk: "把这份文件放在这次生病里吗？",
+    // @patient phrase
+    putYes: "对，放进去",
+    // @patient
+    putDone: "这份文件现在在这次生病里了。",
+    // @patient
+    nothingToPut: "每份文件都已经在里面了。",
+    // @patient phrase
+    kind: {
+      doctor: "医生",
+      clinic: "诊所",
+      hospital: "医院",
+      pharmacy: "药房",
+      lab: "验血的地方",
+      other: "其他地方",
+    },
+    // @patient
+    visitsMany: "Nura 这里有{count}次看诊。",
+    // @patient
+    visitsOne: "Nura 这里有一次看诊。",
+    // @patient
+    lastVisit: "上次看诊是{date}。",
+    // @patient
+    nextVisit: "下次看诊是{date}。",
+    // @patient phrase
+    where: "在哪里",
+    // @patient phrase
+    phone: "电话号码",
+    // @patient headline
+    medicinesFrom: "这里开的药",
+    // @patient headline
+    notesTitle: "关于这个地方的笔记",
+    // @patient
+    notesOnly: "只有主人和负责的家人能看这些笔记。",
+    // @patient phrase
+    noteLabel: "一条关于这个地方的笔记",
+    // @patient phrase
+    noteSave: "保存笔记",
+    // @patient
+    noteSaved: "Nura 保存了您的笔记。",
+    // @patient
+    writtenOn: "这是{date}写的。",
+    // @patient headline
+    waiting: "还在等",
+    // @patient
+    trendsLead: "选一个检查，看它的变化。",
+    // @patient phrase
+    analytes: {
+      total_cholesterol: "您的胆固醇",
+      ldl: "您的坏胆固醇",
+      hdl: "您的好胆固醇",
+      triglycerides: "您的血脂",
+      hba1c: "您的血糖检查",
+      creatinine: "您的肾指数",
+      egfr: "您的肾过滤",
+      potassium: "您身体的盐",
+      haemoglobin: "您的血色素",
+      tsh: "您的甲状腺检查",
+    },
+    // @patient phrase
+    resultOn: "{date}的结果是{value} {unit}",
+    // @patient
+    rangeUnder: "范围是{upper}以下。",
+    // @patient
+    rangeOver: "范围是{lower}以上。",
+    // @patient
+    rangeBetween: "范围是{lower}到{upper}。",
+    // @patient
+    noRange: "Nura 没有这一项的范围。",
+    // @patient
+    labRange: "这个范围印在您的验血单上。",
+    // @patient
+    guideRange: "这个范围来自适合您年龄的指南。",
+    // @patient phrase
+    anchors: {
+      wake: "起床的时候",
+      breakfast: "早餐",
+      lunch: "午餐",
+      dinner: "晚餐",
+      bed: "睡觉的时候",
+    },
+    // @patient phrase
+    readings: {
+      blood_pressure: "血压",
+      blood_sugar: "血糖",
+      weight: "体重",
+    },
+    // @patient phrase
+    walk: "散步",
+    // @patient
+    notSet: "还没有人设定您的一天。",
+    // @patient phrase
+    setDay: "设定这一天",
+    // @patient phrase
+    timeLabel: "几点",
+    // @patient phrase
+    morningCard: "“今天”页面什么时候来",
+    // @patient phrase
+    walkAfter: "之后散步",
+    // @patient phrase
+    checkDay: "检查这一天",
+    // @patient
+    dayAsk: "这一天是这样吗？",
+    // @patient phrase
+    dayYes: "对，设定这一天",
+    // @patient
+    daySaved: "Nura 记下了这一天。",
+    // @patient headline
+    tableMoment: "什么时候",
+    // @patient headline
+    tableTime: "时间",
+    // @patient headline
+    tableMedicines: "药",
+    // @patient headline
+    tableReadings: "要量什么",
+  },
   family: {
     // @patient headline
     title: "家人",
@@ -1369,6 +1647,21 @@ export const zh = {
     TapNotToday: "Nura 只记下您今天点的。",
     // A body too large to take, answered for the app by a layer in front of it (a bare 413).
     TooLarge: "那个文件太大了，Nura 打不开。",
+    NoteNamesHealth: "Nura 不能保存写了药名或病名的笔记。",
+    NotAPlaceNote: "请写一句简短的话，关于这个地方。",
+    NotTheirsToSet: "您可以看这一天，但不能改。",
+    NotARoutine: "时间要按一天的顺序排。",
+    NoSuchAnalyte: "Nura 不认识这个检查。",
+    NobodyToAsk: ["家人名单上没有人可以请。", "请先把一个人加到家人名单上。"],
+    NotACount: "请用数字打有多少。",
+    AlreadyHangsThere: "这份文件已经在那里了。",
+    EpisodeAlreadyClosed: "这次生病已经结束了。",
+    NoSuchEpisode: "这次生病已经不在这里了。",
+    NoSuchProvider: "这位医生不在您的名单上。",
+    StaleState: ["Nura 还在更新。", "请再试一次。"],
+    NotIdentified: "Nura 找不到这个药。",
+    DoseNotRead: "请照标签打怎么吃。",
+    NotADose: "Nura 看不懂怎么吃。",
     WouldWiden: ["Nura 不能把这个放宽。", "文件的主人要先同意更多。"],
     NothingToNarrow: "这样什么都不会改变。",
     NotTheDoer: "只有被交代的人可以说做好了。",
