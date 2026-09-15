@@ -284,7 +284,7 @@ def expected_event_scope(
 ) -> Scope:
     if event.kind is EventKind.READING:
         return Scope.READINGS
-    if event.kind is EventKind.DOSE_TAKEN:
+    if event.kind in (EventKind.DOSE_TAKEN, EventKind.SUPPLY):
         return Scope.MEDICINES
     if event.kind is EventKind.MESSAGE:
         return artifacts.get(event.artifact_id, Scope.FAMILY) if event.artifact_id else Scope.FAMILY
@@ -884,6 +884,12 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",
     ("POST", f"{P}/medicines/{{line_id}}/taken"): "writes a dose taken; returns it",
+    ("POST", f"{P}/medicines/{{line_id}}/ask-to-order"): (
+        "gives the family a task to order more; returns the task and his lines"
+    ),
+    ("POST", f"{P}/medicines/{{line_id}}/more"): (
+        "writes tablets found at home on a yes; returns the supply and the count"
+    ),
     ("POST", f"{P}/episodes"): "opens an episode; returns it",
     ("POST", f"{P}/episodes/{{episode_id}}/attach"): "hangs a paper; returns the attachment",
     ("POST", f"{P}/appointments"): "books a visit; returns it",

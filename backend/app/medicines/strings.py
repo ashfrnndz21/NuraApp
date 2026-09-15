@@ -535,6 +535,40 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ask_to_order": "请家人订。", "i_have_more": "我家里还有。"},
 }
 
+# @patient phrase
+ORDER_TASK: Mapping[str, str] = {
+    "en": "order more of {medicine}",
+    "ms": "pesan lagi {medicine}",
+    "zh": "再订{medicine}",
+}
+"""The task on the family's list when he taps "Ask the family to order." (E04-05): a label in
+his words, since it reaches him in the digest and on his trail."""
+
+# @patient
+ASKED_TO_ORDER: Mapping[str, str] = {
+    "en": "Nura asked {who} to order more of {medicine}.",
+    "ms": "Nura minta {who} pesan lagi {medicine}.",
+    "zh": "Nura已请{who}再订{medicine}。",
+}
+"""What he reads after the tap: who does the next thing."""
+
+# @patient
+KNOWS_NOW: Mapping[str, str] = {
+    "en": "{who} knows now.",
+    "ms": "{who} sudah tahu.",
+    "zh": "{who}已经知道了。",
+}
+"""Under it, when his chief was told and is not the one asked."""
+
+# @patient
+REORDER_NOTICE: Mapping[str, Lines] = {
+    "en": ("{patient} asked the family to order more medicine.", "It is on the family's list."),
+    "ms": ("{patient} minta keluarga pesan lagi ubat.", "Ia ada dalam senarai keluarga."),
+    "zh": ("{patient}请家人再订药。", "这件事在家人的清单上。"),
+}
+"""The notice to his chief after he asks (E04-05). No medicine is named here: the task on
+the family's list names it, and the notice is read wherever a channel delivers it."""
+
 # @patient headline
 TAKEN: Mapping[str, str] = {"en": "Taken", "ms": "Sudah ambil", "zh": "吃了"}
 """The one button on a dose card (glossary: adherence is "Taken")."""
