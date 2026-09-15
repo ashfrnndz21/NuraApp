@@ -34,8 +34,9 @@ function precacheManifest(): Plugin {
   return {
     name: "nura-precache-manifest",
     generateBundle(_options, bundle) {
+      // The staff page (E22-04) is not the patient's shell: it is never cached on his phone.
       const files = Object.keys(bundle)
-        .filter((name) => name !== "sw.js")
+        .filter((name) => name !== "sw.js" && !name.startsWith("review/") && !/^assets\/review-/.test(name))
         .map((name) => BASE + name);
       const sw = bundle["sw.js"];
       if (sw && sw.type === "chunk") {
@@ -58,7 +59,9 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
     rollupOptions: {
-      input: { main: "index.html", sw: "src/sw/sw.ts" },
+      // `review/index.html` is the pharmacist's queue (E22-04): its own page at /app/review/,
+      // signed in with a staff token, never linked from the patient app.
+      input: { main: "index.html", review: "review/index.html", sw: "src/sw/sw.ts" },
       output: {
         entryFileNames: (chunk) => (chunk.name === "sw" ? "sw.js" : "assets/[name]-[hash].js"),
         // The worker imports nothing, so nothing is shared with it; keep it that way.

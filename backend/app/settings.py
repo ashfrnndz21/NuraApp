@@ -78,6 +78,11 @@ class Settings:
     """NURA_REFERENCE_RANGES: which reference-range table the lab trend reads (E09-01,
     `app.reasoning.ranges`). Only the fixture is built; any other name refuses to start."""
     review_staff: tuple[tuple[str, str], ...] = ()
+    privacy_contact: str | None = None
+    """Where a person writes to stop what the app does not stop with one tap — keeping his
+    papers, WhatsApp (`NotStoppedInTheApp`) — until those paths exist: the data protection
+    officer's address (docs/trust/pdpa-data-map.md). Unset, the refusal names the officer
+    without an address."""
     """NURA_REVIEW_STAFF_TOKENS: who may work the pharmacist's review queue (`/review/*`,
     E22-04, ADR 0007), as `handle:token` pairs separated by commas. Staff are not people on
     anyone's record and hold no patient key; the handle is what a decision is signed with.
@@ -229,6 +234,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
+        privacy_contact=(source.get("NURA_PRIVACY_CONTACT") or "").strip() or None,
     )
 
 

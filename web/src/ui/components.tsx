@@ -156,7 +156,7 @@ export function Notice({ error }: { error: unknown }): JSX.Element | null {
     error instanceof Unreachable
       ? [t().errors.network]
       : error instanceof Refused
-        ? refusalLines(error.refusal)
+        ? refusalLines(error.refusal, language.value, { contact: error.contact })
         : refusalLines(undefined);
   return (
     <Tile paper role="alert" testId="notice">
@@ -211,16 +211,20 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
   );
 }
 
-export function TabBar({ current, onSelect }: { current: "today" | "me"; onSelect: (tab: "today" | "me") => void }): JSX.Element {
+export function TabBar({ current, onSelect }: { current: "today" | "family" | "me"; onSelect: (tab: "today" | "family" | "me") => void }): JSX.Element {
   const s = t();
+  const tabs = [
+    ["today", s.tabs.today],
+    ["family", s.tabs.family],
+    ["me", s.tabs.me],
+  ] as const;
   return (
     <nav class="tabbar" aria-label={s.appName}>
-      <button type="button" aria-current={current === "today" ? "page" : undefined} onClick={() => onSelect("today")}>
-        {s.tabs.today}
-      </button>
-      <button type="button" aria-current={current === "me" ? "page" : undefined} onClick={() => onSelect("me")}>
-        {s.tabs.me}
-      </button>
+      {tabs.map(([tab, label]) => (
+        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
+          {label}
+        </button>
+      ))}
     </nav>
   );
 }

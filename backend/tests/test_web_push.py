@@ -302,7 +302,8 @@ async def test_a_reorder_reaches_the_phone_as_one_line_and_an_id_and_nothing_els
         assert set(said) == {"text", "id"} and said["text"] in PUSH_LINE.values()
         uuid.UUID(said["id"])
         # No health word rides a push: not the medicine, not the count, not what it is about.
-        # The id is a random uuid, checked as one above: it may hold "30" by chance.
+        # The id is a bare uuid (checked above), so only the line can carry words: a random
+        # uuid's hex spells "30" about one run in nine, which is not a health word riding it.
         assert not any(word in said["text"].lower() for word in HEALTH_WORDS)
         ids.add(said["id"])
     assert str(row.id) in ids  # the reorder's push names its own delivery row

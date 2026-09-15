@@ -130,13 +130,16 @@ def _api() -> APIRouter:
 
     @api.get("/deployment")
     async def deployment(request: Request) -> dict[str, str | bool | None]:
-        """Which region this deployment serves, whether it is a demo (ADR 0008), and the Web
-        Push key the home-screen app subscribes with (null when it has no Web Push)."""
+        """Which region this deployment serves, whether it is a demo (ADR 0008), the Web Push
+        key the home-screen app subscribes with (null when it has no Web Push), and whether it
+        is a declared dev run — where, and only where, a laptop's `nura-dev-` staff token is
+        taken (the staff page asks before it sends one)."""
         settings = settings_of(request)
         return {
             "region": settings.region.value,
             "demo": settings.demo_mode,
             "push_key": settings.vapid_public_key,
+            "dev": settings.dev_code_sender,
         }
 
     return api

@@ -26,6 +26,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from app.consent.models import ConsentPurpose
+from app.family.relationships import relationship_words
 from app.keys.scopes import Scope
 from app.regions import Region
 
@@ -84,8 +85,8 @@ NAMED_WITH_RELATIONSHIP: Mapping[str, str] = {
     "zh": "{name}（{relationship}）",
 }
 """How each language says who the person is to him, when the granter said: "Ash, your
-daughter," in English and Malay, "Ash（您的女儿）" in Chinese. `relationship` is given in
-the language of the words."""
+daughter," in English and Malay, "Ash（您的女儿）" in Chinese. `relationship` is the code's
+words in the language of the words (`app.family.relationships`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -349,11 +350,13 @@ def what_lines(scopes: Iterable[Scope], language: str) -> list[str]:
 
 # @patient
 def named_words(name: str, relationship: str | None, language: str) -> str:
-    """The person as the words first name them: "Ash", or "Ash, your daughter,"."""
-    if relationship is None:
+    """The person as the words first name them: "Ash", or "Ash, your daughter,". The
+    relationship is a code (`app.family.relationships`), said here in the words' language."""
+    said = relationship_words(relationship, language)
+    if said is None:
         return name
     pattern = NAMED_WITH_RELATIONSHIP.get(language, NAMED_WITH_RELATIONSHIP["en"])
-    return pattern.format(name=name, relationship=relationship)
+    return pattern.format(name=name, relationship=said)
 
 
 # @patient

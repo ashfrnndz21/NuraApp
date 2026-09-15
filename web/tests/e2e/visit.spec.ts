@@ -33,7 +33,7 @@ const spoken = (page: import("@playwright/test").Page) => page.evaluate(() => (w
  *  (`request`), and answered (`response`, below 400). */
 function watchRecording(page: import("@playwright/test").Page) {
   const kinds = {
-    whole: (method: string, path: string) => method === "POST" && /\/recording$/.test(path),
+    whole: (method: string, path: string) => method === "POST" && /\/appointments\/[^/]+\/recording$/.test(path),
     open: (method: string, path: string) => method === "POST" && /\/recording\/uploads$/.test(path),
     chunk: (method: string, path: string) => method === "PUT" && /\/recording\/uploads\/[^/]+\/chunks\/\d+$/.test(path),
     yes: (method: string, path: string) => method === "POST" && /\/recording\/uploads\/[^/]+\/yes$/.test(path),

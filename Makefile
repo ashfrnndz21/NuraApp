@@ -35,6 +35,9 @@ dev: export NURA_WHATSAPP_FIXTURES ?= tests/fixtures/whatsapp
 # The pharmacist's review queue (E22-04, ADR 0007): one laptop-only staff member. A token that
 # starts `nura-dev-` is refused anywhere but a dev run (backend/app/settings.py).
 dev: export NURA_REVIEW_STAFF_TOKENS ?= pharmacist:nura-dev-pharmacist-token-0001
+# Where a person writes to stop what the app does not stop with one tap (NotStoppedInTheApp):
+# the data protection officer's address on a deployment; a reserved .test address on a laptop.
+dev: export NURA_PRIVACY_CONTACT ?= privacy@nura.test
 migrate: ; cd backend && python3 -m alembic upgrade heads
 # The server log is also written to backend/.dev.log (gitignored, fresh on every start) so
 # that `make checkpoint` in another terminal can read the login codes the sender prints.
