@@ -40,7 +40,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import and_, or_, update
 from sqlalchemy.engine import CursorResult
@@ -74,6 +74,9 @@ from app.reasoning.visits.questions import require_visit
 from app.reasoning.visits.summary import Summariser, summary_items
 from app.regions import guard_region
 from app.safety.recording import may_record
+
+if TYPE_CHECKING:
+    from app.delivery.triggers.deliver import Via
 
 UPLOAD = ConsultUpload.__tablename__
 
@@ -408,6 +411,7 @@ async def finish_upload(
     separator: SpeakerSeparator | None,
     summariser: Summariser,
     registry: DrugRegistry,
+    via: Via | None = None,
 ) -> Finished:
     """Stop: the chunks put together, in order, into the one recording `record_consult` keeps,
     then let go. Only after the doctor's yes. Stop sent again after its answer was lost gives
@@ -447,6 +451,7 @@ async def finish_upload(
         separator=separator,
         summariser=summariser,
         registry=registry,
+        via=via,
     )
     upload.recording_id = outcome.recording.id
     await session.flush()

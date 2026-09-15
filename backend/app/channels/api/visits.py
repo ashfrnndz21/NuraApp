@@ -331,6 +331,7 @@ async def recording(
         separator=served.speaker_separator,
         summariser=served.summariser,
         registry=served.drug_registry,
+        via=via_of(request),
     )
     return ConsultOut(
         recording=RecordingOut.of(outcome.recording, outcome.segments),

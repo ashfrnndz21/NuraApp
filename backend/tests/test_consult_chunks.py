@@ -23,16 +23,25 @@ from sqlalchemy import select
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.clock import FrozenClock
-from app.db import utcnow
+from app.db import as_utc, utcnow
+from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder, TriggerType
 from app.ingestion import chunks
 from app.ingestion.chunks import ANSWER_WITHIN, FINISH_WITHIN, MAX_CHUNK_BYTES
-from app.ingestion.models import ConsultUpload
+from app.ingestion.models import ConsultRecording, ConsultUpload
 from app.ingestion.s3 import ObjectStoreUnavailable
 from app.regions import Region
+from app.safety.red_flags import Flag, FlagKind
 from tests.api import bearer, let_in, register_by_phone
 from tests.capture_support import agree_to_recording, refusals
 from tests.conftest import Deployment, _serve
-from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, WEBM_MAGIC, placeholder_consult
+from tests.consult_audio import (
+    CONSULT,
+    CONTENT_TYPE,
+    DURATION_S,
+    RED_FLAG_CONSULT,
+    WEBM_MAGIC,
+    placeholder_consult,
+)
 from tests.test_upload_cap import CHUNK, Endless
 from tests.test_visit_day import House, _kept, household
 
@@ -406,6 +415,59 @@ async def test_a_stop_and_the_sweep_never_both_end_one_upload(deployment: Deploy
         assert not await chunks._claim(session, row, finished_at=utcnow())
     await _ok(await phone.finish(), 201)
     assert len((await _kept(house))[0]) == 1
+
+
+async def _reached_at_once(deployment: Deployment, house: House) -> None:
+    """The flag's ladder started, and Mei, his chief, sent the flag's notice, at the very
+    moment the recording was kept: nothing waited for the scheduler."""
+    async with deployment.sessions() as session:
+        [flag] = (await session.scalars(select(Flag).where(Flag.kind == FlagKind.RED_FLAG))).all()
+        [kept] = (await session.scalars(select(ConsultRecording))).all()
+        [ladder] = (await session.scalars(select(Ladder).where(Ladder.flag_id == flag.id))).all()
+        rungs = (
+            await session.scalars(select(Delivery).where(Delivery.trigger_type == TriggerType.FLAG))
+        ).all()
+    at = as_utc(kept.stored_at)
+    assert as_utc(ladder.started_at) == at
+    assert [(str(row.to_person_id), row.outcome, as_utc(row.recorded_at)) for row in rungs] == [
+        (house.mei["person_id"], DeliveryOutcome.SENT, at)
+    ]
+    assert [str(one) for one in flag.told] == [house.mei["person_id"]]
+
+
+async def test_a_red_flag_heard_in_a_recording_sent_whole_starts_the_ladder_as_it_is_kept(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """#155: a red-flag word heard in a recorded visit writes the flag first and starts its
+    ladder in the same request, as a typed transcript does. On the frozen clock the family is
+    reached at the very moment the recording is kept, with no run of the scheduler."""
+    house = await _house(deployment)
+    sent = await deployment.client.post(
+        f"{house.visit}/recording",
+        params={"duration_s": DURATION_S, "started_at": STARTED},
+        content=placeholder_consult(RED_FLAG_CONSULT),
+        headers={**bearer(house.pa["token"]), "Content-Type": CONTENT_TYPE},
+    )
+    body = await _ok(sent, 201)
+    assert body["summary"]["lines"][0] == "Call Dr Tan today."
+    await _reached_at_once(deployment, house)
+
+
+async def test_a_red_flag_heard_in_a_recording_sent_in_chunks_starts_the_ladder_on_stop(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """#155, the chunked way: Stop puts the chunks together and keeps the recording, and the
+    red flag heard in it starts its ladder in that same request."""
+    house = await _house(deployment)
+    phone = Phone(house, house.pa)
+    await phone.open()
+    await phone.send(placeholder_consult(RED_FLAG_CONSULT))
+    await _ok(await phone.yes())
+    async with deployment.sessions() as session:
+        assert (await session.scalars(select(Ladder))).all() == []
+    body = await _ok(await phone.finish(), 201)
+    assert body["summary"]["lines"][0] == "Call Dr Tan today."
+    await _reached_at_once(deployment, house)
 
 
 # --- the cap --------------------------------------------------------------------------------------

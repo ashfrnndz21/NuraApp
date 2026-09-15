@@ -25,6 +25,7 @@ from starlette.requests import ClientDisconnect
 
 from app.audit.access import audited_guard
 from app.audit.models import Action
+from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import ConsultOut, RecordingOut, SummaryOut
 from app.channels.api.uploads import Cap, read_capped
@@ -179,6 +180,7 @@ async def finish(
         separator=served.speaker_separator,
         summariser=served.summariser,
         registry=served.drug_registry,
+        via=via_of(request),
     )
     return ConsultOut(
         recording=RecordingOut.of(done.recording, list(done.segments)),
