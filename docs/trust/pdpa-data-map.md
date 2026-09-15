@@ -39,6 +39,14 @@ A note on the rows that look operational and are not. `profile_id` is an identif
 
 | Table | Column | Type | Nullable | Classification |
 |---|---|---|---|---|
+| `erasure_record` | `id` | Uuid | no | audit |
+| `erasure_record` | `profile_id` | Uuid | no | identifier |
+| `erasure_record` | `region` | Enum | no | operational |
+| `erasure_record` | `requested_by_person_id` | Uuid | no | identifier |
+| `erasure_record` | `requested_at` | DateTime | no | audit |
+| `erasure_record` | `erased_at` | DateTime | no | audit |
+| `erasure_record` | `consents` | JSON | no | consent |
+| `erasure_record` | `removed` | JSON | no | audit |
 | `person` | `id` | Uuid | no | identifier |
 | `person` | `region` | Enum | no | operational |
 | `person` | `display_name` | String | no | identifier |
@@ -56,14 +64,6 @@ A note on the rows that look operational and are not. `profile_id` is an identif
 | `source` | `allowlisted` | Boolean | no | operational |
 | `source` | `review_status` | Enum | no | operational |
 | `source` | `added_at` | DateTime | no | operational |
-| `erasure_record` | `id` | Uuid | no | audit |
-| `erasure_record` | `profile_id` | Uuid | no | identifier |
-| `erasure_record` | `region` | Enum | no | operational |
-| `erasure_record` | `requested_by_person_id` | Uuid | no | identifier |
-| `erasure_record` | `requested_at` | DateTime | no | audit |
-| `erasure_record` | `erased_at` | DateTime | no | audit |
-| `erasure_record` | `consents` | JSON | no | consent |
-| `erasure_record` | `removed` | JSON | no | audit |
 | `login_challenge` | `id` | Uuid | no | operational |
 | `login_challenge` | `region` | Enum | no | operational |
 | `login_challenge` | `channel` | Enum | no | operational |
