@@ -28,6 +28,12 @@ export interface PlaybackDeps {
   audio(blob: Blob): AudioLike;
   /** A warm-up that was refused (not a 404): said on the screen. */
   onFailure(failure: unknown): void;
+  /** The voice of this card stopped or ended: how many seconds of it played (null when the
+   *  phone's own voice read it, which says nothing of how far it got), and whether this card
+   *  was played before. Seconds of the voice, never of the screen (E11-08). */
+  onPlayed?(itemId: string, seconds: number | null, again: boolean): void;
+  /** The clock the seconds are read on; the page's own by default. */
+  clock?(): number;
 }
 
 export interface HearCard extends SpokenCard {
@@ -46,8 +52,26 @@ export class Playback {
   private readonly ready = new Map<string, Voice>();
   private readonly asking = new Set<string>();
   private current: AudioLike | null = null;
+  /** The card whose voice is playing, and when it started (null seconds: the phone's voice). */
+  private started: { itemId: string; at: number | null } | null = null;
+  private readonly heardBefore = new Set<string>();
 
   constructor(private readonly deps: PlaybackDeps) {}
+
+  private clock(): number {
+    return this.deps.clock ? this.deps.clock() : performance.now();
+  }
+
+  /** The voice that was playing has stopped or ended: say how much of it played, once. */
+  private played(): void {
+    const was = this.started;
+    this.started = null;
+    if (!was) return;
+    const seconds = was.at === null ? null : Math.max(0, (this.clock() - was.at) / 1000);
+    const again = this.heardBefore.has(was.itemId);
+    this.heardBefore.add(was.itemId);
+    this.deps.onPlayed?.(was.itemId, seconds, again);
+  }
 
   /** Fetch, never play, the voices of these cards. */
   warm(cards: readonly { itemId: string; language: string }[]): void {
@@ -80,14 +104,17 @@ export class Playback {
     if (voice?.kind === "audio") {
       const audio = this.deps.audio(voice.blob);
       this.current = audio;
+      this.started = { itemId: card.itemId, at: this.clock() };
       audio.onended = () => this.finished(card.key);
       audio.play().catch(() => {
         // The phone would not play the bytes: read the spoken twin instead, still in the tap.
         this.current = null;
+        this.started = { itemId: card.itemId, at: null };
         this.deps.speak(card);
       });
       return;
     }
+    this.started = { itemId: card.itemId, at: null };
     this.deps.speak(card);
   }
 
@@ -101,12 +128,14 @@ export class Playback {
     this.current = null;
     this.deps.stopSpeaking();
     this.playing.value = null;
+    this.played();
   }
 
   private finished(key: string): void {
     if (this.playing.value === key) {
       this.current = null;
       this.playing.value = null;
+      this.played();
     }
   }
 }

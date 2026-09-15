@@ -311,6 +311,8 @@ export const ms = {
     // @patient
     statusOpened: "{name} sudah buka kad ini.",
     // @patient
+    statusPlayed: "{name} sudah dengar kad ini.",
+    // @patient
     statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
   },
   reading: {

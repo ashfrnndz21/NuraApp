@@ -162,6 +162,7 @@ export interface Strings {
     statusHeld: string;
     statusSent: string;
     statusOpened: string;
+    statusPlayed: string;
     statusDismissed: string;
   };
   reading: {

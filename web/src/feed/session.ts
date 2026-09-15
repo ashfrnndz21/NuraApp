@@ -1,6 +1,8 @@
 import * as nura from "../api/nura";
-import type { ProfileOut } from "../api/types";
+import type { ProfileOut, QueuedEventIn } from "../api/types";
 import { loadFeed, saveFeed } from "../offline/feedCache";
+import { kvGet, kvSet } from "../store/kv";
+import { EventQueue } from "./events";
 import { bindingOf, clearProfileData, zoneOf } from "../offline/todayCache";
 import { speak, stopSpeaking } from "../speech/speak";
 import { browserAudio, Playback } from "./playback";
@@ -14,6 +16,8 @@ export interface OpenFeed {
   id: string;
   store: FeedStore;
   playback: Playback;
+  /** What he did with his cards, kept until the next connection (E11-08). */
+  events: EventQueue;
 }
 
 let open: OpenFeed | null = null;
@@ -25,6 +29,15 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
   open?.playback.stop();
   const profileId = papers.profile_id;
   const zone = zoneOf(papers.region);
+  const canEngage = papers.standing === "owner" || papers.scopes.includes("records");
+  const queued = `feedEvents.${profileId}`;
+  const events = new EventQueue({
+    load: async () => (await kvGet<QueuedEventIn[]>(queued)) ?? [],
+    save: (list) => kvSet(queued, list),
+    send: (list) => nura.feedEvents(bearer, profileId, list),
+    now: () => new Date(),
+    id: () => crypto.randomUUID(),
+  });
   const store = new FeedStore({
     first: () => nura.feedPage(bearer, profileId),
     next: (cursor) => nura.feedPage(bearer, profileId, cursor),
@@ -36,7 +49,7 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
     },
     engage: (itemId, event) => nura.engage(bearer, profileId, itemId, event),
     share: (kind) => nura.shareCard(bearer, profileId, kind),
-    canEngage: papers.standing === "owner" || papers.scopes.includes("records"),
+    canEngage,
     now: () => new Date(),
   });
   const playback = new Playback({
@@ -45,8 +58,14 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
     stopSpeaking,
     audio: browserAudio,
     onFailure: (failure) => store.say(failure),
+    // How much of the voice played, when it stops or ends: a play the first time, a replay
+    // after. Seconds of the voice, never of the screen.
+    onPlayed: (itemId, seconds, again) => {
+      if (canEngage) void events.add(itemId, again ? "replayed" : "played", seconds).then(() => events.flush());
+    },
   });
-  open = { id, store, playback };
+  open = { id, store, playback, events };
+  if (canEngage) void events.flush();
   return open;
 }
 

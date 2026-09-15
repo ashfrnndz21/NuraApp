@@ -311,6 +311,8 @@ export const en = {
     // @patient
     statusOpened: "{name} opened this card.",
     // @patient
+    statusPlayed: "{name} heard this card.",
+    // @patient
     statusDismissed: "{name} tapped Not for me on this card.",
   },
   reading: {

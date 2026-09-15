@@ -46,6 +46,7 @@ from app.delivery.feed.models import (
     Supply,
 )
 from app.delivery.feed.search import Engine
+from app.delivery.feed.sources import require_manager
 from app.errors import Refusal
 from app.family.photos import taken_back
 from app.keys.context import KeyContext
@@ -72,6 +73,8 @@ OPENED: frozenset[EngagementKind] = frozenset(
     }
 )
 """What says a card was opened: on his screen, heard, tapped or asked about."""
+WEEK_TARGET = "feed_item.week"
+"""What the trail names when "Sent to Pa this week" is read, or refused."""
 NOT_IN_THE_WEEK: frozenset[CardType] = frozenset({CardType.NOW, CardType.GATE, CardType.DUTY})
 """The cards that are not something sent: the now card is Today's, the gate is a turn of the
 page, the duty card is hers."""
@@ -426,20 +429,22 @@ async def top_three(session: AsyncSession, *, context: KeyContext, engine: Engin
 
 @dataclass(frozen=True, slots=True)
 class Sent:
-    """One card made for him this week, as his chief's list shows it (spec §1): the card,
-    what became of it, and how many times it was played."""
+    """One card made for him this week, as his chief's list shows it (spec §1): the card and
+    what became of it. Never how many times, and never for how long: the list says whether a
+    card was opened or played, and no count of anything (spec §0, "no counts")."""
 
     item: FeedItem
     status: str
-    plays: int
 
 
 async def sent_this_week(session: AsyncSession, *, context: KeyContext) -> list[Sent]:
     """Every card made for him since Monday on his wall clock — delivered, held for her, or
     kept for the doctor's memo — newest first, each with its status (sent, opened, played,
-    dismissed, held) and its plays: "Sent to Pa this week". The now card, the gate and her
-    own duty card are not sent things and are left out. Narrowed to the parts the key
-    covers, like every read of the feed. Nothing is made here."""
+    dismissed, held): "Sent to Pa this week". The now card, the gate and her own duty card are
+    not sent things and are left out. Narrowed to the parts the key covers, like every read
+    of the feed; the owner's and his chief's to read (`NotTheirsToManage`). Nothing is made
+    here."""
+    await require_manager(session, context=context, target=WEEK_TARGET)
     day = today_for(context)
     found = await audited_read(
         session,
@@ -457,15 +462,7 @@ async def sent_this_week(session: AsyncSession, *, context: KeyContext) -> list[
     if not shown:
         return []
     status = await _statuses(session, context=context, items=shown, held=Counter())
-    engaged = await audited_read(
-        session,
-        Engagement,
-        context,
-        Scope.PROFILE,
-        where=(Engagement.item_id.in_([item.id for item in shown]),),
-    )
-    plays = Counter(one.item_id for one in engaged if one.kind in PLAYS)
-    return [Sent(item, status.get(item.id, "generated"), plays[item.id]) for item in shown]
+    return [Sent(item, status.get(item.id, "generated")) for item in shown]
 
 
 class NoCachedPage(Refusal):
@@ -545,4 +542,7 @@ def item_json(item: FeedItem, status: str) -> dict[str, Any]:
         "colour": item.colour,
         "action": item.action,
         "category": CATEGORY_OF.get(item.type),
+        # The watch that found it, for a card a search made: what her "Pause this watch" on
+        # "Sent to Pa this week" pauses. None for every card made from his own record.
+        "search_job_id": None if item.search_job_id is None else str(item.search_job_id),
     }

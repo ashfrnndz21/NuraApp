@@ -70,6 +70,8 @@ class FeedItemOut(BaseModel):
     """The card's one action: taken, hear, keep_going, call, ask_to_order, open, ask_the_doctor."""
     category: str | None = None
     """For today's top three (E11-02): alert, reminder or insight."""
+    search_job_id: str | None = None
+    """The watch that found this card, when a search made it; None for his own record's."""
 
 
 class FeedPageOut(BaseModel):
@@ -236,15 +238,14 @@ class EventsOut(BaseModel):
 
 
 class SentOut(BaseModel):
-    """One card of "Sent to Pa this week": the card as the feed answers it — its status
-    among sent, opened, played, dismissed, held — and how many times it was played."""
+    """One card of "Sent to Pa this week": the card as the feed answers it, with its status
+    among sent, opened, played, dismissed, held. No count of anything."""
 
     item: FeedItemOut
-    plays: int
 
     @classmethod
     def of(cls, sent: Sent) -> SentOut:
-        return cls(item=FeedItemOut(**item_json(sent.item, sent.status)), plays=sent.plays)
+        return cls(item=FeedItemOut(**item_json(sent.item, sent.status)))
 
 
 class AreaIn(BaseModel):

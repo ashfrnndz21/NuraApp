@@ -311,6 +311,8 @@ export const zh = {
     // @patient
     statusOpened: "{name} 打开了这张卡。",
     // @patient
+    statusPlayed: "{name} 听了这张卡。",
+    // @patient
     statusDismissed: "{name} 按了“不适合我”。",
   },
   reading: {
