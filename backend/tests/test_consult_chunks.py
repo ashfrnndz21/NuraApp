@@ -25,6 +25,7 @@ from app.clock import FrozenClock
 from app.ingestion import chunks
 from app.ingestion.chunks import ANSWER_WITHIN, FINISH_WITHIN, MAX_CHUNK_BYTES
 from app.ingestion.models import ConsultUpload
+from app.ingestion.s3 import ObjectStoreUnavailable
 from app.regions import Region
 from tests.api import bearer, let_in, register_by_phone
 from tests.capture_support import agree_to_recording, refusals
@@ -246,6 +247,57 @@ async def test_a_no_throws_away_every_chunk_already_sent_and_keeps_nothing(
     refused = await early.finish()
     assert refused.status_code == 409 and refused.json() == {"refusal": "NoYesFromTheDoctor"}
     assert await _kept(house) == ([], [])
+    # The phone sends the whole instead of this one: thrown away, every chunk with it.
+    assert (await early.discard("whole")).status_code == 204
+    assert early.staged() == [] and (await _row(deployment, early.upload)).discarded_because == "whole"
+    assert (await early.discard("maybe")).status_code == 422
+
+
+async def test_a_chunk_that_lands_as_it_closes_is_let_go_too(deployment: Deployment) -> None:
+    house = await _house(deployment)
+    profile = uuid.UUID(house.profile_id)
+    # Thrown away; then a chunk that was on its way lands: the phone's second DELETE lets it go.
+    no = Phone(house, house.mei)
+    await no.open()
+    await no.send(DATA[:20])
+    assert (await no.discard("no")).status_code == 204
+    await deployment.objects.put(chunks.chunk_key(profile, uuid.UUID(no.upload), 2), DATA[20:30])
+    assert len(no.staged()) == 1
+    assert (await no.discard("no")).status_code == 204
+    assert no.staged() == []
+    # Put together; then a chunk lands late: the scheduler's next run lets it go.
+    kept = Phone(house, house.mei)
+    await kept.open()
+    await kept.send(DATA)
+    await _ok(await kept.yes())
+    await _ok(await kept.finish(), 201)
+    row = await _row(deployment, kept.upload)
+    await deployment.objects.put(chunks.chunk_key(profile, uuid.UUID(kept.upload), row.chunks), b"late")
+    assert len(kept.staged()) == 1
+    await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
+    assert kept.staged() == []
+
+
+async def test_a_store_that_fails_the_sweep_never_costs_the_run_what_it_sent(
+    deployment: Deployment, clock: FrozenClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    house = await _house(deployment)
+    phone = Phone(house, house.mei)
+    await phone.open()
+    await phone.send(DATA[:20])
+    clock.step(ANSWER_WITHIN)
+
+    async def refused(key: str) -> None:
+        raise ObjectStoreUnavailable("the bucket refused a delete (503)")
+
+    monkeypatch.setattr(deployment.objects, "delete", refused)
+    ran = await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id})
+    assert ran.status_code == 200, ran.text
+    assert len(phone.staged()) == 2 and (await _row(deployment, phone.upload)).discarded_at is None
+    monkeypatch.undo()
+    await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
+    assert phone.staged() == []
+    assert (await _row(deployment, phone.upload)).discarded_because == "no_answer"
 
 
 async def test_what_the_phone_could_not_throw_away_the_scheduler_does(
@@ -301,6 +353,11 @@ async def test_a_chunk_over_the_cap_gets_a_413_and_nothing_of_it_is_kept(
     assert phone.staged() == [] and (await _ok(await phone.status()))["chunks"] == 0
     assert "ChunkTooLarge" in await refusals(deployment, house.pa, house.profile_id)
 
+    # A recording is at most so many chunks.
+    monkeypatch.setattr(chunks, "MAX_CHUNKS", 1)
+    many = await phone.chunk(1, DATA[:10])
+    assert many.status_code == 413 and many.json() == {"refusal": "ConsultTooLong"}
+    monkeypatch.setattr(chunks, "MAX_CHUNKS", 1000)
     # And the whole stays under a visit's cap, chunk by chunk.
     monkeypatch.setattr(chunks, "MAX_CONSULT_BYTES", 25)
     await phone.send(DATA[:20])

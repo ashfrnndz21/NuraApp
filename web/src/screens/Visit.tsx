@@ -30,6 +30,9 @@ import { browserUploadDeps, ChunkedUpload, isNoConnection, uploadCalls } from ".
  *  (docs/adr/0006-consult-recording-on-the-web.md). The post-visit card is the backend's, each
  *  line with "Hear what Dr Tan said" when the recording has that line in it. */
 
+/** The server's refusals of a Stop that mean the chunked upload can end in no recording. */
+const SEND_WHOLE_AFTER: ReadonlySet<string> = new Set(["UploadClosed", "NoSuchUpload", "NotAConsultRecording"]);
+
 type Stage =
   | { kind: "card" }
   | { kind: "gating" }
@@ -200,15 +203,18 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     await begin();
   };
 
-  /** The recording kept: the chunks put together on the server; or, when the chunked upload
-   *  could not end in a recording, the whole of it from the phone, once, as before (#128). */
+  /** The recording kept: the chunks put together on the server. Only when the server says the
+   *  chunked upload can end in no recording (it lapsed, is gone, or its chunks are not all
+   *  there) is it thrown away and the whole sent from the phone, once, as before (#128); any
+   *  other failure is tried again, so a recording is never kept twice. */
   const finishRecording = async (kept: Kept): Promise<ConsultOut> => {
     const upload = chunked.current;
     if (upload) {
       try {
         return await upload.finish(kept.durationS);
       } catch (failure) {
-        if (isNoConnection(failure)) throw failure;
+        if (!(failure instanceof Refused) || !SEND_WHOLE_AFTER.has(failure.refusal)) throw failure;
+        upload.discard("whole");
         chunked.current = null;
       }
     }

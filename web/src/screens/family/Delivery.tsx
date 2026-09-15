@@ -11,10 +11,11 @@ const CHANNELS = ["app_push", "whatsapp", "caregiver"] as const;
 
 /** The engine's reasons for a message the check-in and the family notice held (E11-01,
  *  `backend/app/delivery/triggers/day.py`), to the line the log says instead of the outcome. */
-const HELD_BECAUSE: Record<string, "flagOpen" | "saidToday" | "nudgeAsked"> = {
+const HELD_BECAUSE: Record<string, "flagOpen" | "saidToday" | "nudgeAsked" | "questionOpen"> = {
   "a red flag is open": "flagOpen",
   "he said how he is today": "saidToday",
   "the check-in nudge asked it": "nudgeAsked",
+  "a question of his is open": "questionOpen",
 };
 
 /** E00-05: every attempt to reach someone about him — to whom, when, by which channel, what

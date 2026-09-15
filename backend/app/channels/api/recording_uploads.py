@@ -194,10 +194,11 @@ async def throw_away(
     request: Request,
     context: Context,
     session: Db,
-    because: Literal["no", "left"] = Query(),
+    because: Literal["no", "left", "whole"] = Query(),
 ) -> Response:
     """The doctor said no, or the page was left before he answered: every chunk already sent
-    is thrown away, and nothing of the visit is kept."""
+    is thrown away, and nothing of the visit is kept. `whole`: the phone sends the recording
+    whole instead, because the server said this upload could end in no recording."""
     await discard_upload(
         session,
         context=context,

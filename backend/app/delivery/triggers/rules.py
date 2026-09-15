@@ -150,7 +150,9 @@ RULES: Mapping[TriggerType, Rule] = {
             "check_in_time_reached",
             cap=1,
             quiet=True,
-            channels=(DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP),
+            # WhatsApp first: the question and his three words back are the thread's; the
+            # family may change the list (E11-05).
+            channels=(DeliveryChannel.WHATSAPP, DeliveryChannel.APP_PUSH),
         ),
         Rule(
             TriggerType.FAMILY_NOTICE,

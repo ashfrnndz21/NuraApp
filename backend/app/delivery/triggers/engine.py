@@ -20,6 +20,7 @@ Every trigger that fires writes its rule on every `Delivery` row it makes.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -78,6 +79,8 @@ from app.onboarding.plan import PLAN_SCOPE, due_prompts
 from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ
 from app.safety.red_flags import open_flags
+
+logger = logging.getLogger(__name__)
 
 PATTERN_DAYS = 7
 PATTERN_AT_LEAST = 3
@@ -635,16 +638,22 @@ async def _nudges(run: Run) -> None:
 async def _consult_uploads(run: Run) -> None:
     """A visit's recording on its way in, in chunks (#129), that can no longer finish — the
     doctor never answered, the phone never said Stop, or no RECORDING consent is in force any
-    more — is thrown away here, with every chunk, when the phone could not do it itself."""
+    more — is thrown away here, with every chunk, when the phone could not do it itself. In
+    its own savepoint: a store that fails it is logged, and never costs this run what it
+    already sent (its Delivery rows stand; the next run tries the sweep again)."""
     # Imported here: the recording reaches the visit's card, and the card reaches delivery.
     from app.ingestion.chunks import discard_stale
 
-    await discard_stale(
-        run.session,
-        context=run.acting,
-        store=run.via.providers.object_store,
-        channel=Channel.SYSTEM,
-    )
+    try:
+        async with run.session.begin_nested():
+            await discard_stale(
+                run.session,
+                context=run.acting,
+                store=run.via.providers.object_store,
+                channel=Channel.SYSTEM,
+            )
+    except Exception as failure:  # noqa: BLE001 — the sweep is never worth the run
+        logger.warning("consult upload sweep failed: %s", type(failure).__name__)
 
 
 __all__ = ["NothingToSay", "Report", "Via", "run_due"]

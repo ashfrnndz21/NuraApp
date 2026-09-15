@@ -310,7 +310,7 @@ export const finishUpload = (token: string, profileId: string, appointmentId: st
 
 /** The doctor said no, or the page was left before he answered: every chunk already sent is
  *  thrown away. Goes even as the page goes. */
-export const discardUpload = (token: string, profileId: string, appointmentId: string, uploadId: string, because: "no" | "left") =>
+export const discardUpload = (token: string, profileId: string, appointmentId: string, uploadId: string, because: "no" | "left" | "whole") =>
   sendAndForget(`${uploads(profileId, appointmentId)}/${uploadId}`, { method: "DELETE", token, query: { because } });
 
 /** The notes by hand, when the doctor says no: E05's typed transcript, read into the card. */

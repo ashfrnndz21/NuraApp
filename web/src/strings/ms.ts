@@ -1116,9 +1116,10 @@ export const ms = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Ditahan: {name} tidak sihat hari ini.",
-      saidToday: "Tidak ditanya: {name} sudah beritahu hari ini.",
-      nudgeAsked: "Tidak ditanya dua kali: peringatan kecil sudah tanya.",
+      flagOpen: "Ditahan selagi mesej segera tentang {name} masih terbuka.",
+      saidToday: "Nura tidak bertanya. {name} sudah beritahu keadaannya hari ini.",
+      nudgeAsked: "Nura tidak bertanya dua kali. Peringatan kecil sudah bertanya hari ini.",
+      questionOpen: "Nura tidak bertanya. {name} ada soalan lain daripada Nura untuk dijawab.",
     },
     // @patient phrase
     rule: "Peraturan",

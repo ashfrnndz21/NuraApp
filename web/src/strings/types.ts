@@ -517,7 +517,7 @@ export interface Strings {
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
     /** Why a message was held, where it was not a quiet day: said instead of the outcome, with
      *  `{name}` his (E11-01). Keyed by `HELD_BECAUSE` in `screens/family/Delivery.tsx`. */
-    skippedBecause: Record<"flagOpen" | "saidToday" | "nudgeAsked", string>;
+    skippedBecause: Record<"flagOpen" | "saidToday" | "nudgeAsked" | "questionOpen", string>;
     rule: string;
     quietFrom: string;
     quietUntil: string;

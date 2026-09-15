@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -82,6 +82,9 @@ hour after it opened was never answered: it is thrown away, as on a no."""
 FINISH_WITHIN = timedelta(seconds=MAX_CONSULT_SECONDS) + timedelta(hours=1)
 """A visit is at most ninety minutes; an hour on top for the connection to come back. An upload
 not finished by then is thrown away: nothing is kept that the phone did not say Stop to."""
+MAX_CHUNKS = 1000
+"""The most chunks one recording is sent in: ninety minutes at one every thirty seconds, with
+room for the pieces a dropped connection leaves. More is refused as a visit's cap is."""
 LET_GO_AGAIN = timedelta(minutes=15)
 """A chunk can land as its upload is thrown away. The sweep lets go of the chunks of an upload
 thrown away in the last quarter hour once more, so none is left behind."""
@@ -97,9 +100,12 @@ class Because(StrEnum):
     NO_ANSWER = "no_answer"
     UNFINISHED = "unfinished"
     NO_CONSENT = "no_consent"
+    WHOLE = "whole"
+    """The phone sent the whole recording at once instead (#128's route): the server said this
+    upload could end in no recording."""
 
 
-FROM_THE_PHONE = frozenset({Because.NO, Because.LEFT})
+FROM_THE_PHONE = frozenset({Because.NO, Because.LEFT, Because.WHOLE})
 """The reasons the phone gives. The other three are the sweep's."""
 
 
@@ -195,7 +201,9 @@ async def _noted(
 
 
 async def _let_go(store: ObjectStore, upload: ConsultUpload) -> None:
-    for position in range(upload.chunks):
+    # One past the count: a chunk whose bytes landed but whose count did not (its request
+    # failed after the write, or it arrived as the upload closed) is let go too.
+    for position in range(upload.chunks + 1):
         await store.delete(chunk_key(upload.profile_id, upload.id, position))
 
 
@@ -287,6 +295,8 @@ async def add_chunk(
         raise NotAConsultRecording("a chunk has bytes in it")
     if len(data) > MAX_CHUNK_BYTES:
         raise ChunkTooLarge(f"a chunk is at most {MAX_CHUNK_BYTES} bytes")
+    if position >= MAX_CHUNKS:
+        raise ConsultTooLong(f"a recording is sent in at most {MAX_CHUNKS} chunks")
     key = chunk_key(context.profile_id, upload.id, position)
     if position < upload.chunks:
         if await store.get(key) != data:
@@ -337,7 +347,11 @@ async def discard_upload(
     upload = await _mine(
         session, context=context, appointment_id=appointment_id, upload_id=upload_id
     )
-    if upload.discarded_at is None and upload.finished_at is None:
+    if upload.discarded_at is not None:
+        # Thrown away before: let go once more, for a chunk that landed after (the phone's
+        # second DELETE, sent when a chunk on its way has landed).
+        await _let_go(store, upload)
+    elif upload.finished_at is None:
         await _throw_away(session, context=context, store=store, upload=upload, because=because)
     return upload
 
@@ -470,7 +484,8 @@ async def discard_stale(
     """Every open upload of this profile that can no longer finish, thrown away: no yes within
     `ANSWER_WITHIN`, not finished within `FINISH_WITHIN`, or no RECORDING consent in force on
     the profile (asked where the key reaches the agreements; the engine's does). And, once
-    more, the chunks of one thrown away in the last `LET_GO_AGAIN`. What it threw away."""
+    more, the chunks of one thrown away or put together in the last `LET_GO_AGAIN`, for a
+    chunk that landed as it closed. What it threw away."""
     if not context.allows(Scope.VISITS):
         return []
     guard_region(held_in=store.region, asked_from=context.region)
@@ -481,10 +496,10 @@ async def discard_stale(
         context,
         Scope.VISITS,
         where=(
-            ConsultUpload.finished_at.is_(None),
             or_(
-                ConsultUpload.discarded_at.is_(None),
+                and_(ConsultUpload.finished_at.is_(None), ConsultUpload.discarded_at.is_(None)),
                 ConsultUpload.discarded_at > now - LET_GO_AGAIN,
+                ConsultUpload.finished_at > now - LET_GO_AGAIN,
             ),
         ),
         channel=channel,
@@ -499,7 +514,7 @@ async def discard_stale(
         )
     thrown: list[ConsultUpload] = []
     for upload in uploads:
-        if upload.discarded_at is not None:
+        if upload.discarded_at is not None or upload.finished_at is not None:
             await _let_go(store, upload)
             continue
         because = lapsed(upload, now) or (Because.NO_CONSENT if agreed is False else None)
@@ -520,6 +535,7 @@ __all__ = [
     "ANSWER_WITHIN",
     "FINISH_WITHIN",
     "FROM_THE_PHONE",
+    "MAX_CHUNKS",
     "MAX_CHUNK_BYTES",
     "UPLOAD",
     "Because",

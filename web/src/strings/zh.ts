@@ -1116,9 +1116,10 @@ export const zh = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "没有发：{name}今天不舒服。",
-      saidToday: "没有问：{name}今天已经说过了。",
-      nudgeAsked: "没有问两次：小提醒已经问过了。",
+      flagOpen: "关于{name}的紧急消息还没有结束，所以先不发。",
+      saidToday: "Nura没有问。{name}今天已经说了自己的感觉。",
+      nudgeAsked: "Nura没有问两次。小提醒今天已经问过了。",
+      questionOpen: "Nura没有问。{name}还有Nura的另一个问题要回答。",
     },
     // @patient phrase
     rule: "规则",

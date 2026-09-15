@@ -279,7 +279,7 @@ async def test_pa_completes_a_full_day_on_whatsapp_without_opening_the_app(
     first, second = notice["text"].splitlines()
     assert re.fullmatch(r"Nura wrote down \d+ things about Pa this week\.", first)
     assert second == "You can read them in the app."
-    assert f"{notice['why']['count']} things" in first
+    assert notice["why"] == {"days": 7}  # the count is in her message only
     assert day.said_to(SITI) == []
     assert not _of(await day.run(20, 5), "family_notice")
 
@@ -319,5 +319,5 @@ async def test_pa_completes_a_full_day_on_whatsapp_without_opening_the_app(
         )
     )
     assert kinds["caps"]["check_in"] == 1 and kinds["caps"]["family_notice"] == 1
-    assert kinds["channels"]["check_in"] == ["app_push", "whatsapp"]
+    assert kinds["channels"]["check_in"] == ["whatsapp", "app_push"]
     assert kinds["channels"]["family_notice"] == ["app_push", "whatsapp"]

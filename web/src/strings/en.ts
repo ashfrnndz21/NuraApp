@@ -1118,9 +1118,10 @@ export const en = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Held: {name} is not well today.",
-      saidToday: "Not asked: {name} already said today.",
-      nudgeAsked: "Not asked twice: the small reminder asked.",
+      flagOpen: "Held while the urgent message about {name} is open.",
+      saidToday: "Nura did not ask. {name} already said how he feels today.",
+      nudgeAsked: "Nura did not ask twice. The small reminder asked him today.",
+      questionOpen: "Nura did not ask. {name} has another question from Nura to answer.",
     },
     // @patient phrase
     rule: "Rule",

@@ -217,4 +217,21 @@ describe("a recording sent in chunks as it is made (#129)", () => {
     expect(at.s.yes).toBe(true);
     expect(decoded(at.bytes())).toBe("the notice, his yes, the visit");
   });
+
+  it("an upload that lapsed before the doctor answered sends nothing more until his yes", async () => {
+    const at = server();
+    const one = upload(at.deps);
+    one.start();
+    one.add(audio("the notice, and no answer yet"));
+    await one.send();
+    // A quarter of an hour and no answer: the server let it lapse.
+    at.s.open = false;
+    one.add(audio(" still waiting"));
+    await one.send();
+    expect(at.log.filter((call) => call === "open")).toHaveLength(1);
+    await one.doctorSaidYes();
+    expect(at.s.upload).toBe("u2");
+    expect(at.s.yes).toBe(true);
+    expect(decoded(at.bytes())).toBe("the notice, and no answer yet still waiting");
+  });
 });

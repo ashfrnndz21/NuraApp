@@ -39,7 +39,7 @@ export interface UploadCalls {
   yes(uploadId: string): Promise<UploadOut>;
   finish(uploadId: string, durationS: number): Promise<ConsultOut>;
   /** Throw it away on the server; nobody waits for the answer. */
-  discard(uploadId: string, because: "no" | "left"): void;
+  discard(uploadId: string, because: "no" | "left" | "whole"): void;
 }
 
 export interface UploadDeps {
@@ -74,6 +74,8 @@ export class ChunkedUpload {
   private stopping = false;
   private over = false;
   private pending = false;
+  /** The server let an upload lapse: before the doctor's yes, nothing more goes until it. */
+  private lapsed = false;
   private failure: unknown = null;
   private flight: Promise<void> | null = null;
   private stops: (() => void)[] = [];
@@ -150,7 +152,7 @@ export class ChunkedUpload {
 
   /** The doctor said no, or the page was left before he answered: thrown away here and on the
    *  server, with an open or a chunk still on its way thrown away after it lands. */
-  discard(because: "no" | "left"): void {
+  discard(because: "no" | "left" | "whole"): void {
     if (this.over) return;
     this.close();
     const drop = () => {
@@ -200,6 +202,7 @@ export class ChunkedUpload {
     }
     if (refusal !== null && START_AGAIN.has(refusal)) {
       this.state = null;
+      this.lapsed = true;
       this.unsure = false;
       return true;
     }
@@ -216,8 +219,13 @@ export class ChunkedUpload {
     const { calls } = this.deps;
     if (this.state !== null && this.unsure) this.state = await calls.status(this.state.upload_id);
     this.unsure = false;
-    // Lapsed on the server (no answer from the doctor in time): a new one, sent from the start.
-    if (this.state !== null && !this.state.open) this.state = null;
+    // Lapsed on the server: once the doctor has said yes, a new one, sent again from the start;
+    // before his answer, nothing more goes until he says yes.
+    if (this.state !== null && !this.state.open) {
+      this.state = null;
+      this.lapsed = true;
+    }
+    if (this.state === null && this.lapsed && !this.yes) return;
     this.state ??= await calls.open(this.contentType, this.startedAt);
     if (this.over) return;
     if (this.yes && !this.state.doctor_said_yes) this.state = await calls.yes(this.state.upload_id);

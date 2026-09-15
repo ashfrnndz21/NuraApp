@@ -19,7 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import FrozenClock
 from app.db import as_utc
-from app.delivery.triggers.day import A_FLAG_IS_OPEN, HE_SAID_TODAY, THE_NUDGE_ASKED
+from app.delivery.triggers.day import (
+    A_FLAG_IS_OPEN,
+    A_QUESTION_IS_OPEN,
+    HE_SAID_TODAY,
+    THE_NUDGE_ASKED,
+)
 from app.delivery.triggers.deliver import Firing, Recipient, open_run, write
 from app.delivery.triggers.engine import Report, run_due
 from app.delivery.triggers.ladder import PATIENT
@@ -156,6 +161,35 @@ async def test_the_quiet_hours_hold_the_check_in_and_the_hold_is_written_once(
     assert _asked(h) == []
 
 
+async def test_his_ok_answers_the_question_he_has_open_so_the_check_in_waits(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """His "OK" is also a yes (the classifier's word), and a yes goes to what Nura read back to
+    him first. While a reading of his waits for that yes, the check-in is not asked."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    clock.set(at(12))
+    assert (await h.inbound(sg, PA, "BP 140/90 this morning")).outcome == "proposal"
+    [held] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert (held.outcome, held.reason) == (DeliveryOutcome.SKIPPED, A_QUESTION_IS_OPEN)
+    assert _asked(h) == []
+    # The next day the reading's day is over: he is asked.
+    [asked] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert asked.outcome is DeliveryOutcome.SENT
+
+
+async def test_the_check_in_is_the_threads_first_even_with_the_app_on_his_phone(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    h.push.register(h.pa.id)
+    [asked] = _rows(await _run(sg, h, clock, at(10)), CHECK_IN)
+    assert asked.via is DeliveryChannel.WHATSAPP and asked.passed_over == []
+    assert [one for one in h.push.sent if one.ref == str(asked.id)] == []
+
+
 # --- the family notice ---------------------------------------------------------------------------
 
 
@@ -233,8 +267,8 @@ async def test_the_notice_counts_only_what_her_key_opens(
 
     sent = {row.to_person_id: row for row in _rows(await _run(sg, h, clock, at(20)), NOTICE)}
     assert set(sent) == {h.mei.id, kit.id}
-    assert sent[kit.id].why == {"count": len(kits), "days": 7}
-    assert sent[h.mei.id].why == {"count": len(week), "days": 7}
+    # Each count is in its own message only: the log shows `why` to every chief.
+    assert sent[kit.id].why == sent[h.mei.id].why == {"days": 7}
     assert _notices(h, KIT) == [
         f"Nura wrote down {len(kits)} things about Pa this week.\nYou can read them in the app."
     ]
@@ -290,7 +324,12 @@ def test_the_familys_log_names_both_kinds_and_says_why_one_was_held_in_every_lan
     engine's reasons are the keys it looks them up by, in English, Malay and Chinese."""
     web = Path(__file__).resolve().parents[2] / "web" / "src"
     screen = (web / "screens" / "family" / "Delivery.tsx").read_text(encoding="utf-8")
-    codes = {A_FLAG_IS_OPEN: "flagOpen", HE_SAID_TODAY: "saidToday", THE_NUDGE_ASKED: "nudgeAsked"}
+    codes = {
+        A_FLAG_IS_OPEN: "flagOpen",
+        HE_SAID_TODAY: "saidToday",
+        THE_NUDGE_ASKED: "nudgeAsked",
+        A_QUESTION_IS_OPEN: "questionOpen",
+    }
     for reason, code in codes.items():
         assert f'"{reason}": "{code}"' in screen, reason
     for language in ("en", "ms", "zh"):

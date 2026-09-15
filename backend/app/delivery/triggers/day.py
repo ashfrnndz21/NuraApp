@@ -11,7 +11,8 @@ Two rules of the engine (#121), kept in a module of their own:
   10:00 — once a day, by his own channel list, never in the quiet hours. His "OK", "tired" or
   "pain" back is written down by the inbound path (`inbound._check_in_open`). It does not go
   when he has already said how he is today, nor when the day's check-in nudge asked it: he is
-  asked once.
+  asked once. Nor while Nura waits for his yes or no to something it read back to him on
+  WhatsApp: his "OK" would answer that question, not this one.
 - **The family notice** (`evening_family_notice`): in the evening, to each chief, how many
   things Nura wrote down about him this week — a count, never what they say — on a day
   something was written down. Each chief's count is only what her own key opens, "only me"
@@ -52,6 +53,7 @@ WEEK = timedelta(days=7)
 A_FLAG_IS_OPEN = "a red flag is open"
 HE_SAID_TODAY = "he said how he is today"
 THE_NUDGE_ASKED = "the check-in nudge asked it"
+A_QUESTION_IS_OPEN = "a question of his is open"
 
 
 async def run_day(run: Run) -> None:
@@ -72,9 +74,7 @@ async def _done_today(run: Run, firing: Firing, person: Person) -> bool:
     """Whether this firing already reached the person today, or its hold was written. The
     run's list holds the rows it read and every row it wrote since (`deliver.write`)."""
     earlier = _about(run, firing, person.id, await run.deliveries())
-    return any(
-        row.outcome in (DeliveryOutcome.SENT, DeliveryOutcome.SKIPPED) for row in earlier
-    )
+    return any(row.outcome in (DeliveryOutcome.SENT, DeliveryOutcome.SKIPPED) for row in earlier)
 
 
 async def check_in(run: Run) -> None:
@@ -100,6 +100,9 @@ async def check_in(run: Run) -> None:
         return
     if await _he_said_today(run):
         await write(run, firing, him, DeliveryOutcome.SKIPPED, reason=HE_SAID_TODAY)
+        return
+    if await _a_question_is_open(run):
+        await write(run, firing, him, DeliveryOutcome.SKIPPED, reason=A_QUESTION_IS_OPEN)
         return
     if await _the_nudge_asked_today(run):
         await write(run, firing, him, DeliveryOutcome.SKIPPED, reason=THE_NUDGE_ASKED)
@@ -129,7 +132,24 @@ async def _he_said_today(run: Run) -> bool:
         run.session, context=run.acting, subject="feeling", attribute="reported"
     )
     zone = REGION_TZ[run.acting.region]
-    return any(as_utc(fact.asserted_at).astimezone(zone).date() == run.local.date() for fact in told)
+    return any(
+        as_utc(fact.asserted_at).astimezone(zone).date() == run.local.date() for fact in told
+    )
+
+
+async def _a_question_is_open(run: Run) -> bool:
+    """Whether Nura is waiting for his yes or no to something it read back to him on WhatsApp
+    (a proposal of his own, good for a day). His "OK" to the check-in would be read as the yes
+    to that (`inbound._answer` asks the proposal first), so the check-in waits for another day."""
+    # Imported here: the thread's proposals reach the memory, and the memory reaches delivery.
+    from app.channels.whatsapp.proposals import open_proposals_of
+
+    assert run.patient is not None
+    waiting = await open_proposals_of(run.session, context=run.acting)
+    return any(
+        proposal.poster_person_id == run.patient.id and as_utc(proposal.expires_at) > run.at
+        for proposal in waiting
+    )
 
 
 async def _the_nudge_asked_today(run: Run) -> bool:
@@ -174,7 +194,9 @@ async def family_notice(run: Run) -> None:
         firing = Firing(
             type=TriggerType.FAMILY_NOTICE,
             dedupe_key=f"family_notice:{run.day}",
-            why={"count": len(hers), "days": WEEK.days},
+            # Her count is in her message only: the log shows `why` to every chief it shows the
+            # row to, and another chief's key may open less.
+            why={"days": WEEK.days},
         )
         to = Recipient(chief, "chief")
         if await _done_today(run, firing, chief):
