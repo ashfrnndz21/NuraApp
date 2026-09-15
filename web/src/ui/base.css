@@ -50,11 +50,12 @@ body {
   position: relative;
   max-width: 480px;
   margin: 0 auto;
-  /* Bottom padding clears the fixed tab bar — its 56px target, its 12px of padding, the
-     12px it floats above the edge, and the phone's own inset — plus one tile gap, so the
-     last card scrolls fully out from under it. */
+  /* Bottom padding clears the fixed tab bar — its height as measured (`--tabbar-h`, set by
+     the bar, which grows when a label wraps at a large text size; before it is measured, its
+     target and its 12px of padding), the 12px it floats above the edge, and the phone's own
+     inset — plus a gap and one tile gap, so the last card scrolls fully out from under it. */
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
-    calc(var(--target) + 3 * var(--space-2) + var(--space-3) + env(safe-area-inset-bottom));
+    calc(var(--tabbar-h, calc(var(--target) + var(--space-2))) + 2 * var(--space-2) + var(--space-3) + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -290,12 +291,17 @@ label.pill:focus-within {
   border: var(--glass-border);
   box-shadow: var(--tile-shadow);
   z-index: 2;
+  /* Its labels are sized against its own width (below). */
+  container-type: inline-size;
 }
+/* The labels grow with his text size up to the size at which the three still sit side by side
+   on his screen — the way the iPhone's tab bar stops growing with Dynamic Type — so at 200% on
+   a small phone the bar stays one line tall and leaves the page its room (E15-04). */
 .tabbar button {
   font: inherit;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--text-body);
+  font-size: min(var(--text-body), 9cqi);
   color: var(--ink-soft);
   background: none;
   border: 0;

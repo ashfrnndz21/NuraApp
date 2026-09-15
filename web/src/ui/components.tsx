@@ -1,5 +1,5 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useId } from "preact/hooks";
+import { useEffect, useId, useRef } from "preact/hooks";
 import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
@@ -232,8 +232,20 @@ export function TabBar({ current, onSelect }: { current: "today" | "family" | "m
     ["family", s.tabs.family],
     ["me", s.tabs.me],
   ] as const;
+  // The screen keeps room under its last line for the bar as tall as it is: at a large text
+  // size a label can take two lines, and a fixed allowance would leave a line under the bar.
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = bar.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const measure = () => document.documentElement.style.setProperty("--tabbar-h", `${Math.ceil(element.getBoundingClientRect().height)}px`);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(element);
+    return () => watch.disconnect();
+  }, []);
   return (
-    <nav class="tabbar" aria-label={s.appName}>
+    <nav class="tabbar" aria-label={s.appName} ref={bar}>
       {tabs.map(([tab, label]) => (
         <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
           {label}

@@ -300,7 +300,7 @@ for (const [look, banner] of [
     const his = freshPhone("+659335");
     await page.getByLabel("Their name").fill("Ah Kong");
     await page.getByLabel("Their phone number").fill(his);
-    await page.getByLabel("Who they are to you").fill("Father");
+    await page.getByTestId("relationship-daughter").click();
     await page.getByText("They asked you to do this.").click();
     await page.getByRole("button", { name: "Set it up" }).click();
     await expect(page.locator("main.onboarding")).toBeVisible();

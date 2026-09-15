@@ -624,19 +624,27 @@ export async function nothingDrawnOverLines(
       const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return at !== null && (at === element || element.contains(at));
     };
+    // What is drawn over it, so that a failure names what covers the line.
+    const under = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!at) return " (off the screen)";
+      const named = at.closest("[class]");
+      return ` (under ${at.tagName.toLowerCase()}${named ? `.${String(named.getAttribute("class")).split(" ")[0]}` : ""})`;
+    };
     const visible = (element: HTMLElement) => element.offsetParent !== null && element.getBoundingClientRect().height > 0;
     for (const line of root.querySelectorAll<HTMLElement>(lines)) {
       if (!visible(line) || !line.textContent?.trim()) continue;
       line.scrollIntoView({ block: "center" });
       await frame();
-      if (!hit(line)) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}`);
+      if (!hit(line)) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}${under(line)}`);
     }
     for (const control of root.querySelectorAll<HTMLElement>(controls)) {
       if (!visible(control)) continue;
       control.scrollIntoView({ block: "center" });
       await frame();
       const name = (control.textContent || control.getAttribute("aria-label") || control.tagName).trim().slice(0, 50);
-      if (!hit(control)) problems.push(`control covered: ${name}`);
+      if (!hit(control)) problems.push(`control covered: ${name}${under(control)}`);
       const box = control.getBoundingClientRect();
       if (minTarget && (box.height < minTarget - 0.5 || box.width < minTarget - 0.5)) {
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);

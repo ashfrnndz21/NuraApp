@@ -13,9 +13,10 @@
   flex-direction: column;
   overflow: hidden;
   padding-top: env(safe-area-inset-top);
-  /* The floating tab bar: its target, its padding, the gap it floats above the edge, the
-     phone's own inset — nothing of a card sits under it. */
-  padding-bottom: calc(var(--target) + 3 * var(--space-2) + env(safe-area-inset-bottom));
+  /* The floating tab bar: its height as measured (`--tabbar-h`; before that, its target and
+     its padding), the gap it floats above the edge, the phone's own inset — nothing of a card
+     sits under it. */
+  padding-bottom: calc(var(--tabbar-h, calc(var(--target) + var(--space-2))) + 2 * var(--space-2) + env(safe-area-inset-bottom));
 }
 
 .feed-strip {
