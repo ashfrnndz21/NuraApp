@@ -76,6 +76,7 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
+from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
 from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
@@ -159,6 +160,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToChange, 403),
     # The day, and a calendar's proposals (E10-01, E18-02): reading them is not setting them.
     (NotTheirsToSet, 403),
+    # His insurer (E13-01): typed by him or his chief; an identity card is not a policy.
+    (NotTheirsToSetInsurer, 403),
+    (NotAnInsurer, 400),
+    (NotAPolicyReference, 400),
     (NotTheirsToConnect, 403),
     (NotTheirsToDecide, 403),
     # The family's arrangements (E12): the owner's and his chief's; a key is never widened

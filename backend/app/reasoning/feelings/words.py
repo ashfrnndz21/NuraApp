@@ -22,6 +22,7 @@ from enum import IntEnum, StrEnum
 
 from app.memory.models import EpisodeKind
 from app.safety.red_flags import Feeling, is_red
+from app.safety.symptoms import Symptom
 
 BASE: tuple[Feeling, ...] = (
     Feeling.TIRED,
@@ -48,6 +49,24 @@ WATCH_OUT_WORDS: Mapping[str, Feeling] = {
 """A monograph's watch-out rule id (`app.drugs.registry.Monograph.watch_out_ids`) → the cloud
 word for it. The ids are the licensed registry's; a watch-out with no word here (bleeding
 signs, black stools) is not a feeling he taps and is left to the medicine's own story."""
+
+SYMPTOM_FEELINGS: Mapping[Symptom, Feeling] = {
+    Symptom.TIRED: Feeling.TIRED,
+    Symptom.WEAK: Feeling.TIRED,
+    Symptom.DIZZY: Feeling.DIZZY,
+    Symptom.HEADACHE: Feeling.HEADACHE,
+    Symptom.NAUSEA: Feeling.STOMACH_UPSET,
+    Symptom.VOMITING: Feeling.STOMACH_UPSET,
+    Symptom.STOMACH_PAIN: Feeling.STOMACH_UPSET,
+    Symptom.DIARRHOEA: Feeling.STOMACH_UPSET,
+    Symptom.CANNOT_SLEEP: Feeling.CANT_SLEEP,
+    Symptom.LEG_SWELLING: Feeling.SWOLLEN_ANKLES,
+    Symptom.JOINT_PAIN: Feeling.ACHES,
+}
+"""A symptom said in words (`app.safety.symptoms`, the button and the log) → the cloud word for
+it, so a symptom is read against a new medicine's monograph by the same rule a tap is
+(`WATCH_OUT_WORDS`, `NEW_MEDICINE_WINDOW`): the not-feeling-well card's call-the-clinic row
+(E13-02). A symptom with no cloud word here is read against no monograph."""
 
 AFTER_DISCHARGE_WORDS: tuple[Feeling, ...] = (
     Feeling.BREATHLESS,

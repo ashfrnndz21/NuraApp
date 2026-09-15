@@ -635,6 +635,15 @@ class DriveConfirmIn(BaseModel):
     person_id: uuid.UUID
 
 
+class InsurerConfirmIn(BaseModel):
+    """A yes to his insurer on the emergency card exactly as typed (E13-01); no name takes it
+    off the card. The typer's own yes: his, the steward's or his chief's."""
+
+    subject: Literal[ConfirmSubject.INSURER]
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
+
+
 class CountCorrectionConfirmIn(BaseModel):
     """A yes to adding tablets found at home to one medicine's count (E04-05): which line and
     how many, exactly what `POST /medicines/{line}/more` will write with it."""
@@ -721,14 +730,15 @@ ConfirmIn = Annotated[
     | CountCorrectionConfirmIn
     | RoutineConfirmIn
     | ProposalConfirmIn
-    | DriveConfirmIn,
+    | DriveConfirmIn
+    | InsurerConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01)."""
 
 
 class ConfirmationOut(BaseModel):
@@ -1863,10 +1873,21 @@ class BriefOut(BaseModel):
     voice_script: VoiceScriptOut
     """The brief as it is said (E22-03): each line's spoken words, a pause after each, a longer
     one before the boundary."""
+    withheld: list[Scope] = []
+    """The parts of the record this key does not open whose lines were left off: the record's,
+    for the lines about how he feels (B1)."""
 
     @classmethod
-    def of(cls, brief: Brief) -> BriefOut:
-        lines = [BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines]
+    def of(
+        cls,
+        brief: Brief,
+        shown: list[dict[str, Any]] | None = None,
+        withheld: list[Scope] | None = None,
+    ) -> BriefOut:
+        lines = [
+            BriefLineOut(**{"spoken": line["text"], **line})
+            for line in (brief.lines if shown is None else shown)
+        ]
         return cls(
             brief_id=brief.id,
             appointment_id=brief.appointment_id,
@@ -1876,6 +1897,7 @@ class BriefOut(BaseModel):
             built_at=utc(brief.built_at),
             lines=lines,
             boundary=brief.boundary,
+            withheld=list(withheld or []),
             voice_script=VoiceScriptOut.of(
                 [line.spoken for line in lines], brief.language, brief.boundary
             ),

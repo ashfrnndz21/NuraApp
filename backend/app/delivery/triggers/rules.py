@@ -1,7 +1,7 @@
 """What each trigger is, and the clock of his day it runs on (E00-05, E11-05, E11-10).
 
 A trigger is one of three kinds: a rule (an hour or a date reached — breakfast, the end of a
-dose's window, the reorder date), a pattern (arithmetic on events over a window — three
+dose's window, the reorder date, three days before a visit), a pattern (arithmetic on events over a window — three
 untapped doses in seven days, a count and never a diagnosis) or an event (something new — a
 red flag, a paper waiting for a yes, a visit tomorrow, a family message come due). Each has a
 type, and the type says what it speaks of (`scope`: a recipient's key must cover it), where
@@ -39,7 +39,7 @@ from app.errors import Refusal
 from app.keys.scopes import Scope
 from app.medicines.dose import Anchor
 from app.routines.models import Routine
-from app.routines.service import ANCHORS, DUE_FOR, Day, day_of
+from app.routines.service import Day, day_of, window_of
 
 EVERYWHERE: tuple[DeliveryChannel, ...] = (
     DeliveryChannel.APP_PUSH,
@@ -150,6 +150,15 @@ RULES: Mapping[TriggerType, Rule] = {
             quiet=True,
         ),
         Rule(
+            TriggerType.BRIEF,
+            TriggerKind.RULE,
+            Category.REMINDER,
+            Scope.VISITS,
+            "brief_three_days_before",
+            cap=1,
+            quiet=True,
+        ),
+        Rule(
             TriggerType.NUDGE,
             TriggerKind.EVENT,
             Category.CONTEXT,
@@ -162,10 +171,10 @@ RULES: Mapping[TriggerType, Rule] = {
     )
 }
 
-WINDOW_BEFORE = timedelta(hours=1)
-"""A tablet may be tapped from an hour before its anchor; its window closes at the end of the
-routine's "due" for that anchor (`app.routines.service.DUE_FOR`). Untapped then, the ladder
-starts."""
+BRIEF_DAYS_BEFORE = 3
+"""The pre-visit brief is rendered and its card sent three days before a visit (E05-01, T-3),
+from his breakfast on; a visit booked inside the three days gets it the first run it can, until
+the day before, which is the visit reminder's."""
 MORNING_LATEST = timedelta(hours=3)
 """A morning card not sent by three hours after breakfast is dropped, never sent late."""
 
@@ -210,14 +219,9 @@ class Config:
     def window(self, day: date, anchor: str, tz: ZoneInfo) -> tuple[datetime, datetime]:
         """When a tablet at this anchor on this day of his may be tapped: opens, closes. It
         closes where the routine stops calling the anchor due: `DUE_FOR` after it, or at the
-        next anchor if that comes sooner (`app.routines.service.due_at`)."""
-        at = datetime.combine(day, self.anchor_at(anchor), tz)
-        closes = at + DUE_FOR
-        order = list(ANCHORS)
-        after = order.index(Anchor(anchor).value) + 1
-        if after < len(order):
-            closes = min(closes, datetime.combine(day, self.day.anchors[order[after]], tz))
-        return at - WINDOW_BEFORE, closes
+        next anchor if that comes sooner (`app.routines.service.window_of`, the one window the
+        Taken card reads too). Untapped then, the ladder starts."""
+        return window_of(self.day, day, Anchor(anchor).value, tz)
 
     def morning(self, day: date, tz: ZoneInfo) -> datetime:
         """When the morning card goes: at his breakfast on this day of his — the one

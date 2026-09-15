@@ -7,9 +7,22 @@ Everything on the brief is rendered from a template and checked by the plain-wor
 a brief with one line that fails is refused (`NotPlainEnough`) rather than shown with the
 line missing. "What changed" is the State diff: the facts current now that were not in the
 snapshot at the last visit, counted by what they are — numbers in his blood pressure book,
-his medicines, his papers, how he is. The brief is a row that names the snapshot it was
-rendered from and the one it was measured against, and it is never edited: a later brief
-for the same visit is a newer row.
+his medicines, his papers, how he is — and, each on a line of its own, every symptom written
+down since the last visit (E14-01), in the symptom log's own words (`app.safety.symptom_log`),
+with how much and since when. A symptom is never counted under his papers.
+
+Generated at T-3 (E05-01): E11's engine renders the brief three days before a visit and hands
+its card to delivery (`app.delivery.triggers.engine`, rule `brief_three_days_before`), and the
+feed builds it again inside the week whenever State has moved.
+
+One page: at most `LINE_BUDGET` lines. A section that would run over is folded — what fits,
+then one line saying how many more (`_fold`) — so the brief never needs a second page.
+
+The brief is a row that names the snapshot it was rendered from and the one it was measured
+against, and it is never edited: a later brief for the same visit is a newer row. Its lines
+come from the record, not from a person's typing; what he and his chief want to add goes on
+the questions card (E05-02), which is theirs to edit — the operator's decision of 15
+September 2026.
 """
 
 from __future__ import annotations
@@ -17,7 +30,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, tzinfo
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,10 +39,12 @@ from app.audit.access import audited, audited_read
 from app.audit.models import Action
 from app.db import as_utc, utcnow
 from app.drugs.registry import DrugRegistry
+from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
 from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
+from app.reasoning.visits.guard import may_render_brief
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import Brief, MemoKind
 from app.reasoning.visits.questions import (
@@ -47,6 +62,7 @@ from app.reasoning.visits.strings import (
     time_of_day,
     visit_subject_words,
 )
+from app.regions import REGION_TZ
 from app.safety.boundary import Surface, boundary_line
 from app.safety.high_risk import MEDICINE_SUBJECTS
 from app.state.dimensions import VISIT_LENGTH
@@ -54,6 +70,21 @@ from app.state.models import Dimension, StateSnapshot
 from app.state.service import StateView, current_state, render_from_state
 
 BRIEF = Brief.__tablename__
+
+LINE_BUDGET = 21
+"""One page (E05-01): the most lines a brief has — two for the purpose, four for what changed,
+four for the symptoms, four for the questions, four for what to bring, three for the
+boundary — each line held to plain words' length, so the whole fits one printed page at 20 px."""
+
+SYMPTOM_LINES = 4
+QUESTION_LINES = 4
+MEMO_LINES = 2
+"""The most lines a section takes before it is folded (`_fold`): the symptoms, the questions,
+the memos to bring beside the two fixed bring lines."""
+
+
+class NotOnePage(Refusal):
+    """A brief would run over its one page. `compose` folds every section, so this is a bug."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +177,9 @@ async def _changed(
         where=(Fact.id.in_([uuid.UUID(one) for one in arrived]),),
     )
     for fact in sorted(facts, key=lambda one: (as_utc(one.asserted_at), str(one.id))):
+        if fact.subject == SYMPTOM_SUBJECT:
+            # A symptom has a line of its own (`symptom_lines`), never a count in his papers.
+            continue
         dimension = _dimension_of(state, str(fact.id))
         if dimension is Dimension.CLINICAL or dimension is None:
             if scope_for_subject(fact.subject) is Scope.READINGS:
@@ -157,6 +191,102 @@ async def _changed(
         else:
             changed.how_you_are.append(str(fact.id))
     return changed
+
+
+SYMPTOM_SUBJECT = "symptom"
+"""The subject a symptom is written under (`app.safety.not_feeling_well.SYMPTOM`, which this
+module does not import: the safety flow reaches the delivery engine, which reaches the brief)."""
+
+
+def symptom_lines(entries: Sequence[Any], language: str, zone: tzinfo) -> list[list[Line]]:
+    """One group of lines per symptom entry — a red flag's first, then newest first: a line per
+    thing he felt, the symptom log's own sentence said to him ("You felt dizzy on Monday 14
+    September."), and one line with how much and since when when he said either ("It was quite
+    bad and it started that morning." — since when anchored to that day, not to the day he
+    reads it). Every line is rendered by the log's catalogue, so verified; the sources are the
+    fact."""
+    from app.channels.safety_strings import (
+        SINCE_THEN_WORDS,
+        SYMPTOM_LINES_YOU,
+        phrase,
+        render,
+        severity_said,
+    )
+
+    def order(entry: Any) -> tuple[bool, float, str]:
+        return (not entry.red_flags, -entry.at.timestamp(), str(entry.fact_id))
+
+    groups: list[list[Line]] = []
+    for entry in sorted(entries, key=order):
+        source = (str(entry.fact_id),)
+        codes = [
+            *(flag.value for flag in entry.red_flags),
+            *(one.value for one in entry.symptoms if one.value != "not_well"),
+        ] or ["not_well"]
+        group = [
+            Line(
+                "changed",
+                "symptom",
+                render(
+                    f"you.{code}" if code in SYMPTOM_LINES_YOU else "you.not_well",
+                    language,
+                    date=entry.at.astimezone(zone).date(),
+                ),
+                source,
+            )
+            for code in codes
+        ]
+        severity = None if entry.severity is None else severity_said(entry.severity, language)
+        since = (
+            None
+            if entry.duration is None
+            else phrase(SINCE_THEN_WORDS, language, entry.duration.value)
+        )
+        # How much and since when, one idea a line (plain words, rules 1 and 2): "It was quite
+        # bad." then "It started that morning." — never joined into one.
+        if severity is not None:
+            detail = render("sym.severity", language, severity=severity)
+            group.append(Line("changed", "symptom_detail", detail, source))
+        if since is not None:
+            detail = render("sym.since", language, since=since)
+            group.append(Line("changed", "symptom_detail", detail, source))
+        groups.append(group)
+    return groups
+
+
+def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
+    """The groups that fit in `cap` lines, whole, then `more` — or all of them when they fit.
+    The section is never empty when it has something to say: a first group too long for the
+    page is cut to fit, never dropped (B1 review)."""
+    every = [line for group in groups for line in group]
+    if len(every) <= cap:
+        return every
+    shown: list[Line] = []
+    for group in groups:
+        room = cap - 1 - len(shown)
+        if len(group) <= room:
+            shown.extend(group)
+            continue
+        if not shown:
+            shown.extend(group[:room])
+        break
+    return [*shown, more]
+
+
+SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more"})
+"""The brief's lines about how he feels: the record's (`Scope.RECORDS`, the scope the symptom
+log is read under), not the visits'."""
+
+
+def lines_for(brief: Brief, context: KeyContext) -> tuple[list[dict[str, Any]], list[Scope]]:
+    """The brief's lines as this key may read them, and what was withheld. A symptom is the
+    record's: a key that holds the visits and not the record — a viewer's, a clinic's — reads
+    the brief without the lines about how he feels, and is told the record was withheld
+    (B1 review)."""
+    if context.allows(Scope.RECORDS):
+        return list(brief.lines), []
+    kept = [line for line in brief.lines if line["key"] not in SYMPTOM_KEYS]
+    return kept, ([Scope.RECORDS] if len(kept) != len(brief.lines) else [])
 
 
 def _dimension_of(state: StateView, fact_id: str) -> Dimension | None:
@@ -175,9 +305,12 @@ def compose(
     bring_memos: Sequence[tuple[str, str]],
     has_medicines: bool,
     context: KeyContext,
+    symptoms: Sequence[Sequence[Line]] = (),
 ) -> list[Line]:
     """The brief, section by section, every line through `say` — which refuses a line the
-    verifier fails, and with it the whole brief."""
+    verifier fails, and with it the whole brief — on one page (`LINE_BUDGET`): the symptoms,
+    the questions and the memos to bring are each folded to what fits, and one line says how
+    many more."""
     lang = visit.language
     doctor = visit.doctor
     when = day_and_date(visit.appointment.scheduled_at, lang, context.region)
@@ -199,7 +332,7 @@ def compose(
             (str(visit.appointment.id),),
         ),
     ]
-    if not changed.any():
+    if not changed.any() and not symptoms:
         lines.append(
             Line("changed", "nothing_changed", say("nothing_changed", lang, day=since_day))
         )
@@ -211,21 +344,51 @@ def compose(
     )
     for key, new_ids in counted:
         if new_ids:
+            # "1 new number is", never "1 new numbers are".
+            said = f"{key}_one" if len(new_ids) == 1 else key
             lines.append(
                 Line(
                     "changed",
-                    key,
-                    say(key, lang, day=since_day, count=len(new_ids)),
+                    said,
+                    say(said, lang, day=since_day, count=len(new_ids)),
                     tuple(new_ids),
                 )
             )
-    for key, text, source_ids in proposed_lines:
-        lines.append(Line("questions", key, text, source_ids))
+    lines.extend(
+        _fold(
+            symptoms,
+            SYMPTOM_LINES,
+            Line("changed", "symptoms_more", say("symptoms_more", lang)),
+        )
+    )
+    questions = [[Line("questions", key, text, ids)] for key, text, ids in proposed_lines]
+    extra = len(questions) - (QUESTION_LINES - 1)
+    lines.extend(
+        _fold(
+            questions,
+            QUESTION_LINES,
+            Line(
+                "questions",
+                "questions_more",
+                say("questions_more", lang, count=max(extra, 2), doctor=doctor),
+            ),
+        )
+    )
     lines.append(Line("bring", "bring_bp_book", say("bring_bp_book", lang, day=when)))
     if has_medicines:
         lines.append(Line("bring", "bring_medicines", say("bring_medicines", lang, day=when)))
-    for key, text in bring_memos:
-        lines.append(Line("bring", key, text))
+    memos = [[Line("bring", key, text)] for key, text in bring_memos]
+    extra = len(memos) - (MEMO_LINES - 1)
+    lines.extend(
+        _fold(
+            memos,
+            MEMO_LINES,
+            Line("bring", "bring_more", say("bring_more", lang, count=max(extra, 2), day=when)),
+        )
+    )
+    # Three boundary lines follow (`build_brief`); the whole must fit its one page.
+    if len(lines) + 3 > LINE_BUDGET:
+        raise NotOnePage(f"{len(lines) + 3} lines is more than one page")
     return lines
 
 
@@ -241,8 +404,10 @@ async def build_brief(
 
     Refused whole if any line fails the verifier. The row names the snapshot it was rendered
     from and the one "what changed" was measured against, and every line carries the ids it
-    rests on.
+    rests on. Only whoever may render it — whoever may change the visits, and Nura itself at T-3
+    — gets past the first line; nothing is read for anyone else (B1 review).
     """
+    may_render_brief(context)
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )
@@ -254,6 +419,15 @@ async def build_brief(
     proposed_lines = [
         (one.key, render_proposed(one, visit.language), one.source_ids) for one in proposed
     ]
+    symptoms: list[list[Line]] = []
+    if context.allows(Scope.RECORDS):
+        # Every symptom written down since the last visit (E14-01), each its own line.
+        from app.safety.symptom_log import symptoms_since
+
+        log = await symptoms_since(
+            session, context=context, since=since_moment, language=visit.language
+        )
+        symptoms = symptom_lines(log.entries, visit.language, REGION_TZ[context.region])
     memos = await current_memos(session, context=context)
     bring = [
         (m.key, m.text) for m in memos if m.kind is MemoKind.BRING and m.language == visit.language
@@ -268,6 +442,7 @@ async def build_brief(
         bring_memos=bring,
         has_medicines=has_medicines,
         context=context,
+        symptoms=symptoms,
     )
     # The brief infers — what changed, what to ask — so it ends on its boundary line
     # (E16-01), in his language, naming his doctor; the row carries the same words.

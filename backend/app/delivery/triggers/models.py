@@ -48,6 +48,8 @@ class TriggerType(StrEnum):
     """The first week's prompt due today (E01-04), carried as one line of the morning card."""
     NUDGE = "nudge"
     """The day's smart nudge (E17-03), handed over by its planner; the `nudge` row is the queue."""
+    BRIEF = "visit_brief"
+    """The pre-visit brief, rendered three days before a visit and its card sent (E05-01)."""
 
 
 class Category(StrEnum):

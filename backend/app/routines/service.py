@@ -27,7 +27,7 @@ import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, tzinfo
 from enum import StrEnum
 from itertools import pairwise
 from typing import Any
@@ -517,6 +517,33 @@ def due_at(day: Day, local: datetime) -> str | None:
         if start <= local < end:
             return anchor
     return None
+
+
+WINDOW_BEFORE = timedelta(hours=1)
+"""A tablet may be tapped from an hour before its anchor."""
+
+
+def window_of(day: Day, on: date, anchor: str, tz: tzinfo) -> tuple[datetime, datetime]:
+    """When a tablet at this anchor on this day of his may be tapped: opens an hour before the
+    anchor's time on his day, closes where the routine stops calling the anchor due — `DUE_FOR`
+    after it, or the next anchor if that comes sooner (`due_at`). The one window: the Taken
+    card and its missed-dose lines (E04-02), the not-feeling-well card's tablet row (E13-02)
+    and the ladder (E11) all read it, so moving breakfast moves all of them."""
+    at = datetime.combine(on, day.anchors[anchor], tz)
+    closes = at + DUE_FOR
+    after = ANCHORS.index(anchor) + 1
+    if after < len(ANCHORS):
+        closes = min(closes, datetime.combine(on, day.anchors[ANCHORS[after]], tz))
+    return at - WINDOW_BEFORE, closes
+
+
+async def his_day(session: AsyncSession, *, context: KeyContext) -> Day:
+    """His day as the dose windows read it: his routine's anchors (E10-01) with the one
+    breakfast time — his settings' (`app.onboarding.settings.reach_of`), else the routine's."""
+    return day_of(
+        await current_routine(session, context=context),
+        await breakfast_time(session, context=context),
+    )
 
 
 @audited(Action.READ, Scope.MEDICINES, TARGET)

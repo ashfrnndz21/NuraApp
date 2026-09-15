@@ -244,6 +244,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         region=region,
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
+        red_flag_tiers=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
         review_staff=(("pharmacist", STAFF_TOKEN),),
     )

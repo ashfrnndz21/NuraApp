@@ -130,6 +130,18 @@ async def thread_for(
     )
 
 
+NAME_SLOTS: frozenset[str] = frozenset(
+    {"name", "names", "who", "doctor", "hospital", "patient", "chief", "insurer", "clinic", "both", "either"}
+)
+"""Slots that hold a name: a person's, a doctor's, a hospital's, an insurer's. The standard
+leaves names alone — a name is said as it is written — so the words are verified with each name
+slot standing in as a plain name (`NAME_STAND_IN`) and sent with the real one: "SGH" is a
+hospital's name, not an abbreviation in his sentence, and a red flag's reply is never refused
+for it (B1 review)."""
+
+NAME_STAND_IN = "Ash"
+
+
 class NotLetInHere(Refusal):
     """This person holds no key to the profile, so Nura says nothing to them about it."""
 
@@ -163,12 +175,14 @@ async def _may_message(session: AsyncSession, *, context: KeyContext, person: Pe
 
 def _render(
     kind: str, language: str, params: Mapping[str, str]
-) -> tuple[str, str | None, str | None]:
-    """The words, and which of a template or a catalogue key they came from."""
+) -> tuple[str, str | None, str | None, str]:
+    """The words, which of a template or a catalogue key they came from, and the words as the
+    verifier reads them — every name slot standing in as a plain name."""
+    stand_in = {key: NAME_STAND_IN if key in NAME_SLOTS else value for key, value in params.items()}
     if kind in TEMPLATES:
-        return render(kind, language, params), kind, None
+        return render(kind, language, params), kind, None, render(kind, language, stand_in)
     if kind in REPLIES:
-        return reply(kind, language, **params), None, kind
+        return reply(kind, language, **params), None, kind, reply(kind, language, **stand_in)
     raise NotAMessage(f"{kind!r} is neither an approved template nor a catalogue reply")
 
 
@@ -197,8 +211,8 @@ async def send(
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)
-    text, template_name, catalogue_key = _render(kind, lang, params)
-    failures = [finding for finding in verify(text, lang) if finding.severity == "fail"]
+    text, template_name, catalogue_key, checked = _render(kind, lang, params)
+    failures = [finding for finding in verify(checked, lang) if finding.severity == "fail"]
     if failures:
         raise NotPlainWords(f"{kind} in {lang}: {failures[0].problem}")
 
