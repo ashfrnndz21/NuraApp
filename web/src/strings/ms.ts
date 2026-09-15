@@ -28,7 +28,7 @@ export const ms = {
     // @patient headline
     visits: "Lawatan",
     // @patient headline
-    timeline: "Sejarah",
+    timeline: "Surat",
     // @patient headline
     plan: "Rancangan",
   },
@@ -40,13 +40,15 @@ export const ms = {
     // @patient phrase
     voice: "Cakap",
     // @patient
-    voiceSaid: "Tekan mikrofon pada papan kekunci, kemudian sebut soalan anda.",
+    voiceSaid1: "Tekan mikrofon pada papan kekunci.",
+    // @patient
+    voiceSaid2: "Kemudian sebut soalan anda.",
     // @patient phrase
     close: "Tutup",
   },
   home: {
     // @patient headline
-    mostLikely: "Keadaan paling mungkin",
+    mostLikely: "Keadaan hari ini",
     // @patient headline
     whatChanged: "Apa yang berubah",
     // @patient headline
@@ -54,7 +56,7 @@ export const ms = {
     // @patient headline
     buyMore: "Beli lagi",
     // @patient headline
-    missing: "Tiada dalam surat",
+    missing: "Belum ada dalam surat",
     // @patient
     missingSub: "Nura sudah tambah ini pada soalan untuk lawatan.",
     // @patient phrase
@@ -64,13 +66,11 @@ export const ms = {
     // @patient phrase
     showAll: "Lihat semua {count}",
     // @patient phrase
-    showFewer: "Lihat sedikit",
+    showFewer: "Tunjuk kurang",
+    // @patient
+    bpLast: "Nombor atas terakhir ialah {number}.",
   },
   places: {
-    // @patient headline
-    medicinesOwn: "Ubat anda",
-    // @patient headline
-    medicinesOther: "Ubat {name}",
     // @patient headline
     visitsOwn: "Lawatan anda",
     // @patient headline
@@ -78,13 +78,7 @@ export const ms = {
     // @patient
     visitsNoneOther: "Nura tiada lawatan yang ditulis untuk {name}.",
     // @patient headline
-    recordsOwn: "Surat anda",
-    // @patient headline
-    addTitle: "Tambah pada surat anda",
-    // @patient headline
-    timelineTitle: "Apa yang berlaku, mengikut urutan",
-    // @patient headline
-    planTitle: "Bersedia",
+    planTitle: "Rancangan untuk lawatan seterusnya",
     // @patient
     planLead: "Semua untuk lawatan seterusnya ada di sini.",
   },

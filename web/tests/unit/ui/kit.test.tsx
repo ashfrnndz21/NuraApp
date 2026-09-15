@@ -183,7 +183,7 @@ describe("Sparkline", () => {
     const figure = one(<Sparkline values={[146, 142, 138]} label="Blood pressure, the top number" band={{ low: 120, high: 140 }} tone="watch" />);
     const [svg] = all(figure, byType("svg"));
     expect(svg!.props.role).toBe("img");
-    expect(String(svg!.props["aria-label"])).toContain("146, 142, 138");
+    expect(svg!.props["aria-label"]).toBe("Blood pressure, the top number");
     expect(all(figure, hasClass("spark-line")).length).toBe(1);
     expect(all(figure, hasClass("spark-band")).length).toBe(1);
     expect(all(figure, hasClass("spark-last"))[0]!.props["data-tone"]).toBe("watch");

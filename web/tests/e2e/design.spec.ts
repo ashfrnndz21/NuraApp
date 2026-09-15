@@ -50,7 +50,7 @@ for (const [label, viewport] of [
   test.describe(`D1 — ${label}`, () => {
     if (viewport) test.use({ viewport });
 
-    test("his Today: the backend's number on the wash, a tile per dose due, the coral pill last, nothing covered", async ({ page, request }) => {
+    test("his Today: the backend's number on the wash, a tile per dose due, the coral pill under the hero, nothing covered", async ({ page, request }) => {
       const pa = await seedHome(request);
       await signInThroughTheApp(page, pa.phone, "Pa");
       await todayReady(page);
@@ -67,13 +67,14 @@ for (const [label, viewport] of [
       await expect(page.getByTestId("now-card")).toHaveCount(slots.filter((slot) => slot.due_now && !slot.taken).length);
       if (now.count !== null && slots.some((slot) => slot.due_now)) await expect(page.getByTestId("now-card")).toHaveCount(now.count);
 
-      // His four tabs, his ask bar, the family's note, the visit, and the coral pill last.
+      // His four tabs, his ask bar, the family's note, the visit, and the coral pill under the hero.
       await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
       await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask or search");
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
       await expect(page.getByTestId("visit-tile")).toBeVisible();
-      expect(await page.getByTestId("shell-scroll").evaluate((region) => region.lastElementChild?.getAttribute("data-testid"))).toBe("not-well");
+      // The way in when he feels unwell comes before anything ranked: right under the hero.
+      expect(await page.getByTestId("today-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
       await expect(page.getByTestId("not-well")).toHaveAttribute("class", /coral/);
       // At most one Plum-filled button on the screen.
       expect(await page.locator("main button.plum, main .askbar-go").count()).toBeLessThanOrEqual(1);
@@ -116,7 +117,10 @@ for (const [label, viewport] of [
       await expect(hero.getByTestId("hero-words")).toHaveText(state.line);
       if (state.drivers.length > 0) await expect(page.getByTestId("drivers").locator(".glass-chip")).toHaveText(state.drivers.map((driver) => driver.text));
       await expect(hero.getByTestId("sparkline")).toBeVisible();
-      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", /146, 142, 139, 138$/);
+      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last top number was 138.");
+      // Where the State came from, and the way in when he is unwell, on her Home too.
+      await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
+      await expect(page.getByTestId("home-screen").getByTestId("not-well")).toBeVisible();
 
       const changed = page.getByTestId("what-changed");
       await expect(changed.locator("li").first()).toBeVisible();
@@ -133,7 +137,7 @@ for (const [label, viewport] of [
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");
 
-      await expect(page.locator("nav.tabbar button")).toHaveText(["Home", "History", "Medicines", "Plan", "Family"]);
+      await expect(page.locator("nav.tabbar button")).toHaveText(["Home", "Papers", "Medicines", "Plan", "Family"]);
       await expect(page.locator(".shell-ask").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask about Pa");
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label" })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);

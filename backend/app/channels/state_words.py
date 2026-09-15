@@ -21,9 +21,9 @@ LANGUAGES = ("en", "ms", "zh")
 
 # @patient headline
 POSTURE_WORD: Mapping[str, Mapping[str, str]] = {
-    "en": {"stable": "Stable", "watch": "Watch", "act": "Act today"},
-    "ms": {"stable": "Stabil", "watch": "Perhatikan", "act": "Bertindak hari ini"},
-    "zh": {"stable": "平稳", "watch": "留意", "act": "今天要处理"},
+    "en": {"stable": "Steady", "watch": "One thing to watch", "act": "One thing today"},
+    "ms": {"stable": "Tenang", "watch": "Satu perkara diperhati", "act": "Satu perkara hari ini"},
+    "zh": {"stable": "平稳", "watch": "留意一件事", "act": "今天有一件事"},
 }
 """The posture as one word, large on the wash."""
 
@@ -31,18 +31,18 @@ POSTURE_WORD: Mapping[str, Mapping[str, str]] = {
 POSTURE_LINE: Mapping[str, Mapping[str, str]] = {
     "en": {
         "stable": "Nothing needs you today.",
-        "watch": "Something is worth a look this week.",
-        "act": "Someone should look at this today.",
+        "watch": "Nura is keeping an eye on one thing for you.",
+        "act": "There is one thing for you to do today.",
     },
     "ms": {
         "stable": "Tiada apa yang perlu anda buat hari ini.",
-        "watch": "Ada perkara yang elok dilihat minggu ini.",
-        "act": "Seseorang perlu melihat perkara ini hari ini.",
+        "watch": "Nura sedang memerhatikan satu perkara untuk anda.",
+        "act": "Ada satu perkara untuk anda buat hari ini.",
     },
     "zh": {
         "stable": "今天没有需要您处理的事。",
-        "watch": "这周有件事值得看一看。",
-        "act": "今天需要有人看一看。",
+        "watch": "Nura 在替您留意一件事。",
+        "act": "今天有一件事要您处理。",
     },
 }
 """The one line under the word."""
@@ -111,9 +111,9 @@ PHASE_CHIP: Mapping[str, Mapping[str, str]] = {
         "after_discharge": "Baru keluar hospital",
     },
     "zh": {
-        "before_visit": "这周要看医生",
-        "in_visit": "正在看医生",
-        "after_visit": "刚看完医生",
+        "before_visit": "这周要看诊",
+        "in_visit": "正在看诊",
+        "after_visit": "刚看完诊",
         "after_discharge": "刚出院",
     },
 }

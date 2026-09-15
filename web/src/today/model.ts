@@ -227,11 +227,9 @@ export function proudLine(proud: number | null, s: Strings): string {
   return proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
 }
 
-/** "Thu 10:00" — the next visit's day and time as a figure, in his locale's own short forms. */
-export function shortWhen(date: Date, locale: string): string {
-  const day = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
-  const time = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: false }).format(date);
-  return `${day} ${time}`;
+/** The day of the week in full, in his language: "Thursday", never "Thu" (plain words, rule 5). */
+export function weekdayOf(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
 }
 
 /** His blood pressures' top numbers, oldest first, the last ten — the backend's readings as it

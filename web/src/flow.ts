@@ -6,6 +6,7 @@ import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from
 import { forgetFeed } from "./feed/session";
 import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
+import { todayPage } from "./today/page";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
 
@@ -184,6 +185,7 @@ export async function signOutEverywhere(): Promise<void> {
   await setToken(null);
   await chooseProfile(null);
   me.value = null;
+  todayPage.value = null;
   await clearAllProfileData();
   forgetFeed();
   go({ name: "signin" });

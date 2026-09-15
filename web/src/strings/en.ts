@@ -28,7 +28,7 @@ export const en = {
     // @patient headline
     visits: "Visits",
     // @patient headline
-    timeline: "History",
+    timeline: "Papers",
     // @patient headline
     plan: "Plan",
   },
@@ -40,13 +40,15 @@ export const en = {
     // @patient phrase
     voice: "Speak",
     // @patient
-    voiceSaid: "Tap the microphone on your keyboard, then say your question.",
+    voiceSaid1: "Tap the microphone on your keyboard.",
+    // @patient
+    voiceSaid2: "Then say your question.",
     // @patient phrase
     close: "Close",
   },
   home: {
     // @patient headline
-    mostLikely: "Most likely state",
+    mostLikely: "How things are today",
     // @patient headline
     whatChanged: "What changed",
     // @patient headline
@@ -65,12 +67,10 @@ export const en = {
     showAll: "See all {count}",
     // @patient phrase
     showFewer: "See fewer",
+    // @patient
+    bpLast: "The last top number was {number}.",
   },
   places: {
-    // @patient headline
-    medicinesOwn: "Your medicines",
-    // @patient headline
-    medicinesOther: "{name}'s medicines",
     // @patient headline
     visitsOwn: "Your visits",
     // @patient headline
@@ -78,13 +78,7 @@ export const en = {
     // @patient
     visitsNoneOther: "Nura has no visit written down for {name}.",
     // @patient headline
-    recordsOwn: "Your papers",
-    // @patient headline
-    addTitle: "Add to your papers",
-    // @patient headline
-    timelineTitle: "What happened, in order",
-    // @patient headline
-    planTitle: "Getting ready",
+    planTitle: "Plan for the next visit",
     // @patient
     planLead: "Everything for the next visit is here.",
   },

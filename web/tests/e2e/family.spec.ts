@@ -44,7 +44,7 @@ test("the nav (D1): his four tabs, Family and the rest on Me; her five tabs", as
   await expect(page.getByTestId("me-family")).toBeVisible();
   const hers = await secondPhone(browser);
   await signIn(hers, family.mei, false);
-  await expect(hers.locator("nav.tabbar button")).toHaveText(["Home", "History", "Medicines", "Plan", "Family"]);
+  await expect(hers.locator("nav.tabbar button")).toHaveText(["Home", "Papers", "Medicines", "Plan", "Family"]);
 });
 
 test("Pa's Family, one thing a screen: his circle, his trail, a part kept to himself, and Mei refused on his trail", async ({ page, request }) => {

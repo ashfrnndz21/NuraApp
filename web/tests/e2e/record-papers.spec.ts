@@ -124,8 +124,14 @@ for (const look of LOOKS) {
     const pa = await openOwn(request);
     await signInAs(page, pa, "Pa");
     await lookAs(page, look);
-    await page.getByTestId("tab-today").click();
-    await page.getByTestId("write-reading").click();
+    // His Today has the blood pressure card; her way to it is the Plan tab (D1).
+    if (look === "patient") {
+      await page.getByTestId("tab-today").click();
+      await page.getByTestId("write-reading").click();
+    } else {
+      await page.getByTestId("tab-plan").click();
+      await page.getByTestId("plan-reading").click();
+    }
     await expect(page.getByTestId("reading-photo")).toBeVisible();
     await readable(page, look);
     await page.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });

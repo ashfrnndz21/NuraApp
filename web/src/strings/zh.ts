@@ -28,7 +28,7 @@ export const zh = {
     // @patient headline
     visits: "看诊",
     // @patient headline
-    timeline: "过往",
+    timeline: "文件",
     // @patient headline
     plan: "计划",
   },
@@ -40,13 +40,15 @@ export const zh = {
     // @patient phrase
     voice: "说话",
     // @patient
-    voiceSaid: "请点键盘上的麦克风，然后说出您的问题。",
+    voiceSaid1: "请点键盘上的麦克风。",
+    // @patient
+    voiceSaid2: "然后说出您的问题。",
     // @patient phrase
     close: "关闭",
   },
   home: {
     // @patient headline
-    mostLikely: "最可能的状况",
+    mostLikely: "今天的情况",
     // @patient headline
     whatChanged: "有什么变化",
     // @patient headline
@@ -54,7 +56,7 @@ export const zh = {
     // @patient headline
     buyMore: "再买一些",
     // @patient headline
-    missing: "文件里缺少的",
+    missing: "文件里还没有的",
     // @patient
     missingSub: "Nura 已把这些加进看诊要问的问题里。",
     // @patient phrase
@@ -64,13 +66,11 @@ export const zh = {
     // @patient phrase
     showAll: "看全部 {count} 项",
     // @patient phrase
-    showFewer: "看少一些",
+    showFewer: "收起来",
+    // @patient
+    bpLast: "最近一次上面的数字是{number}。",
   },
   places: {
-    // @patient headline
-    medicinesOwn: "您的药",
-    // @patient headline
-    medicinesOther: "{name}的药",
     // @patient headline
     visitsOwn: "您的看诊",
     // @patient headline
@@ -78,13 +78,7 @@ export const zh = {
     // @patient
     visitsNoneOther: "Nura还没有记下{name}的看诊。",
     // @patient headline
-    recordsOwn: "您的文件",
-    // @patient headline
-    addTitle: "加到您的文件里",
-    // @patient headline
-    timelineTitle: "按时间排的事",
-    // @patient headline
-    planTitle: "做好准备",
+    planTitle: "下次看诊的计划",
     // @patient
     planLead: "下次看诊要的都在这里。",
   },

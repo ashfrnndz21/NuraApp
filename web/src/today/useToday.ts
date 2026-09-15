@@ -40,7 +40,7 @@ export function useToday() {
 
   const show = (next: TodayModel | null) => {
     setModel(next);
-    todayPage.value = next;
+    todayPage.value = next && papers ? { profileId: papers.profile_id, model: next } : null;
   };
 
   /** A refusal, or anything that is not a lost network: nothing of these papers stays. */

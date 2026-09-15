@@ -16,11 +16,11 @@ import {
   greeting,
   nearestToRunOut,
   readingLead,
-  shortWhen,
   stateLines,
   systolics,
   timeLine,
   todayList,
+  weekdayOf,
   whyLine,
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
@@ -56,6 +56,8 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
         words={hero?.count !== null && hero?.count !== undefined ? hero.words : null}
         testId="today-hero"
       />
+      {/* The way in when he feels unwell comes before anything ranked (red flags escalate first). */}
+      <NotWellButton />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       {blank ? (
@@ -96,7 +98,6 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
           </>
         )
       )}
-      <NotWellButton />
     </Shell>
   );
 }
@@ -107,14 +108,15 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
  *  are missing; then the doses she may tap for him, and today's cards. */
 function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit } = v;
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt } = v;
   const drivers = page?.drivers ?? [];
+  const locale = LOCALE[language.value];
   const supply = page ? <SupplyTile lines={page.lines} /> : null;
   return (
     <Shell tab="today" testId="home-screen">
       {page && <span data-testid="today-ready" hidden />}
       {page && page.stateId !== null && page.word && (
-        <Hero label={s.home.mostLikely} figure={page.word} words={page.line ?? null} testId="home-hero">
+        <Hero label={s.home.mostLikely} figure={page.word} words={page.stale || fromPhone ? s.today.staleState : (page.line ?? null)} testId="home-hero">
           <Readings />
           {drivers.length > 0 && (
             <ChipRow testId="drivers" label={s.home.mostLikely}>
@@ -125,9 +127,21 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               ))}
             </ChipRow>
           )}
+          {/* Where the State came from and when, and the boundary it is shown under. */}
+          <p class="hero-sub" data-testid="home-from">
+            {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
+          </p>
+          {(page.boundary ?? []).length > 0 && (
+            <div class="hero-boundary" data-testid="home-boundary">
+              {(page.boundary ?? []).map((line, at) => (
+                <p key={at}>{line}</p>
+              ))}
+            </div>
+          )}
         </Hero>
       )}
       <Notices v={v} saved={saved} />
+      <NotWellButton />
       {blank ? (
         <Blank s={s} />
       ) : (
@@ -136,6 +150,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {feed.flags.map((item) => (
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
+            {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
             {!fromPhone && <WhatChanged />}
             {((nextVisit && !fromPhone) || supply) && (
               <div class="two-up">
@@ -396,7 +411,7 @@ function Readings(): JSX.Element | null {
     );
   }, [bearer, papers?.profile_id]);
   if (values.length < 2) return null;
-  return <Sparkline values={values} label={s.home.bpLabel} />;
+  return <Sparkline values={values} label={fill(s.home.bpLast, { number: String(values[values.length - 1]) })} />;
 }
 
 /** How many of what changed Home shows before "See all": the mockup's three, and one more. */
@@ -448,15 +463,15 @@ function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
   const card = useLogistics(visit);
   const locale = LOCALE[language.value];
-  const place = card?.lines.find((line) => line.section === "place");
+  const when = card?.lines.find((line) => line.section === "when");
   return (
     <GlassTile testId="next-visit-tile">
       <button type="button" class="tile-link" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="open-visit">
         <span class="tile-title">{s.home.nextVisit}</span>
         <Icon name="chevron" />
       </button>
-      <p class="number small">{shortWhen(new Date(visit.scheduled_at), locale)}</p>
-      {place && <p class="source-line">{place.text}</p>}
+      <p class="number small">{weekdayOf(new Date(visit.scheduled_at), locale)}</p>
+      {when && <p class="source-line">{when.text}</p>}
     </GlassTile>
   );
 }

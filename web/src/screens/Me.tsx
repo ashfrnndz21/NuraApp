@@ -35,7 +35,9 @@ export function MeSheet(): JSX.Element | null {
   }, [open, bearer, papers?.profile_id, language.value]);
   const said = summary !== null && summary !== "failed" ? summary : null;
   // His own count waits for his own words; anyone else's view, or his offline, is Today's.
-  const standIn = todayPage.value !== null && (!owner || summary === "failed");
+  // Today's page stands in only for the papers it was read from: never another profile's count.
+  const page = todayPage.value !== null && todayPage.value.profileId === papers?.profile_id ? todayPage.value.model : null;
+  const standIn = page !== null && (!owner || summary === "failed");
   // Escape closes it; opening it puts the screen reader on its title.
   useEffect(() => {
     if (!open) return;
@@ -49,7 +51,7 @@ export function MeSheet(): JSX.Element | null {
 
   // Anyone else's view of the count, or his own when the summary cannot be read (offline):
   // the number Today read, never one counted here.
-  const counted = todayPage.value?.proud ?? null;
+  const counted = page?.proud ?? null;
   const counts = proudLine(counted, s);
   return (
     <Sheet title={s.me.title} open={open} onClose={closeMe} closeLabel={s.shell.close} testId="me-sheet">

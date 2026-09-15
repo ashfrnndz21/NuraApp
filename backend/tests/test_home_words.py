@@ -51,7 +51,7 @@ def test_with_nothing_open_the_hero_counts_the_next_moment_still_to_come() -> No
     assert found is not None
     assert (found.count, found.anchor, found.words) == (1, "dinner", "medicine with dinner")
     assert due_now(slots, "ms") == found.__class__(1, "dinner", "ubat bersama makan malam")
-    assert due_now(slots, "zh") == found.__class__(1, "dinner", "晚餐时的药")
+    assert due_now(slots, "zh") == found.__class__(1, "dinner", "种药，晚餐时吃")
 
 
 def test_with_everything_taken_or_passed_there_is_no_number() -> None:
@@ -72,18 +72,18 @@ def test_the_state_is_said_in_his_language_naming_only_what_it_has_words_for() -
         Dimension.FAMILY: None,  # a dimension this key does not read
     }
     english = said(Posture.ACT, dimensions, "en")
-    assert english.word == "Act today"
-    assert english.line == "Someone should look at this today."
+    assert english.word == "One thing today"
+    assert english.line == "There is one thing for you to do today."
     assert [(d.key, d.text, d.tone) for d in english.drivers] == [
         ("subject:hypertension", "Blood pressure", "watch"),
         ("episode:admission", "In hospital", "act"),
         ("phase:before_visit", "A visit this week", None),
     ]
     malay = said(Posture.ACT, dimensions, "ms")
-    assert malay.word == "Bertindak hari ini"
+    assert malay.word == "Satu perkara hari ini"
     assert [d.text for d in malay.drivers] == ["Tekanan darah", "Di hospital", "Lawatan minggu ini"]
     steady = said(Posture.STABLE, {Dimension.SITUATIONAL: {"phase": "steady"}}, "xx")
-    assert (steady.word, steady.line, steady.drivers) == ("Stable", "Nothing needs you today.", ())
+    assert (steady.word, steady.line, steady.drivers) == ("Steady", "Nothing needs you today.", ())
 
 
 async def test_the_routes_answer_with_the_words_and_numbers(deployment: Deployment) -> None:
@@ -96,7 +96,7 @@ async def test_the_routes_answer_with_the_words_and_numbers(deployment: Deployme
     assert state.status_code == 200, state.text
     body = state.json()
     assert (body["word"], body["line"], body["drivers"]) == (
-        "Stable",
+        "Steady",
         "Nothing needs you today.",
         [],
     )

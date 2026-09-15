@@ -25,7 +25,7 @@ export function AskField({ placeholder, testId }: { placeholder: string; testId?
       onInput={setValue}
       onSubmit={() => go({ name: "ask", question: value.trim() })}
       onVoice={() => {
-        speak({ lines: [s.shell.voiceSaid], language: language.value });
+        speak({ lines: [s.shell.voiceSaid1, s.shell.voiceSaid2], language: language.value });
         input.current?.focus();
       }}
       voiceLabel={s.shell.voice}
