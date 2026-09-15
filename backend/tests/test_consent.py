@@ -193,8 +193,10 @@ def test_the_sharing_words_name_the_person_and_list_the_parts() -> None:
     assert what_lines({Scope.MEDICINES, Scope.VISITS}, "zh") == ["您的药", "您看医生的记录"]
     # Who they are to him is said the way each language says it, or not at all.
     assert named_words("Ash", None, "zh") == "Ash"
-    assert named_words("Ash", "your daughter", "en") == "Ash, your daughter,"
-    assert named_words("Ash", "您的女儿", "zh") == "Ash（您的女儿）"
+    # The relationship is a code (`app.family.relationships`), said in each language's words.
+    assert named_words("Ash", "daughter", "en") == "Ash, your daughter,"
+    assert named_words("Ash", "daughter", "ms") == "Ash, anak perempuan anda,"
+    assert named_words("Ash", "daughter", "zh") == "Ash（您的女儿）"
 
 
 def test_shipped_words_are_never_edited_only_appended() -> None:

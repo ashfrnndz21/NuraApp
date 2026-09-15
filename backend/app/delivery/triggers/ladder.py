@@ -578,6 +578,38 @@ async def acknowledge_flag(
     return newest
 
 
+async def open_flags_for(session: AsyncSession, *, context: KeyContext) -> list[Ladder]:
+    """The open red-flag ladders that reached this person, newest first: the ones their "I'm
+    on it" (`acknowledge_flag`) would stop. Read under the emergency scope, like the
+    acknowledging: a key without it answers nothing."""
+    ladders = await audited_read(
+        session,
+        Ladder,
+        context,
+        Scope.EMERGENCY,
+        where=(Ladder.subject == Subject.FLAG, Ladder.closed_at.is_(None)),
+    )
+    if not ladders:
+        return []
+    reached = await audited_read(
+        session,
+        Delivery,
+        context,
+        Scope.EMERGENCY,
+        where=(
+            Delivery.ladder_id.in_([ladder.id for ladder in ladders]),
+            Delivery.to_person_id == context.person_id,
+            Delivery.outcome == DeliveryOutcome.SENT,
+        ),
+    )
+    theirs_ = {row.ladder_id for row in reached}
+    return sorted(
+        (ladder for ladder in ladders if ladder.id in theirs_),
+        key=lambda ladder: as_utc(ladder.started_at),
+        reverse=True,
+    )
+
+
 # --- doses -----------------------------------------------------------------------------------------
 
 
@@ -687,5 +719,6 @@ __all__ = [
     "climb",
     "dose_for_reply",
     "escalate_flag",
+    "open_flags_for",
     "time",
 ]

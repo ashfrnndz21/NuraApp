@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import now
+from app.consent.models import Consent
 from app.db import take_keepers
 from app.delivery.feed.models import FeedItem
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
@@ -653,6 +654,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             seeded.provenance[str(f.id)] = (_str(f.artifact_id), _str(f.event_id))
             if f.attribute in ("control", "allergy") or f.subject in ("blood_type", "person"):
                 seeded.card.add(str(f.id))
+        consents = list(await session.scalars(select(Consent).where(Consent.profile_id == pid)))
         seeded.params = {
             "event_id": [str(e.id) for e in events],
             "episode_id": [str(illness.id)],
@@ -665,6 +667,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "job_id": [str(uuid.uuid4())],
             "item_id": feed_items or [str(uuid.uuid4())],
             "artifact_id": [consult_voice],
+            "consent_id": [str(c.id) for c in consents],
             "photo_id": [shared["photo"]["photo_id"]],
         }
     return seeded
@@ -736,6 +739,8 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/stewardship"),
     Walk("GET", f"{P}/keys"),
     Walk("GET", f"{P}/consents"),
+    Walk("GET", f"{P}/consents/record.html"),
+    Walk("GET", f"{P}/consents/{{consent_id}}/withdrawal"),
     Walk("GET", f"{P}/audit", params={"limit": "500"}),
     Walk("GET", f"{P}/notes"),
     Walk("GET", f"{P}/state"),
@@ -765,6 +770,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/{{item_id}}/voice"),
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
+    Walk("GET", f"{P}/ladders"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -839,6 +845,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ): "renders the words of an agreement the caller sends; returns no rows",
     ("POST", f"{P}/consents/whatsapp"): "writes an agreement; returns it",
     ("POST", f"{P}/consents/recording"): "writes an agreement; returns it",
+    ("POST", f"{P}/consents/{{consent_id}}/withdraw"): "stops an agreement; returns what it stopped",
     ("POST", f"{P}/notes"): "writes his own note; returns it",
     ("POST", f"{P}/readings"): "writes a reading; returns the event and fact it wrote",
     ("POST", f"{P}/photos"): "keeps a photo; returns its card",

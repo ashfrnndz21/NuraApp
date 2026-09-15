@@ -15,12 +15,14 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read
 from app.audit.models import Action
 from app.db import as_utc, utcnow
+from app.delivery.triggers.models import Delivery, DeliveryOutcome, TriggerType
 from app.drafts import PushDraft
 from app.errors import Refusal
 from app.family.common import NotPlainWords, a_chief
@@ -192,3 +194,49 @@ async def pushes(session: AsyncSession, *, context: KeyContext) -> list[Schedule
     """Every scheduled message, soonest first."""
     found = await audited_read(session, ScheduledPush, context, Scope.SEND)
     return sorted(found, key=lambda push: as_utc(push.send_at))
+
+
+@dataclass(frozen=True, slots=True)
+class PushState:
+    """What became of one message to him, as the delivery log says it (E11)."""
+
+    state: Literal["scheduled", "sent", "not_sent"]
+    """`sent` once a delivery reached him, `not_sent` when its end passed first, else
+    `scheduled`."""
+    sent_at: datetime | None = None
+
+
+async def push_states(
+    session: AsyncSession, *, context: KeyContext, rows: Sequence[ScheduledPush]
+) -> dict[uuid.UUID, PushState]:
+    """Each message's state, read from the delivery log under the same scope as the messages
+    themselves (`Scope.SEND`): only the family-message deliveries that reached him, and of
+    those only when — never who else was reached, by what, or why something was held."""
+    if not rows:
+        return {}
+    sent = await audited_read(
+        session,
+        Delivery,
+        context,
+        Scope.SEND,
+        where=(
+            Delivery.trigger_type == TriggerType.FAMILY_MESSAGE,
+            Delivery.outcome == DeliveryOutcome.SENT,
+        ),
+    )
+    first: dict[str, datetime] = {}
+    for delivery in sent:
+        push_id = str(delivery.why.get("scheduled_push_id", ""))
+        at = as_utc(delivery.recorded_at)
+        if push_id and (push_id not in first or at < first[push_id]):
+            first[push_id] = at
+    moment = utcnow()
+    states: dict[uuid.UUID, PushState] = {}
+    for push in rows:
+        if str(push.id) in first:
+            states[push.id] = PushState("sent", first[str(push.id)])
+        elif as_utc(push.expires_at) <= moment:
+            states[push.id] = PushState("not_sent")
+        else:
+            states[push.id] = PushState("scheduled")
+    return states

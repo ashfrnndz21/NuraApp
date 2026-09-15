@@ -5,7 +5,7 @@ import type { Part, SharingIn, SharingPreviewOut } from "../../api/types";
 import { who } from "../../onboarding/actions";
 import { plan, planNote, to } from "../../onboarding/state";
 import { density } from "../../store/session";
-import { language, t } from "../../strings";
+import { language, RELATIONSHIPS, t, type Relationship } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
 import { Sheet, Status, StepTitle } from "./parts";
 
@@ -24,7 +24,7 @@ export function InviteStep(): JSX.Element {
   const [screen, setScreen] = useState<0 | 1 | 2>(0);
   const [phone, setPhone] = useState("+65");
   const [name, setName] = useState("");
-  const [relationship, setRelationship] = useState("");
+  const [relationship, setRelationship] = useState<Relationship | null>(null);
   const [parts, setParts] = useState<Part[]>([]);
   const [words, setWords] = useState<SharingPreviewOut | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -34,7 +34,7 @@ export function InviteStep(): JSX.Element {
     holder_phone_e164: phone.replace(/\s+/g, ""),
     holder_display_name: name.trim(),
     scopes: PARTS.filter((part) => parts.includes(part)),
-    relationship: relationship.trim() || null,
+    relationship,
     language: language.value,
   });
   const changed = <T,>(set: (value: T) => void) => (value: T) => {
@@ -79,7 +79,14 @@ export function InviteStep(): JSX.Element {
     <Sheet lines={[i.lead]} testId="invite-who">
       <Field name="holder-name" label={i.nameLabel} value={name} onInput={changed(setName)} autoComplete="off" />
       <Field name="holder-phone" label={i.phoneLabel} value={phone} onInput={changed(setPhone)} type="tel" inputMode="tel" />
-      <Field name="relationship" label={i.relationshipLabel} value={relationship} onInput={changed(setRelationship)} />
+      <p class="label">{i.relationshipLabel}</p>
+      <div class="choices two" role="group" aria-label={i.relationshipLabel} data-testid="invite-relationship">
+        {RELATIONSHIPS.map((each) => (
+          <Pill key={each} chosen={relationship === each} onClick={() => changed(setRelationship)(relationship === each ? null : each)} testId={`invite-relationship-${each}`}>
+            {i.relationships[each]}
+          </Pill>
+        ))}
+      </div>
     </Sheet>
   );
   const partsSheet = (

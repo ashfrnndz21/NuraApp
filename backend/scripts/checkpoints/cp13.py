@@ -354,7 +354,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                     "ask",
                     "send",
                 ],
-                "relationship": "anak perempuan",
+                "relationship": "daughter",
                 "language": "ms",
                 "captured_via": "app",
             },

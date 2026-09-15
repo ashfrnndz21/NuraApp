@@ -16,6 +16,7 @@ The first client is a **web app (PWA)** served by the backend and opened in Safa
 | Lock-screen / Home Screen widget, Live Activity | Home-screen PWA opens on the Now card; emergency card one tap away and printable |
 | Share extension "Add to record" | Forward to the WhatsApp agent (E19) |
 | Siri / App Intents | None at T1 |
+| Contacts picker (CNContactPickerViewController) for the "for someone else" door | The Contact Picker API where the browser has it (Chrome on Android); typed entry otherwise, since Safari on iOS has none. The relationship is a set of choices, never typed (E01-01, W6) |
 | Assistive Access | The Dad density mode |
 
 Everything else — sign-in, densities and tokens, Today/Now/Taken, feed pager with voice, onboarding, medicines, review cards, visits, memos, family, offline cache of today's medicines and the emergency card, push for doses on iOS 16.4+ — ships on the web with the same backend.
