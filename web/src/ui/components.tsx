@@ -2,6 +2,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { speak, type SpokenCard } from "../speech/speak";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
+import type { Tab } from "../flow";
 import { demo } from "../store/deployment";
 import { BrandMark, PillButton } from "./kit";
 

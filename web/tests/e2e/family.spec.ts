@@ -39,7 +39,7 @@ const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click
 test("the nav (D1): his four tabs, Family and the rest on Me; her five tabs", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Records", "Visits"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("me-family")).toBeVisible();
   const hers = await secondPhone(browser);

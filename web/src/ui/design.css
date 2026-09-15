@@ -767,3 +767,28 @@ html.shot-full .shell > .shell-scroll {
   border-radius: var(--radius-tile);
   background: var(--white);
 }
+
+/* The Record's places in her density: glass chips that are buttons, a full target each, the
+   one she is on outlined in Plum. */
+.place-chips {
+  margin: 0 6px;
+}
+.place-chip {
+  min-height: var(--target);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: var(--text-caption);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.place-chip[aria-current="page"] {
+  border: 2px solid var(--plum);
+  color: var(--plum);
+  font-weight: 500;
+}
+.place-chip:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}

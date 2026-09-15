@@ -24,83 +24,6 @@ function useOwner(): { own: boolean; name: string } {
   return { own: papers?.standing === "owner", name: papers?.display_name ?? "" };
 }
 
-/** Medicines: every line on the reconciled list — his word for it, the chemical name second and
- *  small, how many are left and the questions for the doctor, where it came from, and its
- *  spoken twin. */
-export function MedicinesScreen(): JSX.Element {
-  const s = t();
-  const bearer = token.value;
-  const papers = profile.value;
-  const { own, name } = useOwner();
-  const [lines, setLines] = useState<LineOut[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  useEffect(() => {
-    if (!bearer || !papers) return;
-    nura.medicines(bearer, papers.profile_id, language.value).then(
-      (found) => {
-        setLines(found);
-        setError(null);
-      },
-      (failure: unknown) => {
-        setLines(null);
-        setError(failure);
-      },
-    );
-  }, [bearer, papers?.profile_id, language.value]);
-  return (
-    <Shell tab="medicines" testId="medicines-screen">
-      <PlaceTitle>{own ? s.places.medicinesOwn : fill(s.places.medicinesOther, { name })}</PlaceTitle>
-      <Notice error={error} />
-      {lines && lines.length === 0 && own && <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />}
-      {lines?.map((line) => {
-        const title = lineTitle(line, s);
-        const said = [...(line.count?.lines ?? []), ...questionLines([line])];
-        return (
-          <FeedCard
-            key={line.line_id}
-            icon="pill"
-            title={title}
-            lines={said}
-            source={line.source}
-            testId="medicine-line"
-            hear={<Hear lines={[title, ...said]} />}
-          >
-            <p class="source-line">
-              {line.generic} {line.strength}
-            </p>
-          </FeedCard>
-        );
-      })}
-    </Shell>
-  );
-}
-
-/** His papers: the ways to add to them that are here today — his blood pressure, how he feels,
- *  setting up from a shoebox of papers. The Record's own screens (W5) join this tab. */
-export function RecordsScreen(): JSX.Element {
-  const s = t();
-  const papers = profile.value;
-  return (
-    <Shell tab="records" testId="records-screen">
-      <PlaceTitle>{s.places.recordsOwn}</PlaceTitle>
-      <PaperTile extra="sheet" testId="add-to-papers">
-        <h2 class="tile-title">{s.places.addTitle}</h2>
-        <PillButton onClick={() => go({ name: "reading" })} testId="records-reading">
-          {s.today.readingTitle}
-        </PillButton>
-        <PillButton onClick={() => go({ name: "symptoms" })} testId="records-symptoms">
-          {s.day.symptomsOpen}
-        </PillButton>
-        {papers && (
-          <PillButton onClick={() => void startOnboarding(papers)} testId="records-set-up">
-            {s.me.setUp}
-          </PillButton>
-        )}
-      </PaperTile>
-    </Shell>
-  );
-}
-
 /** The visits, the spine of the record: each one's day and time, what it is for, and — for the
  *  next one — its brief and its questions. */
 function VisitList(): JSX.Element | null {
@@ -174,18 +97,6 @@ export function VisitsScreen(): JSX.Element {
   );
 }
 
-/** History (the chief's timeline tab, stage 1): the visits in order; W5's timeline of episodes
- *  and papers takes this place when it lands. */
-export function TimelineScreen(): JSX.Element {
-  const s = t();
-  return (
-    <Shell tab="timeline" testId="timeline-screen">
-      <PlaceTitle>{s.places.timelineTitle}</PlaceTitle>
-      <VisitList />
-    </Shell>
-  );
-}
-
 /** The plan (stage 1): getting ready for the next visit, a blood pressure to write down, and
  *  setting up from the papers. */
 export function PlanScreen(): JSX.Element {
@@ -203,6 +114,13 @@ export function PlanScreen(): JSX.Element {
   return (
     <Shell tab="plan" testId="plan-screen">
       <PlaceTitle>{s.places.planTitle}</PlaceTitle>
+      {papers?.scopes.includes("medicines") && (
+        <PaperTile testId="plan-routine-tile">
+          <PillButton onClick={() => go({ name: "record", at: { name: "routine" } })} testId="plan-routine">
+            {s.record.routine}
+          </PillButton>
+        </PaperTile>
+      )}
       <PaperTile testId="plan-ready">
         <p>{s.places.planLead}</p>
         {next && (

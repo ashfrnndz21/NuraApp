@@ -68,7 +68,7 @@ for (const [label, viewport] of [
       if (now.count !== null && slots.some((slot) => slot.due_now)) await expect(page.getByTestId("now-card")).toHaveCount(now.count);
 
       // His four tabs, his ask bar, the family's note, the visit, and the coral pill last.
-      await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Records", "Visits"]);
+      await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
       await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask or search");
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");

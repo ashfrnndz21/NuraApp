@@ -46,6 +46,7 @@ from app.channels.api.schemas import (
     ConfirmIn,
     ConsentIn,
     ConsentOut,
+    CountCorrectionConfirmIn,
     DriveConfirmIn,
     KeyChangeConfirmIn,
     KeyGrant,
@@ -113,6 +114,7 @@ from app.keys.confirm import confirm
 from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
+from app.medicines.reorder import count_correction_draft_for
 from app.medicines.service import draft_for
 from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, EventKind, SourceChannel, short_label
@@ -330,6 +332,13 @@ async def mint_confirmation(
             preview, send_at=body.send_at, channel=body.channel, expires_at=body.expires_at
         )
         return ConfirmationOut.of(await confirm(session, context, push))
+    if isinstance(body, CountCorrectionConfirmIn):
+        # Tablets found at home (E04-05): an active line on this profile, a key that may
+        # change the list, and the number as typed; the yes binds to that number.
+        more = await count_correction_draft_for(
+            session, context=context, line_id=body.line_id, quantity=body.quantity
+        )
+        return ConfirmationOut.of(await confirm(session, context, more))
     if isinstance(body, RoutineConfirmIn):
         # The day (E10-01): the draft is recomputed — times checked, the routine it replaces
         # named — so the yes binds to exactly what `PUT /routine` writes.

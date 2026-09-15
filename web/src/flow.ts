@@ -4,6 +4,7 @@ import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
+import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setToken, token } from "./store/session";
@@ -33,12 +34,13 @@ export type Screen =
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
-  /** The tabs that are not Today (D1): his medicines, his papers, his visits; her timeline and plan. */
-  | { name: "medicines" }
-  | { name: "records" }
+  /** The tabs that are not Today or the Record (D1): his visits; her plan. */
   | { name: "visits" }
-  | { name: "timeline" }
   | { name: "plan" }
+  /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
+   *  and the family's papers; `at` is the one screen under it. Each persona's tabs open into
+   *  it (nav.ts, `recordTab`). */
+  | { name: "record"; at?: RecordAt }
   | { name: "onboarding" }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
@@ -71,9 +73,22 @@ export type FamilyPart =
 
 export type { Tab };
 
-/** Each tab's first screen (nav.ts has which tabs each persona has). */
+/** Each tab's first screen (nav.ts has which tabs each persona has). His Medicines and hers,
+ *  his Records and her Timeline are places in the Record (W5). */
 export function openTab(tab: Tab): void {
-  go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
+  switch (tab) {
+    case "medicines":
+      return go({ name: "record", at: { name: "medicines" } });
+    case "records":
+      return go({ name: "record", at: { name: "hub" } });
+    case "timeline":
+      // A key without the visits part (a helper's) has no timeline to read: its papers' first screen.
+      return go({ name: "record", at: profile.value?.scopes.includes("visits") ? { name: "timeline" } : { name: "hub" } });
+    case "family":
+      return go({ name: "family", part: "home" });
+    default:
+      return go({ name: tab });
+  }
 }
 
 export const screen = signal<Screen>({ name: "loading" });
