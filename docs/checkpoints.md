@@ -1539,7 +1539,7 @@ checkpoint 23 passed: every step did what docs/checkpoints.md says
 
 ## How to run checkpoint 25
 
-The Record is the web client's (W5) over routes the backend already had — E03's timeline, episodes, providers and what changed, E04's medicines, draft and story, E09-01's trend, E10-01's routine, E02's review cards and the machine's screen, E12-09's documents — and two new ones for the reorder card (E04-05): `POST /profiles/{id}/medicines/{line}/ask-to-order` (his tap: a task on the family's list for whoever is on duty, else his chief, and a notice to his chief) and `POST /profiles/{id}/medicines/{line}/more` (tablets found at home, with a yes minted at `POST /profiles/{id}/confirmations`, subject `count_correction`). Nothing is mocked. The people come from checkpoints that already exist: each prints the numbers it signed up (`Pa (+6591117507) registered by phone code…`), and you sign in on the web with those numbers, the code being the newest one for that number in the `make dev` terminal.
+The Record is the web client's (W5) over routes the backend already had — E03's timeline, episodes, providers and what changed, E04's medicines, draft and story, E09-01's trend, E10-01's routine, E02's review cards and the machine's screen — and two new ones for the reorder card (E04-05): `POST /profiles/{id}/medicines/{line}/ask-to-order` (his tap: a task on the family's list for whoever is on duty, else his chief, and a notice to his chief) and `POST /profiles/{id}/medicines/{line}/more` (tablets found at home, with a yes minted at `POST /profiles/{id}/confirmations`, subject `count_correction`). Nothing is mocked. The people come from checkpoints that already exist: each prints the numbers it signed up (`Pa (+6591117507) registered by phone code…`), and you sign in on the web with those numbers, the code being the newest one for that number in the `make dev` terminal.
 
 ```sh
 make dev                # terminal 1: the API on http://127.0.0.1:8000, log to backend/.dev.log
@@ -1574,6 +1574,8 @@ printf '%%PDF-1.4\nnura-paper-placeholder:a-letter-not-a-label\n' > ~/Desktop/no
 
 **The family's papers** (E12-09) — the lasting power of attorney and what it backs — are on the *Family* screen, W6's (checkpoint 26); the Record does not repeat them.
 
+**A closing account** (#151). Once Pa closes his account (*Family* → *What you said yes to* → *Nura keeps your papers*), every Record screen, his and his chief's, says *Nura has stopped keeping these papers.* and shows nothing of them; the backend refuses each read as `AccountClosing`.
+
 **On your iPhone.** Same as checkpoint 10 (`http://<Mac's address>:5173/app/` in Safari, on the same Wi-Fi). *Take a photo* and *Take a photo of the machine* open the back camera. A real photo is not one of the fixture papers, so until the real readers exist (E02) Nura answers *Nura could not read this page.* — that is the fixture, not the screen; the Mac's `cuff.png` shows the full read.
 
 What you will see (the operator's walk: `make build-web`, then `make web-e2e`, which starts `make dev` with the clock frozen):
@@ -1589,12 +1591,13 @@ What you will see (the operator's walk: `make build-web`, then `make web-e2e`, w
 ✓ record-day.spec.ts       › the day: the chief sets it once on her yes; it reads to him as one line per moment and to her as a table
 ✓ record-papers.spec.ts    › the Record's first screen: his medicines, his papers and his day first; a helper sees only what her key opens
 ✓ record-papers.spec.ts    › on a demo deployment the banner is on every Record screen, and still nothing is drawn over a line
+✓ record-papers.spec.ts    › a closing account (patient|caregiver): every Record screen says the backend's AccountClosing sentence, and none of his papers
 ✓ record-papers.spec.ts    › a paper forwarded on WhatsApp is confirmed on the web (patient|caregiver)
 ✓ record-papers.spec.ts    › a blood pressure read off the machine's screen, confirmed with no typing (patient|caregiver)
-21 passed
+23 passed
 ```
 
-**What "passed" means.** In *Big and simple* every Record screen is one thing — one medicine, one visit, one paper — with *This is 1 of N.* and *Next*, 56px buttons, and nothing drawn over a line, the demo banner showing or not; in *Smaller, with more on the page* the same screens are lists and a table. Every line on a card is the backend's — the anchors, what changed, the story, the count, the trend, the day, who was asked to order — and the screens' own words are only titles and buttons; a refusal is one plain sentence (a note naming a medicine, a high-risk medicine without its label photo). A medicine is checked before it is saved, a count moves only on his yes for that number, a paper goes with an illness only on the chief's yes for exactly it, and the day is set only on hers. A helper's key sees only the parts it opens. Nothing of the Record is kept on the phone. If a step does not do that, tell the operator which one and what you saw instead.
+**What "passed" means.** In *Big and simple* every Record screen is one thing — one medicine, one visit, one paper — with *This is 1 of N.* and *Next*, 56px buttons, and nothing drawn over a line, the demo banner showing or not; in *Smaller, with more on the page* the same screens are lists and a table. Every line on a card is the backend's — the anchors, what changed, the story, the count, the trend, the day, who was asked to order — and the screens' own words are only titles and buttons; a refusal is one plain sentence (a note naming a medicine, a high-risk medicine without its label photo, an account being closed). A medicine is checked before it is saved, a count moves only on his yes for that number, a paper goes with an illness only on the chief's yes for exactly it, and the day is set only on hers. A helper's key sees only the parts it opens. Nothing of the Record is kept on the phone. If a step does not do that, tell the operator which one and what you saw instead.
 ## How to run checkpoint 26
 
 Family on the web (W6): the web half of the family stories, walked by two people on two browsers. Three terminals at the top of the repo, the same as checkpoint 10; the household comes from checkpoint 13's script, so there is nothing to type into `/docs` to set it up.
