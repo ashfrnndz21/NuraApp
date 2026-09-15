@@ -85,7 +85,7 @@ from app.language.review import (
     SourceAlreadyListed,
 )
 from app.medicines.reorder import NobodyToAsk, NotACount
-from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
@@ -312,6 +312,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAConsultRecording,
     NotAClip,
     NotOnThisVisit,
+    # A tap the phone held while offline (E00-08) is written only as today's.
+    TapNotToday,
     # The reorder card's (E04-05): tablets found at home are a whole number, more than none.
     NotACount,
 )

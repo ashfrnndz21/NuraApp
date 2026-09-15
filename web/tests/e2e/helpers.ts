@@ -12,6 +12,11 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEV_LOG = process.env.NURA_DEV_LOG ?? resolve(HERE, "../../../backend/.dev.log");
 const CODE_LINE = /login code for (\+[0-9]+): ([0-9]{6})/g;
 
+/** A demo deployment (ADR 0008) takes test numbers only (+65 0…) and signs every one in with
+ *  the operator's code, which it never prints. With `NURA_E2E_DEMO_CODE` set to that code the
+ *  suite walks against a demo: its numbers in the test range, its code instead of the log's. */
+const DEMO_CODE = process.env.NURA_E2E_DEMO_CODE;
+
 /** Every number handed out in this run. The run is one worker (`workers: 1`) on one database, so
  *  a repeat would be the same person twice: `409 ProfileAlreadyOwned` when the second test opens
  *  its profile (main's e2e, run 34912734890). Four random digits per prefix give 10,000 numbers,
@@ -20,7 +25,9 @@ const handedOut = new Set<string>();
 
 export function freshPhone(prefix = "+659777"): string {
   for (;;) {
-    const phone = `${prefix}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+    const phone = DEMO_CODE
+      ? `+650${String(Math.floor(Math.random() * 10_000_000)).padStart(7, "0")}`
+      : `${prefix}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
     if (!handedOut.has(phone)) {
       handedOut.add(phone);
       return phone;
@@ -30,6 +37,7 @@ export function freshPhone(prefix = "+659777"): string {
 
 /** The newest code the server logged for this number, waiting up to five seconds for it. */
 export async function codeFromLog(phone: string, after: number): Promise<string> {
+  if (DEMO_CODE) return DEMO_CODE;
   const deadline = Date.now() + 5000;
   for (;;) {
     if (existsSync(DEV_LOG)) {
@@ -45,7 +53,7 @@ export async function codeFromLog(phone: string, after: number): Promise<string>
 }
 
 export function codesSoFar(phone: string): number {
-  if (!existsSync(DEV_LOG)) return 0;
+  if (DEMO_CODE || !existsSync(DEV_LOG)) return 0;
   return [...readFileSync(DEV_LOG, "utf8").matchAll(CODE_LINE)].filter((m) => m[1] === phone).length;
 }
 
@@ -108,14 +116,19 @@ export async function signInThroughTheApp(page: Page, phone: string, name: strin
 export async function captureSpeech(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const spoken: string[] = [];
+    const rates: number[] = [];
     (window as unknown as { __spoken: string[] }).__spoken = spoken;
+    (window as unknown as { __rates: number[] }).__rates = rates;
     (window as unknown as { __cancels: number }).__cancels = 0;
     const synth = {
       // Every stop is counted, so a test can see a voice stop when its card leaves the screen.
       cancel: () => {
         (window as unknown as { __cancels: number }).__cancels += 1;
       },
-      speak: (u: { text: string }) => spoken.push(u.text),
+      speak: (u: { text: string; rate: number }) => {
+        spoken.push(u.text);
+        rates.push(u.rate);
+      },
       speaking: false,
       pending: false,
       paused: false,
@@ -146,20 +159,119 @@ export async function captureSpeech(page: Page): Promise<void> {
   });
 }
 
-/** The phone's copy of anyone's papers in IndexedDB: every stored value that names a medicine. */
-export async function medicinesInIndexedDb(page: Page): Promise<string[]> {
+/** The phone's copy of anyone's papers in IndexedDB: every stored value that names a medicine.
+ *  The emergency card is left out unless `card` is asked for: it is the one copy the phone keeps
+ *  past midnight (docs/adr/0010-offline-taps-and-the-emergency-card.md), checked on its own. */
+export async function medicinesInIndexedDb(page: Page, { card = false }: { card?: boolean } = {}): Promise<string[]> {
+  return page.evaluate(
+    (withCard) =>
+      new Promise<string[]>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const found: string[] = [];
+          const cursor = opened.result.transaction("kv", "readonly").objectStore("kv").openCursor();
+          cursor.onsuccess = () => {
+            const at = cursor.result;
+            if (!at) return resolve(found);
+            const text = JSON.stringify(at.value);
+            const isCard = String(at.key).startsWith("emergency.");
+            if ((withCard || !isCard) && /amlodipine|blood pressure/.test(text)) found.push(text);
+            at.continue();
+          };
+          cursor.onerror = () => resolve(["error"]);
+        };
+        opened.onerror = () => resolve(["error"]);
+      }),
+    card,
+  );
+}
+
+/** Every key the phone keeps in IndexedDB. */
+export async function keptKeys(page: Page): Promise<string[]> {
   return page.evaluate(
     () =>
       new Promise<string[]>((resolve) => {
         const opened = indexedDB.open("nura", 1);
         opened.onsuccess = () => {
-          const all = opened.result.transaction("kv", "readonly").objectStore("kv").getAll();
-          all.onsuccess = () =>
-            resolve(all.result.map((value: unknown) => JSON.stringify(value)).filter((value: string) => /amlodipine|blood pressure/.test(value)));
+          const all = opened.result.transaction("kv", "readonly").objectStore("kv").getAllKeys();
+          all.onsuccess = () => resolve(all.result.map(String));
         };
-        opened.onerror = () => resolve(["error"]);
+        opened.onerror = () => resolve([]);
       }),
   );
+}
+
+/** Wait until the service worker controls the page, so a reload with no network opens the shell. */
+export async function waitForWorker(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise<void>((done) => navigator.serviceWorker.addEventListener("controllerchange", () => done(), { once: true }));
+    }
+  });
+}
+
+/** Slow the phone's processor by `rate` (Chromium only): 4 is Lighthouse's mid-tier phone, the
+ *  reference for a five-year-old Android. Returns a function that puts it back. */
+export async function throttleCpu(page: Page, rate: number): Promise<() => Promise<void>> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate });
+  return async () => {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+    await cdp.detach();
+  };
+}
+
+/** A redacted paper the fixture extractor knows, as the bytes it knows it by (backend/tests/paper.py). */
+export const paperPhoto = (label: string) => ({ name: `${label}.png`, mimeType: "image/png", buffer: Buffer.concat([PNG, Buffer.from(`nura-paper-placeholder:${label}\n`, "ascii")]) });
+export const paperPdf = (label: string) => ({ name: `${label}.pdf`, mimeType: "application/pdf", buffer: Buffer.from(`%PDF-1.4\nnura-paper-placeholder:${label}\n`, "ascii") });
+
+export interface Owner {
+  phone: string;
+  token: string;
+  profileId: string;
+}
+
+/** A person with his own papers (today's words agreed over the API) and these medicines, each
+ *  written by the label → OK → write flow. */
+export async function seedOwner(
+  request: APIRequestContext,
+  name = "Pa",
+  medicines: { generic: string; strength: string; dose_text: string; quantity: number }[] = [{ generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 }],
+): Promise<Owner> {
+  const phone = freshPhone("+659666");
+  const token = await apiToken(request, phone);
+  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const opened = await request.post(`${API}/profiles/mine`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: name, language: "en" },
+  });
+  if (opened.status() !== 201) throw new Error(`profile: ${opened.status()} ${await opened.text()}`);
+  const profileId = ((await opened.json()) as { profile_id: string }).profile_id;
+  for (const label of medicines) await seedMedicine(request, token, profileId, label);
+  return { phone, token, profileId };
+}
+
+/** Let one person in on the owner's own yes (E12) and cut them a key with this role and these
+ *  parts: their phone, their token and the key's id. */
+export async function cutKey(
+  request: APIRequestContext,
+  owner: Owner,
+  holder: { name: string; prefix: string },
+  role: string,
+  scopes: string[],
+): Promise<{ phone: string; token: string; keyId: string }> {
+  const phone = freshPhone(holder.prefix);
+  const token = await namedToken(request, phone, holder.name);
+  const his = { Authorization: `Bearer ${owner.token}` };
+  const letIn = await request.post(`${API}/profiles/${owner.profileId}/consents/sharing`, {
+    headers: his,
+    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, relationship: "neighbour", language: "en", captured_via: "app" },
+  });
+  if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
+  const key = await request.post(`${API}/profiles/${owner.profileId}/keys`, { headers: his, data: { holder_phone_e164: phone, role, scopes } });
+  if (key.status() !== 201) throw new Error(`key: ${key.status()} ${await key.text()}`);
+  return { phone, token, keyId: ((await key.json()) as { key_id: string }).key_id };
 }
 
 /** Move every kept Today page past its midnight, the way the next morning finds it. */
@@ -272,6 +384,11 @@ export async function seedFeed(request: APIRequestContext, name = "Pa"): Promise
   await request.post(`${API}/profiles/${profileId}/readings`, { headers, data: { systolic: 138, diastolic: 84 } });
   await seedMedicine(request, token, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
   return { phone, token, profileId };
+}
+
+/** Record every utterance's speed too: the rate the phone's voice was asked to speak at. */
+export async function speechRates(page: Page): Promise<number[]> {
+  return page.evaluate(() => (window as unknown as { __rates: number[] }).__rates);
 }
 
 /** The warfarin label photo from the paper fixtures, read and confirmed (checkpoint 5): its
@@ -520,19 +637,35 @@ export async function nothingDrawnOverLines(
       const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return at !== null && (at === element || element.contains(at));
     };
+    // What is drawn over it, so that a failure names what covers the line.
+    const under = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      if (!at) return " (off the screen)";
+      const named = at.closest("[class]");
+      return ` (under ${at.tagName.toLowerCase()}${named ? `.${String(named.getAttribute("class")).split(" ")[0]}` : ""})`;
+    };
     const visible = (element: HTMLElement) => element.offsetParent !== null && element.getBoundingClientRect().height > 0;
+    // Brought to the middle of the screen and tested. A miss is tried again: a screen still
+    // coming in (a card read after the screen opens) moves a line between the scroll and the
+    // test, and only a line still covered after that is a problem.
+    const clear = async (element: HTMLElement) => {
+      for (let tries = 0; tries < 3; tries++) {
+        element.scrollIntoView({ block: "center" });
+        await frame();
+        if (hit(element)) return true;
+      }
+      return false;
+    };
     for (const line of root.querySelectorAll<HTMLElement>(lines)) {
       if (!visible(line) || !line.textContent?.trim()) continue;
-      line.scrollIntoView({ block: "center" });
-      await frame();
-      if (!hit(line)) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}`);
+      if (!(await clear(line))) problems.push(`covered: ${line.textContent.trim().slice(0, 70)}${under(line)}`);
     }
     for (const control of root.querySelectorAll<HTMLElement>(controls)) {
       if (!visible(control)) continue;
-      control.scrollIntoView({ block: "center" });
-      await frame();
+      const covered = !(await clear(control));
       const name = (control.textContent || control.getAttribute("aria-label") || control.tagName).trim().slice(0, 50);
-      if (!hit(control)) problems.push(`control covered: ${name}`);
+      if (covered) problems.push(`control covered: ${name}${under(control)}`);
       const box = control.getBoundingClientRect();
       if (minTarget && (box.height < minTarget - 0.5 || box.width < minTarget - 0.5)) {
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
@@ -565,4 +698,78 @@ export async function expectProud(page: Page, value: string): Promise<void> {
 /** The page's own region scrolled to its end (D1: the page scrolls inside the shell). */
 export async function scrollPageToEnd(page: Page): Promise<void> {
   await page.getByTestId("shell-scroll").evaluate((region) => (region.scrollTop = region.scrollHeight));
+}
+
+/** Nothing is stuck under the floating tab bar. The bar floats over the page, so a line may pass
+ *  under it while the page scrolls — but with the page scrolled as far down as it goes, no line
+ *  and no control of the screen may still be under it, or it could never be read or pressed
+ *  clear of the bar. `nothingDrawnOverLines` scrolls each line to the middle of the screen and so
+ *  never meets the bar at the bottom; this is the check for the bottom. The problems, or []. */
+export async function underTheTabBar(scope: Locator, options: { lines?: string; controls?: string } = {}): Promise<string[]> {
+  const settings = {
+    lines: options.lines ?? "h1, h2, p, .label",
+    controls: options.controls ?? "button, label.pill, input.field, a.pill",
+  };
+  return scope.evaluate(async (root, { lines, controls }) => {
+    const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    const bar = document.querySelector("nav.tabbar");
+    if (!bar) return [];
+    // To the bottom, and again until the page stops growing there: a screen still reading (the
+    // visit's logistics card comes in after the screen opens) grows under a check that
+    // scrolled once, and would name lines that the page's own room clears.
+    // The shell's page scrolls in its own region (D1); a screen outside the shell, the window.
+    const region = document.querySelector<HTMLElement>("[data-testid=shell-scroll]");
+    const scroller = region ?? document.scrollingElement ?? document.documentElement;
+    let settled = 0;
+    for (let tries = 0; tries < 40 && settled < 3; tries++) {
+      const height = scroller.scrollHeight;
+      scroller.scrollTop = height;
+      await frame();
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      settled = atBottom && scroller.scrollHeight === height ? settled + 1 : 0;
+    }
+    const top = bar.getBoundingClientRect().top;
+    // What the region clips below its own edge is hidden, not under the bar.
+    const shown = region ? region.getBoundingClientRect().bottom : window.innerHeight;
+    const problems: string[] = [];
+    for (const element of root.querySelectorAll<HTMLElement>(`${lines}, ${controls}`)) {
+      if (element.offsetParent === null || element.closest("nav.tabbar") || element.closest(".feed-pager")) continue;
+      const box = element.getBoundingClientRect();
+      if (box.height === 0 || box.top >= Math.min(shown, window.innerHeight)) continue;
+      if (Math.min(box.bottom, shown) > top + 0.5) problems.push(`under the tab bar: ${(element.textContent || element.getAttribute("aria-label") || element.tagName).trim().slice(0, 60)}`);
+    }
+    scroller.scrollTop = 0;
+    await frame();
+    return problems;
+  }, settings);
+}
+
+/** What the floating tab bar is drawn over with the page at rest at `scrollY` (the top, by
+ *  default): every visible line and control of `main` under the bar. The bar floats over the
+ *  page by the design (docs/ui-mockup-v2.html), so at rest it covers whatever is at the bottom
+ *  of the screen; this names it. The problems, or []. */
+export async function coveredByTheTabBar(page: Page, scrollY = 0): Promise<string[]> {
+  return page.evaluate(async (at) => {
+    const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    const bar = document.querySelector("nav.tabbar");
+    if (!bar) return [];
+    const region = document.querySelector<HTMLElement>("[data-testid=shell-scroll]");
+    const scroller = region ?? document.scrollingElement ?? document.documentElement;
+    scroller.scrollTop = at;
+    await frame();
+    const top = bar.getBoundingClientRect().top;
+    // What the shell's region clips below its own edge is hidden, not covered by the bar.
+    const shown = region ? region.getBoundingClientRect().bottom : window.innerHeight;
+    const covered: string[] = [];
+    for (const element of document.querySelectorAll<HTMLElement>("main h1, main h2, main p, main .label, main button, main a.pill, main label.pill")) {
+      if (element.closest("nav.tabbar") || element.closest(".feed-pager") || element.offsetParent === null) continue;
+      const box = element.getBoundingClientRect();
+      if (box.height > 0 && Math.min(box.bottom, shown) > top + 0.5 && box.top < Math.min(shown, window.innerHeight)) {
+        covered.push(`${element.tagName.toLowerCase()}: ${(element.textContent || element.getAttribute("aria-label") || "").trim().slice(0, 50)}`);
+      }
+    }
+    scroller.scrollTop = 0;
+    await frame();
+    return covered;
+  }, scrollY);
 }

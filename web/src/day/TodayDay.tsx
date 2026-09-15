@@ -3,12 +3,12 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
-import { bindingOf } from "../offline/todayCache";
+import { bindingOf, zoneOf } from "../offline/todayCache";
 import { density, profile, token } from "../store/session";
 import { language, t } from "../strings";
 import { feedLines, whyLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
-import type { ClipPlayer } from "../visit/clip";
+
 import { ClipCard, FeelingStrip, NudgeTile } from "./components";
 import { cloudView, clipsOf, nudgeToShow, whatToDoLines, type CloudView, type NudgeShown } from "./model";
 import { keepCards, keptCards, wantsCards } from "./offline";
@@ -62,7 +62,7 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
     try {
       const binding = bindingOf(papers);
       if (wantsCards(await keptCards(id, binding), language.value, new Date())) {
-        await keepCards(id, await nura.offlineCards(bearer, id, language.value), binding, new Date());
+        await keepCards(id, await nura.offlineCards(bearer, id, language.value), binding, new Date(), zoneOf(papers.region));
       }
     } catch {
       /* the phone keeps the cards it had */
@@ -149,7 +149,7 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
 
 /** Today's top three (E11-02): the backend's ranking — alerts, then reminders, then insights —
  *  stacked in its order under "For you today" (docs/ui-mockup-v2.html), each under its why. */
-export function TopThree({ items, player }: { items: FeedItemOut[]; player: ClipPlayer }): JSX.Element | null {
+export function TopThree({ items }: { items: FeedItemOut[] }): JSX.Element | null {
   if (items.length === 0) return null;
   return (
     <div class="top-three" data-testid="top-three" data-count={items.length}>
@@ -157,7 +157,7 @@ export function TopThree({ items, player }: { items: FeedItemOut[]; player: Clip
         const clips = clipsOf(item);
         const paper = density() === "patient" || item.supply === "flag";
         return clips.size > 0 ? (
-          <ClipCard key={item.item_id} item={item} clips={clips} player={player} paper={paper} testId="top-three-card" />
+          <ClipCard key={item.item_id} item={item} clips={clips} paper={paper} testId="top-three-card" />
         ) : (
           <Card
             key={item.item_id}

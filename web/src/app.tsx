@@ -1,8 +1,12 @@
 import type { JSX } from "preact";
+import { useEffect } from "preact/hooks";
 import { afterSignIn, go, screen } from "./flow";
+import { focusHeading } from "./ui/focus";
+import { emergencyOnly } from "./offline/emergencyCache";
+import { EmergencyScreen } from "./screens/Emergency";
+import { PapersScreen } from "./screens/Papers";
 import { AskScreen } from "./screens/Ask";
 import { CardScreen } from "./screens/Card";
-import { EmergencyScreen } from "./screens/Emergency";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
@@ -38,6 +42,8 @@ export function App(): JSX.Element | null {
 
 function Route(): JSX.Element | null {
   const current = screen.value;
+  // A new screen: the screen reader and the keyboard start at its heading (E15-04).
+  useEffect(() => focusHeading(), [current.name]);
   if (!restored.value) return null;
   if (current.name === "loading") {
     if (!token.value) go({ name: "signin" });
@@ -68,7 +74,8 @@ function Route(): JSX.Element | null {
     case "forSomeone":
       return <ForSomeoneScreen />;
     case "today":
-      return <TodayScreen saved={current.saved ?? false} />;
+      // A key to the emergency card alone (checkpoint 14's neighbour) sees that card, and nothing else.
+      return profile.value && emergencyOnly(profile.value) ? <EmergencyScreen /> : <TodayScreen saved={current.saved ?? false} />;
     case "feed":
       return <FeedScreen />;
     case "ask":
@@ -85,6 +92,10 @@ function Route(): JSX.Element | null {
       return <RecordScreen at={current.at ?? { name: "hub" }} />;
     case "onboarding":
       return <OnboardingScreen />;
+    case "emergency":
+      return <EmergencyScreen />;
+    case "papers":
+      return <PapersScreen />;
     case "notWell":
       return <NotWellScreen />;
     case "whatToDo":
@@ -99,9 +110,8 @@ function Route(): JSX.Element | null {
       return <QuestionsScreen appointmentId={current.appointmentId} />;
     case "card":
       return <CardScreen item={current.item} />;
-    case "emergency":
-      return <EmergencyScreen />;
     case "family":
       return <FamilyScreen part={current.part ?? "home"} />;
   }
 }
+

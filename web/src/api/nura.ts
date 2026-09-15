@@ -1,4 +1,4 @@
-import { api, apiBlob, apiUpload } from "./client";
+import { api, apiBlob, apiText, apiUpload } from "./client";
 import type {
   AnswerOut,
   AnsweredOut,
@@ -20,6 +20,7 @@ import type {
   DeploymentOut,
   DocumentSource,
   DoorsOut,
+  EmergencyCardOut,
   EngagementEvent,
   EngagementOut,
   EpisodeViewOut,
@@ -189,11 +190,13 @@ export const medicines = (token: string, profileId: string, language: string) =>
 export const dosesToday = (token: string, profileId: string, language: string) =>
   api<SlotOut[]>(`/profiles/${profileId}/medicines/today`, { token, query: { language } });
 
-export const taken = (token: string, profileId: string, lineId: string, anchor: string | null) =>
+/** His tap. `takenAt` is a tap the phone held while offline (E00-08): the moment he made it,
+ *  which the backend writes once however often it is sent. */
+export const taken = (token: string, profileId: string, lineId: string, anchor: string | null, takenAt?: string) =>
   api<TakenOut>(`/profiles/${profileId}/medicines/${lineId}/taken`, {
     method: "POST",
     token,
-    body: { anchor },
+    body: takenAt ? { anchor, taken_at: takenAt } : { anchor },
   });
 
 /** The State, its word, line and drivers in `language` (the profile's own when not given). */
@@ -207,6 +210,14 @@ export const medicinesNow = (token: string, profileId: string, language: string)
 /** The facts that hold now about one subject — his blood pressures, for the chief's sparkline. */
 export const facts = (token: string, profileId: string, subject: string) =>
   api<FactOut[]>(`/profiles/${profileId}/facts`, { token, query: { subject } });
+
+/** A word on the feeling strip (E17), as the phone held it while offline. */
+export const feeling = (token: string, profileId: string, word: string, language: string) =>
+  api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
+
+/** The emergency card, rendered now from State, in his language (E13-01). */
+export const emergencyCard = (token: string, profileId: string, language: string) =>
+  api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
 
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>

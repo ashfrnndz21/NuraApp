@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "description": "Nura's web client (ADR 0001): the app the patient opens in Safari and adds to the home screen.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
@@ -20,6 +22,7 @@
     "preact": "10.29.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
     "@types/node": "24.13.4",
     "typescript": "5.9.3",

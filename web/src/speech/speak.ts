@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import type { SpeechLike } from "../player/player";
 import { LOCALE, type Language } from "../strings";
 
 /** The spoken twin of a card: its lines, read one after another with a pause between.
@@ -71,3 +72,42 @@ export function stopSpeaking(): void {
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   speaking.value = false;
 }
+
+/** The phone's own voice for the one player (`player/player.ts`): the lines one after another
+ *  at his speed, each reported as it starts, so the transcript under the controls follows. The
+ *  same rule as `speak`: only a voice that runs on the phone; with none for the language it
+ *  answers false and nothing is said. */
+export const browserSpeech: SpeechLike = {
+  say(lines, language, rate, events) {
+    const synth = typeof speechSynthesis === "undefined" ? null : speechSynthesis;
+    if (!synth) return false;
+    const voice = pickLocalVoice(synth.getVoices(), language);
+    if (!voice) return false;
+    synth.cancel();
+    if (lines.length === 0) return false;
+    speaking.value = true;
+    lines.forEach((line, index) => {
+      const utterance = new SpeechSynthesisUtterance(line);
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+      utterance.rate = 0.9 * rate;
+      utterance.onstart = () => events.onLine(index);
+      if (index === lines.length - 1) {
+        utterance.onend = () => {
+          speaking.value = false;
+          events.onEnd();
+        };
+        utterance.onerror = () => (speaking.value = false);
+      }
+      synth.speak(utterance);
+    });
+    return true;
+  },
+  pause() {
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.pause();
+  },
+  resume() {
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.resume();
+  },
+  cancel: () => stopSpeaking(),
+};

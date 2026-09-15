@@ -1,6 +1,23 @@
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import { API, apiToken, backendClock, captureSpeech, expireEveryKeptPage, fixClock, freshPhone, medicinesInIndexedDb, seedFeed, seedVisit, seedWarfarinLabel, setBackendClock, shotAs, signInThroughTheApp, todayReady } from "./helpers";
+import {
+  API,
+  apiToken,
+  backendClock,
+  captureSpeech,
+  expireEveryKeptPage,
+  fixClock,
+  freshPhone,
+  medicinesInIndexedDb,
+  seedFeed,
+  seedVisit,
+  seedWarfarinLabel,
+  setBackendClock,
+  shotAs,
+  signInThroughTheApp,
+  todayReady,
+  keptKeys,
+} from "./helpers";
 
 /** Checkpoint 12: the vertical feed on a phone-sized screen, against `make dev` serving the
  *  build. Both clocks stand at 10:00 in Singapore on Monday 14 September — the phone's by
@@ -48,7 +65,11 @@ function recordPages(page: Page): { cursor: string | null; body: FeedPage }[] {
   const seen: { cursor: string | null; body: FeedPage }[] = [];
   page.on("response", async (response) => {
     if (!isFeedPage(response) || !response.ok()) return;
-    seen.push({ cursor: new URL(response.url()).searchParams.get("cursor"), body: (await response.json()) as FeedPage });
+    try {
+      seen.push({ cursor: new URL(response.url()).searchParams.get("cursor"), body: (await response.json()) as FeedPage });
+    } catch {
+      // The test ended, or the page went, while this body was still coming: nothing to record.
+    }
   });
   return seen;
 }
@@ -447,6 +468,7 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   await openPager(page);
   await expect.poll(() => pages.length).toBeGreaterThan(0);
   const kept = pages[0]!.body.items.map((item) => item.item_id);
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {
@@ -468,7 +490,7 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   await page.reload();
   // Today, past midnight: the emergency card rule, and no way into a page the phone no longer holds.
   await expect(page.getByTestId("cannot-reach")).toContainText("Nura cannot reach your papers right now.");
-  await expect(page.getByTestId("emergency-placeholder")).toContainText("Emergency card");
+  await expect(page.getByTestId("emergency-card")).toContainText("Emergency card");
   await expect(page.getByTestId("open-feed")).toHaveCount(0);
   expect(await medicinesInIndexedDb(page)).toEqual([]);
   await context.setOffline(false);

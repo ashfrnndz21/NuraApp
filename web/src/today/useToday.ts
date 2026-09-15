@@ -1,21 +1,42 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { Refused, Unreachable } from "../api/client";
 import * as nura from "../api/nura";
-import type { AppointmentOut, FeedItemOut } from "../api/types";
+import type { AppointmentOut, FeedItemOut, ProfileOut, SlotOut } from "../api/types";
 import { forgetFeed } from "../feed/session";
+import { dropCard, keepsCard, loadCard, readCard, saveCard, wantsRead, type KeptCard } from "../offline/emergencyCache";
 import { dropStaleFeed } from "../offline/feedCache";
-import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type TodayEntry } from "../offline/todayCache";
+import { hold, replay, tapId, waiting, type Tap } from "../offline/queue";
+import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type Binding, type TodayEntry } from "../offline/todayCache";
+import { voice } from "../player/voice";
 import { readFailure } from "../restore";
-import { chooseProfile, posture, profile, token } from "../store/session";
+import { chooseProfile, posture, profile, setLargeText, token } from "../store/session";
 import { language, t } from "../strings";
-import { browserClipDeps, ClipPlayer } from "../visit/clip";
-import { boundaryOf, feedCards, nowCard, tookLine, type TodayModel } from "./model";
+import { boundaryOf, feedCards, largeTextOf, nowCard, tookLine, type TodayModel } from "./model";
 import { todayPage } from "./page";
+
+/** His tap, sent with its moment (W4). A phone clock far enough from Nura's that the moment is
+ *  not today on the region's clock (`TapNotToday`) wrote nothing, and is no reason to lose a tap
+ *  made now: it is sent again at Nura's own moment. */
+async function tapTaken(bearer: string, profileId: string, lineId: string, anchor: string, at: string): Promise<void> {
+  try {
+    await nura.taken(bearer, profileId, lineId, anchor, at);
+  } catch (failure) {
+    if (!(failure instanceof Refused && failure.refusal === "TapNotToday")) throw failure;
+    await nura.taken(bearer, profileId, lineId, anchor);
+  }
+}
 
 /** Today's page, for both personas (D1 split the screen, not the reading): the page the phone
  *  kept (bound to the key that read it, good until the local midnight), then the fresh one when
  *  the network is there. A kept page shows today's list and no Now card: only the backend can
  *  say what is due. A refused read — or a key that has narrowed — deletes what the phone kept
- *  of these papers and says so; nothing is swallowed. */
+ *  of these papers and says so; nothing is swallowed.
+ *
+ *  Offline (E00-08, W4): *Taken* on a dose that came from a live read, tapped when the network
+ *  has gone, is held on the phone with the moment he tapped (`offline/queue.ts`) and sent once,
+ *  in order, when the network is back — the page reads again after. A no to a held tap is said
+ *  in the backend's words. The emergency card is kept too (`offline/emergencyCache.ts`), read
+ *  once a day, and opens with no network. */
 export function useToday() {
   const s = t();
   const bearer = token.value;
@@ -31,25 +52,55 @@ export function useToday() {
   const [visits, setVisits] = useState<AppointmentOut[]>([]);
   // Today's top three (E11-02), read live; a kept page shows the feed's own cards instead.
   const [topThree, setTopThree] = useState<FeedItemOut[]>([]);
-  // "Hear what Dr Tan said" on a card with a consult clip (E21-03): played on a tap only.
-  const clipPlayer = useMemo(
-    () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(bearer ?? "", papers?.profile_id ?? "", artifactId, start, end))),
-    [bearer, papers?.profile_id],
-  );
-  useEffect(() => () => clipPlayer.forget(), [clipPlayer]);
+  // Taps held while offline, whether the last replay sent any, and what the backend said no to.
+  const [held, setHeld] = useState<Tap[]>([]);
+  const [sent, setSent] = useState(false);
+  const [heldRefused, setHeldRefused] = useState<Refused[]>([]);
+  // The emergency card as the phone kept it (W4): shown when Today cannot be.
+  const [card, setCard] = useState<KeptCard | null>(null);
 
   const show = (next: TodayModel | null) => {
     setModel(next);
     todayPage.value = next && papers ? { profileId: papers.profile_id, model: next } : null;
   };
 
-  /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
+  /** A refusal, or anything that is not a lost network: nothing of these papers stays, and the
+   *  no is said — it is not a lost network, whatever the page thought a moment ago. */
   const forget = async (profileId: string, failure: unknown) => {
     await clearProfileData(profileId);
     forgetFeed();
+    // The recordings the player fetched under this key go too: none replays after a no.
+    voice.forget();
+    // His large-text setting came from his State: it goes with the rest.
+    await setLargeText(false);
     show(null);
     setKept(null);
+    setHeld([]);
+    setCard(null);
+    setUnreached(null);
     setError(failure);
+  };
+
+  /** The emergency card: read once a day (and in a new language), kept, and never allowed to
+   *  stop Today. No network or a State behind the record keeps the card the phone has; a no to
+   *  this key deletes it. */
+  const refreshCard = async (current: ProfileOut, binding: Binding): Promise<void> => {
+    if (!bearer) return;
+    const id = current.profile_id;
+    const had = await loadCard(id, binding);
+    if (!wantsRead(had, language.value, new Date(), zoneOf(current.region))) {
+      setCard(had);
+      return;
+    }
+    try {
+      setCard(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date()));
+    } catch (failure) {
+      if (keepsCard(failure)) setCard(had);
+      else {
+        await dropCard(id);
+        setCard(null);
+      }
+    }
   };
 
   const refresh = async (): Promise<void> => {
@@ -62,14 +113,22 @@ export function useToday() {
     if (!sameBinding(binding, bindingOf(papers))) {
       await clearProfileData(id);
       forgetFeed();
+      voice.forget();
       show(null);
       setKept(null);
+      setHeld([]);
+      setCard(null);
       await chooseProfile(current);
     }
     // One call at a time; any refusal stops here and the caller deletes the phone's copy.
     // The State reads under the records scope: a key without it (a helper's, for the
     // medicines) has no State, and Today is the medicines and the feed's cards.
     const state = current.scopes.includes("records") ? await nura.state(bearer, id, language.value) : null;
+    // His own large-text setting, as his State holds it, on his own phone (E15-04).
+    if (current.standing === "owner") {
+      const large = largeTextOf(state);
+      if (large !== null) await setLargeText(large);
+    }
     const lines = await nura.medicines(bearer, id, language.value);
     const slots = await nura.dosesToday(bearer, id, language.value);
     const counted = await nura.proud(bearer, id);
@@ -88,8 +147,8 @@ export function useToday() {
     }
     let chief: string | null = null;
     if (state?.posture === "act" && current.standing === "owner") {
-      const held = await nura.keys(bearer, id);
-      chief = held.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
+      const holders = await nura.keys(bearer, id);
+      chief = holders.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
     }
     const fresh: TodayModel = {
       stateId: state?.state_id ?? null,
@@ -116,19 +175,37 @@ export function useToday() {
     setUnreached(null);
     posture.value = fresh.posture;
     await saveToday(id, fresh, binding, new Date(), zoneOf(current.region));
+    await refreshCard(current, binding);
+  };
+
+  /** Send the taps held while offline, once each and in order, before the page is read. */
+  const replayHeld = async (): Promise<void> => {
+    if (!bearer || !papers) return;
+    const id = papers.profile_id;
+    const binding = bindingOf(papers);
+    const done = await replay(id, binding, new Date(), (tap) =>
+      tap.kind === "taken" ? nura.taken(bearer, id, tap.lineId, tap.anchor, tap.at) : nura.feeling(bearer, id, tap.word, tap.language),
+    );
+    if (done.sent.length > 0) setSent(true);
+    if (done.refused.length > 0) setHeldRefused((before) => [...before, ...done.refused.map((each) => each.failure)]);
+    setHeld(await waiting(id, binding, new Date()));
   };
 
   const load = async () => {
     if (!bearer || !papers) return;
     setError(null);
-    const entry = await loadToday(papers.profile_id, bindingOf(papers), new Date());
-    await dropStaleFeed(papers.profile_id, bindingOf(papers), new Date());
+    const binding = bindingOf(papers);
+    const entry = await loadToday(papers.profile_id, binding, new Date());
+    await dropStaleFeed(papers.profile_id, binding, new Date());
+    setCard(await loadCard(papers.profile_id, binding));
+    setHeld(await waiting(papers.profile_id, binding, new Date()));
     if (entry) {
       setKept(entry);
       show(entry.model);
       posture.value = entry.model.posture;
     }
     try {
+      await replayHeld();
       await refresh();
     } catch (failure) {
       const kind = readFailure(failure);
@@ -139,6 +216,13 @@ export function useToday() {
 
   useEffect(() => {
     void load();
+  }, [bearer, papers?.profile_id, language.value]);
+
+  // The network is back: the held taps go, then the page is read again.
+  useEffect(() => {
+    const back = () => void load();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
   }, [bearer, papers?.profile_id, language.value]);
 
   useEffect(() => {
@@ -158,15 +242,25 @@ export function useToday() {
     if (!bearer || !papers || busy) return;
     setBusy(true);
     setError(null);
+    // The tap's moment goes with it, and the held copy keeps the same one: a tap the backend
+    // wrote whose answer the phone never got is sent again as the same tap, and written once.
+    const at = new Date().toISOString();
     try {
-      await nura.taken(bearer, papers.profile_id, lineId, anchor);
+      await tapTaken(bearer, papers.profile_id, lineId, anchor, at);
       setJustTook(tookLine(new Date().getHours(), s));
       await refresh();
     } catch (failure) {
       const kind = readFailure(failure);
       if (kind === "refused") await forget(papers.profile_id, failure);
-      else if (kind === "network") setUnreached("network");
-      else setError(failure); // the tap did not land; the page stays, and he is told
+      else if (kind === "network") {
+        // No network: the tap is held on the phone with the moment he made it, and sent once
+        // when the network is back. The dose shows as held, in place of Taken.
+        if (failure instanceof Unreachable) {
+          const tap: Tap = { id: tapId(), kind: "taken", lineId, anchor, at };
+          setHeld((await hold(papers.profile_id, tap, bindingOf(papers), new Date(), zoneOf(papers.region))) ?? []);
+        }
+        setUnreached("network");
+      } else setError(failure); // the tap did not land; the page stays, and he is told
     } finally {
       setBusy(false);
     }
@@ -192,10 +286,14 @@ export function useToday() {
     !page || page.stateId === null ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
   // The all-taken and nothing-now cards speak of today's doses: the backend's source line.
   const doseSource = page?.slots[0]?.source ?? "";
-  const dose = page && !fromPhone && !stale ? nowCard(page.slots, page.lines, s) : null;
+  // A dose he tapped with no network is held on the phone: it shows as its own card, with when
+  // he tapped, and the Now card is the next dose the backend marks due.
+  const heldTapOf = (slot: SlotOut) => held.find((tap) => tap.kind === "taken" && tap.lineId === slot.line_id && tap.anchor === slot.anchor);
+  const heldSlots = page && !fromPhone && !stale ? page.slots.filter((slot) => heldTapOf(slot) !== undefined) : [];
+  const dose = page && !fromPhone && !stale ? nowCard(page.slots.filter((slot) => heldTapOf(slot) === undefined), page.lines, s) : null;
   const nextVisit = visits[0] ?? null;
 
-  return { s, bearer, papers, page, kept, unreached, error, justTook, busy, take, fromPhone, blank, feed, act, stale, useFeed, top, stateAt, doseSource, dose, clipPlayer, nextVisit, now };
+  return { s, bearer, papers, page, kept, unreached, error, justTook, busy, take, fromPhone, blank, feed, act, stale, useFeed, top, stateAt, doseSource, dose, nextVisit, now, held, sent, heldRefused, card, heldSlots, heldTapOf };
 }
 
 export type TodayView = ReturnType<typeof useToday>;

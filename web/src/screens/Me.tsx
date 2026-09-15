@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { MeSummaryOut } from "../api/types";
 import { closeMe, go, meOpen, openTab, reloadDoors, signOutEverywhere } from "../flow";
+import { emergencyOnly } from "../offline/emergencyCache";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { backendFor, browserEnv, remindersState, turnOff, turnOn, type RemindersState } from "../push/reminders";
@@ -21,6 +22,8 @@ import { Sheet } from "../ui/kit";
 export function MeSheet(): JSX.Element | null {
   const s = t();
   const open = meOpen.value;
+  // A key to the emergency card alone: nothing here opens more of the papers than that.
+  const only = profile.value ? emergencyOnly(profile.value) : false;
   const names: Record<Language, string> = { en: s.me.en, ms: s.me.ms, zh: s.me.zh };
   const bearer = token.value;
   const papers = profile.value;
@@ -119,9 +122,14 @@ export function MeSheet(): JSX.Element | null {
         <Pill onClick={() => void reloadDoors()} testId="switch-profile">
           {s.me.switchProfile}
         </Pill>
-        {papers && (
+        {papers && !only && (
           <Pill onClick={() => void startOnboarding(papers)} testId="set-up">
             {s.me.setUp}
+          </Pill>
+        )}
+        {profile.value && (profile.value.standing === "owner" || profile.value.scopes.includes("records")) && (
+          <Pill onClick={() => go({ name: "papers" })} testId="open-papers">
+            {s.papers.open}
           </Pill>
         )}
       </Tile>

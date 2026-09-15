@@ -1,4 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
+import { EmergencyCard } from "./Emergency";
+import type { KeptCard } from "../offline/emergencyCache";
+import { zoneOf } from "../offline/todayCache";
 import type { JSX } from "preact";
 import * as family from "../api/family";
 import * as nura from "../api/nura";
@@ -10,6 +13,8 @@ import { go, openTab } from "../flow";
 import { density, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import {
+  clockWords,
+  lineTitle,
   dateLine,
   dayMonthLine,
   dueCards,
@@ -62,8 +67,9 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
       <NotWellButton />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
+      <Held v={v} />
       {blank ? (
-        <Blank s={s} />
+        <Blank s={s} card={v.card} />
       ) : (
         page && (
           <>
@@ -74,7 +80,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <DoseSection v={v} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
-              <TopThree items={top} player={v.clipPlayer} />
+              <TopThree items={top} />
             ) : (
               useFeed && feed.forYou.map((item) => <FeedItemCard key={item.item_id} item={item} v={v} testId="feed-card" />)
             )}
@@ -97,6 +103,10 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             {nextVisit && !fromPhone && <VisitTile visit={nextVisit} />}
             {!fromPhone && <FamilyNote />}
+            {/* The emergency card, one tap from Today, with no network too (W4). */}
+            <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
+              {s.today.emergencyOpen}
+            </PillButton>
           </>
         )
       )}
@@ -150,8 +160,9 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
       )}
       <NotWellButton />
       <Notices v={v} saved={saved} />
+      <Held v={v} />
       {blank ? (
-        <Blank s={s} />
+        <Blank s={s} card={v.card} />
       ) : (
         page && (
           <>
@@ -173,7 +184,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {v.papers?.scopes.includes("medicines") && <DoseSection v={v} />}
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
-              <TopThree items={top} player={v.clipPlayer} />
+              <TopThree items={top} />
             ) : (
               useFeed && feed.forYou.map((item) => <FeedItemCard key={item.item_id} item={item} v={v} testId="feed-card" />)
             )}
@@ -189,6 +200,33 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
 }
 
 // --- the pieces both read ------------------------------------------------------------------
+
+/** What happened to the taps held while offline (W4): a no said in the backend's words, the
+ *  held taps sent, or still held when no dose on screen shows it. */
+function Held({ v }: { v: TodayView }): JSX.Element | null {
+  const { s, held, sent, heldRefused, heldSlots } = v;
+  return (
+    <>
+      {heldRefused.length > 0 && (
+        <div data-testid="held-refused">
+          {heldRefused.map((failure, at) => (
+            <Notice key={at} error={failure} />
+          ))}
+        </div>
+      )}
+      {sent && held.length === 0 && (
+        <Tile paper role="status" testId="held-sent">
+          <p>{s.held.sent}</p>
+        </Tile>
+      )}
+      {held.length > 0 && heldSlots.length === 0 && (
+        <Tile paper role="status" testId="held">
+          <p>{s.held.held}</p>
+        </Tile>
+      )}
+    </>
+  );
+}
 
 function Notices({ v, saved }: { v: TodayView; saved: boolean }): JSX.Element {
   const { s, kept, unreached, page, error } = v;
@@ -213,11 +251,11 @@ function Notices({ v, saved }: { v: TodayView; saved: boolean }): JSX.Element {
 }
 
 /** Past midnight with no network: one line, and where the emergency card is. */
-function Blank({ s }: { s: Strings }): JSX.Element {
+function Blank({ s, card }: { s: Strings; card: KeptCard | null }): JSX.Element {
   return (
     <>
       <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
-      <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
+      {card ? <EmergencyCard kept={card} /> : <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />}
     </>
   );
 }
@@ -227,7 +265,7 @@ function Blank({ s }: { s: Strings }): JSX.Element {
 function FeedItemCard({ item, v, testId }: { item: FeedItemOut; v: TodayView; testId: string }): JSX.Element {
   const clips = clipsOf(item);
   const paper = density() === "patient" || item.supply === "flag";
-  if (clips.size > 0) return <ClipCard item={item} clips={clips} player={v.clipPlayer} paper={paper} testId={testId} />;
+  if (clips.size > 0) return <ClipCard item={item} clips={clips} paper={paper} testId={testId} />;
   const shown = feedLines(item);
   return (
     <FeedCard
@@ -274,6 +312,22 @@ function DoseSection({ v }: { v: TodayView }): JSX.Element | null {
           <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />
         ))}
       {stateAt === "now" && <StateCard v={v} />}
+      {/* A dose tapped with no network: held on the phone, with when he tapped (W4). */}
+      {v.heldSlots.map((slot) => (
+        <Card
+          key={`${slot.line_id}:${slot.anchor}`}
+          title={lineTitle(page.lines.find((line) => line.line_id === slot.line_id), s)}
+          lines={[slot.card]}
+          provenance={slot.source}
+          testId="held-card"
+          action={
+            <div class="lines" role="status" data-testid="held">
+              <p>{fill(s.held.tapped, { time: clockWords(new Date(v.heldTapOf(slot)!.at), language.value, zoneOf(v.papers?.region)) })}</p>
+              <p>{s.held.held}</p>
+            </div>
+          }
+        />
+      ))}
       {due.map((one) => (
         <FeedCard
           key={`${one.lineId}:${one.anchor}`}

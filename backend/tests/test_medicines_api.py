@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import base64
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from httpx import AsyncClient
@@ -504,3 +504,53 @@ async def test_a_dose_from_a_pdf_is_not_a_label_photo_either(deployment: Deploym
     )
     assert refused.status_code == 400
     assert refused.json() == {"refusal": "HighRiskNeedsLabelPhoto", "drug_class": "insulin"}
+
+
+async def test_a_tap_the_phone_held_offline_is_written_when_he_made_it_and_once(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """E00-08: *Taken* tapped with no network is held on the phone and sent when the network is
+    back, with the moment he tapped. The backend writes it at that moment, writes it once
+    however often it comes, and takes only today's."""
+    clock.set(datetime(2026, 9, 14, 2, 0, tzinfo=UTC))  # 10:00 in Singapore
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    photo = await _artefact(client, profile_id, pa, "held")
+    added = await _add(client, profile_id, pa, _label("amlodipine", "5 mg", "1 tab OD", 30), photo)
+    assert added.status_code == 201, added.text
+    route = f"/profiles/{profile_id}/medicines/{added.json()['line_id']}/taken"
+
+    held = {"anchor": "breakfast", "taken_at": "2026-09-14T08:05:00+08:00"}
+    first = await client.post(route, json=held, headers=his)
+    assert first.status_code == 201, first.text
+    assert first.json()["taken_at"].startswith("2026-09-14T00:05:00")
+    # The answer was lost on the way back and the phone sends it again: one tap, written once.
+    again = await client.post(route, json=held, headers=his)
+    assert again.status_code == 201, again.text
+    assert again.json()["dose_taken_id"] == first.json()["dose_taken_id"]
+    assert again.json()["taken_at"] == first.json()["taken_at"]
+    listed = await client.get(f"/profiles/{profile_id}/medicines?language=en", headers=his)
+    assert listed.json()[0]["count"]["taken"] == 1
+    slots = await client.get(f"/profiles/{profile_id}/medicines/today?language=en", headers=his)
+    assert [(slot["anchor"], slot["taken"]) for slot in slots.json()] == [("breakfast", True)]
+
+    # Yesterday's tap is not today's tablet, and a tap cannot be from later than now.
+    for moment in ("2026-09-13T21:00:00+08:00", "2026-09-14T10:30:00+08:00"):
+        refused = await client.post(
+            route, json={"anchor": "breakfast", "taken_at": moment}, headers=his
+        )
+        assert refused.status_code == 400, moment
+        assert refused.json() == {"refusal": "TapNotToday"}, moment
+    # A phone's clock a minute ahead is still today's tap.
+    ahead = await client.post(
+        route, json={"anchor": "lunch", "taken_at": "2026-09-14T10:01:00+08:00"}, headers=his
+    )
+    assert ahead.status_code == 201, ahead.text
+    assert ahead.json()["taken_at"].startswith("2026-09-14T02:01:00")
+    # A moment with no zone is refused before anything is written.
+    naive = await client.post(
+        route, json={"anchor": "breakfast", "taken_at": "2026-09-14T08:05:00"}, headers=his
+    )
+    assert naive.status_code == 422

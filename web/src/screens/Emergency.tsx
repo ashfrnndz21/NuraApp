@@ -1,52 +1,111 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import * as nura from "../api/nura";
 import { go } from "../flow";
+import { dropCard, emergencyOnly, keepsCard, loadCard, readCard, saveCard, type KeptCard } from "../offline/emergencyCache";
+import { wantsHomeScreenHint } from "../offline/register";
+import { bindingOf } from "../offline/todayCache";
 import { profile, token } from "../store/session";
-import { language, t } from "../strings";
-import { Header, Notice } from "../ui/components";
-import { PillButton } from "../ui/kit";
+import { fill, language, LOCALE, t } from "../strings";
+import { dateLine } from "../today/model";
+import { Card, Header, Hear, Notice, Pill, Tile } from "../ui/components";
 import { Shell } from "./Shell";
 
-/** The emergency card (E00, reached from the Me sheet): the backend's own printable page, shown
- *  as it is — every line on it the backend's, the phone composes none — and one button to print
- *  it for his wallet. The page is sandboxed: it runs nothing and fetches nothing. */
+/** Open the backend's printable page for this card in a new tab, from the copy the phone
+ *  kept — so it opens with no network too — for the phone's own Print (E13-01's page: paper,
+ *  20px, high contrast, nothing fetched). */
+function openPrintable(html: string): void {
+  const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** The emergency card on the phone (E00-08, E13-01, ADR 0001's "the card one tap away"): its
+ *  lines are the backend's verified sentences in his language and nothing else; the numbers to
+ *  call are the card's data, as buttons; a big Print opens the backend's printable page. It is
+ *  readable with no network and always says when it was read. */
+export function EmergencyCard({ kept }: { kept: KeptCard }): JSX.Element {
+  const s = t();
+  const locale = LOCALE[language.value];
+  const card = kept.card;
+  const lines = card.lines.map((line) => line.text);
+  const read = new Date(kept.fetchedAt);
+  const callable = [...card.contacts].sort((a, b) => Number(b.role === "chief") - Number(a.role === "chief")).filter((each) => each.phone_e164);
+  return (
+    <Tile paper testId="emergency-card">
+      <h2 class="title">{s.today.emergencyTitle}</h2>
+      <div class="lines" data-testid="emergency-lines">
+        {lines.map((line, at) => (
+          <p key={at}>{line}</p>
+        ))}
+      </div>
+      {callable.map((contact) => (
+        <a key={contact.person_id} class="pill" href={`tel:${contact.phone_e164}`} data-testid="call-contact">
+          {fill(s.emergency.callChief, { name: contact.name })}
+        </a>
+      ))}
+      <a class="pill" href={`tel:${card.emergency_number}`} data-testid="call-ambulance">
+        {fill(s.emergency.callAmbulance, { number: card.emergency_number })}
+      </a>
+      {kept.html && (
+        <Pill plum onClick={() => openPrintable(kept.html!)} testId="print-card">
+          {s.emergency.print}
+        </Pill>
+      )}
+      <p class="provenance" data-testid="emergency-read">
+        {fill(s.emergency.asOf, { date: dateLine(read, locale) })}
+      </p>
+      <Hear lines={lines} />
+    </Tile>
+  );
+}
+
 export function EmergencyScreen(): JSX.Element {
   const s = t();
   const bearer = token.value;
   const papers = profile.value;
-  const [page, setPage] = useState<string | null>(null);
+  const [kept, setKept] = useState<KeptCard | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const frame = useRef<HTMLIFrameElement>(null);
+
   useEffect(() => {
     if (!bearer || !papers) return;
-    nura.emergencyCardPage(bearer, papers.profile_id, language.value).then(
-      (found) => {
-        setPage(found);
-        setError(null);
-      },
-      (failure: unknown) => {
-        setPage(null);
+    const binding = bindingOf(papers);
+    const id = papers.profile_id;
+    void (async () => {
+      const found = await loadCard(id, binding);
+      setKept(found);
+      try {
+        setKept(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date()));
+      } catch (failure) {
+        // No network, or a State behind the record: the card the phone kept stands, dated.
+        if (keepsCard(failure)) return;
+        // A no to this key: nothing of the card stays on the phone, and it is said.
+        await dropCard(id);
+        setKept(null);
         setError(failure);
-      },
-    );
+      } finally {
+        setLoaded(true);
+      }
+    })();
   }, [bearer, papers?.profile_id, language.value]);
-  // The frame is as tall as the card, so the shell's own page is the one that scrolls.
-  const fit = () => {
-    const body = frame.current?.contentDocument?.documentElement;
-    if (frame.current && body) frame.current.style.height = `${body.scrollHeight}px`;
-  };
+
+  // An emergency-only key (a neighbour's) has the card and nothing else: no way back to a Today.
+  const only = papers ? emergencyOnly(papers) : false;
   return (
-    <Shell tab={null} testId="emergency-screen">
-      <Header title={s.today.emergencyTitle} onBack={() => go({ name: "today" })} />
+    <Shell tab={null} testId="emergency-screen" bar={!only}>
+      <Header title={s.today.emergencyTitle} onBack={only ? undefined : () => go({ name: "today" })} />
       <Notice error={error} />
-      {page !== null && (
-        <>
-          <iframe ref={frame} class="emergency-page" title={s.today.emergencyTitle} srcdoc={page} sandbox="allow-same-origin allow-modals" onLoad={fit} data-testid="emergency-page" />
-          <PillButton onClick={() => frame.current?.contentWindow?.print()} testId="emergency-print">
-            {s.me.emergencyPrint}
-          </PillButton>
-        </>
+      {kept ? (
+        <EmergencyCard kept={kept} />
+      ) : (
+        loaded && !error && <Card lines={[s.emergency.none, s.emergency.noneSub]} testId="emergency-none" />
+      )}
+      {wantsHomeScreenHint() && (
+        <Tile glass testId="home-screen-hint">
+          <p>{s.today.homeScreen1}</p>
+          <p>{s.today.homeScreen2}</p>
+          <p>{s.today.homeScreen3}</p>
+        </Tile>
       )}
     </Shell>
   );

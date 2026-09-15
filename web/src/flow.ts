@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import type { Tab } from "./nav";
+import { Refused } from "./api/client";
 import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
@@ -7,8 +8,9 @@ import { forgetFeed } from "./feed/session";
 import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { todayPage } from "./today/page";
+import { voice } from "./player/voice";
 import { language } from "./strings";
-import { chooseProfile, me, profile, setToken, token } from "./store/session";
+import { chooseProfile, me, profile, setLargeText, setToken, token } from "./store/session";
 
 /** Which one thing is on the screen. There is no URL routing: the app is one page, opened
  *  from the home screen on the Now card, and every screen is one step from here. */
@@ -43,6 +45,10 @@ export type Screen =
    *  it (nav.ts, `recordTab`). */
   | { name: "record"; at?: RecordAt }
   | { name: "onboarding" }
+  /** His emergency card, one tap from Today, readable with no network (E00-08, E13-01). */
+  | { name: "emergency" }
+  /** Papers from his photos: many picked at once, one yes, one review card each (E18-01). */
+  | { name: "papers" }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
   | { name: "notWell" }
@@ -116,7 +122,14 @@ export async function afterSignIn(): Promise<void> {
   const opening = takeOpen();
   const bearer = token.value;
   if (!bearer) return go({ name: "signin" });
-  me.value = await nura.me(bearer);
+  try {
+    me.value = await nura.me(bearer);
+  } catch (failure) {
+    // His own account is closing (#151): the backend opens nothing of his papers now, him
+    // included, and `me` reads through them — so it says no. The doors still answer and name
+    // the closing, and below nothing of those papers stays on the phone.
+    if (!(failure instanceof Refused && failure.refusal === "AccountClosing")) throw failure;
+  }
   const doors = await nura.doors(bearer, language.value);
   const remembered = profile.value;
   const known = [doors.own, ...doors.invited, ...doors.stewarding].filter((each): each is ProfileOut => each !== null);
@@ -132,6 +145,9 @@ export async function afterSignIn(): Promise<void> {
     // the doors.
     await clearProfileData(remembered.profile_id);
     forgetFeed();
+    voice.forget();
+    // His large-text setting came from his State: it goes with the rest.
+    await setLargeText(false);
     await chooseProfile(null);
     const why = closing.includes(remembered.profile_id) ? "AccountClosing" : "NoKey";
     return go({ name: "doors", doors, refusal: why });
@@ -165,6 +181,7 @@ export async function openProfile(chosen: ProfileOut): Promise<void> {
   if (before && before.profile_id !== chosen.profile_id) {
     await clearProfileData(before.profile_id);
     forgetFeed();
+    voice.forget();
   }
   await chooseProfile(chosen);
   go({ name: "today" });
@@ -180,10 +197,14 @@ export async function signOutEverywhere(): Promise<void> {
     }
   }
   // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
-  // profile and every cached Today page go. The token goes first, so a page still being read
-  // is not kept (useToday checks it), and the wipe comes after any page already being kept.
-  await setToken(null);
+  // profile, every cached Today page, what the player fetched and his large-text setting (read
+  // from his State) go. Whose papers were open is forgotten first, then the token — so a sign-out
+  // cut short never leaves the next person on the last one's papers, and a page still being read
+  // is not kept (useToday checks the token) — and the wipe comes after both.
+  voice.forget();
+  await setLargeText(false);
   await chooseProfile(null);
+  await setToken(null);
   me.value = null;
   todayPage.value = null;
   await clearAllProfileData();

@@ -99,8 +99,8 @@ for (const [label, viewport] of [
       await page.getByTestId("me-emergency").click();
       await expect(page.getByTestId("me-sheet")).toHaveCount(0);
       await expect(page.getByTestId("emergency-screen")).toBeVisible();
-      await expect(page.getByTestId("emergency-print")).toBeVisible();
-      await expect(page.frameLocator("[data-testid=emergency-page]").locator("body")).toContainText("Pa");
+      // W4's card, in the shell: the backend's lines, kept on the phone, with its own Print.
+      await expect(page.getByTestId("emergency-card")).toContainText("This is Pa's emergency card.");
       expect(await shellHolds(page)).toEqual([]);
     });
 

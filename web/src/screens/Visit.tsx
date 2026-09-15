@@ -8,9 +8,10 @@ import { go } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
 import { fill, isLanguage, language, t } from "../strings";
+import { voice } from "../player/voice";
 import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { HearClip } from "../ui/Player";
 import { Shell } from "./Shell";
-import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../visit/model";
 import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../visit/recorder";
 
@@ -56,13 +57,6 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
   const [memos, setMemos] = useState<MemoCardOut | null>(null);
   const recorder = useMemo(() => new ConsultRecorder(browserRecorderDeps()), []);
-  const clips = useMemo(
-    () =>
-      new ClipPlayer(
-        browserClipDeps((artifactId, start, end) => nura.clip(bearer ?? "", papers?.profile_id ?? "", artifactId, start, end)),
-      ),
-    [bearer, papers?.profile_id],
-  );
   const now = useRef<Stage>(stage);
   now.current = stage;
 
@@ -93,13 +87,13 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     );
   }, [bearer, papers?.profile_id, appointmentId]);
 
-  // Leaving the screen: anything not sent is let go, and a clip stops.
+  // Leaving the screen: anything not sent is let go, and a clip stops and its recording is let go.
   useEffect(
     () => () => {
       recorder.discard();
-      clips.forget();
+      voice.forget();
     },
-    [recorder, clips],
+    [recorder],
   );
 
   // A hidden page stops listening at once (a phone suspends it). Before the doctor's answer
@@ -190,7 +184,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     try {
       const outcome = await nura.uploadRecording(bearer, papers.profile_id, appointmentId, kept.blob, kept.durationS, kept.startedAt);
       const first = outcome.summary ? summaryView(outcome.summary).lines.find((line) => line.clip)?.clip : undefined;
-      if (first) clips.warm(first);
+      if (first) voice.warm(first);
       setStage({ kind: "done", notice, outcome });
     } catch (failure) {
       // Not sent: the audio stays on the phone, and one tap sends it again.
@@ -283,11 +277,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
               return (
                 <div key={at} class="clip-line" data-testid="summary-line" data-item-id={line.itemId ?? undefined} data-left-out={out ? "yes" : undefined}>
                   <p>{line.text}</p>
-                  {line.clip && (
-                    <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
-                      {fill(s.visit.hearClip, { doctor })}
-                    </Pill>
-                  )}
+                  {line.clip && <HearClip name={`visit-clip:${at}`} clip={line.clip} line={line.text} label={fill(s.visit.hearClip, { doctor })} onError={setError} />}
                   {open && line.itemId && (
                     <Pill quiet pressed={out} onClick={() => toggle(line.itemId!)} testId="leave-out">
                       {s.day.summaryLeaveOut}

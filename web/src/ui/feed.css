@@ -13,9 +13,10 @@
   flex-direction: column;
   overflow: hidden;
   padding-top: env(safe-area-inset-top);
-  /* The floating tab bar: its target, its padding, the gap it floats above the edge, the
-     phone's own inset — nothing of a card sits under it. */
-  padding-bottom: calc(var(--target) + 3 * var(--space-2) + env(safe-area-inset-bottom));
+  /* The floating tab bar: its height as measured (`--tabbar-h`; before that, its target and
+     its padding), the gap it floats above the edge, the phone's own inset — nothing of a card
+     sits under it. */
+  padding-bottom: calc(var(--tabbar-h, calc(var(--target) + var(--space-2))) + 2 * var(--space-2) + env(safe-area-inset-bottom));
 }
 
 .feed-strip {
@@ -211,4 +212,35 @@
   stroke-width: var(--icon-stroke);
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* A demo deployment's banner (ADR 0008) sits above every screen. The feed is the one screen
+   that is exactly the height of the phone, so when it is up the app is a column the height of
+   the phone and the feed takes what the banner leaves: no card's buttons under the tab bar,
+   nothing to scroll. With no banner it is the whole height, as before. */
+#app:has(> .feed-screen) {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+#app > .feed-screen {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+}
+/* On the feed, the one screen that is exactly the phone's height, only the banner's pinned
+   headline shows; its lines are on every other screen. */
+#app:has(> .feed-screen) > .demo-lines {
+  display: none;
+}
+/* …and the pinned headline there is set in his caption size, still scaled by his text size,
+   so that at 200% on the smallest phone the card below keeps room for its lines and its four
+   buttons, clear of the tab bar. */
+#app:has(> .feed-screen) > .demo-banner {
+  padding: max(4px, env(safe-area-inset-top)) 16px 4px;
+}
+#app:has(> .feed-screen) > .demo-banner strong {
+  font-size: var(--text-caption);
 }

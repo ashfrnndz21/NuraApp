@@ -584,7 +584,8 @@ test("the post-visit card on the web: each line with where it was said, one left
   await withClip.getByTestId("hear-clip").click();
   await expect.poll(async () => (await stand(page)).__clips.length).toBe(1);
   expect((await stand(page)).__clips[0]).toMatch(/^blob:.*#t=\d+(\.\d)?,\d+(\.\d)?$/);
-  await expect(withClip.getByTestId("clip-caption")).toHaveText(caption);
+  // The one player (E15-07): its transcript is the card's own line while the stretch plays.
+  await expect(withClip.getByTestId("player-line")).toHaveText(caption);
   await shotAs(page, "cp27-feed-clip");
 
   // A recording this key may not hear: the backend's refusal in words, never an empty player.
