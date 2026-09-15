@@ -189,3 +189,33 @@ async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name
         )
     ).all()
     assert closing
+
+
+async def test_on_two_lists_a_fall_said_with_shaky_and_sweaty_is_the_fall_on_each(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Neither family's record holds a sugar condition or a sugar medicine, so shaky-and-sweaty
+    would be held back on both and tell nobody: each family's own record chooses, and the fall
+    is raised on both, each ladder started (B1 re-check)."""
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    ma = await register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6591110009", language="en"
+    )
+    ma_profile = await create_own_profile(sg, region=Region.SG, owner=ma, consent=OPENING_CONSENT)
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    await agree_to_family_sharing(
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+    )
+    await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
+
+    handled = await home.inbound(sg, MEI, "he fell, he is shaky and sweaty")
+    assert handled.outcome == "red_flag_ambiguous"
+    flags = (await sg.scalars(select(Flag))).all()
+    assert {flag.profile_id for flag in flags} == {home.profile.id, ma_profile.id}
+    assert all(
+        flag.feeling is Feeling.FALL and flag.suppressed_because is None for flag in flags
+    )
+    assert len((await sg.scalars(select(Ladder))).all()) == 2

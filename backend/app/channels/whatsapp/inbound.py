@@ -675,8 +675,7 @@ async def _red_flag_everywhere(
     The sender is asked which one, in one fixed line, written down as a share on each. None
     when the sender holds the emergency card on none of them.
     """
-    feeling = detect(message.text)
-    assert feeling is not None
+    assert detect(message.text) is not None
     raised: list[tuple[Profile, KeyContext, Flag]] = []
     for profile_id in profiles:
         context = await resolve_key_context(
@@ -684,6 +683,10 @@ async def _red_flag_everywhere(
         )
         if not context.allows(Scope.EMERGENCY):
             continue
+        # Each family's own record chooses the flag: a fall said with shaky-and-sweaty is the
+        # fall where no sugar condition or sugar medicine is on it (B1 re-check).
+        feeling = await flag_to_raise(session, context=context, text=message.text)
+        assert feeling is not None
         profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
         try:
             async with unit_of_work(session):
