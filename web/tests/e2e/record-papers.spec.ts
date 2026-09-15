@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { API, fixClock, seedMedicine } from "./helpers";
-import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, placeholderPng, readable, signInAs } from "./record-helpers";
+import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
  *  E02-08 a blood pressure read off the machine's screen with no typing, and the Record's
@@ -52,6 +52,43 @@ test("on a demo deployment the banner is on every Record screen, and still nothi
     await page.getByTestId("record-back").click();
   }
 });
+
+
+for (const look of LOOKS) {
+  test(`a closing account (${look}): every Record screen says the backend's AccountClosing sentence, and none of his papers`, async ({ page, request }) => {
+    const pa = await openOwn(request);
+    await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
+    const mei = await letIn(request, pa, "Mei", "chief", EVERY_PART);
+    // Pa reads his papers in his density; Mei, his chief, in hers.
+    const reader = look === "patient" ? pa : mei;
+    await signInAs(page, reader, look === "patient" ? "Pa" : "Mei", look === "caregiver");
+    await lookAs(page, look);
+    const entries = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")!));
+    expect(entries.length).toBe(7);
+
+    // Pa closes his account (#151) on his yes while the Record is open: every key and his own
+    // reads are refused by name.
+    const said = await yes(request, pa.token, pa.profileId, { subject: "close_account", language: "en" });
+    const closed = await request.post(`${API}/profiles/${pa.profileId}/closure`, { ...auth(pa.token), data: { confirmation_id: said, language: "en" } });
+    expect(closed.status(), await closed.text()).toBe(201);
+    const refused = await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(reader.token));
+    expect(refused.status()).toBe(403);
+    expect(await refused.json()).toEqual({ refusal: "AccountClosing" });
+
+    // Each Record screen says the catalogue's sentence for that class, and nothing of his papers.
+    for (const entry of entries) {
+      await page.getByTestId(entry).click();
+      if (entry === "record-trends") await page.getByTestId("analyte-total_cholesterol").click();
+      await expect(page.getByTestId("notice").first()).toHaveText("Nura has stopped keeping these papers.");
+      await expect(page.getByTestId("medicine-line")).toHaveCount(0);
+      await expect(page.locator("main")).not.toContainText(/AccountClosing|amlodipine|blood pressure tablet/);
+      await readable(page, look);
+      await page.getByTestId("record-back").click();
+      if (entry === "record-trends") await page.getByTestId("record-back").click();
+      await expect(page.getByTestId("record-hub")).toBeVisible();
+    }
+  });
+}
 
 for (const look of LOOKS) {
   test(`a paper forwarded on WhatsApp is confirmed on the web (${look})`, async ({ page, request }) => {
