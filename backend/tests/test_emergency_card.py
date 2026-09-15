@@ -44,7 +44,9 @@ from tests.safety_support import (
 async def _ready(session: AsyncSession, *, region: Region = Region.SG):
     """Pa with a condition, an allergy, a blood type, a birth year, the water pill, a
     doctor, a reading, and Mei as chief."""
-    owner = await pa(session, region=region, phone="+6591110031" if region is Region.SG else "+60121110031")
+    owner = await pa(
+        session, region=region, phone="+6591110031" if region is Region.SG else "+60121110031"
+    )
     await fact(session, owner, subject="heart_failure", attribute="control", value="watch")
     await fact(session, owner, subject="penicillin", attribute="allergy", value="rash")
     await fact(session, owner, subject="blood_type", attribute="group", value="O+")
@@ -85,7 +87,10 @@ async def test_the_card_holds_what_a_stranger_needs_and_every_line_is_verified(
     assert card.blood_type == "O+"
     medicine = card.medicines[0]
     assert (medicine.generic, medicine.strength, medicine.amount, medicine.when) == (
-        "frusemide", "40 mg", "1 tablet", "every morning",
+        "frusemide",
+        "40 mg",
+        "1 tablet",
+        "every morning",
     )
     assert medicine.plain_name == "the water pill (frusemide)"
     assert card.contacts[0].name == "Mei" and card.contacts[0].phone_e164 == "+6592220031"

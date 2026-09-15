@@ -268,7 +268,9 @@ def is_boundary_line(surface: Surface, text: str | None) -> bool:
         return True
     for code in LANGUAGES:
         closing = [_pattern(t) for t in NOT_ADVICE[code]]
-        if len(lines) < 3 or not all(p.match(line) for p, line in zip(closing, lines[-2:], strict=True)):
+        if len(lines) < 3 or not all(
+            p.match(line) for p, line in zip(closing, lines[-2:], strict=True)
+        ):
             continue
         body = lines[:-2]
         did = _pattern(WHAT_NURA_DID[code][surface])

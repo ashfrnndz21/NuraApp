@@ -111,9 +111,7 @@ def _section(text: str, number: int) -> list[str]:
     )
     if start is None:
         return []
-    end = next(
-        (i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines)
-    )
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
     return lines[start + 1 : end]
 
 

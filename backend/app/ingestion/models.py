@@ -52,6 +52,7 @@ class FieldState(StrEnum):
 DECISIONS = frozenset({FieldState.CONFIRMED, FieldState.CORRECTED, FieldState.REJECTED})
 """What a person may say about a field. PROPOSED is where it starts, not something he says."""
 
+
 class DocumentSource(StrEnum):
     """Where an imported PDF came from, in the person's word (E02-03)."""
 
@@ -298,9 +299,7 @@ class ConsultSegment(ProfileScoped, Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    recording_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("consult_recording.id"), index=True
-    )
+    recording_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("consult_recording.id"), index=True)
     position: Mapped[int] = mapped_column(Integer)
     speaker: Mapped[Speaker] = mapped_column(enum_column(Speaker, "consult_speaker"))
     start_s: Mapped[float] = mapped_column(Float)
@@ -323,7 +322,8 @@ class ConsultUpload(ProfileScoped, Base):
     connection. `doctor_said_yes_at` is the doctor's answer; nothing is kept as a recording
     before it. The row ends one of two ways: put together into a `consult_recording`
     (`finished_at`, `recording_id`), or thrown away with every chunk (`discarded_at`,
-    `discarded_because`: no, left, no_answer, unfinished, no_consent). No words, no audio."""
+    `discarded_because`: no, left, whole, no_answer, unfinished, no_consent, closing). No
+    words, no audio."""
 
     __tablename__ = "consult_upload"
     __table_args__ = (

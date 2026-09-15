@@ -315,6 +315,29 @@ async def test_neither_goes_on_a_day_with_an_open_red_flag(
     assert asked.outcome is DeliveryOutcome.SENT
 
 
+# --- a closing account ------------------------------------------------------------------------
+
+
+async def test_neither_goes_once_he_has_closed_his_account(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Closing his account (#143) stops both: the engine sends nothing more about him, and
+    writes no hold for either, since there is no day of his left to close."""
+    from tests.test_account_closure import _close
+
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    await check_in_setting(sg, h.owner, "18:00")
+    await _he_says(sg, h, clock, at(12), "tired")
+    clock.set(at(13))
+    await _close(sg, h)
+
+    for hour in (18, 20):
+        report = await _run(sg, h, clock, at(hour))
+        assert not _rows(report, CHECK_IN) and not _rows(report, NOTICE)
+    assert _asked(h) == [] and _notices(h, MEI) == []
+
+
 # --- the family's log -----------------------------------------------------------------------------
 
 

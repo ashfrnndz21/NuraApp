@@ -19,7 +19,11 @@ async def test_the_top_three_are_an_alert_a_reminder_and_an_insight_each_with_it
     await _reading(deployment, profile_id, his, 138, 84)
     quiet = await deployment.client.get(f"/profiles/{profile_id}/feed/today", headers=bearer(his))
     assert quiet.status_code == 200, quiet.text
-    assert [item["category"] for item in quiet.json()["items"]] == ["reminder", "insight", "insight"]
+    assert [item["category"] for item in quiet.json()["items"]] == [
+        "reminder",
+        "insight",
+        "insight",
+    ]
 
     felt = await deployment.client.post(
         f"/profiles/{profile_id}/feelings", json={"word": "fall"}, headers=bearer(his)

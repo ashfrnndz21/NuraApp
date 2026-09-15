@@ -161,7 +161,9 @@ def _place_line(visit: Visit) -> Line:
     address = (visit.provider.address or "").strip()
     if address:
         try:
-            return _line("place", "logistics_place", visit.language, doctor=visit.doctor, place=address)
+            return _line(
+                "place", "logistics_place", visit.language, doctor=visit.doctor, place=address
+            )
         except (NotPlainEnough, NotASlotValue):
             pass
     return _line("place", "logistics_no_place", visit.language, doctor=visit.doctor)
@@ -192,7 +194,9 @@ def drive_task_of(found: list[Task], appointment_id: uuid.UUID) -> Task | None:
     drives = [
         task
         for task in found
-        if task.errand is Errand.DRIVE and task.appointment_id == appointment_id and not task.is_done
+        if task.errand is Errand.DRIVE
+        and task.appointment_id == appointment_id
+        and not task.is_done
     ]
     return max(drives, key=lambda task: (as_utc(task.created_at), str(task.id)), default=None)
 
@@ -301,7 +305,9 @@ async def logistics_for(
         chief = await _chief_name(session, context)
         if chief:
             lines.append(
-                _line("driver", "logistics_driver_ask", lang, who=chief, doctor=visit.doctor, day=day)
+                _line(
+                    "driver", "logistics_driver_ask", lang, who=chief, doctor=visit.doctor, day=day
+                )
             )
 
     clinical = state.dimension(Dimension.CLINICAL) or {}
@@ -380,7 +386,10 @@ async def assign_driver(
     visit = await require_visit(session, context=context, appointment_id=appointment.id)
     profile = await audited_profile_read(session, context)
     await consume_confirmation(
-        session, context, confirmation_id, DriveDraft(appointment_id=appointment.id, person_id=person_id)
+        session,
+        context,
+        confirmation_id,
+        DriveDraft(appointment_id=appointment.id, person_id=person_id),
     )
     label = DRIVE_TASK[visit.language].format(name=profile.display_name, doctor=visit.doctor)
     return await add_task(

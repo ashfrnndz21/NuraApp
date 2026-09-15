@@ -69,7 +69,7 @@ from app.errors import Refusal
 from app.family.models import PushChannel, ScheduledPush
 from app.identity.models import Person
 from app.ingestion.models import ReviewCard
-from app.keys.models import Key
+from app.keys.context import closing_since
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Dose, Frequency
 from app.medicines.service import LineView, active_lines
@@ -114,6 +114,14 @@ async def run_due(
 ) -> Report:
     """Evaluate every trigger for this profile at `at` (now when not given)."""
     run = await open_run(session, via=via, profile_id=profile_id, at=at or utcnow())
+    closing = await closing_since(session, profile_id=profile_id)
+    if closing is not None:
+        # A closing account (#143): nothing more goes out about him — except a red flag raised
+        # before he closed it, which is never hidden from the day it was raised. No check-in
+        # and no family notice (`day`). A visit's recording on its way in is thrown away.
+        await _flags(run, raised_before=closing)
+        await _consult_uploads(run, closing=True)
+        return Report(at=run.at, day=run.day, sent=tuple(run.report))
     await _flags(run)
     if run.patient is not None and run.acting.allows(Scope.MEDICINES):
         lines = await active_lines(
@@ -139,10 +147,13 @@ async def run_due(
 # --- alerts first ----------------------------------------------------------------------------------
 
 
-async def _flags(run: Run) -> None:
-    """Every open flag not held back: its ladder, started if it has none, climbed."""
+async def _flags(run: Run, *, raised_before: datetime | None = None) -> None:
+    """Every open flag not held back: its ladder, started if it has none, climbed. On a
+    closing account, only the flags raised before the closing (`raised_before`)."""
     for flag in await open_flags(run.session, context=run.acting):
         if flag.suppressed_because is not None:
+            continue
+        if raised_before is not None and as_utc(flag.raised_at) > as_utc(raised_before):
             continue
         ladder = await flag_ladder(run, flag, exclude=())
         await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
@@ -299,7 +310,9 @@ async def _reorder(run: Run, lines: Sequence[LineView]) -> None:
         )
         generic = view.line.generic
 
-        async def say(person: object, generic: str = generic, runs_out: object = runs_out) -> Delivered:
+        async def say(
+            person: object, generic: str = generic, runs_out: object = runs_out
+        ) -> Delivered:
             assert hasattr(person, "language")
             lang = run.language_for(cast("Person", person))
             return await send(
@@ -432,7 +445,10 @@ async def _papers(run: Run) -> None:
         ReviewCard,
         run.acting,
         Scope.RECORDS,
-        where=(ReviewCard.confirmed_at.is_(None), ReviewCard.created_at > run.at - timedelta(days=1)),
+        where=(
+            ReviewCard.confirmed_at.is_(None),
+            ReviewCard.created_at > run.at - timedelta(days=1),
+        ),
         channel=Channel.SYSTEM,
     )
     if not cards:
@@ -487,14 +503,21 @@ async def _family_messages(run: Run) -> None:
             if push.via_channel is PushChannel.APP
             else DeliveryChannel.WHATSAPP
         )
-        channels = (first, *(c for c in (DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP) if c is not first))
+        channels = (
+            first,
+            *(c for c in (DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP) if c is not first),
+        )
         firing = Firing(
             type=TriggerType.FAMILY_MESSAGE,
             dedupe_key=f"family:{push.id}",
             why={"scheduled_push_id": str(push.id), "composed_from_state": str(push.state_id)},
         )
 
-        async def say(person: object, push: ScheduledPush = push, who: str = composer.display_name if composer else "") -> Delivered:
+        async def say(
+            person: object,
+            push: ScheduledPush = push,
+            who: str = composer.display_name if composer else "",
+        ) -> Delivered:
             return await send(
                 run.session,
                 context=run.acting,
@@ -512,32 +535,16 @@ async def _family_messages(run: Run) -> None:
         )
 
 
-
-GROUP_SWEEP = timedelta(minutes=15)
-"""How far back a run looks for a key that lapsed: the engine runs every five minutes, so a
-lapsed key is caught by the next run, and a missed run or two by the one after."""
-
-
 async def _family_group(run: Run) -> None:
-    """The family's WhatsApp group follows the keys (E11-01): a key that lapsed since the
-    engine last ran is a person out of the group now, before anyone posts there again. A key
-    closed by hand, an agreement withdrawn and "only me" set the group where they happen."""
+    """The family's WhatsApp group follows the keys (E11-01, #143), set again at every run: a
+    key that lapsed — however long the engine was away — is a person out of the group at the
+    next run, and a sync the provider failed is tried again. Telling it the numbers it already
+    has says nothing and writes nothing (`sync_group`). A key closed or narrowed, an agreement
+    withdrawn, "only me", an answer at the key-accept step and a closing set the group where
+    they happen."""
     if not run.acting.allows(Scope.FAMILY):
         return
-    lapsed = await audited_read(
-        run.session,
-        Key,
-        run.acting,
-        Scope.FAMILY,
-        where=(
-            Key.expires_at.is_not(None),
-            Key.expires_at > run.at - GROUP_SWEEP,
-            Key.expires_at <= run.at,
-        ),
-        channel=Channel.SYSTEM,
-    )
-    if lapsed:
-        await sync_group(run.session, context=run.acting, provider=run.via.providers.whatsapp)
+    await sync_group(run.session, context=run.acting, provider=run.via.providers.whatsapp)
 
 
 async def _nudges(run: Run) -> None:
@@ -635,10 +642,11 @@ async def _nudges(run: Run) -> None:
         await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
 
 
-async def _consult_uploads(run: Run) -> None:
+async def _consult_uploads(run: Run, *, closing: bool = False) -> None:
     """A visit's recording on its way in, in chunks (#129), that can no longer finish — the
-    doctor never answered, the phone never said Stop, or no RECORDING consent is in force any
-    more — is thrown away here, with every chunk, when the phone could not do it itself. In
+    doctor never answered, the phone never said Stop, no RECORDING consent is in force any
+    more, or the account is closing (#143) — is thrown away here, with every chunk, when the
+    phone could not do it itself. In
     its own savepoint: a store that fails it is logged, and never costs this run what it
     already sent (its Delivery rows stand; the next run tries the sweep again)."""
     # Imported here: the recording reaches the visit's card, and the card reaches delivery.
@@ -651,6 +659,7 @@ async def _consult_uploads(run: Run) -> None:
                 context=run.acting,
                 store=run.via.providers.object_store,
                 channel=Channel.SYSTEM,
+                closing=closing,
             )
     except Exception as failure:  # noqa: BLE001 — the sweep is never worth the run
         logger.warning("consult upload sweep failed: %s", type(failure).__name__)

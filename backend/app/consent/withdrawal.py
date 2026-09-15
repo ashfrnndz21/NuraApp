@@ -11,20 +11,25 @@ speaks, and follow docs/plain-words.md like every line he reads.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from app.consent.models import ConsentPurpose
 
 LANGUAGES = ("en", "ms", "zh")
 
 APP_STOPS: frozenset[ConsentPurpose] = frozenset(
-    {ConsentPurpose.SHARE_WITH_PERSON, ConsentPurpose.RECORDING, ConsentPurpose.CALENDAR}
+    {
+        ConsentPurpose.SHARE_WITH_PERSON,
+        ConsentPurpose.RECORDING,
+        ConsentPurpose.CALENDAR,
+        ConsentPurpose.WHATSAPP,
+    }
 )
-"""What the owner stops in the app with one yes. Keeping his papers and WhatsApp are not:
-the not-feeling-well button and his Taken both rest on the first, and every WhatsApp message
-about him — to his family too, a red flag's among them — rests on the second, so stopping
-either is done with the Nura team, who can say what stops with it
-(`NotStoppedInTheApp`)."""
+"""What the owner stops in the app with one yes. WhatsApp is among them since #143: his
+agreement is for messages to him, and his family's red-flag notices rest on their own keys, so
+stopping it stops what reaches him and nothing of theirs — the confirm step says exactly that.
+Keeping his papers is not stopped here: that is closing his account (`app.identity.closing`),
+which says what it stops, and when his papers go (`StopsByClosingTheAccount`)."""
 
 # @patient
 STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
@@ -42,6 +47,11 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
             "If you stop this, Nura stops looking in your calendar.",
             "The visits you already said yes to stay.",
         ),
+        ConsentPurpose.WHATSAPP: (
+            "If you stop this, Nura stops messaging you on WhatsApp.",
+            "Your Today page and reminders will not come there.",
+            "You can say yes to WhatsApp again later.",
+        ),
     },
     "ms": {
         ConsentPurpose.SHARE_WITH_PERSON: (
@@ -57,6 +67,11 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
             "Jika anda hentikan ini, Nura berhenti melihat kalendar anda.",
             "Lawatan yang anda sudah setuju kekal.",
         ),
+        ConsentPurpose.WHATSAPP: (
+            "Jika anda hentikan ini, Nura berhenti menghantar mesej kepada anda di WhatsApp.",
+            "Halaman Hari Ini dan peringatan anda tidak akan datang di situ.",
+            "Anda boleh setuju dengan WhatsApp semula nanti.",
+        ),
     },
     "zh": {
         ConsentPurpose.SHARE_WITH_PERSON: (
@@ -71,6 +86,11 @@ STOP_LINES: Mapping[str, Mapping[ConsentPurpose, tuple[str, ...]]] = {
         ConsentPurpose.CALENDAR: (
             "如果您停止这个，Nura 就不再看您的日历了。",
             "您已经同意的看医生预约会留着。",
+        ),
+        ConsentPurpose.WHATSAPP: (
+            "如果您停止这个，Nura 就不再在 WhatsApp 上给您发消息。",
+            "您的“今天”页面和提醒不会再发到那里。",
+            "以后您可以再同意使用 WhatsApp。",
         ),
     },
 }
@@ -99,19 +119,48 @@ STOPPED_LINES: Mapping[str, Mapping[ConsentPurpose, str]] = {
         ConsentPurpose.SHARE_WITH_PERSON: "{name} cannot see your papers now.",
         ConsentPurpose.RECORDING: "Nura will not listen at your visits to the doctor.",
         ConsentPurpose.CALENDAR: "Nura will not look in your calendar.",
+        ConsentPurpose.WHATSAPP: "Nura will not message you on WhatsApp.",
     },
     "ms": {
         ConsentPurpose.SHARE_WITH_PERSON: "{name} tidak boleh melihat surat-surat anda sekarang.",
         ConsentPurpose.RECORDING: "Nura tidak akan mendengar semasa lawatan anda ke doktor.",
         ConsentPurpose.CALENDAR: "Nura tidak akan melihat kalendar anda.",
+        ConsentPurpose.WHATSAPP: "Nura tidak akan menghantar mesej kepada anda di WhatsApp.",
     },
     "zh": {
         ConsentPurpose.SHARE_WITH_PERSON: "{name} 现在不能看您的文件了。",
         ConsentPurpose.RECORDING: "您看医生的时候 Nura 不会再听。",
         ConsentPurpose.CALENDAR: "Nura 不会再看您的日历。",
+        ConsentPurpose.WHATSAPP: "Nura 不会再在 WhatsApp 上给您发消息。",
     },
 }
 """What stopping did, said after his yes."""
+
+# @patient
+LEAVES_GROUP: Mapping[str, str] = {
+    "en": "You leave the family group on WhatsApp.",
+    "ms": "Anda keluar dari kumpulan keluarga di WhatsApp.",
+    "zh": "您会退出 WhatsApp 上的家人群组。",
+}
+"""Stopping WhatsApp, when his family has a group there: he is out of it, at once (#143)."""
+
+# @patient
+LEFT_GROUP: Mapping[str, str] = {
+    "en": "You are not in the family group on WhatsApp now.",
+    "ms": "Anda tidak lagi dalam kumpulan keluarga di WhatsApp.",
+    "zh": "您现在不在 WhatsApp 上的家人群组里了。",
+}
+"""Said after his yes, when he was in the family's group."""
+
+# @patient
+STILL_TOLD: Mapping[str, str] = {
+    "en": "{named} is still told when you are unwell.",
+    "ms": "{named} masih diberitahu apabila anda tidak sihat.",
+    "zh": "{named}在您不舒服时仍会收到通知。",
+}
+"""Stopping WhatsApp, for each person a red flag reaches: they are told on their own key, not
+on his agreement (#143). `named` is the person as the words name them — "Mei, your
+daughter," — from the relationship code, in his language (`app.consent.texts.named_words`)."""
 
 
 def language_of(asked: str | None) -> str:
@@ -121,23 +170,46 @@ def language_of(asked: str | None) -> str:
 
 
 def stop_lines(
-    purpose: ConsentPurpose, *, name: str, language: str | None, told: bool = False
+    purpose: ConsentPurpose,
+    *,
+    name: str,
+    language: str | None,
+    told: bool = False,
+    in_group: bool = False,
+    still_told: Sequence[str] = (),
 ) -> list[str]:
     """What stopping this agreement will do, in his words. `name` is the person let in (for
-    an agreement that names one); `told` when that person is one a red flag reaches."""
+    an agreement that names one); `told` when that person is one a red flag reaches. For
+    WhatsApp, exactly what changes: `in_group` when he is in his family's group there, and
+    `still_told` names everyone a red flag still reaches (#143)."""
     words = language_of(language)
     lines = [line.format(name=name) for line in STOP_LINES[words][purpose]]
     if told:
         lines.insert(2, NOT_TOLD[words].format(name=name))
+    if purpose is ConsentPurpose.WHATSAPP:
+        extra = ([LEAVES_GROUP[words]] if in_group else []) + [
+            STILL_TOLD[words].format(named=named) for named in still_told
+        ]
+        lines[2:2] = extra
     return lines
 
 
 def stopped_lines(
-    purpose: ConsentPurpose, *, name: str, language: str | None, told: bool = False
+    purpose: ConsentPurpose,
+    *,
+    name: str,
+    language: str | None,
+    told: bool = False,
+    in_group: bool = False,
+    still_told: Sequence[str] = (),
 ) -> list[str]:
     """What stopping did, in his words."""
     words = language_of(language)
     lines = [STOPPED[words], STOPPED_LINES[words][purpose].format(name=name)]
     if told:
         lines.append(NOT_TOLD[words].format(name=name))
+    if purpose is ConsentPurpose.WHATSAPP:
+        if in_group:
+            lines.append(LEFT_GROUP[words])
+        lines += [STILL_TOLD[words].format(named=named) for named in still_told]
     return lines

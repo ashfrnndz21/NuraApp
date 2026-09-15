@@ -111,7 +111,9 @@ async def household(deployment: Deployment) -> House:
     await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
     await _ok(
         await client.post(
-            f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his
+            f"/profiles/{profile_id}/keys",
+            json={"holder_phone_e164": MEI, "role": "chief"},
+            headers=his,
         ),
         201,
     )
@@ -123,10 +125,16 @@ async def household(deployment: Deployment) -> House:
         ),
         201,
     )
-    booking = {"provider_id": tan["provider_id"], "scheduled_at": VISIT_AT, "purpose": "blood pressure check"}
+    booking = {
+        "provider_id": tan["provider_id"],
+        "scheduled_at": VISIT_AT,
+        "purpose": "blood pressure check",
+    }
     yes = await _ok(
         await client.post(
-            f"/profiles/{profile_id}/confirmations", json={"subject": "appointment", **booking}, headers=his
+            f"/profiles/{profile_id}/confirmations",
+            json={"subject": "appointment", **booking},
+            headers=his,
         ),
         201,
     )
@@ -169,7 +177,9 @@ async def _key(house: House, phone: str, name: str, role: str, scopes: list[str]
     await let_in(house.deployment, house.pa, house.profile_id, phone, scopes, relationship="son")
     await _ok(
         await house.deployment.client.post(
-            house.at("/keys"), json={"holder_phone_e164": phone, "role": role, "scopes": scopes}, headers=house.his
+            house.at("/keys"),
+            json={"holder_phone_e164": phone, "role": role, "scopes": scopes},
+            headers=house.his,
         ),
         201,
     )
@@ -189,7 +199,9 @@ async def _kept(house: House) -> tuple[list[ConsultRecording], list[Artifact]]:
     async with house.deployment.sessions() as session:
         recordings = list((await session.execute(select(ConsultRecording))).scalars())
         voices = list(
-            (await session.execute(select(Artifact).where(Artifact.kind == ArtifactKind.VOICE))).scalars()
+            (
+                await session.execute(select(Artifact).where(Artifact.kind == ArtifactKind.VOICE))
+            ).scalars()
         )
     return recordings, voices
 
@@ -215,7 +227,10 @@ def test_segments_are_kept_as_pointers_into_the_transcript_in_order() -> None:
     with pytest.raises(SegmentsDoNotFit):
         align(text, [Segment(Speaker.DOCTOR, 0.0, 1.0, "words nobody said")])
     with pytest.raises(SegmentsDoNotFit):
-        align(text, [Segment(Speaker.DOCTOR, 2.0, 3.0, "Yes"), Segment(Speaker.DOCTOR, 1.0, 1.5, "Thank")])
+        align(
+            text,
+            [Segment(Speaker.DOCTOR, 2.0, 3.0, "Yes"), Segment(Speaker.DOCTOR, 1.0, 1.5, "Thank")],
+        )
     with pytest.raises(SegmentsDoNotFit):
         align(text, [Segment(Speaker.DOCTOR, 1.0, 1.0, "Yes")])
 
@@ -243,7 +258,9 @@ def test_an_item_plays_from_the_segments_its_words_fall_in() -> None:
 async def test_with_no_separator_the_recording_is_one_stretch_by_an_unknown_speaker() -> None:
     heard = Transcript(text="Good morning.", confidence=0.9)
     segments = await Unseparated(Region.SG, 12.0).separate(heard, b"x", Region.SG)
-    assert [(one.speaker, one.start_s, one.end_s) for one in segments] == [(Speaker.UNKNOWN, 0.0, 12.0)]
+    assert [(one.speaker, one.start_s, one.end_s) for one in segments] == [
+        (Speaker.UNKNOWN, 0.0, 12.0)
+    ]
     assert await Unseparated(Region.SG).separate(Transcript("", 0.0), b"x", Region.SG) == ()
 
 
@@ -289,7 +306,10 @@ async def test_the_logistics_card_is_composed_from_the_record_and_the_roster_wai
     # The roster has Mei on duty on Saturday mornings: a suggestion, nothing yet.
     assert card["driver"]["status"] == "suggested" and card["driver"]["name"] == "Mei"
     assert card["driver"]["needs_yes"] is True and card["driver"]["can_say_yes"] is True
-    assert by_section["driver"] == "Mei will tell you who is driving you to Dr Tan on Saturday 5 September."
+    assert (
+        by_section["driver"]
+        == "Mei will tell you who is driving you to Dr Tan on Saturday 5 September."
+    )
     assert [line["text"] for line in card["lines"] if line["section"] == "bring"] == [
         "Bring your blood pressure book on Saturday 5 September."
     ]
@@ -300,7 +320,9 @@ async def test_the_logistics_card_is_composed_from_the_record_and_the_roster_wai
 
     # A key that does not reach the family list reads no note and no driver, and says so.
     kit = await _key(house, KIT, "Kit", "caregiver", ["visits", "records", "readings", "medicines"])
-    theirs = await _ok(await deployment.client.get(f"{house.visit}/logistics", headers=bearer(kit["token"])))
+    theirs = await _ok(
+        await deployment.client.get(f"{house.visit}/logistics", headers=bearer(kit["token"]))
+    )
     assert theirs["note"] is None and theirs["driver"]["status"] == "withheld"
     assert "family" in theirs["withheld"]
     assert {line["section"] for line in theirs["lines"]} == {"when", "place", "bring"}
@@ -311,7 +333,11 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
 ) -> None:
     house = await household(deployment)
     client = deployment.client
-    draft = {"subject": "drive", "appointment_id": house.appointment_id, "person_id": house.mei["person_id"]}
+    draft = {
+        "subject": "drive",
+        "appointment_id": house.appointment_id,
+        "person_id": house.mei["person_id"],
+    }
     # Without a yes for exactly this, nothing is given.
     refused = await client.post(
         f"{house.visit}/driver",
@@ -326,11 +352,15 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
     # A clinic's key is never asked to drive him.
     clinic = await _key(house, SITI, "Clinic", "clinic", ["visits", "records"])
     not_family = await client.post(
-        house.at("/confirmations"), json={**draft, "person_id": clinic["person_id"]}, headers=house.hers
+        house.at("/confirmations"),
+        json={**draft, "person_id": clinic["person_id"]},
+        headers=house.hers,
     )
     assert not_family.status_code == 400 and not_family.json() == {"refusal": "NotOnThisVisit"}
 
-    yes = await _ok(await client.post(house.at("/confirmations"), json=draft, headers=house.hers), 201)
+    yes = await _ok(
+        await client.post(house.at("/confirmations"), json=draft, headers=house.hers), 201
+    )
     task = await _ok(
         await client.post(
             f"{house.visit}/driver",
@@ -340,7 +370,10 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
         201,
     )
     assert task["what"] == "drive Pa to Dr Tan" and task["errand"] == "drive"
-    assert task["appointment_id"] == house.appointment_id and task["assigned_person_id"] == house.mei["person_id"]
+    assert (
+        task["appointment_id"] == house.appointment_id
+        and task["assigned_person_id"] == house.mei["person_id"]
+    )
     assert task["due_at"].startswith("2026-09-05T01:00")
     card = await _ok(await client.get(f"{house.visit}/logistics", headers=house.his))
     assert card["driver"] == {
@@ -351,7 +384,9 @@ async def test_the_chiefs_yes_gives_the_drive_and_the_card_names_the_driver(
         "needs_yes": False,
         "can_say_yes": False,
     }
-    assert "Mei will drive you to Dr Tan on Saturday 5 September." in [line["text"] for line in card["lines"]]
+    assert "Mei will drive you to Dr Tan on Saturday 5 September." in [
+        line["text"] for line in card["lines"]
+    ]
     # The yes is spent: the same one twice is refused.
     again = await client.post(
         f"{house.visit}/driver",
@@ -366,7 +401,9 @@ async def test_what_to_bring_is_the_brief_s_lines_his_medicines_and_his_hospital
 ) -> None:
     house = await household(deployment)
     client = deployment.client
-    label_photo = await _ok(await client.post(house.at("/photos"), json=photo("a-pill-box"), headers=house.his), 201)
+    label_photo = await _ok(
+        await client.post(house.at("/photos"), json=photo("a-pill-box"), headers=house.his), 201
+    )
     label = {
         "generic": "amlodipine",
         "strength": "5 mg",
@@ -378,7 +415,11 @@ async def test_what_to_bring_is_the_brief_s_lines_his_medicines_and_his_hospital
     yes = await _ok(
         await client.post(
             house.at("/confirmations"),
-            json={"subject": "medicine", "label": label, "source_artifact_id": label_photo["artifact_id"]},
+            json={
+                "subject": "medicine",
+                "label": label,
+                "source_artifact_id": label_photo["artifact_id"],
+            },
             headers=house.his,
         ),
         201,
@@ -386,13 +427,21 @@ async def test_what_to_bring_is_the_brief_s_lines_his_medicines_and_his_hospital
     await _ok(
         await client.post(
             house.at("/medicines"),
-            json={"label": label, "source_artifact_id": label_photo["artifact_id"], "confirmation_id": yes["confirmation_id"]},
+            json={
+                "label": label,
+                "source_artifact_id": label_photo["artifact_id"],
+                "confirmation_id": yes["confirmation_id"],
+            },
             headers=house.his,
         ),
         201,
     )
     letter = await _ok(
-        await client.post(house.at("/imports"), json=pdf(DISCHARGE_LETTER, hint="discharge_letter"), headers=house.his),
+        await client.post(
+            house.at("/imports"),
+            json=pdf(DISCHARGE_LETTER, hint="discharge_letter"),
+            headers=house.his,
+        ),
         201,
     )
     closed = await confirm(deployment, house.pa["token"], house.profile_id, letter, decide(letter))
@@ -425,7 +474,10 @@ async def test_the_logistics_card_comes_the_day_before_and_on_the_day(
     visits_part = [line for line in card["lines"] if line["section"] in ("when", "place", "bring")]
     assert tomorrow[0]["body"] == [line["text"] for line in visits_part]
     assert tomorrow[0]["voice"] == [line["spoken"] for line in visits_part]
-    assert not any("Mei" in line for line in tomorrow[0]["body"]) and tomorrow[0]["rendered_from_state"]
+    assert (
+        not any("Mei" in line for line in tomorrow[0]["body"])
+        and tomorrow[0]["rendered_from_state"]
+    )
     assert tomorrow[0]["boundary"] is None and tomorrow[0]["autoplay"] is False
     clock.set(SATURDAY_EARLY)
     today = await logistics_cards()
@@ -456,10 +508,17 @@ async def test_a_key_that_does_not_change_the_visits_is_refused_before_the_room_
     await agree_to_recording(deployment, house.pa, house.profile_id)
     kit = await _key(house, KIT, "Kit", "viewer", ["visits", "readings"])
     siti = await _key(house, SITI, "Siti", "helper", ["medicines"])
-    viewer = await deployment.client.get(f"{house.visit}/recording/notice", headers=bearer(kit["token"]))
+    viewer = await deployment.client.get(
+        f"{house.visit}/recording/notice", headers=bearer(kit["token"])
+    )
     assert viewer.status_code == 403 and viewer.json() == {"refusal": "NotTheirsToChangeVisits"}
-    helper = await deployment.client.get(f"{house.visit}/recording/notice", headers=bearer(siti["token"]))
-    assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    helper = await deployment.client.get(
+        f"{house.visit}/recording/notice", headers=bearer(siti["token"])
+    )
+    assert helper.status_code == 403 and helper.json() == {
+        "refusal": "OutOfScope",
+        "scope": "visits",
+    }
 
 
 async def test_consent_then_notice_then_upload_keeps_a_consult_and_ends_in_the_post_visit_card(
@@ -496,7 +555,11 @@ async def test_consent_then_notice_then_upload_keeps_a_consult_and_ends_in_the_p
         voice = await session.get(Artifact, uuid.UUID(recording["artifact_id"]))
         transcript = await session.get(Artifact, uuid.UUID(recording["transcript_artifact_id"]))
         segments = list((await session.execute(select(ConsultSegment))).scalars())
-    assert voice is not None and voice.kind is ArtifactKind.VOICE and voice.content_type == "audio/webm"
+    assert (
+        voice is not None
+        and voice.kind is ArtifactKind.VOICE
+        and voice.content_type == "audio/webm"
+    )
     assert deployment.objects.path_of(voice.storage_key).read_bytes() == data
     assert voice.storage_key.startswith(f"consults/{house.profile_id}/")
     assert transcript is not None and transcript.kind is ArtifactKind.TRANSCRIPT
@@ -505,7 +568,10 @@ async def test_consent_then_notice_then_upload_keeps_a_consult_and_ends_in_the_p
 
     # The post-visit card, from the transcript, every item placed in the recording.
     summary = kept["summary"]
-    assert kept["summary_refused"] is None and summary["artifact_id"] == recording["transcript_artifact_id"]
+    assert (
+        kept["summary_refused"] is None
+        and summary["artifact_id"] == recording["transcript_artifact_id"]
+    )
     assert summary["recording_artifact_id"] == recording["artifact_id"]
     assert "Ask Dr Tan about the new amount of the water pill (frusemide)." in summary["lines"]
     _clean(summary["lines"])
@@ -535,23 +601,31 @@ async def test_a_no_keeps_nothing(deployment: Deployment) -> None:
     writes the notes by hand."""
     house = await household(deployment)
     await agree_to_recording(deployment, house.pa, house.profile_id)
-    notice = await _ok(await deployment.client.get(f"{house.visit}/recording/notice", headers=house.hers))
+    notice = await _ok(
+        await deployment.client.get(f"{house.visit}/recording/notice", headers=house.hers)
+    )
     assert notice["when_no"] == ["Nura will not listen today.", "Mei will write the notes by hand."]
     recordings, voices = await _kept(house)
     assert recordings == [] and voices == []
     # The by-hand path is E05's: the notes typed, read into the same card.
     typed = await deployment.client.post(
         f"{house.visit}/transcript",
-        json={"data": __import__("base64").b64encode(b"Dr Tan said to weigh every morning.").decode()},
+        json={
+            "data": __import__("base64").b64encode(b"Dr Tan said to weigh every morning.").decode()
+        },
         headers=house.hers,
     )
     assert typed.status_code == 201, typed.text
 
 
-async def test_a_recording_nobody_could_hear_is_kept_and_makes_no_card(deployment: Deployment) -> None:
+async def test_a_recording_nobody_could_hear_is_kept_and_makes_no_card(
+    deployment: Deployment,
+) -> None:
     house = await household(deployment)
     await agree_to_recording(deployment, house.pa, house.profile_id)
-    kept = await _ok(await _upload(house, house.his and house.pa, placeholder_consult("mumbled")), 201)
+    kept = await _ok(
+        await _upload(house, house.his and house.pa, placeholder_consult("mumbled")), 201
+    )
     assert kept["recording"]["heard"] is False and kept["recording"]["segments"] == []
     assert kept["summary"] is None and kept["summary_refused"] is None
     recordings, voices = await _kept(house)
@@ -565,7 +639,9 @@ async def test_what_is_not_a_visit_s_recording_is_refused_on_the_trail(
     await agree_to_recording(deployment, house.pa, house.profile_id)
     data = placeholder_consult(CONSULT)
     wrong_type = await _upload(house, house.pa, data, content_type="text/plain")
-    assert wrong_type.status_code == 400 and wrong_type.json() == {"refusal": "NotAConsultRecording"}
+    assert wrong_type.status_code == 400 and wrong_type.json() == {
+        "refusal": "NotAConsultRecording"
+    }
     wrong_bytes = await _upload(house, house.pa, b"OggS" + data, content_type="audio/webm")
     assert wrong_bytes.status_code == 400
     naive = await _upload(house, house.pa, data, started_at="2026-09-05T09:00:00")
@@ -577,7 +653,9 @@ async def test_what_is_not_a_visit_s_recording_is_refused_on_the_trail(
     assert too_big.status_code == 413 and too_big.json() == {"refusal": "ConsultTooLong"}
     recordings, voices = await _kept(house)
     assert recordings == [] and voices == []
-    assert {"NotAConsultRecording", "ConsultTooLong"} <= await refusals(deployment, house.pa, house.profile_id)
+    assert {"NotAConsultRecording", "ConsultTooLong"} <= await refusals(
+        deployment, house.pa, house.profile_id
+    )
 
 
 # --- E03-05: the answer cites the clip, and the clip plays under the artefact's scope ---------
@@ -598,7 +676,9 @@ async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only
     # Before his yes, recall cites nothing Dr Tan said: the card is waiting for it.
     waiting = await _ok(await client.post(house.at("/ask"), json=ask, headers=house.hers))
     on_the_card = [
-        line for line in waiting["lines"] if any(c["kind"] == "visit_summary" for c in line["cites"])
+        line
+        for line in waiting["lines"]
+        if any(c["kind"] == "visit_summary" for c in line["cites"])
     ]
     assert [line["text"] for line in on_the_card] == [
         "Your card from Dr Tan on Saturday 5 September is waiting for your yes."
@@ -614,7 +694,11 @@ async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only
     yes = await _ok(
         await client.post(
             house.at("/confirmations"),
-            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            json={
+                "subject": "visit_summary",
+                "summary_id": summary["summary_id"],
+                "decisions": decisions,
+            },
             headers=house.hers,
         ),
         201,
@@ -657,12 +741,17 @@ async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only
         assert heard.status_code == 200 and heard.content == data, heard.text
         for who in (kit, clinic):
             refused = await client.get(where, params=params, headers=bearer(who["token"]))
-            assert refused.status_code == 403 and refused.json() == {"refusal": "OnlyTheFamilyHears"}
+            assert refused.status_code == 403 and refused.json() == {
+                "refusal": "OnlyTheFamilyHears"
+            }
     outside = await client.get(where, params={"start": 10, "end": 500}, headers=house.his)
     assert outside.status_code == 400 and outside.json() == {"refusal": "NotAClip"}
     siti = await _key(house, SITI, "Siti", "helper", ["medicines"])
     helper = await client.get(where, params=stretch, headers=bearer(siti["token"]))
-    assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    assert helper.status_code == 403 and helper.json() == {
+        "refusal": "OutOfScope",
+        "scope": "visits",
+    }
 
     # The transcript heard from it is behind the same door: a clinic key cannot read it either.
     async with deployment.sessions() as session:
@@ -710,7 +799,11 @@ async def test_the_words_of_a_confirmed_visit_are_searchable_and_land_on_the_cli
     yes = await _ok(
         await client.post(
             house.at("/confirmations"),
-            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            json={
+                "subject": "visit_summary",
+                "summary_id": summary["summary_id"],
+                "decisions": decisions,
+            },
             headers=house.hers,
         ),
         201,
@@ -732,12 +825,21 @@ async def test_the_words_of_a_confirmed_visit_are_searchable_and_land_on_the_cli
     first, second = after["found"]
     assert first["line"] == "This was said when you saw Dr Tan on Saturday 5 September."
     _clean([first["line"]])
-    assert first["clip"] == {"artifact_id": artifact_id, "start_s": 19.8, "end_s": 28.9, "doctor": "Dr Tan"}
+    assert first["clip"] == {
+        "artifact_id": artifact_id,
+        "start_s": 19.8,
+        "end_s": 28.9,
+        "doctor": "Dr Tan",
+    }
     assert (first["speaker"], second["speaker"]) == ("doctor", "patient")
     assert (second["clip"]["start_s"], second["clip"]["end_s"]) == (55.1, 59.3)
     assert first["heard_in"] == "en" and first["summary_id"] == summary["summary_id"]
     cited = {(c["kind"], c["id"]) for c in first["cites"]}
-    assert {("artifact", artifact_id), ("artifact", transcript_id), ("visit_summary", summary["summary_id"])} <= cited
+    assert {
+        ("artifact", artifact_id),
+        ("artifact", transcript_id),
+        ("visit_summary", summary["summary_id"]),
+    } <= cited
     # The clip plays at that moment.
     played = await client.get(
         house.at(f"/artifacts/{artifact_id}/clip"),
@@ -745,7 +847,9 @@ async def test_the_words_of_a_confirmed_visit_are_searchable_and_land_on_the_cli
         headers=house.his,
     )
     assert played.status_code == 200 and played.headers["x-media-fragment"] == "t=19.8,28.9"
-    nowhere = await _ok(await client.post(where, json={"words": "grandchildren"}, headers=house.his))
+    nowhere = await _ok(
+        await client.post(where, json={"words": "grandchildren"}, headers=house.his)
+    )
     assert nowhere["found"] == []
 
     # His family finds it; a viewer and a clinic holding the visits are refused by name.
@@ -759,7 +863,10 @@ async def test_the_words_of_a_confirmed_visit_are_searchable_and_land_on_the_cli
         assert refused.status_code == 403 and refused.json() == {"refusal": "OnlyTheFamilyHears"}
     siti = await _key(house, SITI, "Siti", "helper", ["medicines"])
     helper = await client.post(where, json=search, headers=bearer(siti["token"]))
-    assert helper.status_code == 403 and helper.json() == {"refusal": "OutOfScope", "scope": "visits"}
+    assert helper.status_code == 403 and helper.json() == {
+        "refusal": "OutOfScope",
+        "scope": "visits",
+    }
     blank = await client.post(where, json={"words": "?!"}, headers=house.his)
     assert blank.status_code == 400 and blank.json() == {"refusal": "NotASearch"}
 
@@ -780,25 +887,49 @@ async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     mei = await register_by_phone(deployment, MEI)
     await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
     await _ok(
-        await client.post(f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his),
+        await client.post(
+            f"/profiles/{profile_id}/keys",
+            json={"holder_phone_e164": MEI, "role": "chief"},
+            headers=his,
+        ),
         201,
     )
     tan = await _ok(
-        await client.post(f"/profiles/{profile_id}/providers", json={"name": "Dr Tan", "kind": "doctor"}, headers=his),
+        await client.post(
+            f"/profiles/{profile_id}/providers",
+            json={"name": "Dr Tan", "kind": "doctor"},
+            headers=his,
+        ),
         201,
     )
-    booking = {"provider_id": tan["provider_id"], "scheduled_at": VISIT_AT, "purpose": "blood pressure check"}
+    booking = {
+        "provider_id": tan["provider_id"],
+        "scheduled_at": VISIT_AT,
+        "purpose": "blood pressure check",
+    }
     yes = await _ok(
-        await client.post(f"/profiles/{profile_id}/confirmations", json={"subject": "appointment", **booking}, headers=his),
+        await client.post(
+            f"/profiles/{profile_id}/confirmations",
+            json={"subject": "appointment", **booking},
+            headers=his,
+        ),
         201,
     )
     visit = await _ok(
-        await client.post(f"/profiles/{profile_id}/appointments", json={**booking, "confirmation_id": yes["confirmation_id"]}, headers=his),
+        await client.post(
+            f"/profiles/{profile_id}/appointments",
+            json={**booking, "confirmation_id": yes["confirmation_id"]},
+            headers=his,
+        ),
         201,
     )
     hers = bearer(mei["token"])
     await _ok(
-        await client.post(f"/profiles/{profile_id}/providers/{tan['provider_id']}/notes", json={"text": "parking at B2"}, headers=hers),
+        await client.post(
+            f"/profiles/{profile_id}/providers/{tan['provider_id']}/notes",
+            json={"text": "parking at B2"},
+            headers=hers,
+        ),
         201,
     )
     route = f"/profiles/{profile_id}/appointments/{visit['appointment_id']}"
@@ -832,7 +963,9 @@ async def test_one_reminder_of_a_visit_a_day_the_logistics_card_holds_the_antici
     assert held["reason"]["feed_item_id"] == card["item_id"]
 
 
-async def test_the_memo_card_on_his_feed_says_where_each_line_was_said(deployment: Deployment) -> None:
+async def test_the_memo_card_on_his_feed_says_where_each_line_was_said(
+    deployment: Deployment,
+) -> None:
     """E21-03 (W7): once the card is confirmed, the memo card on his feed carries, for each of
     its lines heard in the recording, the stretch it was said in — for the phone to play that
     stretch alone, on a tap, under its own line."""
@@ -846,7 +979,11 @@ async def test_the_memo_card_on_his_feed_says_where_each_line_was_said(deploymen
     yes = await _ok(
         await client.post(
             house.at("/confirmations"),
-            json={"subject": "visit_summary", "summary_id": summary["summary_id"], "decisions": decisions},
+            json={
+                "subject": "visit_summary",
+                "summary_id": summary["summary_id"],
+                "decisions": decisions,
+            },
             headers=house.his,
         ),
         201,

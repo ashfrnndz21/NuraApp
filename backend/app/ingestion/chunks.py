@@ -21,7 +21,9 @@ speakers and the same clips.
   does (`discard_stale`, run by the trigger engine every five minutes): an upload the doctor
   did not answer within `ANSWER_WITHIN`, one not finished within `FINISH_WITHIN`, and one on a
   profile where no RECORDING consent is in force any more. A lapsed upload takes nothing more
-  from the moment it lapses, before the sweep reaches it.
+  from the moment it lapses, before the sweep reaches it. Closing the account (#143) throws
+  away every upload still open on the profile at once, and the sweep of a closing profile
+  does it again for a chunk that landed as it closed.
 - **In the region, under the recording's consent.** Every chunk is read against its cap as it
   arrives (`read_capped`, `MAX_CHUNK_BYTES`), asks the gate again (`may_record`) and lands in
   the region's store (`guard_region`); the whole stays under `MAX_CONSULT_BYTES`.
@@ -103,10 +105,12 @@ class Because(StrEnum):
     WHOLE = "whole"
     """The phone sent the whole recording at once instead (#128's route): the server said this
     upload could end in no recording."""
+    CLOSING = "closing"
+    """Its owner closed his account (#143): nothing more of the visit is kept."""
 
 
 FROM_THE_PHONE = frozenset({Because.NO, Because.LEFT, Because.WHOLE})
-"""The reasons the phone gives. The other three are the sweep's."""
+"""The reasons the phone gives. The others are the server's own."""
 
 
 class NoSuchUpload(Refusal):
@@ -480,12 +484,14 @@ async def discard_stale(
     context: KeyContext,
     store: ObjectStore,
     channel: Channel = Channel.SYSTEM,
+    closing: bool = False,
 ) -> list[ConsultUpload]:
     """Every open upload of this profile that can no longer finish, thrown away: no yes within
     `ANSWER_WITHIN`, not finished within `FINISH_WITHIN`, or no RECORDING consent in force on
-    the profile (asked where the key reaches the agreements; the engine's does). And, once
-    more, the chunks of one thrown away or put together in the last `LET_GO_AGAIN`, for a
-    chunk that landed as it closed. What it threw away."""
+    the profile (asked where the key reaches the agreements; the engine's does). On a closing
+    account (`closing`, #143) every open upload, whatever its clock. And, once more, the
+    chunks of one thrown away or put together in the last `LET_GO_AGAIN`, for a chunk that
+    landed as it closed. What it threw away."""
     if not context.allows(Scope.VISITS):
         return []
     guard_region(held_in=store.region, asked_from=context.region)
@@ -507,7 +513,7 @@ async def discard_stale(
     if not uploads:
         return []
     agreed: bool | None = None
-    if context.allows(Scope.FAMILY):
+    if not closing and context.allows(Scope.FAMILY):
         agreed = any(
             row.purpose is ConsentPurpose.RECORDING
             for row in await active_consents(session, context=context)
@@ -517,7 +523,11 @@ async def discard_stale(
         if upload.discarded_at is not None or upload.finished_at is not None:
             await _let_go(store, upload)
             continue
-        because = lapsed(upload, now) or (Because.NO_CONSENT if agreed is False else None)
+        because = (
+            Because.CLOSING
+            if closing
+            else lapsed(upload, now) or (Because.NO_CONSENT if agreed is False else None)
+        )
         if because is not None:
             await _throw_away(
                 session,

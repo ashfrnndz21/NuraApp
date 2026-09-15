@@ -1,5 +1,6 @@
 import { api, apiBlob, apiBytes, apiUpload, sendAndForget } from "./client";
 import type {
+  FeedItemOut,
   UploadOut,
   AnsweredOut,
   BriefOut,
@@ -553,3 +554,7 @@ export const feedToday = (token: string, profileId: string) => api<FeedPageOut>(
 /** The Me page (E17-04): the number that only goes up, in his words. */
 export const meSummary = (token: string, profileId: string, language: string) =>
   api<MeSummaryOut>(`/profiles/${profileId}/me-summary`, { token, query: { language } });
+
+/** One card by its id, under the card's own scope: what a push opens (`?open=<id>`, #143). */
+export const feedItem = (token: string, profileId: string, itemId: string) =>
+  api<FeedItemOut>(`/profiles/${profileId}/feed/${itemId}`, { token });

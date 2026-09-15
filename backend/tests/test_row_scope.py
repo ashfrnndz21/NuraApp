@@ -777,6 +777,9 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/cached"),
     Walk("GET", f"{P}/feed/today"),
     Walk("GET", f"{P}/feed/{{item_id}}/voice"),
+    Walk("GET", f"{P}/feed/{{item_id}}"),
+    Walk("GET", f"{P}/closure"),
+    Walk("GET", f"{P}/whatsapp-opt-in"),
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
@@ -904,7 +907,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/appointments/{{appointment_id}}/recording"): (
         "keeps a consult recording; returns what it kept and its card"
     ),
-    ("POST", f"{P}/appointments/{{appointment_id}}/driver"): "gives the drive on a yes; returns the task",
+    (
+        "POST",
+        f"{P}/appointments/{{appointment_id}}/driver",
+    ): "gives the drive on a yes; returns the task",
     ("POST", f"{P}/appointments/{{appointment_id}}/recording/uploads"): (
         "opens a recording's upload; returns its count"
     ),
@@ -939,6 +945,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
     ("POST", f"{P}/push-subscriptions"): "keeps this phone for his reminders; returns its id",
+    ("POST", f"{P}/closure/preview"): "renders the words of closing his account; returns no rows",
+    ("POST", f"{P}/closure"): "closes his account on his yes; returns the closing",
+    ("POST", f"{P}/closure/undo"): "undoes his closing on his yes; returns the closing",
+    ("POST", f"{P}/whatsapp-opt-in"): "his own yes or no to WhatsApp; returns it",
     ("DELETE", f"{P}/push-subscriptions"): "stops reminders on this phone; returns nothing",
     ("POST", f"{P}/feelings/{{tap_id}}/answer"): "answers a tap; returns the note it wrote",
     ("POST", f"{P}/nudges/plan"): "hands the day's nudge to delivery; returns it",
@@ -1295,6 +1305,10 @@ RAW_READS = re.compile(
     r"|\bmodel\s*=\s*(Fact|Artifact|Event)\b"
 )
 APPROVED_RAW_READS = {
+    "identity/closing.py": (
+        "the erasure's own read of a closed profile's storage keys as the system (#143), so "
+        "evidence stored outside the profile's prefixes goes too: nothing it reads reaches a caller"
+    ),
     "safety/red_flags.py": (
         "the safety rules' own read of the record as the system (`_system_read`, ADR 0002): "
         "nothing it reads reaches the caller, only whether a flag is held back"

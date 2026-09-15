@@ -5,12 +5,12 @@ One table of profile data, tied to its profile the way the visit tables are (002
 on, who opened it, the recorder's container, when the phone began listening, how many chunks
 and bytes have arrived, and when the doctor said yes. It ends put together into a
 `consult_recording` (`recording_id`, `finished_at`) or thrown away (`discarded_at`,
-`discarded_because`: no, left, no_answer, unfinished, no_consent). The chunks themselves are
-bytes in the region's object store, never a column, and are let go of either way. The row
-holds no words and no audio.
+`discarded_because`: no, left, whole, no_answer, unfinished, no_consent, closing). The chunks
+themselves are bytes in the region's object store, never a column, and are let go of either
+way. The row holds no words and no audio.
 
-Revision ID: 0027_consult_upload
-Revises: 0026_relationship_codes
+Revision ID: 0030_consult_upload
+Revises: 0028_whatsapp_opt_in
 Create Date: 2026-09-15
 """
 
@@ -19,8 +19,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0027_consult_upload"
-down_revision = "0026_relationship_codes"
+revision = "0030_consult_upload"
+down_revision = "0028_whatsapp_opt_in"
 branch_labels = None
 depends_on = None
 

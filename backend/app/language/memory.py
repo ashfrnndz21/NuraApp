@@ -317,9 +317,12 @@ def _paths(
             if isinstance(child, ast.Constant) and isinstance(child.value, str):
                 yield (child.value, child.lineno), ((*segments, f"@{child.lineno - start}"), None)
             elif isinstance(child, ast.JoinedStr):
-                yield (pw._template_of(child), child.lineno), (
-                    (*segments, f"@{child.lineno - start}"),
-                    None,
+                yield (
+                    (pw._template_of(child), child.lineno),
+                    (
+                        (*segments, f"@{child.lineno - start}"),
+                        None,
+                    ),
                 )
         return
     for child in ast.iter_child_nodes(node):

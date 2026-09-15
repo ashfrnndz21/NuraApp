@@ -41,12 +41,22 @@ from tests.test_ladder import _of, _run, at
 
 PA, MEI, KIT = "+6591118801", "+6592228802", "+6595558803"
 EVERYTHING = [
-    "medicines", "visits", "readings", "records", "notes", "money", "family", "emergency",
-    "ask", "send",
+    "medicines",
+    "visits",
+    "readings",
+    "records",
+    "notes",
+    "money",
+    "family",
+    "emergency",
+    "ask",
+    "send",
 ]
 
 
-async def _household(deployment: Deployment) -> tuple[dict[str, str], dict[str, str], dict[str, str], str]:
+async def _household(
+    deployment: Deployment,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], str]:
     """Pa, in Malay; Mei his chief; Kit his son with a caregiver key to the medicines."""
     pa = await register_by_phone(deployment, PA, "Pa", "ms")
     mei = await register_by_phone(deployment, MEI, "Mei", "en")
@@ -64,8 +74,12 @@ async def _household(deployment: Deployment) -> tuple[dict[str, str], dict[str, 
     return pa, mei, kit, profile_id
 
 
-async def _sharing_with(deployment: Deployment, pa: dict[str, str], profile_id: str, person_id: str) -> str:
-    listed = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))
+async def _sharing_with(
+    deployment: Deployment, pa: dict[str, str], profile_id: str, person_id: str
+) -> str:
+    listed = await deployment.client.get(
+        f"/profiles/{profile_id}/consents", headers=bearer(pa["token"])
+    )
     assert listed.status_code == 200, listed.text
     (found,) = [
         row["consent_id"]
@@ -91,7 +105,9 @@ async def test_the_owner_stops_letting_kit_in_and_kits_key_closes_at_once(
     clock.set(MONDAY)
     client = deployment.client
     pa, _mei, kit, profile_id = await _household(deployment)
-    assert (await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))).status_code == 200
+    assert (
+        await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))
+    ).status_code == 200
     consent_id = await _sharing_with(deployment, pa, profile_id, kit["person_id"])
 
     # The confirm step: what stopping will do, in his words (Malay, his language), by name.
@@ -113,7 +129,9 @@ async def test_the_owner_stops_letting_kit_in_and_kits_key_closes_at_once(
     assert english.json()["lines"][0] == "If you stop this, Kit cannot see your papers."
 
     # Asking is not stopping: Kit still reads.
-    assert (await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))).status_code == 200
+    assert (
+        await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))
+    ).status_code == 200
 
     stopped = await client.post(
         f"/profiles/{profile_id}/consents/{consent_id}/withdraw",
@@ -135,7 +153,9 @@ async def test_the_owner_stops_letting_kit_in_and_kits_key_closes_at_once(
 
     # The row stays, marked; a second stop has nothing to stop.
     again = await client.post(
-        f"/profiles/{profile_id}/consents/{consent_id}/withdraw", json={}, headers=bearer(pa["token"])
+        f"/profiles/{profile_id}/consents/{consent_id}/withdraw",
+        json={},
+        headers=bearer(pa["token"]),
     )
     assert again.status_code == 404 and again.json()["refusal"] == "NoConsentToWithdraw"
     gone = await client.get(
@@ -144,7 +164,9 @@ async def test_the_owner_stops_letting_kit_in_and_kits_key_closes_at_once(
     assert gone.status_code == 404 and gone.json()["refusal"] == "NoConsentToWithdraw"
 
     # On his trail: the agreement and the key written, as sentences he can read.
-    trail = await client.get(f"/profiles/{profile_id}/trail", params={"language": "en"}, headers=bearer(pa["token"]))
+    trail = await client.get(
+        f"/profiles/{profile_id}/trail", params={"language": "en"}, headers=bearer(pa["token"])
+    )
     said = [s for day in trail.json() for line in day["lines"] for s in line["sentences"]]
     assert any("what you agreed to" in sentence for sentence in said), said
 
@@ -158,14 +180,23 @@ async def test_stopping_is_the_owners_alone_and_every_refusal_is_on_his_trail(
     consent_id = await _sharing_with(deployment, pa, profile_id, kit["person_id"])
     for path, method in (("withdrawal", "GET"), ("withdraw", "POST")):
         url = f"/profiles/{profile_id}/consents/{consent_id}/{path}"
-        hers = await client.request(method, url, headers=bearer(mei["token"]), json=None if method == "GET" else {})
+        hers = await client.request(
+            method, url, headers=bearer(mei["token"]), json=None if method == "GET" else {}
+        )
         assert hers.status_code == 403 and hers.json()["refusal"] == "NotTheirConsentToWithdraw"
         # Kit's own key does not open the family list at all.
-        his = await client.request(method, url, headers=bearer(kit["token"]), json=None if method == "GET" else {})
+        his = await client.request(
+            method, url, headers=bearer(kit["token"]), json=None if method == "GET" else {}
+        )
         assert his.status_code == 403 and his.json()["refusal"] == "OutOfScope"
-    assert _refusals_of(await _refusals(deployment, pa, profile_id)) >= {"NotTheirConsentToWithdraw", "OutOfScope"}
+    assert _refusals_of(await _refusals(deployment, pa, profile_id)) >= {
+        "NotTheirConsentToWithdraw",
+        "OutOfScope",
+    }
     # Nothing was stopped: Kit still reads.
-    assert (await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))).status_code == 200
+    assert (
+        await client.get(f"/profiles/{profile_id}/medicines", headers=bearer(kit["token"]))
+    ).status_code == 200
     # An id that is not an agreement on this profile is nothing to stop.
     stray = await client.get(
         f"/profiles/{profile_id}/consents/{pa['person_id']}/withdrawal", headers=bearer(pa["token"])
@@ -185,11 +216,15 @@ async def test_the_record_is_one_printable_page_his_and_his_chiefs(
     pa, mei, kit, profile_id = await _household(deployment)
     consent_id = await _sharing_with(deployment, pa, profile_id, kit["person_id"])
     stopped = await client.post(
-        f"/profiles/{profile_id}/consents/{consent_id}/withdraw", json={}, headers=bearer(pa["token"])
+        f"/profiles/{profile_id}/consents/{consent_id}/withdraw",
+        json={},
+        headers=bearer(pa["token"]),
     )
     assert stopped.status_code == 200, stopped.text
 
-    page = await client.get(f"/profiles/{profile_id}/consents/record.html", headers=bearer(pa["token"]))
+    page = await client.get(
+        f"/profiles/{profile_id}/consents/record.html", headers=bearer(pa["token"])
+    )
     assert page.status_code == 200, page.text
     assert page.headers["content-type"].startswith("text/html")
     assert page.headers["cache-control"] == "private, no-store"
@@ -210,14 +245,24 @@ async def test_the_record_is_one_printable_page_his_and_his_chiefs(
     assert not re.search(r"<p>\s*</p>", html)
 
     # His chief reads it too, addressed to her; a key without the family list does not.
-    hers = await client.get(f"/profiles/{profile_id}/consents/record.html", headers=bearer(mei["token"]))
+    hers = await client.get(
+        f"/profiles/{profile_id}/consents/record.html", headers=bearer(mei["token"])
+    )
     assert hers.status_code == 200 and "What Pa said yes to" in hers.text
-    kits = await client.get(f"/profiles/{profile_id}/consents/record.html", headers=bearer(kit["token"]))
+    kits = await client.get(
+        f"/profiles/{profile_id}/consents/record.html", headers=bearer(kit["token"])
+    )
     assert kits.status_code == 403
 
     # The page leaving is a share on his trail.
-    audit = await client.get(f"/profiles/{profile_id}/audit", headers=bearer(pa["token"]), params={"limit": 500})
-    shares = [row for row in audit.json() if row["action"] == "share" and row["target"] == "consent_record"]
+    audit = await client.get(
+        f"/profiles/{profile_id}/audit", headers=bearer(pa["token"]), params={"limit": 500}
+    )
+    shares = [
+        row
+        for row in audit.json()
+        if row["action"] == "share" and row["target"] == "consent_record"
+    ]
     assert len(shares) == 2
 
 
@@ -227,7 +272,9 @@ async def test_a_name_on_the_record_is_printed_as_words_never_as_markup(
     clock.set(MONDAY)
     pa = await register_by_phone(deployment, PA, "Pa <b>Tan</b>", "en")
     profile_id = await own_profile(deployment, pa, display_name="Pa <b>Tan</b>", language="en")
-    page = await deployment.client.get(f"/profiles/{profile_id}/consents/record.html", headers=bearer(pa["token"]))
+    page = await deployment.client.get(
+        f"/profiles/{profile_id}/consents/record.html", headers=bearer(pa["token"])
+    )
     assert page.status_code == 200
     assert "<b>" not in page.text
 
@@ -241,7 +288,11 @@ async def test_a_message_to_him_says_scheduled_then_sent_or_not_sent(
     pa, mei, _kit, profile_id = await _household(deployment)
     agreed = await client.post(
         f"/profiles/{profile_id}/consents/whatsapp",
-        json={"wording_version": current_version(ConsentPurpose.WHATSAPP), "language": "ms", "captured_via": "app"},
+        json={
+            "wording_version": current_version(ConsentPurpose.WHATSAPP),
+            "language": "ms",
+            "captured_via": "app",
+        },
         headers=bearer(pa["token"]),
     )
     assert agreed.status_code == 201, agreed.text
@@ -349,36 +400,72 @@ def test_every_agreement_has_its_words_in_every_language_and_they_are_plain() ->
     )
 
 
-async def test_keeping_his_papers_and_whatsapp_are_not_stopped_in_the_app(
+async def test_whatsapp_stops_in_the_app_saying_exactly_what_changes(
     deployment: Deployment, clock: FrozenClock
 ) -> None:
-    """Both carry the red-flag paths — the not-feeling-well button and Taken rest on the first,
-    every WhatsApp message about him, a red flag's to his family among them, on the second —
-    so neither is one tap: the route refuses by name, on his trail, and nothing stops."""
+    """Since #143 his WhatsApp agreement is for messages to him, so it is stopped here with one
+    yes. The confirm step says exactly what changes: what stops reaching him, and who is still
+    told when he is unwell — on their own keys, named — and then it is stopped."""
     clock.set(MONDAY)
     client = deployment.client
     pa, _mei, _kit, profile_id = await _household(deployment)
+    his = bearer(pa["token"])
     agreed = await client.post(
         f"/profiles/{profile_id}/consents/whatsapp",
-        json={"wording_version": current_version(ConsentPurpose.WHATSAPP), "language": "ms", "captured_via": "app"},
-        headers=bearer(pa["token"]),
+        json={
+            "wording_version": current_version(ConsentPurpose.WHATSAPP),
+            "language": "en",
+            "captured_via": "app",
+        },
+        headers=his,
     )
     assert agreed.status_code == 201, agreed.text
-    listed = (await client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))).json()
-    for purpose in ("hold_health_record", "whatsapp"):
-        (row,) = [c for c in listed if c["purpose"] == purpose and c["revoked_at"] is None]
-        for method, path in (("GET", "withdrawal"), ("POST", "withdraw")):
-            refused = await client.request(
-                method,
-                f"/profiles/{profile_id}/consents/{row['consent_id']}/{path}",
-                headers=bearer(pa["token"]),
-                json=None if method == "GET" else {},
-            )
-            assert refused.status_code == 403, refused.text
-            assert refused.json() == {"refusal": "NotStoppedInTheApp"}
-    after = (await client.get(f"/profiles/{profile_id}/consents", headers=bearer(pa["token"]))).json()
-    assert all(c["revoked_at"] is None for c in after if c["purpose"] in ("hold_health_record", "whatsapp"))
-    assert "NotStoppedInTheApp" in await _refusals(deployment, pa, profile_id)
+    row = agreed.json()
+    base = f"/profiles/{profile_id}/consents/{row['consent_id']}"
+    asked = await client.get(f"{base}/withdrawal", params={"language": "en"}, headers=his)
+    assert asked.status_code == 200, asked.text
+    lines = asked.json()["lines"]
+    assert asked.json()["closes_account"] is False
+    assert lines[0] == "If you stop this, Nura stops messaging you on WhatsApp."
+    assert lines[-1] == "You can say yes to WhatsApp again later."
+    assert any(
+        line.startswith("Mei") and line.endswith("is still told when you are unwell.")
+        for line in lines
+    )
+    done = await client.post(f"{base}/withdraw", json={"language": "en"}, headers=his)
+    assert done.status_code == 200, done.text
+    assert done.json()["lines"][:2] == [
+        "You stopped this.",
+        "Nura will not message you on WhatsApp.",
+    ]
+    after = (await client.get(f"/profiles/{profile_id}/consents", headers=his)).json()
+    assert [c["revoked_at"] is not None for c in after if c["consent_id"] == row["consent_id"]] == [
+        True
+    ]
+
+
+async def test_keeping_his_papers_is_stopped_by_closing_his_account(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """Keeping his papers: the confirm step shows the closing's lines — what stops, and when his
+    papers go — and his yes goes to closing the account; the withdraw route refuses, by name,
+    on his trail, and nothing stops there."""
+    clock.set(MONDAY)
+    client = deployment.client
+    pa, _mei, _kit, profile_id = await _household(deployment)
+    his = bearer(pa["token"])
+    listed = (await client.get(f"/profiles/{profile_id}/consents", headers=his)).json()
+    (row,) = [c for c in listed if c["purpose"] == "hold_health_record" and c["revoked_at"] is None]
+    base = f"/profiles/{profile_id}/consents/{row['consent_id']}"
+    asked = await client.get(f"{base}/withdrawal", params={"language": "en"}, headers=his)
+    assert asked.status_code == 200, asked.text
+    assert asked.json()["closes_account"] is True
+    assert asked.json()["lines"][0] == "Nura will stop keeping your papers."
+    refused = await client.post(f"{base}/withdraw", json={"language": "en"}, headers=his)
+    assert refused.status_code == 409 and refused.json() == {"refusal": "StopsByClosingTheAccount"}
+    after = (await client.get(f"/profiles/{profile_id}/consents", headers=his)).json()
+    assert all(c["revoked_at"] is None for c in after if c["purpose"] == "hold_health_record")
+    assert "StopsByClosingTheAccount" in await _refusals(deployment, pa, profile_id)
 
 
 async def test_stopping_someone_a_red_flag_reaches_says_they_will_not_be_told(
@@ -392,10 +479,14 @@ async def test_stopping_someone_a_red_flag_reaches_says_they_will_not_be_told(
     hers = await _sharing_with(deployment, pa, profile_id, mei["person_id"])
     his = await _sharing_with(deployment, pa, profile_id, kit["person_id"])
     asked = await client.get(
-        f"/profiles/{profile_id}/consents/{hers}/withdrawal", params={"language": "en"}, headers=bearer(pa["token"])
+        f"/profiles/{profile_id}/consents/{hers}/withdrawal",
+        params={"language": "en"},
+        headers=bearer(pa["token"]),
     )
     assert "Nura will not tell Mei when you are not well." in asked.json()["lines"]
     asked = await client.get(
-        f"/profiles/{profile_id}/consents/{his}/withdrawal", params={"language": "en"}, headers=bearer(pa["token"])
+        f"/profiles/{profile_id}/consents/{his}/withdrawal",
+        params={"language": "en"},
+        headers=bearer(pa["token"]),
     )
     assert not any("not well" in line for line in asked.json()["lines"])

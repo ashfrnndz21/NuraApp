@@ -333,6 +333,53 @@ async def test_what_the_phone_could_not_throw_away_the_scheduler_does(
     assert await _kept(house) == ([], [])
 
 
+async def test_closing_his_account_throws_away_every_chunk_already_sent(
+    deployment: Deployment,
+) -> None:
+    """Closing the account (#143) throws away a recording still on its way in, with every
+    chunk already sent, even one the doctor said yes to. Nothing more joins it, and a chunk
+    that lands as it closes is let go by the scheduler's next run of the closing profile."""
+    house = await _house(deployment)
+    phone = Phone(house, house.mei)
+    await phone.open()
+    await phone.send(DATA[:30])
+    await _ok(await phone.yes())
+    assert len(phone.staged()) == 3
+
+    his = bearer(house.pa["token"])
+    base = f"/profiles/{house.profile_id}"
+    yes = await _ok(
+        await deployment.client.post(
+            f"{base}/confirmations",
+            json={"subject": "close_account", "language": "en"},
+            headers=his,
+        ),
+        201,
+    )
+    closed = await deployment.client.post(
+        f"{base}/closure",
+        json={"confirmation_id": yes["confirmation_id"], "language": "en"},
+        headers=his,
+    )
+    assert closed.status_code == 201, closed.text
+
+    assert phone.staged() == []
+    row = await _row(deployment, phone.upload)
+    assert row.discarded_because == "closing" and row.discarded_at is not None
+    # Nothing more joins it: the profile is closed to every key.
+    late = await phone.chunk(3, DATA[30:40])
+    assert late.status_code == 403 and late.json() == {"refusal": "AccountClosing"}
+    assert (await phone.finish()).json() == {"refusal": "AccountClosing"}
+
+    # A chunk that was on its way lands after the closing: the next run lets it go.
+    profile = uuid.UUID(house.profile_id)
+    await deployment.objects.put(chunks.chunk_key(profile, uuid.UUID(phone.upload), 3), b"late")
+    assert len(phone.staged()) == 1
+    await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
+    assert phone.staged() == []
+    assert await _kept(house) == ([], [])
+
+
 # --- the cap --------------------------------------------------------------------------------------
 
 

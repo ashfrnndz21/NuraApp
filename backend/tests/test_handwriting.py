@@ -41,7 +41,9 @@ AFTER_THE_SLIP = datetime(2026, 9, 14, 4, 0, tzinfo=UTC)
 TYPED = "once a day in the morning"
 
 
-async def _family(deployment: Deployment, scopes: list[str] | None = None) -> tuple[dict[str, str], dict[str, str], str]:
+async def _family(
+    deployment: Deployment, scopes: list[str] | None = None
+) -> tuple[dict[str, str], dict[str, str], str]:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa, language="en")
     mei = await register_by_phone(deployment, MEI, "Mei")
@@ -100,7 +102,9 @@ async def test_a_handwritten_prescription_reads_drug_dose_and_frequency_with_con
     assert posted.status_code == 201, posted.text
     card = posted.json()
     assert card["document_kind"] == "handwritten_prescription"
-    read = {f["attribute"]: (f["value"], f["confidence"], f["needs_confirm"]) for f in card["fields"]}
+    read = {
+        f["attribute"]: (f["value"], f["confidence"], f["needs_confirm"]) for f in card["fields"]
+    }
     assert read["name"] == ("Metformin", 0.9, False)
     assert read["dose"][0]["instruction"] == "1 tablet" and read["dose"][1:] == (0.79, True)
     assert read["frequency"] == ("twice a day after meals", 0.76, True)
@@ -118,7 +122,9 @@ async def test_a_field_nura_could_not_read_is_never_confirmed_as_read(
     assert refused.json() == {"refusal": "UnreadableField"}
     assert "UnreadableField" in await refusals(deployment, pa, profile_id)
     # Rejecting it is always open: the rest of the slip is kept, the frequency writes nothing.
-    done = await confirm(deployment, pa["token"], profile_id, card, decide(card, reject={"frequency"}))
+    done = await confirm(
+        deployment, pa["token"], profile_id, card, decide(card, reject={"frequency"})
+    )
     assert done.status_code == 200, done.text
     assert "frequency" not in {f["attribute"] for f in done.json()["facts"]}
 

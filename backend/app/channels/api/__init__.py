@@ -45,6 +45,7 @@ import app.medicines
 import app.onboarding
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
 from app.channels.api import (
+    account,
     auth,
     capture,
     connectors,
@@ -110,6 +111,7 @@ def _api() -> APIRouter:
     api.include_router(routine.router)
     api.include_router(connectors.router)
     api.include_router(delivery.router)
+    api.include_router(account.router)
     api.include_router(review.router)
     api.include_router(dev_clock.router)
 

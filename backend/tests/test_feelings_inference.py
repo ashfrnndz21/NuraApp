@@ -58,7 +58,11 @@ async def _said(
     session: AsyncSession, context: KeyContext, word: Feeling, answer: Answer
 ) -> Answered:
     tapped = await record_tap(
-        session, context=context, word=word, registry=REGISTRY, store=STORE,
+        session,
+        context=context,
+        word=word,
+        registry=REGISTRY,
+        store=STORE,
         transcriber=TRANSCRIBER,
         via=VIA,
     )
@@ -367,7 +371,11 @@ async def test_a_helpers_key_starts_the_red_path_and_nothing_else(sg: AsyncSessi
     home, _ = await _home(sg)
     siti = await home.ctx(sg, home.siti)
     tapped = await record_tap(
-        sg, context=siti, word=Feeling.FALL, registry=REGISTRY, store=STORE,
+        sg,
+        context=siti,
+        word=Feeling.FALL,
+        registry=REGISTRY,
+        store=STORE,
         transcriber=TRANSCRIBER,
         via=VIA,
     )

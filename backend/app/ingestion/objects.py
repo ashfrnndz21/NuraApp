@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Protocol
@@ -59,8 +60,11 @@ class ObjectStore(Protocol):
     async def get(self, key: str) -> bytes: ...
 
     async def delete(self, key: str) -> None:
-        """Let go of the bytes under a key. Nothing there is not an error: a delete sent twice
-        is one delete."""
+        """Remove the object under `key`; nothing there is not an error."""
+        ...
+
+    async def delete_prefix(self, prefix: str) -> int:
+        """Remove every object under one profile's `<kind>/<profile_id>/`; how many went."""
         ...
 
 
@@ -104,3 +108,21 @@ class LocalObjectStore:
 
     async def delete(self, key: str) -> None:
         self.path_of(key).unlink(missing_ok=True)
+
+    async def delete_prefix(self, prefix: str) -> int:
+        base = self._root / check_prefix(prefix)
+        if not base.is_dir():
+            return 0
+        files = [path for path in base.rglob("*") if path.is_file()]
+        shutil.rmtree(base)
+        return len(files)
+
+
+_ONE_PROFILE = re.compile(r"^[a-z][a-z-]*/[0-9a-f-]{36}/$")
+
+
+def check_prefix(prefix: str) -> str:
+    """A prefix that names one kind of one profile's objects, and nothing wider."""
+    if not _ONE_PROFILE.match(prefix):
+        raise NotAStorageKey(f"not one profile's objects: {prefix!r}")
+    return prefix.rstrip("/")

@@ -217,7 +217,9 @@ async def record_consult(
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )
-    began = as_utc(started_at) if started_at is not None else utcnow() - timedelta(seconds=duration_s)
+    began = (
+        as_utc(started_at) if started_at is not None else utcnow() - timedelta(seconds=duration_s)
+    )
     digest = sha256_of(data)
     key = consult_key(context.profile_id, digest)
     # The row first, then the bytes: a refusal where the bytes land leaves nothing in the
