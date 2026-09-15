@@ -53,6 +53,7 @@ the same for the notices and the ladder written beside a flag.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
@@ -70,7 +71,16 @@ from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
-from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, keep_on_refusal, utcnow
+from app.db import (
+    Base,
+    ProfileScoped,
+    as_utc,
+    enum_column,
+    frozen,
+    keep_on_refusal,
+    nested_unit_of_work,
+    utcnow,
+)
 from app.errors import Refusal
 from app.identity.models import Profile
 from app.keys.context import KeyContext
@@ -90,6 +100,7 @@ from app.memory.models import (
     _row_of_profile,
     _tied_to_profile,
 )
+from app.safety.high_risk import HIGH_RISK_CLASSES
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 # --- the feeling cloud -----------------------------------------------------------------------
@@ -131,6 +142,8 @@ class Feeling(StrEnum):
     FINE = "fine"
 
 
+log = logging.getLogger(__name__)
+
 RED_FLAGS: frozenset[Feeling] = frozenset(
     {
         Feeling.FALL,
@@ -165,6 +178,12 @@ his head hours later, so a fall is the ambulance at any hour (`AMBULANCE_ON_A_TH
 same class the label-photo rule guards (`app.safety.high_risk.HIGH_RISK_CLASSES`). A class,
 never a list of names; widening it (heparin injections, the antiplatelets) is the
 pharmacist's. Awaiting the clinician's sign-off (docs/trust/clinical-sign-off.md)."""
+
+ANTICOAGULANT_GENERICS: frozenset[str] = HIGH_RISK_CLASSES["anticoagulant"]
+"""The same thinners by generic name, as the label-photo rule already holds them — its one
+list, read here and never copied — so a register that files one under another class code (by
+how it works, say) still raises a fall. The class or the name is enough: the rule only ever
+errs towards the ambulance."""
 
 FLAG_TARGET = "red_flag"
 
@@ -262,15 +281,18 @@ def detect(text: str | None) -> Feeling | None:
     tap on the cloud raises, heard in free text on WhatsApp (E19-05). Every flag the words
     match is found, and one in the ambulance tier (`AMBULANCE_FLAGS`) wins over the table's
     order — "I fell and now I am confused" is confusion, the ambulance, never a fall's "call
-    the doctor today" (B1 review). The weight rule is a fact, not a word, so it is not in the
-    table."""
+    the doctor today" (B1 review). Among the same-day flags a fall wins: on a blood thinner it
+    is the ambulance (`AMBULANCE_ON_A_THINNER`), and off one both are the same day — "I fell
+    and my leg is swollen on one side" is a fall, so the thinner is never missed. The weight
+    rule is a fact, not a word, so it is not in the table."""
     if not text:
         return None
     found = [rule for rule, pattern in _PATTERNS if pattern.search(text)]
     if not found:
         return None
     urgent = [rule for rule in found if rule in AMBULANCE_FLAGS]
-    return (urgent or found)[0]
+    raised = [rule for rule in found if rule in AMBULANCE_ON_A_THINNER]
+    return (urgent or raised or found)[0]
 
 
 # --- the words heard at a visit (E05) --------------------------------------------------------
@@ -757,9 +779,19 @@ async def escalation_now(
     and the ladder's notice to the family, whether the flag came from WhatsApp, the
     not-feeling-well button, the symptom log or the feeling cloud."""
     providers = await audited_read(session, Provider, context, Scope.EMERGENCY, channel=channel)
-    anticoagulated = feeling in AMBULANCE_ON_A_THINNER and await on_a_blood_thinner(
-        session, context=context
-    )
+    anticoagulated = False
+    if feeling in AMBULANCE_ON_A_THINNER:
+        # In its own savepoint: nothing about reading his list may weaken the step or leave the
+        # request's transaction unusable. If it cannot be read, he is taken to be on one — the
+        # ambulance (B1 re-check).
+        try:
+            async with nested_unit_of_work(session):
+                anticoagulated = await on_a_blood_thinner(session, context=context)
+        except Exception as failed:  # noqa: BLE001 — any failure errs towards the ambulance
+            log.warning(
+                "red flag: his list could not be read (%s); the ambulance", type(failed).__name__
+            )
+            anticoagulated = True
     return escalation_for(
         feeling,
         providers=providers,
@@ -799,10 +831,11 @@ async def _system_read(
 
 
 async def on_a_blood_thinner(session: AsyncSession, *, context: KeyContext) -> bool:
-    """Whether a medicine the register classes as an anticoagulant (`ANTICOAGULANT_CLASSES`) is
-    on his list now: a line in force, active or held — a thinner held for a few days still
-    thins his blood. Read as the system (`_system_read`), whoever raised the flag; only the
-    answer leaves, never a medicine's name."""
+    """Whether a blood thinner is on his list now: a line in force, active or held — a thinner
+    held for a few days still thins his blood — whose register class is in
+    `ANTICOAGULANT_CLASSES` (any case), or whose generic name is in `ANTICOAGULANT_GENERICS`.
+    Read as the system (`_system_read`), whoever raised the flag; only the answer leaves,
+    never a medicine's name."""
     lines = await _system_read(
         session,
         context=context,
@@ -811,7 +844,10 @@ async def on_a_blood_thinner(session: AsyncSession, *, context: KeyContext) -> b
         where=(
             MedicationLine.superseded_at.is_(None),
             MedicationLine.status.in_((LineStatus.ACTIVE, LineStatus.HELD)),
-            func.lower(MedicationLine.drug_class).in_(ANTICOAGULANT_CLASSES),
+            or_(
+                func.lower(MedicationLine.drug_class).in_(ANTICOAGULANT_CLASSES),
+                func.lower(MedicationLine.generic).in_(ANTICOAGULANT_GENERICS),
+            ),
         ),
     )
     return bool(lines)
@@ -1253,6 +1289,7 @@ def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Sco
 __all__ = [
     "AMBULANCE_ON_A_THINNER",
     "ANTICOAGULANT_CLASSES",
+    "ANTICOAGULANT_GENERICS",
     "FEELING_CODE",
     "FLAG_SCOPE",
     "FLAG_TARGET",

@@ -618,3 +618,167 @@ async def test_in_malaysia_the_ambulance_is_999(my: AsyncSession, tmp_path: Path
         "Call Pa now.",
         "If Pa has not called the ambulance, call the ambulance now on 999.",
     ]
+
+
+# --- what the clinical-safety re-check found ---------------------------------------------------
+
+FELL_AND_SWOLLEN = {
+    "en": "I fell and my leg is swollen on one side",
+    "ms": "Saya jatuh dan kaki bengkak sebelah",
+    "zh": "我跌倒了，一只脚肿了",
+}
+
+
+@pytest.mark.parametrize("language", sorted(FELL_AND_SWOLLEN))
+def test_a_fall_with_another_same_day_flag_is_heard_as_the_fall(language: str) -> None:
+    """Both are the same day off a thinner; on one, the fall is the ambulance — so the fall is
+    the flag, and the thinner is never missed for the swelling said beside it."""
+    assert detect(FELL_AND_SWOLLEN[language]) is Feeling.FALL
+    assert detect("I fell and now I am confused") is Feeling.CONFUSION
+
+
+@pytest.mark.parametrize("thinner", (None, "warfarin"))
+async def test_a_fall_said_with_swelling_on_a_thinner_is_the_ambulance(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, thinner: str | None
+) -> None:
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    if thinner is not None:
+        await THINNERS[thinner](sg, h.owner)
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, PA, FELL_AND_SWOLLEN["en"])
+    step = Step.AMBULANCE if thinner is not None else Step.NUMBER_IF_WORSE
+    assert handled.replies[0].text.splitlines()[1:-2] == REPLY_STEP[step]
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[step]]
+
+
+@pytest.mark.parametrize("language", ("ms", "zh"))
+async def test_the_familys_ambulance_notice_is_in_her_language(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, language: str
+) -> None:
+    from app.channels.whatsapp.strings import RED_FLAG_NOTICE_TEXT
+
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    await warfarin(sg, h.owner)
+    h.mei.language = language
+    await sg.flush()
+    clock.set(at(22, 30))
+    await h.inbound(sg, PA, FELL["en"])
+    assert h.sent_to(h.mei)[-1].splitlines() == [
+        line.format(name="Pa", emergency_number="995")
+        for line in RED_FLAG_NOTICE_TEXT["red_flag_notice_ambulance_text"][language]
+    ]
+
+
+async def test_inside_her_window_the_ambulance_notice_goes_as_free_text_until_meta_approves(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A number carrying only the approved templates, as a deployment's does until Meta
+    approves the tiered notices: Mei wrote an hour ago, so the ambulance notice goes to her as
+    free text. (Outside her window the approved notice goes — ADR 0010, the open question.)"""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    await warfarin(sg, h.owner)
+    approved = tuple(
+        name
+        for name in h.via.number.templates
+        if name in ("morning_card", "visit_reminder", "reorder", "family_digest", "feeling_check_in", "red_flag_notice")
+    )
+    number = dataclasses.replace(h.via.number, templates=approved)
+    live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
+    clock.set(at(21, 30))
+    await live.inbound(sg, h.mei.phone_e164 or "", "thank you")
+    clock.set(at(22, 30))
+    handled = await live.inbound(sg, PA, FELL["en"])
+    assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+    sent = [
+        row
+        for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
+        if row.outcome is DeliveryOutcome.SENT and row.trigger_type.value == "flag"
+    ]
+    assert [row.template_name for row in sent] == [None]
+    assert live.sent_to(live.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+async def test_the_system_read_of_his_list_is_on_the_trail_in_the_helpers_name(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    from app.audit.models import Action, Channel
+    from app.keys.scopes import Scope
+    from tests.safety_support import trail
+
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    await warfarin(sg, h.owner)
+    clock.set(at(22, 30))
+    await h.inbound(sg, SITI, "Pa jatuh di bilik air")
+    reads = [
+        line
+        for line in await trail(sg, h.owner.profile_id)
+        if line.target == "medication_line" and line.action is Action.READ and line.channel is Channel.SYSTEM
+    ]
+    assert reads and {line.scope for line in reads} == {Scope.MEDICINES}
+    assert h.siti.id in {line.actor_person_id for line in reads}
+
+
+async def test_if_his_list_cannot_be_read_a_fall_is_the_ambulance(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Any failure reading his list errs towards the ambulance, in its own savepoint: the
+    flag, the ladder and the reply all still go."""
+
+    async def broken(*_: object, **__: object) -> bool:
+        raise RuntimeError("the medicines table could not be read")
+
+    monkeypatch.setattr("app.safety.red_flags.on_a_blood_thinner", broken)
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    clock.set(at(15))
+    handled = await h.inbound(sg, PA, FELL["en"])
+    assert handled.outcome == "red_flag" and handled.flag_id is not None
+    assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+@pytest.mark.parametrize(
+    ("drug_class", "generic"),
+    (("vitamin_k_antagonist", "warfarin"), ("ANTICOAGULANT", "warfarin sodium")),
+)
+async def test_a_thinner_is_known_by_its_class_in_any_case_or_by_its_name(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, drug_class: str, generic: str
+) -> None:
+    """A register that files warfarin under another code still raises the fall by its name;
+    one that writes the class in capitals still raises it by the class."""
+    from app.medicines.models import MedicationLine
+
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    made = await warfarin(sg, h.owner)
+    assert made.line is not None
+    await sg.execute(
+        MedicationLine.__table__.update()
+        .where(MedicationLine.__table__.c.id == made.line.id)
+        .values(drug_class=drug_class, generic=generic)
+    )
+    sg.expire_all()
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, PA, FELL["en"])
+    assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+
+
+async def test_his_voice_note_on_a_thinner_is_the_ambulance_not_the_hospital(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The voice note that says he fell (#146), at 22:30 with Gleneagles marked: on warfarin,
+    the ambulance — the same step as typed words."""
+    from tests.whatsapp_support import PA as PA_NUMBER
+    from tests.whatsapp_support import family
+
+    clock.set(datetime(2026, 9, 3, 12, 0, tzinfo=UTC))
+    home = await family(sg, tmp_path)
+    await add_provider(sg, context=home.owner, name="Dr Tan", kind=ProviderKind.DOCTOR, region=Region.SG)
+    await add_provider(
+        sg, context=home.owner, name="Gleneagles", kind=ProviderKind.HOSPITAL, region=Region.SG, panel=True
+    )
+    await warfarin(sg, home.owner)
+    clock.set(datetime(2026, 9, 3, 22, 30, tzinfo=SGT).astimezone(UTC))
+    flagged = await home.inbound(sg, PA_NUMBER, media_id="pa-voice-fell", content_type="audio/ogg; codecs=opus")
+    assert flagged.outcome == "red_flag"
+    said = [line for reply in flagged.replies for line in reply.text.splitlines()]
+    assert "Call the ambulance now on 995." in said
+    assert not any("emergency department" in line or "morning" in line for line in said)

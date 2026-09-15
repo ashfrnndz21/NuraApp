@@ -14,18 +14,40 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 
 ## 3. A fall on a blood thinner
 
-**The rule.** When a fall is raised while a medicine on his list is one the drug register classes as an anticoagulant, the step is the ambulance tier at any hour, whether or not a hospital is marked. He is told "Call the ambulance now on 995." (999 in Malaysia, from the region table), and the family gets the ambulance notice ("Call Pa now. If Pa has not called the ambulance, call the ambulance now on 995."). Without a thinner, a fall keeps its same-day rows. The rule only ever raises a fall; it never lowers anything.
+**The rule.** A fall is raised while a line in force on his list is a blood thinner: its register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`, any case), or its generic name is one the label-photo rule already lists for that class (`ANTICOAGULANT_GENERICS`, read from `HIGH_RISK_CLASSES`, not copied). Then the step is the ambulance tier at any hour, whether or not a hospital is marked.
+- He is told "Call the ambulance now on 995." (999 in Malaysia, from the region table).
+- The family's notice is the ambulance one: "Call Pa now. If Pa has not called the ambulance, call the ambulance now on 995."
+- Without a thinner, a fall keeps its same-day rows.
+- The rule only ever raises a fall; it never lowers anything.
+- A message that says a fall and another same-day flag ("I fell and my leg is swollen on one side") is heard as the fall, so the thinner is never missed.
+- If his list cannot be read, the step is the ambulance.
 
-**Why.** Someone on warfarin or one of the newer thinners (apixaban, rivaroxaban, dabigatran, edoxaban) who falls can bleed inside the head hours later. That needs same-night assessment. At night with no hospital marked, the same-day row said "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan in the morning."
+**Why.** Someone on warfarin or one of the newer thinners (apixaban, rivaroxaban, dabigatran, edoxaban) who falls can bleed inside the head hours later. That needs assessment the same night. At night with no hospital marked, the same-day row said "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan in the morning."
 
-**Where it applies.** Every path that tells anyone about a flag: the WhatsApp reply, and the family's notice from the ladder, whether the fall came from WhatsApp (typed, or a voice note), the not-feeling-well button, the symptom log or the feeling cloud. The button's own card already says the ambulance for every red flag.
+**Where it applies.** The WhatsApp reply, and the family's notice from the ladder, including its later rungs. That covers a fall from WhatsApp (typed, or a voice note), the not-feeling-well button, the symptom log and the feeling cloud. The button's own card, and the log's, already say the ambulance for every red flag.
 
-**Tests.** `backend/tests/test_red_flag_escalation.py`: a fall on warfarin and on apixaban, at 14:00 and at 22:30, with and without a panel hospital, in English, Malay and Chinese; a fall with no thinner keeps today's rows; a stopped thinner does not raise it; a helper's word gets the same step; the button, the log and the cloud; 999 in Malaysia.
+**Where it does not, yet.**
+- *Outside the family member's 24-hour WhatsApp window, until Meta approves `red_flag_notice_ambulance`,* the only approved notice goes, and it says "Call Dr Tan today." This is the same for chest pain; it is the PR's open question. The tiered notices must be approved, or a notice that never says "today" must be, before real profiles.
+- *A fall heard in a visit transcript* raises a flag with no feeling on it. That family notice is the approved one ("Call Dr Tan today."), because he was with the doctor. ADR 0010 asks whether that is right.
+
+**Tests.** `backend/tests/test_red_flag_escalation.py`:
+- a fall on warfarin and on apixaban, at 14:00 and at 22:30, with and without a panel hospital, in English, Malay and Chinese
+- a fall with no thinner keeps today's rows
+- a line no longer in force (superseded) does not raise it
+- a class under another code or in capitals
+- a fall said with swelling
+- a helper's word, and the system's read of his list on the audit trail
+- a list that cannot be read
+- the button, the log and the cloud
+- his voice note
+- the family's notice in Malay and Chinese, and as free text inside the window
+- 999 in Malaysia
 
 **Questions for sign-off.**
 
-1. The class. It is the register's `anticoagulant` class, the same one the label-photo rule guards (warfarin, apixaban, rivaroxaban, dabigatran, edoxaban). It does not include heparin injections (enoxaparin) or the antiplatelets (aspirin, clopidogrel, ticagrelor, two of them together). Should any of those raise a fall too?
-2. Held and stopped. A line marked held still counts, because a thinner paused for a few days still thins the blood. A stopped line does not. Is that right? Should a thinner stopped in the last few days still count?
+1. The class. It is warfarin, apixaban, rivaroxaban, dabigatran and edoxaban (acenocoumarol is rare here). It does not include the heparin injections (enoxaparin), fondaparinux, a single antiplatelet (aspirin, clopidogrel, ticagrelor), or two antiplatelets together. Should any of them raise a fall too? Two antiplatelets together especially.
+2. Held and stopped. A line the list marks as held would count, because a thinner paused for a few days still thins the blood. Nothing in Nura writes "held" or "stopped" yet: a medicine leaves his list only when its line is superseded, and it stops counting then. Should a thinner that left his list in the last few days still count?
 3. Only a fall is raised. Should a knock to the head without a fall, or another same-day flag on a thinner (one-sided swelling, blood in the stool), be raised as well?
-4. It reads his list in Nura only. A thinner nobody recorded cannot raise it, and a licensed register that files the newer thinners under another class code (for example by mechanism) would not either. The deployment's register must be checked against the class before real profiles.
-5. The step. Is "the ambulance now", rather than "go to the emergency department now", the right step at 14:00 in his doctor's hours, when he may be able to get there himself?
+4. It reads his list in Nura only. A thinner nobody recorded cannot raise it. The deployment's licensed register must be checked against the class and the names before real profiles.
+5. The step. At 14:00 in his doctor's hours, when he may be able to get there himself, is "the ambulance now" right, rather than "go to the emergency department now"?
+6. The helper can tell. When a fall gets the ambulance, a helper whose key does not open his medicines can guess that he is on a blood thinner. Is that acceptable for his safety?
