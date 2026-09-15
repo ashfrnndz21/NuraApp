@@ -24,7 +24,7 @@ tap is refused by the family module and is on the trail like any refusal.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
@@ -65,7 +65,6 @@ from app.medicines.strings import (
     ORDER_TASK,
     PLAIN_NAME,
     REORDER_NOTICE,
-    THEIR_NAME,
     language_of,
 )
 from app.memory.episodic import require_artifact
@@ -249,10 +248,9 @@ async def _who_to_ask(
     session: AsyncSession, context: KeyContext
 ) -> tuple[Person | None, Person | None]:
     """Whoever is on duty now (the roster, on his wall clock) and holds a key that opens his
-    medicines, else his chief; and his chief. The task's words name the medicine by his name
-    for it, and two lines can share one ("blood pressure tablet"); the chemical name and
-    strength beside the words reach only a key that opens the medicines, so the one asked to
-    buy it is one who can read which it is."""
+    medicines, else his chief; and his chief. The task's words name the medicine by its
+    chemical name and strength ("order more amlodipine 5 mg for Pa"), so the one asked to
+    buy it is one whose key opens his medicines."""
     chief = await _chief(session, context)
     moment = utcnow()
     opens_medicines = {
@@ -382,12 +380,14 @@ async def ask_to_order(
     profile = await audited_profile_read(session, context)
     theirs = language_of(asked.language)
     name_id = registry.monograph(line.generic).plain_name_id
+    # The medicine as its box names it — the line's chemical name and strength — so the one
+    # who buys it buys this one, and him by name (review #140, item 11).
+    label = " ".join(part for part in (line.generic, line.strength) if part)
     task = await add_task(
         session,
         context=context,
-        what=ORDER_TASK[theirs].format(
-            patient=profile.display_name, medicine=THEIR_NAME[theirs][name_id]
-        ),
+        what=ORDER_TASK[theirs].format(patient=profile.display_name, medicine=label),
+        checked_as=ORDER_TASK[theirs],
         assigned_person_id=asked.id,
         language=theirs,
         errand=Errand.ORDER,
@@ -429,26 +429,6 @@ async def ask_to_order(
         language=lang,
         lines=lines,
     )
-
-
-async def order_medicines(
-    session: AsyncSession, *, context: KeyContext, tasks: Sequence[Task]
-) -> Mapping[uuid.UUID, str]:
-    """Beside each order task's words, the chemical name and strength of the line it names
-    ("amlodipine 5 mg"), small and second, the way every medicine card shows them — for a
-    key that opens the medicines. A key that does not is given none, and the words stand."""
-    wanted = {task.medication_line_id for task in tasks if task.medication_line_id is not None}
-    if not wanted or not context.allows(Scope.MEDICINES):
-        return {}
-    found = await audited_read(
-        session, MedicationLine, context, Scope.MEDICINES, where=(MedicationLine.id.in_(wanted),)
-    )
-    named = {line.id: f"{line.generic} {line.strength}" for line in found}
-    return {
-        task.id: named[task.medication_line_id]
-        for task in tasks
-        if task.medication_line_id is not None and task.medication_line_id in named
-    }
 
 
 def reorder_notice_lines(notice: Notice, *, patient: str, language: str | None = None) -> list[str]:

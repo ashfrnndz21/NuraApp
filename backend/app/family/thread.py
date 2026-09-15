@@ -217,6 +217,8 @@ async def digest(
     names = await _names(session, context, {entry.author_person_id for entry in found})
     can_render_numbers = context.allows(Scope.RECORDS) and context.allows(Scope.READINGS)
     templates = DIGEST[words]
+    # A line carrying a value that is not Nura's words, and the template it is checked as.
+    checked: dict[str, str] = {}
 
     entries: list[DigestEntry] = []
     for entry in found:
@@ -257,7 +259,9 @@ async def digest(
         elif entry.card_kind is CardKind.VISIT:
             lines = [templates["visit"].format(name=profile.display_name, day=day)]
         else:
-            lines = await _task_lines(session, context, entry, names, templates, words, zone)
+            lines = await _task_lines(
+                session, context, entry, names, templates, words, zone, checked
+            )
         assert entry.card_kind is not None  # `is_card` said so
         entries.append(
             DigestEntry(kind=entry.card_kind.value, at=at, lines=lines, message_id=entry.id)
@@ -283,7 +287,7 @@ async def digest(
     failures = [
         str(finding)
         for index, line in enumerate(nura_lines)
-        for finding in verify(line, words, "headline" if index == 0 else "line")
+        for finding in verify(checked.get(line, line), words, "headline" if index == 0 else "line")
         if finding.severity == "fail"
     ]
     if failures:
@@ -306,7 +310,12 @@ async def _task_lines(
     templates: Mapping[str, str],
     words: str,
     zone: Any,
+    checked: dict[str, str],
 ) -> list[str]:
+    """The task card's line, with the task's own words in it. An order task (E04-05) names
+    the medicine as its box does ("order more amlodipine 5 mg for Pa"), a value and not
+    Nura's words: its label was checked as a template when it was kept (`add_task`), so the
+    digest checks this line with `{what}` in its place, recorded in `checked`."""
     if entry.task_id is None:
         return []
     found = await audited_read(
@@ -318,7 +327,12 @@ async def _task_lines(
     doer = names.get(task.assigned_person_id)
     if doer is None:
         doer = (await _names(session, context, {task.assigned_person_id}))[task.assigned_person_id]
+    slots = {"who": doer}
+    template = templates["task_open"]
     if task.done_at is not None:
-        day = say_date(as_utc(task.done_at).astimezone(zone).date(), words)
-        return [templates["task_done"].format(who=doer, day=day, what=task.what)]
-    return [templates["task_open"].format(who=doer, what=task.what)]
+        slots["day"] = say_date(as_utc(task.done_at).astimezone(zone).date(), words)
+        template = templates["task_done"]
+    line = template.format(what=task.what, **slots)
+    if task.medication_line_id is not None:
+        checked[line] = template.format(what="{what}", **slots)
+    return [line]

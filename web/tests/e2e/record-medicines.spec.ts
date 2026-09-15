@@ -48,7 +48,7 @@ for (const look of LOOKS) {
     // Ask the family to order: first who Nura will ask and for what, and nothing written
     // until his yes; then a task on the family's list and his chief told, in the backend's words.
     const tasksOf = async () =>
-      (await (await request.get(`${API}/profiles/${pa.profileId}/tasks`, auth(mei.token))).json()) as { what: string; assigned_person_id: string; medicine: string | null }[];
+      (await (await request.get(`${API}/profiles/${pa.profileId}/tasks`, auth(mei.token))).json()) as { what: string; assigned_person_id: string }[];
     await card.getByTestId("ask-to-order").click();
     const preview = card.getByTestId("order-preview");
     await expect(preview).toContainText("Nura will ask Mei to order more of your blood pressure tablet.");
@@ -63,8 +63,8 @@ for (const look of LOOKS) {
     await card.getByTestId("order-yes").click();
     await expect(page.getByTestId("asked")).toHaveText("Nura asked Mei to order more of your blood pressure tablet.");
     await expect(card.getByTestId("ask-to-order")).toBeDisabled();
-    // The task names him and the medicine, never "your"; the chemical name rides beside it.
-    expect((await tasksOf()).map((task) => [task.what, task.assigned_person_id, task.medicine])).toEqual([["Order more of Pa's blood pressure tablet.", mei.personId, "amlodipine 5 mg"]]);
+    // The task names him, and the medicine as its box does; never "your".
+    expect((await tasksOf()).map((task) => [task.what, task.assigned_person_id])).toEqual([["order more amlodipine 5 mg for Pa", mei.personId]]);
 
     // I have more at home: how many, his yes for that number, the count as the backend says it.
     await card.getByTestId("i-have-more").click();

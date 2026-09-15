@@ -1152,17 +1152,6 @@ export const zh = {
     dayAsk: "您的一天是这样吗？",
     // @patient phrase
     dayYes: "对，设定您的一天",
-    // @patient phrase
-    clockHour: "{hour}点",
-    // @patient phrase
-    clockHourMinute: "{hour}点{minute}分",
-    // @patient phrase
-    atTime: {
-      morning: "早上{time}",
-      noon: "中午{time}",
-      afternoon: "下午{time}",
-      night: "晚上{time}",
-    },
     // @patient
     daySaved: "Nura 记下了您的一天。",
     // @patient headline

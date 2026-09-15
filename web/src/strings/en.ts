@@ -1154,17 +1154,6 @@ export const en = {
     dayAsk: "Is this how your day goes?",
     // @patient phrase
     dayYes: "Yes, set your day",
-    // @patient phrase
-    clockHour: "{hour}",
-    // @patient phrase
-    clockHourMinute: "{hour}:{minute}",
-    // @patient phrase
-    atTime: {
-      morning: "at {time} in the morning",
-      noon: "at {time} in the afternoon",
-      afternoon: "at {time} in the afternoon",
-      night: "at {time} at night",
-    },
     // @patient
     daySaved: "Nura wrote down your day.",
     // @patient headline

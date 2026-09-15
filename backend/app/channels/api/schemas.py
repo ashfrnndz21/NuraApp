@@ -2595,12 +2595,9 @@ class TaskOut(BaseModel):
     errand: str | None = None
     """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); `order` for more of a
     medicine (E04-05); else none."""
-    medicine: str | None = None
-    """For an order task, the chemical name and strength of the line it names
-    ("amlodipine 5 mg"), shown small beside the words — for a key that opens the medicines."""
 
     @classmethod
-    def of(cls, task: Task, *, medicine: str | None = None) -> TaskOut:
+    def of(cls, task: Task) -> TaskOut:
         return cls(
             task_id=task.id,
             what=task.what,
@@ -2612,7 +2609,6 @@ class TaskOut(BaseModel):
             done_by_person_id=task.done_by_person_id,
             appointment_id=task.appointment_id,
             errand=None if task.errand is None else task.errand.value,
-            medicine=medicine,
         )
 
 

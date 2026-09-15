@@ -25,7 +25,7 @@ from sqlalchemy import select
 
 from app.clock import FrozenClock
 from app.family.models import Task
-from app.medicines.strings import LANGUAGES, ORDER_TASK, THEIR_NAME
+from app.medicines.strings import LANGUAGES, ORDER_TASK
 from app.memory.models import ArtifactKind
 from app.safety.models import Notice, NoticeKind
 from app.safety.not_feeling_well import notice_lines
@@ -220,19 +220,35 @@ async def test_ask_to_order_previews_then_on_his_yes_gives_the_task_to_whoever_i
         "Mei knows now.",
     ]
 
-    # The task is on the family's list for Kit. Its words name Pa and his medicine — never
-    # "your", which on Kit's list would be hers — and the chemical name and strength ride
-    # beside the words, small, from the line it names.
+    # The task is on the family's list for Kit. Its words name Pa, and the medicine as its
+    # box names it, chemical name and strength — never "your", which on Kit's list would be
+    # hers (review #140, item 11).
     tasks = await _tasks(deployment, mei, profile_id)
-    assert [(t["what"], t["assigned_person_id"], t["errand"], t["medicine"]) for t in tasks] == [
-        ("Order more of Pa's blood pressure tablet.", kit["person_id"], "order", "amlodipine 5 mg")
+    assert [(t["what"], t["assigned_person_id"], t["errand"]) for t in tasks] == [
+        ("order more amlodipine 5 mg for Pa", kit["person_id"], "order")
     ]
     mine = await client.get(
         f"/profiles/{profile_id}/tasks", params={"mine": "true"}, headers=bearer(kit["token"])
     )
-    assert [(t["task_id"], t["medicine"]) for t in mine.json()] == [
-        (body["task_id"], "amlodipine 5 mg")
+    assert [(t["task_id"], t["what"]) for t in mine.json()] == [
+        (body["task_id"], "order more amlodipine 5 mg for Pa")
     ]
+
+    # The family digest says it the same way and still passes the verifier: the medicine as
+    # its box names it is a value, checked there as `{what}`.
+    card = await client.post(
+        f"/profiles/{profile_id}/thread",
+        json={"card_kind": "task", "task_id": body["task_id"]},
+        headers=bearer(mei["token"]),
+    )
+    assert card.status_code == 201, card.text
+    digested = await client.get(
+        f"/profiles/{profile_id}/thread/digest",
+        params={"since": "2020-01-01T00:00:00+00:00", "language": "en"},
+        headers=bearer(mei["token"]),
+    )
+    assert digested.status_code == 200, digested.text
+    assert "Kit will do this: order more amlodipine 5 mg for Pa." in digested.json()["lines"]
 
     # The chief is told: one notice, a reorder notice, never read as "not feeling well".
     notices = await _notices(deployment, profile_id)
@@ -378,9 +394,9 @@ async def test_with_nobody_on_duty_the_chief_is_asked_and_with_no_chief_nobody_i
 async def test_the_one_asked_is_one_whose_key_opens_his_medicines(
     deployment: Deployment, clock: FrozenClock
 ) -> None:
-    """Two lines can share his name for them ("blood pressure tablet"); the chemical name and
-    strength beside the task reach only a key that opens the medicines. So someone on duty
-    whose key does not is passed over, and the chief is asked."""
+    """The task names his medicine by its chemical name and strength, so the one asked to buy
+    it is one whose key opens the medicines: someone on duty whose key does not is passed
+    over, and the chief is asked."""
     pa, profile_id, line_id = await _pa_with_tablets(deployment)
     mei = await _key(deployment, pa, profile_id, MEI, "Mei", "chief", EVERY_PART)
     kit = await _key(deployment, pa, profile_id, KIT, "Kit", "caregiver", ["visits"])
@@ -390,8 +406,8 @@ async def test_the_one_asked_is_one_whose_key_opens_his_medicines(
     done = await _preview_and_yes(deployment, pa, profile_id, line_id)
     assert done.status_code == 201, done.text
     tasks = await _tasks(deployment, mei, profile_id)
-    assert [(t["assigned_person_id"], t["medicine"]) for t in tasks] == [
-        (mei["person_id"], "amlodipine 5 mg")
+    assert [(t["assigned_person_id"], t["what"]) for t in tasks] == [
+        (mei["person_id"], "order more amlodipine 5 mg for Pa")
     ]
 
 
@@ -410,15 +426,16 @@ async def test_the_preview_in_malay_and_chinese_names_who_and_what(
 
 
 def test_every_order_task_names_him_and_the_medicine_and_passes_plain_words() -> None:
-    """The label `add_task` keeps is verified as a phrase at run time: every one Nura can
-    write, in every language, passes, and none says "your" about him to someone else."""
+    """The task's words are the template, checked as a phrase in every language when it is
+    kept (`add_task(checked_as=...)`): the medicine goes in as its box names it, a value and
+    not Nura's words. Filled, it names him and the medicine, and never says "your"."""
     for language in LANGUAGES:
-        for name in THEIR_NAME[language].values():
-            label = ORDER_TASK[language].format(patient="Pa", medicine=name)
-            failures = [f for f in verify(label, language, "phrase") if f.severity == "fail"]
-            assert failures == [], (label, failures)
-            assert "Pa" in label
-            assert not any(word in label.lower() for word in ("your", "anda", "您"))
+        template = ORDER_TASK[language]
+        failures = [f for f in verify(template, language, "phrase") if f.severity == "fail"]
+        assert failures == [], (template, failures)
+        label = template.format(patient="Pa", medicine="amlodipine 5 mg")
+        assert "Pa" in label and "amlodipine 5 mg" in label
+        assert not any(word in label.lower() for word in ("your", "anda", "您"))
 
 
 async def test_a_helper_can_neither_ask_the_family_nor_add_to_the_count(

@@ -65,9 +65,9 @@ test("the day: the chief sets it once on her yes; it reads to him as one line pe
   await page.getByTestId("walk-dinner").click();
   await page.getByTestId("check-day").click();
   await expect(page.getByTestId("day-ask")).toContainText("Is this how your day goes?");
-  // Each time read back the way he says it ("at 7 in the morning"), never a 24-hour code.
-  await expect(page.getByTestId("day-ask")).toContainText("in the morning");
-  await expect(page.getByTestId("day-ask")).not.toContainText(/\b\d{2}:\d{2}\b/);
+  // Each time read back the way every time in the app is said ("7:00 am"), never a bare code.
+  await expect(page.getByTestId("day-ask")).toContainText(/\b\d{1,2}:\d{2}\sam\b/);
+  await expect(page.getByTestId("day-ask")).not.toContainText(/\b\d{2}:\d{2}\b(?!\s[ap]m)/);
   await readable(page, "caregiver");
   await page.getByTestId("day-yes").click();
   await expect(page.getByTestId("record-note")).toHaveText("Nura wrote down your day.");

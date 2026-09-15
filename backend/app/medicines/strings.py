@@ -61,49 +61,6 @@ PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
 }
 """His name for each medicine, by the monograph's `plain_name_id`."""
 
-# @patient phrase
-THEIR_NAME: Mapping[str, Mapping[str, str]] = {
-    "en": {
-        "blood_pressure_tablet": "blood pressure tablet",
-        "sugar_tablet": "sugar tablet",
-        "cholesterol_tablet": "cholesterol tablet",
-        "blood_thinner_tablet": "blood thinner tablet",
-        "insulin": "insulin",
-        "aspirin": "aspirin",
-        "water_pill": "water pill",
-        "stomach_tablet": "stomach tablet",
-        "joint_tablet": "joint tablet",
-        "pain_tablet": "pain tablet",
-    },
-    "ms": {
-        "blood_pressure_tablet": "ubat tekanan darah",
-        "sugar_tablet": "ubat gula",
-        "cholesterol_tablet": "ubat kolesterol",
-        "blood_thinner_tablet": "ubat cair darah",
-        "insulin": "insulin",
-        "aspirin": "aspirin",
-        "water_pill": "pil air",
-        "stomach_tablet": "ubat perut",
-        "joint_tablet": "ubat sendi",
-        "pain_tablet": "ubat sakit",
-    },
-    "zh": {
-        "blood_pressure_tablet": "血压药",
-        "sugar_tablet": "降糖药",
-        "cholesterol_tablet": "降胆固醇药",
-        "blood_thinner_tablet": "薄血药",
-        "insulin": "胰岛素",
-        "aspirin": "阿司匹林",
-        "water_pill": "去水药",
-        "stomach_tablet": "胃药",
-        "joint_tablet": "关节药",
-        "pain_tablet": "止痛药",
-    },
-}
-"""The same names with nobody's "your" on them, for a line someone else reads about him:
-the family's order task says "Pa's blood pressure tablet", never "your blood pressure
-tablet" (E04-05). His own lines keep `PLAIN_NAME`."""
-
 # @patient
 PURPOSE: Mapping[str, Mapping[str, Lines]] = {
     "en": {
@@ -580,16 +537,19 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
 
 # @patient phrase
 ORDER_TASK: Mapping[str, str] = {
-    "en": "Order more of {patient}'s {medicine}.",
-    "ms": "Pesan lagi {medicine} untuk {patient}.",
-    "zh": "为{patient}再订{medicine}。",
+    "en": "order more {medicine} for {patient}",
+    "ms": "pesan lagi {medicine} untuk {patient}",
+    "zh": "为{patient}再订{medicine}",
 }
 """The task on the family's list when he says yes to "Ask the family to order." (E04-05), in
-the language of the one it is given to: his name, and the medicine by `THEIR_NAME` — never
-his own "your", which on Kit's list would be hers. The chemical name and strength are not in
-these words: a strength is a unit he does not use (plain words, rule 12) and the label also
-reaches him in the digest, so they travel beside the words as data from the line the task
-names (`TaskOut.medicine`), the way every medicine card shows them small and second."""
+the language of the one it is given to: "order more amlodipine 5 mg for Pa" — a phrase like
+every task label ("drive Pa to Dr Tan"), since the digest puts it inside a sentence of its
+own ("Kit will do this: order more amlodipine 5 mg for Pa."). The medicine is
+named as its box names it — the line's chemical name and strength, licensed drug data that
+`ask_to_order` fills in — so the one who buys it cannot buy the wrong one where two of his
+tablets share his name for them; and he is named, never "your", which on Kit's list would be
+hers. The label is a value in `{medicine}`, not words Nura wrote, so the verifier reads this
+template, not the filled task (`add_task(checked_as=...)`, and the family digest the same)."""
 
 # @patient
 ORDER_PREVIEW: Mapping[str, Lines] = {

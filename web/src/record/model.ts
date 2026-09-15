@@ -16,6 +16,7 @@ import type {
 } from "../api/types";
 import type { Density } from "../store/session";
 import { fill, type Strings } from "../strings";
+import { timeLine } from "../today/model";
 import type { HubEntry } from "./places";
 
 /** The Record's logic apart from any screen, all unit-tested. Nothing here writes a sentence:
@@ -248,18 +249,13 @@ export function rangeLine(range: RangeOut | null, s: Strings, units = false): st
   return fill(s.record.rangeBetween, { lower: numberText(range.lower), upper: `${numberText(range.upper)}${unit}` });
 }
 
-/** A clock time of his day ("07:00", "19:30") the way he says it: "at 7 in the morning",
- *  "at 7:30 at night" — the hour on his 12-hour clock and the part of the day, never a bare
- *  24-hour code (plain words, rule 5). Anything that is not a time is left as it is. */
-export function spokenTime(hhmm: string, s: Strings): string {
-  const match = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+/** A clock time of his day ("07:00", "19:30") said the way every time in the app is said,
+ *  through `timeLine`: "7:00 am" in English, "07:00" in Malay and Chinese — one time format
+ *  everywhere (plain words, rule 13). Anything that is not a time is left as it is. */
+export function clockLine(hhmm: string, locale: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
   if (!match) return hhmm;
-  const hour24 = Number(match[1]);
-  const minute = Number(match[2]);
-  const part = hour24 < 12 ? "morning" : hour24 < 14 ? "noon" : hour24 < 19 ? "afternoon" : "night";
-  const hour = String(hour24 % 12 === 0 ? 12 : hour24 % 12);
-  const time = minute === 0 ? fill(s.record.clockHour, { hour }) : fill(s.record.clockHourMinute, { hour, minute: String(minute).padStart(2, "0") });
-  return fill(s.record.atTime[part], { time });
+  return timeLine(new Date(2000, 0, 1, Number(match[1]), Number(match[2])), locale);
 }
 
 /** One result's range line: its range, or — when the backend placed it against none — why

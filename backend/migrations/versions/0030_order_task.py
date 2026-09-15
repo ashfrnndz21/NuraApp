@@ -2,8 +2,7 @@
 
 `task.medication_line_id`: the medicine line a task made on his yes to "Ask the family to
 order." is for, tied to the line on the same profile. It is how one open order task a line a
-day is found again, so a second yes that day answers with the task already on the list, and
-how the family's list shows the chemical name and strength beside the task's words.
+day is found again, so a second yes that day answers with the task already on the list.
 
 `task_errand` gains `order` and `confirm_subject` gains `order`: non-native enums with no
 database constraint, so no schema change for them.

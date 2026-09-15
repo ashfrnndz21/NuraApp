@@ -214,9 +214,16 @@ async def add_task(
     appointment_id: uuid.UUID | None = None,
     errand: Errand | None = None,
     medication_line_id: uuid.UUID | None = None,
+    checked_as: str | None = None,
 ) -> Task:
     """Give one person one thing to do. `what` is a label in plain words — it reaches him
     in the digest and the trail — so it passes the verifier as a phrase before it is kept.
+
+    `checked_as` is for a label Nura fills from its own template: that template, with a
+    `{slot}` where a value that is not Nura's words goes — his name, or a medicine as its box
+    names it ("amlodipine 5 mg", licensed drug data the family buys by). The verifier then
+    reads the template, its slots filled with representative values, instead of `what`. The
+    only caller that passes one is `app.medicines.reorder.ask_to_order`.
 
     A task that is part of a visit's logistics names the visit and the errand (E05-03); the
     only caller that does is `app.reasoning.visits.logistics.assign_driver`, on the chief's
@@ -225,7 +232,8 @@ async def add_task(
     profile, or the table refuses them."""
     a_chief(context)
     label = short_label(what)
-    failures = [str(f) for f in verify(label, language, "phrase") if f.severity == "fail"]
+    words = label if checked_as is None else checked_as
+    failures = [str(f) for f in verify(words, language, "phrase") if f.severity == "fail"]
     if failures:
         raise NotPlainWords(failures)
     await _on_this_profile(session, context, assigned_person_id)

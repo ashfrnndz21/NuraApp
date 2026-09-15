@@ -544,9 +544,6 @@ export interface Strings {
     checkDay: string;
     dayAsk: string;
     dayYes: string;
-    clockHour: string;
-    clockHourMinute: string;
-    atTime: Record<"morning" | "noon" | "afternoon" | "night", string>;
     daySaved: string;
     tableMoment: string;
     tableTime: string;

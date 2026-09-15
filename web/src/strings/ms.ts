@@ -1152,17 +1152,6 @@ export const ms = {
     dayAsk: "Beginikah hari anda?",
     // @patient phrase
     dayYes: "Ya, tetapkan hari anda",
-    // @patient phrase
-    clockHour: "{hour}",
-    // @patient phrase
-    clockHourMinute: "{hour}.{minute}",
-    // @patient phrase
-    atTime: {
-      morning: "pukul {time} pagi",
-      noon: "pukul {time} tengah hari",
-      afternoon: "pukul {time} petang",
-      night: "pukul {time} malam",
-    },
     // @patient
     daySaved: "Nura sudah tulis hari anda.",
     // @patient headline

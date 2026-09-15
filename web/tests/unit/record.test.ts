@@ -18,7 +18,7 @@ import {
   pointRangeLine,
   rangeLine,
   rangeSourceLine,
-  spokenTime,
+  clockLine,
   reorderActions,
   severityLine,
   tidyLabel,
@@ -242,14 +242,11 @@ describe("a lab trend", () => {
     expect(numberText(5.2)).toBe("5.2");
   });
 
-  it("says a time of his day the way he says it, never a 24-hour code", () => {
-    expect(spokenTime("07:00", en)).toBe("at 7 in the morning");
-    expect(spokenTime("06:30", en)).toBe("at 6:30 in the morning");
-    expect(spokenTime("12:00", en)).toBe("at 12 in the afternoon");
-    expect(spokenTime("15:05", en)).toBe("at 3:05 in the afternoon");
-    expect(spokenTime("21:00", en)).toBe("at 9 at night");
-    expect(spokenTime("00:15", en)).toBe("at 12:15 in the morning");
-    expect(spokenTime("", en)).toBe("");
+  it("says a time of his day the way every time in the app is said (timeLine), never a bare code", () => {
+    expect(clockLine("07:00", "en-SG")).toMatch(/^7:00\sam$/);
+    expect(clockLine("19:30", "en-SG")).toMatch(/^7:30\spm$/);
+    expect(clockLine("19:30", "ms-MY")).toBe("19:30");
+    expect(clockLine("", "en-SG")).toBe("");
   });
 
   it("says why a result has no usual number beside it, when the backend says", () => {

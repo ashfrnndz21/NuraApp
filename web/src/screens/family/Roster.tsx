@@ -99,11 +99,6 @@ export function RosterPart(): JSX.Element | null {
         {jobs.value?.map((task) => (
           <div key={task.task_id} class="entry" data-testid="task">
             <p>{task.what}</p>
-            {task.medicine && (
-              <p class="caption" data-testid="task-medicine">
-                {task.medicine}
-              </p>
-            )}
             <p class="label">
               {nameOf(task.assigned_person_id)}
               {task.due_at ? ` · ${wallTime(task.due_at, here.locale)}` : ""}

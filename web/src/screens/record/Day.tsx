@@ -11,7 +11,7 @@ import {
   pointRangeLine,
   rangeSourceLine,
   READINGS,
-  spokenTime,
+  clockLine,
   trendLines,
   withReading,
   withTime,
@@ -19,7 +19,7 @@ import {
   type Analyte,
 } from "../../record/model";
 import { density } from "../../store/session";
-import { fill, language, t } from "../../strings";
+import { fill, language, LOCALE, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
 import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
 
@@ -244,7 +244,7 @@ export function BuilderScreen(): JSX.Element {
           {ANCHORS.map((anchor) => (
             <div class="lines" key={anchor}>
               <p class="label">
-                {s.record.anchors[anchor]} {spokenTime(day.anchors[anchor] ?? "", s)}
+                {s.record.anchors[anchor]} {clockLine(day.anchors[anchor] ?? "", LOCALE[language.value])}
               </p>
               {day.reading_prompts
                 .filter(([, at]) => at === anchor)
@@ -255,7 +255,7 @@ export function BuilderScreen(): JSX.Element {
             </div>
           ))}
           <p class="label">
-            {s.record.morningCard} {spokenTime(day.morning_card_at, s)}
+            {s.record.morningCard} {clockLine(day.morning_card_at, LOCALE[language.value])}
           </p>
           <Pill plum onClick={() => void save()} disabled={busy} testId="day-yes">
             {s.record.dayYes}
