@@ -342,6 +342,10 @@ export const en = {
   feed: {
     // @patient headline
     title: "More for you",
+    // @patient
+    empty: "Nothing new is waiting today.",
+    // @patient phrase
+    emptyAction: "Back to Today",
     // @patient phrase
     open: "See more for you",
     // @patient headline

@@ -792,3 +792,56 @@ html.shot-full .shell > .shell-scroll {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
 }
+
+
+/* --- A screen's head: the way back at the top left, the title; the mark only off the shell --- */
+.screen-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.screen-head .pill {
+  width: auto;
+  align-self: flex-start;
+  padding-left: 0;
+}
+.shell .screen-head .brand {
+  display: none;
+}
+.screen-title {
+  margin: 0;
+}
+
+/* --- The Record's places: rows on paper, an icon, the word, the way in ---------------------- */
+.place-rows {
+  display: flex;
+  flex-direction: column;
+}
+.place-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.place-row + .place-row {
+  border-top: 1px solid rgba(43, 39, 51, 0.08);
+}
+.place-row .place-word {
+  flex: 1;
+}
+.place-row:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+

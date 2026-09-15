@@ -189,16 +189,18 @@ export function Field({ label, value, onInput, type = "text", inputMode, autoCom
   );
 }
 
+/** A screen's head (D1): the way back first, at the top left, its chevron beside its word; then
+ *  the title. The mark shows only on a screen outside the shell, which has its own header. */
 export function Header({ title, onBack }: { title: string; onBack?: () => void }): JSX.Element {
   return (
-    <header style="display:flex;flex-direction:column;gap:12px">
+    <header class="screen-head">
       <Brand />
-      <h1 class="title">{title}</h1>
       {onBack && (
-        <Pill quiet onClick={onBack}>
+        <PillButton variant="quiet" compact icon="back" onClick={onBack}>
           {t().signIn.back}
-        </Pill>
+        </PillButton>
       )}
+      <h1 class="title screen-title">{title}</h1>
     </header>
   );
 }

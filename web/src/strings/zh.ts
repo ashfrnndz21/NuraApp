@@ -342,6 +342,10 @@ export const zh = {
   feed: {
     // @patient headline
     title: "更多给您的",
+    // @patient
+    empty: "今天没有新的东西。",
+    // @patient phrase
+    emptyAction: "回到“今天”",
     // @patient phrase
     open: "看更多给您的",
     // @patient headline

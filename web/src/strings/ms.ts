@@ -342,6 +342,10 @@ export const ms = {
   feed: {
     // @patient headline
     title: "Lagi untuk anda",
+    // @patient
+    empty: "Tiada apa-apa yang baru hari ini.",
+    // @patient phrase
+    emptyAction: "Kembali ke Hari Ini",
     // @patient phrase
     open: "Lihat lagi untuk anda",
     // @patient headline

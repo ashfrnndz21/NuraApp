@@ -22,6 +22,7 @@ export type IconName =
   | "close"
   | "play"
   | "chevron"
+  | "back"
   | "note";
 
 export const ICONS: Record<IconName, readonly string[]> = {
@@ -56,6 +57,7 @@ export const ICONS: Record<IconName, readonly string[]> = {
   close: ["M6.5 6.5l11 11", "M17.5 6.5l-11 11"],
   play: ["M8.5 5.5v13l10-6.5z"],
   chevron: ["M9.5 6l6 6-6 6"],
+  back: ["M14.5 6l-6 6 6 6"],
   note: ["M4 5h16v11H9.5L4 20z"],
 };
 

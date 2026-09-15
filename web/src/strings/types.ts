@@ -144,7 +144,7 @@ export interface Strings {
   /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
    *  lines it says itself. Every card's own words are the backend's. */
   feed: {
-    title: string;
+    title: string; empty: string; emptyAction: string;
     open: string;
     story: string;
     learning: string;

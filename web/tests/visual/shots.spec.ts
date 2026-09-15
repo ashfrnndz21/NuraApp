@@ -13,6 +13,8 @@ import { seedHome } from "../e2e/homeSeed";
 const OUT = process.env.NURA_DESIGN_SHOTS ?? "design-shots";
 mkdirSync(OUT, { recursive: true });
 
+test.use({ actionTimeout: 15_000 });
+
 const SIZES = [
   { name: "390x844", width: 390, height: 844 },
   { name: "360x640", width: 360, height: 640 },

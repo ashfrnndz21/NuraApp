@@ -1,9 +1,10 @@
 import type { JSX } from "preact";
+import { Icon, type IconName } from "../../ui/kit/icons";
 import { hubEntries } from "../../record/model";
 import type { HubEntry, RecordAt } from "../../record/places";
 import { density, profile } from "../../store/session";
 import { fill, t } from "../../strings";
-import { Pill, Tile } from "../../ui/components";
+import { Tile } from "../../ui/components";
 import { ChangesScreen, EpisodeScreen, ProviderScreen, ProvidersScreen, TimelineScreen } from "./Timeline";
 import { AddMedicineScreen, MedicinesScreen, MoreScreen, StoryScreen } from "./Medicines";
 import { BuilderScreen, RoutineScreen, TrendsScreen } from "./Day";
@@ -60,6 +61,17 @@ const PLACE: Record<HubEntry, RecordAt> = {
 
 /** The Record's first screen: one big button a part. In his density his medicines, his
  *  papers and his day come first; a key sees only the parts it opens. */
+/** Each place's icon, always beside its word. */
+const PLACE_ICON: Partial<Record<string, IconName>> = {
+  medicines: "medicines",
+  papers: "records",
+  routine: "today",
+  timeline: "visits",
+  trends: "records",
+  providers: "visits",
+  changes: "note",
+};
+
 function Hub(): JSX.Element {
   const s = t();
   const papers = profile.value;
@@ -68,11 +80,15 @@ function Hub(): JSX.Element {
   return (
     <RecordFrame title={title} testId="record-hub">
       <Tile paper testId="record-entries">
-        {entries.map((entry, index) => (
-          <Pill key={entry} plum={index === 0 && density() === "patient"} onClick={() => toRecord(PLACE[entry])} testId={`record-${entry}`}>
-            {s.record[entry]}
-          </Pill>
-        ))}
+        <nav class="place-rows" aria-label={title}>
+          {entries.map((entry) => (
+            <button key={entry} type="button" class="place-row" onClick={() => toRecord(PLACE[entry])} data-testid={`record-${entry}`}>
+              <Icon name={PLACE_ICON[entry] ?? "records"} />
+              <span class="place-word">{s.record[entry]}</span>
+              <Icon name="chevron" />
+            </button>
+          ))}
+        </nav>
       </Tile>
     </RecordFrame>
   );

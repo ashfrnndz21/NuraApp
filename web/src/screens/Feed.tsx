@@ -15,6 +15,7 @@ import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, Tile } from "../ui/components";
+import { PillButton } from "../ui/kit";
 import { Shell } from "./Shell";
 import "../ui/feed.css";
 
@@ -186,6 +187,18 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
             <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
             <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
           </>
+        )}
+        {!blank && store.origin.value !== "none" && !store.busy.value && !store.error.value && shown.length === 0 && (
+          <Card
+            lines={[s.feed.empty]}
+            hear={false}
+            testId="feed-empty"
+            action={
+              <PillButton onClick={() => go({ name: "today" })} testId="feed-empty-back">
+                {s.feed.emptyAction}
+              </PillButton>
+            }
+          />
         )}
       </div>
 
