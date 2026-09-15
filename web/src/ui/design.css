@@ -845,3 +845,24 @@ html.shot-full .shell > .shell-scroll {
   border-radius: 12px;
 }
 
+
+/* --- W4's player, as the design's strip: glass, a large play target, the line under it at body
+   size (docs/design-system.md §4, "Voice note and clip player"). Behaviour and markup are W4's. */
+.player {
+  padding: var(--space-2);
+  border-radius: var(--radius-tile);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--tile-shadow);
+}
+/* Inside the kit's strip (a card's clip), the strip is the glass: no second pane in it. */
+.player-strip .player {
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
