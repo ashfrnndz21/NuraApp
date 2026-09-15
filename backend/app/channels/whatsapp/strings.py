@@ -244,15 +244,62 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Saya sudah tulis.", "Kalau jadi lebih teruk, telefon {doctor} hari ini."),
         "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
     },
+    # His "Taken", written down: the tablets it was written against, by name, so a wrong one
+    # can be caught (#162). `{took}` is one `TOOK` line per moment of his day.
     "taken_patient": {
-        "en": ("Thank you, I wrote it down.", "{who} can see you took it."),
-        "ms": ("Terima kasih, saya sudah tulis.", "{who} boleh lihat anda sudah ambil."),
-        "zh": ("谢谢，我记下了。", "{who}能看到您吃了。"),
+        "en": ("Thank you, I wrote it down.", "{took}", "{who} can see you took it."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{took}", "{who}能看到您吃了。"),
     },
     "taken_alone": {
-        "en": ("Thank you, I wrote it down.",),
-        "ms": ("Terima kasih, saya sudah tulis.",),
-        "zh": ("谢谢，我记下了。",),
+        "en": ("Thank you, I wrote it down.", "{took}"),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}"),
+        "zh": ("谢谢，我记下了。", "{took}"),
+    },
+    # A "Taken" that could be about more than one tablet at that moment (#162): nothing is
+    # written down until he says which. `{doses}` is one `DOSE_CHOICE` line per tablet.
+    "taken_which": {
+        "en": ("Which tablet did you take?", "{doses}", "Send both if you took both."),
+        "ms": (
+            "Ubat yang mana anda sudah ambil?",
+            "{doses}",
+            "Kalau anda sudah ambil semua, hantar semua.",
+        ),
+        "zh": ("您吃了哪一种药？", "{doses}", "都吃了的话，请发“都”。"),
+    },
+    "taken_which_all": {
+        "en": ("Which tablet did you take?", "{doses}", "Send all if you took them all."),
+        "ms": (
+            "Ubat yang mana anda sudah ambil?",
+            "{doses}",
+            "Kalau anda sudah ambil semua, hantar semua.",
+        ),
+        "zh": ("您吃了哪一种药？", "{doses}", "都吃了的话，请发“都”。"),
+    },
+    # The helper's "given", the same way (#162).
+    "given_which": {
+        "en": ("Which tablet did you give {name}?", "{doses}", "Send both if you gave both."),
+        "ms": (
+            "Ubat yang mana anda sudah beri kepada {name}?",
+            "{doses}",
+            "Kalau anda sudah beri semua, hantar semua.",
+        ),
+        "zh": ("您给{name}吃了哪一种药？", "{doses}", "都给了的话，请发“都”。"),
+    },
+    "given_which_all": {
+        "en": ("Which tablet did you give {name}?", "{doses}", "Send all if you gave them all."),
+        "ms": (
+            "Ubat yang mana anda sudah beri kepada {name}?",
+            "{doses}",
+            "Kalau anda sudah beri semua, hantar semua.",
+        ),
+        "zh": ("您给{name}吃了哪一种药？", "{doses}", "都给了的话，请发“都”。"),
+    },
+    # An answer to "which tablet?" that does not say exactly which: nothing is written (#162).
+    "which_not_sure": {
+        "en": ("I am not sure which tablet you mean.", "I did not write anything down yet."),
+        "ms": ("Saya tidak pasti ubat yang mana.", "Saya belum tulis apa-apa."),
+        "zh": ("我不确定您说的是哪一种药。", "我还没有记下任何东西。"),
     },
     "given": {
         "en": ("Thank you, I wrote it down.", "{name} had {medicine}."),
@@ -329,6 +376,32 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ok": "好", "tired": "累", "pain": "痛"},
 }
 """The three feeling words as the read-back says them."""
+
+# @patient
+DOSE_CHOICE: Mapping[str, str] = {
+    "en": "Send {number} for {medicine}, {strength} on the box, {anchor}.",
+    "ms": "Hantar {number} untuk {medicine}, {strength} pada kotak, {anchor}.",
+    "zh": "{anchor}的{medicine}，盒子上写着 {strength}，请发 {number}。",
+}
+"""One tablet in "which tablet?" (#162): the number that answers it, his words for the
+tablet, its strength as the number on his box (never "mg", a unit he does not use) and the
+moment of his day it is for."""
+
+# @patient
+DOSE_CHOICE_BARE: Mapping[str, str] = {
+    "en": "Send {number} for {medicine} {anchor}.",
+    "ms": "Hantar {number} untuk {medicine} {anchor}.",
+    "zh": "{anchor}的{medicine}，请发 {number}。",
+}
+"""The same line for a tablet whose strength has no number on it to say."""
+
+# @patient
+TOOK: Mapping[str, str] = {
+    "en": "You took {medicine} {anchor}.",
+    "ms": "Anda sudah ambil {medicine} {anchor}.",
+    "zh": "您{anchor}吃了{medicine}。",
+}
+"""What his "Taken" was written against, in his reply (#162): the tablets at one moment."""
 
 # @patient phrase
 GROUP_NAME: Mapping[str, str] = {

@@ -71,7 +71,9 @@ async def _handled(session: AsyncSession, key: str) -> None:
     moment = utcnow()
     receipt = await _receipt(session, key)
     if receipt is None:
-        session.add(WhatsAppReceipt(provider_message_id=key, first_seen_at=moment, handled_at=moment))
+        session.add(
+            WhatsAppReceipt(provider_message_id=key, first_seen_at=moment, handled_at=moment)
+        )
     else:
         receipt.handled_at = moment
     await session.flush()
