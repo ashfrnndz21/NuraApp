@@ -72,7 +72,7 @@ export const zh = {
     // @patient headline
     medicinesOther: "{name}的药",
     // @patient headline
-    visitsOwn: "您的每次看诊",
+    visitsOwn: "您的看诊",
     // @patient headline
     visitsOther: "{name}的看诊",
     // @patient

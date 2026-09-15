@@ -72,7 +72,7 @@ export const ms = {
     // @patient headline
     medicinesOther: "Ubat {name}",
     // @patient headline
-    visitsOwn: "Lawatan-lawatan anda",
+    visitsOwn: "Lawatan anda",
     // @patient headline
     visitsOther: "Lawatan {name}",
     // @patient
