@@ -13,7 +13,7 @@ async function linesOn(page: Page): Promise<string[]> {
 
 /** D1: her screens say his papers about him by name — the backend's twins and the catalogue's —
  *  never to him; the pill is "Pa is not feeling well", the same button flow. */
-test("her Home and her Medicines say his papers about him by name, never to him", async ({ page, request }) => {
+test("her Home, her Medicines and her Papers say his papers about him by name, never to him", async ({ page, request }) => {
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
@@ -24,10 +24,12 @@ test("her Home and her Medicines say his papers about him by name, never to him"
   const home = await linesOn(page);
   expect(home.filter((line) => TO_HIM.test(line))).toEqual([]);
 
-  await page.getByTestId("tab-medicines").click();
-  await expect(page.getByTestId("tab-medicines")).toHaveAttribute("aria-current", "page");
-  await page.waitForLoadState("networkidle");
-  const medicines = await linesOn(page);
-  expect(medicines.length).toBeGreaterThan(0);
-  expect(medicines.filter((line) => TO_HIM.test(line))).toEqual([]);
+  for (const tab of ["tab-medicines", "tab-timeline"]) {
+    await page.getByTestId(tab).click();
+    await expect(page.getByTestId(tab)).toHaveAttribute("aria-current", "page");
+    await page.waitForLoadState("networkidle");
+    const lines = await linesOn(page);
+    expect(lines.length, tab).toBeGreaterThan(0);
+    expect(lines.filter((line) => TO_HIM.test(line)), tab).toEqual([]);
+  }
 });

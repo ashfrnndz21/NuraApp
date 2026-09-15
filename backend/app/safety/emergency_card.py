@@ -49,6 +49,7 @@ from app.channels.safety_strings import (
     render,
 )
 from app.db import as_utc, utcnow
+from app.delivery.strings import theirs
 from app.drugs.registry import DrugRegistry
 from app.identity.models import Person
 from app.keys.context import KeyContext
@@ -384,11 +385,12 @@ def compose_lines(
         say("ec.no_condition", name=name)
     if medicines:
         for medicine in medicines:
-            say("ec.medicine", name=name, medicine=medicine.plain_name)
+            # His words for a medicine carry his possessive; on his card it is said about him.
+            say("ec.medicine", name=name, medicine=theirs(medicine.plain_name, name, lang))
             say("ec.medicine_when", name=name, amount=medicine.amount, when=medicine.when)
             if medicine.high_risk:
                 # The same name as the line above it, so the two are one tablet to him.
-                say("ec.high_risk", name=name, medicine=medicine.plain_name)
+                say("ec.high_risk", name=name, medicine=theirs(medicine.plain_name, name, lang))
     else:
         say("ec.no_medicine", name=name)
     if allergies:

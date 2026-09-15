@@ -26,7 +26,7 @@ from app.audit.access import audited_profile_read
 from app.channels import state_words
 from app.delivery import strings as feed_words
 from app.delivery import timeline_strings
-from app.delivery.strings import language_for
+from app.delivery.strings import language_for, theirs
 from app.keys.context import KeyContext
 from app.medicines import strings as medicine_words
 from app.safety.boundary import BOUNDARY_THEIRS
@@ -84,6 +84,7 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (feed_words.LINES, feed_words.LINES_THEIRS),
         (feed_words.WHY, feed_words.WHY_THEIRS),
         (timeline_strings.CHANGED, timeline_strings.CHANGED_THEIRS),
+        (timeline_strings.ANCHORS, timeline_strings.ANCHORS_THEIRS),
         (medicine_words.DOSE_CARD, medicine_words.DOSE_CARD_THEIRS),
         (medicine_words.TAKEN, medicine_words.TAKEN_THEIRS),
         (medicine_words.COUNT, medicine_words.COUNT_THEIRS),
@@ -117,11 +118,11 @@ def twins(language: str) -> tuple[tuple[str, str], ...]:
     pressure tablet") is still said about him; then the boundary's lines."""
     written: list[tuple[str, str]] = []
     same: list[tuple[str, str]] = []
-    for originals, theirs in _catalogues():
+    for originals, twin_maps in _catalogues():
         mine = originals.get(language)
         if mine is None:
             continue
-        written.extend(_mirror(mine, theirs.get(language)))
+        written.extend(_mirror(mine, twin_maps.get(language)))
         same.extend((one, one) for one in _strings(mine) if not TO_HIM[language].search(one))
     # The written twins first, so a template that is all slot around a few words ("This comes
     # from {…}.") never takes a line that has a twin of its own.
@@ -159,14 +160,8 @@ def _names(language: str) -> frozenset[str]:
 
 
 def _theirs(value: str, name: str, language: str) -> str:
-    """A possessive inside a slot said about him: "your blood pressure tablet" is "Pa's blood
-    pressure tablet"; "ubat tekanan darah anda" is "ubat tekanan darah Pa"; "您的血压药" is
-    "Pa的血压药"."""
-    if language == "en":
-        return re.sub(r"\byour\b", f"{name}'s", value, flags=re.IGNORECASE)
-    if language == "ms":
-        return re.sub(r"\banda\b", name, value, flags=re.IGNORECASE)
-    return value.replace("您的", f"{name}的").replace("您", name)
+    """A possessive inside a slot said about him (`app.delivery.strings.theirs`)."""
+    return theirs(value, name, language)
 
 
 @dataclass(frozen=True, slots=True)

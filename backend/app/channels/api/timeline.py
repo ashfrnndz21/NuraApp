@@ -91,7 +91,7 @@ async def get_timeline(
         limit=limit,
         language=language,
     )
-    return TimelineOut.of(page)
+    return (await reader_of(session, context, language)).model(TimelineOut.of(page))
 
 
 @router.post("/{profile_id}/episodes", status_code=status.HTTP_201_CREATED)

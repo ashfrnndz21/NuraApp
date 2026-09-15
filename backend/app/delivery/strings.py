@@ -17,6 +17,7 @@ words (docs/plain-words.md §3).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -586,15 +587,14 @@ servers; the app opens and reads the card from the region."""
 
 def theirs(medicine: str, name: str, language: str | None) -> str:
     """His words for a medicine, said about him to someone else: "your blood pressure tablet"
-    to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes."""
+    to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes, wherever it
+    sits ("ubat tekanan darah anda (amlodipine)" is "ubat tekanan darah Pa (amlodipine)")."""
     code = language_for(language)
-    if code == "en" and medicine.startswith("your "):
-        return f"{name}'s {medicine[len('your ') :]}"
-    if code == "ms" and medicine.endswith(" anda"):
-        return f"{medicine[: -len(' anda')]} {name}"
-    if code == "zh" and medicine.startswith("您的"):
-        return f"{name}的{medicine[len('您的') :]}"
-    return medicine
+    if code == "en":
+        return re.sub(r"\byour\b", f"{name}'s", medicine, flags=re.IGNORECASE)
+    if code == "ms":
+        return re.sub(r"\banda\b", name, medicine, flags=re.IGNORECASE)
+    return medicine.replace("您的", f"{name}的").replace("您", name)
 
 
 # --- the caregiver's lines -----------------------------------------------------------------

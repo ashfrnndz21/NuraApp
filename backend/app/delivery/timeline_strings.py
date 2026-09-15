@@ -489,3 +489,23 @@ CHANGED_THEIRS: Mapping[str, Mapping[str, str]] = {
     },
 }
 """What changed, said about him by name; the first look is the reader's own, said with no "your"."""
+
+# @patient
+ANCHORS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "last_checkup": "{patient}'s last check-up was with {doctor} on {date}.",
+        "last_visit": "{patient}'s last visit was to {doctor} on {date}.",
+        "next_visit": "{patient}'s next visit is to {doctor} on {date}.",
+    },
+    "ms": {
+        "last_checkup": "Pemeriksaan terakhir {patient} dengan {doctor} pada {date}.",
+        "last_visit": "Lawatan terakhir {patient} ke {doctor} pada {date}.",
+        "next_visit": "Lawatan {patient} yang seterusnya ke {doctor} pada {date}.",
+    },
+    "zh": {
+        "last_checkup": "{date}是{patient}上一次检查，看{doctor}。",
+        "last_visit": "{date}是{patient}上一次看医生，看{doctor}。",
+        "next_visit": "{date}是{patient}下一次看医生，看{doctor}。",
+    },
+}
+"""The timeline's three anchors said about him by name, for a key that is not his."""

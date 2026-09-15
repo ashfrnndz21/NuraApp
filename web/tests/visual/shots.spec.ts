@@ -156,6 +156,7 @@ test("every other screen: the tabs, the feed, not feeling well, symptoms, the em
     await settle(fresh);
     await snap(fresh, `onboarding-agree-${tag}`);
     await fresh.getByTestId("agree").click();
+    await expect(fresh.getByLabel("The name Nura uses")).toBeVisible();
     await settle(fresh);
     await snap(fresh, `onboarding-about-${tag}`);
     await fresh.context().close();
