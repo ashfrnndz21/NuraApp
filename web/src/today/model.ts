@@ -195,6 +195,15 @@ export function dateLine(date: Date, locale: string): string {
   return `${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
+/** "14 September" — the day and the month, for under a weekday already said (the visit tile). */
+export function dayMonthLine(date: Date, locale: string): string {
+  const format = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" });
+  if (locale.startsWith("zh")) return format.format(date);
+  const parts = format.formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("day")} ${part("month")}`;
+}
+
 /** "8:05 pm" in English; "20:05" in Malay and Chinese, with no abbreviation to decode. */
 export function timeLine(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: locale.startsWith("en") }).format(date);

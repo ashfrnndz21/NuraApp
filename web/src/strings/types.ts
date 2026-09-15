@@ -21,9 +21,9 @@ export interface Strings {
   demo: { banner: string; lines: readonly string[] };
   tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string };
   /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close. */
-  shell: { askOrSearch: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string };
+  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
-  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
   /** The tabs' own titles (D1). */
   places: {
     visitsOwn: string;

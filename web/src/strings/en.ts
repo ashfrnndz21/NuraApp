@@ -34,7 +34,7 @@ export const en = {
   },
   shell: {
     // @patient phrase
-    askOrSearch: "Ask or search",
+    askNura: "Ask Nura a question",
     // @patient phrase
     askAbout: "Ask about {name}",
     // @patient phrase
@@ -58,7 +58,9 @@ export const en = {
     // @patient headline
     missing: "Not in the papers yet",
     // @patient
-    missingSub: "Nura added these to the questions for the visit on {date}.",
+    missingSub: "Nura added these to the questions for {doctor} on {date}.",
+    // @patient
+    missingSubDay: "Nura added these to the questions for the visit on {date}.",
     // @patient phrase
     bpLabel: "Blood pressure, the top number",
     // @patient headline

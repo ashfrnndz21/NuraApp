@@ -34,7 +34,7 @@ export const ms = {
   },
   shell: {
     // @patient phrase
-    askOrSearch: "Tanya atau cari",
+    askNura: "Tanya Nura soalan",
     // @patient phrase
     askAbout: "Tanya tentang {name}",
     // @patient phrase
@@ -58,7 +58,9 @@ export const ms = {
     // @patient headline
     missing: "Belum ada dalam surat",
     // @patient
-    missingSub: "Nura sudah tambah soalan ini untuk lawatan pada {date}.",
+    missingSub: "Nura sudah tambah soalan ini untuk ditanya kepada {doctor} pada {date}.",
+    // @patient
+    missingSubDay: "Nura sudah tambah soalan ini untuk lawatan pada {date}.",
     // @patient phrase
     bpLabel: "Tekanan darah, nombor atasnya",
     // @patient headline

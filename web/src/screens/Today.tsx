@@ -11,6 +11,7 @@ import { density, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import {
   dateLine,
+  dayMonthLine,
   dueCards,
   feedLines,
   greeting,
@@ -49,7 +50,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const hero = page?.hero ?? null;
   return (
     <Shell tab="today" testId="today-screen">
-      <AskField placeholder={s.shell.askOrSearch} />
+      <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
         sub={dateLine(now, locale)}
@@ -468,17 +469,18 @@ function AskAboutPill(): JSX.Element | null {
 /** The next visit as a figure — its day and time — and where, as the logistics card says. */
 function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
-  const card = useLogistics(visit);
   const locale = LOCALE[language.value];
-  const when = card?.lines.find((line) => line.section === "when");
+  const at = new Date(visit.scheduled_at);
   return (
     <GlassTile testId="next-visit-tile">
       <button type="button" class="tile-link" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="open-visit">
         <span class="tile-title">{s.home.nextVisit}</span>
         <Icon name="chevron" />
       </button>
-      <p class="number small">{weekdayOf(new Date(visit.scheduled_at), locale)}</p>
-      <p class="source-line">{when ? when.text : dateLine(new Date(visit.scheduled_at), locale)}</p>
+      {/* The weekday once, large; the day and month and the time under it (never the weekday twice). */}
+      <p class="number small">{weekdayOf(at, locale)}</p>
+      <p class="source-line" data-testid="next-visit-date">{dayMonthLine(at, locale)}</p>
+      <p class="source-line">{timeLine(at, locale)}</p>
     </GlassTile>
   );
 }
@@ -525,5 +527,5 @@ function GapsTile({ visit }: { visit: AppointmentOut }): JSX.Element | null {
   }, [bearer, papers?.profile_id, visit.appointment_id, language.value]);
   if (gaps.length === 0) return null;
   const day = dateLine(new Date(visit.scheduled_at), LOCALE[language.value]);
-  return <PanelList title={s.home.missing} rows={gaps.map((gap) => ({ key: gap.question_id, text: gap.text }))} note={fill(s.home.missingSub, { date: day })} testId="gaps" />;
+  return <PanelList title={s.home.missing} rows={gaps.map((gap) => ({ key: gap.question_id, text: gap.text }))} note={visit.doctor ? fill(s.home.missingSub, { doctor: visit.doctor, date: day }) : fill(s.home.missingSubDay, { date: day })} testId="gaps" />;
 }

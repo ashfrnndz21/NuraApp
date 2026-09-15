@@ -69,7 +69,7 @@ for (const [label, viewport] of [
 
       // His four tabs, his ask bar, the family's note, the visit, and the coral pill under the hero.
       await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
-      await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask or search");
+      await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask Nura a question");
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
       await expect(page.getByTestId("visit-tile")).toBeVisible();

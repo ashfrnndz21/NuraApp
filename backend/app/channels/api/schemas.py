@@ -1856,9 +1856,13 @@ class AppointmentOut(BaseModel):
     status: AppointmentStatus
     purpose: str
     confirmed_by_person_id: uuid.UUID
+    doctor: str | None = None
+    """The doctor's or clinic's name as the family wrote it (the provider's), for "the questions
+    for Dr Tan on Wednesday 16 September" — read under the visits scope, like the visit itself.
+    None where the route does not read it."""
 
     @classmethod
-    def of(cls, appointment: Appointment) -> AppointmentOut:
+    def of(cls, appointment: Appointment, doctor: str | None = None) -> AppointmentOut:
         return cls(
             appointment_id=appointment.id,
             provider_id=appointment.provider_id,
@@ -1866,6 +1870,7 @@ class AppointmentOut(BaseModel):
             status=appointment.status,
             purpose=appointment.purpose,
             confirmed_by_person_id=appointment.confirmed_by_person_id,
+            doctor=doctor,
         )
 
 

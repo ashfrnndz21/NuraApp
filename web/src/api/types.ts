@@ -357,6 +357,9 @@ export interface AppointmentOut {
   scheduled_at: string;
   status: string;
   purpose: string;
+  /** The doctor's or clinic's name as the family wrote it (the provider's); absent where the
+   *  route does not read it. */
+  doctor?: string | null;
 }
 
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */

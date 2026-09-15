@@ -34,7 +34,7 @@ export const zh = {
   },
   shell: {
     // @patient phrase
-    askOrSearch: "问问题或搜索",
+    askNura: "问 Nura 一个问题",
     // @patient phrase
     askAbout: "问关于{name}的事",
     // @patient phrase
@@ -58,7 +58,9 @@ export const zh = {
     // @patient headline
     missing: "文件里还没有",
     // @patient
-    missingSub: "Nura 已经把这些放进 {date} 看诊要问的问题里。",
+    missingSub: "Nura 已经把这些放进 {date} 要问{doctor}的问题里。",
+    // @patient
+    missingSubDay: "Nura 已经把这些放进 {date} 看诊要问的问题里。",
     // @patient phrase
     bpLabel: "血压，上面的数字",
     // @patient headline

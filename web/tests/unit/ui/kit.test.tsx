@@ -128,7 +128,7 @@ describe("TabBar", () => {
 });
 
 describe("AskBar", () => {
-  const base = { placeholder: "Ask or search", label: "Your question", voiceLabel: "Speak", submitLabel: "Ask", onInput: () => undefined, onSubmit: () => undefined };
+  const base = { placeholder: "Ask Nura a question", label: "Your question", voiceLabel: "Speak", submitLabel: "Ask", onInput: () => undefined, onSubmit: () => undefined };
 
   it("offers the voice button while the field is empty, and Ask once there are words", () => {
     const voice = vi.fn();
@@ -147,7 +147,7 @@ describe("AskBar", () => {
     const [form] = all(bar, byType("form"));
     expect(form!.props.role).toBe("search");
     const [input] = all(bar, byType("input"));
-    expect(input!.props.placeholder).toBe("Ask or search");
+    expect(input!.props.placeholder).toBe("Ask Nura a question");
     expect(text(all(bar, hasClass("sr-only")))).toBe("Your question");
     // Typing only: no voice button when the screen gives none.
     expect(all(bar, byTestId("ask-voice")).length).toBe(0);

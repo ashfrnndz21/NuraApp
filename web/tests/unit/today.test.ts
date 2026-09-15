@@ -8,6 +8,7 @@ import {
   feedCards,
   feedLines,
   greeting,
+  dayMonthLine,
   homeHero,
   homeHeroWords,
   lineTitle,
@@ -300,5 +301,12 @@ describe("her Home's hero", () => {
   });
   it("on the phone's kept page says it is from earlier, and shows no chips", () => {
     expect(homeHero(page, { flagged: false, kept: true }, en)).toEqual({ word: "Steady", line: en.today.staleState, drivers: false });
+  });
+});
+
+describe("the day and month under a weekday", () => {
+  it("says the day and the month with no weekday, so the visit tile says Monday once", () => {
+    expect(dayMonthLine(new Date(2026, 8, 14), "en-SG")).toBe("14 September");
+    expect(dayMonthLine(new Date(2026, 8, 14), "en-SG")).not.toContain("Monday");
   });
 });
