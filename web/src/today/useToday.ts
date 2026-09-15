@@ -108,6 +108,9 @@ export function useToday() {
       line: state?.line ?? null,
       drivers: state?.drivers ?? [],
     };
+    // Signed out (or into other papers) while this was being read: the page is not his any
+    // more — it is neither shown nor kept, so nothing of it outlives the sign-out.
+    if (token.value !== bearer || profile.value?.profile_id !== id) return;
     show(fresh);
     setKept(null);
     setUnreached(null);

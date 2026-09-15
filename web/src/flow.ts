@@ -164,12 +164,13 @@ export async function signOutEverywhere(): Promise<void> {
     }
   }
   // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
-  // profile and every cached Today page go.
-  await clearAllProfileData();
-  forgetFeed();
+  // profile and every cached Today page go. The token goes first, so a page still being read
+  // is not kept (useToday checks it), and the wipe comes after any page already being kept.
   await setToken(null);
   await chooseProfile(null);
   me.value = null;
+  await clearAllProfileData();
+  forgetFeed();
   go({ name: "signin" });
 }
 
