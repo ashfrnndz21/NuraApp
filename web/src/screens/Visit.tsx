@@ -221,8 +221,12 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     return nura.uploadRecording(bearer ?? "", papers?.profile_id ?? "", appointmentId, kept.blob, kept.durationS, kept.startedAt);
   };
 
+  /** One Stop at a time: a tap and the connection coming back never keep a recording twice. */
+  const keeping = useRef(false);
+
   const keep = async (notice: NoticeOut, kept: Kept) => {
-    if (!bearer || !papers) return;
+    if (!bearer || !papers || keeping.current) return;
+    keeping.current = true;
     setStage({ kind: "saving", notice });
     setError(null);
     try {
@@ -236,6 +240,8 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       const offline = isNoConnection(failure);
       if (!offline) setError(failure);
       setStage({ kind: "held", notice, kept, away: false, offline });
+    } finally {
+      keeping.current = false;
     }
   };
 

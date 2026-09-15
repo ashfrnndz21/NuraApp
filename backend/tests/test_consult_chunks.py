@@ -20,8 +20,10 @@ from typing import Any
 import pytest
 from httpx import Response
 from sqlalchemy import select
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.clock import FrozenClock
+from app.db import utcnow
 from app.ingestion import chunks
 from app.ingestion.chunks import ANSWER_WITHIN, FINISH_WITHIN, MAX_CHUNK_BYTES
 from app.ingestion.models import ConsultUpload
@@ -378,6 +380,32 @@ async def test_closing_his_account_throws_away_every_chunk_already_sent(
     await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
     assert phone.staged() == []
     assert await _kept(house) == ([], [])
+
+
+async def test_a_stop_and_the_sweep_never_both_end_one_upload(deployment: Deployment) -> None:
+    """The sweep, holding the row as it stood a moment before a Stop landed, cannot throw away
+    what the Stop kept, and a second Stop cannot keep it again: an upload is ended in one
+    statement that asks it is still open (`chunks._claim`)."""
+    house = await _house(deployment)
+    phone = Phone(house, house.mei)
+    await phone.open()
+    await phone.send(DATA)
+    await _ok(await phone.yes())
+    await _ok(await phone.finish(), 201)
+    async with deployment.sessions() as session:
+        row = await session.get(ConsultUpload, uuid.UUID(phone.upload))
+        assert row is not None and row.recording_id is not None
+        # As the sweep read it, before the Stop's answer.
+        set_committed_value(row, "finished_at", None)
+        set_committed_value(row, "recording_id", None)
+        ended = await chunks._claim(
+            session, row, discarded_at=utcnow(), discarded_because="no_answer"
+        )
+        assert not ended and row.discarded_at is None and row.recording_id is not None
+        set_committed_value(row, "finished_at", None)
+        assert not await chunks._claim(session, row, finished_at=utcnow())
+    await _ok(await phone.finish(), 201)
+    assert len((await _kept(house))[0]) == 1
 
 
 # --- the cap --------------------------------------------------------------------------------------

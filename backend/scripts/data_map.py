@@ -601,13 +601,13 @@ CLASSES: dict[str, str] = {
     "consult_upload.started_by_person_id": IDENTIFIER,
     "consult_upload.content_type": OPERATIONAL,
     "consult_upload.started_at": HEALTH,
-    "consult_upload.opened_at": OPERATIONAL,
+    "consult_upload.opened_at": HEALTH,
     "consult_upload.chunks": OPERATIONAL,
     "consult_upload.received_bytes": OPERATIONAL,
     "consult_upload.doctor_said_yes_at": CONSENT,
     "consult_upload.discarded_at": CONSENT,
     "consult_upload.discarded_because": CONSENT,
-    "consult_upload.finished_at": OPERATIONAL,
+    "consult_upload.finished_at": HEALTH,
     "consult_upload.recording_id": HEALTH,
     # --- the family (E12) ---------------------------------------------------------------------
     # The thread and the tasks are about his care: their words and what they point at are

@@ -29,7 +29,7 @@ from app.delivery.triggers.deliver import Firing, Recipient, open_run, write
 from app.delivery.triggers.engine import Report, run_due
 from app.delivery.triggers.ladder import PATIENT
 from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, TriggerType
-from app.delivery.triggers.preferences import change
+from app.delivery.triggers.preferences import change, log
 from app.identity.service import register_person
 from app.keys.grants import grant_key
 from app.keys.scopes import KeyRole, Scope, scope_for_subject
@@ -275,6 +275,51 @@ async def test_the_notice_counts_only_what_her_key_opens(
     assert _notices(h, MEI) == [
         f"Nura wrote down {len(week)} things about Pa this week.\nYou can read them in the app."
     ]
+
+
+async def test_the_log_shows_a_notice_only_to_its_chief_and_a_flag_hold_only_to_an_emergency_key(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The family's log (#137) shows each chief her own notice and not another's: whether Mei
+    was told says a part of his record closed to Kit was written today. A hold because a red
+    flag is open is shown only to a key that opens his emergency lines."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    kit = await register_person(
+        sg, region=Region.SG, display_name="Kit", phone_e164=KIT, language="en"
+    )
+    narrow = frozenset({Scope.FAMILY, Scope.READINGS})
+    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
+    await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
+    kits, meis = await h.ctx(sg, kit), await h.ctx(sg, h.mei)
+
+    # Monday: only a feeling of his, which Kit's key does not open. Mei is told; Kit is not,
+    # and his log does not show that she was.
+    await _he_says(sg, h, clock, at(12), "tired")
+    [notice] = _rows(await _run(sg, h, clock, at(20)), NOTICE)
+    assert notice.to_person_id == h.mei.id
+    monday = "2026-09-14"
+    assert notice.id in {row.id for row in await log(sg, context=meis, day=monday)}
+    assert notice.id in {row.id for row in await log(sg, context=h.owner, day=monday)}
+    assert NOTICE not in {row.trigger_type for row in await log(sg, context=kits, day=monday)}
+
+    # Tuesday: a reading Mei sent (Kit's key opens it), then a fall. Both are held, and Kit's
+    # log shows neither hold: his key does not open the emergency lines.
+    clock.set(at(12, day=15))
+    assert (await h.inbound(sg, MEI, "BP 150/90 this morning")).outcome == "proposal"
+    assert (await h.inbound(sg, MEI, "yes")).outcome == "confirmed"
+    clock.set(at(12, 10, day=15))
+    await h.inbound(sg, MEI, "he fell in the bathroom")
+    held = _rows(await _run(sg, h, clock, at(20, day=15)), NOTICE)
+    assert {(row.to_person_id, row.reason) for row in held} == {
+        (h.mei.id, A_FLAG_IS_OPEN),
+        (kit.id, A_FLAG_IS_OPEN),
+    }
+    tuesday = "2026-09-15"
+    theirs = await log(sg, context=kits, day=tuesday)
+    assert not [row for row in theirs if row.reason == A_FLAG_IS_OPEN]
+    hers = await log(sg, context=meis, day=tuesday)
+    assert [row.to_person_id for row in hers if row.trigger_type is NOTICE] == [h.mei.id]
 
 
 async def test_no_notice_on_a_day_nothing_was_written_down(

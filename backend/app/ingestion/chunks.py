@@ -40,8 +40,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
+from typing import Any, cast
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -211,6 +213,28 @@ async def _let_go(store: ObjectStore, upload: ConsultUpload) -> None:
         await store.delete(chunk_key(upload.profile_id, upload.id, position))
 
 
+async def _claim(session: AsyncSession, upload: ConsultUpload, **values: object) -> bool:
+    """End an upload still open, in one statement that asks that it still is: two Stops, or a
+    Stop and the sweep, never both end one upload, since the second finds it ended and changes
+    nothing. False when another got there first. The row is read again either way. A claim
+    made by a request that then fails is undone with the rest of that request (`app.db`)."""
+    claimed = cast(
+        CursorResult[Any],
+        await session.execute(
+            update(ConsultUpload)
+            .where(
+                ConsultUpload.id == upload.id,
+                ConsultUpload.profile_id == upload.profile_id,
+                ConsultUpload.finished_at.is_(None),
+                ConsultUpload.discarded_at.is_(None),
+            )
+            .values(**values)
+        ),
+    )
+    await session.refresh(upload)
+    return claimed.rowcount == 1
+
+
 async def _throw_away(
     session: AsyncSession,
     *,
@@ -219,14 +243,14 @@ async def _throw_away(
     upload: ConsultUpload,
     because: Because,
     channel: Channel = Channel.APP,
-) -> None:
+) -> bool:
     """Every chunk of it gone from the store, and the row says so and why. Nothing else of it
-    was ever kept."""
-    upload.discarded_at = utcnow()
-    upload.discarded_because = because.value
-    await session.flush()
+    was ever kept. False, with nothing done, when a Stop or another throw ended it first."""
+    if not await _claim(session, upload, discarded_at=utcnow(), discarded_because=because.value):
+        return False
     await _let_go(store, upload)
     await _noted(session, context, upload, channel)
+    return True
 
 
 # --- the phone's calls -------------------------------------------------------------------------
@@ -398,6 +422,11 @@ async def finish_upload(
     if upload.doctor_said_yes_at is None:
         raise NoYesFromTheDoctor("the doctor has not said yes to this recording")
     guard_region(held_in=store.region, asked_from=context.region)
+    # Claimed first: a second Stop, or the sweep, now finds it ended.
+    if not await _claim(session, upload, finished_at=utcnow()):
+        if upload.recording_id is not None:
+            return await _what_it_became(session, context=context, upload=upload)
+        raise UploadClosed(f"upload {upload.id} takes nothing more")
     pieces = [
         await store.get(chunk_key(context.profile_id, upload.id, position))
         for position in range(upload.chunks)
@@ -419,7 +448,6 @@ async def finish_upload(
         summariser=summariser,
         registry=registry,
     )
-    upload.finished_at = utcnow()
     upload.recording_id = outcome.recording.id
     await session.flush()
     await _noted(session, context, upload, Channel.APP)
@@ -528,15 +556,14 @@ async def discard_stale(
             if closing
             else lapsed(upload, now) or (Because.NO_CONSENT if agreed is False else None)
         )
-        if because is not None:
-            await _throw_away(
-                session,
-                context=context,
-                store=store,
-                upload=upload,
-                because=because,
-                channel=channel,
-            )
+        if because is not None and await _throw_away(
+            session,
+            context=context,
+            store=store,
+            upload=upload,
+            because=because,
+            channel=channel,
+        ):
             thrown.append(upload)
     return thrown
 
