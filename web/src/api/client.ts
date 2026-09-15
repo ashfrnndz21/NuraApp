@@ -11,6 +11,8 @@ export class Refused extends Error {
     readonly refusal: string,
     readonly status: number,
     readonly scope?: string,
+    /** Where to write, when the backend names it (`NotStoppedInTheApp`). */
+    readonly contact?: string,
   ) {
     super(`refused: ${refusal} (${status})`);
     this.name = "Refused";
@@ -164,10 +166,37 @@ async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<
     } catch {
       /* not JSON: not a refusal */
     }
-    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope, parsed.contact);
     throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
   }
   return response.blob();
+}
+
+/** The same queue, for a page of text: a printable page the backend renders (the consent
+ *  record). The text on success; a refusal as `Refused`, the way `apiBlob` says it. */
+export function apiText(path: string, call: Call = {}): Promise<string> {
+  return enqueue(async (signal) => {
+    const headers: Record<string, string> = { Accept: "text/html" };
+    if (call.token) headers.Authorization = `Bearer ${call.token}`;
+    let response: Response;
+    try {
+      response = await fetchWithin(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit" }, signal);
+    } catch {
+      throw new Unreachable();
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        /* not JSON: not a refusal */
+      }
+      if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope, parsed.contact);
+      throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
+    }
+    return text;
+  }, call.urgent);
 }
 
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
@@ -192,7 +221,7 @@ async function answer<T>(response: Response): Promise<T> {
   const text = await response.text();
   const parsed: unknown = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope, parsed.contact);
     throw new Refused(response.status === 422 ? "NotWellFormed" : "HttpError", response.status);
   }
   return parsed as T;
@@ -223,7 +252,7 @@ async function send<T>(path: string, call: Call, signal: AbortSignal): Promise<T
   const text = await response.text();
   const parsed: unknown = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope, parsed.contact);
     throw new Refused(response.status === 422 ? "NotWellFormed" : "HttpError", response.status);
   }
   return parsed as T;

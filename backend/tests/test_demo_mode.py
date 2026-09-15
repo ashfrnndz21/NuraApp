@@ -202,11 +202,13 @@ async def test_a_real_number_in_any_json_body_is_refused(demo: Demo) -> None:
 
 async def test_the_web_client_is_told_it_is_a_demo(demo: Demo) -> None:
     for path in ("/deployment", "/api/deployment"):
-        # A demo without the VAPID keys has no Web Push, and says so (ADR 0001).
+        # A demo without the VAPID keys has no Web Push, and says so (ADR 0001); and a demo is
+        # not a dev run, so no laptop's staff token is taken.
         assert (await demo.client.get(path)).json() == {
             "region": "SG",
             "demo": True,
             "push_key": None,
+            "dev": False,
         }
     assert (await demo.client.get("/api/health/ready")).json() == {"status": "ok"}
     page = (await demo.client.get("/openapi.json")).json()

@@ -131,7 +131,7 @@ async def family(
         session, region=Region.SG, display_name="Mei", phone_e164=MEI, language="en"
     )
     scopes = mei_scopes if mei_scopes is not None else frozenset(Scope) - {Scope.PROFILE}
-    await agree_to_family_sharing(session, owner, mei, scopes=scopes, relationship="your daughter")
+    await agree_to_family_sharing(session, owner, mei, scopes=scopes, relationship="daughter")
     await grant_key(session, context=owner, holder=mei, role=mei_role, scopes=scopes)
     chief = await resolve_key_context(
         session, region=Region.SG, person_id=mei.id, profile_id=profile.id

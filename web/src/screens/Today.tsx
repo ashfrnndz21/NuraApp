@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { FeedItemOut } from "../api/types";
 import { forgetFeed } from "../feed/session";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { dropStaleFeed } from "../offline/feedCache";
 import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type TodayEntry } from "../offline/todayCache";
 import { readFailure } from "../restore";
@@ -372,7 +372,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         </>
       )}
 
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" onSelect={openTab} />
     </main>
   );
 }
