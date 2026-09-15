@@ -113,12 +113,12 @@ test("every other screen: the tabs, the feed, not feeling well, symptoms, the em
     await his.getByTestId("open-feed").click();
     await settle(his);
     await snap(his, `dad-feed-${tag}`);
-    await his.locator("nav.tabbar button").first().click();
+    await his.goto("./");
     await todayReady(his);
     await his.getByTestId("open-symptoms").click();
     await settle(his);
     await snap(his, `dad-symptoms-${tag}`);
-    await his.locator("nav.tabbar button").first().click();
+    await his.goto("./");
     await todayReady(his);
     await his.getByTestId("write-reading").click();
     await expect(his.getByTestId("reading-photo")).toBeVisible();

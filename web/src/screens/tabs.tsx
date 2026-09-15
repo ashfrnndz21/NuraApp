@@ -66,18 +66,25 @@ function VisitList(): JSX.Element | null {
               </div>
             </div>
             {visit.purpose && <p>{visit.purpose}</p>}
+            {/* The next visit's three ways in, as rows: an icon, the word, the way in (D1). */}
             {at === 0 && (
-              <>
-                <PillButton onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} testId="visit-open">
-                  {s.visit.open}
-                </PillButton>
-                <PillButton onClick={() => go({ name: "brief", appointmentId: visit.appointment_id })} testId="visit-brief">
-                  {s.day.briefOpen}
-                </PillButton>
-                <PillButton onClick={() => go({ name: "questions", appointmentId: visit.appointment_id })} testId="visit-questions">
-                  {s.day.questionsOpen}
-                </PillButton>
-              </>
+              <nav class="place-rows" aria-label={s.visit.open}>
+                <button type="button" class="place-row" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="visit-open">
+                  <Icon name="visits" />
+                  <span class="place-word">{s.visit.open}</span>
+                  <Icon name="chevron" />
+                </button>
+                <button type="button" class="place-row" onClick={() => go({ name: "brief", appointmentId: visit.appointment_id })} data-testid="visit-brief">
+                  <Icon name="records" />
+                  <span class="place-word">{s.day.briefOpen}</span>
+                  <Icon name="chevron" />
+                </button>
+                <button type="button" class="place-row" onClick={() => go({ name: "questions", appointmentId: visit.appointment_id })} data-testid="visit-questions">
+                  <Icon name="note" />
+                  <span class="place-word">{s.day.questionsOpen}</span>
+                  <Icon name="chevron" />
+                </button>
+              </nav>
             )}
           </PaperTile>
         );
