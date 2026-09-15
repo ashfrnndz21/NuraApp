@@ -54,7 +54,10 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
     ["local", "heat", s.chief.heat],
     ["seasonal", "festive food", s.chief.festiveFood],
   ];
-  const paused = new Map((jobs.value ?? []).map((job) => [job.job_id, !job.enabled]));
+  // A watch about his faith (the fasting month) is his yes or his no alone: she sees it on the
+  // list, and neither stops nor resumes it (`FastingIsHisToSay`).
+  const his = (job: SearchJobOut) => job.kind === "seasonal" && job.terms.includes("fasting month");
+  const paused = new Map((jobs.value ?? []).filter((job) => !his(job)).map((job) => [job.job_id, !job.enabled]));
   return (
     <>
       <Tile glass testId="watching">
@@ -66,9 +69,11 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
             <p class="provenance" data-testid="watch-meta">
               {[job.sources.join(", "), every[job.cadence] ?? job.cadence, job.enabled ? null : s.chief.paused].filter(Boolean).join(" · ")}
             </p>
-            <Pill quiet onClick={() => void toggle(job)} disabled={a.busy} testId="watch-toggle">
-              {job.enabled ? s.chief.pause : s.chief.resume}
-            </Pill>
+            {!his(job) && (
+              <Pill quiet onClick={() => void toggle(job)} disabled={a.busy} testId="watch-toggle">
+                {job.enabled ? s.chief.pause : s.chief.resume}
+              </Pill>
+            )}
             <NoticeAt act={a} where={job.job_id} />
           </div>
         ))}

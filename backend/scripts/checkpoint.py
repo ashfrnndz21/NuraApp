@@ -2480,7 +2480,9 @@ def checkpoint_8(client: httpx.Client) -> None:
         raise fail(
             "Pa opens his feed", why=f"expected now, reorder, reading, gate first; got {types}"
         )
-    if not types[4:] or not set(types[4:]) <= {"story", "learning"}:
+    past = [item["supply"] for item in first["items"][4:]]
+    if not past or not set(past) <= {"story", "learning"}:
+        # His story and learning; his week in 30 seconds and a clip are among them (F1).
         raise fail("Pa opens his feed", why=f"expected story and learning past the gate: {types}")
     if any(item["autoplay"] is not False for item in first["items"]):
         raise fail("Pa opens his feed", why="a card says autoplay")
@@ -2525,7 +2527,7 @@ def checkpoint_8(client: httpx.Client) -> None:
     )
     again = _page(client, pa, profile_id, "Pa asks for the second page again", cursor=cursor)
     for page in (second, third):
-        if not page["items"] or not set(_types(page)) <= {"story", "learning"}:
+        if not page["items"] or not {item["supply"] for item in page["items"]} <= {"story", "learning"}:
             raise fail(
                 "Pa pages on", why=f"expected only story and learning past the gate: {_types(page)}"
             )

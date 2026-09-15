@@ -325,11 +325,11 @@ export const en = {
     // @patient phrase
     filterLabel: "Where to look",
     // @patient phrase
-    filterRecords: "Records",
+    filterRecords: "Your papers",
     // @patient phrase
     filterWeb: "Web",
     // @patient phrase
-    filterProviders: "Providers",
+    filterProviders: "Doctors and clinics",
     // @patient phrase
     filterVideos: "Videos",
     // @patient phrase
@@ -421,7 +421,7 @@ export const en = {
     // @patient headline
     ramadanTitle: "Ramadan",
     // @patient
-    ramadanLead: "If you fast, Nura can tell you what to plan before Ramadan.",
+    ramadanLead: "If you keep Ramadan, Nura can help you plan for it.",
     // @patient
     ramadanWho: "The family member who looks after your papers will see this too.",
     // @patient phrase
@@ -1539,8 +1539,6 @@ export const en = {
     // @patient phrase
     tryAgain: "Try again",
   },
-  // One plain sentence for each way the backend says no, by the refusal's class name
-  // (`backend/app/channels/api/refusals.py`). The name itself is never shown.
   chief: {
     // @patient headline
     sentTitle: "Sent to {name} this week",
@@ -1569,7 +1567,7 @@ export const en = {
     // @patient phrase
     resume: "Start again",
     // @patient phrase
-    pauseWatch: "Pause this watch",
+    pauseWatch: "Stop watching for this for now",
     // @patient phrase
     add: "Watch for something new",
     // @patient
@@ -1585,6 +1583,8 @@ export const en = {
     // @patient phrase
     festiveFood: "Festive food",
   },
+  // One plain sentence for each way the backend says no, by the refusal's class name
+  // (`backend/app/channels/api/refusals.py`). The name itself is never shown.
   // @patient
   refusals: {
     // @patient
@@ -1612,7 +1612,7 @@ export const en = {
     // @patient
     NothingToFind: "Please type a word to look for.",
     // @patient
-    NotTheirsToManage: "Only the owner and the family member who runs these papers can do this.",
+    NotTheirsToManage: ["Only the owner can do this.", "The one who looks after these papers can too."],
     default: "Nura could not do that right now.",
     NotInTheDemo: ["This demo only takes test phone numbers.", "A test number starts with +65 0."],
     CardsStillOpen: "A paper still waits for your yes.",

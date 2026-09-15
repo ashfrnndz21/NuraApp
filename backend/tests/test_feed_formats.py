@@ -523,9 +523,9 @@ async def test_dengue_near_his_area_reaches_him_only_once_his_area_is_set_and_a_
     page = await _feed(penang, profile_id, his)
     [local] = await _made(penang, profile_id, CardType.LOCAL)
     assert local.headline == "More dengue near you this week"
-    assert local.why["plain"] == "You are seeing this because you live near there."
+    assert local.why["plain"] == "You are seeing this because it is near your home."
     # What to do today, then the source, then the boundary line it ends on.
-    assert local.body[0] == "Keep pots and pails at home dry today."
+    assert local.body[0] == "Start today: empty the water in pots and pails at home."
     assert local.body[-3:-1] == BOUNDARY_EN and local.boundary is not None
     assert local.cite is not None and local.cite["publisher"] == "MyHEALTH Kementerian Kesihatan"
     assert local.supply.value == "today" and local.deliver_to.value == "patient"
@@ -703,7 +703,7 @@ async def test_the_fasting_month_is_added_by_a_person_and_shows_only_when_it_is_
     assert card.headline == "Ramadan: plan it with your doctor"
     assert card.body[0] == "See your doctor 1 to 2 months before Ramadan."
     # The low-sugar warning the sources give, for a man on sugar tablets or insulin who fasts.
-    assert "If you feel shaky and sweaty, check your blood sugar at once." in card.body
+    assert "If you feel shaky, sweaty or confused, check your blood sugar at once." in card.body
     assert card.why["plain"] == "Ramadan begins around Monday 8 February."
 
 
@@ -990,7 +990,7 @@ async def test_watching_for_pa_lists_each_watch_with_its_sources_and_cadence_and
     )
     assert listed.status_code == 200, listed.text
     watches = {(one["kind"], one["label"]): one for one in listed.json()}
-    explainer = watches[("explainer", "Explainers about blood pressure")]
+    explainer = watches[("explainer", "Blood pressure, in simple words")]
     assert explainer["cadence"] == "on_change" and "HealthHub" in explainer["sources"]
     haze = watches[("local", "The haze where you live")]
     assert haze["cadence"] == "daily" and haze["enabled"] is True
@@ -1020,7 +1020,7 @@ async def test_watching_for_pa_lists_each_watch_with_its_sources_and_cadence_and
     malay = await deployment.client.get(
         f"/profiles/{profile_id}/search-jobs", params={"language": "ms"}, headers=bearer(mei["token"])
     )
-    assert "Denggi di tempat tinggal" in {one["label"] for one in malay.json()}
+    assert "Denggi di tempat anda tinggal" in {one["label"] for one in malay.json()}
     # A caregiver who is not his chief neither reads nor pauses them.
     siti = await _caregiver(deployment, pa, profile_id)
     for answer in (
@@ -1144,8 +1144,12 @@ def test_the_treatment_check_reads_malay_and_chinese_as_well_as_english() -> Non
         "Skip a dose of warfarin if your number is too high.",
         "Berhenti ambil ubat warfarin anda.",
         "Jangan makan ubat ini esok.",
+        "Jangan guna ubat ini lagi.",
+        "Do not take your water pill tomorrow.",
         "不要吃华法林。",
         "停药两天。",
+        "别吃这个药了。",
+        "降压药减量一半。",
     ):
         assert changes_treatment([line]), line
     for line in (
@@ -1230,3 +1234,29 @@ async def test_a_season_page_for_a_condition_he_has_not_told_is_not_for_him(
     await _feed(deployment, profile_id, pa["token"])
     # "Fasting safely with diabetes" is written for diabetes, which he has not told.
     assert await _made(deployment, profile_id, CardType.SEASONAL) == []
+
+
+async def test_his_chief_neither_resumes_nor_stops_his_ramadan_watch(deployment: Deployment) -> None:
+    pa, profile_id = await _pa(deployment)
+    mei = await _chief(deployment, pa, profile_id)
+    added = await deployment.client.post(
+        f"/profiles/{profile_id}/search-jobs",
+        json={"kind": "seasonal", "terms": ["fasting month"]},
+        headers=bearer(pa["token"]),
+    )
+    job = added.json()["job_id"]
+    stopped = await deployment.client.patch(
+        f"/profiles/{profile_id}/search-jobs/{job}", json={"enabled": False}, headers=bearer(pa["token"])
+    )
+    assert stopped.status_code == 200 and stopped.json()["enabled"] is False
+    for enabled in (True, False):
+        hers = await deployment.client.patch(
+            f"/profiles/{profile_id}/search-jobs/{job}",
+            json={"enabled": enabled},
+            headers=bearer(mei["token"]),
+        )
+        assert hers.status_code == 403 and hers.json()["refusal"] == "FastingIsHisToSay"
+    still = await deployment.client.get(
+        f"/profiles/{profile_id}/search-jobs/{job}", headers=bearer(pa["token"])
+    )
+    assert still.json()["enabled"] is False

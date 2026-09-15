@@ -88,8 +88,8 @@ class Compressor(Protocol):
 
 
 TREATMENT_CHANGE = re.compile(
-    r"\b(?:stop|start|double|halve|increase|reduce|skip|change)\b[^.]{0,40}\b"
-    r"(?:tablet|tablets|pill|pills|medicine|medicines|dose|doses|warfarin|insulin)\b",
+    r"\b(?:stop|start|double|halve|increase|reduce|skip|change|do\s+not\s+take|don't\s+take)\b"
+    r"[^.]{0,40}\b(?:tablet|tablets|pill|pills|medicine|medicines|dose|doses|warfarin|insulin)\b",
     re.IGNORECASE,
 )
 """Lines that would start, stop or change a medicine. A card never carries one; the finding
@@ -98,16 +98,22 @@ becomes a question for the doctor and goes to the memo (docs/health-feed-spec.md
 
 TREATMENT_CHANGE_MS = re.compile(
     r"\b(?:berhenti|hentikan|mula(?:kan)?|gandakan|tambah(?:kan)?|kurang(?:kan)?|langkau|"
-    r"tukar|jangan\s+(?:ambil|makan|telan))\b[^.]{0,40}\b(?:ubat|pil|tablet|dos|warfarin|insulin)\b",
+    r"tukar|jangan\s+(?:ambil|makan|telan|guna)|tidak\s+perlu\s+(?:ambil|makan|guna))\b"
+    r"[^.]{0,40}\b(?:ubat|pil|tablet|dos|warfarin|insulin)\b",
     re.IGNORECASE,
 )
 """The same, in Malay: stop, start, double, add, cut, skip, change or do not take a medicine."""
 
 TREATMENT_CHANGE_ZH = re.compile(
-    r"(?:停|停止|开始|加倍|加大|增加|减少|减半|跳过|漏掉|换|改|不要)[^。]{0,12}"
+    r"(?:停|停止|开始|加倍|加大|增加|减少|减半|减量|加量|跳过|漏掉|换|改|不要|别|不吃)[^。]{0,12}"
     r"(?:药|药片|剂量|华法林|胰岛素)"
 )
 """The same, in Chinese: stop, start, double, raise, lower, halve, skip, change or do not take."""
+
+TREATMENT_CHANGE_ZH_AFTER = re.compile(
+    r"(?:药|药片|剂量|华法林|胰岛素)[^。，]{0,6}(?:停|停掉|减量|加量|减半|加倍|减少|增加|跳过|不吃|别吃)"
+)
+"""Chinese names the medicine first as often as not ("降压药减量一半"): the same, the other way round."""
 
 
 def changes_treatment(lines: Sequence[str]) -> bool:
@@ -116,7 +122,12 @@ def changes_treatment(lines: Sequence[str]) -> bool:
     return any(
         pattern.search(line)
         for line in lines
-        for pattern in (TREATMENT_CHANGE, TREATMENT_CHANGE_MS, TREATMENT_CHANGE_ZH)
+        for pattern in (
+            TREATMENT_CHANGE,
+            TREATMENT_CHANGE_MS,
+            TREATMENT_CHANGE_ZH,
+            TREATMENT_CHANGE_ZH_AFTER,
+        )
     )
 
 

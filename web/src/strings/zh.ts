@@ -325,7 +325,7 @@ export const zh = {
     // @patient phrase
     filterLabel: "在哪里找",
     // @patient phrase
-    filterRecords: "记录",
+    filterRecords: "您的文件",
     // @patient phrase
     filterWeb: "网上",
     // @patient phrase
@@ -421,7 +421,7 @@ export const zh = {
     // @patient headline
     ramadanTitle: "斋戒月",
     // @patient
-    ramadanLead: "如果您斋戒，Nura 可以告诉您斋戒月前要准备什么。",
+    ramadanLead: "如果您守斋戒月，Nura 可以帮您提前准备。",
     // @patient
     ramadanWho: "管理您文件的家人也会看到这个。",
     // @patient phrase
@@ -1565,7 +1565,7 @@ export const zh = {
     // @patient phrase
     resume: "重新开始",
     // @patient phrase
-    pauseWatch: "暂停这项留意",
+    pauseWatch: "暂时不留意这个",
     // @patient phrase
     add: "留意新的事",
     // @patient
@@ -1608,7 +1608,7 @@ export const zh = {
     // @patient
     NothingToFind: "请输入要找的字。",
     // @patient
-    NotTheirsToManage: "只有主人和管理这些文件的家人才能做这个。",
+    NotTheirsToManage: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     default: "Nura 现在做不了这件事。",
     NotInTheDemo: ["演示版只接受测试电话号码。", "测试号码以 +65 0 开头。"],
     CardsStillOpen: "还有一份文件在等您同意。",

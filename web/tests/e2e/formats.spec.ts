@@ -177,7 +177,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
     const watching = page.getByTestId("watching");
     await expect(watching.locator("h2")).toHaveText("Watching for Pa");
-    const explainer = watching.getByTestId("watch").filter({ has: page.getByTestId("watch-label").getByText("Explainers about blood pressure", { exact: true }) });
+    const explainer = watching.getByTestId("watch").filter({ has: page.getByTestId("watch-label").getByText("Blood pressure, in simple words", { exact: true }) });
     await expect(explainer.getByTestId("watch-meta")).toContainText("HealthHub");
     await expect(explainer.getByTestId("watch-meta")).toContainText("When something new comes in");
     await expect(watching).toContainText("Nura reads only health offices, hospitals and doctors' groups.");
@@ -206,7 +206,7 @@ test.describe("the caregiver density at 360 by 640", () => {
       expect(["now", "gate", "duty"]).not.toContain(type);
     }
     await expect(sent.getByTestId("sent-status").first()).toHaveText(/^(This was on the page Pa sees\.|Pa opened this card\.|Pa heard this card\.|Nura kept this back from Pa\.)$/);
-    // A card a watch found: where it came from, Hear, and Pause this watch.
+    // A card a watch found: where it came from, Hear, and Stop watching for this for now.
     const clip = rows.filter({ hasText: "Your blood pressure, in 30 seconds" }).first();
     await expect(clip).toContainText("From National Heart Centre Singapore");
     await expect(clip.getByTestId("hear")).toBeVisible();
@@ -222,7 +222,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     await signIn(page, family.mei, false);
     await page.getByTestId("open-ask").click();
     const filters = page.getByTestId("ask-filters");
-    await expect(filters.locator("button")).toHaveText(["Records", "Web", "Providers", "Videos"]);
+    await expect(filters.locator("button")).toHaveText(["Your papers", "Web", "Doctors and clinics", "Videos"]);
     await page.getByTestId("filter-web").click();
     await expect(page.getByTestId("filter-web")).toHaveAttribute("aria-pressed", "true");
     await page.getByLabel("Your question").fill("blood pressure");

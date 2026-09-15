@@ -325,7 +325,7 @@ export const ms = {
     // @patient phrase
     filterLabel: "Cari di mana",
     // @patient phrase
-    filterRecords: "Surat",
+    filterRecords: "Surat anda",
     // @patient phrase
     filterWeb: "Web",
     // @patient phrase
@@ -421,7 +421,7 @@ export const ms = {
     // @patient headline
     ramadanTitle: "Bulan puasa",
     // @patient
-    ramadanLead: "Jika anda berpuasa, Nura boleh beritahu apa yang perlu dirancang sebelum bulan puasa.",
+    ramadanLead: "Jika anda berpuasa pada bulan Ramadan, Nura boleh bantu anda merancang.",
     // @patient
     ramadanWho: "Ahli keluarga yang menjaga surat-surat anda juga akan nampak ini.",
     // @patient phrase
@@ -1565,7 +1565,7 @@ export const ms = {
     // @patient phrase
     resume: "Mula semula",
     // @patient phrase
-    pauseWatch: "Henti perhatian ini",
+    pauseWatch: "Berhenti perhatikan ini buat masa ini",
     // @patient phrase
     add: "Perhatikan sesuatu yang baru",
     // @patient
@@ -1608,7 +1608,7 @@ export const ms = {
     // @patient
     NothingToFind: "Sila taip satu perkataan untuk dicari.",
     // @patient
-    NotTheirsToManage: "Hanya pemilik dan ahli keluarga yang menjaga surat-surat ini boleh buat ini.",
+    NotTheirsToManage: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     default: "Nura tidak dapat buat itu sekarang.",
     NotInTheDemo: ["Demo ini hanya menerima nombor telefon ujian.", "Nombor ujian bermula dengan +65 0."],
     CardsStillOpen: "Satu surat masih menunggu persetujuan anda.",

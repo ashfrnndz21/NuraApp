@@ -232,8 +232,25 @@ async def pause_job(
     session: AsyncSession, *, context: KeyContext, job_id: uuid.UUID, enabled: bool
 ) -> SearchJob:
     """Pause a watch, or resume it ("Watching for Pa"). A paused job is not run again; the
-    cards it made stay what they were. The owner's and his chief's to do, and on the trail."""
+    cards it made stay what they were. The owner's and his chief's to do, and on the trail —
+    except a watch about his faith (the fasting month), which only he or his steward pauses or
+    resumes (`FastingIsHisToSay`)."""
     job = await get_job(session, context=context, job_id=job_id)
+    if set(job.terms) & HIS_OWN_WORD and not (context.is_owner or context.is_steward):
+        # His yes or his no about Ramadan is his: his chief neither resumes a watch he
+        # stopped nor stops one he asked for.
+        refusal = FastingIsHisToSay(f"a {context.role} key does not say whether he fasts")
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=JOB_TARGET,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refusal).__name__,
+        )
+        refusal.written_down = True
+        raise refusal
     job.enabled = enabled
     await session.flush()
     await record(
