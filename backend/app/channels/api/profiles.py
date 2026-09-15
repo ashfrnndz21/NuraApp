@@ -569,7 +569,9 @@ async def withdrawal(
         return WithdrawalOut(
             consent_id=row.id, purpose=row.purpose, lines=list(draft.lines), closes_account=True
         )
-    in_group, still_told, told_in_app = await _what_whatsapp_changes(session, context, row, words)
+    in_group, still_told, told_in_app, family = await _what_whatsapp_changes(
+        session, context, row, words
+    )
     return WithdrawalOut(
         consent_id=row.id,
         purpose=row.purpose,
@@ -581,6 +583,7 @@ async def withdrawal(
             in_group=in_group,
             still_told=still_told,
             told_in_app=told_in_app,
+            family=family,
         ),
     )
 
@@ -596,7 +599,7 @@ async def withdraw(
     Keeping his papers is refused here (`StopsByClosingTheAccount`, 409): that is `/closure`."""
     words = body.language or (await audited_profile_read(session, context)).language
     preview = await withdrawal_of(session, context=context, consent_id=consent_id)
-    in_group, still_told, told_in_app = await _what_whatsapp_changes(
+    in_group, still_told, told_in_app, family = await _what_whatsapp_changes(
         session, context, preview, words
     )
     row, withdrawn = await withdraw_consent(
@@ -615,20 +618,23 @@ async def withdraw(
             in_group=in_group,
             still_told=still_told,
             told_in_app=told_in_app,
+            family=family,
         ),
     )
 
 
 async def _what_whatsapp_changes(
     session: AsyncSession, context: KeyContext, row: Consent, language: str
-) -> tuple[bool, list[str], list[str]]:
+) -> tuple[bool, list[str], list[str], bool]:
     """For stopping WhatsApp: whether he is in his family's group there, and everyone a red
     flag still reaches — each live key holding the emergency card, named as the words name
     them, with who they are to him when a stewardship says (the relationship code, in his
     language): first those it reaches on WhatsApp, then those it reaches only in the app,
-    who said no to WhatsApp or have no number (#163). Nothing for any other agreement."""
+    who said no to WhatsApp or have no number (#163); and whether anyone at all holds a live key,
+    card or not, who hears nothing else about him on WhatsApp now. Nothing for any other
+    agreement."""
     if row.purpose is not ConsentPurpose.WHATSAPP:
-        return False, [], []
+        return False, [], [], False
     in_group = await group_of(session, context=context) is not None
     moment = utcnow()
     said = {
@@ -641,11 +647,13 @@ async def _what_whatsapp_changes(
     on_whatsapp: list[str] = []
     in_app: list[str] = []
     seen: set[uuid.UUID] = set()
+    family = False
     for key in sorted(
         await list_keys(session, context=context), key=lambda k: as_utc(k.granted_at)
     ):
         if key.holder_person_id in seen or not key.is_active(moment):
             continue
+        family = True
         if Scope.EMERGENCY not in key.scopes_held:
             continue
         seen.add(key.holder_person_id)
@@ -658,7 +666,7 @@ async def _what_whatsapp_changes(
             and not await said_no(session, context=context, person_id=key.holder_person_id)
         )
         (on_whatsapp if reachable else in_app).append(words)
-    return in_group, on_whatsapp, in_app
+    return in_group, on_whatsapp, in_app, family
 
 
 def _told(row: Consent) -> bool:

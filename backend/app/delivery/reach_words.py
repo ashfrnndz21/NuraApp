@@ -16,7 +16,7 @@ LANGUAGES = ("en", "ms", "zh")
 # @patient
 NOT_REACHED: Mapping[str, str] = {
     "en": "Nura could not reach {name} on their phone.",
-    "ms": "Nura tidak dapat hubungi {name} di telefon mereka.",
+    "ms": "Nura tidak dapat hubungi telefon {name}.",
     "zh": "Nura 无法通过手机联系{name}。",
 }
 """Beside an open red flag: someone the ladder asked whom no push and no WhatsApp reached."""

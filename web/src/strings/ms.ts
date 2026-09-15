@@ -1377,7 +1377,7 @@ export const ms = {
       app_push: "Aplikasi",
       whatsapp: "WhatsApp",
       caregiver: "Melalui penjaga",
-      in_app: "Di halaman keluarga",
+      in_app: "Dalam aplikasi",
     },
     // @patient phrase
     outcomes: {

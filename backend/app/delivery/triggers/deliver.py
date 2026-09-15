@@ -462,7 +462,10 @@ async def write(
             context=run.acting,
             scope=rule.scope,
             target=Delivery.__tablename__,
-            channel=Channel.APP if via is DeliveryChannel.APP_PUSH else Channel.WHATSAPP,
+            # WhatsApp only for what went there; a push and the in-app notice are the app's.
+            channel=Channel.WHATSAPP
+            if via in (DeliveryChannel.WHATSAPP, DeliveryChannel.CAREGIVER)
+            else Channel.APP,
             shared_with_person_id=to.person.id,
             target_id=row.id,
         )

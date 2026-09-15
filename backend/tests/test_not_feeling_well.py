@@ -19,7 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Channel
 from app.channels.api.safety_schemas import WhatToDoOut
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.clock import FrozenClock
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.db import utcnow
 from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.family.roster import add_slot
@@ -600,3 +602,32 @@ async def test_the_rule_reads_the_record_as_the_system_whoever_pressed(
         and line.action is Action.READ
     ]
     assert {Fact.__tablename__, MedicationLine.__tablename__} <= {line.target for line in system}
+
+
+async def test_the_card_names_whose_phone_was_reached_not_someone_only_the_app_told(
+    sg: AsyncSession,
+) -> None:
+    """#162: Lin is on duty but said no to WhatsApp and has no device, so the ladder reaches
+    her only by the notice on her family page — and moves on at once to Mei, his chief, whose
+    WhatsApp it reaches. "Knows now" is Mei: Lin does not know yet."""
+    owner, mei, lin, _siti, _kit = await _household(sg)
+    await add_slot(
+        sg,
+        context=owner,
+        person_id=lin.person_id,
+        role=KeyRole.EMERGENCY,
+        from_time=time(0, 0),
+        to_time=time(23, 59),
+        weekdays=list(range(7)),
+    )
+    await record_opt_in(
+        sg,
+        context=lin,
+        messages=False,
+        joins_group=False,
+        wording_version=OPT_IN_VERSION,
+        language="en",
+    )
+    chest = await _press(sg, owner, words="chest pain")
+    assert chest.notified_person_ids == [mei.person_id]
+    assert [line.text for line in chest.lines][:1] == ["Mei knows now."]

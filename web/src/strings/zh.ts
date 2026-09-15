@@ -1377,7 +1377,7 @@ export const zh = {
       app_push: "应用",
       whatsapp: "WhatsApp",
       caregiver: "通过照顾的人",
-      in_app: "在家人页面上",
+      in_app: "在应用里",
     },
     // @patient phrase
     outcomes: {

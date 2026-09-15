@@ -1379,7 +1379,7 @@ export const en = {
       app_push: "App",
       whatsapp: "WhatsApp",
       caregiver: "Through the carer",
-      in_app: "On the family page",
+      in_app: "In the app",
     },
     // @patient phrase
     outcomes: {
@@ -1609,7 +1609,7 @@ export const en = {
     NotWellFormed: "Nura did not understand that.",
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
     AlertsGoEveryWay: "Nura always tells your family about this, every way it can.",
-    MessageNamesAMedicine: ["A message cannot name a medicine or say how much to take.", "Nura sends reminders about medicines only from the list."],
+    MessageNamesAMedicine: ["A message cannot name a medicine or say how much to take.", "Nura sends medicine reminders only from the medicines list."],
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
     StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",

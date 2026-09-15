@@ -243,7 +243,7 @@ def test_the_stop_lines_say_who_is_told_where_and_that_nothing_else_goes_there()
         "Your Today page and reminders will not come there.",
         "Mei, your daughter, is still told on WhatsApp when you are unwell.",
         "Siti, your helper, is still told in the app when you are unwell.",
-        "Your family gets other messages about you only in the app.",
+        "Your family is told everything else only in the app.",
         "You can say yes to WhatsApp again later.",
     ]
     for language in ("en", "ms", "zh"):
@@ -254,8 +254,12 @@ def test_the_stop_lines_say_who_is_told_where_and_that_nothing_else_goes_there()
         )
         for line in said:
             assert [f for f in verify(line, language) if f.severity == "fail"] == [], line
-    # With nobody on his family list, nothing is said about them.
+    # With nobody on his family list, nothing is said about them; with family who hold no
+    # emergency card, that nothing else about him goes to them on WhatsApp.
     assert len(stop_lines(ConsentPurpose.WHATSAPP, name="", language="en")) == 3
+    assert stop_lines(ConsentPurpose.WHATSAPP, name="", language="en", family=True)[2] == (
+        "Your family is told everything else only in the app."
+    )
 
 
 # --- decision 2: a message to him naming a medicine is not sent ---------------------------------
