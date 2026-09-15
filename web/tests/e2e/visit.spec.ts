@@ -70,7 +70,7 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   expect(logistics?.body).toContain("You see Dr Tan on Monday 14 September at half past 10 in the morning.");
   expect(logistics?.body.some((line) => line.includes("Mei"))).toBe(false);
 
-  const { sent } = watchRecording(page);
+  const { sent, answered } = watchRecording(page);
   const clipsAsked: string[] = [];
   page.on("request", (one) => {
     if (/\/artifacts\/[^/]+\/clip/.test(one.url())) clipsAsked.push(one.url());
@@ -120,6 +120,9 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
 
   await page.getByTestId("doctor-yes").click();
   await expect.poll(() => sent.yes.length).toBe(1);
+  // Answered before the clock jumps: a jump past the call's deadline with the yes still on its
+  // way would end that call as a dropped connection, which is the dropped-connection test's.
+  await expect.poll(() => answered.yes.length).toBe(1);
   // A second, and the recorder has handed over its first piece; then the rest of the visit,
   // with the upload's own thirty-second send in it.
   await page.clock.fastForward("00:01");
