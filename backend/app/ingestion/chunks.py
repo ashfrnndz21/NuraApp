@@ -11,13 +11,15 @@ speakers and the same clips.
 
 #128's rules hold at every step:
 
-- **Nothing is kept until the doctor's yes.** A chunk waits in the region's object store under
+- **Nothing is stored until the doctor's yes.** No chunk is taken before he said yes on the
+  upload (`POST …/yes`; before it, `NoYesFromTheDoctor`): until then the audio stays on the
+  phone, in the page's memory. After it, a chunk waits in the region's object store under
   `consult-uploads/<profile>/<upload>/<n>` and is nothing more: no artefact, no transcript, no
-  card, and no route serves a chunk back. Only an upload the doctor said yes to (`POST …/yes`)
-  may be finished, and finishing is `record_consult`, with the gate, the checks on the audio
-  and the RECORDING consent asked again where the bytes land.
-- **A no keeps nothing.** "Dr Tan said no", or the page left before he answered, throws away
-  every chunk already sent (`discard_upload`). What the phone could not throw away, the server
+  card, and no route serves a chunk back. Finishing is `record_consult`, with the gate, the
+  checks on the audio and the RECORDING consent asked again where the bytes land.
+- **A no keeps nothing.** "Dr Tan said no" finds nothing sent; the page left, before he
+  answered or after, throws away every chunk already sent (`discard_upload`). What the phone
+  could not throw away, the server
   does (`discard_stale`, run by the trigger engine every five minutes): an upload the doctor
   did not answer within `ANSWER_WITHIN`, one not finished within `FINISH_WITHIN`, and one on a
   profile where no RECORDING consent is in force any more. A lapsed upload takes nothing more
@@ -147,7 +149,7 @@ class ChunkCutShort(Refusal):
 
 
 class NoYesFromTheDoctor(Refusal):
-    """A recording is kept only after the doctor said yes."""
+    """Nothing of a recording is taken or kept before the doctor said yes."""
 
 
 def chunk_key(profile_id: uuid.UUID, upload_id: uuid.UUID, position: int) -> str:
@@ -313,8 +315,9 @@ async def add_chunk(
     data: bytes,
     store: ObjectStore,
 ) -> ConsultUpload:
-    """Chunk `position`, in the region, under the recording's consent. The next one is taken;
-    one the server already has, sent again the same, changes nothing (its answer was lost)."""
+    """Chunk `position`, in the region, under the recording's consent, after the doctor's
+    yes. The next one is taken; one the server already has, sent again the same, changes
+    nothing (its answer was lost)."""
     may_change_visits(context)
     await may_record(session, context)
     guard_region(held_in=store.region, asked_from=context.region)
@@ -322,6 +325,10 @@ async def add_chunk(
         session, context=context, appointment_id=appointment_id, upload_id=upload_id
     )
     _still_open(upload)
+    if upload.doctor_said_yes_at is None:
+        # The audio stays on the phone until the doctor's yes (#129): nothing of a visit he may
+        # still say no to is written anywhere.
+        raise NoYesFromTheDoctor("no chunk is taken before the doctor's yes")
     if not data:
         raise NotAConsultRecording("a chunk has bytes in it")
     if len(data) > MAX_CHUNK_BYTES:

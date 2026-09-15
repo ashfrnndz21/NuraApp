@@ -510,18 +510,18 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     say(f"and on a no: {' / '.join(notice['when_no'])}")
 
     # 7. The recording, as the Visit screen sends it (#129): in chunks while it listens, kept only
-    #    after the doctor's yes. A first try Dr Tan says no to keeps nothing: what it sent is
-    #    thrown away.
+    #    after the doctor's yes. A first try Dr Tan says no to keeps nothing: nothing leaves the
+    #    phone before his yes.
     uploads = f"{route}/recording/uploads"
     octets = {**hers, "Content-Type": "application/octet-stream"}
     opening = {"content_type": CONSULT_TYPE, "started_at": datetime.now(SINGAPORE).isoformat()}
     first = check(client.post(uploads, headers=hers, json=opening), 201, "Mei's phone opens an upload")
-    for number, piece in enumerate((audio[:16], audio[16:32])):
-        check(
-            client.put(f"{uploads}/{first['upload_id']}/chunks/{number}", headers=octets, content=piece),
-            200,
-            f"Mei's phone sends chunk {number}",
-        )
+    # Before Dr Tan's answer nothing leaves the phone: a chunk sent now is refused.
+    check(
+        client.put(f"{uploads}/{first['upload_id']}/chunks/0", headers=octets, content=audio[:16]),
+        409,
+        "a chunk before Dr Tan's answer",
+    )
     thrown = client.delete(f"{uploads}/{first['upload_id']}", headers=hers, params={"because": "no"})
     if thrown.status_code != 204:
         raise fail("Dr Tan says no: the upload is thrown away", thrown)
@@ -530,16 +530,16 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     if closed["open"] or nothing:
         raise fail("Dr Tan says no: nothing is kept", why=f"upload {closed}, recordings {nothing}")
     ok(
-        "a first try, as the Visit screen sends it (#129): the upload opened as the microphone opened, 2 chunks "
-        "sent as it listened (the notice, and Dr Tan's answer); Dr Tan said no — DELETE …/uploads/{upload}"
-        "?because=no threw both away, the upload is closed, and no recording was kept (GET …/recordings is [])"
+        "a first try, as the Visit screen sends it (#129): the upload opened as the microphone opened; a chunk "
+        "sent before Dr Tan answered was refused (409 NoYesFromTheDoctor), so nothing left the phone; Dr Tan said "
+        "no — DELETE …/uploads/{upload}?because=no closed the upload, and no recording was kept (GET …/recordings is [])"
     )
 
     upload = check(client.post(uploads, headers=hers, json=opening), 201, "Mei's phone opens an upload")
     at = f"{uploads}/{upload['upload_id']}"
     parts = [audio[start : start + 16] for start in range(0, len(audio), 16)]
-    check(client.put(f"{at}/chunks/0", headers=octets, content=parts[0]), 200, "chunk 0")
     check(client.post(f"{at}/yes", headers=hers), 200, "Dr Tan said yes")
+    check(client.put(f"{at}/chunks/0", headers=octets, content=parts[0]), 200, "chunk 0")
     check(client.put(f"{at}/chunks/1", headers=octets, content=parts[1]), 200, "chunk 1")
     # Chunk 1's answer was lost: sent again, the same, it changes nothing; the phone asks how far
     # the server got and goes on from there.
@@ -560,7 +560,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("Mei's phone sends the recording", why=f"{recording}")
     ok(
         f"Mei's recording, in {len(parts)} chunks as it was made (POST …/recording/uploads, {CONSULT_TYPE}), Dr Tan's yes "
-        f"after the first (POST …/yes); chunk 1 sent again after its answer was lost changed nothing, and GET "
+        f"before the first (POST …/yes); chunk 1 sent again after its answer was lost changed nothing, and GET "
         f"…/uploads/{{upload}} said where to go on from ({where['chunks']} chunks, {where['received_bytes']} bytes). On "
         f"Stop (POST …/finish, {DURATION_S:g} s) the chunks were put together in the region into one consult voice "
         f"artefact {recording['artifact_id'][:8]}… on the RECORDING consent {recording['consent_id'][:8]}…, heard at "

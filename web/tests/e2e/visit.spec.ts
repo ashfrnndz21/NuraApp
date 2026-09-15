@@ -118,6 +118,7 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
   expect(await nothingCovers(page)).toEqual([]);
   await shotAs(page, "cp22-visit-notice", true);
 
+  expect(sent.chunk).toHaveLength(0); // no audio leaves the phone before the doctor's yes
   await page.getByTestId("doctor-yes").click();
   await expect.poll(() => sent.yes.length).toBe(1);
   // Answered before the clock jumps: a jump past the call's deadline with the yes still on its
@@ -202,8 +203,9 @@ test("a no keeps nothing: the recorder stops, what was sent is thrown away, and 
   const after = await stand(page);
   expect(after.__recorder).toMatchObject({ starts: 1, stops: 1 });
   expect(after.__locks.released).toBe(after.__locks.taken);
-  // The upload opened with the microphone is thrown away on the server, with anything sent.
+  // The upload opened with the microphone is thrown away on the server; no audio was sent.
   await expect.poll(() => sent.thrown.map(because)).toEqual(["no"]);
+  expect(sent.chunk).toHaveLength(0);
   expect(sent.finish).toHaveLength(0);
   expect(sent.whole).toHaveLength(0);
   await expect(page.getByTestId("by-hand")).toContainText("Write what Dr Tan said");
@@ -284,6 +286,7 @@ test("a dropped connection while Nura listens: it says so, sends the rest when i
   const held = page.getByTestId("held");
   await expect(held.getByTestId("no-connection")).toHaveText("The phone has no connection right now.");
   await expect(held).toContainText("Nura sends the recording when the connection is back.");
+  await expect(held).toContainText("Keep this page open until then.");
   await page.unroute(theUpload);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect(page.getByTestId("saved")).toContainText("Nura kept the recording.");

@@ -431,6 +431,8 @@ export const en = {
     noConnection: "The phone has no connection right now.",
     // @patient
     sendLater: "Nura sends the recording when the connection is back.",
+    // @patient
+    keepOpenToSend: "Keep this page open until then.",
   },
   day: {
     // @patient headline
@@ -1378,7 +1380,7 @@ export const en = {
       first_week_prompt: "First week",
       nudge: "A small reminder",
       check_in: "How are you feeling today",
-      family_notice: "What Nura wrote this week",
+      family_notice: "What Nura wrote down this week",
     },
     // @patient phrase
     channels: {
@@ -1397,9 +1399,9 @@ export const en = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Held: the not-well message about {name} is still open.",
-      saidToday: "Held: {name} already said how he feels today.",
-      nudgeAsked: "Held: today's small reminder already asked {name} how he feels.",
+      flagOpen: "Held: the not-well message about {name} comes first today.",
+      saidToday: "Held: {name} already told Nura how things are today.",
+      nudgeAsked: "Held: today's small reminder already asked {name} how things are.",
       questionOpen: "Held: {name} still has a question from Nura to answer.",
     },
     // @patient phrase

@@ -181,9 +181,12 @@ async def test_a_dropped_connection_mid_visit_resumes_from_where_the_server_got_
     assert opened["chunks"] == 0 and opened["open"] and not opened["doctor_said_yes"]
     assert opened["max_chunk_bytes"] == MAX_CHUNK_BYTES
     parts = pieces(DATA)
-    # The notice and the doctor's answer are in the first chunks; then his yes.
-    await phone.send(parts[0] + parts[1])
+    # Nothing is taken before the doctor's yes: the notice and his answer wait on the phone.
+    early = await phone.chunk(0, parts[0])
+    assert early.status_code == 409 and early.json() == {"refusal": "NoYesFromTheDoctor"}
+    assert phone.staged() == []
     assert (await _ok(await phone.yes()))["doctor_said_yes"] is True
+    await phone.send(parts[0] + parts[1])
 
     # The connection drops half way through the third chunk: nothing of it is kept.
     await phone.cut_short(2, parts[2])
@@ -226,14 +229,18 @@ async def test_a_dropped_connection_mid_visit_resumes_from_where_the_server_got_
 # --- a no -----------------------------------------------------------------------------------------
 
 
-async def test_a_no_throws_away_every_chunk_already_sent_and_keeps_nothing(
+async def test_nothing_is_taken_before_the_doctors_yes_and_a_no_or_a_page_left_keeps_nothing(
     deployment: Deployment,
 ) -> None:
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
-    await phone.send(DATA[:30])  # the notice, and the doctor's no, reach the server
-    assert len(phone.staged()) == 3
+    # The notice and the doctor's no never reach the server: no chunk is taken before his yes.
+    for position, piece in enumerate(pieces(DATA[:30])):
+        early = await phone.chunk(position, piece)
+        assert early.status_code == 409 and early.json() == {"refusal": "NoYesFromTheDoctor"}
+    assert phone.staged() == []
+    assert "NoYesFromTheDoctor" in await refusals(deployment, house.pa, house.profile_id)
 
     assert (await phone.discard("no")).status_code == 204
     assert phone.staged() == []
@@ -244,17 +251,18 @@ async def test_a_no_throws_away_every_chunk_already_sent_and_keeps_nothing(
         assert late.status_code == 410 and late.json() == {"refusal": "UploadClosed"}
     assert await _kept(house) == ([], [])
 
-    # The page left before he answered: the same.
+    # The page left after his yes: every chunk already sent is thrown away.
     left = Phone(house, house.mei)
     await left.open()
-    await left.send(DATA[:10])
+    await _ok(await left.yes())
+    await left.send(DATA[:30])
+    assert len(left.staged()) == 3
     assert (await left.discard("left")).status_code == 204
     assert left.staged() == [] and (await _row(deployment, left.upload)).discarded_because == "left"
 
     # Stop before the doctor's yes keeps nothing either.
     early = Phone(house, house.mei)
     await early.open()
-    await early.send(DATA)
     refused = await early.finish()
     assert refused.status_code == 409 and refused.json() == {"refusal": "NoYesFromTheDoctor"}
     assert await _kept(house) == ([], [])
@@ -270,17 +278,18 @@ async def test_a_chunk_that_lands_as_it_closes_is_let_go_too(deployment: Deploym
     # Thrown away; then a chunk that was on its way lands: the phone's second DELETE lets it go.
     no = Phone(house, house.mei)
     await no.open()
+    await _ok(await no.yes())
     await no.send(DATA[:20])
-    assert (await no.discard("no")).status_code == 204
+    assert (await no.discard("left")).status_code == 204
     await deployment.objects.put(chunks.chunk_key(profile, uuid.UUID(no.upload), 2), DATA[20:30])
     assert len(no.staged()) == 1
-    assert (await no.discard("no")).status_code == 204
+    assert (await no.discard("left")).status_code == 204
     assert no.staged() == []
     # Put together; then a chunk lands late: the scheduler's next run lets it go.
     kept = Phone(house, house.mei)
     await kept.open()
-    await kept.send(DATA)
     await _ok(await kept.yes())
+    await kept.send(DATA)
     await _ok(await kept.finish(), 201)
     row = await _row(deployment, kept.upload)
     await deployment.objects.put(chunks.chunk_key(profile, uuid.UUID(kept.upload), row.chunks), b"late")
@@ -295,8 +304,9 @@ async def test_a_store_that_fails_the_sweep_never_costs_the_run_what_it_sent(
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
+    await _ok(await phone.yes())
     await phone.send(DATA[:20])
-    clock.step(ANSWER_WITHIN)
+    clock.step(FINISH_WITHIN)
 
     async def refused(key: str) -> None:
         raise ObjectStoreUnavailable("the bucket refused a delete (503)")
@@ -308,7 +318,7 @@ async def test_a_store_that_fails_the_sweep_never_costs_the_run_what_it_sent(
     monkeypatch.undo()
     await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
     assert phone.staged() == []
-    assert (await _row(deployment, phone.upload)).discarded_because == "no_answer"
+    assert (await _row(deployment, phone.upload)).discarded_because == "unfinished"
 
 
 async def test_what_the_phone_could_not_throw_away_the_scheduler_does(
@@ -317,11 +327,12 @@ async def test_what_the_phone_could_not_throw_away_the_scheduler_does(
     house = await _house(deployment)
     unanswered = Phone(house, house.mei)
     await unanswered.open()
-    await unanswered.send(DATA[:20])
+    early = await unanswered.chunk(0, DATA[:10])
+    assert early.status_code == 409 and early.json() == {"refusal": "NoYesFromTheDoctor"}
     unfinished = Phone(house, house.mei)
     await unfinished.open()
-    await unfinished.send(DATA[:20])
     await _ok(await unfinished.yes())
+    await unfinished.send(DATA[:20])
 
     async def scheduler() -> None:
         await _ok(await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id}))
@@ -353,8 +364,8 @@ async def test_closing_his_account_throws_away_every_chunk_already_sent(
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
-    await phone.send(DATA[:30])
     await _ok(await phone.yes())
+    await phone.send(DATA[:30])
     assert len(phone.staged()) == 3
 
     his = bearer(house.pa["token"])
@@ -398,8 +409,8 @@ async def test_a_stop_and_the_sweep_never_both_end_one_upload(deployment: Deploy
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
-    await phone.send(DATA)
     await _ok(await phone.yes())
+    await phone.send(DATA)
     await _ok(await phone.finish(), 201)
     async with deployment.sessions() as session:
         row = await session.get(ConsultUpload, uuid.UUID(phone.upload))
@@ -461,8 +472,8 @@ async def test_a_red_flag_heard_in_a_recording_sent_in_chunks_starts_the_ladder_
     house = await _house(deployment)
     phone = Phone(house, house.pa)
     await phone.open()
-    await phone.send(placeholder_consult(RED_FLAG_CONSULT))
     await _ok(await phone.yes())
+    await phone.send(placeholder_consult(RED_FLAG_CONSULT))
     async with deployment.sessions() as session:
         assert (await session.scalars(select(Ladder))).all() == []
     body = await _ok(await phone.finish(), 201)
@@ -479,6 +490,7 @@ async def test_a_chunk_over_the_cap_gets_a_413_and_nothing_of_it_is_kept(
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
+    await _ok(await phone.yes())
     # Declared over the cap: refused before a byte is read.
     over = await phone.chunk(0, WEBM_MAGIC + b"A" * MAX_CHUNK_BYTES)
     assert over.status_code == 413 and over.json() == {"refusal": "ChunkTooLarge"}
@@ -512,8 +524,8 @@ async def test_the_assembled_recording_plays_the_same_clips_as_a_single_upload(
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
-    await phone.send(DATA, first=0)
     await _ok(await phone.yes())
+    await phone.send(DATA, first=0)
     chunked = await _ok(await phone.finish(), 201)
 
     async for other in _serve(Region.SG):
@@ -560,13 +572,13 @@ async def test_only_the_phone_that_opened_it_sends_to_it_and_only_the_family_hea
     house = await _house(deployment)
     phone = Phone(house, house.mei)
     await phone.open()
+    await _ok(await phone.yes())
     await phone.send(DATA)
     # Pa holds every part of his record, but this upload is Mei's phone's.
     his = Phone(house, house.pa)
     his.upload = phone.upload
     for call in (await his.status(), await his.chunk(5, b"x"), await his.yes(), await his.finish()):
         assert call.status_code == 403 and call.json() == {"refusal": "NotYourUpload"}
-    await _ok(await phone.yes())
     kept = await _ok(await phone.finish(), 201)
 
     # Kit, a viewer who reads the visits: he cannot open one, and cannot hear what was kept.
@@ -621,6 +633,7 @@ async def test_nothing_opens_without_the_recording_consent_or_in_a_container_a_p
     assert naive.status_code == 422
     # The first chunk is the recorder's own container, or nothing is kept.
     await phone.open()
+    await _ok(await phone.yes())
     bad = await phone.chunk(0, b"not a webm at all")
     assert bad.status_code == 400 and bad.json() == {"refusal": "NotAConsultRecording"}
     assert phone.staged() == []

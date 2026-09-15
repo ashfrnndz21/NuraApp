@@ -54,12 +54,18 @@ function server() {
       const data = new Uint8Array(await bytes.arrayBuffer());
       return reach(`chunk ${position}`, () => {
         if (upload !== s.upload || !s.open) throw new No("UploadClosed");
+        if (!s.yes) throw new No("NoYesFromTheDoctor");
         if (position !== s.chunks.length) throw new No("ChunkOutOfOrder");
         s.chunks.push(data);
         return out();
       });
     },
-    yes: () => reach("yes", () => ((s.yes = true), out())),
+    yes: () =>
+      reach("yes", () => {
+        if (!s.open) throw new No("UploadClosed");
+        s.yes = true;
+        return out();
+      }),
     finish: () =>
       reach("finish", () => {
         if (!s.yes) throw new No("NoYesFromTheDoctor");
@@ -105,16 +111,19 @@ function upload(deps: UploadDeps) {
 }
 
 describe("a recording sent in chunks as it is made (#129)", () => {
-  it("sends what the server does not have yet, in order, as it records", async () => {
+  it("sends nothing before the doctor's yes, then what the server does not have yet, in order", async () => {
     const at = server();
     const one = upload(at.deps);
     one.start();
     one.add(audio("the notice and his yes."));
     await one.send();
+    expect(at.log).toEqual(["open"]);
+    expect(one.sent).toBe(0);
+    await one.doctorSaidYes();
     one.add(audio(" the visit."));
     at.ticks[0]!();
     await one.send();
-    expect(at.log).toEqual(["open", "chunk 0", "chunk 1"]);
+    expect(at.log).toEqual(["open", "yes", "chunk 0", "chunk 1"]);
     expect(decoded(at.bytes())).toBe("the notice and his yes. the visit.");
     expect(one.sent).toBe(one.recorded);
   });
@@ -124,7 +133,7 @@ describe("a recording sent in chunks as it is made (#129)", () => {
     const one = upload(at.deps);
     one.start();
     one.add(audio("0123456789abcdef"));
-    await one.send();
+    await one.doctorSaidYes();
     // The signal goes: nothing reaches the server, and the phone says so.
     at.net.down = true;
     one.add(audio("-while-away"));
@@ -185,6 +194,15 @@ describe("a recording sent in chunks as it is made (#129)", () => {
     at.net.down = false;
     expect(await one.finish(66)).toBe(KEPT);
     expect(decoded(at.bytes())).toBe("the whole visit, heard to the end");
+  });
+
+  it("Stop before the doctor's yes sends no audio: the server's refusal is the answer", async () => {
+    const at = server();
+    const one = upload(at.deps);
+    one.start();
+    one.add(audio("the notice, and no answer yet"));
+    await expect(one.finish(5)).rejects.toMatchObject({ refusal: "NoYesFromTheDoctor" });
+    expect(at.log.filter((call) => call.startsWith("chunk"))).toEqual([]);
   });
 
   it("a no throws it away on the server too, even with the open still on its way", async () => {

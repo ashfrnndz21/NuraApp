@@ -431,6 +431,8 @@ export const zh = {
     noConnection: "手机现在没有网络。",
     // @patient
     sendLater: "网络恢复后，Nura会发送录音。",
+    // @patient
+    keepOpenToSend: "在那之前，请不要离开这一页。",
   },
   day: {
     // @patient headline
@@ -1395,7 +1397,7 @@ export const zh = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "暂停：关于{name}身体不适的消息还没有处理完。",
+      flagOpen: "暂停：今天先处理关于{name}身体不适的消息。",
       saidToday: "暂停：{name}今天已经说了自己的感觉。",
       nudgeAsked: "暂停：今天的小提醒已经问过{name}感觉怎么样。",
       questionOpen: "暂停：{name}还有Nura的一个问题要回答。",

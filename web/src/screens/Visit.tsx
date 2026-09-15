@@ -22,7 +22,7 @@ import { browserUploadDeps, ChunkedUpload, isNoConnection, uploadCalls } from ".
  *  has not agreed. Only then is the notice shown and spoken, and the microphone opened. The
  *  recording begins with the notice itself, so the doctor's answer is its first seconds.
  *  **Dr Tan said yes** keeps listening; **Dr Tan said no** throws the audio away on the phone,
- *  and every chunk already sent away on the server too, and the notes can be written by hand.
+ *  and its upload on the server too (nothing was sent before his yes), and the notes can be written by hand.
  *  The audio goes to the server in chunks as it records (#129, `visit/upload`), so a dropped
  *  connection only delays it; **Stop** sends the rest and asks the server to put it together,
  *  which it keeps only after the doctor's yes. The page must stay in front: hidden, it stops
@@ -149,8 +149,8 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       setStage({ kind: "no", notice });
       return;
     }
-    // The audio goes to the server in chunks as it records (#129): opened now, so the notice
-    // and the doctor's answer are in its first chunk, and kept there only after his yes.
+    // The audio goes to the server in chunks as it records (#129): opened now, but nothing is
+    // sent before the doctor's yes; the notice and his answer go in its first chunk after it.
     const upload = new ChunkedUpload(
       browserUploadDeps(uploadCalls(bearer ?? "", papers?.profile_id ?? "", appointmentId)),
       recorder.mimeType,
@@ -525,6 +525,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
             <>
               <p data-testid="no-connection">{s.visit.noConnection}</p>
               <p>{s.visit.sendLater}</p>
+              <p>{s.visit.keepOpenToSend}</p>
             </>
           )}
           <Pill plum onClick={() => void keep(stage.notice, stage.kept)} testId="keep-heard">

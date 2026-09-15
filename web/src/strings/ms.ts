@@ -431,6 +431,8 @@ export const ms = {
     noConnection: "Telefon tiada sambungan sekarang.",
     // @patient
     sendLater: "Nura hantar rakaman itu apabila sambungan kembali.",
+    // @patient
+    keepOpenToSend: "Biarkan halaman ini terbuka sehingga itu.",
   },
   day: {
     // @patient headline
@@ -1395,7 +1397,7 @@ export const ms = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Ditahan: mesej tidak sihat tentang {name} masih terbuka.",
+      flagOpen: "Ditahan: mesej tidak sihat tentang {name} didahulukan hari ini.",
       saidToday: "Ditahan: {name} sudah beritahu keadaannya hari ini.",
       nudgeAsked: "Ditahan: peringatan kecil hari ini sudah bertanya khabar {name}.",
       questionOpen: "Ditahan: {name} masih ada soalan daripada Nura untuk dijawab.",

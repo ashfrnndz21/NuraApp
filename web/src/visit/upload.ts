@@ -8,7 +8,8 @@ import type { ConsultOut, UploadOut } from "../api/types";
  *
  *  Everything the recorder hands over (`add`) also stays in the page's memory until Stop
  *  (`ConsultRecorder`), so nothing is lost whatever the network does. The upload opens as the
- *  microphone opens. Then, every `SEND_EVERY_MS` and the moment the phone is back online, what
+ *  microphone opens, but no audio goes to the server before it has the doctor's yes: until
+ *  then the recording is only in the page's memory. Then, every `SEND_EVERY_MS` and the moment the phone is back online, what
  *  the server does not have yet goes to it in pieces of at most `PIECE_BYTES`, one at a time,
  *  each numbered from where the server says it got to. A try that did not reach the server is
  *  only a try: the next one asks the server how far it got, and goes on from there. The
@@ -141,7 +142,8 @@ export class ChunkedUpload {
       }
       if (!this.connected.value) throw new NoConnection();
       const state = this.state;
-      if (state !== null && state.received_bytes >= this.size && (!this.yes || state.doctor_said_yes)) {
+      // Before the doctor's yes nothing was sent: the server's refusal to finish is the answer.
+      if (state !== null && (!this.yes || (state.doctor_said_yes && state.received_bytes >= this.size))) {
         const outcome = await this.deps.calls.finish(state.upload_id, durationS);
         this.close();
         return outcome;
@@ -229,6 +231,8 @@ export class ChunkedUpload {
     this.state ??= await calls.open(this.contentType, this.startedAt);
     if (this.over) return;
     if (this.yes && !this.state.doctor_said_yes) this.state = await calls.yes(this.state.upload_id);
+    // No audio leaves the phone before the server has the doctor's yes (#129).
+    if (!this.state.doctor_said_yes) return;
     while (!this.over && this.state.received_bytes < this.size) {
       const from = this.state.received_bytes;
       if (from === 0 && this.size < FIRST_AT_LEAST && !this.stopping) return;

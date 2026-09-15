@@ -289,7 +289,7 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_listed": "{name} ada dalam senarai ubat anda.",
         "paper": "{what} anda dari {date} ada dalam surat-surat anda.",
         "consult_said": "{doctor} bercakap tentang perkara ini pada {date}.",
-        "consult_waiting": "Apa yang {doctor} kata pada {date} sedang menunggu jawapan ya daripada anda.",
+        "consult_waiting": "Apa yang {doctor} kata pada {date} menunggu jawapan ya daripada anda.",
         "note_yours": "Anda meninggalkan nota pada {date}.",
         "note_theirs": "{who} meninggalkan nota pada {date}.",
         "transcript_said": "Ini dikatakan semasa anda berjumpa {doctor} pada {date}.",
