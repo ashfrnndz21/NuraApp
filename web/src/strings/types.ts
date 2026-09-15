@@ -480,7 +480,8 @@ export interface Strings {
     consentsOther: string;
     stop: string;
     stopYes: string;
-    howToStop: string;
+    closeAccount: string;
+    closeAccountYes: string;
     keepCopy: string;
     savePage: string;
     thread: string;

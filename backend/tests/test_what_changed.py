@@ -61,7 +61,11 @@ async def test_the_notes_others_left_and_what_the_family_wrote_are_told_by_who_a
     rec = await record(sg)
     store = LocalObjectStore(tmp_path, Region.SG)
     kit = await let_in(
-        sg, rec.owner, phone=KIT_PHONE, name="Kit", role=KeyRole.CAREGIVER,
+        sg,
+        rec.owner,
+        phone=KIT_PHONE,
+        name="Kit",
+        role=KeyRole.CAREGIVER,
         scopes={Scope.RECORDS, Scope.READINGS},
     )
     before = clock.now()
@@ -70,12 +74,25 @@ async def test_the_notes_others_left_and_what_the_family_wrote_are_told_by_who_a
     assert moment is not None
     said = await post_message(sg, context=rec.mei, text="I will take Pa on Thursday.")
     drawn = await add_scribble(
-        sg, context=rec.mei, store=store, event_id=moment, data=PNG_SIGNATURE + b"arrow",
-        content_type="image/png", captured_at=clock.now(), private=False, label="ask Dr Tan",
+        sg,
+        context=rec.mei,
+        store=store,
+        event_id=moment,
+        data=PNG_SIGNATURE + b"arrow",
+        content_type="image/png",
+        captured_at=clock.now(),
+        private=False,
+        label="ask Dr Tan",
     )
     await add_scribble(
-        sg, context=rec.owner, store=store, event_id=moment, data=PNG_SIGNATURE + b"mine",
-        content_type="image/png", captured_at=clock.now(), private=False,
+        sg,
+        context=rec.owner,
+        store=store,
+        event_id=moment,
+        data=PNG_SIGNATURE + b"mine",
+        content_type="image/png",
+        captured_at=clock.now(),
+        private=False,
     )
 
     his = await what_changed(sg, context=rec.owner, since=before, registry=REGISTRY)
@@ -174,7 +191,9 @@ async def test_a_visit_that_moved_is_told_by_its_new_status(
     look = await mark_looked(sg, context=rec.mei)
     clock.step(timedelta(minutes=1))
     yes = await confirm(
-        sg, rec.owner, StatusChange(appointment_id=rec.next_visit.id, status=AppointmentStatus.CONFIRMED)
+        sg,
+        rec.owner,
+        StatusChange(appointment_id=rec.next_visit.id, status=AppointmentStatus.CONFIRMED),
     )
     await change_appointment_status(
         sg,
@@ -208,9 +227,7 @@ async def test_a_new_amount_is_a_question_for_the_doctor_and_never_the_amount(
     assert changed["change_kind"] == "dose_change" and changed["supersedes_id"]
 
 
-async def test_the_things_we_do_not_wait_for_are_told(
-    sg: AsyncSession, clock: FrozenClock
-) -> None:
+async def test_the_things_we_do_not_wait_for_are_told(sg: AsyncSession, clock: FrozenClock) -> None:
     rec = await record(sg)
     look = await mark_looked(sg, context=rec.mei)
     clock.step(timedelta(minutes=1))
@@ -270,6 +287,8 @@ async def test_the_look_is_the_readers_own_and_on_the_trail(sg: AsyncSession) ->
         str(rec.next_visit.id): "planned",
     }
     assert any(
-        e.target == "last_looked" and e.action is Action.WRITE and e.actor_person_id == rec.mei.person_id
+        e.target == "last_looked"
+        and e.action is Action.WRITE
+        and e.actor_person_id == rec.mei.person_id
         for e in await trail(sg, rec.owner)
     )

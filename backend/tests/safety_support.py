@@ -33,6 +33,8 @@ TRANSCRIBER = FixtureTranscriber(VOICE, Region.SG)
 
 def transcriber_for(region: Region) -> FixtureTranscriber:
     return FixtureTranscriber(VOICE, region)
+
+
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 SHA = "a" * 64
 

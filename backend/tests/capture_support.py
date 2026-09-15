@@ -21,7 +21,11 @@ def b64(data: bytes) -> str:
 
 
 def photo(label: str, *, hint: str | None = None, at: str = "2026-09-14T00:00:00Z") -> JSON:
-    body: JSON = {"data": b64(placeholder_of(label)), "content_type": "image/png", "captured_at": at}
+    body: JSON = {
+        "data": b64(placeholder_of(label)),
+        "content_type": "image/png",
+        "captured_at": at,
+    }
     if hint is not None:
         body["document_kind"] = hint
     return body
@@ -72,7 +76,9 @@ def decide(
     return decisions
 
 
-async def mint(deployment: Deployment, token: str, profile_id: str, card: JSON, decisions: list[JSON]) -> Any:
+async def mint(
+    deployment: Deployment, token: str, profile_id: str, card: JSON, decisions: list[JSON]
+) -> Any:
     return await deployment.client.post(
         f"/profiles/{profile_id}/confirmations",
         json={"subject": "review_card", "card_id": card["card_id"], "decisions": decisions},
@@ -110,7 +116,9 @@ async def key_for(
     assert granted.status_code == 201, granted.text
 
 
-async def agree_to_recording(deployment: Deployment, owner: dict[str, str], profile_id: str) -> None:
+async def agree_to_recording(
+    deployment: Deployment, owner: dict[str, str], profile_id: str
+) -> None:
     """The owner agrees, in today's words, to Nura keeping what is said (E16-02)."""
     agreed = await deployment.client.post(
         f"/profiles/{profile_id}/consents/recording",

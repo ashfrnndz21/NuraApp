@@ -132,7 +132,9 @@ class FixtureVoice:
     async def speak(self, text: str, language: str) -> Spoken:
         code = voice_language(language)
         seconds = seconds_to_say(text, code)
-        return Spoken(audio=silence(seconds), content_type=WAV, duration_seconds=seconds, language=code)
+        return Spoken(
+            audio=silence(seconds), content_type=WAV, duration_seconds=seconds, language=code
+        )
 
 
 def voice_for(settings: Settings) -> Voice:

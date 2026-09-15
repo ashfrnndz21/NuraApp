@@ -17,9 +17,22 @@ const CODE_LINE = /login code for (\+[0-9]+): ([0-9]{6})/g;
  *  suite walks against a demo: its numbers in the test range, its code instead of the log's. */
 const DEMO_CODE = process.env.NURA_E2E_DEMO_CODE;
 
+/** Every number handed out in this run. The run is one worker (`workers: 1`) on one database, so
+ *  a repeat would be the same person twice: `409 ProfileAlreadyOwned` when the second test opens
+ *  its profile (main's e2e, run 34912734890). Four random digits per prefix give 10,000 numbers,
+ *  and a run hands out about a hundred — often enough for two to meet. */
+const handedOut = new Set<string>();
+
 export function freshPhone(prefix = "+659777"): string {
-  if (DEMO_CODE) return `+650${String(Math.floor(Math.random() * 10_000_000)).padStart(7, "0")}`;
-  return `${prefix}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+  for (;;) {
+    const phone = DEMO_CODE
+      ? `+650${String(Math.floor(Math.random() * 10_000_000)).padStart(7, "0")}`
+      : `${prefix}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+    if (!handedOut.has(phone)) {
+      handedOut.add(phone);
+      return phone;
+    }
+  }
 }
 
 /** The newest code the server logged for this number, waiting up to five seconds for it. */

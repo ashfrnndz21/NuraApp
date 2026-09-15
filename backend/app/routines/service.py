@@ -365,7 +365,9 @@ def _capital(line: str) -> str:
 
 def patient_lines(the: TheDay, language: str) -> list[str]:
     """One line per moment of his day, in his words; the Today page's hour first."""
-    lines = [words.MORNING_CARD[language].format(clock=say_clock(the.day.morning_card_at, language))]
+    lines = [
+        words.MORNING_CARD[language].format(clock=say_clock(the.day.morning_card_at, language))
+    ]
     for moment in the.moments:
         tablets = [
             words.ITEM[language].format(
@@ -457,7 +459,9 @@ async def render_routine(
 ) -> RoutineView:
     """The day for one reader: his lines, or her table."""
     lang = language_of(
-        language if language is not None else (await audited_profile_read(session, context)).language
+        language
+        if language is not None
+        else (await audited_profile_read(session, context)).language
     )
     the = await the_day(session, context=context, registry=registry, language=lang)
     who = persona or default_persona(context)
@@ -505,7 +509,10 @@ def due_at(day: Day, local: datetime) -> str | None:
         end = start + DUE_FOR
         if index + 1 < len(ANCHORS):
             end = min(
-                end, datetime.combine(local.date(), day.anchors[ANCHORS[index + 1]], tzinfo=local.tzinfo)
+                end,
+                datetime.combine(
+                    local.date(), day.anchors[ANCHORS[index + 1]], tzinfo=local.tzinfo
+                ),
             )
         if start <= local < end:
             return anchor

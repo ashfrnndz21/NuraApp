@@ -380,7 +380,9 @@ class ConsultClips:
     segments: Sequence[Aligned]
 
     def window(self, span: Span) -> tuple[float, float] | None:
-        hit = [one for one in self.segments if one.char_start < span.end and span.start < one.char_end]
+        hit = [
+            one for one in self.segments if one.char_start < span.end and span.start < one.char_end
+        ]
         if not hit:
             return None
         return min(one.start_s for one in hit), max(one.end_s for one in hit)

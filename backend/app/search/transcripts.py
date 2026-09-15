@@ -182,7 +182,9 @@ async def search_transcripts(
                 Appointment,
                 context,
                 Scope.VISITS,
-                where=(Appointment.id.in_(sorted({r.appointment_id for r in recordings}, key=str)),),
+                where=(
+                    Appointment.id.in_(sorted({r.appointment_id for r in recordings}, key=str)),
+                ),
             )
         }
         providers = {
@@ -192,9 +194,7 @@ async def search_transcripts(
                 Provider,
                 context,
                 Scope.VISITS,
-                where=(
-                    Provider.id.in_(sorted({v.provider_id for v in visits.values()}, key=str)),
-                ),
+                where=(Provider.id.in_(sorted({v.provider_id for v in visits.values()}, key=str)),),
             )
         }
         for segment in await audited_read(

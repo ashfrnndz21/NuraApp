@@ -27,7 +27,9 @@ from tests.conftest import FEED, Deployment
 from tests.medicines_support import REGISTRY
 from tests.visits import pa, reading
 
-ENGINE = Engine(searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY)
+ENGINE = Engine(
+    searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
+)
 
 
 class Counting:

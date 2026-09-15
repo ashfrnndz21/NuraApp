@@ -11,6 +11,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import select
@@ -186,12 +187,18 @@ async def resolve_key_context(
     region: Region,
     person_id: uuid.UUID,
     profile_id: uuid.UUID,
+    while_closing: bool = False,
 ) -> KeyContext:
     """Resolve what this person may see of this profile, in this region, at this moment.
 
     `region` is the region this deployment serves. A profile pinned elsewhere is refused
     even when its row is present, because a row in the wrong database is the thing we are
     guarding against.
+
+    While the owner's closing of his account stands (#143), nobody opens the profile —
+    every key, and the owner's own reads — and the refusal is `AccountClosing`, on the trail.
+    `while_closing` is for the few that must: the closing's status and his undo, and the
+    delivery engine, which still carries a red flag raised before the closing.
     """
     moment = utcnow()
     profile = await session.get(Profile, profile_id)
@@ -228,6 +235,11 @@ async def resolve_key_context(
     # profile is written into this region's trail, so the line stays with the channel's log.
     guard_region(held_in=profile.region, asked_from=region)
 
+    if not while_closing and await closing_since(session, profile_id=profile.id) is not None:
+        closing = AccountClosing(f"profile {profile.id} is closing")
+        await _record_refused(session, profile=profile, person_id=person_id, refusal=closing)
+        raise closing
+
     if profile.owner_person_id == person_id:
         return KeyContext(
             profile_id=profile.id,
@@ -255,6 +267,38 @@ async def resolve_key_context(
     refused = NoKey(person_id=person_id, profile_id=profile_id)
     await _record_refused(session, profile=profile, person_id=person_id, refusal=refused)
     raise refused
+
+
+class AccountClosing(Refusal):
+    """Its owner closed this account (#143): nobody opens it while his papers wait to be
+    deleted. His undo, and the closing's own status, are the only doors left open to him."""
+
+
+async def only_the_owner_while_closing(session: AsyncSession, context: KeyContext) -> None:
+    """For a route resolved `while_closing` that only the owner may use while it stands: his
+    own record — every agreement, his trail — stays his to read in the window (PDPA access),
+    and every key is refused as it would be at the door, on the trail."""
+    if context.is_owner or await closing_since(session, profile_id=context.profile_id) is None:
+        return
+    profile = await session.get(Profile, context.profile_id)
+    closing = AccountClosing(f"profile {context.profile_id} is closing")
+    if profile is not None:
+        await _record_refused(
+            session, profile=profile, person_id=context.person_id, refusal=closing
+        )
+    raise closing
+
+
+async def closing_since(session: AsyncSession, *, profile_id: uuid.UUID) -> datetime | None:
+    """When the owner closed this account, if that closing stands (not undone); else None."""
+    from app.identity.closure_models import AccountClosure
+
+    found: datetime | None = await session.scalar(
+        select(AccountClosure.requested_at)
+        .where(AccountClosure.profile_id == profile_id, AccountClosure.undone_at.is_(None))
+        .limit(1)
+    )
+    return found
 
 
 def unknown_reach(person_id: uuid.UUID, profile_id: uuid.UUID) -> None:

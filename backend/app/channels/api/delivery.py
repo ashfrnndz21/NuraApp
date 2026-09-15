@@ -25,7 +25,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from pydantic import BaseModel, Field
 
 from app.audit.access import audited_profile_read
-from app.channels.api.deps import Context, Db, SignedIn, current_login, providers_of, settings_of
+from app.channels.api.deps import (
+    ClosingContext,
+    Context,
+    Db,
+    SignedIn,
+    current_login,
+    providers_of,
+    settings_of,
+)
 from app.db import as_utc
 from app.delivery.ladder_words import answered_lines, asked_lines
 from app.delivery.ladder_words import language_of as ladder_language
@@ -37,6 +45,7 @@ from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, Tri
 from app.delivery.triggers.preferences import change, current, log
 from app.delivery.triggers.rules import Config
 from app.delivery.when_words import say_clock
+from app.identity.closing import answerable_while_closing
 from app.medicines.strings import say_date
 from app.regions import REGION_TZ
 from app.settings import Settings
@@ -268,11 +277,13 @@ async def open_ladders(
 @router.post("/profiles/{profile_id}/ladders/{ladder_id}/acknowledge")
 async def acknowledge(
     ladder_id: uuid.UUID,
-    context: Context,
+    context: ClosingContext,
     session: Db,
     language: str | None = Query(default=None, min_length=2, max_length=16),
 ) -> LadderOut:
-    """Someone the flag's ladder reached says they have it; the ladder asks nobody else."""
+    """Someone the flag's ladder reached says they have it; the ladder asks nobody else. While
+    the owner's closing stands, still so for a flag raised before it (#143)."""
+    await answerable_while_closing(session, context=context, ladder_id=ladder_id)
     ladder = await acknowledge_flag(session, context=context, ladder_id=ladder_id)
     assert ladder is not None  # a named ladder that is not theirs is refused, not None
     return LadderOut.of(ladder, answered_lines(language))

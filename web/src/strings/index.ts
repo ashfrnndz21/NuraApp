@@ -44,15 +44,10 @@ export function fill(template: string, slots: Record<string, string | number>): 
 
 /** The plain lines for a refusal, by its class name — one, or two when the second says what
  *  to do next; never the name, never an id. */
-export function refusalLines(refusal: string | undefined, code: Language = language.value, slots?: { contact?: string }): string[] {
+export function refusalLines(refusal: string | undefined, code: Language = language.value): string[] {
   const map = CATALOGUE[code].refusals;
   const found = (refusal && map[refusal]) || map.default;
-  const lines = typeof found === "string" ? [found] : [...found];
-  // A refusal that names where to write (`contact`, from the backend): its first line, then
-  // the one that says where, filled with the backend's address.
-  const writeTo = refusal && slots?.contact ? map[`${refusal}WriteTo`] : undefined;
-  if (typeof writeTo === "string" && lines[0]) return [lines[0], fill(writeTo, { contact: slots!.contact! })];
-  return lines;
+  return typeof found === "string" ? [found] : [...found];
 }
 
 /** The same, as one string: the lines one after the other. */

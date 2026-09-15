@@ -79,7 +79,11 @@ async def test_pa_completes_a_full_day_on_whatsapp_without_opening_the_app(
     assert reminder.outcome is DeliveryOutcome.SENT and reminder.via is DeliveryChannel.WHATSAPP
     assert reminder.template_name == "visit_reminder"
     said = h.sent_to(h.pa)
-    assert any(text.splitlines()[:2] == ["Good morning, Pa, this is Nura.", "Today is Monday 14 September."] for text in said)
+    assert any(
+        text.splitlines()[:2]
+        == ["Good morning, Pa, this is Nura.", "Today is Monday 14 September."]
+        for text in said
+    )
     assert any("Dr Tan" in text and "Tuesday 15 September" in text for text in said)
 
     # 07:40, "Taken": the tablet is written as his tap; later runs do not ask him about it.

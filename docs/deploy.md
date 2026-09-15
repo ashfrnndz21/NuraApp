@@ -100,6 +100,7 @@ the repo, `fly.toml` or `render.yaml`.
 | `NURA_OBJECT_BUCKET_REGION` | no | `auto` (Tigris) | `ap-southeast-1` | The bucket's signing region. |
 | `NURA_OBJECT_ACCESS_KEY_ID` | **yes** | from the bucket | from the bucket | |
 | `NURA_OBJECT_SECRET_ACCESS_KEY` | **yes** | from the bucket | from the bucket | |
+| `NURA_ACCOUNT_RETENTION_DAYS` | no | unset (30) | unset (30) until counsel signs off | How long a closed account's papers wait before deletion, while the owner can still undo (#143, `docs/trust/account-closure.md`). A whole number of days, at least 1. |
 | `NURA_VAPID_PUBLIC_KEY` | no | optional: set all three to give the demo Web Push | required | Web Push (ADR 0001): the P-256 public key, base64url (65 bytes). The home-screen app subscribes with it (`GET /api/deployment`). |
 | `NURA_VAPID_PRIVATE_KEY` | **yes** | with the public key | required | Its private half, base64url (32 bytes). Signs every push (RFC 8292). Never in the repo, never in a log. |
 | `NURA_VAPID_SUBJECT` | no | with the keys | required | Whom a push service may contact about these pushes: `mailto:…` or `https://…`. The three go together, or none; a wrong pair refuses to start. |
@@ -251,3 +252,5 @@ people signing in with two different test numbers see two different accounts.
   - the bucket and the platform are confirmed to keep data in Singapore
   - the platform's request logs are checked: where they are kept and for how long
   - the platform accepts a 48 MiB request, the largest recording of a visit
+
+**Closing an account and object versions (#143).** Erasing a closed account deletes every object under the profile's prefixes. If the region's bucket keeps object versions, those deletes leave the older versions behind. Either keep versioning off for the artefact bucket, or add a lifecycle rule that expires noncurrent versions (30 days, pending counsel: `docs/trust/account-closure.md`).

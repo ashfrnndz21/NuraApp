@@ -52,7 +52,9 @@ async def test_two_proposals_one_dismissed_one_accepted_by_pa(deployment: Deploy
         "Tap Yes to add it to your visits.",
     ]
 
-    dismissed = await client.post(f"{base}/proposals/{dialysis['proposal_id']}/dismiss", headers=hers)
+    dismissed = await client.post(
+        f"{base}/proposals/{dialysis['proposal_id']}/dismiss", headers=hers
+    )
     assert dismissed.status_code == 200 and dismissed.json()["status"] == "dismissed"
 
     minted = await client.post(
@@ -80,5 +82,9 @@ async def test_two_proposals_one_dismissed_one_accepted_by_pa(deployment: Deploy
     assert sorted(p["status"] for p in listed) == ["accepted", "dismissed"]
     trail = (await client.get(f"{base}/audit", headers=his)).json()
     targets = {(row["action"], row["target"]) for row in trail if row["outcome"] == "allowed"}
-    assert {("write", "connector"), ("write", "appointment_proposal"), ("write", "appointment")} <= targets
+    assert {
+        ("write", "connector"),
+        ("write", "appointment_proposal"),
+        ("write", "appointment"),
+    } <= targets
     assert any(row["refused_because"] == "AlreadyDecided" for row in trail)

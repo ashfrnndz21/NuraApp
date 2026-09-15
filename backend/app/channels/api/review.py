@@ -198,9 +198,7 @@ async def one_item(item_id: uuid.UUID, who: Staffed, session: Db) -> ReviewItemO
 
 
 @router.post("/items/{item_id}/approve")
-async def approve(
-    item_id: uuid.UUID, body: ApproveIn, who: Staffed, session: Db
-) -> ReviewItemOut:
+async def approve(item_id: uuid.UUID, body: ApproveIn, who: Staffed, session: Db) -> ReviewItemOut:
     decided = await review.decide(
         session, staff=who, item_id=item_id, verdict=Verdict.APPROVED, reason=body.reason
     )

@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard, audited_read
 from app.audit.models import Action
+from app.db import utcnow
 from app.delivery.feed.engagement import NoSuchItem
-from app.delivery.feed.models import FeedItem
+from app.delivery.feed.models import CardType, DeliverTo, FeedItem, Supply
+from app.delivery.feed.rank import _without_photos_taken_back, audience_of
 from app.delivery.voice import Voice, Voiced, voice_language, voiced
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
@@ -62,3 +64,38 @@ async def spoken_twin(
         language=item.language,
         boundary=item.boundary,
     )
+
+
+def _open_to(item: FeedItem, context: KeyContext) -> bool:
+    """Whether this key's feed would show the card at all, by the feed's own rules: the
+    patient's supply for him — never a memo kept for the doctor, never a card held from him —
+    and the caregiver's list for everyone else, never the gate (`app.delivery.feed.rank`)."""
+    if audience_of(context) is DeliverTo.PATIENT:
+        return item.deliver_to is DeliverTo.PATIENT and item.supply is not Supply.HELD
+    return (
+        item.deliver_to in (DeliverTo.PATIENT, DeliverTo.CAREGIVER)
+        and item.type is not CardType.GATE
+    )
+
+
+async def one_card(session: AsyncSession, *, context: KeyContext, item_id: uuid.UUID) -> FeedItem:
+    """One card by its id: what a push opens (#143). A card outside this key's scope is
+    refused, on the trail; one not on this profile, expired, not one this key's feed shows
+    (its audience), or a photo taken back is `NoSuchItem`."""
+    found = await audited_read(
+        session,
+        FeedItem,
+        context,
+        Scope.PROFILE,
+        where=(FeedItem.id == item_id, FeedItem.expires_at > utcnow()),
+    )
+    if not found:
+        raise NoSuchItem(f"no card {item_id} on this profile")
+    item = found[0]
+    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+        context.require(item.scope)
+    if not _open_to(item, context) or not await _without_photos_taken_back(
+        session, context, [item]
+    ):
+        raise NoSuchItem(f"no card {item_id} on this profile")
+    return item

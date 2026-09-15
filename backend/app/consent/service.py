@@ -125,10 +125,9 @@ class NotTheCurrentWording(Refusal):
     """Opening a record is agreed to in today's words, not in words that have moved on."""
 
 
-class NotStoppedInTheApp(Refusal):
-    """This agreement is not stopped with one tap in the app (`app.consent.withdrawal.APP_STOPS`):
-    keeping his papers and WhatsApp carry the red-flag paths with them, and are stopped with the
-    Nura team."""
+class StopsByClosingTheAccount(Refusal):
+    """Keeping his papers is not stopped with one tap: it is stopped by closing his account
+    (#143), whose confirm step says what stops, and when his papers go (`POST /closure`)."""
 
 
 class NoConsentToWithdraw(Refusal):
@@ -584,6 +583,7 @@ async def withdrawal_of(
     consent_id: uuid.UUID,
     action: Action = Action.READ,
     channel: Channel = Channel.APP,
+    allow_closing: bool = False,
 ) -> Consent:
     """The one agreement on this profile the caller may stop: in force, and his.
 
@@ -591,8 +591,9 @@ async def withdrawal_of(
     word that is being taken back. A chief reads the agreements (the family scope) but is
     refused here (`NotTheirConsentToWithdraw`), and so is the person an agreement lets in —
     the way a chief takes someone out is closing their key. An agreement not on this profile,
-    or already stopped, is `NoConsentToWithdraw`; keeping his papers and WhatsApp are not
-    stopped in the app (`NotStoppedInTheApp`: the red-flag paths rest on them). Every refusal is on his trail, as a read
+    or already stopped, is `NoConsentToWithdraw`. Keeping his papers is stopped by closing
+    his account (`StopsByClosingTheAccount`); with `allow_closing` — the confirm step asking —
+    its row is handed back, for the closing's lines. Every refusal is on his trail, as a read
     (the confirm step asking) or a write (the withdrawal), by name.
     """
     moment = utcnow()
@@ -604,8 +605,13 @@ async def withdrawal_of(
         refusal = NotTheirConsentToWithdraw(f"a {context.role} does not stop an agreement")
     elif not any(row.is_active(moment) for row in rows):
         refusal = NoConsentToWithdraw(f"no agreement {consent_id} in force here")
+    elif rows[0].purpose is ConsentPurpose.HOLD_HEALTH_RECORD:
+        if not allow_closing:
+            refusal = StopsByClosingTheAccount(
+                "keeping his papers is stopped by closing the account"
+            )
     elif rows[0].purpose not in APP_STOPS:
-        refusal = NotStoppedInTheApp(f"{rows[0].purpose} is not stopped in the app")
+        refusal = NoConsentToWithdraw(f"{rows[0].purpose} is not stopped here")
     if refusal is not None:
         if action is Action.READ:
             await _refused_read(session, context, refusal, Scope.FAMILY, channel, moment)
