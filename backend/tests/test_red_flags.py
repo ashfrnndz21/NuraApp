@@ -241,7 +241,9 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     ]
     sent = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).one()
     assert sent.to_person_id == kit.id and sent.outcome is DeliveryOutcome.SENT
-    assert sent.template_name == "red_flag_notice" and sent.rule == "red_flag_raised"
+    # The sandbox number approves every template, so the notice goes in today's words (#160);
+    # a number that does not approve `red_flag_notice_v2` sends the approved one.
+    assert sent.template_name == "red_flag_notice_v2" and sent.rule == "red_flag_raised"
     assert list(await sg.scalars(select(Escalation))) == []
 
     # Nothing was extracted from the words: no fact, no proposal; the message is kept.
