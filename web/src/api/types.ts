@@ -166,6 +166,8 @@ export interface FeedItemOut {
   expires_at: string;
   /** For today's top three (E11-02): alert, reminder or insight. */
   category?: string | null;
+  /** The watch that found this card, when a search made it (F1): what "Pause this watch" pauses. */
+  search_job_id?: string | null;
 }
 
 export interface FeedPageOut {
@@ -1064,10 +1066,9 @@ export interface EventsOut {
   skipped: { client_id: string; because: string }[];
 }
 
-/** One card of "Sent to Pa this week": the card, its status, how many times it was played. */
+/** One card of "Sent to Pa this week": the card and its status. No count of anything. */
 export interface SentOut {
   item: FeedItemOut;
-  plays: number;
 }
 
 export type JobKind = "explainer" | "safety" | "local" | "food" | "provider" | "worth_knowing" | "seasonal";

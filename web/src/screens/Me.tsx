@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { MeSummaryOut } from "../api/types";
+import type { AreaOut, MeSummaryOut } from "../api/types";
 import { go, openTab, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
@@ -9,7 +9,7 @@ import { backendFor, browserEnv, remindersState, turnOff, turnOn, type Reminders
 import { pushKey } from "../store/deployment";
 import { density, densityChosen, me, profile, setDensity, setLanguage, token } from "../store/session";
 import { fill, LANGUAGES, language, t, type Language } from "../strings";
-import { Header, Hear, Pill, TabBar, Tile } from "../ui/components";
+import { Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 
 /** Me: who is signed in, the language, how Nura looks, whose papers, sign out. */
 export function MeScreen(): JSX.Element {
@@ -79,6 +79,7 @@ export function MeScreen(): JSX.Element {
           </Pill>
         )}
       </Tile>
+      <Area />
       <Reminders />
       {wantsHomeScreenHint() && (
         <Tile glass>
@@ -141,6 +142,77 @@ function Reminders(): JSX.Element | null {
           </Pill>
         )
       )}
+    </Tile>
+  );
+}
+
+/** Where he lives (E09-07), coarsely: a town from the region's list, set on his own yes — the
+ *  town is asked back ("Do you live in Air Itam?") before it is kept. Nura uses it only to
+ *  match a dengue or haze bulletin near him, on its own server; it is never sent to a search.
+ *  His own key, or the steward's who holds his papers until he claims them; nobody else sees
+ *  this part. */
+function Area(): JSX.Element | null {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [view, setView] = useState<AreaOut | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const mine = papers?.standing === "owner" || papers?.standing === "steward";
+  useEffect(() => {
+    if (!bearer || !papers || !mine) return setView(null);
+    nura.area(bearer, papers.profile_id).then(setView, () => setView(null));
+  }, [bearer, papers?.profile_id]);
+  if (!bearer || !papers || !view || !view.may_set) return null;
+  const keep = async (value: string | null) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await nura.setArea(bearer, papers.profile_id, value));
+      setAsking(null);
+      setChoosing(false);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Tile paper testId="area">
+      <h2 class="title">{s.me.areaTitle}</h2>
+      <p>{s.me.areaLead}</p>
+      <p data-testid="area-now">{view.area ? fill(s.me.areaIs, { area: view.area }) : s.me.areaNone}</p>
+      {asking ? (
+        <>
+          <p data-testid="area-ask">{fill(s.me.areaAsk, { area: asking })}</p>
+          <Pill plum onClick={() => void keep(asking)} disabled={busy} testId="area-yes">
+            {s.me.areaYes}
+          </Pill>
+          <Pill onClick={() => setAsking(null)} disabled={busy} testId="area-no">
+            {s.me.areaNo}
+          </Pill>
+        </>
+      ) : choosing ? (
+        <div class="choices" role="group" aria-label={s.me.areaChange}>
+          {view.districts.map((district) => (
+            <Pill key={district} onClick={() => setAsking(district)} testId="area-choice">
+              {district}
+            </Pill>
+          ))}
+        </div>
+      ) : (
+        <Pill onClick={() => setChoosing(true)} testId="area-change">
+          {s.me.areaChange}
+        </Pill>
+      )}
+      {view.area && !asking && !choosing && (
+        <Pill quiet onClick={() => void keep(null)} disabled={busy} testId="area-clear">
+          {s.me.areaClear}
+        </Pill>
+      )}
+      <Notice error={error} />
     </Tile>
   );
 }

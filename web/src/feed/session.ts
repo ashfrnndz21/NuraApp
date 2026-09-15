@@ -51,6 +51,7 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
     share: (kind) => nura.shareCard(bearer, profileId, kind),
     canEngage,
     now: () => new Date(),
+    queue: (itemId, kind) => void events.add(itemId, kind).then(() => events.flush()),
   });
   const playback = new Playback({
     fetchVoice: (itemId, language) => nura.feedVoice(bearer, profileId, itemId, language),
