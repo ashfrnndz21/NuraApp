@@ -1,7 +1,7 @@
 """A key holder's own answers at the key-accept step: WhatsApp, and the family's group (#143).
 
-Revision ID: 0027_whatsapp_opt_in
-Revises: 0026_account_closure
+Revision ID: 0028_whatsapp_opt_in
+Revises: 0027_account_closure
 Create Date: 2026-09-15
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0027_whatsapp_opt_in"
-down_revision = "0026_account_closure"
+revision = "0028_whatsapp_opt_in"
+down_revision = "0027_account_closure"
 branch_labels = None
 depends_on = None
 

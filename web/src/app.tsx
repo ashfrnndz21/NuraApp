@@ -3,6 +3,7 @@ import { afterSignIn, go, screen } from "./flow";
 import { AskScreen } from "./screens/Ask";
 import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
+import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
 import { MeScreen } from "./screens/Me";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
@@ -80,5 +81,7 @@ export function App(): JSX.Element | null {
       return <QuestionsScreen appointmentId={current.appointmentId} />;
     case "card":
       return <CardScreen item={current.item} />;
+    case "family":
+      return <FamilyScreen part={current.part ?? "home"} />;
   }
 }

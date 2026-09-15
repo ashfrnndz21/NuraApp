@@ -4,8 +4,8 @@
 it outlives the profile it records, keeping the consent rows as they stood and the one line
 that says the graph was erased (`docs/trust/pdpa-data-map.md` §4).
 
-Revision ID: 0026_account_closure
-Revises: 0025_family_story
+Revision ID: 0027_account_closure
+Revises: 0026_relationship_codes
 Create Date: 2026-09-15
 """
 
@@ -14,8 +14,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0026_account_closure"
-down_revision = "0025_family_story"
+revision = "0027_account_closure"
+down_revision = "0026_relationship_codes"
 branch_labels = None
 depends_on = None
 

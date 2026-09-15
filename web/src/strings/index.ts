@@ -2,9 +2,9 @@ import { signal } from "@preact/signals";
 import { en } from "./en";
 import { ms } from "./ms";
 import { zh } from "./zh";
-import { LANGUAGES, type Language, type Strings } from "./types";
+import { LANGUAGES, RELATIONSHIPS, type Language, type Relationship, type Strings } from "./types";
 
-export { LANGUAGES, type Language, type Strings };
+export { LANGUAGES, RELATIONSHIPS, type Language, type Relationship, type Strings };
 
 const CATALOGUE: Record<Language, Strings> = { en, ms, zh };
 

@@ -44,6 +44,7 @@ from app.consent.models import (
     ConsentPurpose,
 )
 from app.consent.texts import current_version, render_sharing, wording
+from app.consent.withdrawal import APP_STOPS
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.identity.models import Person
@@ -122,6 +123,11 @@ class WordingNotOnFile(Refusal):
 
 class NotTheCurrentWording(Refusal):
     """Opening a record is agreed to in today's words, not in words that have moved on."""
+
+
+class StopsByClosingTheAccount(Refusal):
+    """Keeping his papers is not stopped with one tap: it is stopped by closing his account
+    (#143), whose confirm step says what stops, and when his papers go (`POST /closure`)."""
 
 
 class NoConsentToWithdraw(Refusal):
@@ -568,6 +574,84 @@ async def revoke_consent(
         assert holder_person_id is not None  # `_shape` refused otherwise
         await _close_keys_held_by(session, context, holder_person_id, channel, moment)
     return open_rows
+
+
+async def withdrawal_of(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    consent_id: uuid.UUID,
+    action: Action = Action.READ,
+    channel: Channel = Channel.APP,
+    allow_closing: bool = False,
+) -> Consent:
+    """The one agreement on this profile the caller may stop: in force, and his.
+
+    Stopping an agreement is the owner's alone, whatever it is for: it is his record and his
+    word that is being taken back. A chief reads the agreements (the family scope) but is
+    refused here (`NotTheirConsentToWithdraw`), and so is the person an agreement lets in —
+    the way a chief takes someone out is closing their key. An agreement not on this profile,
+    or already stopped, is `NoConsentToWithdraw`. Keeping his papers is stopped by closing
+    his account (`StopsByClosingTheAccount`); with `allow_closing` — the confirm step asking —
+    its row is handed back, for the closing's lines. Every refusal is on his trail, as a read
+    (the confirm step asking) or a write (the withdrawal), by name.
+    """
+    moment = utcnow()
+    rows = await audited_read(
+        session, Consent, context, Scope.FAMILY, where=(Consent.id == consent_id,), channel=channel
+    )
+    refusal: Refusal | None = None
+    if not context.is_owner:
+        refusal = NotTheirConsentToWithdraw(f"a {context.role} does not stop an agreement")
+    elif not any(row.is_active(moment) for row in rows):
+        refusal = NoConsentToWithdraw(f"no agreement {consent_id} in force here")
+    elif rows[0].purpose is ConsentPurpose.HOLD_HEALTH_RECORD:
+        if not allow_closing:
+            refusal = StopsByClosingTheAccount(
+                "keeping his papers is stopped by closing the account"
+            )
+    elif rows[0].purpose not in APP_STOPS:
+        refusal = NoConsentToWithdraw(f"{rows[0].purpose} is not stopped here")
+    if refusal is not None:
+        if action is Action.READ:
+            await _refused_read(session, context, refusal, Scope.FAMILY, channel, moment)
+        else:
+            await _refused_write(session, context, refusal, channel, moment)
+        raise refusal
+    return rows[0]
+
+
+async def withdraw_consent(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    consent_id: uuid.UUID,
+    captured_via: ConsentChannel,
+) -> tuple[Consent, Sequence[Consent]]:
+    """Stop one agreement by its id, on the owner's word (E00-02 over HTTP).
+
+    Checked by `withdrawal_of`, then withdrawn by `revoke_consent`: every row to the same
+    purpose still in force — for letting someone in, every row naming the same person — is
+    marked with when and by whom, and that person's keys close in the same transaction. The
+    delivery engine resolves every person it would reach at the moment it sends
+    (`app.delivery.triggers.deliver.Run.scopes_of`), so nothing pending reaches a key closed
+    here: a ladder's rung for that person is held as not covered, and the ladder climbs on.
+    The agreement row and its id, and the rows withdrawn with it."""
+    row = await withdrawal_of(
+        session,
+        context=context,
+        consent_id=consent_id,
+        action=Action.WRITE,
+        channel=AUDIT_CHANNEL[captured_via],
+    )
+    withdrawn = await revoke_consent(
+        session,
+        context=context,
+        purpose=row.purpose,
+        captured_via=captured_via,
+        holder_person_id=row.holder_person_id,
+    )
+    return row, withdrawn
 
 
 async def _close_keys_held_by(

@@ -23,7 +23,7 @@
     POST /profiles/{id}/privacy/{scope}/lift    open it again (owner's yes)
     POST /profiles/{id}/pushes/preview          exactly what he will see
     POST /profiles/{id}/pushes                  schedule it (yes); nothing sends here
-    GET  /profiles/{id}/pushes                  what is scheduled
+    GET  /profiles/{id}/pushes                  what is scheduled, and what became of it
     GET  /profiles/{id}/documents               the papers behind a basis, with what they back
     POST /profiles/{id}/documents               upload a PDF or a photo and tag it
 
@@ -84,7 +84,7 @@ from app.family.photos import (
     take_back_photo,
 )
 from app.family.privacy import lift_only_me, mark_only_me, marked
-from app.family.pushes import preview_push, pushes, schedule_push
+from app.family.pushes import preview_push, push_states, pushes, schedule_push
 from app.family.roster import (
     add_slot,
     add_task,
@@ -401,7 +401,11 @@ async def push_schedule(body: PushIn, context: Context, session: Db) -> PushOut:
 
 @router.get("/profiles/{profile_id}/pushes")
 async def push_list(context: Context, session: Db) -> list[PushOut]:
-    return [PushOut.of(push) for push in await pushes(session, context=context)]
+    """What is scheduled, and what became of each: sent, still waiting, or not sent before
+    its end (the delivery log's word, E11)."""
+    found = await pushes(session, context=context)
+    states = await push_states(session, context=context, rows=found)
+    return [PushOut.of(push, states.get(push.id)) for push in found]
 
 
 # --- documents -------------------------------------------------------------------------------

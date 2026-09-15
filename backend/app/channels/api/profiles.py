@@ -17,9 +17,11 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import HTMLResponse
 from pydantic import AwareDatetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_profile_read, person_display_name
+from app.audit.access import audited_profile_read, audited_read, person_display_name
 from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
@@ -68,9 +70,14 @@ from app.channels.api.schemas import (
     SummaryConfirmIn,
     TaskDoneConfirmIn,
     WhatsAppConsentIn,
+    WithdrawalOut,
+    WithdrawIn,
+    WithdrawnOut,
 )
-from app.channels.whatsapp.group import sync_group
-from app.consent.models import ConsentBasis, ConsentPurpose
+from app.channels.printable import PrintableConsentRenderer
+from app.channels.whatsapp.group import group_of, sync_group
+from app.consent.export import export_consent_record
+from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import (
     HolderNeedsAName,
     Sharing,
@@ -79,8 +86,12 @@ from app.consent.service import (
     grant_consent,
     may_invite,
     preview_sharing,
+    withdraw_consent,
+    withdrawal_of,
 )
-from app.db import utcnow
+from app.consent.texts import named_words
+from app.consent.withdrawal import stop_lines, stopped_lines
+from app.db import as_utc, utcnow
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
@@ -94,12 +105,12 @@ from app.identity.doors import (
     require_stewardship,
     set_up_for_someone,
 )
-from app.identity.models import Person
+from app.identity.models import Person, Stewardship
 from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.keys.confirm import confirm
-from app.keys.context import only_the_owner_while_closing, resolve_key_context
+from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
 from app.keys.scopes import Scope
 from app.medicines.service import draft_for
@@ -398,13 +409,17 @@ async def claim(body: ClaimIn, request: Request, context: Context, session: Db) 
 
 
 @router.get("/{profile_id}/stewardship")
-async def stewardship(context: Context, session: Db) -> StewardshipOut:
+async def stewardship(
+    person: CurrentPerson, context: Context, session: Db, language: str | None = Language
+) -> StewardshipOut:
     """Who holds this graph for the patient and on what footing, or held it until he claimed
     it. Read under the profile scope, which every key holds: who holds a graph is part of
     whose graph it is. `NoStewardshipHere` (404) if it was never set up for someone."""
     found = await require_stewardship(session, context=context)
     return StewardshipOut.of(
-        found, await person_display_name(session, context, found.steward_person_id)
+        found,
+        await person_display_name(session, context, found.steward_person_id),
+        language or person.language,
     )
 
 
@@ -494,6 +509,148 @@ async def consents(context: ClosingContext, session: Db) -> list[ConsentOut]:
     (#143) it stays his to read, and nobody else's."""
     await only_the_owner_while_closing(session, context)
     return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
+
+
+@router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
+async def consent_record_page(request: Request, context: Context, session: Db) -> HTMLResponse:
+    """Every agreement ever given on this profile, withdrawn ones included, as one printable
+    page to keep (the PDPA record): the words as they were read, who agreed, for whom, how,
+    when and when it stopped, with no health content. Self-contained like the emergency
+    card's page. The owner's and his chief's; the page leaving is a share on his trail."""
+    record = await export_consent_record(
+        session,
+        context=context,
+        renderer=PrintableConsentRenderer(demo=settings_of(request).demo_mode),
+    )
+    return HTMLResponse(
+        record.rendered.body.decode(),
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+        },
+    )
+
+
+@router.get("/{profile_id}/consents/{consent_id}/withdrawal")
+async def withdrawal(
+    consent_id: uuid.UUID,
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Language,
+) -> WithdrawalOut:
+    """What stopping this agreement will do, in his words, for the confirm step. The owner's
+    alone (`NotTheirConsentToWithdraw`, 403); an agreement already stopped or not on this
+    profile is `NoConsentToWithdraw` (404). Nothing is written but the read on his trail.
+
+    Stopping WhatsApp says exactly what changes (#143): what stops reaching him, that he
+    leaves his family's group, and who is still told when he is unwell — on their own keys.
+    Keeping his papers is stopped by closing his account: its lines are the closing's."""
+    row = await withdrawal_of(session, context=context, consent_id=consent_id, allow_closing=True)
+    words = language or (await audited_profile_read(session, context)).language
+    if row.purpose is ConsentPurpose.HOLD_HEALTH_RECORD:
+        draft = await close_draft_for(
+            session,
+            context=context,
+            language=words,
+            retention_days=settings_of(request).account_retention_days,
+        )
+        return WithdrawalOut(
+            consent_id=row.id, purpose=row.purpose, lines=list(draft.lines), closes_account=True
+        )
+    in_group, still_told = await _what_whatsapp_changes(session, context, row, words)
+    return WithdrawalOut(
+        consent_id=row.id,
+        purpose=row.purpose,
+        lines=stop_lines(
+            row.purpose,
+            name=await _named(session, context, row),
+            language=words,
+            told=_told(row),
+            in_group=in_group,
+            still_told=still_told,
+        ),
+    )
+
+
+@router.post("/{profile_id}/consents/{consent_id}/withdraw")
+async def withdraw(
+    consent_id: uuid.UUID, body: WithdrawIn, request: Request, context: Context, session: Db
+) -> WithdrawnOut:
+    """The owner stops one agreement. For letting someone in, that person's keys close in
+    the same transaction, and nothing still waiting to be sent reaches them; for WhatsApp, he
+    is out of his family's group. Either way the group is set again now, not at its next use
+    (#143). The rows stay, marked with when and by whom; the printable record says so.
+    Keeping his papers is refused here (`StopsByClosingTheAccount`, 409): that is `/closure`."""
+    words = body.language or (await audited_profile_read(session, context)).language
+    preview = await withdrawal_of(session, context=context, consent_id=consent_id)
+    in_group, still_told = await _what_whatsapp_changes(session, context, preview, words)
+    row, withdrawn = await withdraw_consent(
+        session, context=context, consent_id=consent_id, captured_via=ConsentChannel.APP
+    )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return WithdrawnOut(
+        consent_id=row.id,
+        purpose=row.purpose,
+        withdrawn=[ConsentOut.of(each) for each in withdrawn],
+        lines=stopped_lines(
+            row.purpose,
+            name=await _named(session, context, row),
+            language=words,
+            told=_told(row),
+            in_group=in_group,
+            still_told=still_told,
+        ),
+    )
+
+
+async def _what_whatsapp_changes(
+    session: AsyncSession, context: KeyContext, row: Consent, language: str
+) -> tuple[bool, list[str]]:
+    """For stopping WhatsApp: whether he is in his family's group there, and everyone a red
+    flag still reaches — each live key holding the emergency card, named as the words name
+    them, with who they are to him when a stewardship says (the relationship code, in his
+    language). Nothing for any other agreement."""
+    if row.purpose is not ConsentPurpose.WHATSAPP:
+        return False, []
+    in_group = await group_of(session, context=context) is not None
+    moment = utcnow()
+    said = {
+        each.steward_person_id: each.relationship
+        for each in sorted(
+            await audited_read(session, Stewardship, context, Scope.FAMILY),
+            key=lambda one: as_utc(one.opened_at),
+        )
+    }
+    named: list[str] = []
+    seen: set[uuid.UUID] = set()
+    for key in sorted(
+        await list_keys(session, context=context), key=lambda k: as_utc(k.granted_at)
+    ):
+        if key.holder_person_id in seen or not key.is_active(moment):
+            continue
+        if Scope.EMERGENCY not in key.scopes_held:
+            continue
+        seen.add(key.holder_person_id)
+        name = await person_display_name(session, context, key.holder_person_id)
+        named.append(named_words(name, said.get(key.holder_person_id), language))
+    return in_group, named
+
+
+def _told(row: Consent) -> bool:
+    """Whether the person this agreement lets in is one a red flag reaches: the emergency card
+    is among the parts it names."""
+    if row.purpose is not ConsentPurpose.SHARE_WITH_PERSON:
+        return False
+    return row.scopes is None or Scope.EMERGENCY.value in row.scopes
+
+
+async def _named(session: AsyncSession, context: KeyContext, row: Consent) -> str:
+    """The person an agreement lets in, by name; nobody for a profile-wide one."""
+    if row.holder_person_id is None:
+        return ""
+    return await person_display_name(session, context, row.holder_person_id)
 
 
 @router.post("/{profile_id}/consents/sharing", status_code=status.HTTP_201_CREATED)

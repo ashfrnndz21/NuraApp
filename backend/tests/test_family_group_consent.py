@@ -176,7 +176,7 @@ async def test_a_yes_on_a_closed_key_does_not_let_her_back_in(
     )
     everything = frozenset(Scope) - {Scope.PROFILE}
     await ws.agree_to_family_sharing(
-        sg, home.owner, home.mei, scopes=everything, relationship="your daughter"
+        sg, home.owner, home.mei, scopes=everything, relationship="daughter"
     )
     await ws.grant_key(
         sg, context=home.owner, holder=home.mei, role=KeyRole.CHIEF, scopes=everything
@@ -266,6 +266,7 @@ CHANGES_WHO_IS_IN = {
     "lift_only_me",
     "narrow_key",
     "claim_profile",
+    "withdraw_consent",
 }
 
 

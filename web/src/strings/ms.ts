@@ -15,6 +15,8 @@ export const ms = {
     today: "Hari Ini",
     // @patient headline
     me: "Saya",
+    // @patient headline
+    family: "Keluarga",
   },
   signIn: {
     // @patient headline
@@ -112,7 +114,22 @@ export const ms = {
     // @patient phrase
     theirPhone: "Nombor telefon mereka",
     // @patient phrase
-    relationshipLabel: "Siapa mereka kepada anda",
+    relationshipLabel: "Siapa anda kepada mereka",
+    // @patient phrase
+    relationships: {
+      daughter: "Anak perempuan mereka",
+      son: "Anak lelaki mereka",
+      spouse: "Suami atau isteri mereka",
+      sibling: "Adik-beradik mereka",
+      grandchild: "Cucu mereka",
+      other_family: "Ahli keluarga mereka yang lain",
+      helper: "Pembantu mereka",
+      friend: "Kawan mereka",
+      neighbour: "Jiran mereka",
+      other: "Orang lain",
+    },
+    // @patient phrase
+    pickContact: "Pilih daripada kenalan saya",
     // @patient
     asked: "Mereka minta anda buat ini.",
     // @patient phrase
@@ -754,6 +771,19 @@ export const ms = {
       phoneLabel: "Nombor telefon mereka",
       // @patient phrase
       relationshipLabel: "Siapa mereka kepada anda",
+      // @patient phrase
+      relationships: {
+        daughter: "Anak perempuan anda",
+        son: "Anak lelaki anda",
+        spouse: "Suami atau isteri anda",
+        sibling: "Adik-beradik anda",
+        grandchild: "Cucu anda",
+        other_family: "Ahli keluarga anda yang lain",
+        helper: "Pembantu anda",
+        friend: "Kawan anda",
+        neighbour: "Jiran anda",
+        other: "Orang lain",
+      },
       // @patient
       partsLead: "Tekan setiap bahagian yang boleh mereka lihat.",
       // @patient phrase
@@ -833,6 +863,337 @@ export const ms = {
         prescriber: "Doktor mana yang menulisnya",
       },
     },
+  },
+  family: {
+    // @patient headline
+    title: "Keluarga",
+    // @patient headline
+    circleSelf: "Siapa boleh melihat surat-surat anda",
+    // @patient headline
+    circleOther: "Siapa boleh melihat surat-surat {name}",
+    // @patient headline
+    trailSelf: "Siapa melihat surat-surat anda",
+    // @patient headline
+    trailOther: "Siapa melihat surat-surat {name}",
+    // @patient headline
+    onlyMe: "Simpan satu bahagian untuk diri sendiri",
+    // @patient
+    onlyMeLead: "Tekan satu bahagian untuk menyimpannya untuk diri sendiri.",
+    // @patient phrase
+    onlyMeYes: "Ya, hanya saya",
+    // @patient phrase
+    onlyMeLift: "Benarkan mereka melihatnya semula",
+    // @patient phrase
+    onlyMeMarked: "Hanya anda",
+    // @patient headline
+    consentsSelf: "Apa yang anda setuju",
+    // @patient headline
+    consentsOther: "Apa yang {name} setuju",
+    // @patient phrase
+    stop: "Hentikan ini",
+    // @patient phrase
+    stopYes: "Ya, hentikan",
+    // @patient phrase
+    closeAccount: "Tutup akaun saya",
+    closeAccountYes: "Ya, tutup akaun saya",
+    // @patient phrase
+    keepCopy: "Simpan salinan untuk dicetak",
+    // @patient phrase
+    savePage: "Simpan halaman ini",
+    // @patient headline
+    thread: "Mesej keluarga",
+    // @patient phrase
+    threadEarlier: "Tunjuk hari sebelumnya",
+    // @patient phrase
+    messageLabel: "Mesej anda kepada keluarga",
+    // @patient phrase
+    sendMessage: "Hantar kepada keluarga",
+    // @patient headline
+    keys: "Ubah siapa boleh melihat apa",
+    // @patient headline
+    newKey: "Beri seseorang kunci",
+    // @patient phrase
+    holderName: "Nama mereka",
+    // @patient phrase
+    holderPhone: "Nombor telefon mereka",
+    // @patient phrase
+    roleLabel: "Siapa mereka",
+    // @patient phrase
+    partsLabel: "Apa yang boleh mereka lihat",
+    // @patient phrase
+    windowLabel: "Untuk berapa lama",
+    // @patient phrase
+    makeKey: "Buat kunci",
+    // @patient phrase
+    narrow: "Kecilkan",
+    // @patient phrase
+    narrowYes: "Ya, kecilkan",
+    // @patient phrase
+    closeKey: "Tutup kunci ini",
+    // @patient phrase
+    closeYes: "Ya, tutup sekarang",
+    // @patient phrase
+    notNow: "Bukan sekarang",
+    // @patient phrase
+    roles: {
+      chief: "Menjaga semuanya",
+      caregiver: "Penjaga",
+      viewer: "Hanya melihat",
+      helper: "Pembantu",
+      emergency: "Kecemasan sahaja",
+      clinic: "Klinik",
+    },
+    // @patient phrase
+    windows: {
+      always: "Sehingga dihentikan",
+      thirty_days: "30 hari",
+      seventy_two_hours: "3 hari",
+      one_day: "1 hari",
+    },
+    // @patient phrase
+    parts: {
+      medicines: "Ubat",
+      visits: "Lawatan ke doktor",
+      readings: "Buku tekanan darah dan nombor gula",
+      records: "Surat-surat",
+      notes: "Nota peribadi",
+      money: "Surat insurans",
+      emergency: "Kad kecemasan",
+      family: "Senarai keluarga",
+      ask: "Soalan kepada Nura",
+      send: "Mesej yang Nura hantar",
+    },
+    // @patient headline
+    roster: "Siapa bertugas, dan tugasan",
+    // @patient headline
+    rosterTitle: "Siapa bertugas",
+    // @patient phrase
+    who: "Siapa",
+    // @patient phrase
+    days: "Hari",
+    // @patient phrase
+    from: "Dari",
+    // @patient phrase
+    to: "Hingga",
+    // @patient phrase
+    onDutyNow: "Bertugas sekarang",
+    // @patient phrase
+    takeOff: "Keluarkan dari senarai",
+    // @patient phrase
+    addSlot: "Letak bertugas",
+    // @patient headline
+    tasksTitle: "Tugasan",
+    // @patient phrase
+    taskWhat: "Apa yang perlu dibuat",
+    // @patient phrase
+    taskDue: "Sebelum bila",
+    // @patient phrase
+    addTask: "Beri tugasan",
+    // @patient phrase
+    done: "Sudah siap",
+    // @patient phrase
+    doneChip: "Siap",
+    // @patient phrase
+    nextVisit: "Lihat lawatan seterusnya dan siapa memandu",
+    // @patient headline
+    messagesTitle: "Mesej untuk {name}",
+    // @patient phrase
+    templates: {
+      pickup: "Masa ambil",
+      call_you: "Masa untuk telefon",
+      see_doctor: "Satu lawatan ke doktor",
+      thinking_of_you: "Teringatkan anda",
+      weigh_tomorrow: "Naik penimbang esok",
+      drink_water: "Minum segelas air",
+      water_pill_morning: "Pil air pada pukul 8",
+    },
+    // @patient phrase
+    ownWords: "Kata-kata saya sendiri",
+    // @patient phrase
+    slots: {
+      who: "Siapa",
+      when: "Bila",
+      doctor: "Doktor mana",
+      day: "Hari apa",
+    },
+    // @patient phrase
+    memoLabel: "Satu baris setiap satu",
+    // @patient phrase
+    languageLabel: "Dalam bahasa apa",
+    // @patient phrase
+    preview: "Lihat rupanya nanti",
+    // @patient phrase
+    sendAt: "Hantar dari",
+    // @patient phrase
+    until: "Hingga",
+    // @patient phrase
+    channelApp: "Dalam aplikasi",
+    // @patient phrase
+    channelWhatsapp: "Di WhatsApp",
+    // @patient phrase
+    schedule: "Jadualkan",
+    // @patient phrase
+    states: {
+      scheduled: "Menunggu dihantar",
+      sent: "Sudah dihantar",
+      not_sent: "Tidak dihantar pada masanya",
+    },
+    // @patient headline
+    metrics: "Minggu ini dalam nombor",
+    // @patient phrase
+    weekOf: "Minggu {date}",
+    // @patient phrase
+    taps: "Kali ditekan",
+    // @patient phrase
+    fineToday: "Sihat hari ini",
+    // @patient phrase
+    fineShare: "Sihat hari ini, daripada 100",
+    // @patient phrase
+    kind: "Jenis",
+    // @patient phrase
+    handedOver: "Diberi",
+    // @patient phrase
+    accepted: "Diterima",
+    // @patient phrase
+    dismissed: "Diketepikan",
+    // @patient phrase
+    kinds: {
+      anticipation: "Bersedia",
+      check_in: "Bertanya khabar",
+      pattern: "Satu corak",
+      commitment: "Satu janji",
+      recognition: "Syabas",
+      presence: "Teringatkan anda",
+    },
+    // @patient headline
+    calendar: "Lawatan daripada kalendar",
+    // @patient phrase
+    chooseFile: "Pilih dokumen kalendar",
+    // @patient phrase
+    agree: "Saya setuju",
+    // @patient phrase
+    bookYes: "Ya, tempah lawatan ini",
+    // @patient phrase
+    notThis: "Bukan yang ini",
+    // @patient phrase
+    ladderYes: "Saya uruskan",
+    // @patient headline
+    deliveries: "Apa yang Nura hantar",
+    // @patient headline
+    settings: "Bila dan bagaimana Nura hantar",
+    // @patient phrase
+    triggers: {
+      morning: "Kad pagi",
+      dose: "Peringatan ubat",
+      reorder: "Masa beli lagi",
+      doses_untapped: "Ubat belum ditekan",
+      flag: "Tidak sihat",
+      visit_tomorrow: "Lawatan esok",
+      papers: "Surat menunggu",
+      family_message: "Mesej daripada keluarga",
+      first_week_prompt: "Minggu pertama",
+      nudge: "Peringatan kecil",
+    },
+    // @patient phrase
+    channels: {
+      app_push: "Aplikasi",
+      whatsapp: "WhatsApp",
+      caregiver: "Melalui penjaga",
+    },
+    // @patient phrase
+    outcomes: {
+      sent: "Sudah dihantar",
+      capped: "Ditahan: cukup untuk hari ini",
+      quiet: "Ditahan: waktu senyap",
+      no_channel: "Tiada cara untuk sampai kepada mereka",
+      no_scope: "Kunci mereka tidak meliputinya",
+      skipped: "Dilangkau pada hari yang tenang",
+    },
+    // @patient phrase
+    rule: "Peraturan",
+    // @patient phrase
+    quietFrom: "Senyap dari",
+    // @patient phrase
+    quietUntil: "Senyap hingga",
+    // @patient phrase
+    skipQuietDays: "Pada hari yang tenang, langkau kad pagi",
+    // @patient phrase
+    cap: "Berapa kali sehari",
+    // @patient phrase
+    saveSettings: "Simpan tetapan ini",
+    // @patient phrase
+    neverHeld: "Tidak pernah ditahan",
+    // @patient headline
+    documents: "Surat untuk senarai keluarga",
+    // @patient phrase
+    tags: {
+      lpa: "Surat kuasa wakil berkekalan",
+      medical_letter: "Surat doktor",
+      consent_form: "Borang persetujuan",
+    },
+    // @patient phrase
+    backs: {
+      consent: "Menyokong satu persetujuan",
+      stewardship: "Menyokong penjagaan surat-surat",
+    },
+    // @patient phrase
+    stillOn: "Masih berjalan",
+    // @patient phrase
+    stoppedChip: "Sudah dihentikan",
+    // @patient phrase
+    addDocument: "Tambah surat",
+    // @patient phrase
+    chooseDocument: "Pilih dokumen atau foto",
+    // @patient phrase
+    whatPaper: "Jenis surat apa",
+  },
+  review: {
+    // @patient headline
+    title: "Senarai ahli farmasi",
+    // @patient phrase
+    tokenLabel: "Token kakitangan",
+    // @patient phrase
+    open: "Buka senarai",
+    // @patient headline
+    statusTitle: "50 yang pertama setiap kad",
+    // @patient phrase
+    cardType: "Kad",
+    // @patient phrase
+    sampled: "Disimpan",
+    // @patient phrase
+    pending: "Menunggu",
+    // @patient phrase
+    stillToCheck: "Masih perlu disemak",
+    // @patient phrase
+    sourcesWaiting: "Sumber menunggu: {count}",
+    // @patient headline
+    queueTitle: "Menunggu keputusan",
+    // @patient phrase
+    showPending: "Yang menunggu sahaja",
+    // @patient phrase
+    showAll: "Semua",
+    // @patient phrase
+    approve: "Luluskan",
+    // @patient phrase
+    reject: "Tolak",
+    // @patient phrase
+    reasonLabel: "Mengapa",
+    // @patient phrase
+    rewrite: "Tulis semula baris",
+    // @patient phrase
+    headline: "Tajuk",
+    // @patient phrase
+    body: "Baris",
+    // @patient phrase
+    voice: "Baris yang dibaca",
+    // @patient phrase
+    why: "Mengapa kad ini",
+    // @patient phrase
+    saveRewrite: "Simpan sebagai cadangan",
+    // @patient phrase
+    decided: "Sudah diputuskan",
+    // @patient phrase
+    leave: "Tutup senarai",
   },
   errors: {
     // @patient
@@ -915,5 +1276,42 @@ export const ms = {
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
+    WouldWiden: ["Nura tidak boleh meluaskan ini.", "Pemilik perlu setuju dengan lebih dahulu."],
+    NothingToNarrow: "Itu tidak akan mengubah apa-apa.",
+    NotTheDoer: "Hanya orang yang diberi tugas boleh kata ia sudah siap.",
+    AlreadyDone: "Ini sudah siap.",
+    NotTheOwner: "Hanya pemilik boleh buat ini.",
+    AlreadyMarked: "Bahagian ini sudah disimpan untuk pemilik.",
+    NotMarked: "Bahagian ini sudah dibuka.",
+    NotAPartToMark: "Kad kecemasan sentiasa dibuka untuk keluarga.",
+    NotOwnerOrChief: ["Hanya pemilik boleh melihat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
+    NotStaff: "Hanya ahli farmasi Nura boleh membuka ini.",
+    NoSuchSlot: "Giliran itu sudah tiada dalam senarai.",
+    NoSuchTask: "Tugasan itu sudah tiada di sini.",
+    NotADuty: "Sila pilih hari dan masanya.",
+    NotOnThisProfile: "Orang itu tidak boleh melihat surat-surat ini.",
+    NoSuchTemplate: "Nura tidak ada mesej itu.",
+    MissingSlot: "Sila isi setiap bahagian mesej.",
+    NotAMemo: "Sila tulis 1 hingga 6 baris pendek.",
+    BadWindow: "Sila pilih masa yang belum berlalu.",
+    NotPlainWords: "Sila guna perkataan yang lebih mudah.",
+    NotAMessage: "Sila tulis mesej yang pendek.",
+    NotTheirsToConnect: ["Hanya pemilik boleh menambah kalendar.", "Orang yang menjaga surat-surat ini juga boleh."],
+    NotTheirsToDecide: "Anda boleh lihat lawatan ini tetapi tidak boleh memutuskannya.",
+    AlreadyDecided: "Seseorang sudah menjawab yang ini.",
+    NoSuchConnector: "Sila tambah dokumen kalendar sekali lagi.",
+    NoSuchProposal: "Lawatan itu sudah tiada di sini.",
+    NotACalendar: "Nura tidak dapat membaca dokumen kalendar itu.",
+    ConsentRevoked: "Pemilik sudah hentikan ini.",
+    ConsentOutOfDate: "Pemilik perlu setuju dengan kata-kata baharu dahulu.",
+    AlreadyReviewed: "Seseorang sudah memutuskan yang ini.",
+    NoSuchReviewItem: "Perkara itu sudah tiada dalam senarai.",
+    NotWellFormed: "Nura tidak faham itu.",
+    AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
+    NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
+    NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
+    StopsByClosingTheAccount: "Untuk hentikan Nura menyimpan surat-surat anda, tutup akaun anda.",
+    DocumentTooLarge: "Dokumen itu terlalu besar untuk Nura.",
+    CalendarTooLarge: "Dokumen kalendar itu terlalu besar untuk Nura.",
   },
 } satisfies Strings;

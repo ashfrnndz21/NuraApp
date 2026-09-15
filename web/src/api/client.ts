@@ -170,6 +170,33 @@ async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<
   return response.blob();
 }
 
+/** The same queue, for a page of text: a printable page the backend renders (the consent
+ *  record). The text on success; a refusal as `Refused`, the way `apiBlob` says it. */
+export function apiText(path: string, call: Call = {}): Promise<string> {
+  return enqueue(async (signal) => {
+    const headers: Record<string, string> = { Accept: "text/html" };
+    if (call.token) headers.Authorization = `Bearer ${call.token}`;
+    let response: Response;
+    try {
+      response = await fetchWithin(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit" }, signal);
+    } catch {
+      throw new Unreachable();
+    }
+    const text = await response.text();
+    if (!response.ok) {
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        /* not JSON: not a refusal */
+      }
+      if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+      throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
+    }
+    return text;
+  }, call.urgent);
+}
+
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
   return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent);

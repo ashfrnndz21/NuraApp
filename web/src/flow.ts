@@ -38,7 +38,34 @@ export type Screen =
   | { name: "feeling"; tap: FeelingOut }
   | { name: "symptoms" }
   | { name: "brief"; appointmentId: string }
-  | { name: "questions"; appointmentId: string };
+  | { name: "questions"; appointmentId: string }
+  /** Family (E12, E00-02, E00-07, E17-05, E18-02): his circle and his trail first, then the
+   *  parts the backend lets each person reach. */
+  | { name: "family"; part?: FamilyPart };
+
+/** One part of Family at a time. */
+export type FamilyPart =
+  | "home"
+  | "keys"
+  | "trail"
+  | "onlyMe"
+  | "consents"
+  | "record"
+  | "thread"
+  | "roster"
+  | "messages"
+  | "metrics"
+  | "calendar"
+  | "deliveries"
+  | "settings"
+  | "documents";
+
+export type Tab = "today" | "family" | "me";
+
+/** The tab bar's three places. */
+export function openTab(tab: Tab): void {
+  go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
+}
 
 export const screen = signal<Screen>({ name: "loading" });
 

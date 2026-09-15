@@ -24,6 +24,7 @@ from app.consent.service import (
     NoConsentToWithdraw,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
+    StopsByClosingTheAccount,
 )
 from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
@@ -148,6 +149,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # Keeping his papers and WhatsApp carry the red-flag paths: not one tap in the app.
+    (StopsByClosingTheAccount, 409),
     # The engine's sources and jobs are the owner's and his chief's to see (E21).
     (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
