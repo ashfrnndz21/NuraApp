@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { CardClipOut, FeedItemOut, LineOut } from "../api/types";
+import type { CardClipOut, FeedItemOut, LineOut, OrderPreviewOut } from "../api/types";
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
@@ -40,6 +40,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   // card cites.
   const [lines, setLines] = useState<LineOut[] | null>(null);
   const [asked, setAsked] = useState<Record<string, string[]>>({});
+  // What he reads before his yes, by card: who Nura will ask, for which medicine.
+  const [previews, setPreviews] = useState<Record<string, OrderPreviewOut>>({});
   const [reorderError, setReorderError] = useState<unknown>(null);
   const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");
   useEffect(() => {
@@ -54,19 +56,41 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
     const actions = line ? reorderActions(line) : null;
     return line && actions ? { lineId: line.line_id, ...actions } : null;
   };
-  /** "Ask the family to order.": the tap is the yes; the backend's lines say who does it. */
+  /** "Ask the family to order.": first the preview — who Nura will ask, and for what. If the
+   *  family was already asked today, the backend's line says so and there is nothing to add. */
   const askToOrder = async (item: FeedItemOut, lineId: string) => {
     const bearer = token.value;
     const papers = profile.value;
     if (!bearer || !papers) return;
     setReorderError(null);
     try {
-      const done = await nura.askToOrder(bearer, papers.profile_id, lineId, language.value);
-      setAsked({ ...asked, [item.item_id]: done.lines });
+      const shown = await nura.orderPreview(bearer, papers.profile_id, lineId, language.value);
       store.record(item, "tapped");
+      if (shown.already_asked) setAsked({ ...asked, [item.item_id]: shown.lines });
+      else setPreviews({ ...previews, [item.item_id]: shown });
     } catch (failure) {
       setReorderError(failure);
     }
+  };
+  /** His yes, for exactly the person and the line the preview named. */
+  const orderYes = async (item: FeedItemOut, shown: OrderPreviewOut) => {
+    const bearer = token.value;
+    const papers = profile.value;
+    if (!bearer || !papers) return;
+    setReorderError(null);
+    try {
+      const minted = await nura.mintOrder(bearer, papers.profile_id, shown.line_id, shown.asked_person_id);
+      const done = await nura.askToOrder(bearer, papers.profile_id, shown.line_id, minted.confirmation_id, language.value);
+      setAsked({ ...asked, [item.item_id]: done.lines });
+      const { [item.item_id]: _, ...rest } = previews;
+      setPreviews(rest);
+    } catch (failure) {
+      setReorderError(failure);
+    }
+  };
+  const orderNo = (item: FeedItemOut) => {
+    const { [item.item_id]: _, ...rest } = previews;
+    setPreviews(rest);
   };
   // "Hear what Dr Tan said" under a line said at a recorded visit (E21-03): on a tap only.
   const clipPlayer = useMemo(
@@ -224,7 +248,10 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               onKeepGoing={() => goTo(index + 1)}
               reorder={reorderFor(entry.item)}
               said={asked[entry.item.item_id] ?? null}
+              preview={previews[entry.item.item_id] ?? null}
               onAskToOrder={(lineId) => void askToOrder(entry.item, lineId)}
+              onOrderYes={(shown) => void orderYes(entry.item, shown)}
+              onOrderNo={() => orderNo(entry.item)}
             />
           ))}
           {store.quiet.value && store.ended.value && (
@@ -278,7 +305,11 @@ interface FeedCardProps {
   reorder: Reorder | null;
   /** What "Ask the family to order." did, in the backend's lines. */
   said: string[] | null;
+  /** Before his yes: who Nura will ask, for which medicine, in the backend's lines. */
+  preview: OrderPreviewOut | null;
   onAskToOrder: (lineId: string) => void;
+  onOrderYes: (shown: OrderPreviewOut) => void;
+  onOrderNo: () => void;
 }
 
 /** One card: the section it came from, the backend's headline and lines, its boundary, its
@@ -288,7 +319,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, reorder, said, onAskToOrder }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, reorder, said, preview, onAskToOrder, onOrderYes, onOrderNo }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -364,6 +395,13 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             ))}
           </div>
         )}
+        {preview && (
+          <div class="feed-note" role="group" data-testid="order-preview">
+            {preview.lines.map((line, at) => (
+              <p key={at}>{line}</p>
+            ))}
+          </div>
+        )}
         {note && (
           <div class="feed-note" role="status" data-testid="note">
             {note === "declined" && (
@@ -383,7 +421,17 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             {s.feed.keepGoing}
           </button>
         )}
-        {!declined && reorder && (
+        {!declined && preview && (
+          <>
+            <button type="button" class="pill plum" onClick={() => onOrderYes(preview)} data-testid="order-yes">
+              {s.record.orderYes}
+            </button>
+            <button type="button" class="pill" onClick={onOrderNo} data-testid="order-no">
+              {s.record.orderNo}
+            </button>
+          </>
+        )}
+        {!declined && reorder && !preview && (
           <>
             <button type="button" class="pill plum" onClick={() => onAskToOrder(reorder.lineId)} disabled={said !== null} data-testid="ask-to-order">
               {reorder.askToOrder}

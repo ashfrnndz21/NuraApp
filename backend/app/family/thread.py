@@ -257,7 +257,9 @@ async def digest(
         elif entry.card_kind is CardKind.VISIT:
             lines = [templates["visit"].format(name=profile.display_name, day=day)]
         else:
-            lines = await _task_lines(session, context, entry, names, templates, words, zone)
+            lines = await _task_lines(
+                session, context, entry, names, templates, words, zone, profile.display_name
+            )
         assert entry.card_kind is not None  # `is_card` said so
         entries.append(
             DigestEntry(kind=entry.card_kind.value, at=at, lines=lines, message_id=entry.id)
@@ -306,7 +308,12 @@ async def _task_lines(
     templates: Mapping[str, str],
     words: str,
     zone: Any,
+    patient: str,
 ) -> list[str]:
+    """The task card's line. A task's own words go into it, except an order task's (E04-05):
+    its label names his medicine as its box does ("order more amlodipine 5 mg for Pa"), for
+    the one who buys it, and he reads this digest too — so an order task is said in the
+    digest's own words, which name no medicine ("Kit will order more medicine for Pa.")."""
     if entry.task_id is None:
         return []
     found = await audited_read(
@@ -318,7 +325,12 @@ async def _task_lines(
     doer = names.get(task.assigned_person_id)
     if doer is None:
         doer = (await _names(session, context, {task.assigned_person_id}))[task.assigned_person_id]
+    order = task.medication_line_id is not None
     if task.done_at is not None:
         day = say_date(as_utc(task.done_at).astimezone(zone).date(), words)
+        if order:
+            return [templates["order_done"].format(who=doer, name=patient, day=day)]
         return [templates["task_done"].format(who=doer, day=day, what=task.what)]
+    if order:
+        return [templates["order_open"].format(who=doer, name=patient)]
     return [templates["task_open"].format(who=doer, what=task.what)]

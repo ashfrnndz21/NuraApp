@@ -994,7 +994,19 @@ export interface ReconciledOut {
   high_risk: boolean;
 }
 
-/** What "Ask the family to order." did (E04-05). */
+/** What he reads before his yes to "Ask the family to order." (E04-05): the one person the
+ *  task will name, in his words. `already_asked` when the family was asked for this line
+ *  today and the task is still open: the one line says so, and a yes answers with that task. */
+export interface OrderPreviewOut {
+  line_id: string;
+  asked_person_id: string;
+  already_asked: boolean;
+  task_id: string | null;
+  language: string;
+  lines: string[];
+}
+
+/** What "Ask the family to order." did (E04-05), on his yes. */
 export interface AskedOut {
   line_id: string;
   task_id: string;
@@ -1002,6 +1014,7 @@ export interface AskedOut {
   told_person_ids: string[];
   language: string;
   lines: string[];
+  already_asked: boolean;
 }
 
 /** What "I have more at home." wrote, and the count now (E04-05). */
@@ -1010,6 +1023,8 @@ export interface MoreOut {
   supply_id: string;
   fact_id: string;
   event_id: string;
+  /** The photo of the box or the label the count rests on; a high-risk medicine's needs one. */
+  artifact_id: string | null;
   quantity: number;
   count: CountOut | null;
 }

@@ -15,8 +15,10 @@ import {
   outcomeLine,
   papersToPut,
   providerLines,
+  pointRangeLine,
   rangeLine,
   rangeSourceLine,
+  clockLine,
   reorderActions,
   severityLine,
   tidyLabel,
@@ -226,12 +228,34 @@ describe("a lab trend", () => {
   const range = { lower: null, upper: 200, unit: "mg/dL", source: "guideline", source_id: "ncep-atp3-2001", lab: null };
 
   it("places each result against its range, in whole lines, and says whose range it is", () => {
-    expect(rangeLine(range, en)).toBe("The range is under 200 mg/dL.");
-    expect(rangeLine({ ...range, lower: 1.0, upper: 1.5 }, en)).toBe("The range is 1 to 1.5 mg/dL.");
-    expect(rangeLine(null, en)).toBe("Nura has no range for this one.");
-    expect(rangeSourceLine(range, en)).toBe("This range is from a guide for your age.");
-    expect(rangeSourceLine({ ...range, source: "lab", source_id: "lab:bukit_lab" }, en)).toBe("This range is printed on your blood test.");
+    // His density: no unit he does not use (plain words, rule 12).
+    expect(rangeLine(range, en)).toBe("For most people this number is under 200.");
+    expect(rangeLine({ ...range, lower: 1.0, upper: 1.5 }, en)).toBe("For most people this number is 1 to 1.5.");
+    // Hers: the unit stays with the number.
+    expect(rangeLine(range, en, true)).toBe("For most people this number is under 200 mg/dL.");
+    expect(rangeLine({ ...range, lower: 1.0, upper: 1.5 }, en, true)).toBe("For most people this number is 1 to 1.5 mg/dL.");
+    expect(rangeLine(null, en)).toBe("Nura has no usual number for this one.");
+    expect(rangeSourceLine(range, en)).toBe("The usual number comes from a guide for your age.");
+    expect(rangeSourceLine({ ...range, source: "lab", source_id: "lab:bukit_lab" }, en)).toBe("The usual number is printed on your blood test.");
+    // The backend's `source` decides; nothing is read into the id.
+    expect(rangeSourceLine({ ...range, source: "guideline", source_id: "lab:bukit_lab" }, en)).toBe("The usual number comes from a guide for your age.");
     expect(numberText(5.2)).toBe("5.2");
+  });
+
+  it("says a time of his day the way every time in the app is said (timeLine), never a bare code", () => {
+    expect(clockLine("07:00", "en-SG")).toMatch(/^7:00\sam$/);
+    expect(clockLine("19:30", "en-SG")).toMatch(/^7:30\spm$/);
+    expect(clockLine("19:30", "ms-MY")).toBe("19:30");
+    expect(clockLine("", "en-SG")).toBe("");
+  });
+
+  it("says why a result has no usual number beside it, when the backend says", () => {
+    expect(pointRangeLine({ range: null, no_range_because: "needs_age" }, en)).toBe("Nura needs your age to find the usual number.");
+    expect(pointRangeLine({ range: null, no_range_because: "needs_sex" }, en)).toBe("Nura needs to know if you are a man or a woman.");
+    expect(pointRangeLine({ range: null, no_range_because: "none_on_file" }, en)).toBe("Nura has no usual number for this one.");
+    expect(pointRangeLine({ range: null, no_range_because: "something_new" }, en)).toBe("Nura has no usual number for this one.");
+    expect(pointRangeLine({ range: null, no_range_because: null }, en)).toBe("Nura has no usual number for this one.");
+    expect(pointRangeLine({ range, no_range_because: null }, en)).toBe("For most people this number is under 200.");
   });
 
   it("keeps the boundary apart and last, whatever order it came in", () => {

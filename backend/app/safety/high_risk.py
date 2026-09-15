@@ -83,6 +83,11 @@ LINE_ATTRIBUTES = ("line:", "supply:")
 """The attributes the medicines module (E04) writes — `line:<generic>`, `supply:<generic>` —
 which carry the dose inside the value, so the rule guards them too."""
 
+COUNT_ATTRIBUTES = ("count:",)
+"""A count correction ("I have more at home", E04-05): `count:<generic>`. Not a dose, but a
+typed count that is too high puts off the reorder of a warfarin line, so a high-risk
+medicine's count rests on a photo of the box or the label, the same as its dose."""
+
 MEDICATION = "medication"
 """The subject the medicines module writes every medicine fact under."""
 
@@ -175,10 +180,16 @@ def is_a_dose(draft: FactDraft) -> bool:
     )
 
 
+def is_a_count(draft: FactDraft) -> bool:
+    """A count correction on a medicine line (`COUNT_ATTRIBUTES`)."""
+    return draft.subject in MEDICINE_SUBJECTS and draft.attribute.startswith(COUNT_ATTRIBUTES)
+
+
 async def refuse_dose_without_label_photo(
     session: AsyncSession, context: KeyContext, draft: FactDraft
 ) -> None:
-    """The rule, as `before_fact_write` sees it.
+    """The rule, as `before_fact_write` sees it. A count correction is held to it too
+    (`is_a_count`), so no writer adds to a high-risk medicine's count from words alone.
 
     A dose names its drug — in the subject, inside its value (`{"drug": "warfarin", …}`,
     the shape the review card writes), or by the class the registry put on it
@@ -188,7 +199,7 @@ async def refuse_dose_without_label_photo(
     read a moment ago by `_check_provenance` under the writer's own key, so looking at its
     kind here writes no second line.
     """
-    if not is_a_dose(draft):
+    if not (is_a_dose(draft) or is_a_count(draft)):
         return
     danger = names_high_risk(draft.subject, draft.value) or class_of(draft.value)
     if danger is None:
