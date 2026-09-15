@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut, FindOut, FindWhere } from "../api/types";
@@ -8,8 +8,9 @@ import { go, openTab } from "../flow";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
-import { browserClipDeps, ClipPlayer } from "../visit/clip";
+import { voice } from "../player/voice";
 import { Field, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { HearClip } from "../ui/Player";
 
 /** Where the ask bar looks (spec §0, mockup v2): his records — Ask, E03's recall — or the web,
  *  his providers, or videos. The web and videos are the allowlisted sources only, each page said
@@ -35,14 +36,8 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
   const [busy, setBusy] = useState(false);
   const mode = askMode(density());
   const filters = density() === "caregiver";
-  const clips = useMemo(
-    () =>
-      new ClipPlayer(
-        browserClipDeps((artifactId, start, end) => nura.clip(token.value ?? "", profile.value?.profile_id ?? "", artifactId, start, end)),
-      ),
-    [],
-  );
-  useEffect(() => () => clips.forget(), [clips]);
+  // Leaving Ask: a clip stops and its recording is let go.
+  useEffect(() => () => voice.forget(), []);
 
   const send = async () => {
     const bearer = token.value;
@@ -112,9 +107,7 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
                   </p>
                 )}
                 {line.clip && (
-                  <Pill quiet onClick={() => void clips.play(`${at}`, line.clip!).catch(setError)} testId="hear-clip">
-                    {fill(s.visit.hearClip, { doctor: line.clip.doctor })}
-                  </Pill>
+                  <HearClip name={`ask-clip:${at}`} clip={line.clip} line={line.text} label={fill(s.visit.hearClip, { doctor: line.clip.doctor })} onError={setError} />
                 )}
               </div>
             ))}

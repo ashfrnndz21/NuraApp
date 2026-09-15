@@ -101,18 +101,18 @@ describe("what to do now", () => {
 describe("the offline cards on the phone", () => {
   it("are bound to the key that read them and go with the rest of his papers", async () => {
     const binding = bindingOf(owner);
-    await keepCards("p1", KEPT, binding, new Date("2026-09-14T02:00:00Z"));
-    expect((await keptCards("p1", binding))?.cards).toEqual(KEPT);
+    await keepCards("p1", KEPT, binding, new Date("2026-09-14T02:00:00Z"), "Asia/Singapore");
+    expect((await keptCards("p1", binding, new Date("2026-09-14T03:00:00Z")))?.cards).toEqual(KEPT);
     expect(await keptCards("p1", bindingOf({ ...owner, standing: "holder", key_id: "k9", scopes: ["emergency"] }))).toBeNull();
     expect(await kvKeys("nfw.")).toEqual([]);
-    await keepCards("p1", KEPT, binding, new Date());
+    await keepCards("p1", KEPT, binding, new Date(), "Asia/Singapore");
     await clearProfileData("p1");
     expect(await kvKeys("nfw.")).toEqual([]);
   });
 
   it("are read again when there are none, in another language, or a day on", () => {
     const at = new Date("2026-09-14T02:00:00Z");
-    const entry = { cards: KEPT, binding: bindingOf(owner), fetchedAt: at.toISOString() };
+    const entry = { cards: KEPT, binding: bindingOf(owner), fetchedAt: at.toISOString(), expiresAt: "2026-09-14T16:00:00.000Z" };
     expect(wantsCards(null, "en", at)).toBe(true);
     expect(wantsCards(entry, "ms", at)).toBe(true);
     expect(wantsCards(entry, "en", new Date(at.getTime() + 60_000))).toBe(false);

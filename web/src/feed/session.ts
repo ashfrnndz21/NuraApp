@@ -4,8 +4,8 @@ import { loadFeed, saveFeed } from "../offline/feedCache";
 import { kvGet, kvSet } from "../store/kv";
 import { EventQueue } from "./events";
 import { bindingOf, clearProfileData, zoneOf } from "../offline/todayCache";
-import { speak, stopSpeaking } from "../speech/speak";
-import { browserAudio, Playback } from "./playback";
+import { voice } from "../player/voice";
+import { Playback } from "./playback";
 import { FeedStore } from "./store";
 
 /** The feed for the papers open now: one store and one player, kept while he moves between
@@ -27,6 +27,7 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
   const id = `${papers.profile_id}|${binding.keyId}|${binding.scopes.join(",")}`;
   if (open?.id === id) return open;
   open?.playback.stop();
+  open?.playback.dispose();
   const profileId = papers.profile_id;
   const zone = zoneOf(papers.region);
   const canEngage = papers.standing === "owner" || papers.scopes.includes("records");
@@ -55,9 +56,7 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
   });
   const playback = new Playback({
     fetchVoice: (itemId, language) => nura.feedVoice(bearer, profileId, itemId, language),
-    speak,
-    stopSpeaking,
-    audio: browserAudio,
+    player: voice,
     onFailure: (failure) => store.say(failure),
     // How much of the voice played, when it stops or ends: a play the first time, a replay
     // after. Seconds of the voice, never of the screen.
@@ -73,5 +72,6 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
 /** Forget the open feed: its voice stops and nothing of it stays in memory. */
 export function forgetFeed(): void {
   open?.playback.stop();
+  open?.playback.dispose();
   open = null;
 }

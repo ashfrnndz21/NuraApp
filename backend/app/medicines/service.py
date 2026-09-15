@@ -18,7 +18,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
 from typing import Any
 
@@ -589,6 +589,7 @@ async def record_dose_taken(
     line_id: uuid.UUID,
     anchor: str | None = None,
     amount: float | None = None,
+    taken_at: datetime | None = None,
     source_channel: SourceChannel = SourceChannel.APP,
     channel: Channel = Channel.APP,
 ) -> DoseTaken:
@@ -598,6 +599,12 @@ async def record_dose_taken(
     written under the medicines scope, so the helper who gives him his tablets can tap it
     with the medicines key she holds, and a row naming the line. Audited like every write,
     on the channel the tap came in on: the app, or a "Taken"/"given" reply on WhatsApp.
+
+    `taken_at` is a tap the phone held while it could not reach Nura (E00-08): written at the
+    moment he made it, which must be today on the region's clock and not later than now
+    (`TapNotToday`), and written once however many times it is sent — the same person, line,
+    moment and anchor is the same tap, and the row already written is the answer. The event
+    is recorded now; it happened when he tapped.
     """
     line = await _require_line(session, context=context, line_id=line_id)
     dose = Dose.from_json(line.dose)
@@ -611,6 +618,15 @@ async def record_dose_taken(
         channel=channel,
     )
     moment = utcnow()
+    tapped = moment if taken_at is None else _tap_moment(taken_at, moment, context)
+    if taken_at is not None:
+        earlier = await audited_read(
+            session, DoseTaken, context, Scope.MEDICINES, where=(DoseTaken.line_id == line.id,)
+        )
+        for tap in earlier:
+            same = tap.anchor == anchor and tap.by_person_id == context.person_id
+            if same and as_utc(tap.taken_at) == tapped:
+                return tap
     event = await audited_write(
         session,
         Event,
@@ -618,7 +634,7 @@ async def record_dose_taken(
         Scope.MEDICINES,
         channel=channel,
         kind=EventKind.DOSE_TAKEN,
-        occurred_at=moment,
+        occurred_at=tapped,
         source_channel=source_channel,
         label=f"taken: {line.generic}",
         artifact_id=None,
@@ -635,9 +651,30 @@ async def record_dose_taken(
         event_id=event.id,
         anchor=anchor,
         amount=amount if amount is not None else dose.amount,
-        taken_at=moment,
+        taken_at=tapped,
         by_person_id=context.person_id,
     )
+
+
+TAP_CLOCK_SKEW = timedelta(minutes=2)
+"""How far ahead of the backend's clock a phone's clock may run and its tap still be now."""
+
+
+class TapNotToday(Refusal):
+    """A tap the phone held while it could not reach Nura is written at the moment he made it,
+    and only when that moment is today on the region's clock: yesterday's tap is not today's
+    tablet. The phone drops a held tap at midnight; this is the backend's own guard."""
+
+
+def _tap_moment(taken_at: datetime, now: datetime, context: KeyContext) -> datetime:
+    """The moment of a held tap, in UTC, as the phone wrote it: today on the region's clock, and
+    not later than now beyond a phone's clock running a little ahead. Kept exactly as sent, so
+    the same tap sent again matches the row it wrote."""
+    tapped = as_utc(taken_at).astimezone(UTC)
+    zone = REGION_TZ[context.region]
+    if tapped > now + TAP_CLOCK_SKEW or tapped.astimezone(zone).date() != now.astimezone(zone).date():
+        raise TapNotToday(f"a tap at {tapped.isoformat()} is not today's")
+    return tapped
 
 
 # --- the list, the count, the flags ---------------------------------------------------------

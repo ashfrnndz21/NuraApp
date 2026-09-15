@@ -211,6 +211,7 @@ async def taken(body: TakenIn, line_id: uuid.UUID, context: Context, session: Db
             line_id=line_id,
             anchor=None if body.anchor is None else body.anchor.value,
             amount=body.amount,
+            taken_at=body.taken_at,
         )
     )
 

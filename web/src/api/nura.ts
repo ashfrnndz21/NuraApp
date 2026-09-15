@@ -1,4 +1,4 @@
-import { api, apiBlob, apiUpload } from "./client";
+import { api, apiBlob, apiText, apiUpload } from "./client";
 import type {
   AskedOut,
   ChangesOut,
@@ -54,6 +54,7 @@ import type {
   DocumentSource,
   DoorsOut,
   AreaOut,
+  EmergencyCardOut,
   EngagementEvent,
   EngagementOut,
   EventsOut,
@@ -195,12 +196,26 @@ export const medicines = (token: string, profileId: string, language: string) =>
 export const dosesToday = (token: string, profileId: string, language: string) =>
   api<SlotOut[]>(`/profiles/${profileId}/medicines/today`, { token, query: { language } });
 
-export const taken = (token: string, profileId: string, lineId: string, anchor: string | null) =>
+/** His tap. `takenAt` is a tap the phone held while offline (E00-08): the moment he made it,
+ *  which the backend writes once however often it is sent. */
+export const taken = (token: string, profileId: string, lineId: string, anchor: string | null, takenAt?: string) =>
   api<TakenOut>(`/profiles/${profileId}/medicines/${lineId}/taken`, {
     method: "POST",
     token,
-    body: { anchor },
+    body: takenAt ? { anchor, taken_at: takenAt } : { anchor },
   });
+
+/** A word on the feeling strip (E17), as the phone held it while offline. */
+export const feeling = (token: string, profileId: string, word: string, language: string) =>
+  api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
+
+/** The emergency card, rendered now from State, in his language (E13-01). */
+export const emergencyCard = (token: string, profileId: string, language: string) =>
+  api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
+
+/** The same card as the backend's one printable page: self-contained, nothing fetched. */
+export const emergencyCardPage = (token: string, profileId: string, language: string) =>
+  apiText(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } });
 
 export const state = (token: string, profileId: string) =>
   api<StateOut>(`/profiles/${profileId}/state`, { token });

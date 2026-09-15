@@ -7,6 +7,11 @@ his language, with the chief's name and a time in words filled in — or as a me
 chief wrote herself. Either way the preview is exactly what he will see, and it passes
 `app.safety.plain_words.verify` or it is refused with the findings, so the composer can
 fix the line. The yes binds to the lines: what was previewed is what is scheduled.
+
+A message to him names no medicine and no dose (#164), whatever the family types into a
+memo or a slot: it is refused (`MessageNamesAMedicine`), the way a note about a clinic that
+names one is (E03-03). His medicine reminders come only from his confirmed list, at the times
+it gives — never from a line the family wrote, which nothing checks against that list.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from app.audit.models import Action
 from app.db import as_utc, utcnow
 from app.delivery.triggers.models import Delivery, DeliveryOutcome, TriggerType
 from app.drafts import PushDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.family.common import NotPlainWords, a_chief
 from app.family.models import PushChannel, ScheduledPush
@@ -31,6 +37,7 @@ from app.family.strings import PUSH_TEMPLATES, TEMPLATE_SLOTS, language_of
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.safety.health_words import names_medicine_or_dose
 from app.safety.plain_words import verify
 from app.state.service import render_from_state
 
@@ -56,6 +63,11 @@ class BadWindow(Refusal):
     """A message is scheduled for a moment ahead, and stops being worth sending after it."""
 
 
+class MessageNamesAMedicine(Refusal):
+    """A message to him named a medicine or a dose (#164). His medicine reminders come only
+    from his confirmed list; the refusal carries nothing of what was written."""
+
+
 @dataclass(frozen=True, slots=True)
 class Preview:
     """What he will see: the lines, in his language, and the verifier's notes on them."""
@@ -72,11 +84,14 @@ def render(
     template_id: str | None,
     slots: Mapping[str, str],
     memo_lines: Sequence[str] | None,
+    registry: DrugRegistry | None = None,
 ) -> Preview:
     """The lines as he will read them, from a template or a memo, through the verifier.
 
     Pure: the same inputs give the same lines, which is what lets a yes minted on the
-    preview be spent on the schedule.
+    preview be spent on the schedule. A line naming a medicine or a dose is refused before
+    the verifier reads it (`MessageNamesAMedicine`); `registry` is the licensed one, through
+    its port, so a medicine it knows by any name is found.
     """
     words = language_of(language)
     if (template_id is None) == (memo_lines is None):
@@ -95,6 +110,8 @@ def render(
         lines = [line.strip() for line in memo_lines if line.strip()]
         if not lines or len(lines) > MAX_MEMO_LINES:
             raise NotAMemo(f"a memo is one to {MAX_MEMO_LINES} lines")
+    if any(names_medicine_or_dose(line, registry) for line in lines):
+        raise MessageNamesAMedicine("a message to him names no medicine and no dose")
     findings = [finding for line in lines for finding in verify(line, words, "line")]
     failures = [str(f) for f in findings if f.severity == "fail"]
     if failures:
@@ -116,6 +133,7 @@ async def preview_push(
     slots: Mapping[str, str] | None = None,
     memo_lines: Sequence[str] | None = None,
     language: str | None = None,
+    registry: DrugRegistry | None = None,
 ) -> Preview:
     """Exactly what he will see, in his language unless another is asked for."""
     a_chief(context)
@@ -125,6 +143,7 @@ async def preview_push(
         template_id=template_id,
         slots=slots or {},
         memo_lines=memo_lines,
+        registry=registry,
     )
 
 
@@ -154,6 +173,7 @@ async def schedule_push(
     slots: Mapping[str, str] | None = None,
     memo_lines: Sequence[str] | None = None,
     language: str | None = None,
+    registry: DrugRegistry | None = None,
 ) -> ScheduledPush:
     """Put the previewed message on the calendar, on the chief's yes for exactly its lines.
 
@@ -171,6 +191,7 @@ async def schedule_push(
         template_id=template_id,
         slots=slots or {},
         memo_lines=memo_lines,
+        registry=registry,
     )
     draft = push_draft(preview, send_at=send_at, channel=channel, expires_at=expires_at)
     await consume_confirmation(session, context, confirmation_id, draft)

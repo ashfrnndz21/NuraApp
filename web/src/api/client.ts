@@ -40,6 +40,24 @@ function isRefusalBody(value: unknown): value is RefusalBody {
   return typeof value === "object" && value !== null && typeof (value as RefusalBody).refusal === "string";
 }
 
+/** A body read as JSON when it is JSON; anything else (a proxy's page, an empty body) is null. */
+function parseJson(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** A "no" with no refusal in it — a proxy or a layer in front of the app answering for it — by
+ *  its status: a body too large to take is `TooLarge`, and said in its own sentence. */
+function bareRefusal(status: number): string {
+  if (status === 422) return "NotWellFormed";
+  if (status === 413) return "TooLarge";
+  return "HttpError";
+}
+
 /** Calls go out one at a time. The person does one thing at a time, and the local dev
  *  database (SQLite) refuses two requests that each read and then write their audit line
  *  at once; a queue costs a few milliseconds and makes the app's behaviour the same on a
@@ -167,13 +185,14 @@ async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<
       /* not JSON: not a refusal */
     }
     if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
-    throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
+    throw new Refused(response.status === 404 ? "NotFound" : bareRefusal(response.status), response.status);
   }
   return response.blob();
 }
 
-/** The same queue, for a page of text: a printable page the backend renders (the consent
- *  record). The text on success; a refusal as `Refused`, the way `apiBlob` says it. */
+/** The same queue, for a page of text: a printable page the backend renders — the emergency
+ *  card (E13-01), kept on the phone to print with no network, and the consent record. The text
+ *  on success; a refusal as `Refused`, the way `apiBlob` says it. */
 export function apiText(path: string, call: Call = {}): Promise<string> {
   return enqueue(async (signal) => {
     const headers: Record<string, string> = { Accept: "text/html" };
@@ -193,7 +212,7 @@ export function apiText(path: string, call: Call = {}): Promise<string> {
         /* not JSON: not a refusal */
       }
       if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
-      throw new Refused(response.status === 404 ? "NotFound" : "HttpError", response.status);
+      throw new Refused(response.status === 404 ? "NotFound" : bareRefusal(response.status), response.status);
     }
     return text;
   }, call.urgent);
@@ -218,11 +237,10 @@ async function sendBytes<T>(path: string, body: Blob, contentType: string, call:
 
 async function answer<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  const parsed: unknown = text ? JSON.parse(text) : null;
+  const parsed = parseJson(await response.text());
   if (!response.ok) {
     if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
-    throw new Refused(response.status === 422 ? "NotWellFormed" : "HttpError", response.status);
+    throw new Refused(bareRefusal(response.status), response.status);
   }
   return parsed as T;
 }
@@ -249,11 +267,5 @@ async function send<T>(path: string, call: Call, signal: AbortSignal): Promise<T
     throw new Unreachable();
   }
   if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  const parsed: unknown = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
-    throw new Refused(response.status === 422 ? "NotWellFormed" : "HttpError", response.status);
-  }
-  return parsed as T;
+  return answer<T>(response);
 }

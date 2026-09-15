@@ -1,5 +1,7 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { batch } from "../../capture/session";
+import { PaperBatchView } from "../PaperBatch";
 import { Refused } from "../../api/client";
 import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
@@ -63,8 +65,37 @@ export function RecordsStep(): JSX.Element {
       {busy && <Status text={r.looking} testId="looking" />}
       <Notice error={error} />
       <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
+      <Pill onClick={() => to({ name: "batch" })} disabled={busy} testId="choose-many">
+        {s.papers.chooseMany}
+      </Pill>
       <Pill onClick={() => void enough()} disabled={busy} testId="all-done">
         {r.allPapers}
+      </Pill>
+    </main>
+  );
+}
+
+/** Many photos at once, in the sitting (E18-01): the grid he confirms, then a review card for
+ *  each paper; each one he checks joins the sitting like a single photo does. */
+export function BatchStep(): JSX.Element {
+  const s = t();
+  return (
+    <main class="screen onboarding" data-stage="batch">
+      <StepTitle title={s.papers.title} />
+      <PaperBatchView
+        onReview={(card) => {
+          returnTo.value = "batch";
+          to({ name: "review", card });
+        }}
+      />
+      <Pill
+        onClick={() => {
+          batch.forget();
+          to({ name: "records" });
+        }}
+        testId="batch-done"
+      >
+        {s.onboarding.back}
       </Pill>
     </main>
   );
@@ -76,9 +107,11 @@ export function RecordsStep(): JSX.Element {
  *  decisions and spends it. Then the biography takes the paper in and says what it learned. */
 interface ReviewStepProps {
   card: ReviewCardOut;
-  /** Outside onboarding (the Record's waiting papers, a machine's screen): what happens once
-   *  the card is confirmed, instead of the sitting taking the paper in. */
+  /** Outside onboarding (the Record's waiting papers, a machine's screen, papers from his
+   *  photos, E18-01): what happens once the card is confirmed, instead of the sitting taking
+   *  the paper in — the card's facts are written, and nothing joins a sitting. */
   onDone?: (card: ReviewCardOut) => void;
+  /** Outside the sitting: back to the list the card was opened from. */
   onBack?: () => void;
   /** Another photo, when the page could not be read: the caller sends it and shows its card. */
   onPaper?: (file: File) => Promise<void>;
@@ -145,7 +178,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
         onDone(card);
         return;
       }
-      if (returnTo.value === "records") {
+      if (returnTo.value === "records" || returnTo.value === "batch") {
         // The sitting takes the paper in; its read-back will read the card's facts back to him.
         await nura.attachPaper(bearer, profileId, card.card_id);
         await refreshBiography();
@@ -153,6 +186,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
         // From the Ready screen the sitting is closed: the gap closes as the fact arrives.
         await refreshPlan();
       }
+      if (returnTo.value === "batch") batch.checked(card.card_id);
       lastPaper.value = card.card_id;
       to({ name: returnTo.value });
     } catch (failure) {

@@ -11,7 +11,11 @@ never held for the quiet hours (`rules.RULES[FLAG]`).
 
 A rung is a `Delivery` row, audited as a SHARE when it reached a person; nobody is on a rung
 whose key does not cover the part it is about — the medicines for a dose, the emergency card
-for a flag — "only me" taken out. A rung with nobody on it is skipped and costs no wait.
+for a flag — "only me" taken out. A rung with nobody on it is skipped and costs no wait. A
+flag's rung goes every way each person on it can be reached, and the notice on their family
+page is always written (`deliver`, #162); a flag's rung whose people no phone reached costs no
+wait either — the next rung is asked at once, and the chief sees who could not be reached
+(`not_reached`).
 
 `escalate_flag` is the one door a red flag is escalated through, and the ladder is the one
 record of who is told: the WhatsApp thread calls it the moment a flag is heard, the feeling
@@ -48,6 +52,7 @@ from app.delivery.triggers.deliver import (
 )
 from app.delivery.triggers.models import (
     LADDER_STEP,
+    PHONE,
     Delivery,
     DeliveryOutcome,
     Ladder,
@@ -93,10 +98,11 @@ class Escalated:
 
     ladder: Ladder | None
     told: tuple[uuid.UUID, ...]
-    """Who a message reached, now."""
+    """Whose phone a message reached, now: an app push or WhatsApp. The notice on a family
+    page is written for everyone asked, and is not counted here."""
     asked: tuple[uuid.UUID, ...]
-    """Who the ladder called first — the flag leads their feed, and a message went to them
-    by the first channel that could carry it (none, where none could)."""
+    """Who the ladder called first — the flag leads their feed and waits on their family page,
+    and a message went to them every way that could carry one (none, where none could)."""
     deliveries: tuple[Delivery, ...]
 
 
@@ -289,22 +295,49 @@ async def climb(run: Run, ladder: Ladder, say: Say, type: TriggerType) -> None:
         return
     elapsed = (run.at - started).total_seconds() / 60
     reached = ladder.next_rung
-    for step in ladder.rungs:
-        if step["after_minutes"] > elapsed:
-            continue
-        person = await run.person(uuid.UUID(step["person_id"]))
-        if person is None:
-            continue
-        to = Recipient(person, step["standing"])
-        firing = Firing(
-            type=type,
-            dedupe_key=f"{ladder.dedupe_key}:r{step['rung']}",
-            why={"ladder_id": str(ladder.id), "rung": step["rung"], "action": ladder.dedupe_key},
-        )
-        await deliver(run, firing, to, say(to), rung=step["rung"], ladder=ladder)
-        reached = max(reached, int(step["rung"]) + 1)
+    # A flag's rung whose people no phone reached moves the ladder on at once: the next
+    # rung is due now, and the ones after it keep their gaps from there (#162). Worked out
+    # from the rows each run, so every run agrees on it.
+    early = 0
+    offsets = sorted({int(step["after_minutes"]) for step in ladder.rungs})
+    for index, offset in enumerate(offsets):
+        if offset - early > elapsed:
+            break
+        group = [step for step in ladder.rungs if int(step["after_minutes"]) == offset]
+        for step in group:
+            person = await run.person(uuid.UUID(step["person_id"]))
+            if person is None:
+                continue
+            to = Recipient(person, step["standing"])
+            firing = Firing(
+                type=type,
+                dedupe_key=f"{ladder.dedupe_key}:r{step['rung']}",
+                why={
+                    "ladder_id": str(ladder.id),
+                    "rung": step["rung"],
+                    "action": ladder.dedupe_key,
+                },
+            )
+            await deliver(run, firing, to, say(to), rung=step["rung"], ladder=ladder)
+            reached = max(reached, int(step["rung"]) + 1)
+        later = index + 1 < len(offsets)
+        if later and ladder.subject is Subject.FLAG and not await _a_phone_reached(run, ladder, group):
+            early += offsets[index + 1] - offset
     if reached != ladder.next_rung:
         await _move(run.session, run.acting, ladder, next_rung=reached)
+
+
+async def _a_phone_reached(run: Run, ladder: Ladder, group: Sequence[dict[str, Any]]) -> bool:
+    """Whether anyone on this rung was reached on their phone about this ladder, this run or
+    an earlier one: an app push, WhatsApp, or the caregiver standing in."""
+    people = {step["person_id"] for step in group}
+    return any(
+        row.ladder_id == ladder.id
+        and row.outcome is DeliveryOutcome.SENT
+        and row.via in PHONE
+        and (str(row.to_person_id) in people or str(row.for_person_id) in people)
+        for row in await run.deliveries()
+    )
 
 
 # --- what each rung says --------------------------------------------------------------------------
@@ -469,9 +502,13 @@ async def escalate_flag(
     ladder = await flag_ladder(run, flag, exclude=told_already, now=True)
     await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
     reached = tuple(
-        sent.delivery.to_person_id
-        for sent in run.report
-        if sent.delivery.outcome is DeliveryOutcome.SENT and sent.delivery.to_person_id is not None
+        dict.fromkeys(
+            sent.delivery.to_person_id
+            for sent in run.report
+            if sent.delivery.outcome is DeliveryOutcome.SENT
+            and sent.delivery.via in PHONE
+            and sent.delivery.to_person_id is not None
+        )
     )
     asked = tuple(
         uuid.UUID(step["person_id"]) for step in ladder.rungs if step["after_minutes"] == 0
@@ -557,6 +594,31 @@ async def open_flags_for(session: AsyncSession, *, context: KeyContext) -> list[
         key=lambda ladder: as_utc(ladder.started_at),
         reverse=True,
     )
+
+
+async def not_reached(
+    session: AsyncSession, *, context: KeyContext, ladder: Ladder
+) -> list[uuid.UUID]:
+    """Everyone this flag's ladder asked whose phone nothing reached — only the notice on their
+    family page — in the order they were asked. What the chief is shown (#162). Read under the
+    emergency scope, like the ladder itself."""
+    rows = await audited_read(
+        session,
+        Delivery,
+        context,
+        Scope.EMERGENCY,
+        where=(Delivery.ladder_id == ladder.id,),
+    )
+    asked: list[uuid.UUID] = []
+    phoned: set[uuid.UUID] = set()
+    for row in sorted(rows, key=lambda one: (as_utc(one.recorded_at), one.rung or 0)):
+        if row.to_person_id is None:
+            continue
+        if row.to_person_id not in asked:
+            asked.append(row.to_person_id)
+        if row.outcome is DeliveryOutcome.SENT and row.via in PHONE:
+            phoned.add(row.to_person_id)
+    return [person for person in asked if person not in phoned]
 
 
 # --- doses -----------------------------------------------------------------------------------------
@@ -668,6 +730,7 @@ __all__ = [
     "climb",
     "dose_for_reply",
     "escalate_flag",
+    "not_reached",
     "open_flags_for",
     "time",
 ]

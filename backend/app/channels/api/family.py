@@ -366,9 +366,12 @@ async def privacy_lift(
 
 
 @router.post("/profiles/{profile_id}/pushes/preview")
-async def push_preview(body: PushComposeIn, context: Context, session: Db) -> PushPreviewOut:
+async def push_preview(
+    body: PushComposeIn, request: Request, context: Context, session: Db
+) -> PushPreviewOut:
     """Exactly what he will see. A line that does not pass plain words is `NotPlainWords`
-    (400) with the findings."""
+    (400) with the findings; a line naming a medicine or a dose is `MessageNamesAMedicine`
+    (400), by the licensed registry's answer among others (#164)."""
     return PushPreviewOut.of(
         await preview_push(
             session,
@@ -377,12 +380,13 @@ async def push_preview(body: PushComposeIn, context: Context, session: Db) -> Pu
             slots=body.slots,
             memo_lines=body.memo_lines,
             language=body.language,
+            registry=providers_of(request).drug_registry,
         )
     )
 
 
 @router.post("/profiles/{profile_id}/pushes", status_code=status.HTTP_201_CREATED)
-async def push_schedule(body: PushIn, context: Context, session: Db) -> PushOut:
+async def push_schedule(body: PushIn, request: Request, context: Context, session: Db) -> PushOut:
     return PushOut.of(
         await schedule_push(
             session,
@@ -395,6 +399,7 @@ async def push_schedule(body: PushIn, context: Context, session: Db) -> PushOut:
             slots=body.slots,
             memo_lines=body.memo_lines,
             language=body.language,
+            registry=providers_of(request).drug_registry,
         )
     )
 

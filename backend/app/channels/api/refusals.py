@@ -47,7 +47,13 @@ from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
-from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
+from app.family.pushes import (
+    BadWindow,
+    MessageNamesAMedicine,
+    MissingSlot,
+    NoSuchTemplate,
+    NotAMemo,
+)
 from app.family.roster import (
     AlreadyDone,
     NoSuchSlot,
@@ -89,7 +95,7 @@ from app.language.review import (
     SourceAlreadyListed,
 )
 from app.medicines.reorder import NobodyToAsk, NotACount
-from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
@@ -313,6 +319,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAMemo,
     MissingSlot,
     BadWindow,
+    # A message to him that names a medicine or a dose (#164): his reminders come only
+    # from his confirmed list.
+    MessageNamesAMedicine,
     NotADocument,
     NotAnAnswer,
     NotAPlanDay,
@@ -330,6 +339,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAConsultRecording,
     NotAClip,
     NotOnThisVisit,
+    # A tap the phone held while offline (E00-08) is written only as today's.
+    TapNotToday,
     # The reorder card's (E04-05): tablets found at home are a whole number, more than none.
     NotACount,
 )
