@@ -11,6 +11,7 @@ import {
   freshPhone,
   nothingDrawnOverLines,
   paperPhoto,
+  seedFeed,
   seedOwner,
   seedVisit,
   signInThroughTheApp,
@@ -328,6 +329,9 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   expect(await page.locator("main p").first().evaluate((el) => getComputedStyle(el).fontSize)).toBe("40px");
   const check = async (where: string, scope: Locator = page.locator("main")) => {
+    // The screen as he sees it once it has come in: nothing still loading, nothing still moving.
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))));
     expect.soft(await sideways(page), `${where}: sideways`).toEqual([]);
     expect.soft(await nothingDrawnOverLines(scope, { minTarget: 56 }), `${where}: drawn over`).toEqual([]);
   };
@@ -348,6 +352,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
   await page.getByRole("button", { name: "Me", exact: true }).click();
+  await expect(page.getByTestId("sign-out")).toBeVisible();
   await check("me");
   await page.getByTestId("open-papers").click();
   await page.getByTestId("photos-input").setInputFiles([paperPhoto("lipid-panel-2023-09-07"), paperPhoto("receipt-2026-09-01")]);
@@ -462,4 +467,37 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   await page.getByTestId("door-key").click();
   await expect(page.getByTestId("proud")).toBeVisible();
   await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");
+});
+
+/** #146's cards, and every other kind the feed pages through — his story (the numbers that
+ *  changed, his tablet days, the doctor's words), learning with "From" its publisher, the gate,
+ *  the now and today cards: each passes axe with no serious or critical finding, and nothing is
+ *  drawn over any of its lines. */
+test("every card the feed pages through — his story, learning with its source, the gate — passes axe, and nothing covers a line", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const pa = await seedFeed(request);
+  await seedVisit(request, pa.token, pa.profileId);
+  // A tablet taken today, so his story has tablet days.
+  const lines = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as { line_id: string }[];
+  await request.post(`${API}/profiles/${pa.profileId}/medicines/${lines[0]!.line_id}/taken`, { ...auth(pa.token), data: { anchor: "breakfast" } });
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await page.getByTestId("open-feed").click();
+  await expect(page.getByTestId("feed-card").first()).toBeVisible();
+
+  const seen: string[] = [];
+  for (let at = 0; at < 14; at++) {
+    const card = page.locator(`article.feed-card[data-index="${at}"]`);
+    if ((await card.count()) === 0) break;
+    await card.scrollIntoViewIfNeeded();
+    const kind = `${await card.getAttribute("data-supply")}:${await card.getAttribute("data-type")}`;
+    seen.push(kind);
+    const results = await new AxeBuilder({ page }).include(`article.feed-card[data-index="${at}"]`).analyze();
+    const serious = results.violations.filter((each) => each.impact === "serious" || each.impact === "critical");
+    expect.soft(serious.map((each) => `${each.id}: ${each.nodes.map((node) => node.target.join(" ")).join(" | ")}`), `card ${at} (${kind})`).toEqual([]);
+    expect.soft(await nothingDrawnOverLines(card, { lines: "h2, p", controls: "button", minTarget: 56 }), `card ${at} (${kind})`).toEqual([]);
+  }
+  test.info().annotations.push({ type: "feed cards audited", description: seen.join(", ") });
+  expect(seen.some((kind) => kind.startsWith("story:"))).toBe(true);
+  expect(seen.some((kind) => kind.startsWith("learning:"))).toBe(true);
 });

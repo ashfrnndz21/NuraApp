@@ -51,6 +51,14 @@ export type Source =
 
 export type Status = "idle" | "loading" | "playing" | "paused";
 
+/** One part of a story said in parts (the medication story, E04-06): its own voice note when
+ *  the backend has one (`audio`), else its lines on the phone's own voice. */
+export interface Part {
+  lines: readonly string[];
+  language: Language;
+  audio: Blob | null;
+}
+
 /** As much of an audio element as the player uses. */
 export interface MediaLike {
   src: string;
@@ -96,6 +104,8 @@ export class Player {
   readonly rate = signal<Speed>(USUAL_SPEED);
   /** Recordings this key may not hear, by artefact id: the refusal's class name. */
   readonly refused = signal<ReadonlyMap<string, string>>(new Map());
+  /** A story said in parts has another part after the one heard: *Next part* plays it. */
+  readonly more = signal(false);
 
   private source: Source | null = null;
   private media: MediaLike | null = null;
@@ -109,13 +119,46 @@ export class Player {
   private turn = 0;
   private said = 0;
   private readonly recordings = new Map<string, Promise<string>>();
+  /** The story being said part by part, and the part it is on. */
+  private sequence: { key: string; parts: readonly Part[]; at: number } | null = null;
 
   constructor(private readonly deps: PlayerDeps) {}
+
+  /** A story in parts, from its first part: each part plays on its own tap and stops at its
+   *  end; nothing starts the next part but *Next part*. Call from a tap and from nowhere else. */
+  playParts(key: string, parts: readonly Part[]): Promise<void> {
+    this.sequence = { key, parts, at: 0 };
+    return this.playPart();
+  }
+
+  /** *Next part*: the part after the one heard, on this tap. */
+  nextPart(): Promise<void> {
+    const sequence = this.sequence;
+    if (!sequence || sequence.at >= sequence.parts.length - 1) return Promise.resolve();
+    sequence.at += 1;
+    return this.playPart();
+  }
+
+  private playPart(): Promise<void> {
+    const sequence = this.sequence;
+    const part = sequence?.parts[sequence.at];
+    if (!sequence || !part) return Promise.resolve();
+    const source: Source = part.audio
+      ? { kind: "audio", key: sequence.key, blob: part.audio, lines: part.lines }
+      : { kind: "speech", key: sequence.key, lines: part.lines, language: part.language };
+    const playing = this.play(source, true);
+    this.more.value = sequence.at < sequence.parts.length - 1;
+    return playing;
+  }
 
   /** Play this, from its start. Call from a tap and from nowhere else. A clip this key may
    *  not hear is not played: its artefact goes into `refused`. Anything else that goes wrong
    *  is thrown for the screen to say. */
-  async play(source: Source): Promise<void> {
+  async play(source: Source, inSequence = false): Promise<void> {
+    if (!inSequence) {
+      this.sequence = null;
+      this.more.value = false;
+    }
     this.halt();
     const turn = ++this.turn;
     const lines = source.lines.filter((line) => line.trim().length > 0);
@@ -183,7 +226,8 @@ export class Player {
       });
       return;
     }
-    if (status === "idle") void this.play(source).catch(() => undefined);
+    // Play after the end: this again from its start — within a story, this part, never the next.
+    if (status === "idle") void this.play(source, this.sequence !== null).catch(() => undefined);
   }
 
   /** His speed, kept on the phone; the voice playing now takes it at once. */
@@ -206,6 +250,8 @@ export class Player {
   /** Stop, and close the controls. */
   stop(): void {
     this.turn++;
+    this.sequence = null;
+    this.more.value = false;
     this.halt();
     this.clear();
   }

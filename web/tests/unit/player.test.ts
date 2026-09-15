@@ -261,3 +261,52 @@ describe("a card's pre-rendered voice", () => {
     expect(player.key.value).toBeNull();
   });
 });
+
+describe("a story said in parts (E04-06)", () => {
+  const parts = [
+    { lines: ["This is your blood pressure tablet."], language: "en" as const, audio: null },
+    { lines: ["Take 1 tablet each morning.", "Ask Dr Tan before you change anything."], language: "en" as const, audio: new Blob(["how"]) },
+    { lines: ["Watch for dizziness.", "Ask Dr Tan before you change anything."], language: "en" as const, audio: null },
+  ];
+
+  it("plays the first part on the tap, stops at its end, and never starts the next by itself", () => {
+    const { player, said, media } = rig();
+    void player.playParts("story:line-1", parts);
+    expect(said[0]!.lines).toEqual(parts[0]!.lines);
+    expect(player.more.value).toBe(true);
+    said[0]!.events.onEnd();
+    expect(player.status.value).toBe("idle");
+    expect(said).toHaveLength(1);
+    expect(media).toHaveLength(0);
+  });
+
+  it("Next part plays the next, its own voice note when it has one, and Play after it says that part again", async () => {
+    const { player, said, media } = rig();
+    void player.playParts("story:line-1", parts);
+    said[0]!.events.onEnd();
+    await player.nextPart();
+    expect(media).toHaveLength(1);
+    expect(player.line.value).toBe("Take 1 tablet each morning. Ask Dr Tan before you change anything.");
+    media[0]!.fire("ended");
+    player.toggle(); // Play, after its end: the same part again, not the next
+    await Promise.resolve();
+    expect(media).toHaveLength(2);
+    expect(said).toHaveLength(1);
+    await player.nextPart();
+    expect(said[1]!.lines).toEqual(parts[2]!.lines); // no voice note: the phone says its words
+    expect(player.more.value).toBe(false); // the last part: no Next part
+    await player.nextPart();
+    expect(said).toHaveLength(2);
+  });
+
+  it("stopping, or any other tap on the player, ends the story", () => {
+    const { player } = rig();
+    void player.playParts("story:line-1", parts);
+    void player.play({ kind: "speech", key: "hear:other", lines: ["Another card."], language: "en" });
+    expect(player.more.value).toBe(false);
+    void player.playParts("story:line-1", parts);
+    player.stop();
+    expect(player.more.value).toBe(false);
+    expect(player.key.value).toBeNull();
+  });
+});

@@ -490,6 +490,10 @@ export const en = {
     usual: "Usual speed",
     // @patient phrase
     faster: "Faster",
+    // @patient phrase
+    nextPart: "Next part",
+    // @patient phrase
+    hearStory: "Hear about {name}",
   },
   day: {
     // @patient headline

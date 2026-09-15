@@ -38,6 +38,7 @@ import type {
   DocumentSource,
   DoorsOut,
   EmergencyCardOut,
+  StoryOut,
   EngagementEvent,
   EngagementOut,
   FeedPageOut,
@@ -184,6 +185,14 @@ export const taken = (token: string, profileId: string, lineId: string, anchor: 
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>
   api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
+
+/** The story of one medicine (E04-06): its sections and the parts said as voice notes. */
+export const story = (token: string, profileId: string, lineId: string, language: string) =>
+  api<StoryOut>(`/profiles/${profileId}/medicines/${lineId}/story`, { token, query: { language } });
+
+/** One part of that story as a voice note; a 404 means the phone says its words itself. */
+export const storyVoice = (token: string, profileId: string, lineId: string, part: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/medicines/${lineId}/story/voice`, { token, query: { part, language } });
 
 /** The emergency card, rendered now from State, in his language (E13-01). */
 export const emergencyCard = (token: string, profileId: string, language: string) =>

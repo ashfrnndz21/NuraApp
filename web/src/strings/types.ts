@@ -251,6 +251,8 @@ export interface Strings {
     slower: string;
     usual: string;
     faster: string;
+    nextPart: string;
+    hearStory: string;
   };
   /** The patient's day (W7): the not-feeling-well button, the symptom log, the nudge's two
    *  buttons, the brief, the questions and the post-visit card's yes. Every card's own lines

@@ -490,6 +490,10 @@ export const ms = {
     usual: "Kelajuan biasa",
     // @patient phrase
     faster: "Lebih laju",
+    // @patient phrase
+    nextPart: "Bahagian seterusnya",
+    // @patient phrase
+    hearStory: "Dengar tentang {name}",
   },
   day: {
     // @patient headline

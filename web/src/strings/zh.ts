@@ -490,6 +490,10 @@ export const zh = {
     usual: "平常的速度",
     // @patient phrase
     faster: "快一点",
+    // @patient phrase
+    nextPart: "下一部分",
+    // @patient phrase
+    hearStory: "听听关于{name}",
   },
   day: {
     // @patient headline

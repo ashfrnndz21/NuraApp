@@ -262,6 +262,26 @@ export interface StateOut {
   dimensions?: Record<string, { facts?: Record<string, Record<string, { value?: unknown }>> } | null>;
 }
 
+/** The medication story (E04-06, `GET /profiles/{id}/medicines/{line}/story`): each section a few
+ *  whole sentences; `voice_parts` the parts said as voice notes, in order, each played from
+ *  `…/story/voice?part=`. */
+export interface StoryOut {
+  line_id: string;
+  language: string;
+  name: string;
+  generic: string;
+  strength: string;
+  purpose: string[];
+  how_to_take: string[];
+  watch_out: string[];
+  avoid: string[];
+  if_forgotten: string[];
+  boundary: string[];
+  doctor_question: string[];
+  lines: string[];
+  voice_parts: string[];
+}
+
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
  *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
 export interface EmergencyCardOut {
