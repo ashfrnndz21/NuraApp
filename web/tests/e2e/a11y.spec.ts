@@ -16,6 +16,7 @@ import {
   seedVisit,
   signInThroughTheApp,
   underTheTabBar,
+  coveredByTheTabBar,
 } from "./helpers";
 
 /** E15-04 on the web (ADR 0001: VoiceOver and Dynamic Type become the page's roles, names and
@@ -505,3 +506,29 @@ test("every card the feed pages through — his story, learning with its source,
   expect(seen.some((kind) => kind.startsWith("story:"))).toBe(true);
   expect(seen.some((kind) => kind.startsWith("learning:"))).toBe(true);
 });
+
+/** The floating tab bar at rest, on Today. By the design the bar floats over the page, so with
+ *  Today at rest — opened and not yet scrolled — it is drawn over whatever is at the bottom of
+ *  the screen: a card's lines, its Hear, a feeling word (the user saw this). Nothing is stuck
+ *  under it (`underTheTabBar`, above, on every screen): each can be scrolled clear. The rule the
+ *  patient mode asks — nothing drawn over a line or a control — needs the page to scroll above a
+ *  docked bar, which is the restyle's (D1) to make. Until then this is expected to fail and says
+ *  what the bar covers; when the restyle lands it turns red, and `test.fail` comes off. */
+for (const [label, viewport, look] of [
+  ["Pixel 5", null, "patient"],
+  ["a small phone, 360 by 640", { width: 360, height: 640 }, "patient"],
+  ["Pixel 5", null, "caregiver"],
+] as const) {
+  test(`at rest on Today, the tab bar is drawn over no line and no control — ${label}, ${look} density (expected to fail until the restyle, D1)`, async ({ page, request }) => {
+    test.fail(true, "the tab bar floats over the page by the design; the restyle (D1) docks it — take test.fail off then");
+    if (viewport) await page.setViewportSize(viewport);
+    const pa = await seedOwner(request);
+    await lookOnThePhone(page, look);
+    await signInThroughTheApp(page, pa.phone, "Pa");
+    await expect(page.getByTestId("proud")).toBeVisible();
+    await page.waitForLoadState("networkidle");
+    const covered = await coveredByTheTabBar(page, 0);
+    test.info().annotations.push({ type: "covered by the tab bar at rest", description: covered.join(" | ") || "nothing" });
+    expect(covered).toEqual([]);
+  });
+}

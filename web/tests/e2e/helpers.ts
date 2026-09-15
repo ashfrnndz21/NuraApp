@@ -676,3 +676,29 @@ export async function underTheTabBar(scope: Locator, options: { lines?: string; 
     return problems;
   }, settings);
 }
+
+/** What the floating tab bar is drawn over with the page at rest at `scrollY` (the top, by
+ *  default): every visible line and control of `main` under the bar. The bar floats over the
+ *  page by the design (docs/ui-mockup-v2.html), so at rest it covers whatever is at the bottom
+ *  of the screen; this names it. The problems, or []. */
+export async function coveredByTheTabBar(page: Page, scrollY = 0): Promise<string[]> {
+  return page.evaluate(async (at) => {
+    const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    const bar = document.querySelector("nav.tabbar");
+    if (!bar) return [];
+    window.scrollTo(0, at);
+    await frame();
+    const top = bar.getBoundingClientRect().top;
+    const covered: string[] = [];
+    for (const element of document.querySelectorAll<HTMLElement>("main h1, main h2, main p, main .label, main button, main a.pill, main label.pill")) {
+      if (element.closest("nav.tabbar") || element.closest(".feed-pager") || element.offsetParent === null) continue;
+      const box = element.getBoundingClientRect();
+      if (box.height > 0 && box.bottom > top + 0.5 && box.top < window.innerHeight) {
+        covered.push(`${element.tagName.toLowerCase()}: ${(element.textContent || element.getAttribute("aria-label") || "").trim().slice(0, 50)}`);
+      }
+    }
+    window.scrollTo(0, 0);
+    await frame();
+    return covered;
+  }, scrollY);
+}
