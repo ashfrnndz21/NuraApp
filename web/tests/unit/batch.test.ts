@@ -84,7 +84,7 @@ describe("his one yes", () => {
       if (each.name === "receipt.png") return card("receipt", false);
       if (each.name === "huge.png") throw new Refused("PhotoTooLarge", 413);
       if (each.name === "d.png" && !online) {
-        online = true; // the network comes back before he taps Send the rest
+        online = true; // the network comes back before he taps Send the ones that did not go
         throw new Unreachable();
       }
       return card(each.name);
@@ -93,7 +93,7 @@ describe("his one yes", () => {
     await batch.send();
     expect(batch.items.value.map((item) => item.outcome.kind)).toEqual(["card", "notHealth", "refused", "notSent", "notSent"]);
     expect(deps.send).toHaveBeenCalledTimes(4); // e was not tried once the network had gone
-    // Send the rest: only the two that did not go.
+    // Send the ones that did not go: only those two.
     (deps.send as ReturnType<typeof vi.fn>).mockClear();
     await batch.send();
     expect((deps.send as ReturnType<typeof vi.fn>).mock.calls.map(([each]) => (each as File).name)).toEqual(["d.png", "e.png"]);

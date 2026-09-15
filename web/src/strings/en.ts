@@ -444,9 +444,9 @@ export const en = {
     // @patient
     asOf: "Nura last read this card on {date}.",
     // @patient
-    none: "Nura has not kept your emergency card on this phone yet.",
+    none: "Your emergency card is not on this phone yet.",
     // @patient
-    noneSub: "Open it once while the internet is on.",
+    noneSub: "Open this card again later, with the internet on.",
     // @patient phrase
     callChief: "Call {name}",
     // @patient phrase
@@ -491,9 +491,9 @@ export const en = {
     // @patient
     notHealth: "This is not a health paper.",
     // @patient
-    notSent: "Nura could not send this one.",
+    notSent: "The internet was off, so this one did not go.",
     // @patient phrase
-    sendRest: "Send the rest",
+    sendRest: "Send the ones that did not go",
     // @patient
     nothingKept: "Nura kept no photo on this phone.",
     // @patient phrase

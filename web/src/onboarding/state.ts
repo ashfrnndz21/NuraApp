@@ -2,6 +2,7 @@ import { signal } from "@preact/signals";
 import type { BiographyOut, ClosedOut, ConditionsOut, PlanOut, ProfileOut, ReviewCardOut, SettingsIn, SettingsOut } from "../api/types";
 import { go } from "../flow";
 import { clearProfileData } from "../offline/todayCache";
+import { voice } from "../player/voice";
 import { chooseProfile, profile } from "../store/session";
 import { fill } from "../strings";
 import type { AboutItem } from "./about";
@@ -70,7 +71,10 @@ export async function startOnboarding(papers: ProfileOut): Promise<void> {
   reset();
   // As `openProfile` does: a page kept for other papers is never shown under these.
   const before = profile.value;
-  if (before && before.profile_id !== papers.profile_id) await clearProfileData(before.profile_id);
+  if (before && before.profile_id !== papers.profile_id) {
+    await clearProfileData(before.profile_id);
+    voice.forget();
+  }
   await chooseProfile(papers);
   go({ name: "onboarding" });
 }

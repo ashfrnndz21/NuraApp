@@ -16,6 +16,7 @@ import { fill, language, LOCALE, t } from "../strings";
 import { clockWords, dateLine, boundaryOf, feedCards, feedLines, greeting, largeTextOf, lineTitle, medicinesCard, nowCard, readingLead, stateLines, timeLine, todayList, tookLine, whyLine, type TodayModel } from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 import { EmergencyCard } from "./Emergency";
+import { voice } from "../player/voice";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
@@ -34,6 +35,18 @@ import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
  *  in order, when the network is back — the page reads again after. A no to a held tap is said
  *  in the backend's words. The emergency card is kept too (`offline/emergencyCache.ts`), read
  *  once a day, and opens with no network, one tap from here. */
+/** His tap, sent with its moment. A phone clock far enough from Nura's that the moment is not
+ *  today on the region's clock (`TapNotToday`) wrote nothing, and is no reason to lose a tap made
+ *  now: it is sent again at Nura's own moment. */
+async function tapTaken(bearer: string, profileId: string, lineId: string, anchor: string, at: string): Promise<void> {
+  try {
+    await nura.taken(bearer, profileId, lineId, anchor, at);
+  } catch (failure) {
+    if (!(failure instanceof Refused && failure.refusal === "TapNotToday")) throw failure;
+    await nura.taken(bearer, profileId, lineId, anchor);
+  }
+}
+
 export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const s = t();
   const bearer = token.value;
@@ -60,6 +73,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const forget = async (profileId: string, failure: unknown) => {
     await clearProfileData(profileId);
     forgetFeed();
+    // The recordings the player fetched under this key go too: none replays after a no.
+    voice.forget();
     // His large-text setting came from his State: it goes with the rest.
     await setLargeText(false);
     setModel(null);
@@ -102,6 +117,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     if (!sameBinding(binding, bindingOf(papers))) {
       await clearProfileData(id);
       forgetFeed();
+      voice.forget();
       setModel(null);
       setKept(null);
       setHeld([]);
@@ -219,8 +235,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     if (!bearer || !papers || busy) return;
     setBusy(true);
     setError(null);
+    // The tap's moment goes with it, and the held copy keeps the same one: a tap the backend
+    // wrote whose answer the phone never got is sent again as the same tap, and written once.
+    const at = new Date().toISOString();
     try {
-      await nura.taken(bearer, papers.profile_id, lineId, anchor);
+      await tapTaken(bearer, papers.profile_id, lineId, anchor, at);
       setJustTook(tookLine(new Date().getHours(), s));
       await refresh();
     } catch (failure) {
@@ -230,7 +249,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         // No network: the tap is held on the phone with the moment he made it, and sent once
         // when the network is back. The Now card says so, in place of Taken.
         if (failure instanceof Unreachable) {
-          const tap: Tap = { id: tapId(), kind: "taken", lineId, anchor, at: new Date().toISOString() };
+          const tap: Tap = { id: tapId(), kind: "taken", lineId, anchor, at };
           setHeld((await hold(papers.profile_id, tap, bindingOf(papers), new Date(), zoneOf(papers.region))) ?? []);
         }
         setUnreached("network");

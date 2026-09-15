@@ -160,6 +160,44 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   expect((await keptKeys(page)).some((key) => key.startsWith("queue."))).toBe(false);
 });
 
+/** A Taken the backend wrote whose answer never reached the phone (the network lost on the way
+ *  back): the phone holds it with the moment it sent, sends it again with that same moment, and
+ *  the backend finds the row it already wrote — the tablet is counted once, not twice. */
+test("Taken whose answer is lost on the way back: held, sent again with the same moment, and counted once", async ({ page, request }) => {
+  const pa = await seedOwner(request, "Pa", [{ generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 }]);
+  const sent: { taken_at?: string }[] = [];
+  page.on("request", (call) => {
+    if (call.method() === "POST" && /\/medicines\/[^/]+\/taken$/.test(new URL(call.url()).pathname)) sent.push(call.postDataJSON() as { taken_at?: string });
+  });
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  const now = page.getByTestId("now-card");
+  await expect(now.getByTestId("taken")).toBeVisible();
+
+  // The first Taken reaches the backend and is written; its answer is lost before the phone.
+  const taken = /\/medicines\/[^/]+\/taken$/;
+  await page.route(taken, async (route) => {
+    await route.fetch();
+    await route.abort("internetdisconnected");
+  });
+  await now.getByTestId("taken").click();
+  await expect(page.getByTestId("held-card")).toHaveCount(1);
+  const count = async () =>
+    ((await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as { count: { taken: number } | null }[])[0]!.count?.taken;
+  expect(await count()).toBe(1);
+
+  // The page read again: the held tap goes with the moment the first one carried, and the
+  // backend answers with the row it wrote.
+  await page.unroute(taken);
+  await page.reload();
+  await expect(page.getByTestId("held-sent")).toContainText("Nura sent what you tapped.");
+  await expect(page.getByTestId("held-card")).toHaveCount(0);
+  expect(sent).toHaveLength(2);
+  expect(sent[0]!.taken_at).toMatch(/^2026-09-14T/);
+  expect(sent[1]!.taken_at).toBe(sent[0]!.taken_at);
+  expect(await count()).toBe(1);
+  await expect(page.getByTestId("proud-number")).toHaveText("1");
+});
+
 /** A held tap the backend says no to — here, Mei's key was closed while her phone was offline —
  *  is said in the backend's words for that no, and nothing of Pa's papers stays on her phone. */
 test("a no to a held tap is said in the backend's words, and nothing of the papers stays", async ({ page, context, request }) => {

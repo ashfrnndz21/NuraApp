@@ -444,9 +444,9 @@ export const zh = {
     // @patient
     asOf: "Nura 最后一次读这张卡是在 {date}。",
     // @patient
-    none: "Nura 还没有把您的紧急卡存在这部手机上。",
+    none: "这部手机上还没有您的紧急卡。",
     // @patient
-    noneSub: "请在有网络的时候打开一次。",
+    noneSub: "请晚一点在有网络的时候再打开这张卡。",
     // @patient phrase
     callChief: "打给{name}",
     // @patient phrase
@@ -471,11 +471,11 @@ export const zh = {
     // @patient
     gridLead: "点一张照片就不发它。",
     // @patient phrase
-    picture: "第 {count} 份",
+    picture: "第 {count} 份文件",
     // @patient
-    tileIn: "Nura 会发这张。",
+    tileIn: "Nura 会发这份。",
     // @patient
-    tileOut: "Nura 不发这张。",
+    tileOut: "Nura 不发这份。",
     // @patient phrase
     sendOne: "发 1 份文件",
     // @patient phrase
@@ -491,9 +491,9 @@ export const zh = {
     // @patient
     notHealth: "这不是看病的文件。",
     // @patient
-    notSent: "Nura 没能发这张。",
+    notSent: "刚才没有网络，这份还没发出去。",
     // @patient phrase
-    sendRest: "发剩下的",
+    sendRest: "发还没发出去的",
     // @patient
     nothingKept: "Nura 没有把照片存在这部手机上。",
     // @patient phrase

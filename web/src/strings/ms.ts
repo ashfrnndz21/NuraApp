@@ -444,9 +444,9 @@ export const ms = {
     // @patient
     asOf: "Nura terakhir membaca kad ini pada {date}.",
     // @patient
-    none: "Nura belum menyimpan kad kecemasan anda di telefon ini.",
+    none: "Kad kecemasan anda belum ada di telefon ini.",
     // @patient
-    noneSub: "Buka sekali semasa internet ada.",
+    noneSub: "Buka kad ini sekali lagi nanti, semasa internet ada.",
     // @patient phrase
     callChief: "Telefon {name}",
     // @patient phrase
@@ -491,9 +491,9 @@ export const ms = {
     // @patient
     notHealth: "Ini bukan surat kesihatan.",
     // @patient
-    notSent: "Nura tidak dapat hantar yang ini.",
+    notSent: "Internet tiada tadi, jadi yang ini belum dihantar.",
     // @patient phrase
-    sendRest: "Hantar yang lain",
+    sendRest: "Hantar yang belum dihantar",
     // @patient
     nothingKept: "Nura tidak simpan gambar di telefon ini.",
     // @patient phrase

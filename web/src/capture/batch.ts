@@ -8,7 +8,7 @@ import type { ReviewCardOut } from "../api/types";
  *
  *  Every paper ends with something said about it: a review card to check, the backend's own
  *  words that a page is not a health paper, a refusal in its sentence, or that it could not be
- *  sent (the network went; *Send the rest* tries again). None is dropped in silence.
+ *  sent (the network went; *Send the ones that did not go* tries again). None is dropped in silence.
  *
  *  Nothing of a photo stays on the phone: the file is only ever in memory, its picture is an
  *  object URL let go as soon as it is sent, and nothing here writes to the phone's storage. */
