@@ -27,6 +27,7 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import whatsapp_provider_for
 from app.clock import install_frozen
 from app.db import make_engine, make_session_factory
+from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.push import push_sender_for
 from app.delivery.voice import voice_for
@@ -70,6 +71,9 @@ def providers_for(settings: Settings) -> Providers:
         reference_ranges=reference_ranges_for(settings),
         voice=voice_for(settings),
         push=push_sender_for(settings),
+        # A clip's still (E09-06): the fixture renderer's one committed still, beside the
+        # feed's other fixtures; it never makes an excerpt (no ffmpeg here).
+        clips=FixtureClipRenderer(Path(settings.feed_fixtures)),
         # Who spoke when in a consult (E02-05): the fixture separator over NURA_SPEAKER_FIXTURES
         # on a laptop; unset, a recording is one stretch by an unknown speaker.
         speaker_separator=None

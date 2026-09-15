@@ -152,7 +152,8 @@ async def test_now_then_at_most_two_new_cards_then_the_gate_then_endless_story_a
     assert types[0] == "now"
     assert types[1] == "reading"
     assert types[2] == "gate", types
-    assert types[3:] and set(types[3:]) <= {"story", "learning"}
+    # Past the gate: his story (the recap is one of its cards) and learning, nothing else.
+    assert types[3:] and {item["supply"] for item in first["items"][3:]} <= {"story", "learning"}
     assert first["held_by_caps"] == {"reading": 2}
     assert first["quiet"] is False
     assert first["next_cursor"]
@@ -239,7 +240,8 @@ async def test_two_unopened_text_cards_switch_the_profile_to_voice_first(
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
     day_one = await _feed(deployment, profile_id, his)
-    assert {item["format"] for item in day_one["items"]} == {"text"}
+    # The text cards (a clip is its own format, and has its own switch: test_feed_formats).
+    assert {item["format"] for item in day_one["items"] if item["format"] != "clip"} == {"text"}
     # He hears nothing, taps nothing. A day passes.
     clock.step(timedelta(days=1))
     await _reading(deployment, profile_id, his, 140, 86)
@@ -271,7 +273,7 @@ async def test_a_card_he_heard_does_not_count_as_unopened(
     assert posted.status_code == 201, posted.text
     clock.step(timedelta(days=1))
     day_two = await _feed(deployment, profile_id, his)
-    assert {item["format"] for item in day_two["items"]} == {"text"}
+    assert {item["format"] for item in day_two["items"] if item["format"] != "clip"} == {"text"}
 
 
 # --- §9: offline launch shows the last cached page ---------------------------------------------

@@ -768,6 +768,18 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/cached"),
     Walk("GET", f"{P}/feed/today"),
     Walk("GET", f"{P}/feed/{{item_id}}/voice"),
+    Walk("GET", f"{P}/feed/week"),
+    Walk("GET", f"{P}/feed/{{item_id}}/clip/poster"),
+    Walk("GET", f"{P}/feed/{{item_id}}/clip/captions"),
+    Walk("GET", f"{P}/feed/{{item_id}}/clip/video"),
+    Walk("GET", f"{P}/area"),
+    Walk(
+        "GET",
+        f"{P}/find",
+        variants=tuple(
+            {"q": "blood pressure", "where": where} for where in ("web", "videos", "providers")
+        ),
+    ),
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
@@ -862,6 +874,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/events/{{event_id}}/notes"): "writes a note on an event; returns it",
     ("POST", f"{P}/feed/{{item_id}}/engagement"): "writes what he did with a card",
     ("POST", f"{P}/search-jobs"): "starts a search; returns the job",
+    ("PATCH", f"{P}/search-jobs/{{job_id}}"): "pauses or resumes a search; returns the job",
+    ("POST", f"{P}/feed/events"): "writes the phone's queue of what he did; returns their ids",
+    ("PUT", f"{P}/area"): "sets his area on his yes; returns it",
     ("POST", f"{P}/feelings"): "writes a feeling; returns the event and flag it wrote",
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",

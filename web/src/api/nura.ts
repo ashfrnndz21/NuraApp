@@ -37,9 +37,17 @@ import type {
   DeploymentOut,
   DocumentSource,
   DoorsOut,
+  AreaOut,
   EngagementEvent,
   EngagementOut,
+  EventsOut,
   FeedPageOut,
+  FindOut,
+  FindWhere,
+  JobKind,
+  QueuedEventIn,
+  SearchJobOut,
+  SentOut,
   KeyOut,
   LineOut,
   MeOut,
@@ -520,3 +528,47 @@ export const feedToday = (token: string, profileId: string) => api<FeedPageOut>(
 /** The Me page (E17-04): the number that only goes up, in his words. */
 export const meSummary = (token: string, profileId: string, language: string) =>
   api<MeSummaryOut>(`/profiles/${profileId}/me-summary`, { token, query: { language } });
+
+// --- the feed's richer formats (F1) ---------------------------------------------------------
+
+/** Flush the phone's queue of what he did with his cards (E11-08). */
+export const feedEvents = (token: string, profileId: string, events: QueuedEventIn[]) =>
+  api<EventsOut>(`/profiles/${profileId}/feed/events`, { token, method: "POST", body: { events } });
+
+/** "Sent to Pa this week": every card made for him since Monday, with its status. */
+export const feedWeek = (token: string, profileId: string) => api<SentOut[]>(`/profiles/${profileId}/feed/week`, { token });
+
+/** A clip's still, from Nura's own server (no video platform is asked). */
+export const clipPoster = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/poster`, { token, accept: "image/*" });
+
+/** A clip's captions, WebVTT, in the card's language. */
+export const clipCaptions = async (token: string, profileId: string, itemId: string): Promise<string> =>
+  (await apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/captions`, { token, accept: "text/vtt" })).text();
+
+/** A clip's excerpt, only where the licence let Nura keep one; a 404 refusal otherwise. */
+export const clipVideo = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/video`, { token, accept: "video/*" });
+
+/** "Watching for Pa": every search the engine runs for him, in the reader's words. */
+export const searchJobs = (token: string, profileId: string, language: string) =>
+  api<SearchJobOut[]>(`/profiles/${profileId}/search-jobs`, { token, query: { language } });
+
+/** Add a watch: the kind and what for. How often is the kind's own. */
+export const addSearchJob = (token: string, profileId: string, kind: JobKind, terms: string[]) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs`, { token, method: "POST", body: { kind, terms } });
+
+/** Pause a watch, or resume it. */
+export const pauseSearchJob = (token: string, profileId: string, jobId: string, enabled: boolean, language: string) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs/${jobId}`, { token, method: "PATCH", body: { enabled }, query: { language } });
+
+/** His area and the towns it may be (owner, chief). */
+export const area = (token: string, profileId: string) => api<AreaOut>(`/profiles/${profileId}/area`, { token });
+
+/** Set his area on his yes, or clear it (null). */
+export const setArea = (token: string, profileId: string, value: string | null) =>
+  api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+
+/** The ask bar's Web, Videos and Providers filters. Records is `ask`. */
+export const find = (token: string, profileId: string, q: string, where: FindWhere, language: string) =>
+  api<FindOut>(`/profiles/${profileId}/find`, { token, query: { q, where, language } });

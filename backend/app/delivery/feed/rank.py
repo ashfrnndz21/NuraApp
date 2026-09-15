@@ -34,6 +34,7 @@ from app.audit.access import audited_read, audited_write
 from app.db import as_utc, utcnow
 from app.delivery.feed.compose import Day, can_compose, refresh, today_for
 from app.delivery.feed.models import (
+    PLAYS,
     SUPPLY_ORDER,
     CapsClass,
     CardType,
@@ -61,6 +62,19 @@ QUIET_UNTIL = time(7, 0)
 """Nothing is delivered between these, on the patient's wall clock, except a flag."""
 DECLINED = "declined"
 """The subject of the "not for me" fact; the attribute is the card type."""
+OPENED: frozenset[EngagementKind] = frozenset(
+    {
+        EngagementKind.SEEN,
+        EngagementKind.OPENED,
+        EngagementKind.HEARD,
+        EngagementKind.TAPPED,
+        EngagementKind.ASKED_MORE,
+    }
+)
+"""What says a card was opened: on his screen, heard, tapped or asked about."""
+NOT_IN_THE_WEEK: frozenset[CardType] = frozenset({CardType.NOW, CardType.GATE, CardType.DUTY})
+"""The cards that are not something sent: the now card is Today's, the gate is a turn of the
+page, the duty card is hers."""
 
 
 class NotACursor(Refusal):
@@ -236,7 +250,9 @@ async def _statuses(
         kinds = by_item.get(item.id, set())
         if EngagementKind.DISMISSED in kinds:
             status[item.id] = "dismissed"
-        elif kinds & {EngagementKind.HEARD, EngagementKind.TAPPED, EngagementKind.SEEN}:
+        elif kinds & PLAYS:
+            status[item.id] = "played"
+        elif kinds & OPENED:
             status[item.id] = "opened"
         elif item.id in sent:
             status[item.id] = "sent"
@@ -358,6 +374,12 @@ CATEGORY_OF: dict[CardType, str] = {
     CardType.NOTICE: "insight",
     CardType.STORY: "insight",
     CardType.LEARNING: "insight",
+    # A local alert says what to do today; the rest are something to know.
+    CardType.LOCAL: "reminder",
+    CardType.CLIP: "insight",
+    CardType.RECAP: "insight",
+    CardType.SEASONAL: "insight",
+    CardType.FOOD: "insight",
 }
 """What each card is to "today's top three" (E11-02): an alert, a reminder, or an insight.
 The gate, the duty card and a doctor's question are none of the three."""
@@ -402,6 +424,50 @@ async def top_three(
         held_by_caps=dict(held),
         status=await _statuses(session, context=context, items=chosen, held=held),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Sent:
+    """One card made for him this week, as his chief's list shows it (spec §1): the card,
+    what became of it, and how many times it was played."""
+
+    item: FeedItem
+    status: str
+    plays: int
+
+
+async def sent_this_week(session: AsyncSession, *, context: KeyContext) -> list[Sent]:
+    """Every card made for him since Monday on his wall clock — delivered, held for her, or
+    kept for the doctor's memo — newest first, each with its status (sent, opened, played,
+    dismissed, held) and its plays: "Sent to Pa this week". The now card, the gate and her
+    own duty card are not sent things and are left out. Narrowed to the parts the key
+    covers, like every read of the feed. Nothing is made here."""
+    day = today_for(context)
+    found = await audited_read(
+        session,
+        FeedItem,
+        context,
+        Scope.PROFILE,
+        where=(FeedItem.created_at >= day.week_starts_at, FeedItem.created_at <= day.now),
+    )
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
+    shown = sorted(
+        (item for item in visible if item.type not in NOT_IN_THE_WEEK),
+        key=lambda item: (as_utc(item.created_at), item.priority),
+        reverse=True,
+    )
+    if not shown:
+        return []
+    status = await _statuses(session, context=context, items=shown, held=Counter())
+    engaged = await audited_read(
+        session,
+        Engagement,
+        context,
+        Scope.PROFILE,
+        where=(Engagement.item_id.in_([item.id for item in shown]),),
+    )
+    plays = Counter(one.item_id for one in engaged if one.kind in PLAYS)
+    return [Sent(item, status.get(item.id, "generated"), plays[item.id]) for item in shown]
 
 
 class NoCachedPage(Refusal):

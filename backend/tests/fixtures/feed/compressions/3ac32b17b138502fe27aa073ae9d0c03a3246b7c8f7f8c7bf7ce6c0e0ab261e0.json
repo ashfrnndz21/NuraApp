@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "Your sugar tablet",
+    "body": [
+      "Your sugar tablet is called metformin.",
+      "It helps your body use sugar better.",
+      "Take it with a meal or just after.",
+      "An upset stomach at first is common."
+    ],
+    "why_topic": "your sugar tablet",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  },
+  "ms": {
+    "headline": "Ubat gula anda",
+    "body": [
+      "Ini ubat gula anda.",
+      "Ubat ini membantu badan anda guna gula dengan lebih baik.",
+      "Ambil semasa makan atau sejurus selepas makan.",
+      "Perut rasa tidak selesa pada mulanya adalah biasa."
+    ],
+    "why_topic": "ubat gula anda",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  },
+  "zh": {
+    "headline": "您的降血糖药",
+    "body": [
+      "您的降血糖药叫二甲双胍。",
+      "它帮身体更好地用掉糖。",
+      "吃饭时或饭后马上吃。",
+      "刚开始时胃不舒服很常见。"
+    ],
+    "why_topic": "您的降血糖药",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  }
+}

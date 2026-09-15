@@ -109,6 +109,9 @@ CLASSES: dict[str, str] = {
     "profile.owner_person_id": IDENTIFIER,
     "profile.patient_phone_e164": IDENTIFIER,
     "profile.created_at": OPERATIONAL,
+    # Where he lives, coarsely (a district or a postcode's first digits): it points at a
+    # person, so it is an identifier, however coarse (F1, E09-07).
+    "profile.area": IDENTIFIER,
     "stewardship.steward_person_id": IDENTIFIER,
     "stewardship.key_id": CONSENT,
     "stewardship.consent_id": CONSENT,
@@ -444,6 +447,10 @@ CLASSES: dict[str, str] = {
     "feed_engagement.channel": OPERATIONAL,
     "feed_engagement.event_id": HEALTH,
     "feed_engagement.at": OPERATIONAL,
+    # How much of a clip or voice note about his health played: about his health.
+    "feed_engagement.seconds": HEALTH,
+    # The phone's own id for an event in its queue: says nothing about anyone.
+    "feed_engagement.client_id": OPERATIONAL,
     # The offline page is a cache of card ids for one person.
     "feed_page.person_id": IDENTIFIER,
     "feed_page.audience": OPERATIONAL,

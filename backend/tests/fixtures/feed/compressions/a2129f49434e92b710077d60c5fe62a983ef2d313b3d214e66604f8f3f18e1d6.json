@@ -1,0 +1,41 @@
+{
+  "en": {
+    "headline": "Diabetes, in 30 seconds",
+    "body": [
+      "A doctor talks about living with diabetes.",
+      "A short walk after meals lowers sugar.",
+      "Fill half your plate with vegetables.",
+      "Look at your feet every day for cuts."
+    ],
+    "why_topic": "your blood sugar",
+    "passage": "[0:18] A short walk after meals helps to lower blood sugar.",
+    "start_sec": 10,
+    "end_sec": 38
+  },
+  "ms": {
+    "headline": "Kencing manis, dalam 30 saat",
+    "body": [
+      "Doktor bercakap tentang hidup dengan kencing manis.",
+      "Berjalan sekejap selepas makan menurunkan gula.",
+      "Isi separuh pinggan anda dengan sayur.",
+      "Lihat kaki anda setiap hari untuk luka."
+    ],
+    "why_topic": "gula dalam darah anda",
+    "passage": "[0:18] A short walk after meals helps to lower blood sugar.",
+    "start_sec": 10,
+    "end_sec": 38
+  },
+  "zh": {
+    "headline": "30秒了解糖尿病",
+    "body": [
+      "一位医生讲怎样和糖尿病一起生活。",
+      "饭后散步一会儿能降血糖。",
+      "盘子的一半放蔬菜。",
+      "每天看看脚上有没有伤口。"
+    ],
+    "why_topic": "您的血糖",
+    "passage": "[0:18] A short walk after meals helps to lower blood sugar.",
+    "start_sec": 10,
+    "end_sec": 38
+  }
+}

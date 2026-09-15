@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "A hot day: drink water through the day",
+    "body": [
+      "Drink water often today, before you are thirsty.",
+      "If your doctor set a limit, keep to it.",
+      "Stay out of the midday sun.",
+      "Get help if you feel dizzy or weak."
+    ],
+    "why_topic": "your health",
+    "passage": "If your doctor has limited how much fluid you should drink, follow that advice."
+  },
+  "ms": {
+    "headline": "Hari panas: minum air sepanjang hari",
+    "body": [
+      "Minum air selalu hari ini, sebelum rasa haus.",
+      "Jika doktor anda beri had, ikut had itu.",
+      "Elakkan matahari tengah hari.",
+      "Dapatkan bantuan jika anda rasa pening atau lemah."
+    ],
+    "why_topic": "kesihatan anda",
+    "passage": "If your doctor has limited how much fluid you should drink, follow that advice."
+  },
+  "zh": {
+    "headline": "天气很热：整天都要喝水",
+    "body": [
+      "今天常常喝水，不要等到口渴。",
+      "如果医生给您定了喝水的量，就照着做。",
+      "中午别晒太阳。",
+      "如果头晕或没力气，就找人帮忙。"
+    ],
+    "why_topic": "您的健康",
+    "passage": "If your doctor has limited how much fluid you should drink, follow that advice."
+  }
+}

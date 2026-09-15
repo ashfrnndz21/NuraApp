@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "Haze today: stay indoors more",
+    "body": [
+      "Stay indoors as much as you can today.",
+      "Keep your windows shut.",
+      "Keep your tablets close by.",
+      "Get help at once if your chest hurts."
+    ],
+    "why_topic": "your heart and breathing",
+    "passage": "people with chronic heart or lung disease should reduce outdoor activity and stay indoors where possible"
+  },
+  "ms": {
+    "headline": "Jerebu hari ini: duduk di dalam rumah",
+    "body": [
+      "Duduk di dalam rumah seberapa boleh hari ini.",
+      "Tutup tingkap rumah anda.",
+      "Simpan ubat anda dekat dengan anda.",
+      "Dapatkan bantuan segera jika dada anda sakit."
+    ],
+    "why_topic": "jantung dan pernafasan anda",
+    "passage": "people with chronic heart or lung disease should reduce outdoor activity and stay indoors where possible"
+  },
+  "zh": {
+    "headline": "今天有烟霾：多待在室内",
+    "body": [
+      "今天尽量待在室内。",
+      "把窗户关好。",
+      "把药放在身边。",
+      "如果胸口痛，马上求助。"
+    ],
+    "why_topic": "您的心脏和呼吸",
+    "passage": "people with chronic heart or lung disease should reduce outdoor activity and stay indoors where possible"
+  }
+}

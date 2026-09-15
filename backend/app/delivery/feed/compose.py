@@ -19,17 +19,19 @@ import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
 from app.db import as_utc, nested_unit_of_work, utcnow
+from app.delivery.feed.days import Day, plain_day, today_for
 from app.delivery.feed.grammar import Direction
 from app.delivery.feed.items import NotPlainWords, Why, create_item
+from app.delivery.feed.local import HAZARDS, SEASONS, relevant_to
 from app.delivery.feed.models import (
+    PLAYS,
     CardFormat,
     CardType,
     DeliverTo,
@@ -37,9 +39,10 @@ from app.delivery.feed.models import (
     EngagementKind,
     FeedItem,
     JobKind,
+    SearchJob,
     Supply,
 )
-from app.delivery.feed.search import Engine, create_job, run_job
+from app.delivery.feed.search import Around, Engine, create_job, due, pause_job, run_job
 from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
@@ -61,7 +64,7 @@ from app.delivery.strings import (
     render,
     test_name,
 )
-from app.delivery.voice import voiced
+from app.delivery.voice import MAX_SECONDS, seconds_to_say, voiced
 from app.errors import Refusal
 from app.family.photos import photos_for_his_feed
 from app.family.roster import who_is_on_duty
@@ -70,6 +73,7 @@ from app.keys.context import KeyContext
 from app.keys.grants import list_keys
 from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope, scope_for_subject
+from app.language.voice_script import script_for
 from app.medicines.service import LineView, active_lines, proud_days
 from app.memory.episodic import record_event
 from app.memory.models import (
@@ -96,7 +100,6 @@ from app.reasoning.visits.logistics import logistics_for
 from app.reasoning.visits.memos import consolidate_memos, current_memos
 from app.reasoning.visits.models import Brief, Memo, MemoSource, SummaryItem, VisitSummary
 from app.reasoning.visits.strings import spoken
-from app.regions import REGION_TZ
 from app.safety.boundary import Surface, boundary_line, is_boundary_line
 from app.safety.red_flags import Flag, open_flags
 from app.state.dimensions import BEFORE_VISIT_WINDOW
@@ -117,85 +120,25 @@ expired from the supply, but they are what the switch is about."""
 
 FORMAT_SUBJECT, FORMAT_ATTRIBUTE, VOICE = "format", "preferred", "voice"
 """The fact the format switch is written as. `format` folds into the cognitive dimension."""
+CLIPS_ATTRIBUTE, AS_CARDS = "clips", "card"
+"""The fact the clip switch is written as (E11-08): `format.clips` is `card` once two clips
+went unplayed, and a video then comes as a voice note instead of a clip."""
+MISSES_TO_SWITCH = UNOPENED_TO_SWITCH
+"""The configured misses (E11-08): how many unopened text cards, or clips seen and never
+played, switch his feed to the other format."""
+OPENED_KINDS: frozenset[EngagementKind] = frozenset(
+    {
+        EngagementKind.HEARD,
+        EngagementKind.TAPPED,
+        EngagementKind.OPENED,
+        EngagementKind.PLAYED,
+        EngagementKind.REPLAYED,
+        EngagementKind.ASKED_MORE,
+    }
+)
+"""What says a card was opened, for the text switch: on his screen, heard, played, tapped or
+asked about. Never how long: nothing here reads seconds."""
 
-WEEKDAYS: Mapping[str, tuple[str, ...]] = {
-    "en": ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
-    "ms": ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad"),
-    "zh": ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"),
-}
-MONTHS: Mapping[str, tuple[str, ...]] = {
-    "en": (
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ),
-    "ms": (
-        "Januari",
-        "Februari",
-        "Mac",
-        "April",
-        "Mei",
-        "Jun",
-        "Julai",
-        "Ogos",
-        "September",
-        "Oktober",
-        "November",
-        "Disember",
-    ),
-}
-
-
-def plain_day(local: datetime, language: str) -> str:
-    """ "Monday 14 September", the way docs/plain-words.md rule 5 says; never "the 14th"."""
-    code = language_for(language)
-    if code == "zh":
-        return f"{local.month}月{local.day}日{WEEKDAYS['zh'][local.weekday()]}"
-    return f"{WEEKDAYS[code][local.weekday()]} {local.day} {MONTHS[code][local.month - 1]}"
-
-
-@dataclass(frozen=True, slots=True)
-class Day:
-    """Today on the patient's wall clock: the date the caps count, and when it ends."""
-
-    tz: ZoneInfo
-    now: datetime
-    local: datetime
-
-    @property
-    def key(self) -> str:
-        return self.local.date().isoformat()
-
-    @property
-    def week(self) -> str:
-        year, week, _ = self.local.isocalendar()
-        return f"{year}-W{week:02d}"
-
-    @property
-    def ends_at(self) -> datetime:
-        midnight = datetime.combine(self.local.date() + timedelta(days=1), time(0), self.tz)
-        return midnight.astimezone(self.now.tzinfo)
-
-    def same_day(self, moment: datetime) -> bool:
-        return as_utc(moment).astimezone(self.tz).date() == self.local.date()
-
-    def plain(self, moment: datetime, language: str) -> str:
-        return plain_day(as_utc(moment).astimezone(self.tz), language)
-
-
-def today_for(context: KeyContext) -> Day:
-    tz = REGION_TZ[context.region]
-    now = utcnow()
-    return Day(tz=tz, now=now, local=now.astimezone(tz))
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,17 +202,13 @@ async def refresh(
     """
     day = today_for(context)
     house = await _household(session, context=context)
-    existing = await audited_read(
-        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > day.now,)
-    )
-    keys = {item.dedupe_key for item in existing}
-    recent = await audited_read(
-        session,
-        FeedItem,
-        context,
-        Scope.PROFILE,
-        where=(FeedItem.created_at > day.now - UNOPENED_WINDOW,),
-    )
+    every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+    existing = [item for item in every if as_utc(item.expires_at) > day.now]
+    # Every card ever made here, expired or not: a card is made once per dedupe key, and the
+    # table refuses a second (`uq_feed_item_dedupe`), so an expired card is never made again
+    # under the same key — a card that comes round (a day's, a week's) has the day in its key.
+    keys = {item.dedupe_key for item in every}
+    recent = [item for item in every if as_utc(item.created_at) > day.now - UNOPENED_WINDOW]
     await _switch_format_if_ignored(session, context=context, day=day, items=recent)
     state = await current_state(session, context=context)
     format = _format_of(state)
@@ -278,12 +217,11 @@ async def refresh(
     async def make(**values: Any) -> FeedItem | None:
         if values["dedupe_key"] in keys:
             return None
+        values.setdefault("format", format)
         if values["type"] is CardType.FLAG:
             # A flag card is made first, on its own: nothing made after it can take it back.
             try:
-                item = await create_item(
-                    session, context=context, state=state, format=format, **values
-                )
+                item = await create_item(session, context=context, state=state, **values)
             except NotPlainWords:
                 return None
         else:
@@ -291,9 +229,7 @@ async def refresh(
             # skipped, and the flag cards made before it stand.
             try:
                 async with nested_unit_of_work(session):
-                    item = await create_item(
-                        session, context=context, state=state, format=format, **values
-                    )
+                    item = await create_item(session, context=context, state=state, **values)
             except Refusal:
                 return None
         keys.add(item.dedupe_key)
@@ -375,6 +311,20 @@ async def refresh(
         visits=memo_visits,
         on_memo_card=on_memo_card,
     )
+    await _recap(
+        make,
+        day=day,
+        house=house,
+        story=[
+            item
+            for item in (*existing, *made)
+            if item.type is CardType.STORY
+            and item.scope is Scope.READINGS
+            and item.dedupe_key.startswith("story:reading:")
+            and item.dedupe_key.endswith(day.week)
+        ],
+        as_cards=_clips_as_cards(state),
+    )
     made.extend(
         await _learning(
             session,
@@ -421,11 +371,61 @@ def _format_of(state: StateView) -> CardFormat:
     return CardFormat.VOICE_FIRST if preferred.get("value") == VOICE else CardFormat.TEXT
 
 
+def _clips_as_cards(state: StateView) -> bool:
+    """Whether two clips went unplayed and his videos now come as voice notes (E11-08)."""
+    cognitive = state.dimension(Dimension.COGNITIVE) or {}
+    held = cognitive.get("facts", {}).get(FORMAT_SUBJECT, {}).get(CLIPS_ATTRIBUTE, {})
+    return held.get("value") == AS_CARDS
+
+
 async def _switch_format_if_ignored(
     session: AsyncSession, *, context: KeyContext, day: Day, items: Sequence[FeedItem]
 ) -> None:
-    """Two text cards from an earlier day, delivered to him, that nobody heard or tapped:
-    the profile goes voice-first, as a Fact resting on the moment it was noticed."""
+    """The format adapts to what he opens (E11-08, spec §3.9): two text cards from an earlier
+    day that he never opened make his feed voice-first; two clips he had on his screen and
+    never played make his videos come as voice notes. Each is a Fact resting on the moment it
+    was noticed, which State folds, so the next snapshot says why the cards changed shape.
+    What is counted is whether a card was opened or played — never for how long."""
+    await _text_to_voice(session, context=context, day=day, items=items)
+    await _clips_to_cards(session, context=context, day=day, items=items)
+
+
+async def _engaged(
+    session: AsyncSession, context: KeyContext, items: Sequence[FeedItem]
+) -> dict[uuid.UUID, set[EngagementKind]]:
+    found = await audited_read(
+        session,
+        Engagement,
+        context,
+        Scope.PROFILE,
+        where=(Engagement.item_id.in_([item.id for item in items]),),
+    )
+    kinds: dict[uuid.UUID, set[EngagementKind]] = {}
+    for one in found:
+        kinds.setdefault(one.item_id, set()).add(one.kind)
+    return kinds
+
+
+async def _his_word_stands(
+    session: AsyncSession, *, context: KeyContext, attribute: str, value: str
+) -> tuple[bool, uuid.UUID | None]:
+    """Whether the switch is already made, or he chose the format himself — two missed cards
+    do not overturn his word (`ConfirmedFactStands`). And the fact a new one supersedes."""
+    already = await current_facts(
+        session, context=context, subject=FORMAT_SUBJECT, attribute=attribute
+    )
+    stands = any(
+        fact.value == value or fact.confidence_state is not ConfidenceState.EXTRACTED
+        for fact in already
+    )
+    return stands, (already[0].id if already else None)
+
+
+async def _text_to_voice(
+    session: AsyncSession, *, context: KeyContext, day: Day, items: Sequence[FeedItem]
+) -> None:
+    """Two text cards from an earlier day, delivered to him, that he never opened: the profile
+    goes voice-first, as a Fact resting on the moment it was noticed."""
     candidates = [
         item
         for item in items
@@ -434,31 +434,17 @@ async def _switch_format_if_ignored(
         and item.supply in (Supply.TODAY, Supply.NOW)
         and not day.same_day(item.created_at)
     ]
-    if len(candidates) < UNOPENED_TO_SWITCH:
+    if len(candidates) < MISSES_TO_SWITCH:
         return
-    opened = await audited_read(
-        session,
-        Engagement,
-        context,
-        Scope.PROFILE,
-        where=(
-            Engagement.item_id.in_([item.id for item in candidates]),
-            Engagement.kind.in_([EngagementKind.HEARD, EngagementKind.TAPPED]),
-        ),
-    )
-    heard = {one.item_id for one in opened}
-    ignored = [item for item in candidates if item.id not in heard]
-    if len(ignored) < UNOPENED_TO_SWITCH:
+    engaged = await _engaged(session, context, candidates)
+    ignored = [item for item in candidates if not engaged.get(item.id, set()) & OPENED_KINDS]
+    if len(ignored) < MISSES_TO_SWITCH:
         return
-    already = await current_facts(
-        session, context=context, subject=FORMAT_SUBJECT, attribute=FORMAT_ATTRIBUTE
+    stands, supersedes = await _his_word_stands(
+        session, context=context, attribute=FORMAT_ATTRIBUTE, value=VOICE
     )
-    if any(
-        fact.value == VOICE or fact.confidence_state is not ConfidenceState.EXTRACTED
-        for fact in already
-    ):
-        # Voice already, or a format he chose himself on his settings screen (E01-03): two
-        # unopened cards do not overturn his word, and `ConfirmedFactStands` would refuse it.
+    if stands:
+        # Voice already, or a format he chose himself on his settings screen (E01-03).
         return
     noticed = await record_event(
         session,
@@ -476,7 +462,56 @@ async def _switch_format_if_ignored(
         value=VOICE,
         confidence=0.8,
         event_id=noticed.id,
-        supersedes_id=already[0].id if already else None,
+        supersedes_id=supersedes,
+    )
+
+
+async def _clips_to_cards(
+    session: AsyncSession, *, context: KeyContext, day: Day, items: Sequence[FeedItem]
+) -> None:
+    """Two clips from an earlier day that were on his screen and that he never played: his
+    videos come as voice notes from now on (the backlog's "clip to card")."""
+    clips = [
+        item
+        for item in items
+        if item.deliver_to is DeliverTo.PATIENT
+        and item.format is CardFormat.CLIP
+        and not day.same_day(item.created_at)
+    ]
+    if len(clips) < MISSES_TO_SWITCH:
+        return
+    engaged = await _engaged(session, context, clips)
+    played = PLAYS | {EngagementKind.HEARD}
+    missed = [
+        item
+        for item in clips
+        if EngagementKind.OPENED in engaged.get(item.id, set())
+        and not engaged.get(item.id, set()) & played
+    ]
+    if len(missed) < MISSES_TO_SWITCH:
+        return
+    stands, supersedes = await _his_word_stands(
+        session, context=context, attribute=CLIPS_ATTRIBUTE, value=AS_CARDS
+    )
+    if stands:
+        return
+    noticed = await record_event(
+        session,
+        context=context,
+        kind=EventKind.ENGAGEMENT,
+        occurred_at=day.now,
+        label="two clips went unplayed",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        session,
+        context=context,
+        subject=FORMAT_SUBJECT,
+        attribute=CLIPS_ATTRIBUTE,
+        value=AS_CARDS,
+        confidence=0.8,
+        event_id=noticed.id,
+        supersedes_id=supersedes,
     )
 
 
@@ -1512,6 +1547,50 @@ async def _story_proud(
     )
 
 
+RECAP_LINES = 3
+"""How many of the week's numbers the recap says: as many as fit in thirty seconds, at most three."""
+
+
+async def _recap(
+    make: Any, *, day: Day, house: Household, story: Sequence[FeedItem], as_cards: bool
+) -> None:
+    """His week in 30 seconds (E11-09): the first line of this week's story cards from his
+    blood pressure book — his own numbers, in his words — narrated over a still with captions,
+    once a week. It repeats the record and infers nothing, so it carries no boundary line. Two
+    of them or none: one number is not a week. When his clips have gone unplayed it is a voice
+    note instead (E11-08)."""
+    if len(story) < 2:
+        return
+    chosen = list(reversed(story[:RECAP_LINES]))
+    head = render("recap", house.language, body=("recap_intro",), why="story_reading")
+    while True:
+        lines = (*head.body, *(item.body[0] for item in chosen))
+        spoken = script_for(lines, head.language).spoken()
+        if seconds_to_say(spoken, head.language) <= MAX_SECONDS or len(chosen) <= 2:
+            break
+        chosen = chosen[1:]
+    if seconds_to_say(script_for(lines, head.language).spoken(), head.language) > MAX_SECONDS:
+        return
+    await make(
+        type=CardType.RECAP,
+        lines=Lines(
+            language=head.language, headline=head.headline, body=lines, voice=lines, why=head.why
+        ),
+        why=Why(
+            kind="recap",
+            plain=head.why,
+            fact_ids=tuple(sorted({one for item in chosen for one in item.why.get("fact_ids", [])})),
+        ),
+        scope=Scope.READINGS,
+        deliver_to=DeliverTo.PATIENT,
+        day=day.key,
+        dedupe_key=f"recap:{day.week}",
+        expires_at=day.week_ends_at,
+        format=CardFormat.VOICE_FIRST if as_cards else CardFormat.CLIP,
+        cite={"recap": True, "story_item_ids": [str(item.id) for item in chosen]},
+    )
+
+
 CONDITION_TERMS: Mapping[str, str] = {"high_blood_pressure": "blood pressure"}
 """What a self-search asks the allowlisted sources about for a condition he told (E01): the
 condition's code in words ("diabetes", "kidneys"), except where the record already searches
@@ -1553,6 +1632,71 @@ def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[st
     return gaps
 
 
+FOOD_TERMS: Mapping[str, str] = {
+    "diabetes": "diabetes",
+    "high_blood_pressure": "blood pressure",
+    "cholesterol": "cholesterol",
+}
+"""The conditions a weekly food card is for, and the term its search asks about."""
+
+
+def _conditions_of(state: StateView) -> dict[str, str]:
+    """The conditions he told (E01) that hold, by code, with the fact each rests on."""
+    clinical = state.dimension(Dimension.CLINICAL) or {}
+    return {
+        code: entry["fact_id"]
+        for code, entry in sorted(clinical.get("facts", {}).get("condition", {}).items())
+        if entry.get("value") is True
+    }
+
+
+async def around_for(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    engine: Engine,
+    state: StateView,
+    day: Day,
+    profile: Profile | None = None,
+    medicines: Sequence[LineView] | None = None,
+) -> Around:
+    """What a search job run needs to know about him besides the State: the day, his area,
+    his conditions and medicines (by fact), and the formats his feed has settled on."""
+    profile = profile if profile is not None else await audited_profile_read(session, context)
+    if medicines is None:
+        medicines = (
+            await active_lines(
+                session,
+                context=context,
+                registry=engine.registry,
+                language=language_for(profile.language),
+            )
+            if context.allows(Scope.MEDICINES)
+            else []
+        )
+    conditions = _conditions_of(state)
+    taken: dict[str, str] = {
+        view.line.generic.strip().lower(): str(view.line.fact_id) for view in medicines
+    }
+    clinical = (state.dimension(Dimension.CLINICAL) or {}).get("facts", {})
+    for subject in ("medicine", "medication"):
+        name = clinical.get(subject, {}).get("name")
+        if name and isinstance(name.get("value"), str):
+            taken.setdefault(name["value"].strip().lower(), name["fact_id"])
+    return Around(
+        day=day,
+        area=profile.area,
+        conditions=tuple(conditions),
+        medicines=tuple(sorted(taken)),
+        format=_format_of(state),
+        clips_as_cards=_clips_as_cards(state),
+        fact_ids={
+            **{code: (fact,) for code, fact in conditions.items()},
+            **{name: (fact,) for name, fact in taken.items()},
+        },
+    )
+
+
 async def _learning(
     session: AsyncSession,
     *,
@@ -1564,34 +1708,74 @@ async def _learning(
     keys: set[str],
     medicines: Sequence[LineView] = (),
 ) -> list[FeedItem]:
-    """A self-search for each gap State shows, run now against the fixture ports, its
-    findings made into learning cards (or questions for the memo, or notices)."""
-    from app.delivery.feed.models import SearchJob
+    """The self-searches his record calls for, run against the allowlist, their findings made
+    into cards (or questions for the memo, or notices for his chief):
 
-    jobs = await audited_read(session, SearchJob, context, Scope.RECORDS)
+    - an explainer for each gap State shows, and a daily safety job for each medicine;
+    - a daily local watch for each hazard a condition or medicine of his makes relevant
+      (E09-07) — the bulletins matched to his area here, never searched by it;
+    - a weekly watch for each season his conditions make relevant, where the planner may add
+      it (the fasting month is added by a person, never guessed);
+    - one weekly food watch across his conditions (a new one pauses the one it replaces).
+
+    A new job runs now; a daily or weekly one that has not run today or this week runs again;
+    a paused one does not run."""
+    jobs = list(await audited_read(session, SearchJob, context, Scope.RECORDS))
     have = {(job.kind, tuple(job.terms)) for job in jobs}
-    wanted: list[tuple[JobKind, str, str, list[str], str]] = []
+    around = await around_for(
+        session,
+        context=context,
+        engine=engine,
+        state=state,
+        day=day,
+        profile=house.profile,
+        medicines=medicines,
+    )
+    wanted: list[tuple[JobKind, tuple[str, ...], str, list[str]]] = []
     for term, scope_word, fact_ids in _gaps(state, medicines):
-        wanted.append((JobKind.EXPLAINER, term, scope_word, fact_ids, "on_change"))
+        wanted.append((JobKind.EXPLAINER, (term,), scope_word, fact_ids))
         if scope_word == "medicines":
             # Any medicine on the list starts a daily safety-notice job (spec §9).
-            wanted.append((JobKind.SAFETY, term, scope_word, fact_ids, "daily"))
+            wanted.append((JobKind.SAFETY, (term,), scope_word, fact_ids))
+    for hazard in HAZARDS:
+        reasons = relevant_to(hazard, around.conditions, around.medicines)
+        if reasons:
+            ids = sorted({one for reason in reasons for one in around.fact_ids.get(reason, ())})
+            wanted.append((JobKind.LOCAL, (hazard,), "records", ids))
+    for season in SEASONS:
+        if season.planned and season.conditions & set(around.conditions):
+            ids = sorted(
+                {one for code in season.conditions for one in around.fact_ids.get(code, ())}
+            )
+            wanted.append((JobKind.SEASONAL, (season.term,), "records", ids))
+    food = tuple(sorted({FOOD_TERMS[code] for code in around.conditions if code in FOOD_TERMS}))
+    if food:
+        ids = sorted({one for code in FOOD_TERMS for one in around.fact_ids.get(code, ())})
+        wanted.append((JobKind.FOOD, food, "records", ids))
     found: list[FeedItem] = []
-    for kind, term, scope_word, fact_ids, cadence in wanted:
-        if (kind, (term,)) in have:
+    ran: set[uuid.UUID] = set()
+    for kind, terms, scope_word, fact_ids in wanted:
+        if (kind, terms) in have:
             continue
+        if kind is JobKind.FOOD:
+            # His conditions changed: the food watch for the old ones stops, this one starts.
+            for old in jobs:
+                if old.kind is JobKind.FOOD and old.enabled and old.reason.get("planned"):
+                    await pause_job(session, context=context, job_id=old.id, enabled=False)
         job = await create_job(
             session,
             context=context,
             kind=kind,
-            terms=[term],
-            cadence=cadence,
+            terms=list(terms),
             reason={
-                "gap": f"no {kind.value} about {term}",
+                "gap": f"no {kind.value} about {' and '.join(terms)}",
                 "fact_ids": fact_ids,
                 "scope": scope_word,
+                "planned": True,
             },
         )
+        have.add((kind, terms))
+        ran.add(job.id)
         found.extend(
             await run_job(
                 session,
@@ -1600,10 +1784,25 @@ async def _learning(
                 engine=engine,
                 state=state,
                 language=house.language,
-                day=day.key,
+                around=around,
                 doctor=house.doctor,
                 existing=keys,
-                format=_format_of(state),
+            )
+        )
+    for job in jobs:
+        if job.id in ran or not due(job, day):
+            continue
+        found.extend(
+            await run_job(
+                session,
+                context=context,
+                job=job,
+                engine=engine,
+                state=state,
+                language=house.language,
+                around=around,
+                doctor=house.doctor,
+                existing=keys,
             )
         )
     return found

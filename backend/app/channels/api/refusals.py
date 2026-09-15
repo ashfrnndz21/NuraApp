@@ -27,9 +27,13 @@ from app.consent.service import (
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
-from app.delivery.feed.engagement import NoSuchItem
+from app.delivery.feed.area import OnlyHeSetsHisArea
+from app.delivery.feed.clips import NoClipRenderer, NoExcerpt, NotAClipCard
+from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
+from app.delivery.feed.find import NotAFilter, NothingToFind
+from app.delivery.feed.local import NotACoarseArea, NotAHazard, NotASeason
 from app.delivery.feed.rank import NoCachedPage
-from app.delivery.feed.search import NoSuchSearchJob
+from app.delivery.feed.search import NoSuchSearchJob, NotACadence
 from app.delivery.feed.sources import NotTheirsToManage
 from app.delivery.feed.twin import NotInThatLanguage
 from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
@@ -200,6 +204,19 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A fact heard at a visit that names a drug is never written; the answer names the rule.
     (DrugNamedInAFact, 400),
     (NoSuchItem, 404),
+    # The feed's richer formats (F1): a clip's parts, the phone's queue, the watches, his
+    # area, the ask bar's filters.
+    (NotAClipCard, 404),
+    (NoExcerpt, 404),
+    (NoClipRenderer, 404),
+    (SecondsOnlyOnAPlay, 400),
+    (NotACadence, 400),
+    (NotAHazard, 400),
+    (NotASeason, 400),
+    (NotACoarseArea, 400),
+    (OnlyHeSetsHisArea, 403),
+    (NotAFilter, 400),
+    (NothingToFind, 400),
     (NoOneToActFor, 404),
     (NothingToSay, 404),
     # Only someone a flag's ladder reached, whose key covers it, answers it (E11-06).

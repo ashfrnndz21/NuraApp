@@ -38,11 +38,32 @@ class Found:
     batch: str | None = None
     """For a safety notice: the batch number it concerns. Matched against the pack photo's
     batch fact; a notice that does not match his pack is held for the caregiver."""
+    media: str | None = None
+    """"video" for a video page (an allowlisted hospital's or ministry's own channel); None
+    for a page of text. A video becomes a clip card (`app.delivery.feed.clips`)."""
+    licence: str | None = None
+    """Under what terms the publisher lets a video be reused ("cc-by", "permission"), or None
+    when it does not say: then no excerpt is kept, and the card is the still and the
+    narration, with the link to the whole video (docs/health-feed-spec.md §7)."""
+    areas: tuple[str, ...] = ()
+    """For a local bulletin: the districts or postcode prefixes it is about. Empty is the
+    whole region (a haze or heat advisory). Matched on this server against his area; the
+    area is never part of a search."""
+    season: str | None = None
+    """For a seasonal page: the season it is about (`app.delivery.feed.local.SEASONS`)."""
 
 
 class Searcher(Protocol):
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         """Pages for these terms, from these domains only. Never a page from anywhere else."""
+        ...
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        """Pages whose words match, from these domains only — the ask bar's Web and Videos
+        filters (`app.delivery.feed.find`). `media="video"` is videos only. The words are the
+        question as typed and nothing else: no name, no area, no fact of his goes with them."""
         ...
 
 
@@ -92,11 +113,11 @@ class FixtureSearcher:
     def __init__(self, root: Path) -> None:
         self._root = root
 
-    def _table(self) -> dict[str, list[dict[str, str]]]:
+    def _table(self) -> dict[str, list[dict[str, Any]]]:
         path = self._root / "searches.json"
         if not path.exists():
             return {}
-        loaded: dict[str, list[dict[str, str]]] = json.loads(path.read_text(encoding="utf-8"))
+        loaded: dict[str, list[dict[str, Any]]] = json.loads(path.read_text(encoding="utf-8"))
         return loaded
 
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
@@ -106,8 +127,33 @@ class FixtureSearcher:
         for term in terms:
             for page in table.get(f"{kind}:{term.strip().lower()}", []):
                 if page["domain"] in allowed:
-                    found.append(Found(**page))
+                    found.append(_found(page))
         return found
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        """Every page in the table, once, whose title or text holds every word, from the
+        domains asked for only."""
+        wanted = [word.strip().lower() for word in words if word.strip()]
+        allowed = set(domains)
+        seen: set[str] = set()
+        found: list[Found] = []
+        for pages in self._table().values():
+            for page in pages:
+                if page["domain"] not in allowed or page["url"] in seen:
+                    continue
+                if media is not None and page.get("media") != media:
+                    continue
+                haystack = f"{page['title']} {page['text']}".lower()
+                if wanted and all(word in haystack for word in wanted):
+                    seen.add(page["url"])
+                    found.append(_found(page))
+        return found
+
+
+def _found(page: dict[str, Any]) -> Found:
+    return Found(**{**page, "areas": tuple(page.get("areas", ()))})
 
 
 @fixture
