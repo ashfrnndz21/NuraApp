@@ -486,9 +486,12 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
             </p>
             <p class="caption">{s.visit.keepOpen}</p>
             {offline && (
-              <p class="caption" data-testid="no-connection">
-                {s.visit.noConnection} {s.visit.sendLater}
-              </p>
+              <>
+                <p class="caption" data-testid="no-connection">
+                  {s.visit.noConnection}
+                </p>
+                <p class="caption">{s.visit.sendLater}</p>
+              </>
             )}
           </Tile>
           {stage.kind === "asking" ? (

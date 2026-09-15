@@ -63,10 +63,16 @@ def _asked(h: Home) -> list[str]:
 
 
 def _notices(h: Home, phone: str) -> list[str]:
-    return [one.text for one in h.whatsapp.sent if one.to_e164 == phone and one.text.startswith("Nura wrote down")]
+    return [
+        one.text
+        for one in h.whatsapp.sent
+        if one.to_e164 == phone and one.text.startswith("Nura wrote down")
+    ]
 
 
-async def _he_says(sg: AsyncSession, h: Home, clock: FrozenClock, when: datetime, text: str) -> None:
+async def _he_says(
+    sg: AsyncSession, h: Home, clock: FrozenClock, when: datetime, text: str
+) -> None:
     clock.set(when)
     handled = await h.inbound(sg, PA, text)
     assert handled.outcome == "check_in_answer", handled
@@ -177,6 +183,23 @@ async def test_his_ok_answers_the_question_he_has_open_so_the_check_in_waits(
     # The next day the reading's day is over: he is asked.
     [asked] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
     assert asked.outcome is DeliveryOutcome.SENT
+
+
+async def test_without_his_whatsapp_yes_the_check_in_never_goes_on_whatsapp(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """His WHATSAPP consent is asked on every message: without it the check-in is logged as
+    not delivered, or goes by the app on his phone when he has it, and never on WhatsApp."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path, whatsapp=False)
+    await check_in_setting(sg, h.owner, "18:00")
+    [row] = _rows(await _run(sg, h, clock, at(18)), CHECK_IN)
+    assert row.outcome is not DeliveryOutcome.SENT and row.via is not DeliveryChannel.WHATSAPP
+    assert _asked(h) == []
+    h.push.register(h.pa.id)
+    [pushed] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
+    assert (pushed.outcome, pushed.via) == (DeliveryOutcome.SENT, DeliveryChannel.APP_PUSH)
+    assert _asked(h) == []
 
 
 async def test_the_check_in_is_the_threads_first_even_with_the_app_on_his_phone(

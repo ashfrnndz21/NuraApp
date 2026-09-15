@@ -1399,7 +1399,7 @@ export const en = {
     skippedBecause: {
       flagOpen: "Held: the not-well message about {name} is still open.",
       saidToday: "Held: {name} already said how he feels today.",
-      nudgeAsked: "Held: the small reminder already asked him today.",
+      nudgeAsked: "Held: today's small reminder already asked {name} how he feels.",
       questionOpen: "Held: {name} still has a question from Nura to answer.",
     },
     // @patient phrase

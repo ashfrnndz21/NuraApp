@@ -265,8 +265,8 @@ test("a dropped connection while Nura listens: it says so, sends the rest when i
   await page.clock.fastForward("00:01");
   await page.clock.fastForward("00:29");
   const lost = page.getByTestId("no-connection");
-  await expect(lost).toContainText("The phone has no connection right now.");
-  await expect(lost).toContainText("Nura sends the recording when the connection is back.");
+  await expect(lost).toHaveText("The phone has no connection right now.");
+  await expect(page.getByText("Nura sends the recording when the connection is back.")).toBeVisible();
   await expect(page.getByTestId("red-dot")).toBeVisible();
   expect(answered.chunk).toHaveLength(0);
 
