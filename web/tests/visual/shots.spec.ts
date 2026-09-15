@@ -5,8 +5,8 @@ import { fixClock, openMe, signInThroughTheApp, todayReady } from "../e2e/helper
 import { seedHome } from "../e2e/homeSeed";
 
 /** The design review's pictures (D1), not a gate: his Today, her Home, sign-in, both tab bars
- *  and the Me sheet, at 390 by 844 and 360 by 640, with the demo banner off and on, from the
- *  same seeded family the design suite uses. Each screen twice: what the phone shows first, and
+ *  and the Me sheet, at 390 by 844 and 360 by 640, with the demo banner off and on, from a family seeded
+ *  the way the design suite seeds one. Each screen twice: what the phone shows first, and
  *  the whole page with its tab bar at the end ("-full"). */
 
 const OUT = process.env.NURA_DESIGN_SHOTS ?? "design-shots";
@@ -34,9 +34,11 @@ async function snap(page: Page, name: string): Promise<void> {
 }
 
 test("his Today, her Home, sign-in, the tab bars and Me, at two sizes, banner off and on", async ({ browser, request }) => {
-  const family = await seedHome(request);
   for (const size of SIZES) {
     for (const on of [false, true]) {
+      // A family of its own each time: reading "What changed" is looking, so a second look at
+      // the same family would find nothing new to show.
+      const family = await seedHome(request);
       const demo = { on };
       const tag = `${size.name}-${on ? "demo" : "plain"}`;
 

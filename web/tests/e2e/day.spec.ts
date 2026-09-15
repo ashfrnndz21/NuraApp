@@ -573,6 +573,9 @@ test("the post-visit card on the web: each line with where it was said, one left
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
+  // The pager may open on the backend's cached page, from before his yes; the fresh page takes
+  // the screen only while he is on the first card, so it is waited for before he reads on.
+  await expect(page.locator("article.feed-card[data-type=memo]").first()).toBeAttached();
   await pageUntil(page, "memo");
   const memo = page.locator("article.feed-card[data-type=memo]").first();
   const withClip = memo.getByTestId("card-line").filter({ has: page.getByTestId("hear-clip") }).first();
@@ -592,6 +595,9 @@ test("the post-visit card on the web: each line with where it was said, one left
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
+  // The pager may open on the backend's cached page, from before his yes; the fresh page takes
+  // the screen only while he is on the first card, so it is waited for before he reads on.
+  await expect(page.locator("article.feed-card[data-type=memo]").first()).toBeAttached();
   await pageUntil(page, "memo");
   // The same line, by its words: once refused, it has no button to be found by.
   const again = page.locator("article.feed-card[data-type=memo]").first().getByTestId("card-line").filter({ hasText: caption }).first();
