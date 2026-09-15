@@ -314,6 +314,30 @@ export const en = {
     statusPlayed: "{name} heard this card.",
     // @patient
     statusDismissed: "{name} tapped Not for me on this card.",
+    // @patient phrase
+    play: "Play",
+    // @patient phrase
+    watchWhole: "Watch the whole video on {publisher}",
+    // @patient phrase
+    askOrSearch: "Ask or search",
+    // @patient phrase
+    filterLabel: "Where to look",
+    // @patient phrase
+    filterRecords: "Records",
+    // @patient phrase
+    filterWeb: "Web",
+    // @patient phrase
+    filterProviders: "Providers",
+    // @patient phrase
+    filterVideos: "Videos",
+    // @patient phrase
+    search: "Search",
+    // @patient phrase
+    readPage: "Read the page on {publisher}",
+    // @patient
+    foundNothing: "Nura found nothing for this.",
+    // @patient phrase
+    nextVisit: "Next visit: {date}",
   },
   reading: {
     // @patient headline
@@ -368,6 +392,24 @@ export const en = {
     remindersDenied1: "This phone said no to reminders.",
     // @patient
     remindersDenied2: "You can change that in the phone's settings.",
+    // @patient headline
+    areaTitle: "Where you live",
+    // @patient
+    areaLead: "Nura uses your town only to tell you about dengue or haze near you.",
+    // @patient
+    areaNone: "Nura does not know your town.",
+    // @patient
+    areaIs: "Nura knows your town is {area}.",
+    // @patient
+    areaAsk: "Do you live in {area}?",
+    // @patient phrase
+    areaYes: "Yes, I live there",
+    // @patient phrase
+    areaNo: "No",
+    // @patient phrase
+    areaChange: "Choose your town",
+    // @patient phrase
+    areaClear: "Take my town off",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1207,8 +1249,78 @@ export const en = {
   },
   // One plain sentence for each way the backend says no, by the refusal's class name
   // (`backend/app/channels/api/refusals.py`). The name itself is never shown.
+  chief: {
+    // @patient headline
+    sentTitle: "Sent to {name} this week",
+    // @patient
+    sentNone: "Nura sent nothing to {name} this week.",
+    // @patient headline
+    watchingTitle: "Watching for {name}",
+    // @patient
+    watchingNone: "Nura is not watching for anything yet.",
+    // @patient
+    sourcesNote: "Nura reads only health offices, hospitals and doctors' groups.",
+    // @patient phrase
+    onChange: "When something new comes in",
+    // @patient phrase
+    daily: "Every day",
+    // @patient phrase
+    weekly: "Every week",
+    // @patient phrase
+    beforeVisits: "Before each visit",
+    // @patient phrase
+    once: "Once",
+    // @patient phrase
+    paused: "Paused",
+    // @patient phrase
+    pause: "Pause",
+    // @patient phrase
+    resume: "Start again",
+    // @patient phrase
+    pauseWatch: "Pause this watch",
+    // @patient phrase
+    add: "Watch for something new",
+    // @patient
+    addLead: "Choose what Nura should watch for.",
+    // @patient
+    added: "Nura will watch for this from now on.",
+    // @patient phrase
+    dengue: "Dengue",
+    // @patient phrase
+    haze: "Haze",
+    // @patient phrase
+    heat: "Hot weather",
+    // @patient phrase
+    fastingMonth: "Ramadan",
+    // @patient phrase
+    festiveFood: "Festive food",
+  },
   // @patient
   refusals: {
+    // @patient
+    NotAClipCard: "This card has nothing to play.",
+    // @patient
+    NoExcerpt: "This one is a picture with a voice.",
+    // @patient
+    NoClipRenderer: "Nura cannot show this picture right now.",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura could not write this down.",
+    // @patient
+    NotACadence: "Please choose how often from the list.",
+    // @patient
+    NotAHazard: "Nura can watch for dengue, haze or hot weather.",
+    // @patient
+    NotASeason: "Nura can watch for Ramadan or festive food.",
+    // @patient
+    NotACoarseArea: ["Please choose your town from the list.", "Or type only the start of your postcode."],
+    // @patient
+    OnlyHeSetsHisArea: "Only the owner of these papers can choose the town.",
+    // @patient
+    NotAFilter: "Please choose where to look.",
+    // @patient
+    NothingToFind: "Please type a word to look for.",
+    // @patient
+    NotTheirsToManage: "Only the owner and the family member who runs these papers can do this.",
     default: "Nura could not do that right now.",
     NotInTheDemo: ["This demo only takes test phone numbers.", "A test number starts with +65 0."],
     CardsStillOpen: "A paper still waits for your yes.",

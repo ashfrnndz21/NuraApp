@@ -314,6 +314,30 @@ export const zh = {
     statusPlayed: "{name} 听了这张卡。",
     // @patient
     statusDismissed: "{name} 按了“不适合我”。",
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    watchWhole: "在{publisher}看完整的视频",
+    // @patient phrase
+    askOrSearch: "提问或搜索",
+    // @patient phrase
+    filterLabel: "在哪里找",
+    // @patient phrase
+    filterRecords: "记录",
+    // @patient phrase
+    filterWeb: "网上",
+    // @patient phrase
+    filterProviders: "医生和诊所",
+    // @patient phrase
+    filterVideos: "视频",
+    // @patient phrase
+    search: "搜索",
+    // @patient phrase
+    readPage: "在{publisher}看这一页",
+    // @patient
+    foundNothing: "Nura 没有找到相关的内容。",
+    // @patient phrase
+    nextVisit: "下次看病：{date}",
   },
   reading: {
     // @patient headline
@@ -368,6 +392,24 @@ export const zh = {
     remindersDenied1: "这部手机不允许提醒。",
     // @patient
     remindersDenied2: "您可以在手机设置里更改。",
+    // @patient headline
+    areaTitle: "您住的地方",
+    // @patient
+    areaLead: "Nura 只用您住的地区，告诉您附近的骨痛热症或烟霾。",
+    // @patient
+    areaNone: "Nura 不知道您住在哪个地区。",
+    // @patient
+    areaIs: "Nura 知道您住在{area}。",
+    // @patient
+    areaAsk: "您住在{area}吗？",
+    // @patient phrase
+    areaYes: "是，我住在那里",
+    // @patient phrase
+    areaNo: "不是",
+    // @patient phrase
+    areaChange: "选择您的地区",
+    // @patient phrase
+    areaClear: "删除我的地区",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1203,8 +1245,78 @@ export const zh = {
     // @patient phrase
     tryAgain: "再试一次",
   },
+  chief: {
+    // @patient headline
+    sentTitle: "这周发给{name}的",
+    // @patient
+    sentNone: "这周 Nura 没有发给{name}任何东西。",
+    // @patient headline
+    watchingTitle: "为{name}留意的",
+    // @patient
+    watchingNone: "Nura 还没有留意任何事。",
+    // @patient
+    sourcesNote: "Nura 只看卫生机构、医院和医生组织的内容。",
+    // @patient phrase
+    onChange: "有新消息时",
+    // @patient phrase
+    daily: "每天",
+    // @patient phrase
+    weekly: "每周",
+    // @patient phrase
+    beforeVisits: "每次看病前",
+    // @patient phrase
+    once: "一次",
+    // @patient phrase
+    paused: "已暂停",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    resume: "重新开始",
+    // @patient phrase
+    pauseWatch: "暂停这项留意",
+    // @patient phrase
+    add: "留意新的事",
+    // @patient
+    addLead: "选择 Nura 要留意什么。",
+    // @patient
+    added: "从现在起 Nura 会留意这个。",
+    // @patient phrase
+    dengue: "骨痛热症",
+    // @patient phrase
+    haze: "烟霾",
+    // @patient phrase
+    heat: "炎热天气",
+    // @patient phrase
+    fastingMonth: "斋戒月",
+    // @patient phrase
+    festiveFood: "节日食物",
+  },
   // @patient
   refusals: {
+    // @patient
+    NotAClipCard: "这张卡没有可以播放的内容。",
+    // @patient
+    NoExcerpt: "这是一张图片加上声音。",
+    // @patient
+    NoClipRenderer: "Nura 现在不能显示这张图片。",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura 没能记下这个。",
+    // @patient
+    NotACadence: "请从列表里选择多久一次。",
+    // @patient
+    NotAHazard: "Nura 可以留意骨痛热症、烟霾或炎热天气。",
+    // @patient
+    NotASeason: "Nura 可以留意斋戒月或节日食物。",
+    // @patient
+    NotACoarseArea: ["请从列表里选择您的地区。", "或者只输入邮编的前几位。"],
+    // @patient
+    OnlyHeSetsHisArea: "只有这些文件的主人才能选择地区。",
+    // @patient
+    NotAFilter: "请选择在哪里找。",
+    // @patient
+    NothingToFind: "请输入要找的字。",
+    // @patient
+    NotTheirsToManage: "只有主人和管理这些文件的家人才能做这个。",
     default: "Nura 现在做不了这件事。",
     NotInTheDemo: ["演示版只接受测试电话号码。", "测试号码以 +65 0 开头。"],
     CardsStillOpen: "还有一份文件在等您同意。",

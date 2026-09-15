@@ -54,7 +54,6 @@ from app.channels.api.feed_schemas import (
     SentOut,
     SourceOut,
 )
-from app.db import utcnow
 from app.delivery.feed.area import read_area, set_area
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
 from app.delivery.feed.compose import around_for, today_for

@@ -163,7 +163,8 @@ async def test_now_then_at_most_two_new_cards_then_the_gate_then_endless_story_a
     for _ in range(4):
         page = await _feed(deployment, profile_id, his, cursor=cursor)
         assert page["items"], "the list pages endlessly past the gate"
-        assert set(_types(page)) <= {"story", "learning"}
+        # His story and learning — a clip and the recap are among them — nothing else.
+        assert {item["supply"] for item in page["items"]} <= {"story", "learning"}
         for item in page["items"]:
             assert item["autoplay"] is False
             assert item["rendered_from_state"]

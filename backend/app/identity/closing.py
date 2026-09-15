@@ -63,6 +63,7 @@ _UNDER_A_PROFILE = re.compile(r"^[a-z-]+/([0-9a-f-]{36})/")
 TARGET = AccountClosure.__tablename__
 
 OBJECT_KINDS = (
+    "clips",
     "consults",
     "documents",
     "family-photos",
