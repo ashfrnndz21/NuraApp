@@ -8,6 +8,12 @@ signs of a stroke are the ambulance at any hour; the rest are the doctor today i
 and, out of them (the directory's hours, else 20:00 to 08:00), the emergency department of
 the hospital marked as on his insurance, or the emergency number if it gets worse. The
 matrix is tier × in or out of hours × a hospital marked or not; the hour never lowers a tier.
+
+A fall while he is on a blood thinner (`ANTICOAGULANT_CLASSES`: warfarin, apixaban and the rest
+the register classes with them) is the ambulance at any hour (`AMBULANCE_ON_A_THINNER`): a bleed
+inside the head can come hours after a fall. Every path a flag is told by reads it — the
+WhatsApp reply and the family's notice from the button, the symptom log and the feeling cloud.
+Without a thinner, a fall keeps its rows exactly.
 """
 
 from __future__ import annotations
@@ -22,15 +28,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.whatsapp.models import Direction, WhatsAppMessage
+from app.channels.whatsapp.strings import RED_FLAG_STEPS
 from app.clock import FrozenClock
-from app.db import as_utc
+from app.db import as_utc, utcnow
 from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.drugs.registry import LabelFields
 from app.errors import Refusal
+from app.keys.scopes import KeyRole
 from app.memory.models import Provider, ProviderKind
 from app.memory.spine import add_provider
+from app.reasoning.feelings.service import record_tap
 from app.regions import Region
+from app.safety.high_risk import HIGH_RISK_CLASSES
+from app.safety.not_feeling_well import not_feeling_well
 from app.safety.red_flags import (
     AMBULANCE_FLAGS,
+    AMBULANCE_ON_A_THINNER,
+    ANTICOAGULANT_CLASSES,
     RED_FLAGS,
     Feeling,
     Flag,
@@ -42,7 +56,10 @@ from app.safety.red_flags import (
     step_for,
     urgency_of,
 )
-from tests.delivery_support import PA, Home, home
+from app.safety.symptom_log import log_symptom
+from tests.delivery_support import PA, SITI, Home, home, via_for
+from tests.feelings_support import STORE, TRANSCRIBER
+from tests.safety_support import REGISTRY, apixaban, let_in, pa, transcriber_for, warfarin
 
 SGT = ZoneInfo("Asia/Singapore")
 STROKE_AND_CHEST = {
@@ -120,7 +137,7 @@ def test_the_step_reads_the_doctors_hours_and_the_hospital_from_the_directory() 
     glen = _listed("Gleneagles", ProviderKind.HOSPITAL, panel=True, n=1)
     other = _listed("Changi General", ProviderKind.HOSPITAL, n=2)
     six_pm = datetime(2026, 9, 14, 18, 0, tzinfo=SGT)
-    step = escalation_for(Feeling.FALL, providers=[tan, glen, other], local=six_pm, emergency_number="995")
+    step = escalation_for(Feeling.FALL, providers=[tan, glen, other], local=six_pm, emergency_number="995", anticoagulated=False)
     assert (step.step, step.after_hours, step.doctor, step.hospital) == (
         Step.HOSPITAL_NOW,
         True,
@@ -128,13 +145,13 @@ def test_the_step_reads_the_doctors_hours_and_the_hospital_from_the_directory() 
         "Gleneagles",
     )
     ten_am = datetime(2026, 9, 14, 10, 0, tzinfo=SGT)
-    step = escalation_for(Feeling.FALL, providers=[tan, other], local=ten_am, emergency_number="995")
+    step = escalation_for(Feeling.FALL, providers=[tan, other], local=ten_am, emergency_number="995", anticoagulated=False)
     assert (step.step, step.hospital) == (Step.DOCTOR_TODAY, None)
     # A clinic marked by mistake is not a hospital on his insurance.
     marked_clinic = _listed("Bedok Clinic", ProviderKind.CLINIC, panel=True)
-    step = escalation_for(Feeling.FALL, providers=[marked_clinic], local=six_pm, emergency_number="995")
+    step = escalation_for(Feeling.FALL, providers=[marked_clinic], local=six_pm, emergency_number="995", anticoagulated=False)
     assert step.step is Step.DOCTOR_TODAY  # the clinic keeps no hours: 08:00 to 20:00
-    assert escalation_for(Feeling.CHEST_TIGHTNESS, providers=[tan, glen], local=ten_am, emergency_number="995").step is Step.AMBULANCE
+    assert escalation_for(Feeling.CHEST_TIGHTNESS, providers=[tan, glen], local=ten_am, emergency_number="995", anticoagulated=False).step is Step.AMBULANCE
 
 
 # --- on WhatsApp, end to end -----------------------------------------------------------------
@@ -382,3 +399,222 @@ async def test_his_voice_note_at_night_is_answered_with_the_hospital_on_his_insu
     assert "If you cannot get there safely, call the ambulance now on 995." in said
     assert not any("today." in line and line.startswith("Call ") for line in said)
     assert said[-1] == CLOSING or CLOSING in said
+
+
+# --- a fall on a blood thinner (the operator, 15 September 2026) ------------------------------
+
+THINNERS = {"warfarin": warfarin, "apixaban": apixaban}
+"""The two kinds of blood thinner a family here holds, from their label photos: the register
+classes both as an anticoagulant."""
+
+FELL = {"en": "I fell in the bathroom", "ms": "Saya jatuh di bilik air", "zh": "我在浴室跌倒了"}
+OPENING = {"en": "This one we do not wait for.", "ms": "Yang ini kita tidak tunggu.", "zh": "这个我们不等。"}
+MEI_KNOWS = {"en": "Mei knows now.", "ms": "Mei sudah tahu.", "zh": "Mei已经知道了。"}
+CLOSINGS = {
+    "en": CLOSING,
+    "ms": "Nura tidak menentukan apa masalahnya.",
+    "zh": "Nura 不判断您出了什么问题。",
+}
+AMBULANCE_NOW = {
+    "en": "Call the ambulance now on 995.",
+    "ms": "Hubungi ambulans sekarang di talian 995.",
+    "zh": "现在就打995叫救护车。",
+}
+"""The ambulance step, word for word, in his three languages."""
+
+
+def _step_lines(step: Step, language: str) -> list[str]:
+    """Today's lines for a step, in his language: the catalogue's, with the directory's names."""
+    if language == "en":
+        return REPLY_STEP[step]
+    return [
+        line.format(doctor="Dr Tan", hospital="Gleneagles", emergency_number="995")
+        for line in RED_FLAG_STEPS[step.value][language]
+    ]
+
+
+@pytest.mark.parametrize("feeling", sorted(RED_FLAGS))
+@pytest.mark.parametrize("after_hours", (False, True))
+@pytest.mark.parametrize("hospital", (False, True))
+def test_on_a_blood_thinner_a_fall_is_the_ambulance_and_no_other_row_moves(
+    feeling: Feeling, after_hours: bool, hospital: bool
+) -> None:
+    step = step_for(urgency_of(feeling, anticoagulated=True), after_hours=after_hours, hospital=hospital)
+    assert step is (Step.AMBULANCE if feeling is Feeling.FALL else _expected(feeling, after_hours, hospital))
+    # Off a thinner, the fall keeps its rows exactly.
+    assert step_for(urgency_of(feeling), after_hours=after_hours, hospital=hospital) is _expected(
+        feeling, after_hours, hospital
+    )
+
+
+def test_the_thinners_are_the_registers_class_and_never_a_list_of_names() -> None:
+    """The rule reads the register's class, the one the label-photo rule guards; every blood
+    thinner the register knows is in it, so no drug list is copied here."""
+    assert AMBULANCE_ON_A_THINNER == {Feeling.FALL}
+    assert AMBULANCE_ON_A_THINNER <= RED_FLAGS - AMBULANCE_FLAGS
+    assert ANTICOAGULANT_CLASSES <= set(HIGH_RISK_CLASSES)
+    known = {
+        match.generic: match.drug_class
+        for generic in HIGH_RISK_CLASSES["anticoagulant"]
+        for match in REGISTRY.identify(LabelFields(generic=generic))
+    }
+    assert {"warfarin", "apixaban"} <= set(known)
+    assert all(drug_class.lower() in ANTICOAGULANT_CLASSES for drug_class in known.values())
+
+
+def test_the_step_on_a_thinner_is_the_ambulance_whatever_the_directory_says() -> None:
+    tan = _listed("Dr Tan", ProviderKind.DOCTOR, hours=(time(9, 0), time(17, 0)))
+    glen = _listed("Gleneagles", ProviderKind.HOSPITAL, panel=True, n=1)
+    for local in (datetime(2026, 9, 14, 14, 0, tzinfo=SGT), datetime(2026, 9, 14, 22, 30, tzinfo=SGT)):
+        for providers in ([], [tan], [tan, glen]):
+            for number in ("995", "999"):
+                step = escalation_for(
+                    Feeling.FALL, providers=providers, local=local, emergency_number=number, anticoagulated=True
+                )
+                assert (step.step, step.urgency, step.anticoagulated, step.emergency_number) == (
+                    Step.AMBULANCE,
+                    Urgency.AMBULANCE,
+                    True,
+                    number,
+                )
+
+
+@pytest.mark.parametrize("thinner", sorted(THINNERS))
+@pytest.mark.parametrize("language", ("en", "ms", "zh"))
+@pytest.mark.parametrize(("hour", "minute"), ((14, 0), (22, 30)))
+@pytest.mark.parametrize("hospital", (False, True))
+async def test_a_fall_on_a_blood_thinner_is_the_ambulance_at_any_hour_in_every_language(
+    sg: AsyncSession,
+    tmp_path: Path,
+    clock: FrozenClock,
+    thinner: str,
+    language: str,
+    hour: int,
+    minute: int,
+    hospital: bool,
+) -> None:
+    """At 14:00 in his doctor's hours and at 22:30 out of them, with Gleneagles marked or not:
+    never "rest now, call Dr Tan in the morning" — the ambulance now, and the family's
+    ambulance notice."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=hospital)
+    await THINNERS[thinner](sg, h.owner)
+    h.pa.language = language
+    await sg.flush()
+    clock.set(at(hour, minute))
+    handled = await h.inbound(sg, PA, FELL[language])
+    assert handled.outcome == "red_flag"
+    assert handled.replies[0].text.splitlines() == [
+        OPENING[language],
+        AMBULANCE_NOW[language],
+        MEI_KNOWS[language],
+        CLOSINGS[language],
+    ]
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+@pytest.mark.parametrize("language", ("en", "ms", "zh"))
+@pytest.mark.parametrize(("hour", "minute"), ((14, 0), (22, 30)))
+@pytest.mark.parametrize("hospital", (False, True))
+async def test_a_fall_with_no_blood_thinner_keeps_todays_rows_exactly(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, language: str, hour: int, minute: int, hospital: bool
+) -> None:
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=hospital)
+    h.pa.language = language
+    await sg.flush()
+    clock.set(at(hour, minute))
+    handled = await h.inbound(sg, PA, FELL[language])
+    step = _expected(Feeling.FALL, after_hours=hour >= 20, hospital=hospital)
+    assert step is not Step.AMBULANCE
+    assert handled.replies[0].text.splitlines() == [
+        OPENING[language],
+        *_step_lines(step, language),
+        MEI_KNOWS[language],
+        CLOSINGS[language],
+    ]
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[step]]
+
+
+async def test_a_thinner_no_longer_in_force_does_not_raise_the_fall(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A line superseded and not replaced is not on his list now: the night row, as without."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    made = await warfarin(sg, h.owner)
+    assert made.line is not None
+    made.line.superseded_at = utcnow()
+    await sg.flush()
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, PA, FELL["en"])
+    assert handled.replies[0].text.splitlines()[1:4] == REPLY_STEP[Step.NUMBER_IF_WORSE]
+
+
+async def test_the_helpers_word_reads_his_list_as_the_system(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Siti's key does not open his medicines; she writes that he fell, at night, in Malay.
+    The rule reads his list as the system and she is told the ambulance — naming no medicine."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    await warfarin(sg, h.owner)
+    clock.set(at(22, 30))
+    handled = await h.inbound(sg, SITI, "Pa jatuh di bilik air")
+    assert handled.outcome == "red_flag"
+    assert handled.replies[0].text.splitlines()[1] == AMBULANCE_NOW["ms"]
+    assert not any(word in handled.replies[0].text.lower() for word in ("warfarin", "marevan", "darah"))
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+@pytest.mark.parametrize("path", ("button", "log", "cloud"))
+@pytest.mark.parametrize("thinner", (None, "warfarin"))
+async def test_the_button_the_log_and_the_cloud_tell_the_family_the_same_step(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, path: str, thinner: str | None
+) -> None:
+    """Pressed, written in the log, or tapped on the cloud at 22:30 with no hospital marked: his
+    card says the ambulance as it always has, and the family's notice follows the tier — the
+    ambulance on a thinner, the night notice without one. (The cloud's follow-up raises its
+    red word through the same path as the tap.)"""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    if thinner is not None:
+        await THINNERS[thinner](sg, h.owner)
+    clock.set(at(22, 30))
+    if path == "button":
+        await not_feeling_well(
+            sg, context=h.owner, store=STORE, transcriber=TRANSCRIBER, registry=REGISTRY, via=h.via,
+            words=FELL["en"],
+        )
+    elif path == "log":
+        await log_symptom(
+            sg, context=h.owner, store=STORE, transcriber=TRANSCRIBER, registry=REGISTRY, via=h.via,
+            words=FELL["en"],
+        )
+    else:
+        await record_tap(
+            sg, context=h.owner, word=Feeling.FALL, registry=REGISTRY, store=STORE,
+            transcriber=TRANSCRIBER, via=h.via,
+        )
+    step = Step.AMBULANCE if thinner is not None else Step.NUMBER_IF_WORSE
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[step]]
+
+
+async def test_in_malaysia_the_ambulance_is_999(my: AsyncSession, tmp_path: Path, clock: FrozenClock) -> None:
+    """The region table gives the number: a fall on warfarin in Kuala Lumpur at 22:30 sends the
+    family the ambulance notice on 999."""
+    clock.set(datetime(2026, 9, 14, 6, 0, tzinfo=SGT).astimezone(UTC))
+    owner = await pa(my, region=Region.MY, phone="+60121110077")
+    await let_in(my, owner, phone="+60122220077", name="Mei", role=KeyRole.CHIEF)
+    await warfarin(my, owner)
+    via = via_for(Region.MY, tmp_path)
+    clock.set(datetime(2026, 9, 14, 22, 30, tzinfo=SGT).astimezone(UTC))
+    done = await not_feeling_well(
+        my, context=owner, store=via.providers.object_store, transcriber=transcriber_for(Region.MY),
+        registry=REGISTRY,
+        via=via, words=FELL["en"],
+    )
+    assert "Call the ambulance now on 999." in [line.text for line in done.lines]
+    whatsapp = via.providers.whatsapp
+    sent = [one.text for one in whatsapp.sent if one.to_e164 == "+60122220077"]  # type: ignore[attr-defined]
+    assert sent and sent[-1].splitlines() == [
+        "This one we do not wait for.",
+        "Pa is not feeling well.",
+        "Call Pa now.",
+        "If Pa has not called the ambulance, call the ambulance now on 999.",
+    ]

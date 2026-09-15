@@ -58,6 +58,14 @@
       "drug_class": "anticoagulant"
     },
     {
+      "registration_no": "SIN14471P",
+      "brand": "Eliquis",
+      "generic": "apixaban",
+      "strength": "5 mg",
+      "form": "tablet",
+      "drug_class": "anticoagulant"
+    },
+    {
       "registration_no": "SIN12208P",
       "brand": "Lantus SoloStar",
       "generic": "insulin glargine",
@@ -236,6 +244,20 @@
         "leafy_greens_steady",
         "tcm_supplements_ask",
         "alcohol"
+      ]
+    },
+    "apixaban": {
+      "plain_name_id": "blood_thinner_tablet",
+      "purpose_id": "clots",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "bleeding_signs",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "tcm_supplements_ask"
       ]
     },
     "insulin glargine": {
