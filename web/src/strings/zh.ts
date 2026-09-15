@@ -401,7 +401,7 @@ export const zh = {
     // @patient headline
     areaTitle: "您住的地方",
     // @patient
-    areaLead: "Nura 只用您住的地区，告诉您附近的骨痛热症或烟霾。",
+    areaLead: "Nura 只用您住的地区，告诉您附近的骨痛热症、烟霾或炎热天气。",
     // @patient
     areaNone: "Nura 不知道您住在哪个地区。",
     // @patient

@@ -461,6 +461,10 @@ async def sent_this_week(session: AsyncSession, *, context: KeyContext) -> list[
         where=(FeedItem.created_at >= day.week_starts_at, FeedItem.created_at <= day.now),
     )
     visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
+    if context.is_owner:
+        # His own read of the week is of what reached him: a card held for his chief or kept
+        # for the doctor's memo is not on his feed, so it is not on his week either.
+        visible = [item for item in visible if item.deliver_to is DeliverTo.PATIENT]
     shown = sorted(
         (item for item in visible if item.type not in NOT_IN_THE_WEEK),
         key=lambda item: (as_utc(item.created_at), item.priority),

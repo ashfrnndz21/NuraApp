@@ -22,6 +22,8 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
+from app.audit.models import Outcome
+from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.delivery.feed import clips as clip_module
@@ -40,6 +42,7 @@ from app.delivery.feed.local import check_area, relevant_to
 from app.delivery.feed.models import (
     PLAYS,
     CardType,
+    DeliverTo,
     Engagement,
     EngagementKind,
     FeedItem,
@@ -992,7 +995,7 @@ async def test_watching_for_pa_lists_each_watch_with_its_sources_and_cadence_and
     watches = {(one["kind"], one["label"]): one for one in listed.json()}
     explainer = watches[("explainer", "Blood pressure, in simple words")]
     assert explainer["cadence"] == "on_change" and "HealthHub" in explainer["sources"]
-    haze = watches[("local", "The haze where you live")]
+    haze = watches[("local", "The haze anywhere in the country")]
     assert haze["cadence"] == "daily" and haze["enabled"] is True
     # She pauses the haze watch: it is not run again, and no new haze card comes.
     paused = await deployment.client.patch(
@@ -1015,12 +1018,12 @@ async def test_watching_for_pa_lists_each_watch_with_its_sources_and_cadence_and
         headers=bearer(mei["token"]),
     )
     assert added.status_code == 201, added.text
-    assert added.json()["cadence"] == "daily" and added.json()["label"] == "Dengue where you live"
+    assert added.json()["cadence"] == "daily" and added.json()["label"] == "Dengue anywhere in the country"
     # In Malay, for a reader who reads Malay.
     malay = await deployment.client.get(
         f"/profiles/{profile_id}/search-jobs", params={"language": "ms"}, headers=bearer(mei["token"])
     )
-    assert "Denggi di tempat anda tinggal" in {one["label"] for one in malay.json()}
+    assert "Denggi di seluruh negara" in {one["label"] for one in malay.json()}
     # A caregiver who is not his chief neither reads nor pauses them.
     siti = await _caregiver(deployment, pa, profile_id)
     for answer in (
@@ -1260,3 +1263,115 @@ async def test_his_chief_neither_resumes_nor_stops_his_ramadan_watch(deployment:
         f"/profiles/{profile_id}/search-jobs/{job}", headers=bearer(pa["token"])
     )
     assert still.json()["enabled"] is False
+
+
+async def test_his_own_week_shows_only_what_reached_him(deployment: Deployment) -> None:
+    pa, profile_id = await _pa(deployment)
+    mei = await _chief(deployment, pa, profile_id)
+    await _took(deployment, pa, profile_id, "warfarin")
+    await _reading(deployment, profile_id, pa["token"], 138, 84)
+    await _feed(deployment, profile_id, pa["token"])
+    async with deployment.sessions() as session:
+        rows = (
+            await session.scalars(select(FeedItem).where(FeedItem.profile_id == uuid.UUID(profile_id)))
+        ).all()
+    not_his = {str(row.id) for row in rows if row.deliver_to is not DeliverTo.PATIENT}
+    assert not_his, "the warfarin pages make a card for the memo or for his chief"
+    his = await deployment.client.get(f"/profiles/{profile_id}/feed/week", headers=bearer(pa["token"]))
+    assert his.status_code == 200, his.text
+    assert not {row["item"]["item_id"] for row in his.json()} & not_his
+    hers = await deployment.client.get(f"/profiles/{profile_id}/feed/week", headers=bearer(mei["token"]))
+    assert {row["item"]["item_id"] for row in hers.json()} & not_his, "his chief still reads them"
+
+
+async def test_no_season_card_when_his_kidneys_are_on_his_record(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    pa, profile_id = await _pa(deployment)
+    await _told(deployment, pa, profile_id, "diabetes", "kidneys")
+    await _feed(deployment, profile_id, pa["token"])
+    clock.step(timedelta(days=7))
+    await _feed(deployment, profile_id, pa["token"])
+    assert await _made(deployment, profile_id, CardType.SEASONAL) == []
+    async with deployment.sessions() as session:
+        jobs = (
+            await session.scalars(
+                select(SearchJob).where(
+                    SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.SEASONAL
+                )
+            )
+        ).all()
+    assert jobs and all(
+        "held_for_his_dietitian" in {r["because"] for r in job.results["rejected"]} for job in jobs
+    )
+
+
+async def test_his_chief_cannot_ask_about_his_faith_under_another_kind_of_watch(
+    deployment: Deployment,
+) -> None:
+    pa, profile_id = await _pa(deployment)
+    mei = await _chief(deployment, pa, profile_id)
+    for kind, term in (("explainer", "ramadan"), ("worth_knowing", "puasa"), ("explainer", "Fasting month")):
+        hers = await deployment.client.post(
+            f"/profiles/{profile_id}/search-jobs",
+            json={"kind": kind, "terms": [term]},
+            headers=bearer(mei["token"]),
+        )
+        assert hers.status_code == 403 and hers.json()["refusal"] == "FastingIsHisToSay", hers.text
+    # "Fasting" alone is his word for no food before a blood test, not his faith.
+    fine = await deployment.client.post(
+        f"/profiles/{profile_id}/search-jobs",
+        json={"kind": "explainer", "terms": ["fasting blood sugar"]},
+        headers=bearer(mei["token"]),
+    )
+    assert fine.status_code == 201, fine.text
+    his = await deployment.client.post(
+        f"/profiles/{profile_id}/search-jobs",
+        json={"kind": "explainer", "terms": ["ramadan"]},
+        headers=bearer(pa["token"]),
+    )
+    assert his.status_code == 201, his.text
+    async with deployment.sessions() as session:
+        trail = await read_audit(session, context=await _context(deployment, pa["person_id"], profile_id))
+    assert sum(e.refused_because == "FastingIsHisToSay" for e in trail) == 3
+
+
+async def test_a_key_without_the_record_is_refused_on_the_queue_and_it_is_on_his_trail(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    pa, profile_id = await _pa(deployment)
+    await _reading(deployment, profile_id, pa["token"], 138, 84)
+    page = await _feed(deployment, profile_id, pa["token"])
+    item = page["items"][0]["item_id"]
+    kit = await register_by_phone(deployment, SITI, "Kit")
+    await let_in(deployment, pa, profile_id, SITI, ["medicines"], "helper", holder_display_name="Kit")
+    key = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": SITI, "role": "caregiver", "scopes": ["medicines"]},
+        headers=bearer(pa["token"]),
+    )
+    assert key.status_code == 201, key.text
+    sent = await deployment.client.post(
+        f"/profiles/{profile_id}/feed/events",
+        json=_events(_event(item, "opened", clock.now())),
+        headers=bearer(kit["token"]),
+    )
+    assert sent.status_code == 403, sent.text
+    async with deployment.sessions() as session:
+        trail = await read_audit(session, context=await _context(deployment, pa["person_id"], profile_id))
+    refused = [e for e in trail if e.outcome is Outcome.REFUSED and e.target == "feed_engagement"]
+    assert len(refused) == 1
+
+
+async def test_a_card_about_his_medicine_says_not_to_stop_it(deployment: Deployment) -> None:
+    pa, profile_id = await _pa(deployment)
+    await _took(deployment, pa, profile_id, "amlodipine")
+    await _feed(deployment, profile_id, pa["token"])
+    made = await _made(deployment, profile_id, CardType.LEARNING)
+    [tablet] = [card for card in made if card.headline == "Your blood pressure tablet"]
+    keep = "Ask your doctor before you stop this medicine."
+    assert keep in tablet.body
+    assert tablet.body.index(keep) < tablet.body.index("This comes from HealthHub.")
+    assert not _fails([keep], "en")
+    # A card about a condition, not a medicine, has no such line.
+    assert all(keep not in card.body for card in made if card is not tablet)

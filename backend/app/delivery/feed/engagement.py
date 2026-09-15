@@ -85,6 +85,7 @@ class Flushed:
     key does not cover, too old, or not yet."""
 
 
+@audited(Action.WRITE, Scope.RECORDS, ENGAGEMENT_TARGET)
 async def record_events(
     session: AsyncSession, *, context: KeyContext, events: Sequence[Queued]
 ) -> Flushed:

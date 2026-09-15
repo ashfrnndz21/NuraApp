@@ -154,6 +154,8 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("At your visit on {day}, {doctor} said this:",),
         "story_photo": ("{who} shared this photo on {day}.",),
         "learning_source": ("This comes from {source_name}.",),
+        # A card about one of his medicines never reads as a reason to stop it.
+        "learning_keep_taking": ("Ask {doctor} before you stop this medicine.",),
         "recap_intro": ("This is your week, from your blood pressure book.",),
         "flag_family": (
             "You told Nura about {feeling}.",
@@ -227,6 +229,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("Semasa lawatan anda pada {day}, {doctor} kata begini:",),
         "story_photo": ("{who} berkongsi gambar ini pada {day}.",),
         "learning_source": ("Ini datang dari {source_name}.",),
+        "learning_keep_taking": ("Tanya {doctor} sebelum anda berhenti makan ubat ini.",),
         "recap_intro": ("Ini minggu anda, dari buku tekanan darah anda.",),
         "flag_family": (
             "Anda beritahu Nura tentang {feeling}.",
@@ -272,6 +275,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("{day}看病时{doctor}这样说：",),
         "story_photo": ("{who}在{day}分享了这张照片。",),
         "learning_source": ("这来自{source_name}。",),
+        "learning_keep_taking": ("停这个药以前，先问一问{doctor}。",),
         "recap_intro": ("这是您的这一周，来自您的血压本。",),
         "flag_family": (
             "您告诉Nura您{feeling}。",
@@ -559,10 +563,13 @@ def learning_lines(
     source_name: str,
     doctor: str,
     why: str = "learning",
+    keep_taking: bool = False,
     **slots: Any,
 ) -> Lines:
     """A learning card: the compressed lines, then where they came from, then the boundary
-    line every inferring card carries, then why it is here.
+    line every inferring card carries, then why it is here. A card about one of his medicines
+    (`keep_taking`) says, after its lines, not to stop it without asking his doctor: a line
+    about what a medicine can do is never read as a reason to stop it.
 
     The boundary is `app.safety.boundary`'s line for the learning-card surface (E16-01) —
     what Nura did, "This is not a doctor's advice.", "Ask {doctor}." — the same words as on
@@ -572,7 +579,8 @@ def learning_lines(
     filled = {"source_name": source_name, "doctor": doctor, "topic": topic, **slots}
     source = tuple(_fill(line, filled) for line in LINES[code]["learning_source"])
     boundary = boundary_line(Surface.LEARNING_CARD, code, doctor=doctor)
-    lines = (*body, *source, *boundary.splitlines())
+    keep = tuple(_fill(line, filled) for line in LINES[code]["learning_keep_taking"]) if keep_taking else ()
+    lines = (*body, *keep, *source, *boundary.splitlines())
     return Lines(
         language=code,
         headline=headline,
@@ -656,7 +664,7 @@ WATCH_LABELS: Mapping[str, Mapping[str, str]] = {
         "explainer": "{term}, in simple words",
         "safety": "Safety notices about {term}",
         "local": "{term} near {area}",
-        "local_region": "{term} where you live",
+        "local_region": "{term} anywhere in the country",
         "seasonal": "{term}, before it comes",
         "food": "Food choices for {term}",
         "provider": "News from {term}",
@@ -666,7 +674,7 @@ WATCH_LABELS: Mapping[str, Mapping[str, str]] = {
         "explainer": "{term}, dalam kata-kata mudah",
         "safety": "Notis keselamatan tentang {term}",
         "local": "{term} dekat {area}",
-        "local_region": "{term} di tempat anda tinggal",
+        "local_region": "{term} di seluruh negara",
         "seasonal": "{term}, sebelum tiba",
         "food": "Pilihan makanan untuk {term}",
         "provider": "Berita dari {term}",
@@ -676,7 +684,7 @@ WATCH_LABELS: Mapping[str, Mapping[str, str]] = {
         "explainer": "用简单的话讲{term}",
         "safety": "关于{term}的安全通知",
         "local": "{area}附近的{term}",
-        "local_region": "住处附近的{term}",
+        "local_region": "全国各地的{term}",
         "seasonal": "{term}来临前的提醒",
         "food": "适合{term}的食物选择",
         "provider": "来自{term}的消息",

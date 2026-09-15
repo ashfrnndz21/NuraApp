@@ -90,6 +90,17 @@ class FastingIsHisToSay(Refusal):
 HIS_OWN_WORD: frozenset[str] = frozenset({"fasting month"})
 """The watches only he (or his steward) may add: those that say something about his faith."""
 
+FAITH_WORDS: tuple[str, ...] = ("fasting month", "ramadan", "ramadhan", "puasa", "斋戒")
+"""The words that say something about his faith wherever they stand in a watch's terms, and
+whatever kind of watch it is: "ramadan" asked for as an explainer is the same guess about him
+as the fasting month asked for as a season. ("Fasting" alone is his word for no food before a
+blood test, and says nothing about his faith.)"""
+
+
+def speaks_of_his_faith(terms: Sequence[str]) -> bool:
+    """Whether a watch's terms say something about his faith (`FAITH_WORDS`)."""
+    return any(word in term.strip().lower() for term in terms for word in FAITH_WORDS)
+
 
 CADENCES = frozenset({"on_change", "daily", "weekly", "before_visits", "once"})
 DEFAULT_CADENCE: Mapping[JobKind, str] = {
@@ -105,7 +116,8 @@ DEFAULT_CADENCE: Mapping[JobKind, str] = {
 or local bulletin every day, a season or a food card every week."""
 
 FOOD_HELD_FOR: frozenset[str] = frozenset({"kidneys", "kidney_watched"})
-"""The conditions whose food a dietitian sets: no general food card is made for them."""
+"""The conditions whose food a dietitian sets: no general food card, and no season's card
+(festive food, breaking the fast with dates), is made for them."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,19 +186,19 @@ async def create_job(
         cleaned = [check_hazard(term) for term in cleaned]
     elif kind is JobKind.SEASONAL:
         cleaned = [check_season_term(term) for term in cleaned]
-        if set(cleaned) & HIS_OWN_WORD and not (context.is_owner or context.is_steward):
-            refusal = FastingIsHisToSay(f"a {context.role} key does not say whether he fasts")
-            await record(
-                session,
-                context=context,
-                action=Action.WRITE,
-                scope=Scope.RECORDS,
-                target=JOB_TARGET,
-                outcome=Outcome.REFUSED,
-                refused_because=type(refusal).__name__,
-            )
-            refusal.written_down = True
-            raise refusal
+    if speaks_of_his_faith(cleaned) and not (context.is_owner or context.is_steward):
+        refusal = FastingIsHisToSay(f"a {context.role} key does not say whether he fasts")
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=JOB_TARGET,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refusal).__name__,
+        )
+        refusal.written_down = True
+        raise refusal
     cadence = cadence or DEFAULT_CADENCE[kind]
     if cadence not in CADENCES:
         raise NotACadence(f"{cadence!r} is not a cadence a search runs on")
@@ -236,7 +248,7 @@ async def pause_job(
     except a watch about his faith (the fasting month), which only he or his steward pauses or
     resumes (`FastingIsHisToSay`)."""
     job = await get_job(session, context=context, job_id=job_id)
-    if set(job.terms) & HIS_OWN_WORD and not (context.is_owner or context.is_steward):
+    if speaks_of_his_faith(job.terms) and not (context.is_owner or context.is_steward):
         # His yes or his no about Ramadan is his: his chief neither resumes a watch he
         # stopped nor stops one he asked for.
         refusal = FastingIsHisToSay(f"a {context.role} key does not say whether he fasts")
@@ -357,9 +369,10 @@ async def run_job(
             for found in found_pages:
                 rejected.append({"url": found.url, "because": "not_relevant_to_his_record"})
             found_pages = []
-    if job.kind is JobKind.FOOD and FOOD_HELD_FOR & set(around.conditions):
+    if job.kind in (JobKind.FOOD, JobKind.SEASONAL) and FOOD_HELD_FOR & set(around.conditions):
         # His kidneys are on his record: a kidney diet (less potassium and phosphate) is a
-        # dietitian's to set, and a general food choice could go against it. No food card.
+        # dietitian's to set, and a general food choice could go against it — a season's card
+        # too (mooncakes; dates to break the fast, which are high in potassium). No card.
         for found in found_pages:
             rejected.append({"url": found.url, "because": "held_for_his_dietitian"})
         found_pages = []
@@ -521,6 +534,7 @@ async def run_job(
             doctor=doctor or YOUR_DOCTOR[code],
             around=around,
             season=season,
+            about_a_medicine=job.kind is JobKind.EXPLAINER and job.reason.get("scope") == "medicines",
         )
         if shape.cite:
             cite |= shape.cite
@@ -628,6 +642,7 @@ def _shape(
     doctor: str,
     around: Around,
     season: Any,
+    about_a_medicine: bool = False,
 ) -> _Shape:
     """Which card a page becomes, and its words: the compressed lines, where they came from,
     the boundary line, and why it is here."""
@@ -656,7 +671,7 @@ def _shape(
         return _Shape(CardType.SEASONAL, lines, around.format)
     if kind is JobKind.FOOD:
         return _Shape(CardType.FOOD, learning_lines(code, **common), around.format)
-    lines = learning_lines(code, **common)
+    lines = learning_lines(code, keep_taking=about_a_medicine, **common)
     if found.media == "video":
         fits = clip_length_ok(compressed.start_sec, compressed.end_sec) and _narrates_in_time(
             lines.voice, code, lines.boundary
