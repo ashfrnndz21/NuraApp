@@ -512,9 +512,12 @@ export interface Strings {
     ladderYes: string;
     deliveries: string;
     settings: string;
-    triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
+    triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge" | "check_in" | "family_notice", string>;
     channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
+    /** Why a message was held, where it was not a quiet day: said instead of the outcome, with
+     *  `{name}` his (E11-01). Keyed by `HELD_BECAUSE` in `screens/family/Delivery.tsx`. */
+    skippedBecause: Record<"flagOpen" | "saidToday" | "nudgeAsked", string>;
     rule: string;
     quietFrom: string;
     quietUntil: string;

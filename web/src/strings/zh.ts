@@ -1096,6 +1096,8 @@ export const zh = {
       family_message: "家人的一条消息",
       first_week_prompt: "第一周",
       nudge: "小提醒",
+      check_in: "今天感觉怎么样",
+      family_notice: "Nura这个星期记下的",
     },
     // @patient phrase
     channels: {
@@ -1111,6 +1113,12 @@ export const zh = {
       no_channel: "联系不上他们",
       no_scope: "他们的钥匙不包括这个",
       skipped: "安静的日子跳过了",
+    },
+    // @patient
+    skippedBecause: {
+      flagOpen: "没有发：{name}今天不舒服。",
+      saidToday: "没有问：{name}今天已经说过了。",
+      nudgeAsked: "没有问两次：小提醒已经问过了。",
     },
     // @patient phrase
     rule: "规则",

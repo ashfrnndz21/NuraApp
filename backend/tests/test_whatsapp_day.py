@@ -302,3 +302,22 @@ async def test_pa_completes_a_full_day_on_whatsapp_without_opening_the_app(
     } <= {row["rule"] for row in sent}
     # Morning card, visit card, the Taken reply, the voice note's, the check-in, its reply.
     assert len(day.said_to(PA)) >= 6
+
+    # The family's own log and settings (E11-05, #137): Mei, his chief, reads both rules there,
+    # and each is a kind of message whose channels and cap the family can change.
+    hers = await _ok(
+        await deployment.client.get(
+            f"/profiles/{day.profile_id}/deliveries",
+            params={"day": DAY},
+            headers=bearer(day.mei["token"]),
+        )
+    )
+    assert {"check_in_time_reached", "evening_family_notice"} <= {row["rule"] for row in hers}
+    kinds = await _ok(
+        await deployment.client.get(
+            f"/profiles/{day.profile_id}/delivery-settings", headers=bearer(day.mei["token"])
+        )
+    )
+    assert kinds["caps"]["check_in"] == 1 and kinds["caps"]["family_notice"] == 1
+    assert kinds["channels"]["check_in"] == ["app_push", "whatsapp"]
+    assert kinds["channels"]["family_notice"] == ["app_push", "whatsapp"]

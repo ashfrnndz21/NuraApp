@@ -1098,6 +1098,8 @@ export const en = {
       family_message: "Family message",
       first_week_prompt: "First week",
       nudge: "A small reminder",
+      check_in: "How are you feeling today",
+      family_notice: "What Nura wrote this week",
     },
     // @patient phrase
     channels: {
@@ -1113,6 +1115,12 @@ export const en = {
       no_channel: "No way to reach them",
       no_scope: "Their key does not cover it",
       skipped: "Skipped on a quiet day",
+    },
+    // @patient
+    skippedBecause: {
+      flagOpen: "Held: {name} is not well today.",
+      saidToday: "Not asked: {name} already said today.",
+      nudgeAsked: "Not asked twice: the small reminder asked.",
     },
     // @patient phrase
     rule: "Rule",

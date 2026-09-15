@@ -10,6 +10,7 @@ only on a day something was written down.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -278,3 +279,26 @@ async def test_neither_goes_on_a_day_with_an_open_red_flag(
     # The next evening the flag is out of its day: he is asked again.
     [asked] = _rows(await _run(sg, h, clock, at(18, day=15)), CHECK_IN)
     assert asked.outcome is DeliveryOutcome.SENT
+
+
+# --- the family's log -----------------------------------------------------------------------------
+
+
+def test_the_familys_log_names_both_kinds_and_says_why_one_was_held_in_every_language() -> None:
+    """The delivery log on the web (#137, `family/Delivery.tsx`) labels each kind of message
+    and, for a message held for these rules' reasons, says why rather than "a quiet day": the
+    engine's reasons are the keys it looks them up by, in English, Malay and Chinese."""
+    web = Path(__file__).resolve().parents[2] / "web" / "src"
+    screen = (web / "screens" / "family" / "Delivery.tsx").read_text(encoding="utf-8")
+    codes = {A_FLAG_IS_OPEN: "flagOpen", HE_SAID_TODAY: "saidToday", THE_NUDGE_ASKED: "nudgeAsked"}
+    for reason, code in codes.items():
+        assert f'"{reason}": "{code}"' in screen, reason
+    for language in ("en", "ms", "zh"):
+        text = (web / "strings" / f"{language}.ts").read_text(encoding="utf-8")
+        kinds = re.search(r"triggers: \{\n(.*?)\n\s*\},", text, re.DOTALL)
+        held = re.search(r"skippedBecause: \{\n(.*?)\n\s*\},", text, re.DOTALL)
+        assert kinds is not None and held is not None, language
+        for kind in (CHECK_IN, NOTICE):
+            assert f"{kind.value}: " in kinds.group(1), (language, kind)
+        for code in codes.values():
+            assert f'{code}: "' in held.group(1), (language, code)

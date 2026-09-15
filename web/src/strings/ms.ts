@@ -1096,6 +1096,8 @@ export const ms = {
       family_message: "Mesej daripada keluarga",
       first_week_prompt: "Minggu pertama",
       nudge: "Peringatan kecil",
+      check_in: "Apa khabar hari ini",
+      family_notice: "Apa yang Nura tulis minggu ini",
     },
     // @patient phrase
     channels: {
@@ -1111,6 +1113,12 @@ export const ms = {
       no_channel: "Tiada cara untuk sampai kepada mereka",
       no_scope: "Kunci mereka tidak meliputinya",
       skipped: "Dilangkau pada hari yang tenang",
+    },
+    // @patient
+    skippedBecause: {
+      flagOpen: "Ditahan: {name} tidak sihat hari ini.",
+      saidToday: "Tidak ditanya: {name} sudah beritahu hari ini.",
+      nudgeAsked: "Tidak ditanya dua kali: peringatan kecil sudah tanya.",
     },
     // @patient phrase
     rule: "Peraturan",
