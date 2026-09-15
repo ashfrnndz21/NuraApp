@@ -76,6 +76,8 @@ export const zh = {
     // @patient headline
     visitsOwn: "您的看诊",
     // @patient headline
+    visitsOwnOther: "{patient}的看诊",
+    // @patient headline
     visitsOther: "{name}的看诊",
     // @patient
     visitsNoneOther: "Nura还没有记下{name}的看诊。",
@@ -277,7 +279,7 @@ export const zh = {
     // @patient
     cannotReachOther: "Nura 现在打不开{patient}的文件。",
     // @patient
-    emergencySoonOther: "Nura 会把{patient}的急救卡放在这里。",
+    emergencySoonOther: "Nura 会把{patient}的紧急卡放在这里。",
     // @patient headline
     todayListOther: "{patient}今天的药",
     // @patient
@@ -971,19 +973,33 @@ export const zh = {
     // @patient headline
     medicines: "您的药",
     // @patient headline
+    medicinesOther: "{patient}的药",
+    // @patient headline
     papers: "等您确认的文件",
+    // @patient headline
+    papersOther: "等确认的文件",
     // @patient headline
     routine: "您的一天",
     // @patient headline
+    routineOther: "{patient}的一天",
+    // @patient headline
     timeline: "您的看诊",
+    // @patient headline
+    timelineOther: "{patient}的看诊",
     // @patient headline
     trends: "您的验血",
     // @patient headline
+    trendsOther: "{patient}的验血",
+    // @patient headline
     providers: "您的医生和诊所",
+    // @patient headline
+    providersOther: "{patient}的医生和诊所",
     // @patient headline
     changes: "有什么变化",
     // @patient phrase
     back: "回到您的文件",
+    // @patient phrase
+    backOther: "回到{patient}的文件",
     // @patient
     sureYes: "您已经确认了这一条。",
     // @patient
@@ -992,6 +1008,8 @@ export const zh = {
     disputed: "有人说这一条不对。",
     // @patient
     twice: "这个药在您的清单上有两次。",
+    // @patient
+    twiceOther: "这种药在{patient}的清单上出现了两次。",
     // @patient phrase
     aboutIt: "关于这个药",
     // @patient phrase
@@ -1008,6 +1026,8 @@ export const zh = {
     storyForgot: "如果忘了吃",
     // @patient headline
     storyAsk: "要问医生的",
+    // @patient phrase
+    storyAskOther: "要问{patient}的医生",
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient
@@ -1029,13 +1049,19 @@ export const zh = {
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient
+    outcomeNewOther: "这是{patient}清单上的新药。",
+    // @patient
     outcomeRefill: "这是您清单上已有的药，又多了一些。",
+    // @patient
+    outcomeRefillOther: "这是{patient}清单上已有的药，又买了一些。",
     // @patient
     outcomeChange: "这张标签上的分量不一样。",
     // @patient headline
     flaggedTitle: "加之前",
     // @patient
     flaggedNone: "Nura 在您的清单上没有找到和它相冲的药。",
+    // @patient
+    flaggedNoneOther: "Nura 没有在{patient}的清单上找到和它相冲的药。",
     // @patient
     severity: {
       major: "这一点很重要。",
@@ -1048,6 +1074,8 @@ export const zh = {
     addIt: "加到我的清单上",
     // @patient
     added: "Nura 已经加到您的清单上了。",
+    // @patient
+    addedOther: "Nura 已经把它加到{patient}的清单上了。",
     // @patient headline
     moreTitle: "家里还有",
     // @patient
@@ -1058,6 +1086,8 @@ export const zh = {
     moreYes: "对，加上去",
     // @patient
     papersNone: "没有等您确认的文件。",
+    // @patient
+    papersNoneOther: "没有等确认的文件。",
     // @patient
     paperFrom: "这是{date}收到的。",
     // @patient phrase
@@ -1158,6 +1188,8 @@ export const zh = {
     noteSave: "保存笔记",
     // @patient
     noteSaved: "Nura 保存了您的笔记。",
+    // @patient
+    noteSavedOther: "Nura 保存了这条笔记。",
     // @patient
     writtenOn: "这是{date}写的。",
     // @patient headline

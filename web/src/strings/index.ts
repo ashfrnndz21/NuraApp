@@ -31,19 +31,26 @@ export function deviceLanguage(tags: readonly string[]): Language {
  *  cards about him (app/channels/about_him.py) — whole catalogue lines, never composed here. */
 export const aboutWhom = signal<string | null>(null);
 
-/** The chrome that speaks to him, each with its "…Other" twin in the catalogue. */
-const TODAY_ABOUT_HIM = ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken"] as const;
-const DAY_ABOUT_HIM = ["notWell", "symptomsOpen"] as const;
+/** The chrome that speaks to him, by section, each key with its "…Other" twin in the catalogue. */
+const ABOUT_HIM = {
+  today: ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken"],
+  day: ["notWell", "symptomsOpen"],
+  places: ["visitsOwn"],
+  record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved"],
+} as const satisfies Partial<Record<keyof Strings, readonly string[]>>;
 const theirs = new Map<string, Strings>();
 
 /** The catalogue with his chrome said about him by name: `{patient}` is his name. */
 export function aboutHim(s: Strings, name: string): Strings {
   const said = (template: string) => template.split("{patient}").join(name);
-  const today = { ...s.today } as Record<string, unknown>;
-  for (const key of TODAY_ABOUT_HIM) today[key] = said(s.today[`${key}Other`]);
-  const day = { ...s.day } as Record<string, unknown>;
-  for (const key of DAY_ABOUT_HIM) day[key] = said(s.day[`${key}Other`]);
-  return { ...s, today: today as Strings["today"], day: day as Strings["day"] };
+  const out = { ...s } as Record<string, unknown>;
+  for (const [section, keys] of Object.entries(ABOUT_HIM)) {
+    const own = s[section as keyof Strings] as unknown as Record<string, string>;
+    const copy: Record<string, unknown> = { ...own };
+    for (const key of keys) copy[key] = said(own[`${key}Other`] ?? own[key] ?? "");
+    out[section] = copy;
+  }
+  return out as unknown as Strings;
 }
 
 export function t(): Strings {

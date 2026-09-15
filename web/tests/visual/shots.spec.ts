@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL } from "../../playwright.config";
-import { fixClock, openMe, signInThroughTheApp, todayReady } from "../e2e/helpers";
+import { fixClock, freshPhone, openMe, signInThroughTheApp, todayReady } from "../e2e/helpers";
+import { placeholderPng } from "../e2e/record-helpers";
 import { seedHome } from "../e2e/homeSeed";
 
 /** The design review's pictures (D1), not a gate: his Today, her Home, sign-in, both tab bars
@@ -74,5 +75,87 @@ test("his Today, her Home, sign-in, the tab bars and Me, at two sizes, banner of
       await hers.screenshot({ path: `${OUT}/me-sheet-caregiver-${tag}.png`, animations: "disabled" });
       await hers.context().close();
     }
+  }
+});
+
+/** Stage 2 (D1): every other screen in both densities — each tab, the feed, not feeling well,
+ *  the symptom log, the emergency card, the review card and the start of setting up — at both
+ *  sizes with the banner off, each as the phone shows it first and as a whole page. */
+test("every other screen: the tabs, the feed, not feeling well, symptoms, the emergency and review cards, setting up", async ({ browser, request }) => {
+  test.setTimeout(900_000);
+  const off = { on: false };
+  const settle = async (page: Page) => {
+    await page.waitForLoadState("networkidle");
+    await page.evaluate(() => document.fonts.ready);
+  };
+  const eachTab = async (page: Page, who: string, tag: string) => {
+    const tabs = page.locator("nav.tabbar button");
+    const count = await tabs.count();
+    for (let index = 1; index < count; index += 1) {
+      const name = ((await tabs.nth(index).innerText()).trim().toLowerCase() || `tab${index}`).replace(/\W+/g, "-");
+      await tabs.nth(index).click();
+      await settle(page);
+      await snap(page, `${who}-${name}-${tag}`);
+    }
+    await tabs.nth(0).click();
+    await todayReady(page);
+  };
+  for (const size of SIZES) {
+    const family = await seedHome(request);
+    const tag = size.name;
+
+    const his = await phone(browser, size, off);
+    await signInThroughTheApp(his, family.phone, "Pa");
+    await todayReady(his);
+    await eachTab(his, "dad", tag);
+    await his.getByTestId("open-feed").click();
+    await settle(his);
+    await snap(his, `dad-feed-${tag}`);
+    await his.locator("nav.tabbar button").first().click();
+    await todayReady(his);
+    await his.getByTestId("open-symptoms").click();
+    await settle(his);
+    await snap(his, `dad-symptoms-${tag}`);
+    await his.locator("nav.tabbar button").first().click();
+    await todayReady(his);
+    await his.getByTestId("write-reading").click();
+    await expect(his.getByTestId("reading-photo")).toBeVisible();
+    await his.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
+    await expect(his.getByTestId("review-card")).toBeVisible();
+    await settle(his);
+    await snap(his, `dad-review-card-${tag}`);
+    await his.goto("./");
+    await todayReady(his);
+    await openMe(his);
+    await his.getByTestId("me-emergency").click();
+    await expect(his.getByTestId("emergency-screen")).toBeVisible();
+    await settle(his);
+    await snap(his, `dad-emergency-${tag}`);
+    await his.goto("./");
+    await todayReady(his);
+    await his.getByTestId("not-well").click();
+    await settle(his);
+    await snap(his, `dad-not-well-${tag}`);
+    await his.context().close();
+
+    const hers = await phone(browser, size, off);
+    await signInThroughTheApp(hers, family.meiPhone, "Mei");
+    await hers.getByTestId("door-key").click();
+    await todayReady(hers);
+    await eachTab(hers, "chief", tag);
+    await hers.getByTestId("open-feed").click();
+    await settle(hers);
+    await snap(hers, `chief-feed-${tag}`);
+    await hers.context().close();
+
+    const fresh = await phone(browser, size, off);
+    await signInThroughTheApp(fresh, freshPhone("+659881"), "Pa");
+    await fresh.getByTestId("door-for-me").click();
+    await settle(fresh);
+    await snap(fresh, `onboarding-agree-${tag}`);
+    await fresh.getByTestId("agree").click();
+    await settle(fresh);
+    await snap(fresh, `onboarding-about-${tag}`);
+    await fresh.context().close();
   }
 });

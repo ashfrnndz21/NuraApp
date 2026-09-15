@@ -76,6 +76,8 @@ export const en = {
     // @patient headline
     visitsOwn: "Your visits",
     // @patient headline
+    visitsOwnOther: "{patient}'s visits",
+    // @patient headline
     visitsOther: "{name}'s visits",
     // @patient
     visitsNoneOther: "Nura has no visit written down for {name}.",
@@ -973,19 +975,33 @@ export const en = {
     // @patient headline
     medicines: "Your medicines",
     // @patient headline
+    medicinesOther: "{patient}'s medicines",
+    // @patient headline
     papers: "Papers waiting for your yes",
+    // @patient headline
+    papersOther: "Papers waiting for a yes",
     // @patient headline
     routine: "Your day",
     // @patient headline
+    routineOther: "{patient}'s day",
+    // @patient headline
     timeline: "Your visits",
+    // @patient headline
+    timelineOther: "{patient}'s visits",
     // @patient headline
     trends: "Your blood tests",
     // @patient headline
+    trendsOther: "{patient}'s blood tests",
+    // @patient headline
     providers: "Your doctors and clinics",
+    // @patient headline
+    providersOther: "{patient}'s doctors and clinics",
     // @patient headline
     changes: "What changed",
     // @patient phrase
     back: "Back to your papers",
+    // @patient phrase
+    backOther: "Back to {patient}'s papers",
     // @patient
     sureYes: "You said yes to this.",
     // @patient
@@ -994,6 +1010,8 @@ export const en = {
     disputed: "Someone said this is not right.",
     // @patient
     twice: "This medicine is on your list twice.",
+    // @patient
+    twiceOther: "This medicine is on {patient}'s list twice.",
     // @patient phrase
     aboutIt: "About this medicine",
     // @patient phrase
@@ -1010,6 +1028,8 @@ export const en = {
     storyForgot: "If you forget it",
     // @patient headline
     storyAsk: "To ask your doctor",
+    // @patient phrase
+    storyAskOther: "To ask {patient}'s doctor",
     // @patient
     addLead: "Take a photo of the label first.",
     // @patient
@@ -1031,13 +1051,19 @@ export const en = {
     // @patient
     outcomeNew: "This is a new medicine for your list.",
     // @patient
+    outcomeNewOther: "This is a new medicine for {patient}'s list.",
+    // @patient
     outcomeRefill: "This is more of a medicine on your list.",
+    // @patient
+    outcomeRefillOther: "This is more of a medicine on {patient}'s list.",
     // @patient
     outcomeChange: "This label has a different amount.",
     // @patient headline
     flaggedTitle: "Before you add it",
     // @patient
     flaggedNone: "Nura found nothing on your list that goes badly with it.",
+    // @patient
+    flaggedNoneOther: "Nura found nothing on {patient}'s list that goes badly with it.",
     // @patient
     severity: {
       major: "This one matters a lot.",
@@ -1050,6 +1076,8 @@ export const en = {
     addIt: "Add it to my list",
     // @patient
     added: "Nura added it to your list.",
+    // @patient
+    addedOther: "Nura added it to {patient}'s list.",
     // @patient headline
     moreTitle: "More at home",
     // @patient
@@ -1060,6 +1088,8 @@ export const en = {
     moreYes: "Yes, add them",
     // @patient
     papersNone: "No paper is waiting for your yes.",
+    // @patient
+    papersNoneOther: "No paper is waiting for a yes.",
     // @patient
     paperFrom: "This came in on {date}.",
     // @patient phrase
@@ -1160,6 +1190,8 @@ export const en = {
     noteSave: "Keep the note",
     // @patient
     noteSaved: "Nura kept your note.",
+    // @patient
+    noteSavedOther: "Nura kept the note.",
     // @patient
     writtenOn: "This was written on {date}.",
     // @patient headline

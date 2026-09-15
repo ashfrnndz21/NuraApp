@@ -76,6 +76,8 @@ export const ms = {
     // @patient headline
     visitsOwn: "Lawatan anda",
     // @patient headline
+    visitsOwnOther: "Lawatan {patient}",
+    // @patient headline
     visitsOther: "Lawatan {name}",
     // @patient
     visitsNoneOther: "Nura belum catat apa-apa lawatan untuk {name}.",
@@ -971,19 +973,33 @@ export const ms = {
     // @patient headline
     medicines: "Ubat anda",
     // @patient headline
+    medicinesOther: "Ubat {patient}",
+    // @patient headline
     papers: "Surat yang menunggu ya anda",
+    // @patient headline
+    papersOther: "Surat yang menunggu ya",
     // @patient headline
     routine: "Hari anda",
     // @patient headline
+    routineOther: "Hari {patient}",
+    // @patient headline
     timeline: "Lawatan anda",
+    // @patient headline
+    timelineOther: "Lawatan {patient}",
     // @patient headline
     trends: "Ujian darah anda",
     // @patient headline
+    trendsOther: "Ujian darah {patient}",
+    // @patient headline
     providers: "Doktor dan klinik anda",
+    // @patient headline
+    providersOther: "Doktor dan klinik {patient}",
     // @patient headline
     changes: "Apa yang berubah",
     // @patient phrase
     back: "Kembali ke surat anda",
+    // @patient phrase
+    backOther: "Kembali ke surat {patient}",
     // @patient
     sureYes: "Anda sudah kata ya untuk ini.",
     // @patient
@@ -992,6 +1008,8 @@ export const ms = {
     disputed: "Ada yang kata ini tidak betul.",
     // @patient
     twice: "Ubat ini ada dua kali dalam senarai anda.",
+    // @patient
+    twiceOther: "Ubat ini ada dua kali dalam senarai {patient}.",
     // @patient phrase
     aboutIt: "Tentang ubat ini",
     // @patient phrase
@@ -1008,6 +1026,8 @@ export const ms = {
     storyForgot: "Jika anda terlupa",
     // @patient headline
     storyAsk: "Untuk ditanya kepada doktor anda",
+    // @patient phrase
+    storyAskOther: "Untuk ditanya kepada doktor {patient}",
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient
@@ -1029,13 +1049,19 @@ export const ms = {
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient
+    outcomeNewOther: "Ini ubat baru untuk senarai {patient}.",
+    // @patient
     outcomeRefill: "Ini tambahan ubat yang sudah ada dalam senarai anda.",
+    // @patient
+    outcomeRefillOther: "Ini tambahan ubat yang sudah ada dalam senarai {patient}.",
     // @patient
     outcomeChange: "Label ini ada jumlah yang lain.",
     // @patient headline
     flaggedTitle: "Sebelum anda tambah",
     // @patient
     flaggedNone: "Nura tidak jumpa ubat dalam senarai anda yang tidak sesuai dengannya.",
+    // @patient
+    flaggedNoneOther: "Nura tidak jumpa apa-apa dalam senarai {patient} yang tidak sesuai dengannya.",
     // @patient
     severity: {
       major: "Yang ini sangat penting.",
@@ -1048,6 +1074,8 @@ export const ms = {
     addIt: "Tambah ke senarai saya",
     // @patient
     added: "Nura sudah tambah ke senarai anda.",
+    // @patient
+    addedOther: "Nura sudah tambah ubat ini ke senarai {patient}.",
     // @patient headline
     moreTitle: "Ada lagi di rumah",
     // @patient
@@ -1058,6 +1086,8 @@ export const ms = {
     moreYes: "Ya, tambah",
     // @patient
     papersNone: "Tiada surat yang menunggu ya anda.",
+    // @patient
+    papersNoneOther: "Tiada surat yang menunggu ya.",
     // @patient
     paperFrom: "Ini sampai pada {date}.",
     // @patient phrase
@@ -1158,6 +1188,8 @@ export const ms = {
     noteSave: "Simpan nota",
     // @patient
     noteSaved: "Nura sudah simpan nota anda.",
+    // @patient
+    noteSavedOther: "Nura sudah simpan nota itu.",
     // @patient
     writtenOn: "Ini ditulis pada {date}.",
     // @patient headline

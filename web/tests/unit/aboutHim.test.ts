@@ -12,6 +12,9 @@ describe("the chrome that speaks to him, on someone else's key", () => {
     expect(t().day.notWell).toBe("Pa is not feeling well");
     expect(t().today.stateStable).toBe("Pa's day is steady.");
     expect(t().day.symptomsOpen).toBe("Write down how Pa feels");
+    expect(t().record.medicines).toBe("Pa's medicines");
+    expect(t().record.back).toBe("Back to Pa's papers");
+    expect(t().places.visitsOwn).toBe("Pa's visits");
     language.value = "ms";
     expect(t().day.notWell).toBe("Pa rasa tidak sihat");
     language.value = "zh";

@@ -26,7 +26,7 @@ export interface Strings {
   home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
   /** The tabs' own titles (D1). */
   places: {
-    visitsOwn: string;
+    visitsOwn: string; visitsOwnOther: string;
     visitsOther: string;
     visitsNoneOther: string;
     planTitle: string;
@@ -444,18 +444,18 @@ export interface Strings {
   record: {
     title: string;
     titleOther: string;
-    medicines: string;
-    papers: string;
-    routine: string;
-    timeline: string;
-    trends: string;
-    providers: string;
+    medicines: string; medicinesOther: string;
+    papers: string; papersOther: string;
+    routine: string; routineOther: string;
+    timeline: string; timelineOther: string;
+    trends: string; trendsOther: string;
+    providers: string; providersOther: string;
     changes: string;
-    back: string;
+    back: string; backOther: string;
     sureYes: string;
     sureRead: string;
     disputed: string;
-    twice: string;
+    twice: string; twiceOther: string;
     aboutIt: string;
     add: string;
     storyPurpose: string;
@@ -463,7 +463,7 @@ export interface Strings {
     storyWatch: string;
     storyAvoid: string;
     storyForgot: string;
-    storyAsk: string;
+    storyAsk: string; storyAskOther: string;
     addLead: string;
     addLead2: string;
     nameLabel: string;
@@ -473,20 +473,20 @@ export interface Strings {
     countLabel: string;
     doctorLabel: string;
     checkIt: string;
-    outcomeNew: string;
-    outcomeRefill: string;
+    outcomeNew: string; outcomeNewOther: string;
+    outcomeRefill: string; outcomeRefillOther: string;
     outcomeChange: string;
     flaggedTitle: string;
-    flaggedNone: string;
+    flaggedNone: string; flaggedNoneOther: string;
     severity: Record<"major" | "moderate" | "minor", string>;
     pair: string;
     addIt: string;
-    added: string;
+    added: string; addedOther: string;
     moreTitle: string;
     moreLead: string;
     moreLabel: string;
     moreYes: string;
-    papersNone: string;
+    papersNone: string; papersNoneOther: string;
     paperFrom: string;
     paperOpen: string;
     older: string;
@@ -526,7 +526,7 @@ export interface Strings {
     notesOnly: string;
     noteLabel: string;
     noteSave: string;
-    noteSaved: string;
+    noteSaved: string; noteSavedOther: string;
     writtenOn: string;
     waiting: string;
     trendsLead: string;

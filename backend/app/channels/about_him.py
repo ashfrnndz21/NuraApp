@@ -115,14 +115,17 @@ def twins(language: str) -> tuple[tuple[str, str], ...]:
     """Every (original, twin) pair in one language: the written twins first; then each template
     that does not speak to him itself, as its own twin, so a slot that does ("your blood
     pressure tablet") is still said about him; then the boundary's lines."""
-    pairs: list[tuple[str, str]] = []
+    written: list[tuple[str, str]] = []
+    same: list[tuple[str, str]] = []
     for originals, theirs in _catalogues():
         mine = originals.get(language)
         if mine is None:
             continue
-        pairs.extend(_mirror(mine, theirs.get(language)))
-        pairs.extend((one, one) for one in _strings(mine) if not TO_HIM[language].search(one))
-    pairs.extend(BOUNDARY_THEIRS.get(language, {}).values())
+        written.extend(_mirror(mine, theirs.get(language)))
+        same.extend((one, one) for one in _strings(mine) if not TO_HIM[language].search(one))
+    # The written twins first, so a template that is all slot around a few words ("This comes
+    # from {…}.") never takes a line that has a twin of its own.
+    pairs = [*written, *BOUNDARY_THEIRS.get(language, {}).values(), *same]
     first: dict[str, str] = {}
     for original, twin in pairs:
         first.setdefault(original, twin)

@@ -750,8 +750,8 @@ TAKEN_THEIRS: Mapping[str, str] = {
 
 # @patient
 COUNT_THEIRS: Mapping[str, Lines] = {
-    "en": ("{patient} has {amount} of {name} left.", "That is about {days} days."),
-    "ms": ("{patient} ada {amount} {name} lagi.", "Itu lebih kurang {days} hari."),
+    "en": ("There are {amount} of {name} left.", "That is about {days} days."),
+    "ms": ("Tinggal {amount} {name} lagi.", "Itu lebih kurang {days} hari."),
     "zh": ("{name}还剩{amount}。", "大概够{days}天。"),
 }
 
