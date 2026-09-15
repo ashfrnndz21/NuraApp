@@ -295,7 +295,8 @@ screen is `src/record/model.ts`, unit-tested (`tests/unit/record.test.ts`); the 
 the story, a medicine added and checked, "I have more at home."), his visits (the spine's three
 anchors and the cursor, an illness and a paper put with it, the directory and the chief's note,
 what changed), his blood tests and his day (the trend, the routine, the chief's builder), and his
-papers (waiting review cards on onboarding's own review card, the family's documents).
+papers waiting for a yes (on onboarding's own review card). The family's papers (E12-09) are the
+Family screen's (W6), not repeated here.
 
 **One thing a screen, or the list.** In the patient density a list is one item a screen with
 *This is 1 of N.* and *Next* (the timeline reads the next page by the backend's cursor when he

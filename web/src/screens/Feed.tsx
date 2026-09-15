@@ -5,7 +5,7 @@ import type { CardClipOut, FeedItemOut, LineOut } from "../api/types";
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { cardView, speechLanguage, statusLine, variantOf, type CardView, type SideAction } from "../feed/model";
 import { lineForCard, reorderActions } from "../record/model";
 import type { Playback } from "../feed/playback";
@@ -245,7 +245,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         </div>
       )}
 
-      <TabBar current="today" />
+      <TabBar current="today" onSelect={openTab} />
     </main>
   );
 }

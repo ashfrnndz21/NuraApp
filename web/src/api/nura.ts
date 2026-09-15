@@ -2,8 +2,6 @@ import { api, apiBlob, apiUpload } from "./client";
 import type {
   AskedOut,
   ChangesOut,
-  DocumentOut,
-  DocumentTag,
   EpisodeViewOut,
   LabelIn,
   MedicineDraftOut,
@@ -492,13 +490,6 @@ export const setRoutine = (token: string, profileId: string, day: RoutineDayIn, 
     query: { persona, language },
     body: { ...day, confirmation_id: confirmationId },
   });
-
-/** The papers behind a basis — the lasting power of attorney, a doctor's letter (E12-09). */
-export const documents = (token: string, profileId: string) =>
-  api<DocumentOut[]>(`/profiles/${profileId}/documents`, { token });
-
-export const addDocument = (token: string, profileId: string, data: string, content_type: string, captured_at: string, tag: DocumentTag) =>
-  api<DocumentOut[]>(`/profiles/${profileId}/documents`, { method: "POST", token, body: { data, content_type, captured_at, tag } });
 
 /** The story of one medicine, in his language (E04-06). */
 export const story = (token: string, profileId: string, lineId: string, language: string) =>

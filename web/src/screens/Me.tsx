@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { MeSummaryOut } from "../api/types";
-import { go, reloadDoors, signOutEverywhere } from "../flow";
+import { go, openTab, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { backendFor, browserEnv, remindersState, turnOff, turnOn, type RemindersState } from "../push/reminders";
@@ -91,7 +91,7 @@ export function MeScreen(): JSX.Element {
           {s.me.signOut}
         </Pill>
       </Tile>
-      <TabBar current="me" />
+      <TabBar current="me" onSelect={openTab} />
     </main>
   );
 }

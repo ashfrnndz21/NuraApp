@@ -8,13 +8,18 @@
 
 export type Language = "en" | "ms" | "zh";
 
+/** Who someone is to the patient: the backend's closed set of codes (`Relationship`). */
+export type Relationship = "daughter" | "son" | "spouse" | "sibling" | "grandchild" | "other_family" | "helper" | "friend" | "neighbour" | "other";
+
+export const RELATIONSHIPS: readonly Relationship[] = ["daughter", "son", "spouse", "sibling", "grandchild", "other_family", "helper", "friend", "neighbour", "other"];
+
 export const LANGUAGES: readonly Language[] = ["en", "ms", "zh"];
 
 export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
   demo: { banner: string; lines: readonly string[] };
-  tabs: { today: string; record: string; me: string };
+  tabs: { today: string; record: string; family: string; me: string };
   signIn: {
     title: string;
     phoneLead: string;
@@ -58,6 +63,10 @@ export interface Strings {
     theirName: string;
     theirPhone: string;
     relationshipLabel: string;
+    /** Who the one setting up is to him, as a choice: the label she taps. The code goes to
+     *  the backend, which says it to him in his language ("Mei, your daughter, …"). */
+    relationships: Record<Relationship, string>;
+    pickContact: string;
     asked: string;
     create: string;
   };
@@ -391,6 +400,8 @@ export interface Strings {
       nameLabel: string;
       phoneLabel: string;
       relationshipLabel: string;
+      /** Who the person let in is to him, as a choice; the code goes to the backend. */
+      relationships: Record<Relationship, string>;
       partsLead: string;
       parts: Record<"medicines" | "visits" | "readings" | "records", string>;
       seeWords: string;
@@ -426,7 +437,6 @@ export interface Strings {
     timeline: string;
     trends: string;
     providers: string;
-    documents: string;
     changes: string;
     back: string;
     sureYes: string;
@@ -531,14 +541,136 @@ export interface Strings {
     tableTime: string;
     tableMedicines: string;
     tableReadings: string;
-    documentsLead: string;
+  };
+  /** Family (W6): chrome only. Every line about his record on these screens is the backend's. */
+  family: {
+    title: string;
+    circleSelf: string;
+    circleOther: string;
+    trailSelf: string;
+    trailOther: string;
+    onlyMe: string;
+    onlyMeLead: string;
+    onlyMeYes: string;
+    onlyMeLift: string;
+    onlyMeMarked: string;
+    consentsSelf: string;
+    consentsOther: string;
+    stop: string;
+    stopYes: string;
+    howToStop: string;
+    keepCopy: string;
+    savePage: string;
+    thread: string;
+    threadEarlier: string;
+    messageLabel: string;
+    sendMessage: string;
+    keys: string;
+    newKey: string;
+    holderName: string;
+    holderPhone: string;
+    roleLabel: string;
+    partsLabel: string;
+    windowLabel: string;
+    makeKey: string;
+    narrow: string;
+    narrowYes: string;
+    closeKey: string;
+    closeYes: string;
+    notNow: string;
+    roles: Record<"chief" | "caregiver" | "viewer" | "helper" | "emergency" | "clinic", string>;
+    windows: Record<"always" | "thirty_days" | "seventy_two_hours" | "one_day", string>;
+    parts: Record<"medicines" | "visits" | "readings" | "records" | "notes" | "money" | "emergency" | "family" | "ask" | "send", string>;
+    roster: string;
+    rosterTitle: string;
+    who: string;
+    days: string;
+    from: string;
+    to: string;
+    onDutyNow: string;
+    takeOff: string;
+    addSlot: string;
+    tasksTitle: string;
+    taskWhat: string;
+    taskDue: string;
+    addTask: string;
+    done: string;
+    doneChip: string;
+    nextVisit: string;
+    messagesTitle: string;
+    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water" | "water_pill_morning", string>;
+    ownWords: string;
+    slots: Record<"who" | "when" | "doctor" | "day", string>;
+    memoLabel: string;
+    languageLabel: string;
+    preview: string;
+    sendAt: string;
+    until: string;
+    channelApp: string;
+    channelWhatsapp: string;
+    schedule: string;
+    states: Record<"scheduled" | "sent" | "not_sent", string>;
+    metrics: string;
+    weekOf: string;
+    taps: string;
+    fineToday: string;
+    fineShare: string;
+    kind: string;
+    handedOver: string;
+    accepted: string;
+    dismissed: string;
+    kinds: Record<"anticipation" | "check_in" | "pattern" | "commitment" | "recognition" | "presence", string>;
+    calendar: string;
+    chooseFile: string;
+    agree: string;
+    bookYes: string;
+    notThis: string;
+    ladderYes: string;
+    deliveries: string;
+    settings: string;
+    triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
+    rule: string;
+    quietFrom: string;
+    quietUntil: string;
+    skipQuietDays: string;
+    cap: string;
+    saveSettings: string;
+    neverHeld: string;
+    documents: string;
     tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
-    noDocuments: string;
-    keptOn: string;
-    backsConsent: string;
-    backsStewardship: string;
-    chooseKind: string;
-    documentAdded: string;
+    backs: Record<"consent" | "stewardship", string>;
+    stillOn: string;
+    stoppedChip: string;
+    addDocument: string;
+    chooseDocument: string;
+    whatPaper: string;
+  };
+  review: {
+    title: string;
+    tokenLabel: string;
+    open: string;
+    statusTitle: string;
+    cardType: string;
+    sampled: string;
+    pending: string;
+    stillToCheck: string;
+    sourcesWaiting: string;
+    queueTitle: string;
+    showPending: string;
+    showAll: string;
+    approve: string;
+    reject: string;
+    reasonLabel: string;
+    rewrite: string;
+    headline: string;
+    body: string;
+    voice: string;
+    why: string;
+    saveRewrite: string;
+    decided: string;
+    leave: string;
   };
   errors: { network: string; tryAgain: string };
   /** One line per refusal, or two when the second says what to do next; each line one idea. */

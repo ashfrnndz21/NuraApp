@@ -1,6 +1,5 @@
 import type {
   ArtifactRefOut,
-  DocumentOut,
   EpisodeViewOut,
   FeedItemOut,
   LabelIn,
@@ -24,8 +23,8 @@ import type { HubEntry } from "./places";
 
 /** In his density the Record opens on his medicines, his papers and his day, one a screen;
  *  in hers, on what changed and the visits. */
-export const PATIENT_HUB: readonly HubEntry[] = ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes", "documents"];
-export const CAREGIVER_HUB: readonly HubEntry[] = ["changes", "timeline", "medicines", "papers", "trends", "routine", "providers", "documents"];
+export const PATIENT_HUB: readonly HubEntry[] = ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"];
+export const CAREGIVER_HUB: readonly HubEntry[] = ["changes", "timeline", "medicines", "papers", "trends", "routine", "providers"];
 
 /** The part of the papers each entry reads, so a key that does not open it is not offered it. */
 const PART: Record<HubEntry, string | null> = {
@@ -36,7 +35,6 @@ const PART: Record<HubEntry, string | null> = {
   trends: "records",
   providers: "visits",
   changes: null,
-  documents: "family",
 };
 
 export function hubEntries(density: Density, scopes: readonly string[]): HubEntry[] {
@@ -310,16 +308,4 @@ export function dayInOrder(day: RoutineDayIn): boolean {
   const times = ANCHORS.map((anchor) => day.anchors[anchor] ?? "");
   if (!times.every((at) => HHMM.test(at)) || !HHMM.test(day.morning_card_at)) return false;
   return times.every((at, index) => index === 0 || at > times[index - 1]!);
-}
-
-// --- the family's papers (E12-09) ---------------------------------------------------------------
-
-/** What a document backs, in whole lines, once each. */
-export function backsLines(document: Pick<DocumentOut, "backs">, s: Strings): string[] {
-  const lines = new Set<string>();
-  for (const backing of document.backs) {
-    if (!backing.active) continue;
-    lines.add(backing.kind === "stewardship" ? s.record.backsStewardship : s.record.backsConsent);
-  }
-  return [...lines];
 }

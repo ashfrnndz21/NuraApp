@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { API, fixClock, seedMedicine } from "./helpers";
-import { auth, EVERY_PART, letIn, LOOKS, lookAs, LPA_PDF, openOwn, placeholderPng, readable, setUpOnLpa, signInAs, signUp, uniquePhone } from "./record-helpers";
+import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, placeholderPng, readable, signInAs } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
- *  E02-08 a blood pressure read off the machine's screen with no typing, E12-09 the lasting
- *  power of attorney kept and shown backing the stewardship; and the Record's first screen. */
+ *  E02-08 a blood pressure read off the machine's screen with no typing, and the Record's
+ *  first screen. (The family's papers, E12-09, are walked by W6's Family specs.) */
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -16,7 +16,7 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
 
   await signInAs(page, pa, "Pa");
   await expect(page.getByTestId("tab-record")).toHaveText("Papers");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Papers", "Me"]);
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Papers", "Family", "Me"]);
   await page.getByTestId("tab-record").click();
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
@@ -25,6 +25,8 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
 
   await page.getByTestId("tab-me").click();
   await page.getByTestId("sign-out").click();
+  // Signing out finishes before the next person signs in: nothing of his papers stays behind.
+  await expect(page.getByLabel("Your phone number")).toBeVisible();
   await signInAs(page, siti, "Siti", true);
   await page.getByTestId("tab-record").click();
   await expect(page.locator("h1")).toHaveText("Pa's papers");
@@ -43,7 +45,7 @@ test("on a demo deployment the banner is on every Record screen, and still nothi
   await page.getByTestId("tab-record").click();
   await expect(page.getByTestId("demo-banner")).toBeVisible();
   await readable(page, "patient");
-  for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes", "documents"]) {
+  for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
     await page.getByTestId(`record-${entry}`).click();
     await expect(page.getByTestId("demo-banner")).toBeVisible();
     await readable(page, "patient");
@@ -98,27 +100,5 @@ for (const look of LOOKS) {
     await expect(page.getByTestId("reading-prompt")).toBeVisible();
     const facts = (await (await request.get(`${API}/profiles/${pa.profileId}/facts?subject=blood_pressure`, auth(pa.token))).json()) as { value: { systolic?: number; diastolic?: number } }[];
     expect(facts.some((fact) => fact.value.systolic === 138 && fact.value.diastolic === 84)).toBe(true);
-  });
-
-  test(`the family's papers (${look}): the lasting power of attorney kept and shown backing the stewardship`, async ({ page, request }) => {
-    const mei = await signUp(request, uniquePhone(), "Mei");
-    await setUpOnLpa(request, mei);
-    await signInAs(page, mei, "Mei", true);
-    await lookAs(page, look);
-    await page.getByTestId("record-documents").click();
-    // The paper the papers were set up on is there already, by reference, with what it backs.
-    const kept = page.getByTestId("document");
-    await expect(kept).toHaveCount(1);
-    await expect(kept.locator("h2")).toHaveText("Lasting power of attorney");
-    await expect(kept).toContainText("Looking after these papers rests on it.");
-    await expect(kept).toContainText("An agreement to share rests on it.");
-    await readable(page, look);
-    // Its bytes arrive: the same paper, one document, still backing the same two things.
-    await page.getByTestId("tag-lpa").click();
-    await page.getByTestId("file-input").setInputFiles({ name: "lpa.pdf", mimeType: "application/pdf", buffer: LPA_PDF });
-    await expect(page.getByTestId("document-added")).toHaveText("Nura kept the paper.");
-    await expect(kept).toHaveCount(1);
-    await expect(kept).toContainText("Looking after these papers rests on it.");
-    await readable(page, look);
   });
 }

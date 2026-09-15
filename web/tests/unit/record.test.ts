@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EpisodeViewOut, FeedItemOut, LineOut, ReviewCardOut, ReviewFieldOut, TimelineItemOut } from "../../src/api/types";
 import {
-  backsLines,
   confidenceLine,
   countOf,
   dayInOrder,
@@ -276,17 +275,5 @@ describe("the day", () => {
     expect(dayInOrder(day)).toBe(true);
     expect(dayInOrder(withTime(day, "lunch", "06:00"))).toBe(false);
     expect(dayInOrder(withTime(day, "bed", ""))).toBe(false);
-  });
-});
-
-describe("the family's papers", () => {
-  it("says what a document backs, once each, and nothing that has ended", () => {
-    const backs = [
-      { kind: "consent", id: "1", basis: "lpa", purpose: "share_with_person", active: true },
-      { kind: "consent", id: "2", basis: "lpa", purpose: "share_with_person", active: true },
-      { kind: "stewardship", id: "3", basis: "lpa", purpose: null, active: true },
-      { kind: "consent", id: "4", basis: "lpa", purpose: null, active: false },
-    ];
-    expect(backsLines({ backs }, en)).toEqual(["An agreement to share rests on it.", "Looking after these papers rests on it."]);
   });
 });

@@ -1,4 +1,4 @@
-import { createHash, randomInt } from "node:crypto";
+import { randomInt } from "node:crypto";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { API, backendClock, codeFromLog, codesSoFar, nothingDrawnOverLines, signInThroughTheApp } from "./helpers";
 
@@ -23,9 +23,6 @@ export function placeholderPng(label: string): Buffer {
 export function unknownPng(): Buffer {
   return Buffer.concat([PNG, Buffer.from(`a label photo the extractor does not know ${Math.random()}\n`)]);
 }
-
-/** The lasting power of attorney's placeholder PDF (checkpoint 13's bytes). */
-export const LPA_PDF = Buffer.from("%PDF-1.4\n% nura-lpa-placeholder: a lasting power of attorney, redacted\n");
 
 /** A Singapore-shaped number nobody on this dev database has yet: `+658` and seven random
  *  digits. The dev database keeps every account from every run, so four random digits (the
@@ -147,25 +144,6 @@ export async function book(
 export async function daysFromNow(request: APIRequestContext, days: number): Promise<string> {
   const now = Date.parse((await backendClock(request)).now);
   return new Date(now + days * 86_400_000).toISOString();
-}
-
-/** Mei sets Pa up on a lasting power of attorney, citing its PDF by digest (checkpoint 13). */
-export async function setUpOnLpa(request: APIRequestContext, mei: Person): Promise<string> {
-  const digest = createHash("sha256").update(LPA_PDF).digest("hex");
-  const opened = await request.post(`${API}/profiles/for-someone`, {
-    ...auth(mei.token),
-    data: {
-      patient_phone_e164: uniquePhone(),
-      display_name: "Pa",
-      language: "en",
-      consent: { wording_version: await holdWording(request), language: "en", captured_via: "app" },
-      basis: "lpa",
-      relationship: "daughter",
-      evidence: { kind: "pdf", storage_key: `documents/${digest}`, content_type: "application/pdf", sha256: digest, captured_at: "2026-09-01T09:00:00Z" },
-    },
-  });
-  expect(opened.status(), await opened.text()).toBe(201);
-  return ((await opened.json()) as { profile_id: string }).profile_id;
 }
 
 /** Sign in through the app, through the door to someone else's papers when the app shows

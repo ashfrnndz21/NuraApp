@@ -7,7 +7,7 @@ import { Pill, Tile } from "../../ui/components";
 import { ChangesScreen, EpisodeScreen, ProviderScreen, ProvidersScreen, TimelineScreen } from "./Timeline";
 import { AddMedicineScreen, MedicinesScreen, MoreScreen, StoryScreen } from "./Medicines";
 import { BuilderScreen, RoutineScreen, TrendsScreen } from "./Day";
-import { DocumentsScreen, PaperScreen, PapersScreen } from "./Papers";
+import { PaperScreen, PapersScreen } from "./Papers";
 import { RecordFrame, toRecord } from "./parts";
 
 /** The Record (W5): his medicines, his papers, his day, his visits, his blood tests, his
@@ -45,8 +45,6 @@ export function RecordScreen({ at }: { at: RecordAt }): JSX.Element {
       return <RoutineScreen />;
     case "builder":
       return <BuilderScreen />;
-    case "documents":
-      return <DocumentsScreen />;
   }
 }
 
@@ -58,7 +56,6 @@ const PLACE: Record<HubEntry, RecordAt> = {
   trends: { name: "trends" },
   providers: { name: "providers" },
   changes: { name: "changes" },
-  documents: { name: "documents" },
 };
 
 /** The Record's first screen: one big button a part. In his density his medicines, his

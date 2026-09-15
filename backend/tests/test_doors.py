@@ -177,7 +177,7 @@ async def test_the_for_me_door_is_closed_on_a_number_someone_set_up_for(
     mei = await register_by_phone(deployment, MEI, "Mei")
     for_brother = await deployment.client.post(
         "/profiles/for-someone",
-        json=_for_someone(BROTHER, display_name="Brother", relationship="sister"),
+        json=_for_someone(BROTHER, display_name="Brother", relationship="sibling"),
         headers=bearer(mei["token"]),
     )
     assert for_brother.status_code == 409
@@ -223,8 +223,9 @@ async def test_the_claim_converts_the_steward_to_a_chief_key_and_records_consent
     assert offer["set_up_by"] == "Mei" and offer["relationship"] == "daughter"
     assert offer["parts"] == STEWARD_PARTS
     assert offer["words_language"] == "ms"  # his own language, from registration
-    # The words are Malay; who Mei is to him is as Mei wrote it, like any sharing consent.
-    assert offer["sharing_words"].startswith("Anda membenarkan Mei, daughter, melihat")
+    # The words are Malay, and so is who Mei is to him: the code, said in his language.
+    assert offer["sharing_words"].startswith("Anda membenarkan Mei, anak perempuan anda, melihat")
+    assert offer["relationship_words"] == "anak perempuan anda"
     assert "- ubat anda" in offer["sharing_words"]
     assert "Singapura" in offer["hold_words"]
     # Until he says yes he sees whose graph it is and nothing more.
@@ -564,7 +565,7 @@ async def test_the_doors_say_which_apply(deployment: Deployment) -> None:
     )
     [offer] = doors.json()["claimable"]
     assert offer["profile_id"] == profile_id and offer["words_language"] == "en"
-    assert "Mei, daughter" in offer["sharing_words"]
+    assert "Mei, your daughter," in offer["sharing_words"]
     await _pa_claims(deployment, pa, profile_id)
     doors = await deployment.client.get("/doors", headers=bearer(pa["token"]))
     assert doors.json()["own"]["profile_id"] == profile_id

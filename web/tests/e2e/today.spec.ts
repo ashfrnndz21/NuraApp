@@ -151,7 +151,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   // The proud number is the backend's and names its source; no badges; vertical only; the
   // tab bar never covers the last card.
   await expect(page.getByTestId("proud")).toContainText("Nura counted the days you took your tablets.");
-  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Papers\s*Me\s*$/);
+  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Papers\s*Family\s*Me\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);

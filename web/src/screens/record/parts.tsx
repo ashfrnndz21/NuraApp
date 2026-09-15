@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren, JSX } from "preact";
-import { go } from "../../flow";
+import { go, openTab } from "../../flow";
 import type { RecordAt } from "../../record/places";
 import { density, profile, token } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
@@ -102,7 +102,7 @@ export function RecordFrame({ title, back, testId, children }: FrameProps): JSX.
           {s.record.back}
         </Pill>
       )}
-      <TabBar current="record" />
+      <TabBar current="record" onSelect={openTab} />
     </main>
   );
 }

@@ -2,7 +2,7 @@ import type { ComponentChildren, JSX } from "preact";
 import { speak, type SpokenCard } from "../speech/speak";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
-import { go } from "../flow";
+import type { Tab } from "../flow";
 import { demo } from "../store/deployment";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
@@ -157,7 +157,7 @@ export function Notice({ error }: { error: unknown }): JSX.Element | null {
     error instanceof Unreachable
       ? [t().errors.network]
       : error instanceof Refused
-        ? refusalLines(error.refusal)
+        ? refusalLines(error.refusal, language.value, { contact: error.contact })
         : refusalLines(undefined);
   return (
     <Tile paper role="alert" testId="notice">
@@ -212,19 +212,21 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
   );
 }
 
-/** The nav entries, in the order Today · Feed · Record · Family · Me; each one screen away.
- *  (The Feed opens from Today's "See more for you", and the Family entry is W6's.) */
-export type Tab = "today" | "record" | "me";
-const TABS: readonly Tab[] = ["today", "record", "me"];
-
-export function TabBar({ current }: { current: Tab }): JSX.Element {
+/** The nav entries, in the order Today · Feed · Record · Family · Me; each one screen away
+ *  (the Feed opens from Today's "See more for you"). The Record's entry reads *Papers*. */
+export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Tab) => void }): JSX.Element {
   const s = t();
-  const open = (tab: Tab) => go(tab === "record" ? { name: "record", at: { name: "hub" } } : { name: tab });
+  const tabs = [
+    ["today", s.tabs.today],
+    ["record", s.tabs.record],
+    ["family", s.tabs.family],
+    ["me", s.tabs.me],
+  ] as const;
   return (
     <nav class="tabbar" aria-label={s.appName}>
-      {TABS.map((tab) => (
-        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => open(tab)} data-testid={`tab-${tab}`}>
-          {s.tabs[tab]}
+      {tabs.map(([tab, label]) => (
+        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
+          {label}
         </button>
       ))}
     </nav>

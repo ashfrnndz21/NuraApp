@@ -344,7 +344,8 @@ test("the caregiver density, for a chief setting up her father", async ({ page }
   await page.getByTestId("door-for-someone").click();
   await page.getByLabel("Their name").fill("Pa");
   await page.getByLabel("Their phone number").fill(freshPhone("+659887"));
-  await page.getByLabel("Who they are to you").fill("Father");
+  // Who she is to him is a choice, never typed (E01-01).
+  await page.getByTestId("relationship-daughter").click();
   await page.getByText("They asked you to do this.").click();
   await page.getByRole("button", { name: "Set it up" }).click();
 
@@ -499,7 +500,7 @@ test("the Ready screen's other actions: breakfast from its card, and one person 
   const mei = freshPhone("+659883");
   await page.getByLabel("Their name").fill("Mei");
   await page.getByLabel("Their phone number").fill(mei);
-  await page.getByLabel("Who they are to you").fill("daughter");
+  await page.getByTestId("invite-relationship-daughter").click();
   await page.getByTestId("invite-next").click();
   await page.getByTestId("part-medicines").click();
   await page.getByTestId("part-visits").click();

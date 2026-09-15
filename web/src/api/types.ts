@@ -1,3 +1,4 @@
+import type { Relationship } from "../strings/types";
 /** The API's answers, as the backend's pydantic schemas name them
  *  (`backend/app/channels/api/schemas.py`). Only the fields the client reads are typed. */
 
@@ -40,6 +41,8 @@ export interface ClaimableOut {
   steward_person_id: string;
   set_up_by: string;
   relationship: string | null;
+  /** Who set it up is to him, in the words' language: "your daughter". */
+  relationship_words?: string | null;
   parts: string[];
   words_language: string;
   hold_wording_version: string;
@@ -303,6 +306,7 @@ export interface ReadingOut {
 export interface RefusalBody {
   refusal: string;
   scope?: string;
+  contact?: string;
   drug_class?: string;
 }
 
@@ -704,7 +708,7 @@ export interface SharingIn {
   /** The name the words use for the person, as he calls them (`HolderNeedsAName` without it). */
   holder_display_name: string;
   scopes: Part[];
-  relationship: string | null;
+  relationship: Relationship | null;
   language: string;
 }
 
@@ -719,10 +723,17 @@ export interface SharingPreviewOut {
 
 export interface ConsentOut {
   consent_id: string;
+  /** What the agreement is for, by the backend's code (`share_with_family` lets one person in). */
+  purpose?: string;
+  person_id?: string;
   holder_person_id: string | null;
   scopes: string[] | null;
   text_version: string;
+  language?: string;
+  /** The words as he read them and agreed to, one idea per line. */
   wording_text: string;
+  granted_at?: string;
+  revoked_at?: string | null;
 }
 
 // --- W5: the Record (E03, E04, E09-01, E10-01, E02-04, E02-08, E12-09) -----------------------
@@ -929,19 +940,6 @@ export interface RoutineDayIn {
   reading_prompts: [string, string][];
   walks: string[];
   morning_card_at: string;
-}
-
-export type DocumentTag = "lpa" | "medical_letter" | "consent_form";
-
-/** A paper kept by reference behind a basis (E12-09), with what it backs. */
-export interface DocumentOut {
-  artifact_id: string;
-  kind: string;
-  content_type: string;
-  captured_at: string;
-  tag: DocumentTag | null;
-  added_at: string | null;
-  backs: { kind: string; id: string; basis: string; purpose: string | null; active: boolean }[];
 }
 
 /** The story of one medicine (E04-06), in his language; `lines` is the voice script. */
@@ -1331,6 +1329,8 @@ export interface CardClipOut {
 export interface DeploymentOut {
   region: "SG" | "MY";
   demo: boolean;
+  /** A declared dev run: the only place a laptop's `nura-dev-` staff token is taken. */
+  dev?: boolean;
   /** The Web Push key the home-screen app subscribes with; null when there is no Web Push. */
   push_key?: string | null;
 }
