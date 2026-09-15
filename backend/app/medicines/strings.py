@@ -535,21 +535,19 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ask_to_order": "请家人订。", "i_have_more": "我家里还有。"},
 }
 
-# @patient phrase
+# The family's words, not his: the family's list only (caregiver density), so not tagged.
 ORDER_TASK: Mapping[str, str] = {
     "en": "order more {medicine} for {patient}",
     "ms": "pesan lagi {medicine} untuk {patient}",
     "zh": "为{patient}再订{medicine}",
 }
 """The task on the family's list when he says yes to "Ask the family to order." (E04-05), in
-the language of the one it is given to: "order more amlodipine 5 mg for Pa" — a phrase like
-every task label ("drive Pa to Dr Tan"), since the digest puts it inside a sentence of its
-own ("Kit will do this: order more amlodipine 5 mg for Pa."). The medicine is
+the language of the one it is given to: "order more amlodipine 5 mg for Pa". The medicine is
 named as its box names it — the line's chemical name and strength, licensed drug data that
 `ask_to_order` fills in — so the one who buys it cannot buy the wrong one where two of his
 tablets share his name for them; and he is named, never "your", which on Kit's list would be
-hers. The label is a value in `{medicine}`, not words Nura wrote, so the verifier reads this
-template, not the filled task (`add_task(checked_as=...)`, and the family digest the same)."""
+hers. It is the family's label and never reaches him: the digest, which he reads too, says
+an order task in its own words and names no medicine (`app.family.strings.DIGEST`)."""
 
 # @patient
 ORDER_PREVIEW: Mapping[str, Lines] = {

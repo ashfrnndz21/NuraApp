@@ -25,6 +25,7 @@ from sqlalchemy import select
 
 from app.clock import FrozenClock
 from app.family.models import Task
+from app.family.strings import DIGEST
 from app.medicines.strings import LANGUAGES, ORDER_TASK
 from app.memory.models import ArtifactKind
 from app.safety.models import Notice, NoticeKind
@@ -234,8 +235,8 @@ async def test_ask_to_order_previews_then_on_his_yes_gives_the_task_to_whoever_i
         (body["task_id"], "order more amlodipine 5 mg for Pa")
     ]
 
-    # The family digest says it the same way and still passes the verifier: the medicine as
-    # its box names it is a value, checked there as `{what}`.
+    # The family digest, which he reads too, says it in its own checked words and names no
+    # medicine: the chemical name and strength are on the family's list only.
     card = await client.post(
         f"/profiles/{profile_id}/thread",
         json={"card_kind": "task", "task_id": body["task_id"]},
@@ -248,7 +249,9 @@ async def test_ask_to_order_previews_then_on_his_yes_gives_the_task_to_whoever_i
         headers=bearer(mei["token"]),
     )
     assert digested.status_code == 200, digested.text
-    assert "Kit will do this: order more amlodipine 5 mg for Pa." in digested.json()["lines"]
+    said = digested.json()["lines"]
+    assert "Kit will order more medicine for Pa." in said
+    assert not any("amlodipine" in line for line in said)
 
     # The chief is told: one notice, a reorder notice, never read as "not feeling well".
     notices = await _notices(deployment, profile_id)
@@ -426,14 +429,15 @@ async def test_the_preview_in_malay_and_chinese_names_who_and_what(
 
 
 def test_every_order_task_names_him_and_the_medicine_and_passes_plain_words() -> None:
-    """The task's words are the template, checked as a phrase in every language when it is
-    kept (`add_task(checked_as=...)`): the medicine goes in as its box names it, a value and
-    not Nura's words. Filled, it names him and the medicine, and never says "your"."""
+    """The family's label, in every language, names him and the medicine as its box does, and
+    never says "your". It is the family's words, not his: what reaches him about it — the
+    digest — is Nura's own checked sentence (`DIGEST` order lines), which passes."""
     for language in LANGUAGES:
-        template = ORDER_TASK[language]
-        failures = [f for f in verify(template, language, "phrase") if f.severity == "fail"]
-        assert failures == [], (template, failures)
-        label = template.format(patient="Pa", medicine="amlodipine 5 mg")
+        label = ORDER_TASK[language].format(patient="Pa", medicine="amlodipine 5 mg")
+        for key in ("order_open", "order_done"):
+            line = DIGEST[language][key]
+            failures = [f for f in verify(line, language, "line") if f.severity == "fail"]
+            assert failures == [], (line, failures)
         assert "Pa" in label and "amlodipine 5 mg" in label
         assert not any(word in label.lower() for word in ("your", "anda", "您"))
 

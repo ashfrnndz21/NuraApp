@@ -451,7 +451,7 @@ export interface Strings {
     storyAvoid: string;
     storyForgot: string;
     storyAsk: string;
-    hearPart: string;
+    hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
     addLead: string;
     addLead2: string;
     nameLabel: string;

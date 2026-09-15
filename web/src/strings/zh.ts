@@ -917,7 +917,14 @@ export const zh = {
     // @patient headline
     storyAsk: "要问医生的",
     // @patient phrase
-    hearPart: "听{part}",
+    hearParts: {
+      purpose: "听这个药是做什么的",
+      how_to_take: "听怎么吃",
+      watch_out: "听要注意什么",
+      avoid: "听要避开什么",
+      if_forgotten: "听忘了吃怎么办",
+      doctor_question: "听要问医生什么",
+    },
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient

@@ -917,7 +917,14 @@ export const ms = {
     // @patient headline
     storyAsk: "Untuk ditanya kepada doktor anda",
     // @patient phrase
-    hearPart: "Dengar {part}",
+    hearParts: {
+      purpose: "Dengar untuk apa ubat ini",
+      how_to_take: "Dengar cara mengambilnya",
+      watch_out: "Dengar apa yang perlu diperhatikan",
+      avoid: "Dengar apa yang perlu dielakkan",
+      if_forgotten: "Dengar apa perlu buat jika anda terlupa",
+      doctor_question: "Dengar apa perlu ditanya kepada doktor anda",
+    },
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient

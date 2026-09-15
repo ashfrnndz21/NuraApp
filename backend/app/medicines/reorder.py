@@ -387,7 +387,6 @@ async def ask_to_order(
         session,
         context=context,
         what=ORDER_TASK[theirs].format(patient=profile.display_name, medicine=label),
-        checked_as=ORDER_TASK[theirs],
         assigned_person_id=asked.id,
         language=theirs,
         errand=Errand.ORDER,

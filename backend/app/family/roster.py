@@ -214,16 +214,15 @@ async def add_task(
     appointment_id: uuid.UUID | None = None,
     errand: Errand | None = None,
     medication_line_id: uuid.UUID | None = None,
-    checked_as: str | None = None,
 ) -> Task:
     """Give one person one thing to do. `what` is a label in plain words — it reaches him
     in the digest and the trail — so it passes the verifier as a phrase before it is kept.
 
-    `checked_as` is for a label Nura fills from its own template: that template, with a
-    `{slot}` where a value that is not Nura's words goes — his name, or a medicine as its box
-    names it ("amlodipine 5 mg", licensed drug data the family buys by). The verifier then
-    reads the template, its slots filled with representative values, instead of `what`. The
-    only caller that passes one is `app.medicines.reorder.ask_to_order`.
+    Except an order task's (`Errand.ORDER`, E04-05): its label names his medicine as its box
+    does ("order more amlodipine 5 mg for Pa", licensed drug data the family buys by), for
+    the one who buys it, and it never reaches him — the digest says an order task in its own
+    words, which name no medicine (`app.family.thread`), and the family's list is not on his
+    screens. The only caller that makes one is `app.medicines.reorder.ask_to_order`.
 
     A task that is part of a visit's logistics names the visit and the errand (E05-03); the
     only caller that does is `app.reasoning.visits.logistics.assign_driver`, on the chief's
@@ -232,10 +231,10 @@ async def add_task(
     profile, or the table refuses them."""
     a_chief(context)
     label = short_label(what)
-    words = label if checked_as is None else checked_as
-    failures = [str(f) for f in verify(words, language, "phrase") if f.severity == "fail"]
-    if failures:
-        raise NotPlainWords(failures)
+    if errand is not Errand.ORDER:
+        failures = [str(f) for f in verify(label, language, "phrase") if f.severity == "fail"]
+        if failures:
+            raise NotPlainWords(failures)
     await _on_this_profile(session, context, assigned_person_id)
     return await audited_write(
         session,

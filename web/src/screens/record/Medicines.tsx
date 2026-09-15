@@ -244,7 +244,7 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
                 ))}
                 {story.voice_parts?.includes(key) && (
                   <HearPart
-                    title={title}
+                    label={s.record.hearParts[key as keyof typeof s.record.hearParts]}
                     onHear={() =>
                       void voice.hear(key, {
                         // As the backend says the part: every part but what it is for ends on the boundary.
@@ -271,17 +271,13 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
   );
 }
 
-/** A heading read inside a sentence: "What to look out for" as "what to look out for". */
-function lowerFirst(text: string): string {
-  return text.charAt(0).toLocaleLowerCase() + text.slice(1);
-}
-
-/** One part's Hear: the same button as every card's, naming the part it plays, as one whole
- *  phrase a screen reader says ("Hear what to look out for"), never a label and a colon. */
-function HearPart({ title, onHear, testId }: { title: string; onHear: () => void; testId: string }): JSX.Element {
+/** One part's Hear: the same button as every card's, naming the part it plays in one whole
+ *  phrase of the catalogue a screen reader says ("Hear what to look out for"), never a
+ *  label and a colon, and never assembled. */
+function HearPart({ label, onHear, testId }: { label: string; onHear: () => void; testId: string }): JSX.Element {
   const s = t();
   return (
-    <Pill quiet onClick={onHear} label={fill(s.record.hearPart, { part: lowerFirst(title) })} testId={testId}>
+    <Pill quiet onClick={onHear} label={label} testId={testId}>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 10v4h3l4 4V6L7 10H4z" />
         <path d="M15 9a4 4 0 0 1 0 6" />

@@ -919,7 +919,14 @@ export const en = {
     // @patient headline
     storyAsk: "To ask your doctor",
     // @patient phrase
-    hearPart: "Hear {part}",
+    hearParts: {
+      purpose: "Hear what it is for",
+      how_to_take: "Hear how to take it",
+      watch_out: "Hear what to look out for",
+      avoid: "Hear what to stay away from",
+      if_forgotten: "Hear what to do if you forget it",
+      doctor_question: "Hear what to ask your doctor",
+    },
     // @patient
     addLead: "Take a photo of the label first.",
     // @patient
