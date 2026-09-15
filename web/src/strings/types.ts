@@ -216,6 +216,13 @@ export interface Strings {
     areaNo: string;
     areaChange: string;
     areaClear: string;
+    areaWho: string;
+    ramadanTitle: string;
+    ramadanLead: string;
+    ramadanWho: string;
+    ramadanYes: string;
+    ramadanOn: string;
+    ramadanStop: string;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
@@ -721,7 +728,6 @@ export interface Strings {
     dengue: string;
     haze: string;
     heat: string;
-    fastingMonth: string;
     festiveFood: string;
   };
   refusals: Record<string, string | readonly string[]> & { default: string };

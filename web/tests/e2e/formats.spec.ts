@@ -187,13 +187,14 @@ test.describe("the caregiver density at 360 by 640", () => {
     await expect(explainer.getByTestId("watch-meta")).toContainText("Paused");
     await explainer.getByTestId("watch-toggle").click();
     await expect(explainer).toHaveAttribute("data-enabled", "true");
-    // Ramadan is added by a person, never guessed.
-    await expect(watching.getByTestId("watch-label").getByText("Ramadan, before it comes")).toHaveCount(0);
+    // She adds a watch: festive food, weekly by its kind. Ramadan is not hers to add — whether
+    // he fasts is his to say, on his own Me page.
     await watching.getByTestId("watch-add").click();
-    await watching.getByTestId("watch-add-fasting-month").click();
+    await expect(watching.getByTestId("watch-add-fasting-month")).toHaveCount(0);
+    await watching.getByTestId("watch-add-festive-food").click();
     await expect(watching.getByTestId("watch-added")).toHaveText("Nura will watch for this from now on.");
-    const ramadan = watching.getByTestId("watch").filter({ has: page.getByText("Ramadan, before it comes", { exact: true }) });
-    await expect(ramadan.getByTestId("watch-meta")).toContainText("Every week");
+    const festive = watching.getByTestId("watch").filter({ has: page.getByText("Festive food, before it comes", { exact: true }) });
+    await expect(festive.getByTestId("watch-meta")).toContainText("Every week");
     await shotAs(page, "cp28-watching");
 
     const sent = page.getByTestId("sent");
@@ -243,7 +244,7 @@ test.describe("the caregiver density at 360 by 640", () => {
   });
 });
 
-test("his town on Me, on his yes; his chief reads it and cannot set it; his own ask bar is his records only", async ({ page, request }) => {
+test("his town and Ramadan on Me, on his yes; his chief reads his town and cannot set it or add Ramadan; his own ask bar is his records only", async ({ page, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
   await page.getByTestId("open-ask").click();
@@ -257,7 +258,15 @@ test("his town on Me, on his yes; his chief reads it and cannot set it; his own 
   await expect(area.getByTestId("area-ask")).toHaveText("Do you live in Bedok?");
   await area.getByTestId("area-yes").click();
   await expect(area.getByTestId("area-now")).toHaveText("Nura knows your town is Bedok.");
+  await expect(area).toContainText("The family member who looks after your papers can see your town.");
   await shotAs(page, "cp28-area");
+  // Ramadan, on his own yes; the screen says his chief will see it too.
+  const ramadan = page.getByTestId("ramadan");
+  await expect(ramadan).toContainText("The family member who looks after your papers will see this too.");
+  await ramadan.getByTestId("ramadan-yes").click();
+  await expect(ramadan.getByTestId("ramadan-on")).toHaveText("Nura will tell you before Ramadan.");
+  const theirs = await request.post(`${API}/profiles/${family.profileId}/search-jobs`, { headers: auth(family.mei.token), data: { kind: "seasonal", terms: ["fasting month"] } });
+  expect(theirs.status()).toBe(403);
   const hers = await request.get(`${API}/profiles/${family.profileId}/area`, { headers: auth(family.mei.token) });
   expect(await hers.json()).toMatchObject({ area: "Bedok", may_set: false });
   const refused = await request.put(`${API}/profiles/${family.profileId}/area`, { headers: auth(family.mei.token), data: { area: "Toa Payoh" } });

@@ -416,6 +416,20 @@ export const zh = {
     areaChange: "选择您的地区",
     // @patient phrase
     areaClear: "删除我的地区",
+    // @patient
+    areaWho: "管理您文件的家人可以看到您住的地区。",
+    // @patient headline
+    ramadanTitle: "斋戒月",
+    // @patient
+    ramadanLead: "如果您斋戒，Nura 可以告诉您斋戒月前要准备什么。",
+    // @patient
+    ramadanWho: "管理您文件的家人也会看到这个。",
+    // @patient phrase
+    ramadanYes: "好，斋戒月前告诉我",
+    // @patient
+    ramadanOn: "斋戒月前 Nura 会告诉您。",
+    // @patient phrase
+    ramadanStop: "不用再告诉我",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1565,12 +1579,12 @@ export const zh = {
     // @patient phrase
     heat: "炎热天气",
     // @patient phrase
-    fastingMonth: "斋戒月",
-    // @patient phrase
     festiveFood: "节日食物",
   },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "只有这些文件的主人才能说这个。",
     // @patient
     NotAClipCard: "这张卡没有可以播放的内容。",
     // @patient

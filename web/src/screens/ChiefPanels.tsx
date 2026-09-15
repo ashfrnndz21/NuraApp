@@ -15,8 +15,9 @@ import { NoticeAt, useAct, useRead } from "./family/common";
  *    she can do: hear it, and pause the watch that found it. Never a count of anything.
  *  - **Watching for Pa** — every search the engine runs for him, in the backend's words, with
  *    its sources and how often; she pauses or starts one again, and adds a watch for dengue,
- *    haze, hot weather, Ramadan or festive food. Nura never guesses whether he fasts: the
- *    fasting month is added here, by a person.
+ *    haze, hot weather or festive food. Whether he fasts speaks of his faith, so the fasting
+ *    month is his to add, on his own Me page (`FastingIsHisToSay` for anyone else); Nura never
+ *    guesses it.
  *
  *  Every card line and every watch's words are the backend's; these name the panels. The
  *  backend decides who may read them (his chief, his steward, himself), and says so. */
@@ -51,7 +52,6 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
     ["local", "dengue", s.chief.dengue],
     ["local", "haze", s.chief.haze],
     ["local", "heat", s.chief.heat],
-    ["seasonal", "fasting month", s.chief.fastingMonth],
     ["seasonal", "festive food", s.chief.festiveFood],
   ];
   const paused = new Map((jobs.value ?? []).map((job) => [job.job_id, !job.enabled]));

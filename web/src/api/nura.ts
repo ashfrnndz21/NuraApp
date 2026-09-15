@@ -704,6 +704,7 @@ export const area = (token: string, profileId: string) => api<AreaOut>(`/profile
 export const setArea = (token: string, profileId: string, value: string | null) =>
   api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
 
-/** The ask bar's Web, Videos and Providers filters. Records is `ask`. */
+/** The ask bar's Web, Videos and Providers filters. Records is `ask`. His words go in the
+ *  body, never in the URL, where a log or the browser's history would keep them. */
 export const find = (token: string, profileId: string, q: string, where: FindWhere, language: string) =>
-  api<FindOut>(`/profiles/${profileId}/find`, { token, query: { q, where, language } });
+  api<FindOut>(`/profiles/${profileId}/find`, { token, method: "POST", body: { q, where, language } });

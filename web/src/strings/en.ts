@@ -416,6 +416,20 @@ export const en = {
     areaChange: "Choose your town",
     // @patient phrase
     areaClear: "Take my town off",
+    // @patient
+    areaWho: "The family member who looks after your papers can see your town.",
+    // @patient headline
+    ramadanTitle: "Ramadan",
+    // @patient
+    ramadanLead: "If you fast, Nura can tell you what to plan before Ramadan.",
+    // @patient
+    ramadanWho: "The family member who looks after your papers will see this too.",
+    // @patient phrase
+    ramadanYes: "Yes, tell me before Ramadan",
+    // @patient
+    ramadanOn: "Nura will tell you before Ramadan.",
+    // @patient phrase
+    ramadanStop: "Stop telling me",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1569,12 +1583,12 @@ export const en = {
     // @patient phrase
     heat: "Hot weather",
     // @patient phrase
-    fastingMonth: "Ramadan",
-    // @patient phrase
     festiveFood: "Festive food",
   },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "Only the owner of these papers can say this.",
     // @patient
     NotAClipCard: "This card has nothing to play.",
     // @patient

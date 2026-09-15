@@ -416,6 +416,20 @@ export const ms = {
     areaChange: "Pilih bandar anda",
     // @patient phrase
     areaClear: "Buang bandar saya",
+    // @patient
+    areaWho: "Ahli keluarga yang menjaga surat-surat anda boleh nampak bandar anda.",
+    // @patient headline
+    ramadanTitle: "Bulan puasa",
+    // @patient
+    ramadanLead: "Jika anda berpuasa, Nura boleh beritahu apa yang perlu dirancang sebelum bulan puasa.",
+    // @patient
+    ramadanWho: "Ahli keluarga yang menjaga surat-surat anda juga akan nampak ini.",
+    // @patient phrase
+    ramadanYes: "Ya, beritahu saya sebelum bulan puasa",
+    // @patient
+    ramadanOn: "Nura akan beritahu anda sebelum bulan puasa.",
+    // @patient phrase
+    ramadanStop: "Berhenti beritahu saya",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1565,12 +1579,12 @@ export const ms = {
     // @patient phrase
     heat: "Cuaca panas",
     // @patient phrase
-    fastingMonth: "Bulan puasa",
-    // @patient phrase
     festiveFood: "Makanan perayaan",
   },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "Hanya pemilik surat-surat ini boleh kata ini.",
     // @patient
     NotAClipCard: "Kad ini tiada apa-apa untuk dimainkan.",
     // @patient
