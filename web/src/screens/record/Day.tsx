@@ -11,6 +11,7 @@ import {
   pointRangeLine,
   rangeSourceLine,
   READINGS,
+  spokenTime,
   trendLines,
   withReading,
   withTime,
@@ -20,7 +21,7 @@ import {
 import { density } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
-import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead, useTimeOf } from "./parts";
+import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
 
 function isAnalyte(code: string | null): code is Analyte {
   return code !== null && (ANALYTES as readonly string[]).includes(code);
@@ -175,7 +176,6 @@ export function RoutineScreen(): JSX.Element {
  *  when his Today page comes; then the day read back, and her yes for exactly it. */
 export function BuilderScreen(): JSX.Element {
   const s = t();
-  const timeOf = useTimeOf();
   const [changed, setDay] = useState<RoutineDayIn | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -244,7 +244,7 @@ export function BuilderScreen(): JSX.Element {
           {ANCHORS.map((anchor) => (
             <div class="lines" key={anchor}>
               <p class="label">
-                {s.record.anchors[anchor]} {timeOf(day.anchors[anchor] ?? "")}
+                {s.record.anchors[anchor]} {spokenTime(day.anchors[anchor] ?? "", s)}
               </p>
               {day.reading_prompts
                 .filter(([, at]) => at === anchor)
@@ -255,7 +255,7 @@ export function BuilderScreen(): JSX.Element {
             </div>
           ))}
           <p class="label">
-            {s.record.morningCard} {timeOf(day.morning_card_at)}
+            {s.record.morningCard} {spokenTime(day.morning_card_at, s)}
           </p>
           <Pill plum onClick={() => void save()} disabled={busy} testId="day-yes">
             {s.record.dayYes}

@@ -5,7 +5,7 @@ import { go, openTab } from "../../flow";
 import type { RecordAt } from "../../record/places";
 import { density, profile, token } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
-import { dateLine, timeLine } from "../../today/model";
+import { dateLine } from "../../today/model";
 import { Header, Pill, TabBar } from "../../ui/components";
 
 /** What every Record screen is made of. */
@@ -76,17 +76,6 @@ export function takeNote(): string[] | null {
 export function useDateOf(): (iso: string) => string {
   const locale = LOCALE[language.value];
   return (iso: string) => dateLine(new Date(iso), locale);
-}
-
-/** A clock time of his day ("07:00") as he would say it, in his language ("7:00 am"), not a
- *  bare 24-hour code (plain words, rule 5). Anything that is not a time is left as it is. */
-export function useTimeOf(): (hhmm: string) => string {
-  const locale = LOCALE[language.value];
-  return (hhmm: string) => {
-    const match = /^(\d{1,2}):(\d{2})/.exec(hhmm);
-    if (!match) return hhmm;
-    return timeLine(new Date(2000, 0, 1, Number(match[1]), Number(match[2])), locale);
-  };
 }
 
 export function upperFirst(text: string): string {

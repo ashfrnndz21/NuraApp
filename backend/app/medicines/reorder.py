@@ -248,9 +248,23 @@ async def _open_order_today(
 async def _who_to_ask(
     session: AsyncSession, context: KeyContext
 ) -> tuple[Person | None, Person | None]:
-    """Whoever is on duty now (the roster, on his wall clock), else his chief; and his chief."""
+    """Whoever is on duty now (the roster, on his wall clock) and holds a key that opens his
+    medicines, else his chief; and his chief. The task's words name the medicine by his name
+    for it, and two lines can share one ("blood pressure tablet"); the chemical name and
+    strength beside the words reach only a key that opens the medicines, so the one asked to
+    buy it is one who can read which it is."""
     chief = await _chief(session, context)
-    on_duty = await who_is_on_duty(session, context=context)
+    moment = utcnow()
+    opens_medicines = {
+        key.holder_person_id
+        for key in await list_keys(session, context=context)
+        if key.is_active(moment) and Scope.MEDICINES in key.scopes_held
+    }
+    on_duty = [
+        duty
+        for duty in await who_is_on_duty(session, context=context)
+        if duty.person_id in opens_medicines
+    ]
     asked: Person | None = chief
     if on_duty:
         asked = await key_holder(session, context, on_duty[0].person_id, scope=Scope.FAMILY)

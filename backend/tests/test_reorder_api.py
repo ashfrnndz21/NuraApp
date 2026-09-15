@@ -375,6 +375,26 @@ async def test_with_nobody_on_duty_the_chief_is_asked_and_with_no_chief_nobody_i
     assert malay.json()["lines"] == ["Nura minta Mei pesan lagi ubat tekanan darah anda."]
 
 
+async def test_the_one_asked_is_one_whose_key_opens_his_medicines(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """Two lines can share his name for them ("blood pressure tablet"); the chemical name and
+    strength beside the task reach only a key that opens the medicines. So someone on duty
+    whose key does not is passed over, and the chief is asked."""
+    pa, profile_id, line_id = await _pa_with_tablets(deployment)
+    mei = await _key(deployment, pa, profile_id, MEI, "Mei", "chief", EVERY_PART)
+    kit = await _key(deployment, pa, profile_id, KIT, "Kit", "caregiver", ["visits"])
+    await _on_duty(deployment, mei, profile_id, kit)
+    shown = await _preview(deployment, pa, profile_id, line_id)
+    assert shown.json()["asked_person_id"] == mei["person_id"]
+    done = await _preview_and_yes(deployment, pa, profile_id, line_id)
+    assert done.status_code == 201, done.text
+    tasks = await _tasks(deployment, mei, profile_id)
+    assert [(t["assigned_person_id"], t["medicine"]) for t in tasks] == [
+        (mei["person_id"], "amlodipine 5 mg")
+    ]
+
+
 async def test_the_preview_in_malay_and_chinese_names_who_and_what(
     deployment: Deployment, clock: FrozenClock
 ) -> None:

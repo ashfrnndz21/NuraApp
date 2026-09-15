@@ -18,6 +18,7 @@ import {
   pointRangeLine,
   rangeLine,
   rangeSourceLine,
+  spokenTime,
   reorderActions,
   severityLine,
   tidyLabel,
@@ -239,6 +240,16 @@ describe("a lab trend", () => {
     // The backend's `source` decides; nothing is read into the id.
     expect(rangeSourceLine({ ...range, source: "guideline", source_id: "lab:bukit_lab" }, en)).toBe("The usual number comes from a guide for your age.");
     expect(numberText(5.2)).toBe("5.2");
+  });
+
+  it("says a time of his day the way he says it, never a 24-hour code", () => {
+    expect(spokenTime("07:00", en)).toBe("at 7 in the morning");
+    expect(spokenTime("06:30", en)).toBe("at 6:30 in the morning");
+    expect(spokenTime("12:00", en)).toBe("at 12 in the afternoon");
+    expect(spokenTime("15:05", en)).toBe("at 3:05 in the afternoon");
+    expect(spokenTime("21:00", en)).toBe("at 9 at night");
+    expect(spokenTime("00:15", en)).toBe("at 12:15 in the morning");
+    expect(spokenTime("", en)).toBe("");
   });
 
   it("says why a result has no usual number beside it, when the backend says", () => {
