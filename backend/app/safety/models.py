@@ -48,6 +48,9 @@ class NoticeKind(StrEnum):
     """To a key holder: he is not feeling well, this is what he said, call him."""
     CHECK_IN = "check_in"
     """To the person himself, later: how do you feel now."""
+    REORDER = "reorder"
+    """To his chief: he asked the family to order more of a medicine (E04-05). Not a
+    health alert: rendered by the medicines' words (`app.medicines.reorder`)."""
 
 
 class Notice(ProfileScoped, Base):

@@ -1,13 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { CardClipOut } from "../api/types";
+import type { CardClipOut, FeedItemOut, LineOut } from "../api/types";
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
-import type { JSX } from "preact";
-import type { FeedItemOut } from "../api/types";
 import { go, openTab } from "../flow";
-import { cardView, speechLanguage, statusLine, type CardView, type SideAction } from "../feed/model";
+import { cardView, speechLanguage, statusLine, variantOf, type CardView, type SideAction } from "../feed/model";
+import { lineForCard, reorderActions } from "../record/model";
 import type { Playback } from "../feed/playback";
 import { feedFor } from "../feed/session";
 import type { Entry, FeedStore, Note } from "../feed/store";
@@ -35,6 +35,39 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const notes = store.notes.value;
   const audience = store.audience.value;
   const patient = density() === "patient";
+  // The reorder card's two buttons (E04-05) are the medicine line's, in the backend's words:
+  // the list is read once, when a reorder card is on the page, and matched by the fact the
+  // card cites.
+  const [lines, setLines] = useState<LineOut[] | null>(null);
+  const [asked, setAsked] = useState<Record<string, string[]>>({});
+  const [reorderError, setReorderError] = useState<unknown>(null);
+  const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");
+  useEffect(() => {
+    const bearer = token.value;
+    const papers = profile.value;
+    if (!hasReorder || lines !== null || !bearer || !papers) return;
+    nura.medicines(bearer, papers.profile_id, language.value).then(setLines, () => setLines([]));
+  }, [hasReorder]);
+  const reorderFor = (item: FeedItemOut): Reorder | null => {
+    if (variantOf(item) !== "reorder" || !lines) return null;
+    const line = lineForCard(item, lines);
+    const actions = line ? reorderActions(line) : null;
+    return line && actions ? { lineId: line.line_id, ...actions } : null;
+  };
+  /** "Ask the family to order.": the tap is the yes; the backend's lines say who does it. */
+  const askToOrder = async (item: FeedItemOut, lineId: string) => {
+    const bearer = token.value;
+    const papers = profile.value;
+    if (!bearer || !papers) return;
+    setReorderError(null);
+    try {
+      const done = await nura.askToOrder(bearer, papers.profile_id, lineId, language.value);
+      setAsked({ ...asked, [item.item_id]: done.lines });
+      store.record(item, "tapped");
+    } catch (failure) {
+      setReorderError(failure);
+    }
+  };
   // "Hear what Dr Tan said" under a line said at a recorded visit (E21-03): on a tap only.
   const clipPlayer = useMemo(
     () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(token.value ?? "", profile.value?.profile_id ?? "", artifactId, start, end))),
@@ -143,6 +176,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         )}
         <Notice error={store.error.value} />
         <Notice error={store.said.value} />
+        <Notice error={reorderError} />
         {blank && (
           <>
             <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
@@ -188,6 +222,9 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               onFamily={() => void store.share(entry.item)}
               onNotForMe={() => void store.notForMe(entry.item)}
               onKeepGoing={() => goTo(index + 1)}
+              reorder={reorderFor(entry.item)}
+              said={asked[entry.item.item_id] ?? null}
+              onAskToOrder={(lineId) => void askToOrder(entry.item, lineId)}
             />
           ))}
           {store.quiet.value && store.ended.value && (
@@ -213,6 +250,13 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   );
 }
 
+/** The reorder card's buttons: its line and the backend's two labels. */
+interface Reorder {
+  lineId: string;
+  askToOrder: string;
+  iHaveMore: string;
+}
+
 interface FeedCardProps {
   entry: Entry;
   index: number;
@@ -231,6 +275,10 @@ interface FeedCardProps {
   onFamily: () => void;
   onNotForMe: () => void;
   onKeepGoing: () => void;
+  reorder: Reorder | null;
+  /** What "Ask the family to order." did, in the backend's lines. */
+  said: string[] | null;
+  onAskToOrder: (lineId: string) => void;
 }
 
 /** One card: the section it came from, the backend's headline and lines, its boundary, its
@@ -240,7 +288,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, reorder, said, onAskToOrder }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -309,6 +357,13 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             )}
           </>
         )}
+        {said && (
+          <div class="feed-note" role="status" data-testid="asked">
+            {said.map((line, at) => (
+              <p key={at}>{line}</p>
+            ))}
+          </div>
+        )}
         {note && (
           <div class="feed-note" role="status" data-testid="note">
             {note === "declined" && (
@@ -327,6 +382,16 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
           <button type="button" class="pill plum" onClick={onKeepGoing} data-testid="keep-going">
             {s.feed.keepGoing}
           </button>
+        )}
+        {!declined && reorder && (
+          <>
+            <button type="button" class="pill plum" onClick={() => onAskToOrder(reorder.lineId)} disabled={said !== null} data-testid="ask-to-order">
+              {reorder.askToOrder}
+            </button>
+            <button type="button" class="pill" onClick={() => go({ name: "record", at: { name: "more", lineId: reorder.lineId } })} data-testid="i-have-more">
+              {reorder.iHaveMore}
+            </button>
+          </>
         )}
         {!declined && view.action === "toTablets" && (
           <button type="button" class="pill" onClick={() => go({ name: "today" })} data-testid="to-tablets">

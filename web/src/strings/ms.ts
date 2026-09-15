@@ -14,6 +14,8 @@ export const ms = {
     // @patient headline
     today: "Hari Ini",
     // @patient headline
+    record: "Surat",
+    // @patient headline
     me: "Saya",
     // @patient headline
     family: "Keluarga",
@@ -328,6 +330,10 @@ export const ms = {
     saved: "Nura sudah tulis.",
     // @patient phrase
     cancel: "Bukan sekarang",
+    // @patient phrase
+    photo: "Ambil gambar mesin",
+    // @patient
+    photoLead: "Atau ambil gambar skrin mesin.",
   },
   me: {
     // @patient headline
@@ -868,6 +874,278 @@ export const ms = {
       },
     },
   },
+  // The Record (W5): the screens' own lines. Every card's words are the backend's.
+  record: {
+    // @patient headline
+    title: "Surat anda",
+    // @patient headline
+    titleOther: "Surat {name}",
+    // @patient headline
+    medicines: "Ubat anda",
+    // @patient headline
+    papers: "Surat yang menunggu ya anda",
+    // @patient headline
+    routine: "Hari anda",
+    // @patient headline
+    timeline: "Lawatan anda",
+    // @patient headline
+    trends: "Ujian darah anda",
+    // @patient headline
+    providers: "Doktor dan klinik anda",
+    // @patient headline
+    changes: "Apa yang berubah",
+    // @patient phrase
+    back: "Kembali ke surat anda",
+    // @patient
+    sureYes: "Anda sudah kata ya untuk ini.",
+    // @patient
+    sureRead: "Nura membaca ini dengan jelas.",
+    // @patient
+    disputed: "Ada yang kata ini tidak betul.",
+    // @patient
+    twice: "Ubat ini ada dua kali dalam senarai anda.",
+    // @patient phrase
+    aboutIt: "Tentang ubat ini",
+    // @patient phrase
+    add: "Tambah ubat",
+    // @patient headline
+    storyPurpose: "Untuk apa",
+    // @patient headline
+    storyHow: "Cara mengambilnya",
+    // @patient headline
+    storyWatch: "Apa yang perlu diperhatikan",
+    // @patient headline
+    storyAvoid: "Apa yang perlu dielakkan",
+    // @patient headline
+    storyForgot: "Jika anda terlupa",
+    // @patient headline
+    storyAsk: "Untuk ditanya kepada doktor anda",
+    // @patient
+    addLead: "Ambil gambar label dahulu.",
+    // @patient
+    addLead2: "Kemudian semak apa yang Nura baca.",
+    // @patient phrase
+    nameLabel: "Nama pada label",
+    // @patient phrase
+    strengthLabel: "Kekuatannya",
+    // @patient phrase
+    howLabel: "Cara mengambilnya",
+    // @patient
+    howHint: "Taip seperti yang tertulis pada label.",
+    // @patient phrase
+    countLabel: "Berapa banyak dalam kotak",
+    // @patient phrase
+    doctorLabel: "Nama doktor",
+    // @patient phrase
+    checkIt: "Semak",
+    // @patient
+    outcomeNew: "Ini ubat baharu untuk senarai anda.",
+    // @patient
+    outcomeRefill: "Ini tambahan ubat yang sudah ada dalam senarai anda.",
+    // @patient
+    outcomeChange: "Label ini ada jumlah yang lain.",
+    // @patient headline
+    flaggedTitle: "Sebelum anda tambah",
+    // @patient
+    flaggedNone: "Nura tidak jumpa ubat dalam senarai anda yang tidak sesuai dengannya.",
+    // @patient
+    severity: {
+      major: "Yang ini sangat penting.",
+      moderate: "Yang ini penting.",
+      minor: "Yang ini sedikit penting.",
+    },
+    // @patient phrase
+    pair: "{one} dan {two}",
+    // @patient phrase
+    addIt: "Tambah ke senarai saya",
+    // @patient
+    added: "Nura sudah tambah ke senarai anda.",
+    // @patient headline
+    moreTitle: "Ada lagi di rumah",
+    // @patient
+    moreLead: "Berapa banyak lagi yang anda jumpa di rumah?",
+    // @patient phrase
+    moreLabel: "Berapa banyak lagi",
+    // @patient phrase
+    moreYes: "Ya, tambah",
+    // @patient
+    papersNone: "Tiada surat yang menunggu ya anda.",
+    // @patient
+    paperFrom: "Ini sampai pada {date}.",
+    // @patient phrase
+    paperOpen: "Lihat surat ini",
+    // @patient phrase
+    older: "Tunjuk lawatan lama",
+    // @patient
+    papersWith: "{count} surat ada bersamanya.",
+    // @patient
+    paperWith: "Satu surat ada bersamanya.",
+    // @patient
+    nothingWith: "Belum ada apa-apa bersamanya.",
+    // @patient
+    factsWith: "Nura menulis {count} perkara daripadanya.",
+    // @patient
+    factWith: "Nura menulis satu perkara daripadanya.",
+    // @patient
+    since: "Ia bermula pada {date}.",
+    // @patient
+    ended: "Ia berakhir pada {date}.",
+    // @patient phrase
+    seeIllness: "Lihat sakit ini",
+    // @patient phrase
+    seeDoctor: "Lihat doktor ini",
+    // @patient
+    endOfList: "Itu sahaja yang Nura ada.",
+    // @patient
+    status: {
+      planned: "Lawatan ini dirancang.",
+      confirmed: "Lawatan ini sudah ditetapkan.",
+      attended: "Anda sudah pergi ke lawatan ini.",
+      not_attended: "Anda tidak pergi ke lawatan ini.",
+      cancelled: "Lawatan ini dibatalkan.",
+    },
+    // @patient headline
+    illnessPapers: "Surat untuk sakit ini",
+    // @patient headline
+    illnessVisits: "Lawatan semasa sakit ini",
+    // @patient headline
+    illnessMoments: "Apa yang ditulis",
+    // @patient
+    moments: {
+      reading: "Satu nombor baharu ditulis pada {date}.",
+      dose_taken: "Satu ubat diambil pada {date}.",
+      symptom: "Apa yang anda rasa ditulis pada {date}.",
+      discharge: "Anda pulang dari hospital pada {date}.",
+      visit: "Ada lawatan pada {date}.",
+      other: "Sesuatu ditulis pada {date}.",
+    },
+    // @patient
+    photoOn: "Ini gambar dari {date}.",
+    // @patient
+    letterOn: "Ini surat dari {date}.",
+    // @patient
+    paperOn: "Ini kertas dari {date}.",
+    // @patient phrase
+    putWith: "Letak surat bersama sakit ini",
+    // @patient phrase
+    putThis: "Letak surat ini bersamanya",
+    // @patient
+    putAsk: "Letak surat ini bersama sakit ini?",
+    // @patient phrase
+    putYes: "Ya, letak di situ",
+    // @patient
+    putDone: "Surat itu kini bersama sakit ini.",
+    // @patient
+    nothingToPut: "Semua surat sudah ada bersamanya.",
+    // @patient phrase
+    kind: {
+      doctor: "Doktor",
+      clinic: "Klinik",
+      hospital: "Hospital",
+      pharmacy: "Farmasi",
+      lab: "Tempat ujian darah",
+      other: "Tempat lain",
+    },
+    // @patient
+    visitsMany: "Nura ada {count} lawatan di sini.",
+    // @patient
+    visitsOne: "Nura ada satu lawatan di sini.",
+    // @patient
+    lastVisit: "Lawatan terakhir pada {date}.",
+    // @patient
+    nextVisit: "Lawatan seterusnya pada {date}.",
+    // @patient phrase
+    where: "Di mana",
+    // @patient phrase
+    phone: "Nombor telefon",
+    // @patient headline
+    medicinesFrom: "Ubat dari sini",
+    // @patient headline
+    notesTitle: "Nota tentang tempat ini",
+    // @patient
+    notesOnly: "Hanya pemilik dan ketua keluarga boleh baca nota ini.",
+    // @patient phrase
+    noteLabel: "Satu nota tentang tempat ini",
+    // @patient phrase
+    noteSave: "Simpan nota",
+    // @patient
+    noteSaved: "Nura sudah simpan nota anda.",
+    // @patient
+    writtenOn: "Ini ditulis pada {date}.",
+    // @patient headline
+    waiting: "Masih menunggu",
+    // @patient
+    trendsLead: "Pilih satu ujian untuk melihatnya dari masa ke masa.",
+    // @patient phrase
+    analytes: {
+      total_cholesterol: "Kolesterol anda",
+      ldl: "Kolesterol jahat anda",
+      hdl: "Kolesterol baik anda",
+      triglycerides: "Lemak darah anda",
+      hba1c: "Ujian gula anda",
+      creatinine: "Nombor buah pinggang anda",
+      egfr: "Penapis buah pinggang anda",
+      potassium: "Garam badan anda",
+      haemoglobin: "Kiraan darah anda",
+      tsh: "Ujian tiroid anda",
+    },
+    // @patient phrase
+    resultOn: "{value} {unit} pada {date}",
+    // @patient
+    rangeUnder: "Julatnya bawah {upper}.",
+    // @patient
+    rangeOver: "Julatnya atas {lower}.",
+    // @patient
+    rangeBetween: "Julatnya {lower} hingga {upper}.",
+    // @patient
+    noRange: "Nura tiada julat untuk yang ini.",
+    // @patient
+    labRange: "Julat ini tercetak pada ujian darah anda.",
+    // @patient
+    guideRange: "Julat ini dari panduan untuk umur anda.",
+    // @patient phrase
+    anchors: {
+      wake: "Apabila anda bangun",
+      breakfast: "Sarapan",
+      lunch: "Makan tengah hari",
+      dinner: "Makan malam",
+      bed: "Waktu tidur",
+    },
+    // @patient phrase
+    readings: {
+      blood_pressure: "Tekanan darah",
+      blood_sugar: "Gula dalam darah",
+      weight: "Berat badan",
+    },
+    // @patient phrase
+    walk: "Berjalan kaki",
+    // @patient
+    notSet: "Hari anda belum ditetapkan lagi.",
+    // @patient phrase
+    setDay: "Tetapkan hari",
+    // @patient phrase
+    timeLabel: "Pukul berapa",
+    // @patient phrase
+    morningCard: "Bila halaman Hari Ini sampai",
+    // @patient phrase
+    walkAfter: "Berjalan kaki selepas ini",
+    // @patient phrase
+    checkDay: "Semak hari",
+    // @patient
+    dayAsk: "Adakah ini harinya?",
+    // @patient phrase
+    dayYes: "Ya, tetapkan hari",
+    // @patient
+    daySaved: "Nura sudah tulis hari itu.",
+    // @patient headline
+    tableMoment: "Bila",
+    // @patient headline
+    tableTime: "Pukul",
+    // @patient headline
+    tableMedicines: "Ubat",
+    // @patient headline
+    tableReadings: "Apa yang perlu diperiksa",
+  },
   family: {
     // @patient headline
     title: "Keluarga",
@@ -1294,6 +1572,21 @@ export const ms = {
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
+    NoteNamesHealth: "Nura tidak boleh simpan nota yang menyebut ubat atau penyakit.",
+    NotAPlaceNote: "Sila tulis satu baris pendek tentang tempat itu.",
+    NotTheirsToSet: "Anda boleh lihat hari itu tetapi tidak boleh mengubahnya.",
+    NotARoutine: "Waktu mesti mengikut urutan sepanjang hari.",
+    NoSuchAnalyte: "Nura tidak kenal ujian itu.",
+    NobodyToAsk: ["Tiada sesiapa dalam senarai keluarga untuk diminta.", "Tambah seseorang ke senarai keluarga dahulu."],
+    NotACount: "Sila taip berapa banyak, sebagai nombor.",
+    AlreadyHangsThere: "Surat itu sudah ada di situ.",
+    EpisodeAlreadyClosed: "Sakit ini sudah berakhir.",
+    NoSuchEpisode: "Sakit itu tiada di sini lagi.",
+    NoSuchProvider: "Doktor itu tiada dalam senarai anda.",
+    StaleState: ["Nura masih mengemas kini.", "Sila cuba lagi."],
+    NotIdentified: "Nura tidak dapat mencari ubat ini.",
+    DoseNotRead: "Sila taip cara mengambilnya, seperti pada label.",
+    NotADose: "Nura tidak faham cara mengambilnya.",
     WouldWiden: ["Nura tidak boleh meluaskan ini.", "Pemilik perlu setuju dengan lebih dahulu."],
     NothingToNarrow: "Itu tidak akan mengubah apa-apa.",
     NotTheDoer: "Hanya orang yang diberi tugas boleh kata ia sudah siap.",

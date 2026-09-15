@@ -93,6 +93,7 @@ from app.language.review import (
     NotStaff,
     SourceAlreadyListed,
 )
+from app.medicines.reorder import NobodyToAsk, NotACount
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
 from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
@@ -282,6 +283,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (SummaryAlreadyConfirmed, 409),
     # The same label twice, or one that adds nothing, changes nothing.
     (AlreadyRecorded, 409),
+    # "Ask the family to order." with nobody on duty and no chief to give the task to (E04-05).
+    (NobodyToAsk, 409),
     # A proposal has one yes or one no; a trend is not rendered from a State the record has
     # moved past, or one the key cannot check (compose again).
     (AlreadyDecided, 409),
@@ -328,6 +331,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAConsultRecording,
     NotAClip,
     NotOnThisVisit,
+    # The reorder card's (E04-05): tablets found at home are a whole number, more than none.
+    NotACount,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""
