@@ -541,3 +541,8 @@ export const meSummary = (token: string, profileId: string, language: string) =>
 /** One card by its id, under the card's own scope: what a push opens (`?open=<id>`, #143). */
 export const feedItem = (token: string, profileId: string, itemId: string) =>
   api<FeedItemOut>(`/profiles/${profileId}/feed/${itemId}`, { token });
+
+/** The emergency card as the backend prints it (E00, `GET /profiles/{id}/emergency-card.html`):
+ *  one self-contained page, every line the backend's, read with his key and shown as it is. */
+export const emergencyCardPage = (token: string, profileId: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } }).then((page) => page.text());

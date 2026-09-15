@@ -426,6 +426,8 @@ export const ms = {
     signOut: "Daftar keluar",
     // @patient phrase
     remindersGet: "Dapatkan peringatan di telefon ini",
+    // @patient phrase
+    emergencyPrint: "Cetak",
     // @patient
     remindersOn: "Peringatan sudah dihidupkan untuk telefon ini.",
     // @patient phrase

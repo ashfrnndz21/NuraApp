@@ -426,6 +426,8 @@ export const zh = {
     signOut: "退出登录",
     // @patient phrase
     remindersGet: "在这部手机上接收提醒",
+    // @patient phrase
+    emergencyPrint: "打印出来",
     // @patient
     remindersOn: "这部手机的提醒已经打开了。",
     // @patient phrase

@@ -757,3 +757,13 @@ html.shot-full .shell > .shell-scroll {
 .panel-stack > .pill.compact {
   align-self: flex-end;
 }
+
+/* The emergency card: the backend's printable page, on paper, as tall as itself. */
+.emergency-page {
+  display: block;
+  width: 100%;
+  min-height: 60vh;
+  border: var(--paper-border);
+  border-radius: var(--radius-tile);
+  background: var(--white);
+}

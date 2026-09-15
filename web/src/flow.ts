@@ -23,6 +23,8 @@ export type Screen =
   | { name: "forSomeone" }
   | { name: "today"; saved?: boolean }
   | { name: "card"; item: FeedItemOut }
+  /** The emergency card, as the backend prints it: from the Me sheet, one tap. */
+  | { name: "emergency" }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
   /** Ask (E03's recall, `POST /profiles/{id}/ask`), shown as the backend wrote it: about one

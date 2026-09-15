@@ -426,6 +426,8 @@ export const en = {
     signOut: "Sign out",
     // @patient phrase
     remindersGet: "Get reminders on this phone",
+    // @patient phrase
+    emergencyPrint: "Print it",
     // @patient
     remindersOn: "Reminders are on for this phone.",
     // @patient phrase

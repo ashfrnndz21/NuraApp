@@ -85,10 +85,22 @@ for (const [label, viewport] of [
       // Me is a sheet from the avatar: everything that was on the Me tab, 56 by 56, then Close.
       await openMe(page);
       const sheet = page.getByTestId("me-sheet");
-      for (const id of ["lang-en", "density-patient", "me-family", "switch-profile", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
+      for (const id of ["lang-en", "density-patient", "me-family", "switch-profile", "me-emergency", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
+      // The chosen language and look are outlined, not filled: at most one Plum button in the sheet.
+      await expect(sheet.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
+      expect(await sheet.locator("button.plum").count()).toBeLessThanOrEqual(1);
       expect(await nothingDrawnOverLines(sheet, { lines: "h2, p, .label", controls: "button", minTarget: 56 })).toEqual([]);
       await page.keyboard.press("Escape");
       await expect(sheet).toHaveCount(0);
+
+      // The emergency card is one tap from the sheet: the backend's own page, and Print.
+      await openMe(page);
+      await page.getByTestId("me-emergency").click();
+      await expect(page.getByTestId("me-sheet")).toHaveCount(0);
+      await expect(page.getByTestId("emergency-screen")).toBeVisible();
+      await expect(page.getByTestId("emergency-print")).toBeVisible();
+      await expect(page.frameLocator("[data-testid=emergency-page]").locator("body")).toContainText("Pa");
+      expect(await shellHolds(page)).toEqual([]);
     });
 
     test("her Home: the State's word and drivers, his pressures, what changed, the next visit, nothing covered", async ({ page, request }) => {
@@ -111,6 +123,13 @@ for (const [label, viewport] of [
       for (const tone of await changed.locator(".tone-dot").evaluateAll((dots) => dots.map((dot) => dot.getAttribute("data-tone")))) {
         expect(["good", "watch", "act", "none"]).toContain(tone);
       }
+      expect(await changed.locator("li").count()).toBeLessThanOrEqual(4);
+      if ((await page.getByTestId("what-changed-all").count()) > 0) {
+        await page.getByTestId("what-changed-all").click();
+        expect(await changed.locator("li").count()).toBeGreaterThan(4);
+        await page.getByTestId("what-changed-all").click();
+      }
+      await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");
 

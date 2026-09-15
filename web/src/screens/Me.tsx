@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { MeSummaryOut } from "../api/types";
-import { closeMe, meOpen, openTab, reloadDoors, signOutEverywhere } from "../flow";
+import { closeMe, go, meOpen, openTab, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { backendFor, browserEnv, remindersState, turnOff, turnOn, type RemindersState } from "../push/reminders";
@@ -86,7 +86,7 @@ export function MeSheet(): JSX.Element | null {
         <p class="label">{s.me.language}</p>
         <div class="row" role="group" aria-label={s.me.language}>
           {LANGUAGES.map((code) => (
-            <Pill key={code} plum={language.value === code} onClick={() => void setLanguage(code)} testId={`lang-${code}`}>
+            <Pill key={code} chosen={language.value === code} onClick={() => void setLanguage(code)} testId={`lang-${code}`}>
               {names[code]}
             </Pill>
           ))}
@@ -95,10 +95,10 @@ export function MeSheet(): JSX.Element | null {
       <Tile paper>
         <p class="label">{s.me.look}</p>
         <div class="row" role="group" aria-label={s.me.look}>
-          <Pill plum={density() === "patient"} onClick={() => void setDensity("patient")} testId="density-patient">
+          <Pill chosen={density() === "patient"} onClick={() => void setDensity("patient")} testId="density-patient">
             {s.me.patient}
           </Pill>
-          <Pill plum={density() === "caregiver"} onClick={() => void setDensity("caregiver")} testId="density-caregiver">
+          <Pill chosen={density() === "caregiver"} onClick={() => void setDensity("caregiver")} testId="density-caregiver">
             {s.me.caregiver}
           </Pill>
         </div>
@@ -124,6 +124,19 @@ export function MeSheet(): JSX.Element | null {
         )}
       </Tile>
       <Reminders />
+      {papers && (papers.standing === "owner" || papers.scopes.includes("emergency")) && (
+        <Tile paper>
+          <Pill
+            onClick={() => {
+              closeMe();
+              go({ name: "emergency" });
+            }}
+            testId="me-emergency"
+          >
+            {s.today.emergencyTitle}
+          </Pill>
+        </Tile>
+      )}
       {wantsHomeScreenHint() && (
         <Tile glass>
           <p>{s.today.homeScreen1}</p>

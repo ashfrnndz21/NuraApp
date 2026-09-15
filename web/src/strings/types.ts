@@ -205,6 +205,7 @@ export interface Strings {
     setUp: string;
     signOut: string;
     remindersGet: string;
+    emergencyPrint: string;
     remindersOn: string;
     remindersStop: string;
     remindersDenied1: string;
