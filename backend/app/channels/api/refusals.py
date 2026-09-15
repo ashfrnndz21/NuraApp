@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
+from app.channels.api.deps import settings_of
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
@@ -22,6 +23,7 @@ from app.channels.whatsapp.provider import NotAWebhook, WebhookTooLarge
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
+    NotStoppedInTheApp,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
 )
@@ -141,6 +143,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoConsent, 403),
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
+    # Keeping his papers and WhatsApp carry the red-flag paths: not one tap in the app.
+    (NotStoppedInTheApp, 403),
     # The engine's sources and jobs are the owner's and his chief's to see (E21).
     (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
@@ -320,6 +324,11 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
         body["scope"] = refusal.scope.value
     if isinstance(refusal, HighRiskNeedsLabelPhoto):
         body["drug_class"] = refusal.drug_class
+    if isinstance(refusal, NotStoppedInTheApp):
+        # Not only "no": where to write to stop it, when the deployment names the address.
+        contact = settings_of(request).privacy_contact
+        if contact:
+            body["contact"] = contact
     if isinstance(refusal, NotPlainWords):
         # The verifier's findings — rule, problem, rewrite — so the composer can fix the
         # line. They are about the words offered, never about the record.

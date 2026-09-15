@@ -7,6 +7,7 @@ import { EmergencyScreen } from "./screens/Emergency";
 import { PapersScreen } from "./screens/Papers";
 import { AskScreen } from "./screens/Ask";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
+import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
 import { MeScreen } from "./screens/Me";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
@@ -89,6 +90,8 @@ export function App(): JSX.Element | null {
       return <BriefScreen appointmentId={current.appointmentId} />;
     case "questions":
       return <QuestionsScreen appointmentId={current.appointmentId} />;
+    case "family":
+      return <FamilyScreen part={current.part ?? "home"} />;
   }
 }
 

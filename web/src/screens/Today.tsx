@@ -4,7 +4,7 @@ import { Refused, Unreachable } from "../api/client";
 import * as nura from "../api/nura";
 import type { FeedItemOut, ProfileOut, SlotOut } from "../api/types";
 import { forgetFeed } from "../feed/session";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { dropCard, keepsCard, loadCard, readCard, saveCard, wantsRead, type KeptCard } from "../offline/emergencyCache";
 import { dropStaleFeed } from "../offline/feedCache";
 import { hold, replay, tapId, waiting, type Tap } from "../offline/queue";
@@ -489,7 +489,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
         </>
       )}
 
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" onSelect={openTab} />
     </main>
   );
 }

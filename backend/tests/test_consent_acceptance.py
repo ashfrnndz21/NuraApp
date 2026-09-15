@@ -530,7 +530,7 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         owner,
         daughter,
         scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
-        relationship="your daughter",
+        relationship="daughter",
     )
     clock.set(CLAIMED_AT + timedelta(days=40, hours=1))
     await grant_key(

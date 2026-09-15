@@ -18,8 +18,10 @@ this page, and the home-screen icon that opens the card in one tap, are its subs
 from __future__ import annotations
 
 from html import escape
+from typing import Any
 
 from app.channels.strings import DEMO_HEADLINE, DEMO_LINES
+from app.consent.export import PlainTextRenderer
 from app.safety.emergency_card import Card
 
 TOKENS: dict[str, str] = {
@@ -149,4 +151,90 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
         f'<section class="paper">{section("ec.chief_who", "ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor", "ec.clinic")}{clinic}{ambulance}</section>'
         f'<section class="paper">{section("ec.last_reading", "ec.boundary")}</section>'
         "</main></body></html>"
+    )
+
+
+# --- the consent record (E00-02) ----------------------------------------------------------------
+
+
+class PrintableConsentRenderer:
+    """The consent record as one printable page: the same lines `PlainTextRenderer` writes —
+    word for word, in the same order — set on paper with the emergency card's tokens, and
+    nothing fetched. An adapter behind `ConsentRenderer`, like the PDF one will be."""
+
+    media_type = "text/html"
+
+    def __init__(self, *, demo: bool = False) -> None:
+        self.demo = demo
+
+    def render(self, document: dict[str, Any]) -> bytes:
+        lines = PlainTextRenderer().render(document).decode().splitlines()
+        return consent_record_html(lines, demo=self.demo).encode()
+
+
+def consent_record_html(lines: list[str], *, demo: bool = False) -> str:
+    """The record's Markdown lines as HTML: `#` the title, `##` a paper per kind of agreement,
+    `- ` one agreement, an indented `- ` one part of the record, any other line a paragraph.
+    Every line is escaped; no line is added."""
+    title = ""
+    # On a demo the banner comes first, as on the emergency card: a printed demo record cannot
+    # pass for a real one. The record's frame is English; so is its banner.
+    body: list[str] = [_demo_banner("en")] if demo else []
+    in_paper = in_entry = in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            body.append("</ul>")
+            in_list = False
+
+    def close_entry() -> None:
+        nonlocal in_entry
+        close_list()
+        if in_entry:
+            body.append("</div>")
+            in_entry = False
+
+    def close_paper() -> None:
+        nonlocal in_paper
+        close_entry()
+        if in_paper:
+            body.append("</section>")
+            in_paper = False
+
+    for raw in lines:
+        if not raw.strip():
+            continue
+        if raw.startswith("# "):
+            title = raw[2:].strip()
+            body.append(f"<h1>{escape(title)}</h1>")
+        elif raw.startswith("## "):
+            close_paper()
+            body.append(f'<section class="paper"><h2>{escape(raw[3:].strip())}</h2>')
+            in_paper = True
+        elif raw.startswith("- "):
+            close_entry()
+            body.append(f'<div class="entry"><p class="said">{escape(raw[2:].strip())}</p>')
+            in_entry = True
+        elif raw.startswith("  - "):
+            if not in_list:
+                body.append("<ul>")
+                in_list = True
+            body.append(f"<li>{escape(raw[4:].strip())}</li>")
+        else:
+            close_list()
+            body.append(f"<p>{escape(raw.strip())}</p>")
+    close_paper()
+    extra = """
+.entry { border-top: 1px solid var(--mist); padding: 12px 0 4px 0; }
+.entry:first-of-type { border-top: 0; }
+.said { font-weight: 500; }
+ul { margin: 0 0 8px 0; padding-left: 24px; }
+li { margin: 0 0 4px 0; }
+"""
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{escape(title)}</title><style>{_style()}{extra}</style></head>"
+        f'<body><main>{"".join(body)}</main></body></html>'
     )

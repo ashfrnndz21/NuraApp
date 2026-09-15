@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut } from "../api/types";
 import { answerView, askMode } from "../feed/ask";
-import { go } from "../flow";
+import { go, openTab } from "../flow";
 import { density, profile, token } from "../store/session";
 import { fill, language, t } from "../strings";
 import { voice } from "../player/voice";
@@ -95,7 +95,7 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
       <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
         {s.feed.back}
       </Pill>
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
+      <TabBar current="today" onSelect={openTab} />
     </main>
   );
 }

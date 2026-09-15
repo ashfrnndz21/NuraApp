@@ -15,6 +15,8 @@ export const zh = {
     today: "今天",
     // @patient headline
     me: "我",
+    // @patient headline
+    family: "家人",
   },
   signIn: {
     // @patient headline
@@ -112,7 +114,22 @@ export const zh = {
     // @patient phrase
     theirPhone: "他们的手机号码",
     // @patient phrase
-    relationshipLabel: "他们是您的谁",
+    relationshipLabel: "您是他们的什么人",
+    // @patient phrase
+    relationships: {
+      daughter: "他们的女儿",
+      son: "他们的儿子",
+      spouse: "他们的丈夫或妻子",
+      sibling: "他们的兄弟姐妹",
+      grandchild: "他们的孙子或孙女",
+      other_family: "他们的其他家人",
+      helper: "他们的帮手",
+      friend: "他们的朋友",
+      neighbour: "他们的邻居",
+      other: "其他人",
+    },
+    // @patient phrase
+    pickContact: "从我的联系人里选",
     // @patient
     asked: "是他们请您这么做的。",
     // @patient phrase
@@ -844,6 +861,19 @@ export const zh = {
       phoneLabel: "他们的手机号码",
       // @patient phrase
       relationshipLabel: "他们是您的什么人",
+      // @patient phrase
+      relationships: {
+        daughter: "您的女儿",
+        son: "您的儿子",
+        spouse: "您的丈夫或妻子",
+        sibling: "您的兄弟姐妹",
+        grandchild: "您的孙子或孙女",
+        other_family: "您的其他家人",
+        helper: "您的帮手",
+        friend: "您的朋友",
+        neighbour: "您的邻居",
+        other: "其他人",
+      },
       // @patient
       partsLead: "他们可以看的，每一样点一下。",
       // @patient phrase
@@ -923,6 +953,336 @@ export const zh = {
         prescriber: "哪位医生开的",
       },
     },
+  },
+  family: {
+    // @patient headline
+    title: "家人",
+    // @patient headline
+    circleSelf: "谁可以看您的文件",
+    // @patient headline
+    circleOther: "谁可以看{name}的文件",
+    // @patient headline
+    trailSelf: "谁看过您的文件",
+    // @patient headline
+    trailOther: "谁看过{name}的文件",
+    // @patient headline
+    onlyMe: "留一部分只给自己看",
+    // @patient
+    onlyMeLead: "点一下，把那一部分留给自己看。",
+    // @patient phrase
+    onlyMeYes: "好，只给我看",
+    // @patient phrase
+    onlyMeLift: "让他们再看",
+    // @patient phrase
+    onlyMeMarked: "只有您",
+    // @patient headline
+    consentsSelf: "您同意过的事",
+    // @patient headline
+    consentsOther: "{name}同意过的事",
+    // @patient phrase
+    stop: "停止这个",
+    // @patient phrase
+    stopYes: "好，停止",
+    // @patient phrase
+    howToStop: "怎样停止这个",
+    // @patient phrase
+    keepCopy: "留一份可以打印",
+    // @patient phrase
+    savePage: "保存这一页",
+    // @patient headline
+    thread: "家人的消息",
+    // @patient phrase
+    threadEarlier: "看前一天",
+    // @patient phrase
+    messageLabel: "您给家人的消息",
+    // @patient phrase
+    sendMessage: "发给家人",
+    // @patient headline
+    keys: "改谁可以看什么",
+    // @patient headline
+    newKey: "给一个人钥匙",
+    // @patient phrase
+    holderName: "他们的名字",
+    // @patient phrase
+    holderPhone: "他们的电话号码",
+    // @patient phrase
+    roleLabel: "他们是谁",
+    // @patient phrase
+    partsLabel: "他们可以看什么",
+    // @patient phrase
+    windowLabel: "多久",
+    // @patient phrase
+    makeKey: "做钥匙",
+    // @patient phrase
+    narrow: "改小一点",
+    // @patient phrase
+    narrowYes: "好，改小一点",
+    // @patient phrase
+    closeKey: "关掉这把钥匙",
+    // @patient phrase
+    closeYes: "好，现在关掉",
+    // @patient phrase
+    notNow: "先不要",
+    // @patient phrase
+    roles: {
+      chief: "负责一切的人",
+      caregiver: "照顾的人",
+      viewer: "只可以看",
+      helper: "帮手",
+      emergency: "只在紧急时",
+      clinic: "诊所",
+    },
+    // @patient phrase
+    windows: {
+      always: "直到停止",
+      thirty_days: "30天",
+      seventy_two_hours: "3天",
+      one_day: "1天",
+    },
+    // @patient phrase
+    parts: {
+      medicines: "药",
+      visits: "看医生的记录",
+      readings: "血压本和血糖数字",
+      records: "文件",
+      notes: "私人笔记",
+      money: "保险信",
+      emergency: "紧急卡",
+      family: "家人名单",
+      ask: "问 Nura 的问题",
+      send: "Nura 发的信息",
+    },
+    // @patient headline
+    roster: "谁值班，还有要做的事",
+    // @patient headline
+    rosterTitle: "谁值班",
+    // @patient phrase
+    who: "谁",
+    // @patient phrase
+    days: "哪几天",
+    // @patient phrase
+    from: "从",
+    // @patient phrase
+    to: "到",
+    // @patient phrase
+    onDutyNow: "现在值班",
+    // @patient phrase
+    takeOff: "从名单上拿掉",
+    // @patient phrase
+    addSlot: "安排值班",
+    // @patient headline
+    tasksTitle: "要做的事",
+    // @patient phrase
+    taskWhat: "要做什么",
+    // @patient phrase
+    taskDue: "什么时候之前",
+    // @patient phrase
+    addTask: "交给他们",
+    // @patient phrase
+    done: "做好了",
+    // @patient phrase
+    doneChip: "已做好",
+    // @patient phrase
+    nextVisit: "看下次看医生和谁开车",
+    // @patient headline
+    messagesTitle: "给{name}的消息",
+    // @patient phrase
+    templates: {
+      pickup: "接的时间",
+      call_you: "打电话的时间",
+      see_doctor: "去看医生",
+      thinking_of_you: "想念您",
+      weigh_tomorrow: "明天站上秤",
+      drink_water: "喝一杯水",
+      water_pill_morning: "8点吃去水药",
+    },
+    // @patient phrase
+    ownWords: "我自己的话",
+    // @patient phrase
+    slots: {
+      who: "谁",
+      when: "什么时候",
+      doctor: "哪位医生",
+      day: "哪一天",
+    },
+    // @patient phrase
+    memoLabel: "每行一句",
+    // @patient phrase
+    languageLabel: "用哪种语言",
+    // @patient phrase
+    preview: "先看看样子",
+    // @patient phrase
+    sendAt: "从什么时候发",
+    // @patient phrase
+    until: "到",
+    // @patient phrase
+    channelApp: "在应用里",
+    // @patient phrase
+    channelWhatsapp: "在 WhatsApp 上",
+    // @patient phrase
+    schedule: "安排发送",
+    // @patient phrase
+    states: {
+      scheduled: "等着发送",
+      sent: "已发送",
+      not_sent: "没有及时发送",
+    },
+    // @patient headline
+    metrics: "这一周的数字",
+    // @patient phrase
+    weekOf: "{date}那一周",
+    // @patient phrase
+    taps: "点的次数",
+    // @patient phrase
+    fineToday: "今天还好",
+    // @patient phrase
+    fineShare: "每100次里今天还好的次数",
+    // @patient phrase
+    kind: "种类",
+    // @patient phrase
+    handedOver: "发出",
+    // @patient phrase
+    accepted: "接受",
+    // @patient phrase
+    dismissed: "放下",
+    // @patient phrase
+    kinds: {
+      anticipation: "提前准备",
+      check_in: "问候",
+      pattern: "规律",
+      commitment: "承诺",
+      recognition: "做得好",
+      presence: "想念您",
+    },
+    // @patient headline
+    calendar: "日历里的看医生预约",
+    // @patient phrase
+    chooseFile: "选一个日历文件",
+    // @patient phrase
+    agree: "我同意",
+    // @patient phrase
+    bookYes: "好，预约这次看医生",
+    // @patient phrase
+    notThis: "不是这个",
+    // @patient phrase
+    ladderYes: "我来处理",
+    // @patient headline
+    deliveries: "Nura 发了什么",
+    // @patient headline
+    settings: "Nura 什么时候、怎样发",
+    // @patient phrase
+    triggers: {
+      morning: "早上的卡",
+      dose: "吃药提醒",
+      reorder: "该买药了",
+      doses_untapped: "药还没点",
+      flag: "不舒服",
+      visit_tomorrow: "明天看医生",
+      papers: "文件在等",
+      family_message: "家人的一条消息",
+      first_week_prompt: "第一周",
+      nudge: "小提醒",
+    },
+    // @patient phrase
+    channels: {
+      app_push: "应用",
+      whatsapp: "WhatsApp",
+      caregiver: "通过照顾的人",
+    },
+    // @patient phrase
+    outcomes: {
+      sent: "已发送",
+      capped: "暂停：今天够了",
+      quiet: "暂停：安静时间",
+      no_channel: "联系不上他们",
+      no_scope: "他们的钥匙不包括这个",
+      skipped: "安静的日子跳过了",
+    },
+    // @patient phrase
+    rule: "规则",
+    // @patient phrase
+    quietFrom: "安静时间从",
+    // @patient phrase
+    quietUntil: "安静时间到",
+    // @patient phrase
+    skipQuietDays: "安静的日子不发早上的卡",
+    // @patient phrase
+    cap: "一天几次",
+    // @patient phrase
+    saveSettings: "保存这些设置",
+    // @patient phrase
+    neverHeld: "从不暂停",
+    // @patient headline
+    documents: "家人名单的文件",
+    // @patient phrase
+    tags: {
+      lpa: "持久授权书",
+      medical_letter: "医生的信",
+      consent_form: "同意书",
+    },
+    // @patient phrase
+    backs: {
+      consent: "支持一项同意",
+      stewardship: "支持代管文件",
+    },
+    // @patient phrase
+    stillOn: "还有效",
+    // @patient phrase
+    stoppedChip: "已停止",
+    // @patient phrase
+    addDocument: "加一份文件",
+    // @patient phrase
+    chooseDocument: "选一个文件或照片",
+    // @patient phrase
+    whatPaper: "什么文件",
+  },
+  review: {
+    // @patient headline
+    title: "药剂师的清单",
+    // @patient phrase
+    tokenLabel: "员工令牌",
+    // @patient phrase
+    open: "打开清单",
+    // @patient headline
+    statusTitle: "每种卡的前50张",
+    // @patient phrase
+    cardType: "卡",
+    // @patient phrase
+    sampled: "已保存",
+    // @patient phrase
+    pending: "等待中",
+    // @patient phrase
+    stillToCheck: "还要检查",
+    // @patient phrase
+    sourcesWaiting: "等待的来源：{count}",
+    // @patient headline
+    queueTitle: "等待决定",
+    // @patient phrase
+    showPending: "只看等待的",
+    // @patient phrase
+    showAll: "全部",
+    // @patient phrase
+    approve: "批准",
+    // @patient phrase
+    reject: "拒绝",
+    // @patient phrase
+    reasonLabel: "原因",
+    // @patient phrase
+    rewrite: "重写这些句子",
+    // @patient phrase
+    headline: "标题",
+    // @patient phrase
+    body: "句子",
+    // @patient phrase
+    voice: "念出来的句子",
+    // @patient phrase
+    why: "为什么是这张卡",
+    // @patient phrase
+    saveRewrite: "保存为建议",
+    // @patient phrase
+    decided: "已决定",
+    // @patient phrase
+    leave: "关闭清单",
   },
   errors: {
     // @patient
@@ -1007,5 +1367,43 @@ export const zh = {
     TapNotToday: "Nura 只记下您今天点的。",
     // A body too large to take, answered for the app by a layer in front of it (a bare 413).
     TooLarge: "那个文件太大了，Nura 打不开。",
+    WouldWiden: ["Nura 不能把这个放宽。", "文件的主人要先同意更多。"],
+    NothingToNarrow: "这样什么都不会改变。",
+    NotTheDoer: "只有被交代的人可以说做好了。",
+    AlreadyDone: "这件事已经做好了。",
+    NotTheOwner: "只有本人可以做这件事。",
+    AlreadyMarked: "这一部分已经只给主人看了。",
+    NotMarked: "这一部分已经开放了。",
+    NotAPartToMark: "紧急卡一直对家人开放。",
+    NotOwnerOrChief: ["只有文件的主人可以看这个。", "负责这些文件的家人也可以。"],
+    NotStaff: "只有 Nura 的药剂师可以打开这个。",
+    NoSuchSlot: "那一班已经不在名单上了。",
+    NoSuchTask: "那件事已经不在这里了。",
+    NotADuty: "请选好日子和时间。",
+    NotOnThisProfile: "那个人不能看这些文件。",
+    NoSuchTemplate: "Nura 没有那条消息。",
+    MissingSlot: "请把消息的每一部分都填好。",
+    NotAMemo: "请写1到6行短句。",
+    BadWindow: "请选一个还没过去的时间。",
+    NotPlainWords: "请用更简单的话。",
+    NotAMessage: "请写一条短消息。",
+    NotTheirsToConnect: ["只有文件的主人可以加日历。", "负责这些文件的家人也可以。"],
+    NotTheirsToDecide: "您可以看这些预约，但不能决定。",
+    AlreadyDecided: "已经有人回答了这个。",
+    NoSuchConnector: "请再加一次日历文件。",
+    NoSuchProposal: "那次看医生已经不在这里了。",
+    NotACalendar: "Nura 看不懂那个日历文件。",
+    ConsentRevoked: "文件的主人停止了这个。",
+    ConsentOutOfDate: "文件的主人要先同意新的话。",
+    AlreadyReviewed: "已经有人决定了这个。",
+    NoSuchReviewItem: "那一项已经不在清单里了。",
+    NotWellFormed: "Nura 不明白那个。",
+    AlertsAreNeverHeld: "不能等的消息从不暂停。",
+    NotOnTheLadder: "Nura 没有请您处理这个。",
+    NotADocument: "Nura 在这里只能保存文件或照片。",
+    NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 的隐私负责人可以和您一起停止它。"],
+    NotStoppedInTheAppWriteTo: "要停止它，请写信给 Nura 的隐私负责人：{contact}。",
+    DocumentTooLarge: "那个文件太大了，Nura 打不开。",
+    CalendarTooLarge: "那个日历文件太大了，Nura 打不开。",
   },
 } satisfies Strings;
