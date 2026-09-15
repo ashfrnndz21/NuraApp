@@ -1175,6 +1175,7 @@ export const en = {
     stopYes: "Yes, stop it",
     // @patient phrase
     closeAccount: "Close my account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",

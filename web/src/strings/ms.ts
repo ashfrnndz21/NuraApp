@@ -1173,6 +1173,7 @@ export const ms = {
     stopYes: "Ya, hentikan",
     // @patient phrase
     closeAccount: "Tutup akaun saya",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
