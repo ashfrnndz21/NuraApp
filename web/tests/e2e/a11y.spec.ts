@@ -15,6 +15,7 @@ import {
   seedOwner,
   seedVisit,
   signInThroughTheApp,
+  underTheTabBar,
 } from "./helpers";
 
 /** E15-04 on the web (ADR 0001: VoiceOver and Dynamic Type become the page's roles, names and
@@ -72,6 +73,8 @@ async function audit(page: Page, where: string): Promise<void> {
       where,
     )
     .toEqual([]);
+  // Nothing stuck under the floating tab bar, on any screen that has one.
+  expect.soft(await underTheTabBar(page.locator("main").first()), `${where}: under the tab bar`).toEqual([]);
 }
 
 /** Every visible element that reaches past the right edge of the screen: nothing sideways. */
@@ -334,6 +337,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))));
     expect.soft(await sideways(page), `${where}: sideways`).toEqual([]);
     expect.soft(await nothingDrawnOverLines(scope, { minTarget: 56 }), `${where}: drawn over`).toEqual([]);
+    expect.soft(await underTheTabBar(page.locator("main").first()), `${where}: under the tab bar`).toEqual([]);
   };
   await check("sign in");
   await signInThroughTheApp(page, pa.phone, "Pa");

@@ -646,3 +646,33 @@ export async function nothingDrawnOverLines(
     return problems;
   }, settings);
 }
+
+/** Nothing is stuck under the floating tab bar. The bar floats over the page, so a line may pass
+ *  under it while the page scrolls — but with the page scrolled as far down as it goes, no line
+ *  and no control of the screen may still be under it, or it could never be read or pressed
+ *  clear of the bar. `nothingDrawnOverLines` scrolls each line to the middle of the screen and so
+ *  never meets the bar at the bottom; this is the check for the bottom. The problems, or []. */
+export async function underTheTabBar(scope: Locator, options: { lines?: string; controls?: string } = {}): Promise<string[]> {
+  const settings = {
+    lines: options.lines ?? "h1, h2, p, .label",
+    controls: options.controls ?? "button, label.pill, input.field, a.pill",
+  };
+  return scope.evaluate(async (root, { lines, controls }) => {
+    const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
+    const bar = document.querySelector("nav.tabbar");
+    if (!bar) return [];
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await frame();
+    const top = bar.getBoundingClientRect().top;
+    const problems: string[] = [];
+    for (const element of root.querySelectorAll<HTMLElement>(`${lines}, ${controls}`)) {
+      if (element.offsetParent === null || element.closest("nav.tabbar") || element.closest(".feed-pager")) continue;
+      const box = element.getBoundingClientRect();
+      if (box.height === 0 || box.top >= window.innerHeight) continue;
+      if (box.bottom > top + 0.5) problems.push(`under the tab bar: ${(element.textContent || element.getAttribute("aria-label") || element.tagName).trim().slice(0, 60)}`);
+    }
+    window.scrollTo(0, 0);
+    await frame();
+    return problems;
+  }, settings);
+}
