@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
 import { API, apiToken, backendClock, fixClock, freshPhone, seedVisit, signInThroughTheApp } from "./helpers";
-import { auth, caregiverScreenOk, ICS, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
+import { auth, caregiverScreenOk, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
  *  the morning in Singapore on Monday 14 September. Pa reads it in the patient density on a
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
 async function signIn(page: Page, who: Person, owner: boolean): Promise<void> {
   await signInThroughTheApp(page, who.phone, who.name);
   if (!owner) await page.getByTestId("door-key").click();
-  await expect(page.getByTestId("tab-family")).toBeVisible();
+  await expect(page.getByTestId("open-me")).toBeVisible();
 }
 
 /** Someone else, on a browser of their own, at 360 by 640. */
@@ -36,16 +36,21 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-test("the nav: Today, Family, Me", async ({ page, request }) => {
+test("the nav (D1): his four tabs, Family and the rest on Me; her five tabs", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Family", "Me"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Records", "Visits"]);
+  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await expect(page.getByTestId("me-family")).toBeVisible();
+  const hers = await secondPhone(browser);
+  await signIn(hers, family.mei, false);
+  await expect(hers.locator("nav.tabbar button")).toHaveText(["Home", "History", "Medicines", "Plan", "Family"]);
 });
 
 test("Pa's Family, one thing a screen: his circle, his trail, a part kept to himself, and Mei refused on his trail", async ({ page, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await page.getByTestId("tab-family").click();
+  await openFamily(page);
   await expect(page.locator("html")).toHaveAttribute("data-density", "patient");
   const circle = page.getByTestId("circle");
   await expect(circle).toContainText("Who can see your papers");
@@ -85,7 +90,7 @@ test("Pa stops letting Kit in after reading what it will do, Kit is out at once,
   const family = await seedFamily(request);
   expect((await request.get(`${API}/profiles/${family.profileId}/medicines`, { headers: auth(family.kit.token) })).status()).toBe(200);
   await signIn(page, family.pa, true);
-  await page.getByTestId("tab-family").click();
+  await openFamily(page);
   await page.getByTestId("open-consents").click();
   // Keeping his papers is not one tap: the button asks how, and the backend says where to write.
   const keeping = page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" });
@@ -122,7 +127,7 @@ test("Pa's calendar one proposal at a time: his yes books the visit, a no books 
   const family = await seedFamily(request);
   await seedProposals(request, family);
   await signIn(page, family.pa, true);
-  await page.getByTestId("tab-family").click();
+  await openFamily(page);
   await page.getByTestId("open-calendar").click();
   await expect(page.getByTestId("proposal")).toHaveCount(1);
   const first = await page.getByTestId("proposal-lines").innerText();
@@ -153,7 +158,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     const family = await seedFamily(request);
     await signIn(page, family.mei, false);
     await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
-    await page.getByTestId("tab-family").click();
+    await openFamily(page);
     // The circle is read after the page opens: check the layout once its lines are in.
     await expect(page.getByTestId("grant-lines")).toHaveCount(2);
     expect(await caregiverScreenOk(page)).toEqual([]);
@@ -350,7 +355,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     const said = await request.post(`${API}/profiles/${family.profileId}/not-feeling-well`, { headers: auth(family.pa.token), data: { words: "chest pain" } });
     expect(said.status()).toBe(201);
     await signIn(page, family.mei, false);
-    await page.getByTestId("tab-family").click();
+    await openFamily(page);
     const ladder = page.getByTestId("ladder");
     await expect(ladder.getByTestId("ladder-lines")).toContainText("Nura asked you to check on Pa on Monday 14 September at 10 in the morning.");
     expect(await caregiverScreenOk(page)).toEqual([]);

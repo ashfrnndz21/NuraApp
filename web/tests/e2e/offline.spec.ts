@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { BASE_URL } from "../../playwright.config";
-import { API, apiToken, expireKeptPages, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+import { API, apiToken, expireKeptPages, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, openMe } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -24,7 +24,7 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await seedMedicine(request, token, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
 
   await signInThroughTheApp(page, phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -50,7 +50,10 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   // the feed's cards for today, and they stand in "For you today" in place of the State card.
   await expect(page.getByTestId("feed-card").first()).toContainText("Your tablets today");
   await expect(page.getByTestId("state-card")).toHaveCount(0);
+  // The proud number on Me is the kept page's own count (D1).
+  await openMe(page);
   await expect(page.getByTestId("proud-number")).toBeVisible();
+  await page.getByTestId("sheet-close").click();
   expect(await page.locator("[role=progressbar], .spinner").count()).toBe(0);
   await shot(page, "offline-kept");
 

@@ -140,8 +140,15 @@
   overflow: hidden;
   padding: 0;
 }
+/* The pager's screen takes the page's whole height by flexing, never by a percentage: its
+   pager is a size container, whose own content never sizes it. */
 .shell.fill .feed-screen {
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+  /* Its own auto margins would shrink it to its content in the column; it spans the page. */
+  width: 100%;
+  margin: 0;
   max-width: none;
   padding-top: 0;
   padding-bottom: 0;
@@ -686,8 +693,8 @@
   padding: 0 var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
 }
 @keyframes sheet-in {
-  from { transform: translateY(24px); opacity: 0.6; }
-  to { transform: none; opacity: 1; }
+  from { transform: translateY(24px); }
+  to { transform: none; }
 }
 
 /* --- For the review screenshots only: the whole page, the tab bar at its end ---------------- */
@@ -701,4 +708,42 @@ html.shot-full .shell {
 html.shot-full .shell > .shell-scroll {
   flex: none;
   overflow: visible;
+}
+
+/* Inside the shell the header already carries the mark: a screen's own title drops its copy. */
+.shell .brand svg {
+  display: none;
+}
+.place-title {
+  margin: var(--space-1) 6px 0;
+}
+/* A tile's heading that is also its way in: the words and a chevron, the whole row the target. */
+.tile-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  min-height: var(--target);
+  margin: -8px 0 -4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tile-link .icon {
+  color: var(--plum);
+}
+.tile-link:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.number.small {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+.tile > .pill.compact {
+  align-self: flex-end;
 }

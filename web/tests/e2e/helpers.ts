@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 /** The same three things `backend/scripts/checkpoint.py` does: a fresh number every run, the
  *  login code read from the `make dev` log (never from the API), and a medicine seeded by
@@ -529,4 +529,28 @@ export async function nothingDrawnOverLines(
     window.scrollTo(0, 0);
     return problems;
   }, settings);
+}
+
+/** Today has its page, fresh or kept (D1: the proud number that used to say so is on Me now). */
+export async function todayReady(page: Page): Promise<void> {
+  await expect(page.getByTestId("today-ready")).toBeAttached();
+}
+
+/** Open the Me sheet from the header's avatar. */
+export async function openMe(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await expect(page.getByTestId("me-sheet")).toBeVisible();
+}
+
+/** The proud number, read on the Me sheet (D1): the sheet opened, read, and closed again. */
+export async function expectProud(page: Page, value: string): Promise<void> {
+  await openMe(page);
+  await expect(page.locator("[data-testid=me-proud-number], [data-testid=proud-number]").first()).toHaveText(value);
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("me-sheet")).toHaveCount(0);
+}
+
+/** The page's own region scrolled to its end (D1: the page scrolls inside the shell). */
+export async function scrollPageToEnd(page: Page): Promise<void> {
+  await page.getByTestId("shell-scroll").evaluate((region) => (region.scrollTop = region.scrollHeight));
 }

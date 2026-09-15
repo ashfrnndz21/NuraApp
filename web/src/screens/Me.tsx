@@ -26,11 +26,16 @@ export function MeSheet(): JSX.Element | null {
   const papers = profile.value;
   const patient = density() === "patient";
   // The number that only goes up (E17-04), on his own Me, in the backend's words.
-  const [summary, setSummary] = useState<MeSummaryOut | null>(null);
+  // "failed": the summary could not be read (offline) — then the count Today read stands in.
+  const [summary, setSummary] = useState<MeSummaryOut | "failed" | null>(null);
+  const owner = papers?.standing === "owner";
   useEffect(() => {
-    if (!open || !bearer || !papers || papers.standing !== "owner") return setSummary(null);
-    nura.meSummary(bearer, papers.profile_id, language.value).then(setSummary, () => setSummary(null));
+    if (!open || !bearer || !papers || !owner) return setSummary(null);
+    nura.meSummary(bearer, papers.profile_id, language.value).then(setSummary, () => setSummary("failed"));
   }, [open, bearer, papers?.profile_id, language.value]);
+  const said = summary !== null && summary !== "failed" ? summary : null;
+  // His own count waits for his own words; anyone else's view, or his offline, is Today's.
+  const standIn = todayPage.value !== null && (!owner || summary === "failed");
   // Escape closes it; opening it puts the screen reader on its title.
   useEffect(() => {
     if (!open) return;
@@ -48,21 +53,21 @@ export function MeSheet(): JSX.Element | null {
   const counts = proudLine(counted, s);
   return (
     <Sheet title={s.me.title} open={open} onClose={closeMe} closeLabel={s.shell.close} testId="me-sheet">
-      {summary ? (
+      {said ? (
         <Tile paper testId="me-proud">
           <div class="number" data-testid="me-proud-number">
-            {summary.proud_days}
+            {said.proud_days}
           </div>
           <div class="lines" data-testid="me-proud-lines">
-            {summary.lines.map((line, at) => (
+            {said.lines.map((line, at) => (
               <p key={at}>{line}</p>
             ))}
           </div>
           <p class="provenance">{s.today.fromDays}</p>
-          <Hear lines={summary.lines} />
+          <Hear lines={said.lines} />
         </Tile>
       ) : (
-        todayPage.value && (
+        standIn && (
           <Tile paper testId="proud">
             <div class="number" data-testid="proud-number">
               {counted ?? 0}

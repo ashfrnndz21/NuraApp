@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, apiToken, captureSpeech, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp } from "./helpers";
+import { API, apiToken, captureSpeech, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -57,7 +57,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await page.getByTestId("set-up-later").click();
 
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
-  await expect(page.getByTestId("proud-number")).toHaveText("0");
+  await expectProud(page, "0");
   await expect(page.locator("html")).toHaveAttribute("data-density", "patient");
   await expect(page.locator("html")).toHaveAttribute("data-posture", "stable");
   const token = await apiToken(request, phone);
@@ -98,8 +98,12 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     // No feed cards (the quiet hours, or nothing new): the State and the medicines, in the
     // backend's words, each under its source line.
     await expect(page.getByTestId("state-card").getByTestId("boundary")).toContainText("This is not a doctor's advice.");
-    await expect(page.getByTestId("medicines-card")).toContainText("You have 120 tablets of your blood pressure tablet left.");
-    await expect(page.getByTestId("medicines-card")).toContainText("This comes from the label you kept on");
+    // The medicines, with their counts and sources, are on the Medicines tab (D1).
+    await page.getByTestId("tab-medicines").click();
+    await expect(page.getByTestId("medicine-line")).toContainText("You have 120 tablets of your blood pressure tablet left.");
+    await expect(page.getByTestId("medicine-line")).toContainText("This comes from the label you kept on");
+    await page.getByTestId("tab-today").click();
+    await todayReady(page);
   }
   await shot(page, "today");
 
@@ -124,10 +128,11 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
 
     await taken.click();
     await expect(page.getByText(/^You took it/)).toBeVisible();
-    await expect(page.getByTestId("proud-number")).toHaveText("1");
-    if (fromFeed.length === 0) {
-      await expect(page.getByTestId("medicines-card")).toContainText("You have 119 tablets of your blood pressure tablet left.");
-    }
+    await expectProud(page, "1");
+    await page.getByTestId("tab-medicines").click();
+    await expect(page.getByTestId("medicine-line")).toContainText("You have 119 tablets of your blood pressure tablet left.");
+    await page.getByTestId("tab-today").click();
+    await todayReady(page);
     const after = await todaySlots(request, token, me.profile_id);
     expect(after.filter((slot) => slot.taken).map((slot) => slot.anchor)).toEqual([due.anchor]);
     // Nothing else is offered as "now" unless the backend marks it due; a passed dose shows
@@ -142,21 +147,23 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     await expect(card).toContainText(missed.if_forgotten[0]!);
     await expect(card).toContainText("Never take 2 at once.");
     await expect(card).toContainText(missed.source);
-    await expect(page.getByTestId("proud-number")).toHaveText("0");
+    await expectProud(page, "0");
   } else {
     await expect(page.getByTestId("nothing-now")).toContainText("There is nothing to take right now.");
     await expect(page.getByTestId("taken")).toHaveCount(0);
   }
 
-  // The proud number is the backend's and names its source; no badges; vertical only; the
-  // tab bar never covers the last card.
-  await expect(page.getByTestId("proud")).toContainText("Nura counted the days you took your tablets.");
-  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Family\s*Me\s*$/);
+  // The proud number is the backend's and names its source, on Me; no badges; vertical only;
+  // his four tabs; the tab bar never covers the last card.
+  await openMe(page);
+  await expect(page.locator("[data-testid=me-proud], [data-testid=proud]").first()).toContainText("Nura counted the days you took your tablets.");
+  await page.getByTestId("sheet-close").click();
+  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Medicines\s*Records\s*Visits\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);
-  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  const lastCard = await page.locator("main.screen > section").last().boundingBox();
+  await scrollPageToEnd(page);
+  const lastCard = await page.locator("[data-testid=shell-scroll] > section").last().boundingBox();
   const barAtBottom = await page.locator("nav.tabbar").boundingBox();
   expect(lastCard!.y + lastCard!.height).toBeLessThanOrEqual(barAtBottom!.y - 8);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -202,7 +209,7 @@ test("a refused read clears the phone's copy and is said in one plain sentence",
   await signInThroughTheApp(page, mei, "Mei");
   await page.getByTestId("door-key").click();
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
 
   await request.delete(`${API}/profiles/${profileId}/keys/${keyId}`, auth(paToken));
@@ -240,7 +247,7 @@ test("a key without the records scope opens Today on the medicines and the feed,
 
   await signInThroughTheApp(page, siti, "Siti");
   await page.getByTestId("door-key").click();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("[data-testid=medicines-card], [data-testid=feed-card], [data-testid=now-card], [data-testid=missed-card], [data-testid=nothing-now]").first()).toBeVisible();
   await expect(page.getByTestId("state-card")).toHaveCount(0);
   await expect(page.getByTestId("notice")).toHaveCount(0);
@@ -255,7 +262,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   let failed = 0;
   await page.route("**/api/me", async (route) => {
     if (failed++ === 0) await route.fulfill({ status: 500, body: "Internal Server Error" });
@@ -263,7 +270,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
   });
   await page.reload();
   await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.getByLabel("Your phone number")).toHaveCount(0);
   expect(failed).toBeGreaterThan(0);
 });

@@ -1,21 +1,6 @@
 import { expect, test, type Locator, type Page, type Response } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import {
-  API,
-  apiToken,
-  backendClock,
-  captureSpeech,
-  expireEveryKeptPage,
-  fixClock,
-  freshPhone,
-  medicinesInIndexedDb,
-  seedFeed,
-  seedVisit,
-  seedWarfarinLabel,
-  setBackendClock,
-  shotAs,
-  signInThroughTheApp,
-} from "./helpers";
+import { API, apiToken, backendClock, captureSpeech, expireEveryKeptPage, fixClock, freshPhone, medicinesInIndexedDb, seedFeed, seedVisit, seedWarfarinLabel, setBackendClock, shotAs, signInThroughTheApp, todayReady } from "./helpers";
 
 /** Checkpoint 12: the vertical feed on a phone-sized screen, against `make dev` serving the
  *  build. Both clocks stand at 10:00 in Singapore on Monday 14 September — the phone's by
@@ -132,7 +117,7 @@ test("the pager: one card a screen, in the backend's order, the gate, endless pa
   await captureSpeech(page);
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
 
   const pages = recordPages(page);
   await openPager(page);
@@ -230,7 +215,7 @@ test("a learning card: its lines, its boundary, its why, four side actions; Hear
   const played = () => page.evaluate(() => (window as unknown as { __played: string[] }).__played);
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   const pages = recordPages(page);
   const voiceAsks: [string, number][] = [];
   page.on("response", (response) => {
@@ -310,7 +295,7 @@ test("Family sends a reading to the family thread by reference; a card it cannot
   await captureSpeech(page);
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await openPager(page);
 
   await pageUntil(page, "reading");
@@ -385,7 +370,7 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   await signInThroughTheApp(page, mei, "Mei");
   await page.getByTestId("door-key").click();
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   const pages = recordPages(page);
   await openPager(page);
   await expect.poll(() => pages.length).toBeGreaterThan(0);
@@ -428,7 +413,7 @@ test("quiet hours (both clocks at 22:30): the pager says Nura keeps quiet, with 
   try {
     await fixClock(page, new Date(night));
     await signInThroughTheApp(page, pa.phone, "Pa");
-    await expect(page.getByTestId("proud")).toBeVisible();
+    await todayReady(page);
     await page.getByTestId("open-feed").click();
     await expect(page.getByTestId("feed-quiet")).toContainText("Nura keeps quiet at night.");
     await expect(page.getByTestId("feed-quiet")).toContainText("Your cards come back in the morning.");
@@ -442,7 +427,7 @@ test("quiet hours (both clocks at 22:30): the pager says Nura keeps quiet, with 
 test("Reduce Motion: the pager moves a card at once, with no smooth scroll", async ({ page, request }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });  const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await openPager(page);
   const pager = page.getByTestId("pager");
   expect(await pager.evaluate((el) => getComputedStyle(el).scrollBehavior)).toBe("auto");
@@ -457,7 +442,7 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
   test.skip(BASE_URL.includes(":5173"), "needs the built app the backend serves (the worker is not built in dev)");
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   const pages = recordPages(page);
   await openPager(page);
   await expect.poll(() => pages.length).toBeGreaterThan(0);
@@ -543,7 +528,7 @@ for (const [label, viewport] of [
       const pa = await seedFeed(request);
       await seedVisit(request, pa.token, pa.profileId);
       await signInThroughTheApp(page, pa.phone, "Pa");
-      await expect(page.getByTestId("proud")).toBeVisible();
+      await todayReady(page);
       await openPager(page);
       for (const type of ["visit", "reorder", "learning"]) {
         await pageUntil(page, type);
