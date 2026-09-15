@@ -97,7 +97,9 @@ async def test_every_artefact_can_hang_off_a_visit_and_the_visit_shows_it(
     for kind in ArtifactKind:
         paper = await artefact(sg, rec.owner, kind=kind)
         yes = await confirm(
-            sg, rec.owner, AttachDraft(artifact_id=paper.id, episode_id=None, appointment_id=rec.checkup.id)
+            sg,
+            rec.owner,
+            AttachDraft(artifact_id=paper.id, episode_id=None, appointment_id=rec.checkup.id),
         )
         row = await attach_to_appointment(
             sg,
@@ -121,7 +123,9 @@ async def test_hanging_a_paper_takes_a_yes_for_exactly_that_and_a_refusal_is_on_
     paper = await artefact(sg, rec.owner)
     # A yes for this paper on the visit is not a yes for it on the illness.
     wrong = await confirm(
-        sg, rec.owner, AttachDraft(artifact_id=paper.id, episode_id=None, appointment_id=rec.checkup.id)
+        sg,
+        rec.owner,
+        AttachDraft(artifact_id=paper.id, episode_id=None, appointment_id=rec.checkup.id),
     )
     with pytest.raises(NotWhatWasConfirmed):
         await attach_to_episode(
@@ -137,7 +141,9 @@ async def test_hanging_a_paper_takes_a_yes_for_exactly_that_and_a_refusal_is_on_
     )
     # Once is enough.
     again_yes = await confirm(
-        sg, rec.owner, AttachDraft(artifact_id=rec.paper.id, episode_id=rec.episode.id, appointment_id=None)
+        sg,
+        rec.owner,
+        AttachDraft(artifact_id=rec.paper.id, episode_id=rec.episode.id, appointment_id=None),
     )
     with pytest.raises(AlreadyHangsThere):
         await attach_to_episode(
@@ -150,7 +156,9 @@ async def test_hanging_a_paper_takes_a_yes_for_exactly_that_and_a_refusal_is_on_
     # Nothing hangs off an illness that is over.
     await close_episode(sg, context=rec.owner, episode_id=rec.episode.id)
     late = await confirm(
-        sg, rec.owner, AttachDraft(artifact_id=paper.id, episode_id=rec.episode.id, appointment_id=None)
+        sg,
+        rec.owner,
+        AttachDraft(artifact_id=paper.id, episode_id=rec.episode.id, appointment_id=None),
     )
     with pytest.raises(NoSuchEpisode):
         await attach_to_episode(
@@ -231,12 +239,19 @@ async def test_each_part_is_read_under_its_own_scope_and_withheld_by_name(
     assert set(page.withheld) == {Scope.RECORDS, Scope.READINGS, Scope.MEDICINES}
     # The spine is the visits'; a key without them is refused, and it is written down.
     siti = await let_in(
-        sg, rec.owner, phone="+6597770004", name="Siti", role=KeyRole.HELPER, scopes={Scope.MEDICINES}
+        sg,
+        rec.owner,
+        phone="+6597770004",
+        name="Siti",
+        role=KeyRole.HELPER,
+        scopes={Scope.MEDICINES},
     )
     with pytest.raises(OutOfScope):
         await timeline(sg, context=siti)
     assert any(
-        e.refused_because == "OutOfScope" and e.scope is Scope.VISITS and e.actor_person_id == siti.person_id
+        e.refused_because == "OutOfScope"
+        and e.scope is Scope.VISITS
+        and e.actor_person_id == siti.person_id
         for e in await refusals(sg, rec.owner)
     )
 
@@ -258,7 +273,9 @@ async def test_a_part_the_owner_keeps_only_me_is_withheld_from_his_chief(sg: Asy
     assert rec.readings[1].id in {fact.id for fact in his.item.hanging.facts}
 
 
-async def test_the_notes_on_an_event_hang_off_it_by_reference(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_the_notes_on_an_event_hang_off_it_by_reference(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     """A voice note or a scribble left on the reading taken during the illness (E02-06) hangs
     off that event on the timeline: the note's row, never its image or its words. A private
     note is the notes scope's; a key without it sees the shared one and is told `notes` was

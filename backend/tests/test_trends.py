@@ -297,7 +297,9 @@ async def test_pa_born_in_1951_his_cholesterol_in_malay_with_range_and_direction
 
     # In English, the same numbers; the doctor is named once the record names one.
     await add(sg, owner, label("amlodipine", "5 mg", "1 tab OD"))
-    again = await trend(sg, context=owner, ranges=RANGES, analyte="total_cholesterol", language="en")
+    again = await trend(
+        sg, context=owner, ranges=RANGES, analyte="total_cholesterol", language="en"
+    )
     assert again.lines[0] == "Your cholesterol was 212 on Friday 29 August 2025."
     assert again.lines[-1] == "Ask Dr Tan."
 

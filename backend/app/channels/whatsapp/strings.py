@@ -46,6 +46,38 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Nura 不是医生。",
         ),
     },
+    # A number whose only family is closing its account (#143): nothing is kept and nobody is
+    # told through Nura, so the one fixed line always says who to call.
+    "closing": {
+        "en": (
+            "Nura is not keeping these papers any more.",
+            "Nura did not keep this message.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak lagi menyimpan surat-surat ini.",
+            "Nura tidak menyimpan mesej ini.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": (
+            "Nura 已不再保存这些文件。",
+            "Nura 没有保存这条消息。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
+    },
+    # A post in a family's group from a number that is not in that family now (#143): nothing
+    # is kept, and a red word is answered to the sender alone, with who to call.
+    "group_not_kept": {
+        "en": (
+            "Nura did not keep this message.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak menyimpan mesej ini.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": ("Nura 没有保存这条消息。", "如果不能等，现在就打{emergency_number}。"),
+    },
     "more_than_one": {
         "en": ("You are on more than one family list.", "Open the app to say who this is about."),
         "ms": (
@@ -232,7 +264,11 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Saya letak ia paling atas dalam aplikasi keluarga.",
             "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
         ),
-        "zh": ("这个我们不等。", "我把它放在家人应用的最上面。", "如果不能等，现在就打{emergency_number}。"),
+        "zh": (
+            "这个我们不等。",
+            "我把它放在家人应用的最上面。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
     },
     # A red-flag word from someone on more than one family's list: raised on each, then asked.
     "red_flag_which": {
@@ -248,7 +284,12 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "Ini tentang siapa?",
             "Hantar nama kepada saya, {either}.",
         ),
-        "zh": ("这个我们不等。", "我把它放在{both}家人应用的最上面。", "是关于谁的？", "请把名字发给我：{either}。"),
+        "zh": (
+            "这个我们不等。",
+            "我把它放在{both}家人应用的最上面。",
+            "是关于谁的？",
+            "请把名字发给我：{either}。",
+        ),
     },
     "red_flag_which_thanks": {
         "en": ("Thank you, it is about {name}.", "I stopped asking the other family."),
@@ -272,7 +313,11 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
 """The three feeling words as the read-back says them."""
 
 # @patient phrase
-GROUP_NAME: Mapping[str, str] = {"en": "{name} and family", "ms": "{name} dan keluarga", "zh": "{name}和家人"}
+GROUP_NAME: Mapping[str, str] = {
+    "en": "{name} and family",
+    "ms": "{name} dan keluarga",
+    "zh": "{name}和家人",
+}
 """The name of the family's group on WhatsApp (E11-01), as everyone in it reads it."""
 
 # @patient phrase

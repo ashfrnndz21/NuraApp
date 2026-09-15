@@ -334,9 +334,7 @@ async def recording(
     )
     return ConsultOut(
         recording=RecordingOut.of(outcome.recording, outcome.segments),
-        summary=None
-        if outcome.summary is None
-        else SummaryOut.of(outcome.summary, outcome.items),
+        summary=None if outcome.summary is None else SummaryOut.of(outcome.summary, outcome.items),
         summary_refused=outcome.summary_refused,
     )
 

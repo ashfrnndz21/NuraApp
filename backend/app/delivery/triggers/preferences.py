@@ -46,7 +46,9 @@ async def current(
         limit=1,
     )
     row = rows[0] if rows else None
-    routine = await current_routine(session, context=context) if context.allows(Scope.MEDICINES) else None
+    routine = (
+        await current_routine(session, context=context) if context.allows(Scope.MEDICINES) else None
+    )
     return config_of(row, routine, await breakfast_time(session, context=context)), row
 
 

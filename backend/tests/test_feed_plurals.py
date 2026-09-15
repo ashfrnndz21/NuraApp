@@ -104,7 +104,9 @@ async def test_one_tablet_day_makes_the_story_card_say_1_day(sg: AsyncSession) -
     context = await pa(sg, language="en")
     line = (await add(sg, context, label("amlodipine", "5 mg"))).line
     await record_dose_taken(sg, context=context, line_id=line.id)
-    engine = Engine(searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY)
+    engine = Engine(
+        searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
+    )
     _, made = await refresh(sg, context=context, engine=engine)
     [count] = [item for item in made if item.dedupe_key.startswith("story:proud:")]
     assert isinstance(count, FeedItem)

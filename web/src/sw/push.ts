@@ -1,8 +1,8 @@
 /// <reference lib="webworker" />
 /** The push handler of Nura's service worker (Web Push, ADR 0001). A push carries one line —
  *  "Nura has something for you.", in his language — and an id; this shows that line and
- *  nothing else, and a tap opens the app at the card the id names, which the app then reads
- *  from its region. No health word is ever in a push. Its own module, imported by sw.ts, so
+ *  nothing else, and a tap opens the app at `?open=<id>`: the app reads the card the id names
+ *  from its region (`src/push/open.ts`), or lands on Today. No health word is ever in a push. Its own module, imported by sw.ts, so
  *  the offline work there and this do not meet. */
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
@@ -31,7 +31,7 @@ worker.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const id = (event.notification.data as { id?: string } | null)?.id ?? "";
   const base = new URL(worker.registration.scope).pathname;
-  const target = id ? `${base}?card=${encodeURIComponent(id)}` : base;
+  const target = id ? `${base}?open=${encodeURIComponent(id)}` : base;
   event.waitUntil(
     (async () => {
       const open = await worker.clients.matchAll({ type: "window", includeUncontrolled: true });

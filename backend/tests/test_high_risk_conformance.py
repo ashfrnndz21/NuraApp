@@ -63,15 +63,31 @@ representative per class would let a missing name — methadone, once — throug
 
 EXPECTED_AT_LEAST = {
     "anticoagulant": {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban"},
-    "opioid": {"morphine", "oxycodone", "codeine", "tramadol", "fentanyl", "methadone",
-               "hydrocodone", "tapentadol", "oxymorphone", "buprenorphine", "pethidine"},
+    "opioid": {
+        "morphine",
+        "oxycodone",
+        "codeine",
+        "tramadol",
+        "fentanyl",
+        "methadone",
+        "hydrocodone",
+        "tapentadol",
+        "oxymorphone",
+        "buprenorphine",
+        "pethidine",
+    },
     "insulin": {"insulin"},
     "cardiac_glycoside": {"digoxin"},
     "antimetabolite": {"methotrexate"},
 }
 """The names the review named as missing, and the ones the document names: never dropped."""
 
-NOT_A_LABEL_PHOTO = (ArtifactKind.VOICE, ArtifactKind.MESSAGE, ArtifactKind.PDF, ArtifactKind.SCREENSHOT)
+NOT_A_LABEL_PHOTO = (
+    ArtifactKind.VOICE,
+    ArtifactKind.MESSAGE,
+    ArtifactKind.PDF,
+    ArtifactKind.SCREENSHOT,
+)
 
 
 async def _pa(session: AsyncSession) -> KeyContext:
@@ -102,7 +118,11 @@ async def _artifact(session: AsyncSession, context: KeyContext, kind: ArtifactKi
 
 def _review_card_shape(drug: str) -> dict[str, Any]:
     """The value the review card writes for a `dose` field (`app.ingestion.review`)."""
-    return {"subject": "medicine", "attribute": "dose", "value": {"drug": drug, "instruction": "1 tablet at night"}}
+    return {
+        "subject": "medicine",
+        "attribute": "dose",
+        "value": {"drug": drug, "instruction": "1 tablet at night"},
+    }
 
 
 def _medicines_module_shape(generic: str, drug_class: str) -> dict[str, Any]:
@@ -111,7 +131,12 @@ def _medicines_module_shape(generic: str, drug_class: str) -> dict[str, Any]:
     return {
         "subject": "medication",
         "attribute": f"line:{generic}",
-        "value": {"drug_class": drug_class, "high_risk": True, "strength": "5 mg", "dose": {"amount": 1}},
+        "value": {
+            "drug_class": drug_class,
+            "high_risk": True,
+            "strength": "5 mg",
+            "dose": {"amount": 1},
+        },
     }
 
 
@@ -154,7 +179,11 @@ async def test_the_review_card_shape_is_refused_from_anything_but_a_photo(
     not_a_label = await _artifact(sg, owner, kind)
     async with refused_unit(sg, HighRiskNeedsLabelPhoto):
         await assert_fact(
-            sg, context=owner, confidence=1.0, artifact_id=not_a_label.id, **_review_card_shape("Warfarin")
+            sg,
+            context=owner,
+            confidence=1.0,
+            artifact_id=not_a_label.id,
+            **_review_card_shape("Warfarin"),
         )
     assert list(await current_facts(sg, context=owner, subject="medicine")) == []
     trail = await read_audit(sg, context=owner)
@@ -181,12 +210,21 @@ async def test_a_whatsapp_message_or_a_voice_note_is_words_alone(sg: AsyncSessio
     )
     with pytest.raises(HighRiskNeedsLabelPhoto):
         await assert_fact(
-            sg, context=owner, confidence=0.8, event_id=said.id, **_review_card_shape("insulin glargine")
+            sg,
+            context=owner,
+            confidence=0.8,
+            event_id=said.id,
+            **_review_card_shape("insulin glargine"),
         )
     voice = await _artifact(sg, owner, ArtifactKind.VOICE)
     with pytest.raises(HighRiskNeedsLabelPhoto):
         await assert_fact(
-            sg, context=owner, confidence=0.8, artifact_id=voice.id, event_id=said.id, **_review_card_shape("Insulin")
+            sg,
+            context=owner,
+            confidence=0.8,
+            artifact_id=voice.id,
+            event_id=said.id,
+            **_review_card_shape("Insulin"),
         )
     assert list(await current_facts(sg, context=owner)) == []
 
@@ -210,7 +248,11 @@ async def _voice_note(deployment: Deployment, profile_id: str, who: dict[str, st
 
 
 async def _add_medicine(
-    client: AsyncClient, profile_id: str, who: dict[str, str], label: dict[str, Any], artifact_id: str
+    client: AsyncClient,
+    profile_id: str,
+    who: dict[str, str],
+    label: dict[str, Any],
+    artifact_id: str,
 ) -> Any:
     his = bearer(who["token"])
     minted = await client.post(
@@ -221,7 +263,11 @@ async def _add_medicine(
     assert minted.status_code == 201, minted.text
     return await client.post(
         f"/profiles/{profile_id}/medicines",
-        json={"label": label, "source_artifact_id": artifact_id, "confirmation_id": minted.json()["confirmation_id"]},
+        json={
+            "label": label,
+            "source_artifact_id": artifact_id,
+            "confirmation_id": minted.json()["confirmation_id"],
+        },
         headers=his,
     )
 
@@ -232,7 +278,13 @@ async def test_the_medicines_route_refuses_a_high_risk_dose_from_a_voice_note(
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)
     voice = await _voice_note(deployment, profile_id, pa)
-    label = {"generic": "warfarin", "strength": "3 mg", "dose_text": "1 tab ON", "quantity": 28, "prescriber": "Dr Tan"}
+    label = {
+        "generic": "warfarin",
+        "strength": "3 mg",
+        "dose_text": "1 tab ON",
+        "quantity": 28,
+        "prescriber": "Dr Tan",
+    }
     refused = await _add_medicine(deployment.client, profile_id, pa, label, voice)
     assert refused.status_code == 400, refused.text
     assert refused.json() == {"refusal": "HighRiskNeedsLabelPhoto", "drug_class": "anticoagulant"}
@@ -282,7 +334,11 @@ async def test_the_review_card_route_saves_a_warfarin_dose_only_because_it_came_
     # A voice note cannot be posted as a photo.
     not_a_photo = await deployment.client.post(
         f"/profiles/{profile_id}/photos",
-        json={"data": base64.b64encode(b"ID3 a voice note").decode(), "content_type": "audio/mpeg", "captured_at": "2026-09-03T08:00:00Z"},
+        json={
+            "data": base64.b64encode(b"ID3 a voice note").decode(),
+            "content_type": "audio/mpeg",
+            "captured_at": "2026-09-03T08:00:00Z",
+        },
         headers=his,
     )
     assert not_a_photo.status_code in (400, 415, 422), not_a_photo.text

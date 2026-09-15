@@ -31,7 +31,11 @@ async def test_taps_the_fine_today_share_and_acceptance_by_kind_per_week(
     await record_dose_taken(sg, context=owner, line_id=added.line.id)
     for word in (Feeling.DIZZY, Feeling.FINE, Feeling.FINE):
         await record_tap(
-            sg, context=owner, word=word, registry=REGISTRY, store=STORE,
+            sg,
+            context=owner,
+            word=word,
+            registry=REGISTRY,
+            store=STORE,
             transcriber=TRANSCRIBER,
             via=VIA,
         )

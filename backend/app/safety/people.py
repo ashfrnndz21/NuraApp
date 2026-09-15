@@ -44,7 +44,9 @@ async def key_holder(
     return person
 
 
-async def owner_of(session: AsyncSession, context: KeyContext, profile: Profile, /) -> Person | None:
+async def owner_of(
+    session: AsyncSession, context: KeyContext, profile: Profile, /
+) -> Person | None:
     """The patient's own account, for a notice to him: whose graph it is is what every key
     opens, so the read is under `Scope.PROFILE`, with a READ line."""
     if profile.owner_person_id is None:

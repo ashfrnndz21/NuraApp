@@ -33,6 +33,7 @@ from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
 from app.drafts import (
     AttachDraft,
     ClaimDraft,
+    CloseDraft,
     ConfirmSubject,
     CountCorrectionDraft,
     Draft,
@@ -67,6 +68,8 @@ def scope_of(draft: Draft) -> Scope:
     the graph, which every key holds; a message to the patient is a send. Hanging an
     artefact off an episode or a visit (E03) is an arrangement of the record, where the
     artefact is kept."""
+    if isinstance(draft, CloseDraft):
+        return Scope.PROFILE
     if isinstance(draft, FactDraft):
         return scope_for_subject(draft.subject)
     if isinstance(draft, ClaimDraft):

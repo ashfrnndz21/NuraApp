@@ -96,6 +96,8 @@ async def test_a_nested_unit_that_refuses_keeps_its_refused_line_and_the_work_be
         (daughter.id, "OutOfScope")
     ]
     written = [
-        line for line in after if line.outcome is Outcome.ALLOWED and line.target == Note.__tablename__
+        line
+        for line in after
+        if line.outcome is Outcome.ALLOWED and line.target == Note.__tablename__
     ]
     assert len(written) == 1

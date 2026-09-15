@@ -1174,7 +1174,8 @@ export const en = {
     // @patient phrase
     stopYes: "Yes, stop it",
     // @patient phrase
-    howToStop: "How to stop this",
+    closeAccount: "Close my account",
+    closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
     // @patient phrase
@@ -1508,6 +1509,7 @@ export const en = {
     ChallengeExpired: "That code is too old now.",
     ChallengeLocked: "Ask for a new code and start again.",
     NoKey: "You cannot see these papers any more.",
+    AccountClosing: "Nura has stopped keeping these papers.",
     OutOfScope: "This part of the papers is not open to you.",
     OutOfRegion: "These papers are kept in another country.",
     NotTheirsToRead: "Only the owner can see this.",
@@ -1563,8 +1565,6 @@ export const en = {
     NoSuchAnalyte: "Nura does not know that test.",
     NobodyToAsk: ["Nobody is on the family list to ask.", "Add someone to the family list first."],
     NotACount: "Please type how many, as a number.",
-    NotADocument: "Nura can keep a letter or a photo of a page.",
-    DocumentTooLarge: "That paper is too big for Nura.",
     AlreadyHangsThere: "That paper is already there.",
     EpisodeAlreadyClosed: "This illness is over.",
     NoSuchEpisode: "That illness is not here any more.",
@@ -1606,8 +1606,9 @@ export const en = {
     NotWellFormed: "Nura did not understand that.",
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
     NotOnTheLadder: "Nura did not ask you about this one.",
-    NotStoppedInTheApp: ["Nura cannot stop this in the app yet.", "Nura's privacy officer can stop it with you."],
-    NotStoppedInTheAppWriteTo: "To stop it, write to Nura's privacy officer at {contact}.",
+    NotADocument: "Nura can only keep a file or a photo here.",
+    StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",
+    DocumentTooLarge: "That file is too big for Nura.",
     CalendarTooLarge: "That calendar file is too big for Nura.",
   },
 } satisfies Strings;

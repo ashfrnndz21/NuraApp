@@ -45,7 +45,6 @@ def scoped_select[Row: ProfileScoped](
     return statement
 
 
-
 def scoped_projection[Row: ProfileScoped](
     model: type[Row], context: KeyContext, scope: Scope, /
 ) -> Select[tuple[Row]]:

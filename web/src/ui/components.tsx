@@ -157,7 +157,7 @@ export function Notice({ error }: { error: unknown }): JSX.Element | null {
     error instanceof Unreachable
       ? [t().errors.network]
       : error instanceof Refused
-        ? refusalLines(error.refusal, language.value, { contact: error.contact })
+        ? refusalLines(error.refusal, language.value)
         : refusalLines(undefined);
   return (
     <Tile paper role="alert" testId="notice">

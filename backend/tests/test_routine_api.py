@@ -25,11 +25,15 @@ DAY: dict[str, Any] = {
 }
 
 
-async def test_mei_sets_the_day_once_and_it_renders_to_pa_and_to_her(deployment: Deployment) -> None:
+async def test_mei_sets_the_day_once_and_it_renders_to_pa_and_to_her(
+    deployment: Deployment,
+) -> None:
     client = deployment.client
     pa = await register_by_phone(deployment, PA, "Pa", "ms")
     profile_id = await own_profile(deployment, pa, display_name="Pa", language="ms")
-    await add_medicine(deployment, pa["token"], profile_id, "amlodipine", "5 mg", "1 biji sekali sehari pagi")
+    await add_medicine(
+        deployment, pa["token"], profile_id, "amlodipine", "5 mg", "1 biji sekali sehari pagi"
+    )
     mei = await register_by_phone(deployment, MEI, "Mei", "en")
     await caregiver(deployment, pa, profile_id, MEI, ["medicines", "visits", "readings"])
     route = f"/profiles/{profile_id}/routine"
@@ -48,7 +52,9 @@ async def test_mei_sets_the_day_once_and_it_renders_to_pa_and_to_her(deployment:
     other = {**DAY, "morning_card_at": "08:00", "confirmation_id": yes}
     wrong = await client.put(route, json=other, headers=bearer(mei["token"]))
     assert (wrong.status_code, wrong.json()) == (400, {"refusal": "NotWhatWasConfirmed"})
-    done = await client.put(route, json={**DAY, "confirmation_id": yes}, headers=bearer(mei["token"]))
+    done = await client.put(
+        route, json={**DAY, "confirmation_id": yes}, headers=bearer(mei["token"])
+    )
     assert done.status_code == 200, done.text
     assert done.json()["set"] is True and done.json()["persona"] == "caregiver"
 
@@ -64,7 +70,9 @@ async def test_mei_sets_the_day_once_and_it_renders_to_pa_and_to_her(deployment:
     assert rows["breakfast"]["at"] == "07:30"
     assert [m["generic"] for m in rows["breakfast"]["medicines"]] == ["amlodipine"]
     assert rows["wake"]["readings"] == ["blood_pressure"] and rows["dinner"]["walk"] is True
-    as_him = await client.get(route, params={"persona": "patient", "language": "en"}, headers=bearer(mei["token"]))
+    as_him = await client.get(
+        route, params={"persona": "patient", "language": "en"}, headers=bearer(mei["token"])
+    )
     assert as_him.json()["lines"][2] == "At breakfast, take 1 tablet of your blood pressure tablet."
 
 

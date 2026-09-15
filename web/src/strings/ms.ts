@@ -1172,7 +1172,8 @@ export const ms = {
     // @patient phrase
     stopYes: "Ya, hentikan",
     // @patient phrase
-    howToStop: "Cara menghentikan ini",
+    closeAccount: "Tutup akaun saya",
+    closeAccountYes: "Ya, tutup akaun saya",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
     // @patient phrase
@@ -1504,6 +1505,7 @@ export const ms = {
     ChallengeExpired: "Kod itu sudah terlalu lama.",
     ChallengeLocked: "Minta kod baharu dan mula semula.",
     NoKey: "Anda tidak boleh melihat surat-surat ini lagi.",
+    AccountClosing: "Nura sudah berhenti menyimpan surat-surat ini.",
     OutOfScope: "Bahagian surat-surat ini tidak dibuka untuk anda.",
     OutOfRegion: "Surat-surat ini disimpan di negara lain.",
     NotTheirsToRead: "Hanya pemilik boleh melihat ini.",
@@ -1559,8 +1561,6 @@ export const ms = {
     NoSuchAnalyte: "Nura tidak kenal ujian itu.",
     NobodyToAsk: ["Tiada sesiapa dalam senarai keluarga untuk diminta.", "Tambah seseorang ke senarai keluarga dahulu."],
     NotACount: "Sila taip berapa banyak, sebagai nombor.",
-    NotADocument: "Nura boleh simpan surat atau gambar sehelai kertas.",
-    DocumentTooLarge: "Surat itu terlalu besar untuk Nura.",
     AlreadyHangsThere: "Surat itu sudah ada di situ.",
     EpisodeAlreadyClosed: "Sakit ini sudah berakhir.",
     NoSuchEpisode: "Sakit itu tiada di sini lagi.",
@@ -1602,8 +1602,9 @@ export const ms = {
     NotWellFormed: "Nura tidak faham itu.",
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
-    NotStoppedInTheApp: ["Nura belum boleh hentikan ini dalam aplikasi.", "Pegawai privasi Nura boleh hentikannya bersama anda."],
-    NotStoppedInTheAppWriteTo: "Untuk menghentikannya, tulis kepada pegawai privasi Nura di {contact}.",
+    NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
+    StopsByClosingTheAccount: "Untuk hentikan Nura menyimpan surat-surat anda, tutup akaun anda.",
+    DocumentTooLarge: "Dokumen itu terlalu besar untuk Nura.",
     CalendarTooLarge: "Dokumen kalendar itu terlalu besar untuk Nura.",
   },
 } satisfies Strings;

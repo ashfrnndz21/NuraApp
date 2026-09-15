@@ -30,7 +30,11 @@ async def test_the_settings_are_read_changed_and_an_alert_is_never_capped(
     assert body["channels"]["flag"] == ["whatsapp", "app_push"]
     changed = await deployment.client.put(
         f"/profiles/{profile_id}/delivery-settings",
-        json={"skip_quiet_days": True, "channels": {"reorder": ["whatsapp"]}, "caps": {"reorder": 2}},
+        json={
+            "skip_quiet_days": True,
+            "channels": {"reorder": ["whatsapp"]},
+            "caps": {"reorder": 2},
+        },
         headers=his,
     )
     assert changed.status_code == 200, changed.text
@@ -52,9 +56,7 @@ async def test_the_log_is_the_owners_and_his_chiefs_and_the_dev_run_fills_it(
         f"/profiles/{profile_id}/feelings", json={"word": "fall"}, headers=his
     )
     assert felt.status_code == 201
-    ran = await deployment.client.post(
-        "/dev/run-triggers", json={"profile_id": profile_id}
-    )
+    ran = await deployment.client.post("/dev/run-triggers", json={"profile_id": profile_id})
     assert ran.status_code == 200, ran.text
     assert ran.json()["day"] == "2026-09-03"
     log = await deployment.client.get(f"/profiles/{profile_id}/deliveries", headers=his)
@@ -111,7 +113,9 @@ async def test_one_reminder_of_a_visit_reaches_him_the_day_before(
     (card,) = [item for item in page.json()["items"] if item["type"] == "visit_logistics"]
 
     async def log() -> list[dict[str, Any]]:
-        ran = await deployment.client.post("/dev/run-triggers", json={"profile_id": house.profile_id})
+        ran = await deployment.client.post(
+            "/dev/run-triggers", json={"profile_id": house.profile_id}
+        )
         assert ran.status_code == 200, ran.text
         rows = await deployment.client.get(
             house.at("/deliveries"), params={"day": "2026-09-04"}, headers=house.his
@@ -122,7 +126,10 @@ async def test_one_reminder_of_a_visit_reaches_him_the_day_before(
     first = await log()
     (reminder,) = [row for row in first if row["trigger_type"] == "visit_tomorrow"]
     assert reminder["outcome"] == "sent" and reminder["template_name"] == "visit_reminder"
-    assert reminder["why"] == {"appointment_id": house.appointment_id, "feed_item_id": card["item_id"]}
+    assert reminder["why"] == {
+        "appointment_id": house.appointment_id,
+        "feed_item_id": card["item_id"],
+    }
     (nudge,) = [row for row in first if row["trigger_type"] == "nudge"]
     assert nudge["outcome"] == "skipped" and nudge["reason"] == "the visit reminder said it"
     assert await log() == first

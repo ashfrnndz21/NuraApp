@@ -136,9 +136,7 @@ async def test_nobody_whose_key_does_not_cover_the_medicines_is_on_the_ladder(
 ) -> None:
     clock.set(at(6))
     h = await home(sg, tmp_path, roster=False)
-    kit = await register_person(
-        sg, region=Region.SG, display_name="Kit", phone_e164="+6595550061"
-    )
+    kit = await register_person(sg, region=Region.SG, display_name="Kit", phone_e164="+6595550061")
     await agree_to_family_sharing(sg, h.owner, kit, scopes={Scope.VISITS})
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes={Scope.VISITS})
     await _run(sg, h, clock, at(8, 31))

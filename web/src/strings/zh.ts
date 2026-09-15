@@ -1172,7 +1172,8 @@ export const zh = {
     // @patient phrase
     stopYes: "好，停止",
     // @patient phrase
-    howToStop: "怎样停止这个",
+    closeAccount: "关闭我的账户",
+    closeAccountYes: "是的，关闭我的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
     // @patient phrase
@@ -1504,6 +1505,7 @@ export const zh = {
     ChallengeExpired: "这个验证码太旧了。",
     ChallengeLocked: "请要一个新的验证码，重新开始。",
     NoKey: "您不能再看这份文件了。",
+    AccountClosing: "Nura 已停止保存这些文件。",
     OutOfScope: "文件的这部分没有对您开放。",
     OutOfRegion: "这份文件保存在另一个国家。",
     NotTheirsToRead: "只有文件的主人可以看这个。",
@@ -1559,8 +1561,6 @@ export const zh = {
     NoSuchAnalyte: "Nura 不认识这个检查。",
     NobodyToAsk: ["家人名单上没有人可以请。", "请先把一个人加到家人名单上。"],
     NotACount: "请用数字打有多少。",
-    NotADocument: "Nura 可以保存一封信或者一页纸的照片。",
-    DocumentTooLarge: "这份文件太大了，Nura 放不下。",
     AlreadyHangsThere: "这份文件已经在那里了。",
     EpisodeAlreadyClosed: "这次生病已经结束了。",
     NoSuchEpisode: "这次生病已经不在这里了。",
@@ -1602,8 +1602,9 @@ export const zh = {
     NotWellFormed: "Nura 不明白那个。",
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
     NotOnTheLadder: "Nura 没有请您处理这个。",
-    NotStoppedInTheApp: ["Nura 还不能在应用里停止这个。", "Nura 的隐私负责人可以和您一起停止它。"],
-    NotStoppedInTheAppWriteTo: "要停止它，请写信给 Nura 的隐私负责人：{contact}。",
+    NotADocument: "Nura 在这里只能保存文件或照片。",
+    StopsByClosingTheAccount: "要让 Nura 停止保存您的文件，请关闭您的账户。",
+    DocumentTooLarge: "那个文件太大了，Nura 打不开。",
     CalendarTooLarge: "那个日历文件太大了，Nura 打不开。",
   },
 } satisfies Strings;

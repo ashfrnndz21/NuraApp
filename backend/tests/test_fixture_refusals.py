@@ -58,7 +58,11 @@ def _every_class_under_app() -> set[type]:
 
 def test_every_fixture_under_app_carries_the_mark() -> None:
     classes = _every_class_under_app()
-    named = {cls for cls in classes if cls.__name__.startswith("Fixture") and not issubclass(cls, BaseException)}
+    named = {
+        cls
+        for cls in classes
+        if cls.__name__.startswith("Fixture") and not issubclass(cls, BaseException)
+    }
     assert {cls.__name__ for cls in named} >= {
         "FixtureProvider",
         "FixtureRegistry",
