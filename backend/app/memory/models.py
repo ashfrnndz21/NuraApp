@@ -154,6 +154,9 @@ class EventKind(StrEnum):
     ONBOARDING = "onboarding"
     """What a person said while his profile was being set up (E01): the settings he chose, a
     read-back line he answered. The moment a setting fact, or a dispute, rests on."""
+    SUPPLY = "supply"
+    """A person said there are more of a medicine at home (E04-05, "I have more at home"):
+    the moment the count correction's fact rests on, under the medicines' part."""
 
 
 class Event(ProfileScoped, RowScoped, Base):

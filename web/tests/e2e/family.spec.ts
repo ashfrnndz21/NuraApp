@@ -36,10 +36,10 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-test("the nav: Today, Family, Me", async ({ page, request }) => {
+test("the nav: Today, Papers (the Record, W5), Family, Me", async ({ page, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Family", "Me"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Papers", "Family", "Me"]);
 });
 
 test("Pa's Family, one thing a screen: his circle, his trail, a part kept to himself, and Mei refused on his trail", async ({ page, request }) => {

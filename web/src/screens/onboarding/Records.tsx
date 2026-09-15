@@ -74,7 +74,17 @@ export function RecordsStep(): JSX.Element {
  *  is in words (solid underline, or dotted and "Please check this one."), a box to correct
  *  it, "Leave this one out", and one "Looks right" that mints the yes for exactly these
  *  decisions and spends it. Then the biography takes the paper in and says what it learned. */
-export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
+interface ReviewStepProps {
+  card: ReviewCardOut;
+  /** Outside onboarding (the Record's waiting papers, a machine's screen): what happens once
+   *  the card is confirmed, instead of the sitting taking the paper in. */
+  onDone?: (card: ReviewCardOut) => void;
+  onBack?: () => void;
+  /** Another photo, when the page could not be read: the caller sends it and shows its card. */
+  onPaper?: (file: File) => Promise<void>;
+}
+
+export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const locale = LOCALE[language.value];
@@ -83,13 +93,14 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const back = () => to({ name: returnTo.value });
+  const back = onBack ?? (() => to({ name: returnTo.value }));
 
   const upload = async (file: File) => {
     setBusy(true);
     setError(null);
     try {
-      to({ name: "review", card: await sendPaper(file) });
+      if (onPaper) await onPaper(file);
+      else to({ name: "review", card: await sendPaper(file) });
     } catch (failure) {
       setError(failure);
     } finally {
@@ -129,6 +140,10 @@ export function ReviewStep({ card }: { card: ReviewCardOut }): JSX.Element {
         const yes = await nura.mintReviewYes(bearer, profileId, card.card_id, decisions);
         await nura.confirmReviewCard(bearer, profileId, card.card_id, decisions, yes.confirmation_id);
         setConfirmed(true);
+      }
+      if (onDone) {
+        onDone(card);
+        return;
       }
       if (returnTo.value === "records") {
         // The sitting takes the paper in; its read-back will read the card's facts back to him.

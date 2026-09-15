@@ -644,6 +644,15 @@ class InsurerConfirmIn(BaseModel):
     policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
 
 
+class CountCorrectionConfirmIn(BaseModel):
+    """A yes to adding tablets found at home to one medicine's count (E04-05): which line and
+    how many, exactly what `POST /medicines/{line}/more` will write with it."""
+
+    subject: Literal[ConfirmSubject.COUNT_CORRECTION]
+    line_id: uuid.UUID
+    quantity: int = Field(gt=0, le=1000)
+
+
 class TaskDoneConfirmIn(BaseModel):
     """The doer's yes to her own task being done. Anyone else's finds no task."""
 
@@ -718,6 +727,7 @@ ConfirmIn = Annotated[
     | PushConfirmIn
     | StatusConfirmIn
     | AttachConfirmIn
+    | CountCorrectionConfirmIn
     | RoutineConfirmIn
     | ProposalConfirmIn
     | DriveConfirmIn
@@ -1267,6 +1277,37 @@ class ReconciledOut(BaseModel):
             supply=None if done.supply is None else SupplyOut.of(done.supply),
             flags=[FlagOut.of(flag) for flag in done.flags],
         )
+
+
+class AskedOut(BaseModel):
+    """What "Ask the family to order." did (E04-05): the task on the family's list, who it was
+    given to, who was told, and the lines he reads, in his words."""
+
+    line_id: uuid.UUID
+    task_id: uuid.UUID
+    asked_person_id: uuid.UUID
+    told_person_ids: list[uuid.UUID]
+    language: str
+    lines: list[str]
+
+
+class MoreIn(BaseModel):
+    """Tablets found at home, with the yes minted for exactly this line and number."""
+
+    quantity: int = Field(gt=0, le=1000)
+    confirmation_id: uuid.UUID
+
+
+class MoreOut(BaseModel):
+    """What "I have more at home." wrote: the supply, the fact and the moment it rests on, and
+    the count as it stands now, with its lines in his words."""
+
+    line_id: uuid.UUID
+    supply_id: uuid.UUID
+    fact_id: uuid.UUID
+    event_id: uuid.UUID
+    quantity: int
+    count: CountOut | None
 
 
 class TakenIn(BaseModel):

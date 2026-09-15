@@ -35,6 +35,7 @@ from app.drafts import (
     ClaimDraft,
     CloseDraft,
     ConfirmSubject,
+    CountCorrectionDraft,
     Draft,
     DriveDraft,
     FactDraft,
@@ -83,6 +84,9 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, PushDraft):
         return Scope.SEND
+    if isinstance(draft, CountCorrectionDraft):
+        # Tablets found at home are a supply on the line: the medicines' (E04-05).
+        return Scope.MEDICINES
     if isinstance(draft, RoutineDraft):
         # The day is read where the helper reads today's tablets (E10).
         return Scope.MEDICINES
