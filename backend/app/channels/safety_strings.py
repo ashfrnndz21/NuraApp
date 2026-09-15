@@ -831,7 +831,12 @@ WHEN_WORDS: Mapping[str, Mapping[str, str]] = {
 # @patient phrase
 LANGUAGE_NAMES: Mapping[str, Mapping[str, str]] = {
     "en": {"en": "English", "ms": "Malay", "zh": "Chinese", "ta": "Tamil"},
-    "ms": {"en": "Bahasa Inggeris", "ms": "Bahasa Melayu", "zh": "Bahasa Cina", "ta": "Bahasa Tamil"},
+    "ms": {
+        "en": "Bahasa Inggeris",
+        "ms": "Bahasa Melayu",
+        "zh": "Bahasa Cina",
+        "ta": "Bahasa Tamil",
+    },
     "zh": {"en": "英语", "ms": "马来语", "zh": "华语", "ta": "泰米尔语"},
 }
 
@@ -895,16 +900,34 @@ A code not here is said as it is written, with its underscores taken out."""
 # @patient phrase
 BLOOD_GROUP_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
-        "O+": "O positive", "O-": "O negative", "A+": "A positive", "A-": "A negative",
-        "B+": "B positive", "B-": "B negative", "AB+": "A B positive", "AB-": "A B negative",
+        "O+": "O positive",
+        "O-": "O negative",
+        "A+": "A positive",
+        "A-": "A negative",
+        "B+": "B positive",
+        "B-": "B negative",
+        "AB+": "A B positive",
+        "AB-": "A B negative",
     },
     "ms": {
-        "O+": "O positif", "O-": "O negatif", "A+": "A positif", "A-": "A negatif",
-        "B+": "B positif", "B-": "B negatif", "AB+": "A B positif", "AB-": "A B negatif",
+        "O+": "O positif",
+        "O-": "O negatif",
+        "A+": "A positif",
+        "A-": "A negatif",
+        "B+": "B positif",
+        "B-": "B negatif",
+        "AB+": "A B positif",
+        "AB-": "A B negatif",
     },
     "zh": {
-        "O+": "O型阳性", "O-": "O型阴性", "A+": "A型阳性", "A-": "A型阴性",
-        "B+": "B型阳性", "B-": "B型阴性", "AB+": "A B型阳性", "AB-": "A B型阴性",
+        "O+": "O型阳性",
+        "O-": "O型阴性",
+        "A+": "A型阳性",
+        "A-": "A型阴性",
+        "B+": "B型阳性",
+        "B-": "B型阴性",
+        "AB+": "A B型阳性",
+        "AB-": "A B型阴性",
     },
 }
 

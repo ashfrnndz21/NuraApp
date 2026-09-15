@@ -231,7 +231,10 @@ class FixtureProvider:
         if content_type.startswith("audio/"):
             # The voice notes' placeholder (tests/voice_notes.py): its digest names what the
             # fixture transcriber heard (tests/fixtures/voice/). No audio is committed.
-            return Media(data=b"nura-voice-placeholder:" + label.encode("ascii") + b"\n", content_type=content_type)
+            return Media(
+                data=b"nura-voice-placeholder:" + label.encode("ascii") + b"\n",
+                content_type=content_type,
+            )
         if content_type == "application/pdf":
             data = b"%PDF-1.4\n%nura-paper-placeholder:" + label.encode("ascii") + b"\n"
         else:

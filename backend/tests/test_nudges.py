@@ -257,7 +257,11 @@ async def test_a_watched_feeling_is_asked_about_again_a_week_later(
 ) -> None:
     _, owner = await _home(sg)
     tapped = await record_tap(
-        sg, context=owner, word=Feeling.LOW, registry=REGISTRY, store=STORE,
+        sg,
+        context=owner,
+        word=Feeling.LOW,
+        registry=REGISTRY,
+        store=STORE,
         transcriber=TRANSCRIBER,
         via=VIA,
     )

@@ -332,7 +332,7 @@ def masked(reference: str | None) -> str | None:
 
 
 def age_band(birth_year: int, today_year: int) -> str | None:
-    """"70 to 79": the decade, never the year. A band is enough for a stranger."""
+    """ "70 to 79": the decade, never the year. A band is enough for a stranger."""
     age = today_year - birth_year
     if age < 0 or age > 120:
         return None
@@ -519,9 +519,7 @@ async def emergency_card(
             phone_e164=held.clinic.phone_e164,
         )
     )
-    last_reading_at = (
-        None if held.last_reading is None else as_utc(held.last_reading.occurred_at)
-    )
+    last_reading_at = None if held.last_reading is None else as_utc(held.last_reading.occurred_at)
     # The policy reference in full for him, the steward and his chief — the card he prints and
     # carries; the last four for everyone else holding the emergency card (B1 review).
     reveal = context.is_owner or context.is_steward or context.role is KeyRole.CHIEF

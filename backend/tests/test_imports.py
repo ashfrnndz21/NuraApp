@@ -96,7 +96,9 @@ async def test_a_pdf_that_is_not_a_health_paper_is_an_open_card_that_says_so(
     assert card["confirmed_at"] is None and card["source"] == "email"
     assert card["notice"] == list(NOT_A_HEALTH_PAPER)
     assert card["notice"] == ["This does not look like a health paper."]
-    facts = await deployment.client.get(f"/profiles/{profile_id}/facts", headers=bearer(pa["token"]))
+    facts = await deployment.client.get(
+        f"/profiles/{profile_id}/facts", headers=bearer(pa["token"])
+    )
     assert facts.json() == []
 
 
@@ -106,20 +108,28 @@ async def test_what_is_not_a_pdf_is_refused_before_a_byte_lands_and_is_on_the_tr
     pa, profile_id = await _pa_http(deployment)
     his = bearer(pa["token"])
     as_photo = {**pdf(DISCHARGE_LETTER), "content_type": "image/png"}
-    refused = await deployment.client.post(f"/profiles/{profile_id}/imports", json=as_photo, headers=his)
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/imports", json=as_photo, headers=his
+    )
     assert refused.status_code == 400 and refused.json() == {"refusal": "NotAPdf"}
     pretending = {**pdf(DISCHARGE_LETTER), "data": b64(b"hello, not a pdf")}
-    refused = await deployment.client.post(f"/profiles/{profile_id}/imports", json=pretending, headers=his)
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/imports", json=pretending, headers=his
+    )
     assert refused.status_code == 400 and refused.json() == {"refusal": "NotAPdf"}
     assert not list(deployment.objects.path_of(f"imports/{profile_id}/x").parent.parent.glob("*/*"))
     assert "NotAPdf" in await refusals(deployment, pa, profile_id)
     unknown_hint = {**pdf(DISCHARGE_LETTER), "document_kind": "device_screen"}
     assert (
-        await deployment.client.post(f"/profiles/{profile_id}/imports", json=unknown_hint, headers=his)
+        await deployment.client.post(
+            f"/profiles/{profile_id}/imports", json=unknown_hint, headers=his
+        )
     ).status_code == 422
     unknown_source = {**pdf(DISCHARGE_LETTER), "source": "fax"}
     assert (
-        await deployment.client.post(f"/profiles/{profile_id}/imports", json=unknown_source, headers=his)
+        await deployment.client.post(
+            f"/profiles/{profile_id}/imports", json=unknown_source, headers=his
+        )
     ).status_code == 422
 
 
@@ -139,7 +149,12 @@ async def test_a_pdf_too_big_is_refused_and_one_for_another_region_never_lands(
         )
     with pytest.raises(NotAPdf):
         await store_pdf(
-            sg, context=owner, store=here, data=b"", content_type="application/pdf", captured_at=WHEN
+            sg,
+            context=owner,
+            store=here,
+            data=b"",
+            content_type="application/pdf",
+            captured_at=WHEN,
         )
     across = LocalObjectStore(tmp_path, Region.MY)
     with pytest.raises(OutOfRegion):
@@ -167,5 +182,7 @@ async def test_a_pdf_too_big_is_refused_and_one_for_another_region_never_lands(
 async def test_the_familys_documents_route_is_left_as_it_was(deployment: Deployment) -> None:
     """E12-09 keeps `/documents` for a paper behind a basis; a PDF to be read is an import."""
     pa, profile_id = await _pa_http(deployment)
-    listed = await deployment.client.get(f"/profiles/{profile_id}/documents", headers=bearer(pa["token"]))
+    listed = await deployment.client.get(
+        f"/profiles/{profile_id}/documents", headers=bearer(pa["token"])
+    )
     assert listed.status_code == 200 and listed.json() == []

@@ -30,7 +30,13 @@ MOMENTS: Mapping[str, Mapping[str, str]] = {
         "dinner": "Semasa makan malam",
         "bed": "Sebelum tidur",
     },
-    "zh": {"wake": "起床后", "breakfast": "早餐时", "lunch": "午餐时", "dinner": "晚餐时", "bed": "睡前"},
+    "zh": {
+        "wake": "起床后",
+        "breakfast": "早餐时",
+        "lunch": "午餐时",
+        "dinner": "晚餐时",
+        "bed": "睡前",
+    },
 }
 
 # @patient phrase
@@ -47,12 +53,21 @@ DOING: Mapping[str, Mapping[str, str]] = {
         "weight": "berdiri di atas penimbang",
         "walk": "pergi berjalan kaki",
     },
-    "zh": {"blood_pressure": "量血压", "blood_sugar": "验血糖", "weight": "站上秤", "walk": "去散步"},
+    "zh": {
+        "blood_pressure": "量血压",
+        "blood_sugar": "验血糖",
+        "weight": "站上秤",
+        "walk": "去散步",
+    },
 }
 """What he is prompted to do at a moment: a reading, or a walk."""
 
 # @patient phrase
-ITEM: Mapping[str, str] = {"en": "{amount} of {name}", "ms": "{amount} {name}", "zh": "{amount}{name}"}
+ITEM: Mapping[str, str] = {
+    "en": "{amount} of {name}",
+    "ms": "{amount} {name}",
+    "zh": "{amount}{name}",
+}
 """One medicine at a moment, the way the dose card says it."""
 
 AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}

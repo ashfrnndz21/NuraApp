@@ -168,9 +168,7 @@ async def test_a_flag_that_depends_on_a_missing_fact_is_written_suppressed_and_t
     why, so the caregiver sees it was considered, and no one is told (safety.md)."""
     home = await family(sg, tmp_path)
     said = await _said(sg, home.owner, Feeling.SHAKY_SWEATY)
-    flag = await raise_flag(
-        sg, context=home.owner, feeling=Feeling.SHAKY_SWEATY, event_id=said.id
-    )
+    flag = await raise_flag(sg, context=home.owner, feeling=Feeling.SHAKY_SWEATY, event_id=said.id)
     assert flag.suppressed_because == "no_sugar_condition_on_record"
     assert flag.told == []
     weight = await _said(sg, home.owner, Feeling.WEIGHT_GAIN)
@@ -541,7 +539,11 @@ def test_every_template_in_the_catalogue_passes_the_verifier_filled() -> None:
     failures: list[str] = []
     for template_id, language, text in strings.catalogue():
         rendered = strings.render(template_id, language, **FILLERS)
-        found = [f for f in verify(rendered, language, strings.KIND_OF.get(template_id, "line")) if f.severity == "fail"]
+        found = [
+            f
+            for f in verify(rendered, language, strings.KIND_OF.get(template_id, "line"))
+            if f.severity == "fail"
+        ]
         failures.extend(f"{template_id} [{language}]: {f.problem} — {text}" for f in found)
     assert failures == []
 
@@ -554,7 +556,16 @@ def test_a_line_that_fails_the_standard_is_refused_not_shown() -> None:
 
 
 def test_no_template_tells_him_to_start_stop_or_change_a_medicine() -> None:
-    forbidden = ("stop taking", "start taking", "double", "take 2", "skip", "increase", "reduce", " mg")
+    forbidden = (
+        "stop taking",
+        "start taking",
+        "double",
+        "take 2",
+        "skip",
+        "increase",
+        "reduce",
+        " mg",
+    )
     for template_id, language, text in strings.catalogue():
         low = text.lower()
         for word in forbidden:

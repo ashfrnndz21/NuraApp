@@ -7,8 +7,8 @@ columns on the directory's `provider` (E03-03, E19-05): whether a hospital is on
 escalation reads. The new trigger type (`visit_brief`) and the new card kind (`call_clinic`)
 are values of enums stored as checked strings: no DDL.
 
-Revision ID: 0027_brief_safety
-Revises: 0026_relationship_codes
+Revision ID: 0029_brief_safety
+Revises: 0028_whatsapp_opt_in
 Create Date: 2026-09-15
 """
 
@@ -17,8 +17,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0027_brief_safety"
-down_revision = "0026_relationship_codes"
+revision = "0029_brief_safety"
+down_revision = "0028_whatsapp_opt_in"
 branch_labels = None
 depends_on = None
 

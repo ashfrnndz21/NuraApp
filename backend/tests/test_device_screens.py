@@ -50,7 +50,10 @@ async def test_a_blood_pressure_machine_is_read_off_its_screen_with_no_typing(
     his = bearer(pa["token"])
     card = await _screen(deployment, pa, profile_id, BP_CUFF)
     assert card["document_kind"] == "device_screen" and card["asked_as"] == "device_screen"
-    read = {(f["subject"], f["attribute"]): (f["value"], f["unit"], f["confidence"]) for f in card["fields"]}
+    read = {
+        (f["subject"], f["attribute"]): (f["value"], f["unit"], f["confidence"])
+        for f in card["fields"]
+    }
     assert read == {
         ("device", "kind"): ("blood_pressure_monitor", None, 0.9),
         ("blood_pressure", "systolic"): (138, "mmHg", 0.97),
@@ -137,7 +140,9 @@ async def test_half_a_blood_pressure_is_not_a_reading_and_the_refusal_is_on_the_
     clock.set(LATER_THAT_DAY)
     pa, profile_id = await _pa(deployment)
     card = await _screen(deployment, pa, profile_id, BP_CUFF)
-    refused = await confirm(deployment, pa["token"], profile_id, card, decide(card, reject={"diastolic"}))
+    refused = await confirm(
+        deployment, pa["token"], profile_id, card, decide(card, reject={"diastolic"})
+    )
     assert refused.status_code == 400 and refused.json() == {"refusal": "NotAWholeReading"}
     assert "NotAWholeReading" in await refusals(deployment, pa, profile_id)
     left = await deployment.client.get(f"/profiles/{profile_id}/facts", headers=bearer(pa["token"]))
@@ -163,12 +168,16 @@ async def test_a_time_on_the_screen_later_than_now_is_refused_and_rejecting_it_u
         f"/profiles/{profile_id}/readings/photo", json=body, headers=bearer(pa["token"])
     )
     card = posted.json()
-    done = await confirm(deployment, pa["token"], profile_id, card, decide(card, reject={"taken_at"}))
+    done = await confirm(
+        deployment, pa["token"], profile_id, card, decide(card, reject={"taken_at"})
+    )
     assert done.status_code == 200, done.text
     assert all(f["valid_from"].startswith("2026-09-03T08:30:00") for f in done.json()["facts"])
 
 
-def _field(subject: str, attribute: str, value: object, decision: str = "confirmed") -> DecidedField:
+def _field(
+    subject: str, attribute: str, value: object, decision: str = "confirmed"
+) -> DecidedField:
     return DecidedField(uuid.uuid4(), subject, attribute, value, None, decision)
 
 

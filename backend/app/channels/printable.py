@@ -126,11 +126,7 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
     contacts = "".join(
         '<div class="contact">'
         f"<span>{escape(c.name)}</span>"
-        + (
-            f'<a href="{_tel(c.phone_e164)}">{escape(c.phone_e164)}</a>'
-            if c.phone_e164
-            else ""
-        )
+        + (f'<a href="{_tel(c.phone_e164)}">{escape(c.phone_e164)}</a>' if c.phone_e164 else "")
         + "</div>"
         for c in card.contacts
     )

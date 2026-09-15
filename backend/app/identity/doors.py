@@ -26,7 +26,7 @@ step is on the trail.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy import select
@@ -62,6 +62,7 @@ from app.keys.confirm import consume_confirmation
 from app.keys.context import (
     KeyContext,
     Standing,
+    closing_since,
     owned_profile,
     profile_for_number,
     resolve_key_context,
@@ -136,6 +137,9 @@ class Doors:
     claimable: list[Claimable]
     invited: list[Held]
     stewarding: list[Held]
+    closing: list[uuid.UUID] = field(default_factory=list)
+    """His own graph, or one he holds a key to, while its owner's closing stands (#143): by id
+    alone, never opened — the rest of his doors still open."""
 
 
 # --- for someone I care for ---------------------------------------------------------------
@@ -565,8 +569,11 @@ async def doors_for(
     """Which doors apply to this person, each graph read the way every graph is read: through
     a context, written down."""
     own: Held | None = None
+    closing: list[uuid.UUID] = []
     found = await owned_profile(session, region=region, owner_person_id=person.id)
-    if found is not None:
+    if found is not None and await closing_since(session, profile_id=found.id) is not None:
+        closing.append(found.id)
+    elif found is not None:
         context = await resolve_key_context(
             session, region=region, person_id=person.id, profile_id=found.id
         )
@@ -581,6 +588,10 @@ async def doors_for(
     for key in keys:
         if not key.is_active(moment):
             continue
+        if await closing_since(session, profile_id=key.profile_id) is not None:
+            if key.profile_id not in closing:
+                closing.append(key.profile_id)
+            continue
         context = await resolve_key_context(
             session, region=region, person_id=person.id, profile_id=key.profile_id
         )
@@ -592,6 +603,7 @@ async def doors_for(
         claimable=await claimable_for(session, region=region, person=person, language=language),
         invited=invited,
         stewarding=stewarding,
+        closing=closing,
     )
 
 

@@ -13,19 +13,18 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
-from app.channels.api.deps import settings_of
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
-from app.channels.whatsapp.outbound.send import OutsideTheWindow
+from app.channels.whatsapp.outbound.send import NotLetInHere, OutsideTheWindow
 from app.channels.whatsapp.provider import NotAWebhook, WebhookTooLarge
 from app.consent.service import (
     NoConsent,
     NoConsentToWithdraw,
-    NotStoppedInTheApp,
     NotTheirConsentToGive,
     NotTheirConsentToWithdraw,
+    StopsByClosingTheAccount,
 )
 from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.rank import NoCachedPage
@@ -54,6 +53,7 @@ from app.family.roster import (
     NotTheDoer,
 )
 from app.family.thread import NoSuchTask as NoSuchTaskForCard
+from app.identity.closing import AlreadyClosing, NothingToUndo, NotTheirsToClose, TooLateToUndo
 from app.identity.doors import AlreadySetUp, NoStewardshipHere, NotTheClaimant
 from app.identity.login import NoSession
 from app.identity.service import AlreadyRegistered, ProfileAlreadyOwned, WaitingToBeClaimed
@@ -77,7 +77,7 @@ from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
 from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
-from app.keys.context import NoKey, OutOfScope
+from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
     AlreadyReviewed,
@@ -131,6 +131,12 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (AlreadyReviewed, 409),
     (SourceAlreadyListed, 409),
     (NoKey, 403),
+    (AccountClosing, 403),
+    (NotTheirsToClose, 403),
+    (AlreadyClosing, 409),
+    (NothingToUndo, 409),
+    (TooLateToUndo, 409),
+    (NotLetInHere, 403),
     (OutOfScope, 403),
     (OutOfRegion, 403),
     (NotTheirsToRead, 403),
@@ -145,7 +151,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirConsentToGive, 403),
     (NotTheirConsentToWithdraw, 403),
     # Keeping his papers and WhatsApp carry the red-flag paths: not one tap in the app.
-    (NotStoppedInTheApp, 403),
+    (StopsByClosingTheAccount, 409),
     # The engine's sources and jobs are the owner's and his chief's to see (E21).
     (NotTheirsToManage, 403),
     (NotTheClaimant, 403),
@@ -327,11 +333,6 @@ async def refused(request: Request, refusal: Exception) -> JSONResponse:
         body["scope"] = refusal.scope.value
     if isinstance(refusal, HighRiskNeedsLabelPhoto):
         body["drug_class"] = refusal.drug_class
-    if isinstance(refusal, NotStoppedInTheApp):
-        # Not only "no": where to write to stop it, when the deployment names the address.
-        contact = settings_of(request).privacy_contact
-        if contact:
-            body["contact"] = contact
     if isinstance(refusal, NotPlainWords):
         # The verifier's findings — rule, problem, rewrite — so the composer can fix the
         # line. They are about the words offered, never about the record.

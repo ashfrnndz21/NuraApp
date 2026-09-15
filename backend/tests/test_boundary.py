@@ -144,7 +144,9 @@ def test_without_a_named_doctor_the_line_says_your_doctor() -> None:
         "This is not a doctor's advice.\n"
         "Ask your doctor."
     )
-    assert boundary_line(Surface.STATE_POSTURE, "en").splitlines()[0] == "Nura put your day in order."
+    assert (
+        boundary_line(Surface.STATE_POSTURE, "en").splitlines()[0] == "Nura put your day in order."
+    )
     assert boundary_lines(Surface.SUMMARY, "ms")[-1] == "Tanya doktor anda."
     assert boundary_lines(Surface.SUMMARY, "zh")[-1] == "问您的医生。"
     # A language Nura does not speak yet falls back to English rather than to nothing.
@@ -309,8 +311,11 @@ def test_an_urgent_card_closes_on_one_line_and_never_sends_him_to_his_doctor() -
     assert is_boundary_line(Surface.NOT_FEELING_WELL, lettered)
     assert not is_boundary_line(Surface.NOT_FEELING_WELL, "Nura does not decide what is wrong.")
     assert not is_boundary_line(
-        Surface.NOT_FEELING_WELL, "Mei knows now.\nNura does not decide what is wrong.\nAsk your doctor."
+        Surface.NOT_FEELING_WELL,
+        "Mei knows now.\nNura does not decide what is wrong.\nAsk your doctor.",
     )
-    assert not is_boundary_line(Surface.BRIEF, "Mei knows now.\nNura does not decide what is wrong.")
+    assert not is_boundary_line(
+        Surface.BRIEF, "Mei knows now.\nNura does not decide what is wrong."
+    )
     with pytest.raises(ValueError):
         boundary_lines(Surface.BRIEF, "en", urgent=True)

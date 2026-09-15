@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import app.audit.models
 import app.channels.whatsapp.models
+import app.channels.whatsapp.opt_in
 import app.consent.models
 import app.delivery.feed.models
 import app.delivery.nudges.models
 import app.delivery.triggers.models
 import app.family.models
+import app.identity.closure_models
 import app.identity.models
 import app.ingestion.connectors.models
 import app.ingestion.models

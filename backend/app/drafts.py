@@ -41,6 +41,7 @@ class ConfirmSubject(StrEnum):
     ATTACH = "attach"
     DRIVE = "drive"
     INSURER = "insurer"
+    CLOSE_ACCOUNT = "close_account"
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +305,26 @@ class KeyChangeDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class CloseDraft:
+    """The owner about to close his account (#143): what he was told will happen, word for
+    word, and the day his papers go. His yes binds to exactly these."""
+
+    lines: tuple[str, ...]
+    delete_on: str
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.CLOSE_ACCOUNT
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"lines": list(self.lines), "delete_on": self.delete_on}
+
+
+@dataclass(frozen=True, slots=True)
 class OnlyMeDraft:
     """The owner about to mark a part of his record "only me", or to open it again (E12-04):
     which part, and which way."""
@@ -392,7 +413,6 @@ class PushDraft:
             "channel": self.channel,
             "expires_at": self.expires_at,
         }
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -519,6 +539,7 @@ Draft = (
     | AttachDraft
     | DriveDraft
     | InsurerDraft
+    | CloseDraft
 )
 
 

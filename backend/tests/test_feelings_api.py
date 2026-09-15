@@ -215,7 +215,9 @@ async def test_a_tap_is_the_records_and_a_note_on_a_medicine_is_withheld_without
     assert [n["note_id"] for n in shown["notes"]] == [answered.json()["note"]["note_id"]]
 
 
-async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(deployment: Deployment) -> None:
+async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(
+    deployment: Deployment,
+) -> None:
     """W7: a push carries no words, so the app reads the day's handed-over nudge — its lines,
     its why — and what the reader has done with it; he answers at the response route."""
     pa = await register_by_phone(deployment, PA, "Pa")
@@ -235,7 +237,9 @@ async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(deployme
     assert day.json()["day"] == nudge["day"]
 
     answered = await deployment.client.post(
-        f"/profiles/{profile_id}/nudges/{nudge['nudge_id']}/response", json={"kind": "accepted"}, headers=his
+        f"/profiles/{profile_id}/nudges/{nudge['nudge_id']}/response",
+        json={"kind": "accepted"},
+        headers=his,
     )
     assert answered.status_code == 201, answered.text
     again = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=his)
@@ -243,15 +247,27 @@ async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(deployme
 
     # Each person's own answers: Mei, his chief, has done nothing with it.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["emergency", "medicines", "visits", "readings", "records", "family", "notes"])
+    await let_in(
+        deployment,
+        pa,
+        profile_id,
+        MEI,
+        ["emergency", "medicines", "visits", "readings", "records", "family", "notes"],
+    )
     key = await deployment.client.post(
-        f"/profiles/{profile_id}/keys", json={"holder_phone_e164": MEI, "role": "chief"}, headers=his
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": MEI, "role": "chief"},
+        headers=his,
     )
     assert key.status_code == 201, key.text
-    hers = await deployment.client.get(f"/profiles/{profile_id}/nudges", headers=bearer(mei["token"]))
+    hers = await deployment.client.get(
+        f"/profiles/{profile_id}/nudges", headers=bearer(mei["token"])
+    )
     assert hers.json()["nudges"][0]["responses"] == []
 
-    other = await deployment.client.get(f"/profiles/{profile_id}/nudges?day=2026-01-05", headers=his)
+    other = await deployment.client.get(
+        f"/profiles/{profile_id}/nudges?day=2026-01-05", headers=his
+    )
     assert other.json()["nudges"] == []
 
 

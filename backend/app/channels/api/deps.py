@@ -202,3 +202,21 @@ async def key_context(
 
 
 Context = Annotated[KeyContext, Depends(key_context)]
+
+
+async def closing_key_context(
+    profile_id: uuid.UUID, request: Request, person: CurrentPerson, session: Db
+) -> KeyContext:
+    """The key context even while the owner's closing of his account stands (#143): for the
+    doors that stay open to him, the closing's status and his undo. Who may use them is the
+    service's to say (`app.identity.closing`)."""
+    return await resolve_key_context(
+        session,
+        region=settings_of(request).region,
+        person_id=person.id,
+        profile_id=profile_id,
+        while_closing=True,
+    )
+
+
+ClosingContext = Annotated[KeyContext, Depends(closing_key_context)]

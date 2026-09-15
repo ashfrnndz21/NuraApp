@@ -29,7 +29,9 @@ from tests.support import refused_unit
 from tests.whatsapp_support import MEI, family
 
 SGT = ZoneInfo("Asia/Singapore")
-LIVE = business_number_for(Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False))
+LIVE = business_number_for(
+    Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False)
+)
 """A deployment's number: E19's six approved, E11's nine pending."""
 
 
@@ -48,7 +50,11 @@ async def test_a_pending_template_is_refused_outside_a_dev_run_and_written_down(
             context=fam.owner,
             to_person=fam.pa,
             kind="dose_reminder",
-            params={"name": "Pa", "medicine": "your blood pressure tablet", "anchor": "with breakfast"},
+            params={
+                "name": "Pa",
+                "medicine": "your blood pressure tablet",
+                "anchor": "with breakfast",
+            },
             provider=fam.providers.whatsapp,
             number=LIVE,
             state=state,

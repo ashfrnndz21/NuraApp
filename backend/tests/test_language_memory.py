@@ -71,7 +71,9 @@ def test_the_glossary_is_read_row_by_row() -> None:
 
 def test_rule_13_gives_his_word_and_the_variants_never_said() -> None:
     g = parse(DOC)
-    assert g.same_words == (("your blood pressure book", ("the log", "the readings", "the record")),)
+    assert g.same_words == (
+        ("your blood pressure book", ("the log", "the readings", "the record")),
+    )
     assert ("the log", "your blood pressure book") in list(g.never("en"))
 
 
@@ -79,7 +81,11 @@ def test_section_6_gives_each_thing_in_three_languages_and_the_words_never_said(
     g = parse(DOC)
     water = g.term("water pill")
     assert water is not None
-    assert (water.say("en"), water.say("ms"), water.say("zh")) == ("water pill", "pil air", "去水药")
+    assert (water.say("en"), water.say("ms"), water.say("zh")) == (
+        "water pill",
+        "pil air",
+        "去水药",
+    )
     letter = g.term("hospital letter")
     assert letter is not None and letter.never == {"zh": ("医院信",)}
     assert ("医院信", "出院信") in list(g.never("zh"))
@@ -135,7 +141,7 @@ def test_a_language_key_inside_a_language_key_is_part_of_the_key(repo: Memory) -
 
 
 def test_a_word_the_verifier_reads_as_a_token_is_still_his_word(repo: Memory) -> None:
-    """"demam" is a whole Malay word; filed under "ms" it is in the memory."""
+    """ "demam" is a whole Malay word; filed under "ms" it is in the memory."""
     fever = repo.get("backend/app/reasoning/visits/strings:RED_FLAG_WORDS.fever_on_medicine:ms")
     assert fever is not None and fever.text == "demam"
 
@@ -326,9 +332,18 @@ def test_his_word_for_a_thing_is_the_same_phrase_in_malay_and_chinese(tmp_path: 
 def test_a_name_said_the_same_in_every_language_is_not_a_translation(tmp_path: Path) -> None:
     report = _report(
         tmp_path,
-        ("web/src/strings/en.ts", 'export const en = {\n  // @patient headline\n  appName: "Nura",\n};\n'),
-        ("web/src/strings/ms.ts", 'export const ms = {\n  // @patient headline\n  appName: "Nura",\n};\n'),
-        ("web/src/strings/zh.ts", 'export const zh = {\n  // @patient headline\n  appName: "Nura",\n};\n'),
+        (
+            "web/src/strings/en.ts",
+            'export const en = {\n  // @patient headline\n  appName: "Nura",\n};\n',
+        ),
+        (
+            "web/src/strings/ms.ts",
+            'export const ms = {\n  // @patient headline\n  appName: "Nura",\n};\n',
+        ),
+        (
+            "web/src/strings/zh.ts",
+            'export const zh = {\n  // @patient headline\n  appName: "Nura",\n};\n',
+        ),
     )
     assert report.findings == []
 

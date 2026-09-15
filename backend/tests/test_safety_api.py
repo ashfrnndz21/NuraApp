@@ -85,7 +85,25 @@ async def _pa_with_the_water_pill(deployment: Deployment) -> tuple[dict[str, str
 
 
 async def _key(deployment: Deployment, owner, profile_id: str, phone: str, role: str, scopes=None):
-    await let_in(deployment, owner, profile_id, phone, scopes or ["emergency", "medicines", "visits", "readings", "records", "family", "notes", "money", "ask", "send"])
+    await let_in(
+        deployment,
+        owner,
+        profile_id,
+        phone,
+        scopes
+        or [
+            "emergency",
+            "medicines",
+            "visits",
+            "readings",
+            "records",
+            "family",
+            "notes",
+            "money",
+            "ask",
+            "send",
+        ],
+    )
     body = {"holder_phone_e164": phone, "role": role}
     if scopes is not None:
         body["scopes"] = scopes
@@ -214,7 +232,10 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     # His own voice note is his words, kept like typed text: no recording consent (ADR 0003).
     chest = await deployment.client.post(
         f"/profiles/{profile_id}/not-feeling-well",
-        json={"audio": base64.b64encode(placeholder_voice(CHEST_PAIN)).decode(), "content_type": CONTENT_TYPE},
+        json={
+            "audio": base64.b64encode(placeholder_voice(CHEST_PAIN)).decode(),
+            "content_type": CONTENT_TYPE,
+        },
         headers=his,
     )
     assert chest.status_code == 201, chest.text
@@ -237,7 +258,10 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
 
     dizzy = await deployment.client.post(
         f"/profiles/{profile_id}/symptoms",
-        json={"audio": base64.b64encode(placeholder_voice(DIZZY)).decode(), "content_type": CONTENT_TYPE},
+        json={
+            "audio": base64.b64encode(placeholder_voice(DIZZY)).decode(),
+            "content_type": CONTENT_TYPE,
+        },
         headers=his,
     )
     assert dizzy.status_code == 201, dizzy.text
@@ -261,10 +285,14 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
         f"/profiles/{profile_id}/symptoms?since=2026-09-04T00:00:00Z", headers=his
     )
     assert empty.json()["entries"] == []
-    assert re.fullmatch(r"Nobody wrote anything down since \w+ \d+ September\.", empty.json()["lines"][0]["text"])
+    assert re.fullmatch(
+        r"Nobody wrote anything down since \w+ \d+ September\.", empty.json()["lines"][0]["text"]
+    )
 
 
-async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deployment: Deployment) -> None:
+async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(
+    deployment: Deployment,
+) -> None:
     """W7: what the web client shows when a red word or the button cannot reach Nura. Fixed
     lines from the catalogue, the urgent shape (the reassurance first, the one closing line
     last, never "Ask your doctor." after an emergency number), the chief by name, the region's
@@ -286,7 +314,9 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
         return events, flags
 
     before = await written()
-    kept = await deployment.client.get(f"/profiles/{profile_id}/not-feeling-well/offline", headers=his)
+    kept = await deployment.client.get(
+        f"/profiles/{profile_id}/not-feeling-well/offline", headers=his
+    )
     assert kept.status_code == 200, kept.text
     body = kept.json()
     assert body["emergency_number"] == "995" and body["language"] == "en"
@@ -323,7 +353,9 @@ async def test_the_phone_keeps_two_cards_for_when_it_cannot_reach_nura(deploymen
     # With nobody else on his list, the card names his family, never a person Nura made up.
     ana = await register_by_phone(deployment, ANA, "Ana")
     alone = await own_profile(deployment, ana, language="en")
-    lonely = await deployment.client.get(f"/profiles/{alone}/not-feeling-well/offline", headers=bearer(ana["token"]))
+    lonely = await deployment.client.get(
+        f"/profiles/{alone}/not-feeling-well/offline", headers=bearer(ana["token"])
+    )
     assert [line["text"] for line in lonely.json()["unknown"]][2] == "Call your family now."
     assert [line["text"] for line in lonely.json()["red_flag"]] == [
         "You did right to say so.",
@@ -343,7 +375,9 @@ def _web_fallback(language: str) -> dict[str, str]:
     """The web client's copy of the offline cards (`web/src/strings/<language>.ts`, `day.fallback`)."""
     from pathlib import Path
 
-    text = (Path(__file__).resolve().parents[2] / "web" / "src" / "strings" / f"{language}.ts").read_text()
+    text = (
+        Path(__file__).resolve().parents[2] / "web" / "src" / "strings" / f"{language}.ts"
+    ).read_text()
     block = text[text.index("fallback: {") :]
     block = block[: block.index("}")]
     return dict(re.findall(r'(\w+): "((?:[^"\\]|\\.)*)"', block))
@@ -364,14 +398,23 @@ async def test_the_web_keeps_the_offline_cards_word_for_word(deployment: Deploym
         ).json()
         web = _web_fallback(language)
         assert [line["text"] for line in body["red_flag"]] == [
-            web["youDidRight"], web["notSent"], web["call995"], web["closing"]
+            web["youDidRight"],
+            web["notSent"],
+            web["call995"],
+            web["closing"],
         ], language
         assert [line["text"] for line in body["unknown"]] == [
-            web["youDidRight"], web["notSent"], web["callFamily"], web["bad995"], web["closing"]
+            web["youDidRight"],
+            web["notSent"],
+            web["callFamily"],
+            web["bad995"],
+            web["closing"],
         ], language
 
 
-async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(deployment: Deployment) -> None:
+async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(
+    deployment: Deployment,
+) -> None:
     """W7: a red flag said in the log escalates exactly as the button does, and the answer carries
     the button's urgent card — what he is shown next. "Quite a lot" is the table's middle row
     (E13-02) and carries the call-the-clinic card; an everyday symptom carries none."""
@@ -380,11 +423,17 @@ async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(deploy
     await _key(deployment, pa, profile_id, MEI, "chief")
     his = bearer(pa["token"])
     red = await deployment.client.post(
-        f"/profiles/{profile_id}/symptoms", json={"words": "chest pain since this morning"}, headers=his
+        f"/profiles/{profile_id}/symptoms",
+        json={"words": "chest pain since this morning"},
+        headers=his,
     )
     assert red.status_code == 201, red.text
     body = red.json()
-    assert body["flag_id"] and body["posture"] == "act" and mei["person_id"] in body["notified_person_ids"]
+    assert (
+        body["flag_id"]
+        and body["posture"] == "act"
+        and mei["person_id"] in body["notified_person_ids"]
+    )
     assert [line["text"] for line in body["card"]] == [
         "Mei knows now.",
         "Call the ambulance now on 995.",
