@@ -983,7 +983,7 @@ What you will see (the numbers, ids and days change each run):
      47.5–55.1  You see Dr Tan again on Thursday 15 October at 10 in the morning.
      47.5–55.1  Mei will book it.
      10.4–19.8  Dr Tan wrote down your blood pressure.
-✓ Mei asks "what did Dr Tan say about the water pill" before the card has a yes: "Your card from Dr Tan on Wednesday 16 September is waiting for your yes." — nothing Dr Tan said is cited yet
+✓ Mei asks "what did Dr Tan say about the water pill" before the card has a yes: "What Dr Tan said on Wednesday 16 September is waiting for your yes." — nothing Dr Tan said is cited yet
 ✓ Mei confirms the card on her yes, then asks again: "Dr Tan talked about this on Wednesday 16 September." — citing the recording 3c394484… from 19.8 to 28.9 seconds, the button "Hear what Dr Tan said"
 ✓ the clip (GET …/artifacts/{a}/clip?start=19.8&end=28.9): the recording's 47 bytes, audio/webm, X-Media-Fragment t=19.8,28.9 — the phone plays that stretch
 ✓ who hears it is what the room was told: Pa and the family he let in — Lim, his caregiver, hears the clip and the whole recording; Kit's viewer key and the clinic's key both hold the visits and are refused, OnlyTheFamilyHears (403); Siti's helper key does not reach the visits, OutOfScope (403); a stretch outside the recording is NotAClip (400)

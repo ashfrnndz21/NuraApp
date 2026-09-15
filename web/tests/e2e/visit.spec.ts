@@ -168,7 +168,7 @@ test("the visit screen: logistics from the record, the yes to a driver, consent,
       await request.post(`${API}/profiles/${pa.profileId}/ask`, { ...auth(pa.token), data: { question: "what did Dr Tan say about the water pill", mode: "voice" } })
     ).json()) as Answer;
   const before = await askIt();
-  expect(before.lines[0]?.text).toBe("Your card from Dr Tan on Monday 14 September is waiting for your yes.");
+  expect(before.lines[0]?.text).toBe("What Dr Tan said on Monday 14 September is waiting for your yes.");
   expect(before.lines.every((each) => each.clip === null)).toBe(true);
   const cards = (await (await request.get(`${API}/profiles/${pa.profileId}/appointments/${pa.appointmentId}/summaries`, auth(pa.token))).json()) as {
     summary_id: string;
