@@ -114,7 +114,10 @@ def test_a_date_with_its_year() -> None:
     assert spoken_line("Ujian anda dari Khamis 7 September 2023 ada di sini.", "ms") == (
         "Ujian anda dari Khamis tujuh September dua ribu dua puluh tiga ada di sini."
     )
-    assert spoken_line("2023年9月7日星期四，您验了血。", "zh") == "二零二三年九月七日星期四，您验了血。"
+    assert (
+        spoken_line("2023年9月7日星期四，您验了血。", "zh")
+        == "二零二三年九月七日星期四，您验了血。"
+    )
 
 
 def test_the_time_of_day_in_each_language() -> None:
@@ -155,7 +158,9 @@ def test_two_before_a_measure_word_is_liang_in_chinese() -> None:
 
 def test_the_emergency_number_is_said_the_way_it_is_dialled() -> None:
     assert spoken_line("Call 995 now.", "en") == "Call nine nine five now."
-    assert spoken_line("Telefon 999 sekarang.", "ms") == "Telefon sembilan sembilan sembilan sekarang."
+    assert (
+        spoken_line("Telefon 999 sekarang.", "ms") == "Telefon sembilan sembilan sembilan sekarang."
+    )
     assert spoken_line("请现在打995。", "zh") == "请现在打九九五。"
 
 

@@ -378,9 +378,7 @@ async def _facts(
                 session, Fact, context, scope, where=(Fact.id.in_(replaced), fact_is_under(scope))
             )
             olds = {old.id: old for old in found}
-        withheld = await withheld_provenance(
-            session, context=context, rows=[*rows, *olds.values()]
-        )
+        withheld = await withheld_provenance(session, context=context, rows=[*rows, *olds.values()])
         new_groups: dict[tuple[str, str], list[Fact]] = {}
         fixed_groups: dict[tuple[str, str], list[tuple[Fact, Fact]]] = {}
         for fact in sorted(rows, key=lambda each: as_utc(each.asserted_at)):

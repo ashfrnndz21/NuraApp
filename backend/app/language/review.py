@@ -89,7 +89,22 @@ PERSON_WORDS_TABLES = frozenset({"YOUR_DOCTOR", "THE_DOCTOR", "YOU", "SOMEONE"})
 """The catalogue tables of his words for a person who is not named ("your doctor", "You",
 "Someone"): what may fill a person's slot without being a name, and is never taken out."""
 NAME_JOINERS = frozenset(
-    {"and", "dan", "bin", "binti", "bt", "bte", "a/l", "a/p", "s/o", "d/o", "anak", "al", "van", "de"}
+    {
+        "and",
+        "dan",
+        "bin",
+        "binti",
+        "bt",
+        "bte",
+        "a/l",
+        "a/p",
+        "s/o",
+        "d/o",
+        "anak",
+        "al",
+        "van",
+        "de",
+    }
 )
 """Words inside a name that are not capitalised: "Ahmad bin Ali", "Siva a/l Kumar", "Mei and
 Kit"."""
@@ -479,7 +494,9 @@ def _proposal(item: ReviewItem, rewrite: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(before, list):
             if not isinstance(after, list) or len(after) != len(before):
                 raise NotARewrite(f"{name} is rewritten line for line: {len(before)} lines")
-            pairs = [(i, str(b), str(a)) for i, (b, a) in enumerate(zip(before, after, strict=True))]
+            pairs = [
+                (i, str(b), str(a)) for i, (b, a) in enumerate(zip(before, after, strict=True))
+            ]
         else:
             pairs = [(None, str(before or ""), str(after))]
         for index, old, new in pairs:

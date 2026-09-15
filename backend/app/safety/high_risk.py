@@ -32,9 +32,7 @@ from app.memory.episodic import artifact_kind_on_profile
 from app.memory.models import ArtifactKind
 
 HIGH_RISK_CLASSES: Mapping[str, frozenset[str]] = {
-    "anticoagulant": frozenset(
-        {"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban"}
-    ),
+    "anticoagulant": frozenset({"warfarin", "apixaban", "rivaroxaban", "dabigatran", "edoxaban"}),
     "insulin": frozenset(
         {
             "insulin",

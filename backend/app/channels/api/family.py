@@ -41,7 +41,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
-from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
+from app.channels.api.deps import ClosingContext, Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     DigestOut,
     DocumentIn,
@@ -97,6 +97,7 @@ from app.family.roster import (
 )
 from app.family.thread import digest, post_card, post_message, read_thread
 from app.family.trail import trail
+from app.keys.context import only_the_owner_while_closing
 from app.keys.grants import narrow_key
 from app.keys.scopes import Scope
 
@@ -106,19 +107,22 @@ router = APIRouter(tags=["family"])
 
 
 @router.put("/profiles/{profile_id}/keys/{key_id}")
-async def narrow(key_id: uuid.UUID, body: KeyNarrowIn, context: Context, session: Db) -> KeyOut:
+async def narrow(
+    key_id: uuid.UUID, body: KeyNarrowIn, request: Request, context: Context, session: Db
+) -> KeyOut:
     """Narrow a live key in place, on the caller's yes for exactly this change. Wider is
-    refused (`WouldWiden`, 403): that is a fresh consent and a new key."""
-    return KeyOut.of(
-        await narrow_key(
-            session,
-            context=context,
-            key_id=key_id,
-            scopes=body.scopes,
-            window=body.window,
-            confirmation_id=body.confirmation_id,
-        )
+    refused (`WouldWiden`, 403): that is a fresh consent and a new key. A key narrowed out of
+    the family's part is a person out of the family's WhatsApp group, now (#143)."""
+    narrowed = await narrow_key(
+        session,
+        context=context,
+        key_id=key_id,
+        scopes=body.scopes,
+        window=body.window,
+        confirmation_id=body.confirmation_id,
     )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return KeyOut.of(narrowed)
 
 
 @router.get("/family/roles")
@@ -171,7 +175,9 @@ async def thread(
 
 
 @router.post("/profiles/{profile_id}/thread", status_code=status.HTTP_201_CREATED)
-async def post(body: ThreadPostIn, request: Request, context: Context, session: Db) -> ThreadEntryOut:
+async def post(
+    body: ThreadPostIn, request: Request, context: Context, session: Db
+) -> ThreadEntryOut:
     if isinstance(body, ThreadCardIn):
         return ThreadEntryOut.of(
             await post_card(session, context=context, kind=body.card_kind, task_id=body.task_id)
@@ -315,13 +321,14 @@ async def task_done(task_id: uuid.UUID, body: TaskDoneIn, context: Context, sess
 
 @router.get("/profiles/{profile_id}/trail")
 async def trail_days(
-    context: Context,
+    context: ClosingContext,
     session: Db,
     language: str | None = Query(default=None, min_length=2, max_length=16),
     since: AwareDatetime | None = None,
     limit: int = Query(default=500, ge=1, le=2000),
 ) -> list[TrailDayOut]:
     """Who looked at what, in his words, by day, newest first. Owner and chief only."""
+    await only_the_owner_while_closing(session, context)  # his trail stays his (#143)
     days = await trail(session, context=context, language=language, since=since, limit=limit)
     return [TrailDayOut.of(day) for day in days]
 

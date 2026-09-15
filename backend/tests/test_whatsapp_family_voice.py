@@ -48,8 +48,22 @@ async def test_the_family_group_is_who_reads_the_thread_and_a_message_there_land
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     home = await family(sg, tmp_path)
-    await cut_key(sg, home.owner, phone=KIT, name="Kit", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS, Scope.READINGS})
-    await cut_key(sg, home.owner, phone=SITI, name="Siti", role=KeyRole.HELPER, scopes={Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND})
+    await cut_key(
+        sg,
+        home.owner,
+        phone=KIT,
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.RECORDS, Scope.READINGS},
+    )
+    await cut_key(
+        sg,
+        home.owner,
+        phone=SITI,
+        name="Siti",
+        role=KeyRole.HELPER,
+        scopes={Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND},
+    )
 
     group, members = await open_group(sg, context=home.chief, provider=home.whatsapp)
     gid = group.provider_group_id
@@ -63,7 +77,9 @@ async def test_the_family_group_is_who_reads_the_thread_and_a_message_there_land
     assert said.outcome == "family_thread" and said.thread_message_id is not None
     assert said.replies == ()
     page, _ = await read_thread(sg, context=home.owner)
-    assert [(e.text, e.author_person_id) for e in page] == [("I will take Pa on Thursday.", home.mei.id)]
+    assert [(e.text, e.author_person_id) for e in page] == [
+        ("I will take Pa on Thursday.", home.mei.id)
+    ]
     assert not list(await sg.scalars(select(Fact).where(Fact.profile_id == home.profile.id)))
 
     # Kit's key does not read the family, nor Siti's: not members, not taken in, not answered.
@@ -78,7 +94,9 @@ async def test_the_family_group_is_who_reads_the_thread_and_a_message_there_land
     assert flagged.outcome == "red_flag" and flagged.flag_id is not None
     # A stranger, or a group this number does not keep: nothing kept, nothing said.
     assert (await home.inbound(sg, "+6599990001", "hello", group_id=gid)).outcome == "ignored"
-    assert (await home.inbound(sg, MEI, "hello", group_id="group.fixture.other")).outcome == "ignored"
+    assert (
+        await home.inbound(sg, MEI, "hello", group_id="group.fixture.other")
+    ).outcome == "ignored"
 
     # The app's thread, mirrored out: said in the group, in her name.
     entry = await post_message(sg, context=home.chief, text="The doctor moved it to 3 pm.")
@@ -106,7 +124,14 @@ async def test_a_group_is_opened_only_by_him_or_his_chief_on_his_agreement_to_wh
     home = await family(sg, tmp_path, whatsapp_consent=False)
     with pytest.raises(NoConsent):
         await open_group(sg, context=home.owner, provider=home.whatsapp)
-    kit = await cut_key(sg, home.owner, phone=KIT, name="Kit", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS, Scope.FAMILY})
+    kit = await cut_key(
+        sg,
+        home.owner,
+        phone=KIT,
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.RECORDS, Scope.FAMILY},
+    )
     with pytest.raises(NotTheirsToOpen):
         await open_group(sg, context=kit, provider=home.whatsapp)
     assert home.whatsapp.groups == {}
@@ -118,7 +143,9 @@ async def test_pas_voice_note_is_heard_in_the_region_and_kept_as_his_own_note(
 ) -> None:
     home = await family(sg, tmp_path)
     kept = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
-    assert kept.outcome == "voice_note" and kept.note_id is not None and kept.artifact_id is not None
+    assert (
+        kept.outcome == "voice_note" and kept.note_id is not None and kept.artifact_id is not None
+    )
     assert [r.text for r in kept.replies] == ["Nura kept your voice note."]
 
     note = await sg.get(EventNote, kept.note_id)
@@ -128,12 +155,18 @@ async def test_pas_voice_note_is_heard_in_the_region_and_kept_as_his_own_note(
     assert voice is not None and voice.kind is ArtifactKind.VOICE
     assert voice.source_channel is SourceChannel.WHATSAPP and voice.storage_key.startswith("voice/")
     # His own voice: no recording consent asked or on file (ADR 0003), and never a fact.
-    purposes = {c.purpose for c in await sg.scalars(select(Consent).where(Consent.profile_id == home.profile.id))}
+    purposes = {
+        c.purpose
+        for c in await sg.scalars(select(Consent).where(Consent.profile_id == home.profile.id))
+    }
     assert ConsentPurpose.RECORDING not in purposes
     assert not list(await sg.scalars(select(Fact).where(Fact.profile_id == home.profile.id)))
 
     # Recall finds it: his, and his chief's, whose key opens his notes.
-    for context, line in ((home.owner, "You left a note on Thursday 3 September."), (home.chief, "Pa left a note on Thursday 3 September.")):
+    for context, line in (
+        (home.owner, "You left a note on Thursday 3 September."),
+        (home.chief, "Pa left a note on Thursday 3 September."),
+    ):
         answer = await recall(
             sg,
             context=context,
@@ -144,7 +177,14 @@ async def test_pas_voice_note_is_heard_in_the_region_and_kept_as_his_own_note(
         )
         found = [l for l in answer.lines if any(c.kind == "event_note" for c in l.cites)]
         assert [l.text for l in found] == [line]
-    kit = await cut_key(sg, home.owner, phone=KIT, name="Kit", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS, Scope.READINGS, Scope.ASK})
+    kit = await cut_key(
+        sg,
+        home.owner,
+        phone=KIT,
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.RECORDS, Scope.READINGS, Scope.ASK},
+    )
     theirs = await recall(
         sg,
         context=kit,
@@ -156,11 +196,15 @@ async def test_pas_voice_note_is_heard_in_the_region_and_kept_as_his_own_note(
     assert not [l for l in theirs.lines if any(c.kind == "event_note" for c in l.cites)]
 
 
-async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     home = await family(sg, tmp_path)
     kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert kept.outcome == "voice_note" and kept.note_id is not None
-    assert [r.text for r in kept.replies] == ["Nura kept your voice note.\nNura could not hear this note."]
+    assert [r.text for r in kept.replies] == [
+        "Nura kept your voice note.\nNura could not hear this note."
+    ]
     note = await sg.get(EventNote, kept.note_id)
     assert note is not None and note.transcript_key is None
 
@@ -183,7 +227,9 @@ async def test_without_his_agreement_to_whatsapp_a_red_word_in_his_voice_is_stil
     flagged = await home.inbound(sg, PA, media_id="pa-voice-fell", content_type=OGG)
     assert flagged.flag_id is not None
     # Raised on the word alone: nothing of the message is kept, his voice note least of all.
-    assert not list(await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id)))
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )
     plain = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
     assert plain.outcome == "refused" and plain.note_id is None
 
@@ -192,15 +238,21 @@ async def test_nobody_elses_voice_note_is_kept(sg: AsyncSession, tmp_path: Path)
     home = await family(sg, tmp_path)
     handled = await home.inbound(sg, MEI, media_id="pa-voice-market", content_type=OGG)
     assert handled.outcome == "other" and handled.note_id is None
-    assert not list(await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id)))
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )
 
 
-async def test_a_voice_note_is_heard_in_the_region_or_not_at_all(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_a_voice_note_is_heard_in_the_region_or_not_at_all(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     home = await family(sg, tmp_path)
     home.providers = replace(home.providers, transcriber=FixtureTranscriber(VOICE, Region.MY))
     with pytest.raises(OutOfRegion):
         await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
-    assert not list(await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id)))
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )
 
 
 def test_the_webhook_reads_a_voice_note_as_media_to_fetch_and_hear() -> None:
@@ -220,7 +272,11 @@ def test_the_webhook_reads_a_voice_note_as_media_to_fetch_and_hear() -> None:
                                         "id": "wamid.voice.1",
                                         "timestamp": "1757000000",
                                         "type": "audio",
-                                        "audio": {"id": "pa-voice-market", "mime_type": OGG, "voice": True},
+                                        "audio": {
+                                            "id": "pa-voice-market",
+                                            "mime_type": OGG,
+                                            "voice": True,
+                                        },
                                     }
                                 ]
                             }
@@ -263,7 +319,9 @@ async def test_a_flag_in_his_voice_note_stands_when_keeping_the_note_is_refused(
     assert not any("did not understand" in r.text for r in flagged.replies)
 
 
-async def test_the_group_follows_only_me_and_his_agreement(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_the_group_follows_only_me_and_his_agreement(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     from app.consent.models import ConsentChannel
     from app.consent.service import revoke_consent
     from tests.timeline_support import keep_only_me
@@ -284,14 +342,22 @@ async def test_the_group_follows_only_me_and_his_agreement(sg: AsyncSession, tmp
     assert home.whatsapp.groups[gid] == ()
 
 
-async def test_a_photo_in_the_group_is_never_one_of_his_papers(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_a_photo_in_the_group_is_never_one_of_his_papers(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     home = await family(sg, tmp_path)
     group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
     shared = await home.inbound(
-        sg, MEI, media_id="grandkids-photo", content_type="image/jpeg", group_id=group.provider_group_id
+        sg,
+        MEI,
+        media_id="grandkids-photo",
+        content_type="image/jpeg",
+        group_id=group.provider_group_id,
     )
     assert shared.outcome == "ignored" and shared.review_card_id is None
-    assert not list(await sg.scalars(select(Artifact).where(Artifact.profile_id == home.profile.id)))
+    assert not list(
+        await sg.scalars(select(Artifact).where(Artifact.profile_id == home.profile.id))
+    )
 
 
 async def test_his_ok_is_a_check_in_answer_only_while_a_check_in_is_open(
@@ -303,7 +369,11 @@ async def test_his_ok_is_a_check_in_answer_only_while_a_check_in_is_open(
     stray = await home.inbound(sg, PA, "OK")
     assert stray.outcome == "nothing_open" and stray.fact_id is None
     await run_feeling_check_in(
-        sg, settings=home.settings, providers=home.providers, number=home.number, profile_id=home.profile.id
+        sg,
+        settings=home.settings,
+        providers=home.providers,
+        number=home.number,
+        profile_id=home.profile.id,
     )
     answered = await home.inbound(sg, PA, "OK")
     assert answered.outcome == "check_in_answer" and answered.fact_id is not None
@@ -325,7 +395,9 @@ async def test_a_voice_note_that_could_not_be_fetched_is_told_to_him(
     ]
 
 
-async def test_his_private_voice_notes_moment_is_the_notes_own(sg: AsyncSession, tmp_path: Path) -> None:
+async def test_his_private_voice_notes_moment_is_the_notes_own(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
     from app.memory.models import Event
 
     home = await family(sg, tmp_path)

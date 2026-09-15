@@ -132,7 +132,9 @@ def bytes_of(label: str, directory: Path = PAPER) -> tuple[bytes, str]:
     return data, "application/pdf" if data.startswith(b"%PDF-") else "image/png"
 
 
-def _score(label: str, truth: Sequence[dict[str, Any]], read: Sequence[ExtractedField]) -> list[Scored]:
+def _score(
+    label: str, truth: Sequence[dict[str, Any]], read: Sequence[ExtractedField]
+) -> list[Scored]:
     waiting = list(read)
     scored: list[Scored] = []
     for want in truth:
@@ -161,7 +163,15 @@ def _score(label: str, truth: Sequence[dict[str, Any]], read: Sequence[Extracted
         )
     for extra in waiting:
         scored.append(
-            Scored(label, extra.subject, extra.attribute, Outcome.INVENTED, None, extra.value, extra.confidence)
+            Scored(
+                label,
+                extra.subject,
+                extra.attribute,
+                Outcome.INVENTED,
+                None,
+                extra.value,
+                extra.confidence,
+            )
         )
     return scored
 

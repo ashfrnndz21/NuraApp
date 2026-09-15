@@ -119,7 +119,9 @@ async def test_set_once_it_renders_to_him_as_one_line_per_moment_and_to_mei_as_a
 
     # The same day in his other languages, every line verified.
     for language in ("ms", "zh"):
-        lines = (await render_routine(sg, context=owner, registry=REGISTRY, language=language)).lines
+        lines = (
+            await render_routine(sg, context=owner, registry=REGISTRY, language=language)
+        ).lines
         assert len(lines) == 4
         assert not [f for line in lines for f in verify(line, language) if f.severity == "fail"]
 
@@ -138,7 +140,9 @@ async def test_the_helper_sees_the_day_with_the_prompts_withheld_and_cannot_set_
     assert all(row["readings"] is None for row in hers.table)
     assert [m["generic"] for m in hers.table[1]["medicines"]] == ["amlodipine"]
     # Rendered to her as his lines, too: the tablets, not the prompts.
-    lines = (await render_routine(sg, context=siti, registry=REGISTRY, persona=Persona.PATIENT)).lines
+    lines = (
+        await render_routine(sg, context=siti, registry=REGISTRY, persona=Persona.PATIENT)
+    ).lines
     assert not any("tekanan darah anda." in line for line in lines if line.startswith("Apabila"))
     with pytest.raises(NotTheirsToSet):
         await routine_draft_for(
@@ -159,7 +163,12 @@ async def test_setting_again_supersedes_and_the_yes_binds_to_the_day_as_shown(
     first = await _set(sg, owner)
     later = {**PA_DAY, "wake": "07:00", "breakfast": "08:00"}
     draft = await routine_draft_for(
-        sg, context=owner, anchors=later, reading_prompts=PROMPTS, walks=WALKS, morning_card_at="07:30"
+        sg,
+        context=owner,
+        anchors=later,
+        reading_prompts=PROMPTS,
+        walks=WALKS,
+        morning_card_at="07:30",
     )
     assert draft.supersedes_id == first.id
     yes = await confirm(sg, owner, draft)
@@ -208,13 +217,22 @@ async def test_prompts_for_readings_need_the_readings_scope(sg: AsyncSession) ->
     )
     with pytest.raises(OutOfScope):
         await routine_draft_for(
-            sg, context=kit, anchors=PA_DAY, reading_prompts=PROMPTS, walks=[], morning_card_at="07:00"
+            sg,
+            context=kit,
+            anchors=PA_DAY,
+            reading_prompts=PROMPTS,
+            walks=[],
+            morning_card_at="07:00",
         )
 
 
 async def test_a_third_medicine_at_one_moment_starts_a_second_line(sg: AsyncSession) -> None:
     owner = await pa(sg, language="en")
-    for generic, strength in (("amlodipine", "5 mg"), ("metformin", "500 mg"), ("atorvastatin", "20 mg")):
+    for generic, strength in (
+        ("amlodipine", "5 mg"),
+        ("metformin", "500 mg"),
+        ("atorvastatin", "20 mg"),
+    ):
         await add(sg, owner, label(generic, strength, "1 tab OD"))
     lines = (await render_routine(sg, context=owner, registry=REGISTRY)).lines
     breakfast = [line for line in lines if line.startswith("At breakfast")]
@@ -231,7 +249,10 @@ async def test_due_now_says_what_hangs_on_the_moment(sg: AsyncSession) -> None:
     assert at_breakfast is not None and at_breakfast.anchor == "breakfast"
     assert at_breakfast.medicine_line_ids == (added.line.id,)
     at_wake = await due_now(sg, context=owner, at=datetime(2026, 9, 2, 22, 35, tzinfo=UTC))
-    assert at_wake is not None and (at_wake.anchor, at_wake.readings) == ("wake", ("blood_pressure",))
+    assert at_wake is not None and (at_wake.anchor, at_wake.readings) == (
+        "wake",
+        ("blood_pressure",),
+    )
     assert await due_now(sg, context=owner, at=datetime(2026, 9, 3, 2, 0, tzinfo=UTC)) is None
     # An anchor is due until the next one comes, if that is sooner than an hour.
     day = check_day({**PA_DAY, "wake": "07:00", "breakfast": "07:20"}, [], [], "07:00")

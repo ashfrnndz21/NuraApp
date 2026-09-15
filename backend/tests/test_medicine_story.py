@@ -246,13 +246,20 @@ def test_each_voice_part_but_what_it_is_for_ends_on_the_boundary() -> None:
 
     registry = FixtureRegistry.load()
     told = medication_story(
-        generic="amlodipine", strength="5 mg", dose=Dose(1, "tablet", Frequency.OD),
-        prescriber="Dr Tan", change_kind=next(iter(ChangeKind)),
-        monograph=registry.monograph("amlodipine"), language="en",
+        generic="amlodipine",
+        strength="5 mg",
+        dose=Dose(1, "tablet", Frequency.OD),
+        prescriber="Dr Tan",
+        change_kind=next(iter(ChangeKind)),
+        monograph=registry.monograph("amlodipine"),
+        language="en",
     )
     for part in voice_parts(told):
         lines, boundary = story_part(told, part)
         if part == "purpose":
             assert boundary is None
         else:
-            assert boundary == "\n".join(told.boundary) and lines[-len(told.boundary):] == told.boundary
+            assert (
+                boundary == "\n".join(told.boundary)
+                and lines[-len(told.boundary) :] == told.boundary
+            )

@@ -55,6 +55,8 @@ def business_number_for(settings: Settings) -> BusinessNumber:
         # A dev run sends every template, pending ones included; a deployment only the ones
         # Meta has approved (`Template.approved`).
         templates=tuple(
-            name for name, template in TEMPLATES.items() if template.approved or settings.dev_code_sender
+            name
+            for name, template in TEMPLATES.items()
+            if template.approved or settings.dev_code_sender
         ),
     )
