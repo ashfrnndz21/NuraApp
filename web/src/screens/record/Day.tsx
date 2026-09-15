@@ -244,7 +244,7 @@ export function BuilderScreen(): JSX.Element {
           {ANCHORS.map((anchor) => (
             <div class="lines" key={anchor}>
               <p class="label">
-                {s.record.anchors[anchor]} {timeOf(day.anchors[anchor])}
+                {s.record.anchors[anchor]} {timeOf(day.anchors[anchor] ?? "")}
               </p>
               {day.reading_prompts
                 .filter(([, at]) => at === anchor)

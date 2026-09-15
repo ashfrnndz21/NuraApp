@@ -312,10 +312,14 @@ reads are in, so a screen reader waits for the lines and nothing moves under a f
 e2e overlap check waits for it too).
 
 **The reorder card (E04-05).** Its two buttons are on the medicines screen and on the feed's
-reorder card, labelled with the line's `reorder_actions`: *Ask the family to order.* posts
-`…/medicines/{line}/ask-to-order` (the tap is the yes, as Taken is) and shows the backend's
-lines; *I have more at home.* asks how many, mints the yes for that number (subject
-`count_correction`) and posts `…/medicines/{line}/more`.
+reorder card, labelled with the line's `reorder_actions`: *Ask the family to order.* first posts
+`…/medicines/{line}/ask-to-order/preview` and shows who Nura will ask and for what, with *Yes*
+and *Not now*; his yes mints a confirm for exactly that person and line (subject `order`) and
+posts `…/medicines/{line}/ask-to-order` with it, then shows the backend's lines. Nothing is put
+on anyone's list without that yes, and a second yes the same day answers with the task already
+there. *I have more at home.* asks how many — for a high-risk medicine, a photo of the box or
+the label first — mints the yes for that number and photo (subject `count_correction`) and
+posts `…/medicines/{line}/more`.
 
 **The machine's screen (E02-08).** `src/screens/Reading.tsx` keeps typed entry and adds *Take a
 photo of the machine*: `POST …/readings/photo` answers with a review card, shown on onboarding's
