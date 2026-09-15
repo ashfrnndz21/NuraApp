@@ -296,7 +296,7 @@ async def test_three_untapped_tablets_in_a_week_are_a_count_for_the_one_on_duty(
     assert counted.rule == "three_untapped_doses_in_seven_days"
     assert h.sent_to(h.mei)[-1].splitlines() == [
         "Pa did not say Taken 3 times this week.",
-        "This is a count, not a worry.",
+        "This is only a count.",
         "You can see which ones in the app.",
     ]
     # Once a week.

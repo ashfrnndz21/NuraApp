@@ -461,10 +461,10 @@ export const zh = {
     symptomsLead: "说说您哪里不舒服、有多难受、从什么时候开始。",
     // @patient phrase
     symptomsKeep: "保存",
-    // @patient
     // @patient phrase
     sendAgain: "再发送一次",
-    symptomsSaved: "Nura已经记下了。",
+    // @patient
+    symptomsSaved: "Nura记下了。",
     // @patient phrase
     nudgeOk: "好的",
     // @patient phrase
@@ -817,8 +817,8 @@ export const zh = {
       cadence1: "Nura 每天最多只问一件事。",
       // @patient
       cadence2: "点“以后”，Nura 过几天再问一次。",
-      // @patient phrase
-      missing: "还没有",
+      // @patient
+      missing: "Nura 还没有这个。",
       // @patient
       onDay: "Nura 会在 {date} 问这件事。",
       // @patient phrase
@@ -830,7 +830,7 @@ export const zh = {
       // @patient
       more: "之后还有 {count} 件。",
       // @patient
-      nothing: "现在什么都不缺。",
+      nothing: "Nura 现在需要的都有了。",
       // @patient phrase
       open: "打开 Nura",
     },
@@ -1173,6 +1173,7 @@ export const zh = {
     stopYes: "好，停止",
     // @patient phrase
     closeAccount: "关闭我的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",

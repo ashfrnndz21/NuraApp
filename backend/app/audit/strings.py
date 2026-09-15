@@ -36,9 +36,9 @@ name, the same in every language, so not a line of the catalogue."""
 
 # @patient
 SYSTEM_CHECKS: Mapping[str, str] = {
-    "en": "On {day}, Nura checked your papers {count} times to remind you on time.",
-    "ms": "Pada {day}, Nura menyemak surat-surat anda {count} kali untuk ingatkan anda tepat pada masanya.",
-    "zh": "{day}，Nura 查看了您的文件 {count} 次，好按时提醒您。",
+    "en": "On {day}, Nura checked your papers to remind you on time.",
+    "ms": "Pada {day}, Nura menyemak surat-surat anda untuk ingatkan anda tepat pada masanya.",
+    "zh": "{day}，Nura 查看了您的文件，好按时提醒您。",
 }
 """The day's reads by Nura itself, folded into one line (the delivery engine checks every few
 minutes; one line, not hundreds)."""
@@ -51,7 +51,7 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "key": "the keys to your papers",
         "consent": "what you agreed to",
         "consent_record": "the page of what you agreed to",
-        "stewardship": "who set up your papers",
+        "stewardship": "who set up Nura for you",
         "confirmation": "your yes",
         "state_snapshot": "how you are doing",
         "review_card": "the paper Nura read",
@@ -75,7 +75,7 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "key": "kunci surat-surat anda",
         "consent": "apa yang anda setuju",
         "consent_record": "halaman apa yang anda setuju",
-        "stewardship": "siapa yang membuka surat-surat anda",
+        "stewardship": "siapa yang menyediakan Nura untuk anda",
         "confirmation": "jawapan ya anda",
         "state_snapshot": "keadaan anda",
         "review_card": "kertas yang Nura baca",
@@ -99,7 +99,7 @@ TARGET_WORDS: Mapping[str, Mapping[str, str]] = {
         "key": "您文件的钥匙",
         "consent": "您同意过的事",
         "consent_record": "您同意过的事那一页",
-        "stewardship": "谁开了您的文件",
+        "stewardship": "谁帮您设置了 Nura",
         "confirmation": "您的同意",
         "state_snapshot": "您的近况",
         "review_card": "Nura 读过的纸",

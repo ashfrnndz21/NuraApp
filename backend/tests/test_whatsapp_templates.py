@@ -1,4 +1,4 @@
-"""E19-01, E11: the fifteen templates, their slots, which are approved, and the business number."""
+"""E19-01, E11: the sixteen templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.regions import Region
 from app.safety.plain_words import verify
 from app.settings import Settings
 
-FIFTEEN = (
+SIXTEEN = (
     "morning_card",
     "visit_reminder",
     "reorder",
@@ -34,12 +34,14 @@ FIFTEEN = (
     "red_flag_notice_self",
     "red_flag_notice_ambiguous",
     "nudge",
+    "red_flag_notice_v2",
 )
 """E19's six, then E11's nine (the ladder's two asks, the reorder to the family, the count,
 the papers waiting, a family message, the red-flag notice's two variants, and the day's smart
-nudge), in the order they are submitted for approval."""
+nudge), then the red-flag notice in the glossary's words (#160), in the order they are
+submitted for approval."""
 
-E19_SIX = FIFTEEN[:6]
+E19_SIX = SIXTEEN[:6]
 """Approved: the only templates a deployment's number carries until Meta approves E11's."""
 
 DOSES = {
@@ -85,8 +87,8 @@ FILL = {
 }
 
 
-def test_there_are_fifteen_and_each_has_every_language() -> None:
-    assert TEMPLATE_NAMES == FIFTEEN
+def test_there_are_sixteen_and_each_has_every_language() -> None:
+    assert TEMPLATE_NAMES == SIXTEEN
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)
         for language, body in template.text.items():
@@ -94,7 +96,7 @@ def test_there_are_fifteen_and_each_has_every_language() -> None:
                 assert f"{{{slot}}}" in body, (template.name, language, slot)
 
 
-@pytest.mark.parametrize("name", FIFTEEN)
+@pytest.mark.parametrize("name", SIXTEEN)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
     fill = {
@@ -135,7 +137,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     assert sandbox.region is Region.MY
     assert sandbox.provider_name == "fixture"
     assert sandbox.verification is VerificationState.SANDBOX
-    assert sandbox.templates == FIFTEEN
+    assert sandbox.templates == SIXTEEN
     assert sandbox.approves("morning_card") and not sandbox.approves("marketing_blast")
     named = business_number_for(
         Settings(
@@ -151,7 +153,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
 
 def test_e11s_templates_wait_for_meta_and_a_deployment_carries_only_the_approved() -> None:
     pending = [template.name for template in TEMPLATES.values() if not template.approved]
-    assert pending == list(FIFTEEN[6:])
+    assert pending == list(SIXTEEN[6:])
     live = business_number_for(
         Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False)
     )

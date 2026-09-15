@@ -382,8 +382,9 @@ def flag_message(run: Run, flag: Flag) -> Say:
     """The red-flag notice, in the reader's language: "This one we do not wait for. Mei said Pa
     is not well. Call Dr Tan today." When he raised it himself, "Pa is not feeling well."; when
     the person who raised it is on more than one family's list and has not said which, "It may
-    be about Pa." — each variant only where the number approves it, the approved notice
-    otherwise, so a flag never waits on Meta."""
+    be about Pa." — each variant only where the number approves it. Otherwise the notice in the
+    glossary's words (`red_flag_notice_v2`, #160) where the number approves it, and the approved
+    notice where it does not, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
         lang = run.language_for(person)
@@ -402,6 +403,8 @@ def flag_message(run: Run, flag: Flag) -> Say:
             and approves("red_flag_notice_self")
         ):
             kind, params = "red_flag_notice_self", {"name": name, "doctor": doctor}
+        elif approves("red_flag_notice_v2"):
+            kind = "red_flag_notice_v2"
         return await send(
             run.session,
             context=run.acting,

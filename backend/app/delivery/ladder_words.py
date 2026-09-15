@@ -16,15 +16,15 @@ LANGUAGES = ("en", "ms", "zh")
 ASKED: Mapping[str, tuple[str, str]] = {
     "en": (
         "Nura asked you to check on {name} on {day} at {time}.",
-        "Once you say you have it, Nura asks nobody else.",
+        "Once you tap I'm on it, Nura asks nobody else.",
     ),
     "ms": (
         "Nura minta anda tengok {name} pada {day}, {time}.",
-        "Bila anda kata anda uruskan, Nura tidak minta orang lain.",
+        "Bila anda tekan Saya uruskan, Nura tidak minta orang lain.",
     ),
     "zh": (
         "Nura 在{day}{time}请您去看看{name}。",
-        "您说您来处理以后，Nura 就不再问别人。",
+        "您按了“我来处理”以后，Nura 就不再问别人。",
     ),
 }
 """Beside the button: who was asked about whom, and what the button does."""

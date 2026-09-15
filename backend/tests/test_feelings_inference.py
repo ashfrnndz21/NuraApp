@@ -126,6 +126,8 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
     assert note.lines == [
         "Tell Dr Tan you feel dizzy since yesterday.",
         "This can come from your blood pressure tablet, new since Thursday 3 September.",
+        "Do not stop your blood pressure tablet yourself.",
+        "Tell Dr Tan how you feel.",
     ]
     assert note.then == "Nura will keep this for your visit to Dr Tan."
     assert note.boundary == boundary_line(Surface.FEELING_INFERENCE, "en", doctor="Dr Tan")
@@ -244,7 +246,7 @@ async def test_nothing_to_read_it_against_is_watched_and_asked_again(sg: AsyncSe
     _, owner = await _home(sg)
     note = (await _said(sg, owner, Feeling.LOW, Answer.TODAY)).note
     assert note is not None
-    assert note.lines == ["Tell your doctor you feel low today."]
+    assert note.lines == ["Tell your doctor you feel sad today."]
     assert note.then == "Nura will ask you again in a week."
     assert note.outcome is NoteOutcome.WATCH and note.reasons == []
 
