@@ -64,13 +64,22 @@ for (const look of LOOKS) {
 
     // The story, in his words, the boundary last; Hear reads the backend's own script.
     await page.getByTestId("record-back").click();
-    await page.getByTestId("medicine-line").getByTestId("open-story").click();
     const story = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines/${line!.line_id}/story?language=en`, auth(pa.token))).json()) as {
       purpose: string[];
       boundary: string[];
       lines: string[];
       voice_parts?: string[];
     };
+    // One part answers as the backend does when it has no note for it (a plain 404), from
+    // before the story opens: that part is said in the phone's voice.
+    const fallback = (story.voice_parts ?? []).find((part) => part !== "purpose");
+    if (fallback) {
+      await page.route(
+        (url) => url.pathname.endsWith("/story/voice") && url.searchParams.get("part") === fallback,
+        (route) => route.fulfill({ status: 404, body: "" }),
+      );
+    }
+    await page.getByTestId("medicine-line").getByTestId("open-story").click();
     const tile = page.getByTestId("story");
     await expect(tile.getByTestId("story-purpose")).toContainText(story.purpose[0]!);
     await expect(tile.locator(".lines").last()).toHaveAttribute("data-testid", "boundary");
@@ -89,15 +98,10 @@ for (const look of LOOKS) {
     await expect.poll(played).toHaveLength(1);
     expect((await played())[0]).toMatch(/^blob:/);
     expect(await spoken()).toEqual([]);
-    const fallback = (story.voice_parts ?? []).find((part) => part !== "purpose");
     if (fallback) {
-      await page.route(`**/story/voice?part=${fallback}*`, (route) => route.fulfill({ status: 404, body: "" }));
-      await page.reload();
-      await page.getByTestId("tab-record").click();
-      await page.getByTestId("record-medicines").click();
-      await page.getByTestId("medicine-line").getByTestId("open-story").click();
-      await page.getByTestId("story").getByTestId(`hear-${fallback}`).click();
+      await tile.getByTestId(`hear-${fallback}`).click();
       await expect.poll(async () => (await spoken()).join(" ")).toContain(story.boundary[0]!);
+      expect(await played()).toHaveLength(1);
     }
   });
 
