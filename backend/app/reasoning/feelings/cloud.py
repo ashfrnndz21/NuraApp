@@ -106,8 +106,8 @@ def weigh(situation: Situation) -> list[Weighed]:
     # within reach, as chest pain is — not only in the medicine's first fortnight (#157).
     for line in situation.lines:
         if line.drug_class in HYPOGLYCAEMIC_CLASSES:
-            ids = {"line_id": str(line.line_id), "generic": line.generic}
-            put(Feeling.SHAKY_SWEATY, Weight.BASE, Reason(ReasonCode.SUGAR_MEDICINE, None, ids))
+            sugar: dict[str, Any] = {"line_id": str(line.line_id), "generic": line.generic}
+            put(Feeling.SHAKY_SWEATY, Weight.BASE, Reason(ReasonCode.SUGAR_MEDICINE, None, sugar))
     for line in sorted(situation.lines, key=lambda one: one.started_at, reverse=True):
         if now - line.started_at > NEW_MEDICINE_WINDOW:
             continue

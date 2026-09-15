@@ -1238,6 +1238,20 @@ _ASKING = re.compile(
     + r"|^\W*(?:问一问|问|告诉).{0,10}?(?:医生|大夫|药剂师|dr\.?\s)",
     re.IGNORECASE,
 )
+_KEEP_TAKING = re.compile(
+    r"^\W*do not stop (?![^.?!]*\b(?:until|unless|before|after|for|when|if|and|or)\b)"
+    r"[^.?!\d]*\byourself\.?$"
+    r"|^\W*jangan berhenti (?:makan|ambil) "
+    r"(?![^.?!]*\b(?:sehingga|sampai|kecuali|sebelum|selepas|jika|kalau|dan|atau)\b)"
+    r"[^.?!\d]*\bsendiri\.?$"
+    r"|^\W*不要自己停[^。？！，\d]*。?$",
+    re.IGNORECASE,
+)
+"""The one line that puts a treatment verb beside a medicine to keep it as it is: "Do not stop
+{medicine} yourself." (#157, `app.reasoning.feelings.strings.DO_NOT_STOP`). It is the opposite
+of a change: he keeps taking it, and the doctor decides. Held to that shape: a line that adds
+anything ("Do not stop the water pill until Friday.") fails as before."""
+
 """The boundary (CLAUDE.md): no line the patient reads starts, stops or changes a medicine.
 A treatment-changing verb beside a medicine noun fails unless the line is a question put to
 the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask Dr Tan about…",
@@ -1253,7 +1267,7 @@ def _check_boundary(line: _Line) -> None:
     verb = verbs.search(line.text)
     if verb is None or nouns.search(line.text) is None:
         return
-    if _ASKING.search(line.text):
+    if _ASKING.search(line.text) or _KEEP_TAKING.search(line.text):
         return
     line.add(
         14,
@@ -1916,7 +1930,8 @@ plain-words checks every patient string against docs/plain-words.md. By the doc'
      IC are his); units he does not use (mg, mmHg, mmol/L); any id, phone number, IC number.
   13 The same words every time: "the log", "the readings", "discharge summary", "the clinic".
   14 The boundary: no line starts, stops or changes a medicine — a treatment verb beside a
-     medicine noun fails unless the line asks the doctor (en, ms and zh alike).
+     medicine noun fails unless the line asks the doctor, or says "Do not stop {medicine}
+     yourself." and nothing more (en, ms and zh alike).
 Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action.
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.
