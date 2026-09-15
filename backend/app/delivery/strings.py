@@ -587,11 +587,12 @@ def learning_lines(
 SEASON_NAMES: Mapping[str, Mapping[str, str]] = {
     # "Fasting" is his word for no food before a blood test (the glossary), so in English the
     # month is its name.
-    "en": {"mid_autumn": "the Mid-Autumn Festival", "fasting_month": "Ramadan"},
-    "ms": {"mid_autumn": "Pesta Kuih Bulan", "fasting_month": "bulan puasa"},
+    "en": {"mid_autumn": "The Mid-Autumn Festival", "fasting_month": "Ramadan"},
+    "ms": {"mid_autumn": "Pesta Kuih Bulan", "fasting_month": "Bulan puasa"},
     "zh": {"mid_autumn": "中秋节", "fasting_month": "斋戒月"},
 }
-"""His words for a season, to fill the seasonal card's why line (`app.delivery.feed.local`)."""
+"""His words for a season, to fill the seasonal card's why line (`app.delivery.feed.local`),
+which it begins, so each starts with a capital."""
 
 
 def season_name(code: str, language: str | None) -> str:
@@ -686,9 +687,11 @@ WATCH_LABELS: Mapping[str, Mapping[str, str]] = {
 
 
 def watch_label(kind: str, terms: list[str], language: str | None, area: str | None) -> str:
+    """What one watch is for, as a line that starts with a capital ("Dengue near Air Itam")."""
     code = language_for(language)
     key = "local_region" if kind == "local" and not area else kind
-    return _fill(WATCH_LABELS[code][key], {"term": term_words(terms, code), "area": area or ""})
+    line = _fill(WATCH_LABELS[code][key], {"term": term_words(terms, code), "area": area or ""})
+    return line[:1].upper() + line[1:]
 
 
 def feeling_words(word: str, language: str | None) -> str:

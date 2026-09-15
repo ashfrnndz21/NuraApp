@@ -56,7 +56,8 @@ HAZARDS: Mapping[str, Hazard] = {
     # blood thinner (MOH and WHO consumer guidance).
     "dengue": Hazard(
         "dengue",
-        frozenset({"diabetes", "high_blood_pressure", "heart", "kidneys"}),
+        # "blood_thinner" is what he told when the setup asked (E01), before any label.
+        frozenset({"diabetes", "high_blood_pressure", "heart", "kidneys", "blood_thinner"}),
         frozenset(
             {"warfarin", "aspirin", "clopidogrel", "ticagrelor", "apixaban", "rivaroxaban",
              "dabigatran"}
@@ -67,7 +68,7 @@ HAZARDS: Mapping[str, Hazard] = {
     # Heat advisories name long-term heart, kidney and sugar conditions, and water pills.
     "heat": Hazard(
         "heat",
-        frozenset({"heart", "kidneys", "diabetes"}),
+        frozenset({"heart", "kidneys", "diabetes", "water_pill"}),
         frozenset({"frusemide", "furosemide", "hydrochlorothiazide", "indapamide",
                    "spironolactone"}),
     ),
