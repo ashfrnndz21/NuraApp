@@ -73,20 +73,22 @@ interface ShellProps {
   extraClass?: string;
   /** False while the screen must not be left (a visit being recorded): no tab bar. */
   bar?: boolean;
+  /** False on a screen that is itself the question (Ask): no second ask bar over it. */
+  ask?: boolean;
 }
 
 /** Every screen with the tab bar (D1): the header, in the chief's density the ask bar — "Ask
  *  about Pa", on every one of her screens — then the page, which scrolls in its own region, and
  *  the tab bar under it in the flow. The bar reserves its own space: nothing scrolls under it
  *  and it never covers a line. */
-export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true }: ShellProps): JSX.Element {
+export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true, ask = true }: ShellProps): JSX.Element {
   const s = t();
   const d = density();
   const papers = profile.value;
   return (
     <main class={["shell", fills && "fill", extraClass].filter(Boolean).join(" ")} data-density={d} data-testid={testId} {...attrs}>
       <ShellHeader />
-      {d === "caregiver" && papers && (
+      {ask && d === "caregiver" && papers && (
         <div class="shell-ask">
           <AskField placeholder={fill(s.shell.askAbout, { name: papers.display_name })} />
         </div>

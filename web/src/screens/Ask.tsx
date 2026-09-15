@@ -56,7 +56,7 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
 
   const view = answer ? answerView(answer) : null;
   return (
-    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }}>
+    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
       <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
       {item && (
         <Tile paper>

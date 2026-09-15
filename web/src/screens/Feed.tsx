@@ -57,7 +57,9 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
     const playingKey = playback.playing.peek();
     if (playingKey) {
       const card = root.querySelector<HTMLElement>(`article.feed-card[data-key="${playingKey}"]`);
-      const gone = !card || card.offsetTop + card.offsetHeight <= root.scrollTop || card.offsetTop >= root.scrollTop + root.clientHeight;
+      // Offsets are whole pixels and the pager's height need not be (it flexes in the shell):
+      // a card within a pixel of the edge has left.
+      const gone = !card || card.offsetTop + card.offsetHeight <= root.scrollTop + 1 || card.offsetTop >= root.scrollTop + root.clientHeight - 1;
       if (gone) playback.leave(playingKey);
     }
     const list = store.entries.peek();
