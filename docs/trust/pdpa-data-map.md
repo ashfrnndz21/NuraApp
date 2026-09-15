@@ -947,7 +947,7 @@ A note on the rows that look operational and are not. `profile_id` is an identif
 | `whatsapp_proposal` | `event_id` | Uuid | yes | health |
 | `whatsapp_proposal` | `profile_id` | Uuid | no | identifier |
 <!-- data-map:end -->
-<!-- data-map:end -->
+
 
 ## 3. Lawful basis per purpose
 

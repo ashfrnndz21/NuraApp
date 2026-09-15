@@ -380,8 +380,8 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
 # @patient
 DOSE_CHOICE: Mapping[str, str] = {
     "en": "Send {number} for {medicine}, {strength} on the box, {anchor}.",
-    "ms": "Hantar {number} untuk {medicine}, {strength} pada kotak, {anchor}.",
-    "zh": "{anchor}的{medicine}，盒子上写着 {strength}，请发 {number}。",
+    "ms": "Hantar {number} untuk {medicine}, kotak bertulis {strength}, {anchor}.",
+    "zh": "请发 {number}：{medicine}，盒子上写着 {strength}，{anchor}吃。",
 }
 """One tablet in "which tablet?" (#162): the number that answers it, his words for the
 tablet, its strength as the number on his box (never "mg", a unit he does not use) and the
@@ -391,9 +391,18 @@ moment of his day it is for."""
 DOSE_CHOICE_BARE: Mapping[str, str] = {
     "en": "Send {number} for {medicine} {anchor}.",
     "ms": "Hantar {number} untuk {medicine} {anchor}.",
-    "zh": "{anchor}的{medicine}，请发 {number}。",
+    "zh": "请发 {number}：{medicine}，{anchor}吃。",
 }
 """The same line for a tablet whose strength has no number on it to say."""
+
+# @patient phrase
+BOXED: Mapping[str, str] = {
+    "en": "{medicine}, {strength} on the box,",
+    "ms": "{medicine}, kotak bertulis {strength},",
+    "zh": "{medicine}（盒子上写着 {strength}）",
+}
+"""A tablet named with the number on its box, where another on the list goes by the same
+words: the read-back then says which one was written down (#162)."""
 
 # @patient
 TOOK: Mapping[str, str] = {

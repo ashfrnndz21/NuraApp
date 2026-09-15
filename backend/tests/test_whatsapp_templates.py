@@ -57,10 +57,10 @@ CHOICES = {
         "Send 2 for the water pill, 40 on the box, with breakfast."
     ),
     "ms": (
-        "Hantar 1 untuk ubat tekanan darah anda, 5 pada kotak, bersama sarapan.\n"
-        "Hantar 2 untuk pil air, 40 pada kotak, bersama sarapan."
+        "Hantar 1 untuk ubat tekanan darah anda, kotak bertulis 5, bersama sarapan.\n"
+        "Hantar 2 untuk pil air, kotak bertulis 40, bersama sarapan."
     ),
-    "zh": "早餐时的您的血压药，盒子上写着 5，请发 1。\n早餐时的去水药，盒子上写着 40，请发 2。",
+    "zh": "请发 1：您的血压药，盒子上写着 5，早餐时吃。\n请发 2：去水药，盒子上写着 40，早餐时吃。",
 }
 TOOK_LINES = {
     "en": "You took your blood pressure tablet with breakfast.",

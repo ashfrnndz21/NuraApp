@@ -281,7 +281,7 @@ UNHEARD_NOTE_NOTICE = Template(
         "ms": (
             "{name} hantar nota suara kepada Nura.\n"
             "Nura tidak dapat mendengar nota ini.\n"
-            "Dengar dalam aplikasi, atau telefon {name} sekarang."
+            "Dengar nota itu dalam aplikasi, atau telefon {name} sekarang."
         ),
         "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n请在应用里听，或者现在就打电话给{name}。",
     },

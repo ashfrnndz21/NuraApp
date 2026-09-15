@@ -294,6 +294,39 @@ async def test_a_red_word_in_a_failed_then_retried_message_escalates_exactly_onc
     }
 
 
+async def test_a_reply_that_fails_after_the_ladder_ran_never_takes_the_flag_back(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    real = home.whatsapp.send_text
+
+    async def down_for_mei(to_e164: str, text: str) -> str:
+        if to_e164 == MEI:
+            raise ConnectionError("the provider went away, for the test")
+        return await real(to_e164, text)
+
+    monkeypatch.setattr(home.whatsapp, "send_text", down_for_mei)
+    message = DevInbound(from_e164=MEI, text="he fell in the bathroom").as_message(utcnow())
+
+    async def handle() -> object:
+        return await handle_inbound(
+            sg,
+            settings=home.settings,
+            providers=home.providers,
+            number=home.number,
+            classifier=RuleClassifier(),
+            message=message,
+        )
+
+    # The flag and its ladder stand: the message is handled, never sent again, never twice.
+    assert await receive(sg, message, handle) is Received.HANDLED
+    assert await receive(sg, message, handle) is Received.ALREADY
+    assert len((await sg.scalars(select(Flag))).all()) == 1
+    assert len((await sg.scalars(select(Ladder))).all()) == 1
+    assert len(_told(home, KIT)) == 1
+
+
 # --- the family's group, looked up through the keys door -----------------------------------------
 
 

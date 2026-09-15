@@ -203,8 +203,10 @@ async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(
     kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert kept.outcome == "voice_note" and kept.note_id is not None
     assert [r.text for r in kept.replies] == [
-        "Nura kept your voice note.\nNura could not hear this note.\n"
-        "If you feel unwell, call your family now."
+        (
+            "Nura kept your voice note.\nNura could not hear this note.\n"
+            "If you feel unwell, call your family now."
+        )
     ]
     note = await sg.get(EventNote, kept.note_id)
     assert note is not None and note.transcript_key is None

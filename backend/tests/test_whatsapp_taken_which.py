@@ -189,11 +189,78 @@ async def test_a_word_that_names_two_tablets_on_the_list_is_not_an_answer(
     unclear = await home.inbound(sg, PA, "blood pressure tablet")
     assert unclear.outcome == "which_tablet" and _said(unclear)[0] == NOT_SURE
     assert await _taps(sg) == []
-    # Its own name says exactly which.
+    # Its own name says exactly which, and the read-back tells it apart by its box.
     answered = await home.inbound(sg, PA, "losartan")
     assert answered.outcome == "taken"
+    assert _said(answered)[0][1] == (
+        "You took your blood pressure tablet, 50 on the box, with breakfast."
+    )
     [tap] = await _taps(sg)
     assert tap.line_id == losartan.line.id
+
+
+async def test_a_name_with_a_no_beside_it_or_two_names_is_not_an_answer(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    home, _, water = await _two_at_breakfast(sg, tmp_path, clock)
+    clock.set(BREAKFAST)
+    await home.inbound(sg, PA, "Taken")
+    for unclear in (
+        "the water pill, not the blood pressure tablet",
+        "amlodipine not frusemide",
+        "the water pill and the blood pressure tablet",
+        "belum pil air",
+    ):
+        answer = await home.inbound(sg, PA, unclear)
+        assert answer.outcome == "which_tablet" and _said(answer)[0] == NOT_SURE, unclear
+    assert await _taps(sg) == []
+    # "Took both", and a word typed in quotes as the question shows it, are answers.
+    answered = await home.inbound(sg, PA, "took both")
+    assert answered.outcome == "taken" and len(await _taps(sg)) == 2
+    assert water.id in {tap.line_id for tap in await _taps(sg)}
+
+
+async def test_a_question_whose_tablet_left_the_list_is_asked_again_and_nothing_written(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    import uuid
+
+    from app.audit.access import audited_write
+    from app.channels.whatsapp.models import DoseQuestion, WhatsAppThread
+    from app.keys.scopes import Scope as Part
+
+    home, _, water = await _two_at_breakfast(sg, tmp_path, clock)
+    clock.set(BREAKFAST)
+    await home.inbound(sg, PA, "Taken")
+    thread = (await sg.scalars(select(WhatsAppThread))).one()
+    clock.set(datetime(2026, 9, 13, 23, 41, tzinfo=UTC))
+    # As if the first tablet it read out had been stopped since: its line is not on today's list.
+    await audited_write(
+        sg,
+        DoseQuestion,
+        home.owner,
+        Part.MEDICINES,
+        thread_id=thread.id,
+        asked_at=datetime(2026, 9, 13, 23, 41, tzinfo=UTC),
+        expires_at=datetime(2026, 9, 14, 1, 41, tzinfo=UTC),
+        doses=[
+            {"line_id": str(uuid.uuid4()), "anchor": "breakfast"},
+            {"line_id": str(water.id), "anchor": "breakfast"},
+        ],
+    )
+    stale = await home.inbound(sg, PA, "2")
+    assert stale.outcome == "which_tablet"
+    assert _said(stale) == [NOT_SURE, ASKED]
+    assert await _taps(sg) == []
+
+
+def test_which_tablet_closes_at_the_end_of_his_day() -> None:
+    from app.channels.whatsapp.inbound import _question_closes
+
+    morning = datetime(2026, 9, 13, 23, 40, tzinfo=UTC)  # 07:40 his wall clock
+    assert _question_closes(morning, Region.SG) == datetime(2026, 9, 14, 1, 40, tzinfo=UTC)
+    late = datetime(2026, 9, 14, 15, 30, tzinfo=UTC)  # 23:30 his wall clock
+    assert _question_closes(late, Region.SG) == datetime(2026, 9, 14, 16, 0, tzinfo=UTC)
 
 
 async def test_the_helpers_sudah_beri_follows_the_same_rule(
@@ -213,8 +280,8 @@ async def test_the_helpers_sudah_beri_follows_the_same_rule(
     assert _said(asked) == [
         [
             "Ubat yang mana anda sudah beri kepada Pa?",
-            "Hantar 1 untuk ubat tekanan darah Pa, 5 pada kotak, bersama sarapan.",
-            "Hantar 2 untuk pil air, 40 pada kotak, bersama sarapan.",
+            "Hantar 1 untuk ubat tekanan darah Pa, kotak bertulis 5, bersama sarapan.",
+            "Hantar 2 untuk pil air, kotak bertulis 40, bersama sarapan.",
             "Kalau anda sudah beri semua, hantar semua.",
         ]
     ]
