@@ -91,12 +91,18 @@ async function readingsFor(request: Parameters<typeof seedFeed>[0], family: Fami
 }
 
 const NURA = new Set([new URL(API).host, new URL(BASE_URL).host]);
+/** The publisher's own site and the video platforms: none is asked for anything by the app. */
+const VIDEO_SITES = /(^|\.)(nhcs\.com\.sg|singhealth\.com\.sg|youtube\.com|youtu\.be|ytimg\.com|googlevideo\.com|vimeo\.com|facebook\.com|tiktok\.com)$/;
 
 test("a clip: its still from Nura's own server, Play on a tap only, the line being said under it, the whole video on the publisher's site", async ({ page, request }) => {
   await captureSpeech(page);
   const plays = await recordPlays(page);
   const hosts = new Set<string>();
-  page.on("request", (asked) => hosts.add(new URL(asked.url()).host));
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    asked.push(request.url());
+    hosts.add(new URL(request.url()).host);
+  });
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await openFeed(page);
@@ -128,8 +134,13 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   const lines = await card.getByTestId("lines").locator("p").allTextContents();
   expect(lines).toContain(await caption.textContent());
   await shotAs(page, "cp28-clip-playing");
-  // The still and the captions came from Nura; no video site was asked for anything.
-  expect([...hosts].filter((host) => !NURA.has(host))).toEqual([]);
+  // The still and the captions came from Nura's own server; no video site — the publisher's
+  // or any platform's — was asked for anything. (The app's own typeface comes from its font
+  // host, as on every screen; blob: pictures have no host.)
+  const clipAsks = asked.filter((url) => /\/feed\/[^/]+\/clip\/(poster|captions)$/.test(new URL(url).pathname));
+  expect(clipAsks.some((url) => url.endsWith("/clip/poster")) && clipAsks.some((url) => url.endsWith("/clip/captions"))).toBe(true);
+  expect(clipAsks.filter((url) => !NURA.has(new URL(url).host))).toEqual([]);
+  expect([...hosts].filter((host) => VIDEO_SITES.test(host))).toEqual([]);
   // What he did goes back on the next connection: opened, and a play, and nothing measures
   // how long a card was on his screen.
   const flushed = page.waitForRequest((asked) => asked.method() === "POST" && asked.url().endsWith("/feed/events"));

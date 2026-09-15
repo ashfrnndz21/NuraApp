@@ -86,7 +86,7 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
       <Tile paper>
         <Field label={s.feed.askLabel} name="question" value={question} onInput={setQuestion} maxLength={300} />
         {filters && (
-          <div class="row" role="group" aria-label={s.feed.filterLabel} data-testid="ask-filters">
+          <div class="choices two" role="group" aria-label={s.feed.filterLabel} data-testid="ask-filters">
             {WHERES.map((each) => (
               <Pill key={each} chosen={where === each} onClick={() => setWhere(each)} testId={`filter-${each}`}>
                 {words[each]}
