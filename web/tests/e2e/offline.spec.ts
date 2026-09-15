@@ -269,3 +269,29 @@ test("the not-feeling-well cards on the phone: served with no network after a re
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   expect((await keptKeys(page)).filter((key) => /^(today|feed|queue|emergency|nfw)\./.test(key))).toEqual([]);
 });
+
+/** An owner closing his account (#151): from then on nobody opens his papers, him included, so
+ *  nothing of them stays on the phone either — the Today page, the feed, the emergency card
+ *  (which outlives midnight, ADR 0010), the not-feeling-well cards and any held tap go the
+ *  moment he says yes, and the doors say why; opened again, the app still keeps none of them. */
+test("an account closing: nothing of its papers stays on the phone, and the doors say why", async ({ page, request }) => {
+  const pa = await seedOwner(request);
+  const kept = async () => (await keptKeys(page)).filter((key) => key.endsWith(pa.profileId));
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await expect(page.getByTestId("proud")).toBeVisible();
+  await expect.poll(async () => (await kept()).some((key) => key.startsWith("emergency."))).toBe(true);
+  await expect.poll(async () => (await kept()).some((key) => key.startsWith("nfw."))).toBe(true);
+  expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);
+
+  await page.getByTestId("tab-family").click();
+  await page.getByTestId("open-consents").click();
+  await page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" }).getByTestId("close-account").click();
+  await page.getByTestId("close-yes").click();
+  await expect(page.getByTestId("notice")).toContainText("Nura has stopped keeping these papers.");
+  await expect.poll(kept).toEqual([]);
+  expect((await request.get(`${API}/profiles/${pa.profileId}`, auth(pa.token))).status()).toBe(403);
+
+  await page.reload();
+  await expect(page.getByTestId("notice")).toContainText("Nura has stopped keeping these papers.");
+  expect(await kept()).toEqual([]);
+});

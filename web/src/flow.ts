@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import { Refused } from "./api/client";
 import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
@@ -83,7 +84,14 @@ export async function afterSignIn(): Promise<void> {
   const opening = takeOpen();
   const bearer = token.value;
   if (!bearer) return go({ name: "signin" });
-  me.value = await nura.me(bearer);
+  try {
+    me.value = await nura.me(bearer);
+  } catch (failure) {
+    // His own account is closing (#151): the backend opens nothing of his papers now, him
+    // included, and `me` reads through them — so it says no. The doors still answer and name
+    // the closing, and below nothing of those papers stays on the phone.
+    if (!(failure instanceof Refused && failure.refusal === "AccountClosing")) throw failure;
+  }
   const doors = await nura.doors(bearer, language.value);
   const remembered = profile.value;
   const known = [doors.own, ...doors.invited, ...doors.stewarding].filter((each): each is ProfileOut => each !== null);
