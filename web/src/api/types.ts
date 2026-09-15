@@ -214,7 +214,8 @@ export interface ClipOut {
 }
 
 export interface AnswerOut {
-  question_artifact_id: string;
+  /** The question as it was kept; null when a red word in it took the red-flag path instead. */
+  question_artifact_id: string | null;
   mode: AskMode;
   language: string;
   answered: boolean;

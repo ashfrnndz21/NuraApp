@@ -236,6 +236,19 @@ export function homeHeroWords(page: Pick<TodayModel, "stale" | "line">, on: { fl
   return page.line ?? null;
 }
 
+/** What her Home's hero shows. While a red-flag card is on the page, nothing of the State: no
+ *  word ("Steady" in large type over a flag reassures), no line, no chips — the flag goes first
+ *  and the State does not count it. On the phone's kept page, the word with the stale line and no
+ *  chips (they read as now). Otherwise the State's word, its line, and its chips. */
+export function homeHero(
+  page: Pick<TodayModel, "stale" | "line" | "word">,
+  on: { flagged: boolean; kept: boolean },
+  s: Strings,
+): { word: string | null; line: string | null; drivers: boolean } {
+  if (on.flagged) return { word: null, line: null, drivers: false };
+  return { word: page.word ?? null, line: homeHeroWords(page, on, s), drivers: !on.kept };
+}
+
 /** The day of the week in full, in his language: "Thursday", never "Thu" (plain words, rule 5). */
 export function weekdayOf(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);

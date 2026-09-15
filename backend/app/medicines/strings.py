@@ -588,10 +588,10 @@ NOW_WORDS: Mapping[str, Mapping[str, tuple[str, str]]] = {
         "bed": ("ubat sebelum tidur", "ubat sebelum tidur"),
     },
     "zh": {
-        "breakfast": ("种药，早餐时吃", "种药，早餐时吃"),
-        "lunch": ("种药，午餐时吃", "种药，午餐时吃"),
-        "dinner": ("种药，晚餐时吃", "种药，晚餐时吃"),
-        "bed": ("种药，睡前吃", "种药，睡前吃"),
+        "breakfast": ("早餐时要吃的药", "早餐时要吃的药"),
+        "lunch": ("午餐时要吃的药", "午餐时要吃的药"),
+        "dinner": ("晚餐时要吃的药", "晚餐时要吃的药"),
+        "bed": ("睡前要吃的药", "睡前要吃的药"),
     },
 }
 """The words under the one big number on his Today (the hero): what the number counts, for

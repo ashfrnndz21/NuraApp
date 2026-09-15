@@ -40,7 +40,7 @@ export const ms = {
     // @patient phrase
     voice: "Cakap",
     // @patient
-    voiceSaid1: "Tekan mikrofon pada papan kekunci.",
+    voiceSaid1: "Tekan gambar mikrofon kecil di tepi huruf.",
     // @patient
     voiceSaid2: "Kemudian sebut soalan anda.",
     // @patient phrase
@@ -58,7 +58,7 @@ export const ms = {
     // @patient headline
     missing: "Belum ada dalam surat",
     // @patient
-    missingSub: "Nura sudah masukkan perkara ini dalam soalan untuk lawatan.",
+    missingSub: "Nura sudah tambah soalan ini untuk lawatan pada {date}.",
     // @patient phrase
     bpLabel: "Tekanan darah, nombor atasnya",
     // @patient headline
@@ -68,7 +68,7 @@ export const ms = {
     // @patient phrase
     showFewer: "Tunjuk kurang",
     // @patient
-    bpLast: "Nombor atas bacaan tekanan darah yang terakhir ialah {number}.",
+    bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
   },
   places: {
     // @patient headline
@@ -76,11 +76,11 @@ export const ms = {
     // @patient headline
     visitsOther: "Lawatan {name}",
     // @patient
-    visitsNoneOther: "Nura tiada lawatan yang ditulis untuk {name}.",
+    visitsNoneOther: "Nura belum catat apa-apa lawatan untuk {name}.",
     // @patient headline
     planTitle: "Rancangan untuk lawatan seterusnya",
     // @patient
-    planLead: "Semua untuk lawatan seterusnya ada di sini.",
+    planLead: "Semua yang perlu untuk lawatan seterusnya ada di sini.",
   },
   signIn: {
     // @patient headline

@@ -51,7 +51,7 @@ def test_with_nothing_open_the_hero_counts_the_next_moment_still_to_come() -> No
     assert found is not None
     assert (found.count, found.anchor, found.words) == (1, "dinner", "medicine with dinner")
     assert due_now(slots, "ms") == found.__class__(1, "dinner", "ubat bersama makan malam")
-    assert due_now(slots, "zh") == found.__class__(1, "dinner", "种药，晚餐时吃")
+    assert due_now(slots, "zh") == found.__class__(1, "dinner", "晚餐时要吃的药")
 
 
 def test_with_everything_taken_or_passed_there_is_no_number() -> None:

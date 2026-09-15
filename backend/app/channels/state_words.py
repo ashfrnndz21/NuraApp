@@ -22,7 +22,7 @@ LANGUAGES = ("en", "ms", "zh")
 # @patient headline
 POSTURE_WORD: Mapping[str, Mapping[str, str]] = {
     "en": {"stable": "Steady", "watch": "One thing to watch", "act": "One thing today"},
-    "ms": {"stable": "Tenang", "watch": "Satu perkara untuk diperhatikan", "act": "Satu perkara hari ini"},
+    "ms": {"stable": "Stabil", "watch": "Satu perkara dipantau", "act": "Satu perkara hari ini"},
     "zh": {"stable": "平稳", "watch": "留意一件事", "act": "今天有一件事"},
 }
 """The posture as one word, large on the wash."""
@@ -106,7 +106,7 @@ PHASE_CHIP: Mapping[str, Mapping[str, str]] = {
     },
     "ms": {
         "before_visit": "Lawatan minggu ini",
-        "in_visit": "Sedang di lawatan",
+        "in_visit": "Sedang dalam lawatan",
         "after_visit": "Baru balik dari lawatan",
         "after_discharge": "Baru keluar hospital",
     },

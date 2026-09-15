@@ -239,25 +239,26 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     they cite, each naming its ids; "Nura does not have that written down" when nothing
     answers; the boundary last. The question is kept as a MESSAGE artefact, by reference."""
     outside = providers_of(request)
-    # A red flag in the question takes the red-flag path first, exactly as the same word tapped
-    # on the feeling cloud: the moment written, the flag raised and kept, the family told, before
-    # anything is looked up (red flags escalate before ranking; .claude/rules/safety.md). Every
-    # role holds the emergency scope, so every key starts it; nothing here answers in its place.
-    red: FeelingOut | None = None
+    # A red flag in the question takes the red-flag path, exactly as the same word tapped on the
+    # feeling cloud: the moment written in his own typed words, the flag raised and kept, the
+    # family told, the urgent card said back (red flags escalate first; .claude/rules/safety.md).
+    # Nothing is looked up after it, so nothing after it can take the card away: not a key that
+    # holds the emergency card but not ask (a helper's), not a lookup that fails. A key without
+    # the emergency card is refused as its tap on the button is.
     heard = detect(body.question)
     if heard is not None:
-        red = FeelingOut.of(
-            await record_tap(
-                session,
-                context=context,
-                word=heard,
-                registry=outside.drug_registry,
-                store=outside.object_store,
-                transcriber=outside.transcriber,
-                via=via_of(request),
-                language=body.language,
-            )
+        tapped = await record_tap(
+            session,
+            context=context,
+            word=heard,
+            registry=outside.drug_registry,
+            store=outside.object_store,
+            transcriber=outside.transcriber,
+            via=via_of(request),
+            language=body.language,
+            said=body.question,
         )
+        return AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
     answer = await recall(
         session,
         context=context,
@@ -268,4 +269,4 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
         registry=outside.drug_registry,
         language=body.language,
     )
-    return AnswerOut.of(answer, red_flag=red)
+    return AnswerOut.of(answer)

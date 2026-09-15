@@ -15,6 +15,7 @@ from tests.conftest import Deployment
 PA = "+6598760431"
 MEI = "+6598760432"
 KOW = "+6598760433"
+SITI = "+6598760434"
 
 
 @pytest.mark.parametrize(
@@ -46,6 +47,8 @@ async def test_a_red_word_in_a_question_takes_the_red_flag_path_first(
     assert flagged["opens"] == "not_feeling_well" and flagged["question"] is None
     assert flagged["language"] == language
     assert flagged["lines"][-1] == URGENT_CLOSING[language]
+    # Nothing looked up after it: the card is the whole answer.
+    assert red.json()["question_artifact_id"] is None and red.json()["lines"] == []
 
     # The flag is there to be read back, as a tap on the cloud leaves it: a second tap of the
     # same word is its own moment, and the question's flag is not undone by the answer after it.
@@ -119,3 +122,30 @@ async def test_a_family_red_word_about_him_takes_the_same_path_or_is_refused_as_
     flagged = asked.json()["red_flag"]
     assert flagged is not None and flagged["red_flag"] is True and flagged["word"] == "fall"
     assert flagged["flag_id"] and flagged["lines"][-1] == URGENT_CLOSING["en"]
+
+
+async def test_a_helper_holding_the_card_but_not_ask_still_gets_the_urgent_card(
+    deployment: Deployment,
+) -> None:
+    """A helper's key holds his emergency card and not ask. Her red word raises his flag and
+    she is shown what to do now — never a refusal for the lookup that does not follow."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    siti = await register_by_phone(deployment, SITI, "Siti")
+    scopes = ["medicines", "emergency"]
+    await let_in(deployment, pa, profile_id, SITI, scopes, "helper", holder_display_name="Siti")
+    granted = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": SITI, "role": "helper", "scopes": scopes},
+        headers=bearer(pa["token"]),
+    )
+    assert granted.status_code == 201, granted.text
+    asked = await deployment.client.post(
+        f"/profiles/{profile_id}/ask",
+        json={"question": "Pa fell in the bathroom"},
+        headers=bearer(siti["token"]),
+    )
+    assert asked.status_code == 200, asked.text
+    flagged = asked.json()["red_flag"]
+    assert flagged is not None and flagged["red_flag"] is True and flagged["flag_id"]
+    assert flagged["lines"][-1] == URGENT_CLOSING["en"]

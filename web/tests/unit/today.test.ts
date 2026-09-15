@@ -8,6 +8,7 @@ import {
   feedCards,
   feedLines,
   greeting,
+  homeHero,
   homeHeroWords,
   lineTitle,
   medicinesCard,
@@ -285,5 +286,19 @@ describe("her Home's hero line", () => {
   it("reassures nobody while a red-flag card is on the page: the flag goes first", () => {
     expect(homeHeroWords({ stale: false, line }, { flagged: true, kept: false }, en)).toBeNull();
     expect(homeHeroWords({ stale: true, line }, { flagged: true, kept: true }, en)).toBeNull();
+  });
+});
+
+describe("her Home's hero", () => {
+  const page = { stale: false, line: "Nothing needs you today.", word: "Steady" };
+  it("shows the State's word, its line and its chips when the page is current and nothing is flagged", () => {
+    expect(homeHero(page, { flagged: false, kept: false }, en)).toEqual({ word: "Steady", line: page.line, drivers: true });
+  });
+  it("shows nothing of the State over a red-flag card: no word, no line, no chips", () => {
+    expect(homeHero(page, { flagged: true, kept: false }, en)).toEqual({ word: null, line: null, drivers: false });
+    expect(homeHero(page, { flagged: true, kept: true }, en)).toEqual({ word: null, line: null, drivers: false });
+  });
+  it("on the phone's kept page says it is from earlier, and shows no chips", () => {
+    expect(homeHero(page, { flagged: false, kept: true }, en)).toEqual({ word: "Steady", line: en.today.staleState, drivers: false });
   });
 });

@@ -14,7 +14,7 @@ import {
   dueCards,
   feedLines,
   greeting,
-  homeHeroWords,
+  homeHero,
   nearestToRunOut,
   readingLead,
   stateLines,
@@ -111,15 +111,16 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
   const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt } = v;
   const drivers = page?.drivers ?? [];
+  const hero = page ? homeHero(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s) : null;
   const locale = LOCALE[language.value];
   const supply = page ? <SupplyTile lines={page.lines} /> : null;
   return (
     <Shell tab="today" testId="home-screen">
       {page && <span data-testid="today-ready" hidden />}
-      {page && page.stateId !== null && page.word && (
-        <Hero label={s.home.mostLikely} figure={page.word} words={homeHeroWords(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s)} testId="home-hero">
+      {page && page.stateId !== null && page.word && hero && (
+        <Hero label={hero.word ? s.home.mostLikely : undefined} figure={hero.word} words={hero.line} testId="home-hero">
           <Readings />
-          {drivers.length > 0 && (
+          {hero.drivers && drivers.length > 0 && (
             <ChipRow testId="drivers" label={s.home.mostLikely}>
               {drivers.map((driver) => (
                 <Chip key={driver.key} tone={toneOf(driver.tone)}>
@@ -128,16 +129,21 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               ))}
             </ChipRow>
           )}
-          {/* Where the State came from and when, and the boundary it is shown under. */}
-          <p class="hero-sub" data-testid="home-from">
-            {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
-          </p>
-          {(page.boundary ?? []).length > 0 && (
-            <div class="hero-boundary" data-testid="home-boundary">
-              {(page.boundary ?? []).map((line, at) => (
-                <p key={at}>{line}</p>
-              ))}
-            </div>
+          {/* Where the State came from and when, and the boundary it is shown under: with the
+              State's word, never over a flag. */}
+          {hero.word && (
+            <>
+              <p class="hero-sub" data-testid="home-from">
+                {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
+              </p>
+              {(page.boundary ?? []).length > 0 && (
+                <div class="hero-boundary" data-testid="home-boundary">
+                  {(page.boundary ?? []).map((line, at) => (
+                    <p key={at}>{line}</p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </Hero>
       )}
@@ -518,5 +524,6 @@ function GapsTile({ visit }: { visit: AppointmentOut }): JSX.Element | null {
     );
   }, [bearer, papers?.profile_id, visit.appointment_id, language.value]);
   if (gaps.length === 0) return null;
-  return <PanelList title={s.home.missing} rows={gaps.map((gap) => ({ key: gap.question_id, text: gap.text }))} note={s.home.missingSub} testId="gaps" />;
+  const day = dateLine(new Date(visit.scheduled_at), LOCALE[language.value]);
+  return <PanelList title={s.home.missing} rows={gaps.map((gap) => ({ key: gap.question_id, text: gap.text }))} note={fill(s.home.missingSub, { date: day })} testId="gaps" />;
 }

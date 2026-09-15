@@ -40,7 +40,7 @@ export const en = {
     // @patient phrase
     voice: "Speak",
     // @patient
-    voiceSaid1: "Press the microphone on your keyboard.",
+    voiceSaid1: "Press the small microphone beside the letters.",
     // @patient
     voiceSaid2: "Then say your question.",
     // @patient phrase
@@ -58,7 +58,7 @@ export const en = {
     // @patient headline
     missing: "Not in the papers yet",
     // @patient
-    missingSub: "Nura added these to the questions for the visit.",
+    missingSub: "Nura added these to the questions for the visit on {date}.",
     // @patient phrase
     bpLabel: "Blood pressure, the top number",
     // @patient headline

@@ -40,7 +40,7 @@ export const zh = {
     // @patient phrase
     voice: "说话",
     // @patient
-    voiceSaid1: "请点键盘上的麦克风。",
+    voiceSaid1: "请按字母旁边的小麦克风。",
     // @patient
     voiceSaid2: "然后说出您的问题。",
     // @patient phrase
@@ -56,13 +56,13 @@ export const zh = {
     // @patient headline
     buyMore: "再买一些",
     // @patient headline
-    missing: "文件里还没有的",
+    missing: "文件里还没有",
     // @patient
-    missingSub: "Nura 已把这些加进看诊要问的问题里。",
+    missingSub: "Nura 已经把这些放进 {date} 看诊要问的问题里。",
     // @patient phrase
     bpLabel: "血压，上面的数字",
     // @patient headline
-    fromName: "来自{name}",
+    fromName: "{name}的留言",
     // @patient phrase
     showAll: "看全部 {count} 项",
     // @patient phrase
@@ -80,7 +80,7 @@ export const zh = {
     // @patient headline
     planTitle: "下次看诊的计划",
     // @patient
-    planLead: "下次看诊要的都在这里。",
+    planLead: "下次看诊需要的东西都在这里。",
   },
   signIn: {
     // @patient headline
