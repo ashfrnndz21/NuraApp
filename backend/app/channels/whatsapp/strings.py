@@ -117,10 +117,25 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Nura sudah simpan nota suara anda.",),
         "zh": ("Nura 保存了您的语音留言。",),
     },
+    # His voice note kept, but no words heard in it (#158): a red word in it could not be read,
+    # so, like its twin `voice_note_not_fetched`, the reply says what to do if he feels unwell,
+    # and his chief is told to listen (`inbound._tell_family_unheard`).
     "voice_note_unheard": {
-        "en": ("Nura kept your voice note.", "Nura could not hear this note."),
-        "ms": ("Nura sudah simpan nota suara anda.", "Nura tidak dapat mendengar nota ini."),
-        "zh": ("Nura 保存了您的语音留言。", "Nura 听不清这段录音。"),
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
     },
     "voice_note_not_fetched": {
         "en": ("Nura could not hear your voice note.", "If you feel unwell, call your family now."),
@@ -130,10 +145,13 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("Nura 听不到您的语音留言。", "如果您不舒服，现在就打电话给家人。"),
     },
+    # Said in the family's WhatsApp group, which he reads, above a message written in the app
+    # (#158): his words for where it was written, the same in every language, and a subject
+    # always — `mirror_to_group` fills an unnamed poster as Someone.
     "family_said": {
-        "en": ("{who} wrote in the family thread:",),
-        "ms": ("{who} menulis dalam perbualan keluarga:",),
-        "zh": ("{who}在家人群里写道：",),
+        "en": ("{who} wrote this in the Nura app:",),
+        "ms": ("{who} menulis ini dalam aplikasi Nura:",),
+        "zh": ("{who}在 Nura 应用里写道：",),
     },
     "propose_blood_pressure": {
         "en": (
