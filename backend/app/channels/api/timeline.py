@@ -49,7 +49,6 @@ from app.channels.api.timeline_schemas import (
     StatusIn,
     TimelineOut,
 )
-from app.errors import Refusal
 from app.memory.attach import attach_to_appointment, attach_to_episode
 from app.memory.changes import last_look, mark_looked, what_changed
 from app.memory.providers import directory, provider_history, write_chief_note
@@ -241,27 +240,24 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     answers; the boundary last. The question is kept as a MESSAGE artefact, by reference."""
     outside = providers_of(request)
     # A red flag in the question takes the red-flag path first, exactly as the same word tapped
-    # on the feeling cloud: the moment written, the flag raised, the family told, before anything
-    # is looked up (red flags escalate before ranking; .claude/rules/safety.md). A key that
-    # cannot start that path (no emergency scope) is answered as before.
+    # on the feeling cloud: the moment written, the flag raised and kept, the family told, before
+    # anything is looked up (red flags escalate before ranking; .claude/rules/safety.md). Every
+    # role holds the emergency scope, so every key starts it; nothing here answers in its place.
     red: FeelingOut | None = None
     heard = detect(body.question)
     if heard is not None:
-        try:
-            red = FeelingOut.of(
-                await record_tap(
-                    session,
-                    context=context,
-                    word=heard,
-                    registry=outside.drug_registry,
-                    store=outside.object_store,
-                    transcriber=outside.transcriber,
-                    via=via_of(request),
-                    language=body.language,
-                )
+        red = FeelingOut.of(
+            await record_tap(
+                session,
+                context=context,
+                word=heard,
+                registry=outside.drug_registry,
+                store=outside.object_store,
+                transcriber=outside.transcriber,
+                via=via_of(request),
+                language=body.language,
             )
-        except Refusal:
-            red = None
+        )
     answer = await recall(
         session,
         context=context,

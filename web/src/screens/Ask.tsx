@@ -3,6 +3,9 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut } from "../api/types";
 import { whatToDoLines } from "../day/model";
+import { askStartedTheRedPath, whenNotReached } from "../day/redPath";
+import { keptCards } from "../day/offline";
+import { bindingOf } from "../offline/todayCache";
 import { answerView, askMode } from "../feed/ask";
 import { go } from "../flow";
 import { density, profile, token } from "../store/session";
@@ -50,6 +53,12 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
       }
       setAnswer(found);
     } catch (failure) {
+      // A red word the backend heard but this key may not raise: the kept card and the refusal
+      // named, as a refused red tap on the cloud gets — never nothing, never an answer instead.
+      if (askStartedTheRedPath(failure)) {
+        const kept = await keptCards(papers.profile_id, bindingOf(papers));
+        return go({ name: "whatToDo", ...whenNotReached("red_flag", failure, kept?.cards ?? null, papers.region, s, language.value) });
+      }
       setAnswer(null);
       setError(failure);
     } finally {

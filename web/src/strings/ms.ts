@@ -58,9 +58,9 @@ export const ms = {
     // @patient headline
     missing: "Belum ada dalam surat",
     // @patient
-    missingSub: "Nura sudah tambah ini pada soalan untuk lawatan.",
+    missingSub: "Nura sudah masukkan perkara ini dalam soalan untuk lawatan.",
     // @patient phrase
-    bpLabel: "Tekanan darah, nombor atas",
+    bpLabel: "Tekanan darah, nombor atasnya",
     // @patient headline
     fromName: "Daripada {name}",
     // @patient phrase
@@ -68,7 +68,7 @@ export const ms = {
     // @patient phrase
     showFewer: "Tunjuk kurang",
     // @patient
-    bpLast: "Tekanan darah terakhir ada nombor atas {number}.",
+    bpLast: "Nombor atas bacaan tekanan darah yang terakhir ialah {number}.",
   },
   places: {
     // @patient headline
@@ -882,7 +882,7 @@ export const ms = {
       // @patient
       cadence2: "Tekan Nanti dan Nura akan tanya sekali lagi.",
       // @patient phrase
-      missing: "Belum ada",
+      missing: "Belum ada dalam surat",
       // @patient
       onDay: "Nura akan minta ini pada {date}.",
       // @patient phrase

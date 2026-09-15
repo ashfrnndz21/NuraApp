@@ -8,12 +8,13 @@ const HEIGHT = 64;
 interface SparklineProps {
   values: readonly number[];
   /** What the line says, for the screen reader: one whole line from the catalogue ("The last
-   *  top number was 138."), never the numbers strung together. */
+   *  blood pressure had a top number of 138."), never the numbers strung together. */
   label: string;
   band?: { low: number; high: number } | null;
   /** The last point's colour: a state colour on the figure, or Ink. */
   tone?: Tone | null;
-  /** The direction in words, from the backend — the patient's density always shows it. */
+  /** The visible caption under the line: what its number is ("Blood pressure, the top
+   *  number"), or the direction in words from the backend. */
   caption?: string | null;
   testId?: string;
 }

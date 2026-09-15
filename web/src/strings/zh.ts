@@ -882,7 +882,7 @@ export const zh = {
       // @patient
       cadence2: "点“以后”，Nura 过几天再问一次。",
       // @patient phrase
-      missing: "还没有",
+      missing: "文件里还没有",
       // @patient
       onDay: "Nura 会在 {date} 问这件事。",
       // @patient phrase

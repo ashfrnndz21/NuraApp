@@ -882,7 +882,7 @@ export const en = {
       // @patient
       cadence2: "Tap Later and Nura asks once more.",
       // @patient phrase
-      missing: "Missing",
+      missing: "Not in the papers yet",
       // @patient
       onDay: "Nura will ask for this on {date}.",
       // @patient phrase

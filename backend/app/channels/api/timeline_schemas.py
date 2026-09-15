@@ -609,7 +609,7 @@ class AnswerOut(BaseModel):
     red_flag: FeelingOut | None = None
     """A red flag heard in the question: the red-flag path it took before anything was looked up,
     as the same word tapped on the feeling cloud (the moment written, the flag raised, the family
-    told). None when the question carries none, or the key cannot start that path."""
+    told). None when the question carries none."""
 
     @classmethod
     def of(cls, answer: Answer, red_flag: FeelingOut | None = None) -> AnswerOut:
