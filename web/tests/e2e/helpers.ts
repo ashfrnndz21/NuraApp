@@ -334,9 +334,11 @@ export interface Stand {
   __locks: { taken: number; released: number };
 }
 
-/** A phone that can record: a stand-in `MediaRecorder` that hands back `bytes` when it stops,
- *  a microphone, a screen wake lock, and an audio element that writes down what it was asked
- *  to play (Playwright's Chromium has no microphone to give and cannot play the stand-in). */
+/** A phone that can record: a stand-in `MediaRecorder` that hands back `bytes` as it records —
+ *  twenty bytes each timeslice, the way a real one hands over a piece every second, and the
+ *  rest when it stops — a microphone, a screen wake lock, and an audio element that writes down
+ *  what it was asked to play (Playwright's Chromium has no microphone to give and cannot play
+ *  the stand-in). */
 export async function fakeRecorder(page: Page, bytes: number[] = CONSULT_BYTES): Promise<void> {
   await page.addInitScript((data: number[]) => {
     const stand = window as unknown as {
@@ -352,6 +354,8 @@ export async function fakeRecorder(page: Page, bytes: number[] = CONSULT_BYTES):
       mimeType: string;
       ondataavailable: ((event: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
+      private timer: ReturnType<typeof setInterval> | null = null;
+      private at = 0;
       static isTypeSupported(type: string): boolean {
         return type === "audio/webm;codecs=opus" || type === "audio/webm";
       }
@@ -359,15 +363,23 @@ export async function fakeRecorder(page: Page, bytes: number[] = CONSULT_BYTES):
         this.mimeType = options?.mimeType ?? "audio/webm";
         stand.__recorder.types.push(this.mimeType);
       }
-      start(): void {
+      start(timeslice?: number): void {
         this.state = "recording";
         stand.__recorder.starts += 1;
+        this.at = 0;
+        this.timer = setInterval(() => this.hand(20), timeslice ?? 1000);
+      }
+      private hand(most: number): void {
+        const piece = data.slice(this.at, this.at + most);
+        this.at += piece.length;
+        if (piece.length > 0) this.ondataavailable?.({ data: new Blob([new Uint8Array(piece)], { type: this.mimeType }) });
       }
       stop(): void {
         if (this.state === "inactive") return;
         this.state = "inactive";
+        if (this.timer !== null) clearInterval(this.timer);
         stand.__recorder.stops += 1;
-        this.ondataavailable?.({ data: new Blob([new Uint8Array(data)], { type: this.mimeType }) });
+        this.hand(data.length);
         this.onstop?.();
       }
     }

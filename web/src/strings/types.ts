@@ -213,6 +213,8 @@ export interface Strings {
     byHandSave: string;
     noMic: string;
     noMicSub: string;
+    noConnection: string;
+    sendLater: string;
   };
   /** The patient's day (W7): the not-feeling-well button, the symptom log, the nudge's two
    *  buttons, the brief, the questions and the post-visit card's yes. Every card's own lines

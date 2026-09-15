@@ -1,5 +1,6 @@
-import { api, apiBlob, apiUpload } from "./client";
+import { api, apiBlob, apiBytes, apiUpload, sendAndForget } from "./client";
 import type {
+  UploadOut,
   AnsweredOut,
   BriefOut,
   CloudOut,
@@ -279,6 +280,38 @@ export const uploadRecording = (token: string, profileId: string, appointmentId:
     token,
     query: { duration_s: durationS.toFixed(1), started_at: startedAt },
   });
+
+const uploads = (profileId: string, appointmentId: string) => `/profiles/${profileId}/appointments/${appointmentId}/recording/uploads`;
+
+/** A visit's recording sent in chunks as it is made (#129): opened as the microphone opens. */
+export const openUpload = (token: string, profileId: string, appointmentId: string, contentType: string, startedAt: string) =>
+  api<UploadOut>(uploads(profileId, appointmentId), { method: "POST", token, body: { content_type: contentType, started_at: startedAt } });
+
+/** How far it has come: where to start again after a dropped connection. */
+export const uploadStatus = (token: string, profileId: string, appointmentId: string, uploadId: string) =>
+  api<UploadOut>(`${uploads(profileId, appointmentId)}/${uploadId}`, { token });
+
+/** One chunk: the recorder's bytes, from where the server got to. */
+export const uploadChunk = (token: string, profileId: string, appointmentId: string, uploadId: string, position: number, bytes: Blob) =>
+  apiBytes<UploadOut>(`${uploads(profileId, appointmentId)}/${uploadId}/chunks/${position}`, bytes, "application/octet-stream", { method: "PUT", token });
+
+/** The doctor said yes: the recording may be kept, on Stop. */
+export const doctorSaidYes = (token: string, profileId: string, appointmentId: string, uploadId: string) =>
+  api<UploadOut>(`${uploads(profileId, appointmentId)}/${uploadId}/yes`, { method: "POST", token });
+
+/** Stop: the chunks put together on the server, heard, and read into the post-visit card. */
+export const finishUpload = (token: string, profileId: string, appointmentId: string, uploadId: string, durationS: number) =>
+  api<ConsultOut>(`${uploads(profileId, appointmentId)}/${uploadId}/finish`, {
+    method: "POST",
+    token,
+    slow: true,
+    query: { duration_s: durationS.toFixed(1) },
+  });
+
+/** The doctor said no, or the page was left before he answered: every chunk already sent is
+ *  thrown away. Goes even as the page goes. */
+export const discardUpload = (token: string, profileId: string, appointmentId: string, uploadId: string, because: "no" | "left") =>
+  sendAndForget(`${uploads(profileId, appointmentId)}/${uploadId}`, { method: "DELETE", token, query: { because } });
 
 /** The notes by hand, when the doctor says no: E05's typed transcript, read into the card. */
 export const writeNotes = (token: string, profileId: string, appointmentId: string, text: string) =>

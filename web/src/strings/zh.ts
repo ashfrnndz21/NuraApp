@@ -404,6 +404,10 @@ export const zh = {
     noMic: "Nura不能使用这部手机的麦克风。",
     // @patient
     noMicSub: "您可以自己写下来。",
+    // @patient
+    noConnection: "手机现在没有网络。",
+    // @patient
+    sendLater: "网络恢复后，Nura会发送录音。",
   },
   day: {
     // @patient headline
@@ -911,6 +915,11 @@ export const zh = {
     NoSuchRecording: "这段录音已经不在这里了。",
     NotAClip: "Nura找不到录音的这一部分。",
     OnlyTheFamilyHears: "只有本人和他让进来的家人可以听。",
+    ChunkTooLarge: "这一段录音太大，Nura收不了。",
+    UploadClosed: "Nura已经不再接收这段录音。",
+    NotYourUpload: "只有开始录音的手机才能发送。",
+    NoYesFromTheDoctor: "医生说可以以后，Nura才会保存录音。",
+    NoSuchUpload: "Nura找不到这段录音。",
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",

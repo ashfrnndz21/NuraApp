@@ -32,6 +32,9 @@ export interface Call {
   query?: Record<string, string | undefined>;
   /** Goes ahead of every call still waiting (see `enqueue`): the red-flag path only. */
   urgent?: boolean;
+  /** Waits as long as the server takes: putting a visit's recording together and hearing it
+   *  (#129). Any other call gives up after `CALL_DEADLINE_MS`. */
+  slow?: boolean;
 }
 
 function isRefusalBody(value: unknown): value is RefusalBody {
@@ -103,11 +106,12 @@ function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false): 
   });
 }
 
-/** A fetch that gives up after `CALL_DEADLINE_MS`, or when the call's own signal aborts. */
-async function fetchWithin(url: URL, init: RequestInit, signal: AbortSignal): Promise<Response> {
+/** A fetch that gives up after `within` ms (`CALL_DEADLINE_MS`; 0 waits as long as it takes), or
+ *  when the call's own signal aborts. */
+async function fetchWithin(url: URL, init: RequestInit, signal: AbortSignal, within = CALL_DEADLINE_MS): Promise<Response> {
   const control = new AbortController();
   const stop = () => control.abort();
-  const timer = setTimeout(stop, CALL_DEADLINE_MS);
+  const timer = within > 0 ? setTimeout(stop, within) : undefined;
   if (signal.aborted) stop();
   else signal.addEventListener("abort", stop, { once: true });
   try {
@@ -187,6 +191,46 @@ async function sendBytes<T>(path: string, body: Blob, contentType: string, call:
   return answer<T>(response);
 }
 
+/** The same queue, for one chunk of a visit's recording (#129): its bytes, by `call.method`
+ *  (PUT), given up after `CALL_DEADLINE_MS` like any call so that a chunk on a bad network never
+ *  holds the queue. The chunked upload sends it again, from where the server got to. */
+export function apiBytes<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
+  return enqueue(async (signal) => {
+    const headers: Record<string, string> = { Accept: "application/json", "Content-Type": contentType };
+    if (call.token) headers.Authorization = `Bearer ${call.token}`;
+    let response: Response;
+    try {
+      response = await fetchWithin(
+        urlFor(path, call),
+        { method: call.method ?? "PUT", headers, body, cache: "no-store", credentials: "omit" },
+        signal,
+      );
+    } catch {
+      throw new Unreachable();
+    }
+    return answer<T>(response);
+  }, call.urgent);
+}
+
+/** A call that must go even as the page goes, outside the queue and waited for by nobody:
+ *  throwing away a visit's recording when the doctor said no or the page was left (#129). If
+ *  it cannot go, the server throws the upload away itself (`app.ingestion.chunks`). */
+export function sendAndForget(path: string, call: Call = {}): void {
+  const headers: Record<string, string> = {};
+  if (call.token) headers.Authorization = `Bearer ${call.token}`;
+  try {
+    void fetch(urlFor(path, call), {
+      method: call.method ?? "POST",
+      headers,
+      keepalive: true,
+      cache: "no-store",
+      credentials: "omit",
+    }).catch(() => undefined);
+  } catch {
+    /* the page is going; the server's sweep has it */
+  }
+}
+
 async function answer<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
   const text = await response.text();
@@ -215,6 +259,7 @@ async function send<T>(path: string, call: Call, signal: AbortSignal): Promise<T
         credentials: "omit",
       },
       signal,
+      call.slow ? 0 : CALL_DEADLINE_MS,
     );
   } catch {
     throw new Unreachable();

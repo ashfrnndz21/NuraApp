@@ -12,6 +12,7 @@ import { Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../visit/model";
 import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../visit/recorder";
+import { browserUploadDeps, ChunkedUpload, isNoConnection, uploadCalls } from "../visit/upload";
 
 /** The Visit screen (E05-03, E05-04, E02-05): the logistics card, then one big button.
  *
@@ -21,8 +22,11 @@ import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../v
  *  has not agreed. Only then is the notice shown and spoken, and the microphone opened. The
  *  recording begins with the notice itself, so the doctor's answer is its first seconds.
  *  **Dr Tan said yes** keeps listening; **Dr Tan said no** throws the audio away on the phone,
- *  and the notes can be written by hand. **Stop** is the one thing that uploads. The page must
- *  stay in front: hidden, it stops listening at once, and says so
+ *  and every chunk already sent away on the server too, and the notes can be written by hand.
+ *  The audio goes to the server in chunks as it records (#129, `visit/upload`), so a dropped
+ *  connection only delays it; **Stop** sends the rest and asks the server to put it together,
+ *  which it keeps only after the doctor's yes. The page must stay in front: hidden, it stops
+ *  listening at once, and says so
  *  (docs/adr/0006-consult-recording-on-the-web.md). The post-visit card is the backend's, each
  *  line with "Hear what Dr Tan said" when the recording has that line in it. */
 
@@ -32,7 +36,7 @@ type Stage =
   | { kind: "consent"; words: WordingOut }
   | { kind: "asking"; notice: NoticeOut }
   | { kind: "recording"; notice: NoticeOut }
-  | { kind: "held"; notice: NoticeOut; kept: Kept; away: boolean }
+  | { kind: "held"; notice: NoticeOut; kept: Kept; away: boolean; offline?: boolean }
   | { kind: "saving"; notice: NoticeOut }
   | { kind: "done"; notice: NoticeOut; outcome: ConsultOut }
   | { kind: "no"; notice: NoticeOut }
@@ -55,6 +59,8 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
   const [memos, setMemos] = useState<MemoCardOut | null>(null);
   const recorder = useMemo(() => new ConsultRecorder(browserRecorderDeps()), []);
+  /** The recording's chunked upload (#129), from the moment the microphone opens. */
+  const chunked = useRef<ChunkedUpload | null>(null);
   const clips = useMemo(
     () =>
       new ClipPlayer(
@@ -95,6 +101,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   // Leaving the screen: anything not sent is let go, and a clip stops.
   useEffect(
     () => () => {
+      chunked.current?.discard("left");
       recorder.discard();
       clips.forget();
     },
@@ -109,6 +116,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       const current = now.current;
       if (current.kind === "asking") {
         recorder.discard();
+        chunked.current?.discard("left");
         setSaid(s.visit.stoppedAway);
         setStage({ kind: "card" });
       } else if (current.kind === "recording") {
@@ -138,6 +146,16 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       setStage({ kind: "no", notice });
       return;
     }
+    // The audio goes to the server in chunks as it records (#129): opened now, so the notice
+    // and the doctor's answer are in its first chunk, and kept there only after his yes.
+    const upload = new ChunkedUpload(
+      browserUploadDeps(uploadCalls(bearer ?? "", papers?.profile_id ?? "", appointmentId)),
+      recorder.mimeType,
+      recorder.startedAt,
+    );
+    recorder.onData = (piece) => upload.add(piece);
+    chunked.current = upload;
+    upload.start();
     setStage({ kind: "asking", notice });
   };
 
@@ -182,29 +200,55 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
     await begin();
   };
 
-  const upload = async (notice: NoticeOut, kept: Kept) => {
+  /** The recording kept: the chunks put together on the server; or, when the chunked upload
+   *  could not end in a recording, the whole of it from the phone, once, as before (#128). */
+  const finishRecording = async (kept: Kept): Promise<ConsultOut> => {
+    const upload = chunked.current;
+    if (upload) {
+      try {
+        return await upload.finish(kept.durationS);
+      } catch (failure) {
+        if (isNoConnection(failure)) throw failure;
+        chunked.current = null;
+      }
+    }
+    return nura.uploadRecording(bearer ?? "", papers?.profile_id ?? "", appointmentId, kept.blob, kept.durationS, kept.startedAt);
+  };
+
+  const keep = async (notice: NoticeOut, kept: Kept) => {
     if (!bearer || !papers) return;
     setStage({ kind: "saving", notice });
     setError(null);
     try {
-      const outcome = await nura.uploadRecording(bearer, papers.profile_id, appointmentId, kept.blob, kept.durationS, kept.startedAt);
+      const outcome = await finishRecording(kept);
       const first = outcome.summary ? summaryView(outcome.summary).lines.find((line) => line.clip)?.clip : undefined;
       if (first) clips.warm(first);
       setStage({ kind: "done", notice, outcome });
     } catch (failure) {
-      // Not sent: the audio stays on the phone, and one tap sends it again.
-      setError(failure);
-      setStage({ kind: "held", notice, kept, away: false });
+      // Not kept yet: the audio stays on the phone. It goes again on one tap, or by itself the
+      // moment the connection is back.
+      const offline = isNoConnection(failure);
+      if (!offline) setError(failure);
+      setStage({ kind: "held", notice, kept, away: false, offline });
     }
   };
 
   const stop = async (notice: NoticeOut) => {
     const kept = await recorder.stop();
-    if (kept) await upload(notice, kept);
+    if (kept) await keep(notice, kept);
   };
+
+  // Stop came with no connection: the recording goes the moment the connection is back.
+  useEffect(() => {
+    if (stage.kind !== "held" || !stage.offline) return;
+    const back = () => void keep(stage.notice, stage.kept);
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
+  }, [stage]);
 
   const no = (notice: NoticeOut) => {
     recorder.discard();
+    chunked.current?.discard("no");
     setStage({ kind: "no", notice });
   };
 
@@ -262,6 +306,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   };
 
   const listening = stage.kind === "asking" || stage.kind === "recording";
+  const offline = listening && chunked.current !== null && !chunked.current.connected.value;
   const doctor = card?.doctor ?? ("notice" in stage ? stage.notice.doctor : "");
   const view = card ? logisticsView(card) : null;
   const elapsed = timer(recorder.elapsed.value);
@@ -428,10 +473,22 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
               <span>{s.visit.listening}</span>
             </p>
             <p class="caption">{s.visit.keepOpen}</p>
+            {offline && (
+              <p class="caption" data-testid="no-connection">
+                {s.visit.noConnection} {s.visit.sendLater}
+              </p>
+            )}
           </Tile>
           {stage.kind === "asking" ? (
             <>
-              <Pill plum onClick={() => setStage({ kind: "recording", notice: stage.notice })} testId="doctor-yes">
+              <Pill
+                plum
+                onClick={() => {
+                  setStage({ kind: "recording", notice: stage.notice });
+                  void chunked.current?.doctorSaidYes();
+                }}
+                testId="doctor-yes"
+              >
                 {fill(s.visit.saidYes, { doctor: stage.notice.doctor })}
               </Pill>
               <Pill onClick={() => no(stage.notice)} testId="doctor-no">
@@ -449,7 +506,13 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
       {stage.kind === "held" && (
         <Tile paper testId="held">
           {stage.away && <p>{s.visit.stoppedAway}</p>}
-          <Pill plum onClick={() => void upload(stage.notice, stage.kept)} testId="keep-heard">
+          {stage.offline && (
+            <>
+              <p data-testid="no-connection">{s.visit.noConnection}</p>
+              <p>{s.visit.sendLater}</p>
+            </>
+          )}
+          <Pill plum onClick={() => void keep(stage.notice, stage.kept)} testId="keep-heard">
             {s.visit.keepHeard}
           </Pill>
         </Tile>

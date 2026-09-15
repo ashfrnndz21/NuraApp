@@ -404,6 +404,10 @@ export const ms = {
     noMic: "Nura tidak boleh guna mikrofon telefon ini.",
     // @patient
     noMicSub: "Anda boleh tulis nota dengan tangan.",
+    // @patient
+    noConnection: "Telefon tiada sambungan sekarang.",
+    // @patient
+    sendLater: "Nura hantar rakaman itu apabila sambungan kembali.",
   },
   day: {
     // @patient headline
@@ -911,6 +915,11 @@ export const ms = {
     NoSuchRecording: "Rakaman itu sudah tiada di sini.",
     NotAClip: "Nura tidak dapat mencari bahagian rakaman itu.",
     OnlyTheFamilyHears: "Hanya pemilik dan keluarga yang dia benarkan boleh mendengar ini.",
+    ChunkTooLarge: "Bahagian rakaman itu terlalu besar untuk Nura.",
+    UploadClosed: "Nura sudah berhenti menerima rakaman itu.",
+    NotYourUpload: "Hanya telefon yang mula merakam boleh menghantarnya.",
+    NoYesFromTheDoctor: "Nura hanya simpan rakaman selepas doktor kata ya.",
+    NoSuchUpload: "Nura tidak dapat mencari rakaman itu.",
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",

@@ -404,6 +404,10 @@ export const en = {
     noMic: "Nura cannot use the microphone on this phone.",
     // @patient
     noMicSub: "You can write it down yourself instead.",
+    // @patient
+    noConnection: "The phone has no connection right now.",
+    // @patient
+    sendLater: "Nura sends the recording when the connection is back.",
   },
   day: {
     // @patient headline
@@ -915,6 +919,11 @@ export const en = {
     NoSuchRecording: "That recording is not here any more.",
     NotAClip: "Nura cannot find that part of the recording.",
     OnlyTheFamilyHears: "Only the owner and the family he let in can hear this.",
+    ChunkTooLarge: "That part of the recording is too big for Nura.",
+    UploadClosed: "Nura has stopped taking that recording.",
+    NotYourUpload: "Only the phone that started the recording can send it.",
+    NoYesFromTheDoctor: "Nura keeps a recording only after the doctor says yes.",
+    NoSuchUpload: "Nura cannot find that recording.",
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",

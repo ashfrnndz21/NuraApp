@@ -6,9 +6,11 @@ import { signal } from "@preact/signals";
  *  container it has — opus in webm (Chrome, Android), opus in ogg (Firefox), AAC in mp4
  *  (Safari on the iPhone) — keeps the screen awake while it listens, and counts the seconds.
  *  The audio stays in the page's memory as the recorder hands it over: nothing is sent and
- *  nothing is written to the phone. `stop()` hands back the whole recording, once, for the
- *  screen to upload; `discard()` — a no from the doctor, or the page hidden before his answer
- *  — throws it away. Nothing here uploads, speaks or starts by itself
+ *  nothing is written to the phone. Each piece the recorder hands over is also given to
+ *  `onData`, as it comes, for the chunked upload to send while it listens (#129); the whole
+ *  stays here until Stop. `stop()` hands back the whole recording, once; `discard()` — a no
+ *  from the doctor, or the page hidden before his answer — throws it away. Nothing here
+ *  uploads, speaks or starts by itself
  *  (docs/adr/0006-consult-recording-on-the-web.md). */
 
 export interface RecorderLike {
@@ -66,8 +68,20 @@ export class ConsultRecorder {
   private started = 0;
   private cancelTick: (() => void) | null = null;
   private kept: Kept | null = null;
+  /** Given each piece of audio as the recorder hands it over, while it listens (#129). */
+  onData: ((piece: Blob) => void) | null = null;
 
   constructor(private readonly deps: RecorderDeps) {}
+
+  /** The container the recorder is making, once it has started. */
+  get mimeType(): string {
+    return this.recorder?.mimeType || this.chunks[0]?.type || "audio/webm";
+  }
+
+  /** When it began listening, once it has started. */
+  get startedAt(): string {
+    return new Date(this.started).toISOString();
+  }
 
   /** Ask for the microphone and start listening. Call it after the notice has been said. */
   async start(): Promise<void> {
@@ -80,7 +94,9 @@ export class ConsultRecorder {
       this.stream = stream;
       const recorder = this.deps.makeRecorder(stream, pickMimeType((type) => this.deps.isTypeSupported(type)));
       recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) this.chunks.push(event.data);
+        if (!event.data || event.data.size === 0) return;
+        this.chunks.push(event.data);
+        this.onData?.(event.data);
       };
       this.recorder = recorder;
       recorder.start(1000);
@@ -130,6 +146,7 @@ export class ConsultRecorder {
     if (recorder) {
       recorder.ondataavailable = null;
       recorder.onstop = null;
+      this.onData = null;
       if (recorder.state !== "inactive") recorder.stop();
     }
     this.chunks = [];

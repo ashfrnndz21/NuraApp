@@ -1,0 +1,29 @@
+# ADR 0013 — A consult recording goes up in chunks as it is made
+
+**Date** 2026-09-15 · **Status** proposed · **Decided by** the builder, for the operator · **Story** #129 (follows ADR 0006 and #128)
+
+## Context
+
+Visit day (#128, ADR 0006) recorded the consult on the phone and sent it once, on Stop: up to 48 MB or ninety minutes in one request. A connection that dropped at Stop lost the upload; a page the phone put to sleep lost the recording. #129 asks for the upload to go in chunks as it records, to resume after a dropped connection, to be put together on the server, and to keep #128's rule: nothing is kept until the doctor's yes, and a no, or the page left before he answers, keeps nothing.
+
+## Decision
+
+**An upload, opened as the microphone opens.** `POST …/appointments/{appt}/recording/uploads` asks the same door and gate as the notice (a key that changes the visits; the RECORDING consent in force) and names the recorder's container. The row (`consult_upload`) holds no words and no audio: which visit, the consent it was opened on, who opened it, how many chunks and bytes arrived, the doctor's answer, and what became of it.
+
+**Chunks, in order, once each, in the region.** `PUT …/uploads/{upload}/chunks/{n}` takes the recorder's bytes as the body, read against a 1 MiB cap as they arrive (`read_capped`, 413 `ChunkTooLarge`), with the gate asked again and the region's store checked (`guard_region`). A chunk waits in the region's object store under `consult-uploads/<profile>/<upload>/<n>`; nothing serves it back. The next number is taken; one the server has, sent again the same, changes nothing (its answer was lost); other bytes under its number (`NotTheChunkSent`) or a number past the next (`ChunkOutOfOrder`) are refused, and the phone asks `GET …/uploads/{upload}` how far the server got. A connection that drops mid-chunk keeps nothing of it (`ChunkCutShort`). The first chunk must open the way the recorder's container does, and the whole stays under a visit's 48 MB.
+
+**Kept only after the doctor's yes.** `POST …/yes` records his answer; `POST …/finish` refuses without it (`NoYesFromTheDoctor`). Finishing puts the chunks together in order and hands the bytes to `record_consult` exactly as a single upload does: the same checks, the RECORDING consent asked again where the bytes land, the same transcriber, speaker separator and card. The same bytes give the same words, the same speakers and the same clips. The chunks are then let go. Stop sent again answers with what the first one kept.
+
+**A no keeps nothing.** `DELETE …/uploads/{upload}?because=no|left` throws away every chunk already sent, from the store, and closes the upload. The phone sends it with `keepalive`, so it goes even as the page goes. What the phone cannot throw away, the server does: the trigger engine's five-minute run (`app.delivery.triggers.engine._consult_uploads`, `app.ingestion.chunks.discard_stale`) throws away an upload the doctor did not answer within fifteen minutes, one not finished within two and a half hours (the longest visit and an hour), and one on a profile where no RECORDING consent is in force any more. A lapsed upload takes nothing more from the moment it lapses. The chunks of an upload thrown away in the last quarter hour are let go once more, for a chunk that landed as it was thrown away.
+
+**Only the phone that opened it.** The person who opened an upload is the only one who reads its count, adds to it, says the doctor's yes on it, finishes it or throws it away (`NotYourUpload`). Who hears the recording it becomes does not change: the patient and the family he let in (`OnlyTheFamilyHears`, ADR 0006).
+
+**The web.** The recorder hands over a piece every second (`ConsultRecorder.onData`); `ChunkedUpload` (`web/src/visit/upload.ts`) sends what the server does not have every thirty seconds and the moment the phone is back online, in pieces of at most 256 kB, one at a time, from where the server says it got to. The whole recording also stays in the page's memory until Stop, as before, so a network that never comes back loses nothing that one tap cannot send: when the chunked upload cannot end in a recording, the phone sends the whole once, by #128's route, which stays. While the connection is down the screen says "The phone has no connection right now. Nura sends the recording when the connection is back."; a Stop with no connection holds the recording on the phone and sends it the moment the connection is back.
+
+## Consequences
+
+- A dropped connection only delays a recording. The tests hold each rule: `backend/tests/test_consult_chunks.py` (a connection dropped mid-chunk resumes; a no and a page left throw away what was sent; the sweep; a chunk over the cap; the same clips as a single upload; who may send and who hears) and `web/tests/e2e/visit.spec.ts` (chunks as it listens, a no thrown away, a dropped connection resumed, Stop with no connection).
+- Chunks waiting for the doctor's yes are a visit's audio in the region's store for up to fifteen minutes, or five more until the next run of the engine when the phone could not send its no. They are never readable, and the trail records every upload's open, the doctor's yes, and its end.
+- Every chunk is a line on the trail (a read of the upload's row). At one chunk every thirty seconds that is about 120 lines an hour of recording.
+- The object store port gains `delete` (local files and the S3 bucket), used only here.
+- Open: the sweep runs with the engine, per profile; a deployment whose scheduler stops also stops throwing away lapsed uploads.
