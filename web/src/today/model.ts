@@ -1,4 +1,4 @@
-import type { FeedItemOut, LineOut, Posture, SlotOut } from "../api/types";
+import type { FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
@@ -22,6 +22,11 @@ export interface TodayModel {
   /** The State's own boundary lines (E16-01): what Nura did, not a doctor's advice, whom to ask. */
   boundary: string[];
   fetchedAt: string;
+  /** D1: the hero's number and words (`…/medicines/now`); the State's word, line and drivers. */
+  hero?: NowOut | null;
+  word?: string | null;
+  line?: string | null;
+  drivers?: StateDriverOut[];
 }
 
 export type NowCard =
@@ -193,4 +198,50 @@ export function dateLine(date: Date, locale: string): string {
 /** "8:05 pm" in English; "20:05" in Malay and Chinese, with no abbreviation to decode. */
 export function timeLine(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: locale.startsWith("en") }).format(date);
+}
+
+/** One dose tile under "Now" (D1): each dose the backend marks due and not yet tapped, in its
+ *  order, with its own sentence and source — as many tiles as the hero's number counts. */
+export interface DueCard {
+  lineId: string;
+  anchor: string;
+  title: string;
+  sentence: string;
+  provenance: string;
+}
+
+export function dueCards(slots: readonly SlotOut[], lines: readonly LineOut[], s: Strings): DueCard[] {
+  return slots
+    .filter((slot) => slot.due_now && !slot.taken)
+    .map((slot) => ({
+      lineId: slot.line_id,
+      anchor: slot.anchor,
+      title: lineTitle(lines.find((each) => each.line_id === slot.line_id), s),
+      sentence: slot.card,
+      provenance: slot.source,
+    }));
+}
+
+/** The proud number's line: the catalogue's, for none, one, or the backend's count. */
+export function proudLine(proud: number | null, s: Strings): string {
+  return proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
+}
+
+/** "Thu 10:00" — the next visit's day and time as a figure, in his locale's own short forms. */
+export function shortWhen(date: Date, locale: string): string {
+  const day = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
+  const time = new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: false }).format(date);
+  return `${day} ${time}`;
+}
+
+/** His blood pressures' top numbers, oldest first, the last ten — the backend's readings as it
+ *  holds them (subject `blood_pressure`, attribute `reading`), never a number worked out here. */
+export function systolics(facts: readonly FactOut[]): number[] {
+  return facts
+    .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading")
+    .map((fact) => ({ at: Date.parse(fact.valid_from), top: (fact.value as { systolic?: unknown } | null)?.systolic }))
+    .filter((each): each is { at: number; top: number } => typeof each.top === "number" && Number.isFinite(each.at))
+    .sort((a, b) => a.at - b.at)
+    .slice(-10)
+    .map((each) => each.top);
 }

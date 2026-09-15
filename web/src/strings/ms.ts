@@ -17,6 +17,70 @@ export const ms = {
     me: "Saya",
     // @patient headline
     family: "Keluarga",
+    // @patient headline
+    home: "Utama",
+    // @patient headline
+    medicines: "Ubat",
+    // @patient headline
+    records: "Surat",
+    // @patient headline
+    visits: "Lawatan",
+    // @patient headline
+    timeline: "Sejarah",
+    // @patient headline
+    plan: "Rancangan",
+  },
+  shell: {
+    // @patient phrase
+    askOrSearch: "Tanya atau cari",
+    // @patient phrase
+    askAbout: "Tanya tentang {name}",
+    // @patient phrase
+    voice: "Cakap",
+    // @patient
+    voiceSaid: "Tekan mikrofon pada papan kekunci, kemudian sebut soalan anda.",
+    // @patient phrase
+    close: "Tutup",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "Keadaan paling mungkin",
+    // @patient headline
+    whatChanged: "Apa yang berubah",
+    // @patient headline
+    nextVisit: "Lawatan seterusnya",
+    // @patient headline
+    buyMore: "Beli lagi",
+    // @patient headline
+    missing: "Tiada dalam surat",
+    // @patient
+    missingSub: "Nura sudah tambah ini pada soalan untuk lawatan.",
+    // @patient phrase
+    bpLabel: "Tekanan darah, nombor atas",
+    // @patient headline
+    fromName: "Daripada {name}",
+  },
+  places: {
+    // @patient headline
+    medicinesOwn: "Ubat anda",
+    // @patient headline
+    medicinesOther: "Ubat {name}",
+    // @patient headline
+    visitsOwn: "Lawatan-lawatan anda",
+    // @patient headline
+    visitsOther: "Lawatan {name}",
+    // @patient
+    visitsNoneOther: "Nura tiada lawatan yang ditulis untuk {name}.",
+    // @patient headline
+    recordsOwn: "Surat anda",
+    // @patient headline
+    addTitle: "Tambah pada surat anda",
+    // @patient headline
+    timelineTitle: "Apa yang berlaku, mengikut urutan",
+    // @patient headline
+    planTitle: "Bersedia",
+    // @patient
+    planLead: "Semua untuk lawatan seterusnya ada di sini.",
   },
   signIn: {
     // @patient headline

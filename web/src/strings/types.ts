@@ -19,7 +19,24 @@ export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
   demo: { banner: string; lines: readonly string[] };
-  tabs: { today: string; family: string; me: string };
+  tabs: { today: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string };
+  /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close. */
+  shell: { askOrSearch: string; askAbout: string; voice: string; voiceSaid: string; close: string };
+  /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
+  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; bpLabel: string; fromName: string };
+  /** The tabs' own titles (D1). */
+  places: {
+    medicinesOwn: string;
+    medicinesOther: string;
+    visitsOwn: string;
+    visitsOther: string;
+    visitsNoneOther: string;
+    recordsOwn: string;
+    addTitle: string;
+    timelineTitle: string;
+    planTitle: string;
+    planLead: string;
+  };
   signIn: {
     title: string;
     phoneLead: string;

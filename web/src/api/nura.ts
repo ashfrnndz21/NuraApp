@@ -1,55 +1,51 @@
 import { api, apiBlob, apiUpload } from "./client";
 import type {
-  AnsweredOut,
-  BriefOut,
-  CloudOut,
-  DayNudgesOut,
-  FeelingOut,
-  HandedOverOut,
-  ItemDecision,
-  MeSummaryOut,
-  MemoCardOut,
-  NudgeAnswer,
-  NudgePlanOut,
-  OfflineCardsOut,
-  QuestionChange,
-  Said,
-  SummaryConfirmedOut,
-  SymptomLoggedOut,
-  SymptomLogOut,
-  VisitQuestionOut,
-  VisitQuestionsOut,
-  WhatToDoOut,
-  AppointmentOut,
-  ConsultOut,
-  LogisticsOut,
-  NoticeOut,
-  VisitSummaryOut,
   AnswerOut,
+  AnsweredOut,
+  AppointmentOut,
   AskMode,
   BiographyOut,
+  BriefOut,
+  ChangesOut,
   ClaimableOut,
   ClosedOut,
+  CloudOut,
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
+  ConsultOut,
+  DayNudgesOut,
   DecisionIn,
   DeploymentOut,
   DocumentSource,
   DoorsOut,
   EngagementEvent,
   EngagementOut,
+  FactOut,
   FeedPageOut,
+  FeelingOut,
+  HandedOverOut,
+  ItemDecision,
   KeyOut,
   LineOut,
+  LogisticsOut,
   MeOut,
+  MeSummaryOut,
+  MemoCardOut,
+  NoticeOut,
+  NowOut,
+  NudgeAnswer,
+  NudgePlanOut,
+  OfflineCardsOut,
   PaperAddedOut,
   PlanOut,
   ProfileOut,
   ProudOut,
+  QuestionChange,
   ReadingOut,
   ReviewCardOut,
   ReviewConfirmedOut,
+  Said,
   SessionOut,
   SettingsIn,
   SettingsOut,
@@ -57,9 +53,16 @@ import type {
   SharingPreviewOut,
   SlotOut,
   StateOut,
+  SummaryConfirmedOut,
+  SymptomLogOut,
+  SymptomLoggedOut,
   TakenOut,
   ThreadCardKind,
   ThreadEntryOut,
+  VisitQuestionOut,
+  VisitQuestionsOut,
+  VisitSummaryOut,
+  WhatToDoOut,
   WordingOut,
 } from "./types";
 
@@ -178,8 +181,21 @@ export const taken = (token: string, profileId: string, lineId: string, anchor: 
     body: { anchor },
   });
 
-export const state = (token: string, profileId: string) =>
-  api<StateOut>(`/profiles/${profileId}/state`, { token });
+/** The State, its word, line and drivers in `language` (the profile's own when not given). */
+export const state = (token: string, profileId: string, language?: string) =>
+  api<StateOut>(`/profiles/${profileId}/state`, { token, query: { language } });
+
+/** The one big number on his Today and what it counts (D1, `GET …/medicines/now`). */
+export const medicinesNow = (token: string, profileId: string, language: string) =>
+  api<NowOut>(`/profiles/${profileId}/medicines/now`, { token, query: { language } });
+
+/** The facts that hold now about one subject — his blood pressures, for the chief's sparkline. */
+export const facts = (token: string, profileId: string, subject: string) =>
+  api<FactOut[]>(`/profiles/${profileId}/facts`, { token, query: { subject } });
+
+/** What changed since this reader last looked (reading it is looking), each line with its tone. */
+export const changes = (token: string, profileId: string, language: string) =>
+  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language } });
 
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>

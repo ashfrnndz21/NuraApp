@@ -3,23 +3,14 @@ import { speak, type SpokenCard } from "../speech/speak";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
 import { demo } from "../store/deployment";
+import { BrandMark, PillButton } from "./kit";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
 
 export function Brand(): JSX.Element {
   return (
     <div class="brand" aria-hidden="true">
-      <svg viewBox="0 0 200 200">
-        <defs>
-          <linearGradient id="nuraAura" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#B9A6E0" />
-            <stop offset="1" stop-color="#F0C9DA" />
-          </linearGradient>
-        </defs>
-        <path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round" />
-        <path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#nuraAura)" stroke-width="20" stroke-linecap="round" />
-        <circle cx="100" cy="112" r="12" fill="#4E3A78" />
-      </svg>
+      <BrandMark />
       {t().appName}
     </div>
   );
@@ -82,18 +73,14 @@ export function Pill({ onClick, children, plum, coral, done, quiet, disabled, la
   );
 }
 
-/** The spoken twin of a card. Audio starts here and nowhere else. */
+/** The spoken twin of a card. Audio starts here and nowhere else. The speaker icon sits beside
+ *  its word; the button is as wide as its words and never under the target height. */
 export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
   const card: SpokenCard = { lines, language: language.value };
   return (
-    <Pill quiet onClick={() => speak(card)} label={`${t().today.hear}: ${lines[0] ?? ""}`} testId="hear">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 10v4h3l4 4V6L7 10H4z" />
-        <path d="M15 9a4 4 0 0 1 0 6" />
-        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-      </svg>
+    <PillButton variant="quiet" compact icon="speaker" onClick={() => speak(card)} label={`${t().today.hear}: ${lines[0] ?? ""}`} testId="hear">
       {t().today.hear}
-    </Pill>
+    </PillButton>
   );
 }
 
@@ -130,9 +117,13 @@ export function Card({ title, lines, provenance, paper = true, action, hear = tr
           ))}
         </div>
       )}
-      {provenance && <p class="provenance">{provenance}</p>}
       {action}
-      {hear && <Hear lines={spoken} />}
+      {(provenance || hear) && (
+        <div class="card-foot">
+          {provenance && <p class="provenance">{provenance}</p>}
+          {hear && <Hear lines={spoken} />}
+        </div>
+      )}
     </Tile>
   );
 }
@@ -208,24 +199,6 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
         </Pill>
       )}
     </header>
-  );
-}
-
-export function TabBar({ current, onSelect }: { current: "today" | "family" | "me"; onSelect: (tab: "today" | "family" | "me") => void }): JSX.Element {
-  const s = t();
-  const tabs = [
-    ["today", s.tabs.today],
-    ["family", s.tabs.family],
-    ["me", s.tabs.me],
-  ] as const;
-  return (
-    <nav class="tabbar" aria-label={s.appName}>
-      {tabs.map(([tab, label]) => (
-        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
-          {label}
-        </button>
-      ))}
-    </nav>
   );
 }
 

@@ -4,11 +4,12 @@ import { Refused } from "../api/client";
 import * as nura from "../api/nura";
 import type { ConsultOut, LogisticsOut, MemoCardOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
 import { decisionsFor, waitingSummary } from "../day/model";
-import { go, openTab } from "../flow";
+import { go } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
 import { fill, isLanguage, language, t } from "../strings";
-import { Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { Shell } from "./Shell";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../visit/model";
 import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../visit/recorder";
@@ -342,7 +343,12 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   };
 
   return (
-    <main class="screen" data-density={density()} data-testid="visit-screen" data-stage={stage.kind}>
+    <Shell
+      tab={density() === "patient" ? "visits" : "today"}
+      testId="visit-screen"
+      attrs={{ "data-stage": stage.kind }}
+      bar={!listening && stage.kind !== "saving" && stage.kind !== "held"}
+    >
       <Header title={s.visit.title} onBack={listening ? undefined : () => go({ name: "today" })} />
       <Notice error={error} />
       {said && (
@@ -520,9 +526,6 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
         </>
       )}
 
-      {!listening && stage.kind !== "saving" && stage.kind !== "held" && (
-        <TabBar current="today" onSelect={openTab} />
-      )}
-    </main>
+    </Shell>
   );
 }

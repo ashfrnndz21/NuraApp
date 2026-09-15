@@ -4,7 +4,8 @@ import { AskScreen } from "./screens/Ask";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
-import { MeScreen } from "./screens/Me";
+import { MeSheet } from "./screens/Me";
+import { MedicinesScreen, PlanScreen, RecordsScreen, TimelineScreen, VisitsScreen } from "./screens/tabs";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
 import { CodeScreen, EmailScreen, EmailTokenScreen, PhoneScreen } from "./screens/SignIn";
@@ -22,6 +23,17 @@ import { afterRestoreFailure } from "./restore";
 /** One screen at a time. On start, the page restores the session and goes to Today at once
  *  when a profile is remembered (offline included), checking the doors in the background. */
 export function App(): JSX.Element | null {
+  const shown = Route();
+  // Me is a sheet over whatever screen is open (D1), never a screen of its own.
+  return shown && (
+    <>
+      {shown}
+      <MeSheet />
+    </>
+  );
+}
+
+function Route(): JSX.Element | null {
   const current = screen.value;
   if (!restored.value) return null;
   if (current.name === "loading") {
@@ -57,13 +69,21 @@ export function App(): JSX.Element | null {
     case "feed":
       return <FeedScreen />;
     case "ask":
-      return <AskScreen item={current.item} />;
+      return <AskScreen item={current.item} question={current.question} />;
     case "reading":
       return <ReadingScreen />;
     case "visit":
       return <VisitScreen appointmentId={current.appointmentId} />;
-    case "me":
-      return <MeScreen />;
+    case "medicines":
+      return <MedicinesScreen />;
+    case "records":
+      return <RecordsScreen />;
+    case "visits":
+      return <VisitsScreen />;
+    case "timeline":
+      return <TimelineScreen />;
+    case "plan":
+      return <PlanScreen />;
     case "onboarding":
       return <OnboardingScreen />;
     case "notWell":

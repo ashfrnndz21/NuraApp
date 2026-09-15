@@ -18,7 +18,7 @@ import { whenNotReached } from "./redPath";
  *  offline, or blank — because it works with no network too (the offline card). */
 export function NotWellButton(): JSX.Element {
   return (
-    <Pill onClick={() => go({ name: "notWell" })} testId="not-well">
+    <Pill coral onClick={() => go({ name: "notWell" })} testId="not-well">
       {t().day.notWell}
     </Pill>
   );

@@ -17,6 +17,70 @@ export const en = {
     me: "Me",
     // @patient headline
     family: "Family",
+    // @patient headline
+    home: "Home",
+    // @patient headline
+    medicines: "Medicines",
+    // @patient headline
+    records: "Records",
+    // @patient headline
+    visits: "Visits",
+    // @patient headline
+    timeline: "History",
+    // @patient headline
+    plan: "Plan",
+  },
+  shell: {
+    // @patient phrase
+    askOrSearch: "Ask or search",
+    // @patient phrase
+    askAbout: "Ask about {name}",
+    // @patient phrase
+    voice: "Speak",
+    // @patient
+    voiceSaid: "Tap the microphone on your keyboard, then say your question.",
+    // @patient phrase
+    close: "Close",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "Most likely state",
+    // @patient headline
+    whatChanged: "What changed",
+    // @patient headline
+    nextVisit: "Next visit",
+    // @patient headline
+    buyMore: "Buy more",
+    // @patient headline
+    missing: "Missing from the papers",
+    // @patient
+    missingSub: "Nura added these to the questions for the visit.",
+    // @patient phrase
+    bpLabel: "Blood pressure, the top number",
+    // @patient headline
+    fromName: "From {name}",
+  },
+  places: {
+    // @patient headline
+    medicinesOwn: "Your medicines",
+    // @patient headline
+    medicinesOther: "{name}'s medicines",
+    // @patient headline
+    visitsOwn: "Your visits",
+    // @patient headline
+    visitsOther: "{name}'s visits",
+    // @patient
+    visitsNoneOther: "Nura has no visit written down for {name}.",
+    // @patient headline
+    recordsOwn: "Your papers",
+    // @patient headline
+    addTitle: "Add to your papers",
+    // @patient headline
+    timelineTitle: "What happened, in order",
+    // @patient headline
+    planTitle: "Getting ready",
+    // @patient
+    planLead: "Everything for the next visit is here.",
   },
   signIn: {
     // @patient headline

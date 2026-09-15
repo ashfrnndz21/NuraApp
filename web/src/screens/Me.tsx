@@ -2,43 +2,77 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { MeSummaryOut } from "../api/types";
-import { go, openTab, reloadDoors, signOutEverywhere } from "../flow";
+import { closeMe, meOpen, openTab, reloadDoors, signOutEverywhere } from "../flow";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
 import { backendFor, browserEnv, remindersState, turnOff, turnOn, type RemindersState } from "../push/reminders";
 import { pushKey } from "../store/deployment";
 import { density, densityChosen, me, profile, setDensity, setLanguage, token } from "../store/session";
 import { fill, LANGUAGES, language, t, type Language } from "../strings";
-import { Header, Hear, Pill, TabBar, Tile } from "../ui/components";
+import { proudLine } from "../today/model";
+import { todayPage } from "../today/page";
+import { Hear, Pill, Tile } from "../ui/components";
+import { Sheet } from "../ui/kit";
 
-/** Me: who is signed in, the language, how Nura looks, whose papers, sign out. */
-export function MeScreen(): JSX.Element {
+/** Me (D1): a sheet from the header's avatar, over whatever screen is open — never a tab. Who
+ *  is signed in; the number that only goes up; the language; how Nura looks; his family (the
+ *  chief has Family as a tab); whose papers; setting up; reminders on this phone; sign out.
+ *  Everything that was on the Me tab is here, one tap from any screen. */
+export function MeSheet(): JSX.Element | null {
   const s = t();
+  const open = meOpen.value;
   const names: Record<Language, string> = { en: s.me.en, ms: s.me.ms, zh: s.me.zh };
   const bearer = token.value;
   const papers = profile.value;
-  // The number that only goes up (E17-04), on his own Me page, in the backend's words.
-  const [proud, setProud] = useState<MeSummaryOut | null>(null);
+  const patient = density() === "patient";
+  // The number that only goes up (E17-04), on his own Me, in the backend's words.
+  const [summary, setSummary] = useState<MeSummaryOut | null>(null);
   useEffect(() => {
-    if (!bearer || !papers || papers.standing !== "owner") return setProud(null);
-    nura.meSummary(bearer, papers.profile_id, language.value).then(setProud, () => setProud(null));
-  }, [bearer, papers?.profile_id, language.value]);
+    if (!open || !bearer || !papers || papers.standing !== "owner") return setSummary(null);
+    nura.meSummary(bearer, papers.profile_id, language.value).then(setSummary, () => setSummary(null));
+  }, [open, bearer, papers?.profile_id, language.value]);
+  // Escape closes it; opening it puts the screen reader on its title.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMe();
+    };
+    document.addEventListener("keydown", onKey);
+    document.getElementById("sheet-title")?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  // Anyone else's view of the count, or his own when the summary cannot be read (offline):
+  // the number Today read, never one counted here.
+  const counted = todayPage.value?.proud ?? null;
+  const counts = proudLine(counted, s);
   return (
-    <main class="screen">
-      <Header title={s.me.title} />
-      {proud && (
+    <Sheet title={s.me.title} open={open} onClose={closeMe} closeLabel={s.shell.close} testId="me-sheet">
+      {summary ? (
         <Tile paper testId="me-proud">
           <div class="number" data-testid="me-proud-number">
-            {proud.proud_days}
+            {summary.proud_days}
           </div>
           <div class="lines" data-testid="me-proud-lines">
-            {proud.lines.map((line, at) => (
+            {summary.lines.map((line, at) => (
               <p key={at}>{line}</p>
             ))}
           </div>
           <p class="provenance">{s.today.fromDays}</p>
-          <Hear lines={proud.lines} />
+          <Hear lines={summary.lines} />
         </Tile>
+      ) : (
+        todayPage.value && (
+          <Tile paper testId="proud">
+            <div class="number" data-testid="proud-number">
+              {counted ?? 0}
+            </div>
+            <p>{counts}</p>
+            <p class="caption">{s.today.proudSub}</p>
+            <p class="provenance">{s.today.fromDays}</p>
+            <Hear lines={[counts, s.today.proudSub]} />
+          </Tile>
+        )
       )}
       <Tile paper>
         <p>{fill(s.me.signedInAs, { name: me.value?.display_name || "" })}</p>
@@ -70,11 +104,16 @@ export function MeScreen(): JSX.Element {
         )}
       </Tile>
       <Tile paper>
+        {patient && papers && (
+          <Pill onClick={() => openTab("family")} testId="me-family">
+            {s.tabs.family}
+          </Pill>
+        )}
         <Pill onClick={() => void reloadDoors()} testId="switch-profile">
           {s.me.switchProfile}
         </Pill>
-        {profile.value && (
-          <Pill onClick={() => void startOnboarding(profile.value!)} testId="set-up">
+        {papers && (
+          <Pill onClick={() => void startOnboarding(papers)} testId="set-up">
             {s.me.setUp}
           </Pill>
         )}
@@ -84,6 +123,7 @@ export function MeScreen(): JSX.Element {
         <Tile glass>
           <p>{s.today.homeScreen1}</p>
           <p>{s.today.homeScreen2}</p>
+          <p>{s.today.homeScreen3}</p>
         </Tile>
       )}
       <Tile paper>
@@ -91,8 +131,7 @@ export function MeScreen(): JSX.Element {
           {s.me.signOut}
         </Pill>
       </Tile>
-      <TabBar current="me" onSelect={openTab} />
-    </main>
+    </Sheet>
   );
 }
 

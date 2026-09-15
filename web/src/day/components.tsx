@@ -5,6 +5,7 @@ import type { CardClipOut, FeedItemOut } from "../api/types";
 import { fill, refusalLines, t } from "../strings";
 import { feedLines, whyLine } from "../today/model";
 import { Hear, Notice, Pill, Tile } from "../ui/components";
+import { PlayerStrip } from "../ui/kit";
 import type { ClipPlayer } from "../visit/clip";
 import { clipRef, type CloudView, type NudgeShown } from "./model";
 
@@ -92,7 +93,7 @@ export function ClipButton({ clip, player, playKey }: { clip: CardClipOut; playe
     });
   };
   return (
-    <div class="clip" data-testid="clip">
+    <PlayerStrip playing={player.playing.value === playKey} testId="clip">
       <Pill quiet onClick={play} testId="hear-clip">
         {fill(s.visit.hearClip, { doctor: clip.doctor })}
       </Pill>
@@ -102,7 +103,7 @@ export function ClipButton({ clip, player, playKey }: { clip: CardClipOut; playe
         </p>
       )}
       <Notice error={failed} />
-    </div>
+    </PlayerStrip>
   );
 }
 
@@ -132,8 +133,10 @@ export function ClipCard({ item, clips, player, paper, testId }: { item: FeedIte
           ))}
         </div>
       )}
-      {why && <p class="provenance">{why}</p>}
-      <Hear lines={item.voice.length > 0 ? item.voice : [item.headline, ...shown.lines, ...shown.boundary].filter(Boolean)} />
+      <div class="card-foot">
+        {why && <p class="why-line">{why}</p>}
+        <Hear lines={item.voice.length > 0 ? item.voice : [item.headline, ...shown.lines, ...shown.boundary].filter(Boolean)} />
+      </div>
     </Tile>
   );
 }

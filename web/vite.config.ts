@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { readdirSync } from "node:fs";
 import { defineConfig, type Plugin } from "vite";
 
 /** Where the app lives on its origin: the backend serves `web/dist` at `/app` (see
@@ -38,6 +39,12 @@ function precacheManifest(): Plugin {
       const files = Object.keys(bundle)
         .filter((name) => name !== "sw.js" && !name.startsWith("review/") && !/^assets\/review-/.test(name))
         .map((name) => BASE + name);
+      // The self-hosted Outfit (public/fonts) is part of the shell: the app opens offline in
+      // its own face, and no font is ever asked of anyone else.
+      const fonts = readdirSync(new URL("./public/fonts", import.meta.url))
+        .filter((name) => name.endsWith(".woff2"))
+        .map((name) => `${BASE}fonts/${name}`);
+      files.push(...fonts);
       const sw = bundle["sw.js"];
       if (sw && sw.type === "chunk") {
         sw.code = sw.code.replaceAll("__PRECACHE__", JSON.stringify(files));
@@ -71,6 +78,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/unit/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.ts", "tests/unit/**/*.test.tsx"],
   },
 });

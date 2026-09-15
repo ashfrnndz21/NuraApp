@@ -3,11 +3,12 @@ import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut } from "../api/types";
 import { answerView, askMode } from "../feed/ask";
-import { go, openTab } from "../flow";
+import { go } from "../flow";
 import { density, profile, token } from "../store/session";
 import { fill, language, t } from "../strings";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
-import { Field, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { Shell } from "./Shell";
 
 /** Ask about a card (E21-04), answered by E03's recall (`POST /profiles/{id}/ask`): voice
  *  mode in the patient's density, text in the caregiver's. He types his question — or says it
@@ -15,9 +16,9 @@ import { Field, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/component
  *  voice leaves the phone. The answer is the backend's: each cited line under its source line,
  *  the honest line when nothing on his papers answers, and the boundary last. Hear reads it
  *  out on tap, never by itself. A refusal is said in one plain sentence. */
-export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
+export function AskScreen({ item, question: asked }: { item?: FeedItemOut; question?: string }): JSX.Element {
   const s = t();
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(asked ?? "");
   const [answer, setAnswer] = useState<AnswerOut | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -48,14 +49,21 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
     }
   };
 
+  // A question typed into the ask bar is asked at once: the answer is what he came for.
+  useEffect(() => {
+    if (asked && asked.trim()) void send();
+  }, []);
+
   const view = answer ? answerView(answer) : null;
   return (
-    <main class="screen" data-testid="ask-screen" data-mode={mode}>
-      <Header title={s.feed.askTitle} />
-      <Tile paper>
-        <p class="caption">{s.feed.askAbout}</p>
-        <h2 class="title">{item.headline}</h2>
-      </Tile>
+    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }}>
+      <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
+      {item && (
+        <Tile paper>
+          <p class="caption">{s.feed.askAbout}</p>
+          <h2 class="title">{item.headline}</h2>
+        </Tile>
+      )}
       <Tile paper>
         <Field label={s.feed.askLabel} name="question" value={question} onInput={setQuestion} maxLength={300} />
         <p class="caption">{s.feed.askLead}</p>
@@ -99,10 +107,11 @@ export function AskScreen({ item }: { item: FeedItemOut }): JSX.Element {
           <Hear lines={view.spoken} />
         </Tile>
       )}
-      <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
-        {s.feed.back}
-      </Pill>
-      <TabBar current="today" onSelect={openTab} />
-    </main>
+      {item && (
+        <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
+          {s.feed.back}
+        </Pill>
+      )}
+    </Shell>
   );
 }

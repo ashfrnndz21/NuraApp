@@ -50,11 +50,10 @@ body {
   position: relative;
   max-width: 480px;
   margin: 0 auto;
-  /* Bottom padding clears the fixed tab bar — its 56px target, its 12px of padding, the
-     12px it floats above the edge, and the phone's own inset — plus one tile gap, so the
-     last card scrolls fully out from under it. */
+  /* A screen with the tab bar is inside the shell (design.css), which reserves the bar's
+     space; a screen without it (sign-in, the doors, onboarding) ends with a plain margin. */
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
-    calc(var(--target) + 3 * var(--space-2) + var(--space-3) + env(safe-area-inset-bottom));
+    calc(var(--space-4) + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -264,40 +263,7 @@ body {
   color: var(--plum);
 }
 
-/* The tab bar: glass, two words, no badges */
-.tabbar {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
-  width: min(calc(100% - 2 * var(--space-3)), 440px);
-  display: flex;
-  justify-content: space-around;
-  padding: 6px;
-  border-radius: var(--radius-pill);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: var(--glass-border);
-  box-shadow: var(--tile-shadow);
-  z-index: 2;
-}
-.tabbar button {
-  font: inherit;
-  font-size: var(--text-body);
-  color: var(--ink-soft);
-  background: none;
-  border: 0;
-  min-height: var(--target);
-  flex: 1;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-.tabbar button[aria-current="page"] {
-  color: var(--plum);
-  font-weight: 500;
-  background: var(--paper-bg);
-}
+/* The tab bar and the shell it sits in: design.css. */
 
 /* Colour on the figure only, never as a fill */
 .good { color: var(--good); }

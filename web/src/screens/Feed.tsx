@@ -6,7 +6,7 @@ import { clipsOf } from "../day/model";
 import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import type { JSX } from "preact";
 import type { FeedItemOut } from "../api/types";
-import { go, openTab } from "../flow";
+import { go } from "../flow";
 import { cardView, speechLanguage, statusLine, type CardView, type SideAction } from "../feed/model";
 import type { Playback } from "../feed/playback";
 import { feedFor } from "../feed/session";
@@ -14,7 +14,8 @@ import type { Entry, FeedStore, Note } from "../feed/store";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
-import { Card, Notice, TabBar, Tile } from "../ui/components";
+import { Card, Notice, Tile } from "../ui/components";
+import { Shell } from "./Shell";
 import "../ui/feed.css";
 
 /** The vertical feed (E21-01): one card fills the screen; up for the next. The backend's
@@ -132,7 +133,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const keptAt = store.keptAt.value;
 
   return (
-    <main class="feed-screen" data-density={density()} data-testid="feed-screen">
+    <Shell tab="today" fill>
+      <div class="feed-screen" data-density={density()} data-testid="feed-screen">
       <div class="feed-strip">
         {store.offline.value && keptAt && shown.length > 0 && (
           <Tile glass testId="offline">
@@ -208,8 +210,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         </div>
       )}
 
-      <TabBar current="today" onSelect={openTab} />
-    </main>
+      </div>
+    </Shell>
   );
 }
 

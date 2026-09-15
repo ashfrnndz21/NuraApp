@@ -1,0 +1,704 @@
+/* D1 — the design system's components and the app shell (docs/design-system.md §2–§5,
+   docs/ui-mockup.html, docs/ui-mockup-v2.html). Every value comes from tokens.css; the two
+   densities move only the type scale, the target and which ink secondary text is set in. */
+
+/* --- Icons: 1.5px at any size, never alone ------------------------------------------------ */
+.icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.icon path {
+  vector-effect: non-scaling-stroke;
+}
+.icon[data-icon="play"] {
+  fill: currentColor;
+}
+
+/* --- The shell: header, the scrolling page, the tab bar under it ---------------------------
+   The page scrolls inside its own region and the tab bar is the next thing in the flow, so it
+   reserves its own space: nothing ever scrolls beneath it, and it never covers a line. */
+#app:has(> .shell) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#app:has(> .shell) > .demo-banner {
+  position: relative;
+  flex: none;
+}
+.shell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.shell-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: calc(var(--space-2) + env(safe-area-inset-top)) var(--gutter) var(--space-1);
+}
+.shell-head .brand-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.whose {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+}
+.whose-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.me-button {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target);
+  min-width: var(--target);
+  padding: 4px 14px 4px 4px;
+  border-radius: var(--radius-pill);
+  border: var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+  font: inherit;
+  font-size: var(--text-button);
+  font-weight: var(--weight-button);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.me-button:focus-visible,
+.tabbar button:focus-visible,
+.poster:focus-visible,
+.askbar-voice:focus-visible,
+.askbar-go:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--plum);
+  color: var(--white);
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1;
+}
+.avatar.soft {
+  background: #e7e0f1;
+  color: var(--plum);
+}
+.shell-ask {
+  flex: none;
+  padding: 0 var(--gutter) var(--space-1);
+}
+/* The page itself: the old `.screen` column, now the region that scrolls. */
+.shell > .shell-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-1) var(--gutter) var(--space-3);
+}
+.shell.fill > .shell-scroll {
+  overflow: hidden;
+  padding: 0;
+}
+.shell.fill .feed-screen {
+  height: 100%;
+  max-width: none;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* --- The tab bar: glass, an icon above each word, in the flow under the page --------------- */
+.tabbar {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  margin: var(--space-1) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+  box-shadow: var(--glass-highlight), var(--tile-shadow);
+}
+.tabbar button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--target);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  font: inherit;
+  font-size: var(--text-tab);
+  line-height: 1.15;
+  color: var(--ink-quiet);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.tabbar button[aria-current="page"] {
+  color: var(--plum);
+  font-weight: 500;
+  background: var(--paper-bg);
+}
+.tab-word {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- The hero: on the wash, no tile ------------------------------------------------------- */
+.hero-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 6px var(--space-1);
+}
+.hero-greeting {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  line-height: 1.25;
+}
+.hero-sub,
+.hero-label {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.hero-label {
+  margin-top: var(--space-1);
+}
+.hero-figure {
+  margin-top: var(--space-1);
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-variant-numeric: var(--numeric);
+  overflow-wrap: anywhere;
+}
+.hero-words {
+  font-size: var(--text-body);
+  line-height: 1.35;
+}
+:root[data-density="caregiver"] .hero-words {
+  font-size: 1.125rem;
+  color: var(--ink-soft);
+}
+.hero-block .sparkline,
+.hero-block .chip-row {
+  margin-top: var(--space-2);
+}
+
+/* In his density every word on the wash is Ink: 7:1 on every stop. */
+:root[data-density="patient"] .hero-sub,
+:root[data-density="patient"] .hero-label,
+:root[data-density="patient"] .section-label,
+:root[data-density="patient"] .tabbar button {
+  color: var(--ink);
+}
+:root[data-density="patient"] .tabbar button[aria-current="page"] {
+  color: var(--plum);
+}
+
+.section-label {
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--ink-quiet);
+  margin: var(--space-2) 6px 0;
+}
+
+/* --- Cards: the grammar ---------------------------------------------------------------------- */
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.card-head .title {
+  min-width: 0;
+}
+.card-icon {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--plum);
+  background: linear-gradient(145deg, #ffffff, #e9e2f1);
+  border: 1px solid rgba(78, 58, 120, 0.15);
+}
+.card-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.card-figure .number {
+  font-variant-numeric: var(--numeric);
+}
+.card-figure[data-tone="good"] .number { color: var(--good); }
+.card-figure[data-tone="watch"] .number { color: var(--watch); }
+.card-figure[data-tone="act"] .number { color: var(--act); }
+.card-direction {
+  font-size: var(--text-body);
+  color: var(--ink-quiet);
+}
+.tile-title {
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+.source-line {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.why-line {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  padding-top: var(--space-1);
+  border-top: var(--hairline);
+}
+.tile .provenance {
+  color: var(--ink-quiet);
+}
+/* The foot of a card: where it came from or why it is here, and its spoken twin beside it. */
+.card-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-half);
+  padding-top: var(--space-1);
+  border-top: var(--hairline);
+}
+.card-foot > .why-line,
+.card-foot > .provenance {
+  flex: 1 1 10rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  align-self: center;
+}
+.card-foot > .pill {
+  flex: none;
+  margin-left: auto;
+}
+
+/* --- Pills ----------------------------------------------------------------------------------- */
+.pill.compact {
+  width: auto;
+  padding: 0 var(--space-2);
+}
+.pill.quiet.compact {
+  padding: 0 var(--space-1);
+}
+.pill.coral {
+  background: var(--coral-pill-bg);
+  border-color: var(--coral-pill-border);
+  color: var(--coral-pill-ink);
+  min-height: calc(var(--target) + 4px);
+}
+.pill .pill-word {
+  min-width: 0;
+}
+
+/* --- Chips and dots -------------------------------------------------------------------------- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.glass-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-chip);
+  background: var(--chip-bg);
+  backdrop-filter: var(--chip-blur);
+  -webkit-backdrop-filter: var(--chip-blur);
+  border: var(--chip-border);
+  color: var(--ink);
+  font-size: var(--text-caption);
+  line-height: 1.3;
+}
+.tile.paper .glass-chip {
+  background: #f3eff7;
+  border-color: rgba(78, 58, 120, 0.12);
+}
+.tone-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(78, 58, 120, 0.35);
+}
+.tone-dot[data-tone="good"] { background: var(--good); }
+.tone-dot[data-tone="watch"] { background: var(--watch); }
+.tone-dot[data-tone="act"] { background: var(--act); }
+
+/* --- Ask or search --------------------------------------------------------------------------- */
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.askbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: calc(var(--target) + 8px);
+  padding: 4px 4px 4px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-bg);
+  border: var(--paper-border);
+  box-shadow: 0 8px 24px rgba(60, 40, 80, 0.08);
+}
+.askbar:focus-within {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.askbar-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-quiet);
+}
+.askbar-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--target);
+  border: 0;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-body);
+  color: var(--ink);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.askbar-field input::placeholder {
+  color: var(--ink-quiet);
+  opacity: 1;
+}
+.askbar-field input::-webkit-search-cancel-button {
+  display: none;
+}
+.askbar-voice,
+.askbar-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target);
+  min-width: var(--target);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--text-button);
+  font-weight: var(--weight-button);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.askbar-voice {
+  border: 0;
+  background: #efe9f5;
+  color: var(--plum);
+}
+.askbar-go {
+  border: 1px solid var(--plum);
+  background: var(--plum);
+  color: var(--white);
+}
+
+/* --- Sparkline ------------------------------------------------------------------------------- */
+.sparkline {
+  margin: 0;
+}
+.sparkline svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.spark-band {
+  fill: var(--band);
+}
+.spark-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.spark-last { fill: var(--ink); }
+.spark-last[data-tone="good"] { fill: var(--good); }
+.spark-last[data-tone="watch"] { fill: var(--watch); }
+.spark-last[data-tone="act"] { fill: var(--act); }
+.spark-caption {
+  margin-top: 4px;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+
+/* --- Memo, player strip, poster, review field, panel ---------------------------------------- */
+.memo-quote {
+  margin: 0;
+  padding-left: var(--space-2);
+  border-left: 3px solid var(--lavender);
+}
+.memo-quote p + p {
+  margin-top: 4px;
+}
+.player-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-tile);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
+}
+.tile.paper .player-strip {
+  background: #f3eff7;
+  border-color: rgba(78, 58, 120, 0.1);
+}
+.player-strip .pill {
+  justify-content: flex-start;
+}
+.player-strip .caption {
+  padding: 0 var(--space-2) var(--space-1);
+  font-size: var(--text-body);
+  color: var(--ink);
+}
+.poster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 500;
+  color: var(--plum);
+  text-align: left;
+  cursor: pointer;
+}
+.poster-art {
+  width: 84px;
+  height: 84px;
+  flex: none;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--plum);
+  background: linear-gradient(135deg, #e5ddef, #f4e4ea 60%, #dde9e1);
+}
+.poster.wide {
+  flex-direction: column;
+  align-items: stretch;
+}
+.poster.wide .poster-art {
+  width: 100%;
+  height: 120px;
+}
+.review-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: var(--hairline);
+}
+.review-value {
+  font-weight: 500;
+  font-variant-numeric: var(--numeric);
+  padding-bottom: 2px;
+  border-bottom: 2px solid var(--good);
+}
+.review-value.check {
+  border-bottom: 2px dotted var(--watch);
+}
+.review-unit {
+  font-weight: 400;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.panel-title {
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+.panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.panel-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: var(--hairline);
+  line-height: 1.45;
+}
+.panel-list li:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.panel-list .tone-dot {
+  margin-top: 0.45em;
+}
+.panel-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.panel-meta {
+  flex: none;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  white-space: nowrap;
+}
+
+/* --- Home's two tiles side by side; Today's family note ------------------------------------- */
+.two-up {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tile-gap);
+}
+.two-up > .tile {
+  min-width: 0;
+}
+.note-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.visit-lines p + p {
+  margin-top: 2px;
+}
+
+/* --- The sheet ------------------------------------------------------------------------------- */
+.sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 39, 51, 0.28);
+}
+.sheet-panel {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100dvh - var(--space-3) - env(safe-area-inset-top));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  background: linear-gradient(160deg, var(--wash-a), var(--wash-b) var(--wash-at), var(--wash-c));
+  box-shadow: 0 -8px 32px rgba(60, 40, 80, 0.12);
+  animation: sheet-in var(--settle);
+}
+.sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--gutter) var(--space-1);
+}
+.sheet-head .title:focus {
+  outline: none;
+}
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tile-gap);
+  padding: 0 var(--gutter) calc(var(--space-3) + env(safe-area-inset-bottom));
+}
+@keyframes sheet-in {
+  from { transform: translateY(24px); opacity: 0.6; }
+  to { transform: none; opacity: 1; }
+}
+
+/* --- For the review screenshots only: the whole page, the tab bar at its end ---------------- */
+html.shot-full #app {
+  height: auto !important;
+  overflow: visible !important;
+}
+html.shot-full .shell {
+  height: auto;
+}
+html.shot-full .shell > .shell-scroll {
+  flex: none;
+  overflow: visible;
+}

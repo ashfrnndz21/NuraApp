@@ -28,6 +28,7 @@ import type {
   Scope,
   TaskOut,
   ThreadEntryOut,
+  ThreadPageOut,
   TrailDayOut,
   WithdrawalOut,
   WithdrawnOut,
@@ -100,6 +101,10 @@ export const digest = (token: string, profileId: string, since: string, language
 
 export const postMessage = (token: string, profileId: string, text: string) =>
   api<ThreadEntryOut>(`/profiles/${profileId}/thread`, { method: "POST", token, body: { text } });
+
+/** The family thread, newest first (E12-02): what the family said, as they wrote it. */
+export const thread = (token: string, profileId: string, limit = 20) =>
+  api<ThreadPageOut>(`/profiles/${profileId}/thread`, { token, query: { limit: String(limit) } });
 
 // --- E12-03: the roster and the tasks ---------------------------------------------------------------
 

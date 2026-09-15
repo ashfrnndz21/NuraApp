@@ -17,6 +17,70 @@ export const zh = {
     me: "我",
     // @patient headline
     family: "家人",
+    // @patient headline
+    home: "首页",
+    // @patient headline
+    medicines: "药",
+    // @patient headline
+    records: "文件",
+    // @patient headline
+    visits: "看诊",
+    // @patient headline
+    timeline: "过往",
+    // @patient headline
+    plan: "计划",
+  },
+  shell: {
+    // @patient phrase
+    askOrSearch: "问问题或搜索",
+    // @patient phrase
+    askAbout: "问关于{name}的事",
+    // @patient phrase
+    voice: "说话",
+    // @patient
+    voiceSaid: "请点键盘上的麦克风，然后说出您的问题。",
+    // @patient phrase
+    close: "关闭",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "最可能的状况",
+    // @patient headline
+    whatChanged: "有什么变化",
+    // @patient headline
+    nextVisit: "下次看诊",
+    // @patient headline
+    buyMore: "再买一些",
+    // @patient headline
+    missing: "文件里缺少的",
+    // @patient
+    missingSub: "Nura 已把这些加进看诊要问的问题里。",
+    // @patient phrase
+    bpLabel: "血压，上面的数字",
+    // @patient headline
+    fromName: "来自{name}",
+  },
+  places: {
+    // @patient headline
+    medicinesOwn: "您的药",
+    // @patient headline
+    medicinesOther: "{name}的药",
+    // @patient headline
+    visitsOwn: "您的每次看诊",
+    // @patient headline
+    visitsOther: "{name}的看诊",
+    // @patient
+    visitsNoneOther: "Nura还没有记下{name}的看诊。",
+    // @patient headline
+    recordsOwn: "您的文件",
+    // @patient headline
+    addTitle: "加到您的文件里",
+    // @patient headline
+    timelineTitle: "按时间排的事",
+    // @patient headline
+    planTitle: "做好准备",
+    // @patient
+    planLead: "下次看诊要的都在这里。",
   },
   signIn: {
     // @patient headline

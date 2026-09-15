@@ -260,6 +260,39 @@ export interface StateOut {
   stale_after: string | null;
   /** The line the posture is shown under (E16-01), one idea per line, joined by newlines. */
   boundary: string;
+  /** The posture as one word and one line, in the language asked for (D1: the chief's hero). */
+  word?: string;
+  line?: string;
+  /** What raised the posture, as chips, each with its tone. */
+  drivers?: StateDriverOut[];
+}
+
+export interface StateDriverOut {
+  key: string;
+  text: string;
+  tone: string | null;
+}
+
+/** The one big number on his Today (`GET …/medicines/now`): null when nothing is left today. */
+export interface NowOut {
+  count: number | null;
+  anchor: string | null;
+  words: string | null;
+}
+
+/** One line of what changed, in his words, with the tone of its dot (null: no tone). */
+export interface ChangeLineOut {
+  section: string;
+  key: string;
+  text: string;
+  tone?: string | null;
+}
+
+export interface ChangesOut {
+  language: string;
+  first_look: boolean;
+  lines: ChangeLineOut[];
+  waiting: ChangeLineOut[];
 }
 
 export interface ProudOut {
@@ -490,6 +523,8 @@ export interface FactOut {
   attribute: string;
   value: unknown;
   unit: string | null;
+  /** When it holds from: a reading's moment. */
+  valid_from: string;
 }
 
 export interface ReviewConfirmedOut {

@@ -1,4 +1,5 @@
 import { signal } from "@preact/signals";
+import type { Tab } from "./nav";
 import * as nura from "./api/nura";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
@@ -22,12 +23,18 @@ export type Screen =
   | { name: "today"; saved?: boolean }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
-  /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
-  | { name: "ask"; item: FeedItemOut }
+  /** Ask (E03's recall, `POST /profiles/{id}/ask`), shown as the backend wrote it: about one
+   *  card, or the question typed into the ask bar on top of Today and Home. */
+  | { name: "ask"; item?: FeedItemOut; question?: string }
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
-  | { name: "me" }
+  /** The tabs that are not Today (D1): his medicines, his papers, his visits; her timeline and plan. */
+  | { name: "medicines" }
+  | { name: "records" }
+  | { name: "visits" }
+  | { name: "timeline" }
+  | { name: "plan" }
   | { name: "onboarding" }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
@@ -58,16 +65,29 @@ export type FamilyPart =
   | "settings"
   | "documents";
 
-export type Tab = "today" | "family" | "me";
+export type { Tab };
 
-/** The tab bar's three places. */
+/** Each tab's first screen (nav.ts has which tabs each persona has). */
 export function openTab(tab: Tab): void {
   go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
 }
 
 export const screen = signal<Screen>({ name: "loading" });
 
+/** Me (D1): a sheet over whatever screen is open, from the header's avatar — never a tab. */
+export const meOpen = signal(false);
+
+export function openMe(): void {
+  meOpen.value = true;
+}
+
+export function closeMe(): void {
+  meOpen.value = false;
+}
+
+/** A new screen closes the Me sheet: whatever was tapped in it has somewhere to go. */
 export function go(next: Screen): void {
+  meOpen.value = false;
   screen.value = next;
 }
 
