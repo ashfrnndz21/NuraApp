@@ -124,6 +124,7 @@ async def test_his_own_taken_stops_the_ladder_before_anyone_else_is_asked(
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
         "Thank you, I wrote it down.",
+        "You took your blood pressure tablet with breakfast.",
         "Mei can see you took it.",
     ]
     assert (await sg.scalars(select(DoseTaken))).one().by_person_id == h.pa.id

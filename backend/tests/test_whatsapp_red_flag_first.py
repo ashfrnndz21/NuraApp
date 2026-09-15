@@ -111,6 +111,7 @@ async def test_taken_writes_the_tap_for_the_tablet_whose_window_is_open(
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
         "Thank you, I wrote it down.",
+        "You took your blood pressure tablet with breakfast.",
         "Mei can see you took it.",
     ]
     tap = (await sg.scalars(select(DoseTaken))).one()

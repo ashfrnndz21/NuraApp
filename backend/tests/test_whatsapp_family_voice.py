@@ -102,7 +102,7 @@ async def test_the_family_group_is_who_reads_the_thread_and_a_message_there_land
     entry = await post_message(sg, context=home.chief, text="The doctor moved it to 3 pm.")
     assert await mirror_to_group(sg, context=home.chief, provider=home.whatsapp, message=entry)
     [out] = [sent for sent in home.whatsapp.sent if sent.group_id == gid]
-    assert out.text == "Mei wrote in the family thread:\nThe doctor moved it to 3 pm."
+    assert out.text == "Mei wrote this in the Nura app:\nThe doctor moved it to 3 pm."
 
     # Her key closed: out of the group at once; her next message there is not taken in.
     assert home.chief.key_id is not None
@@ -203,7 +203,10 @@ async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(
     kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert kept.outcome == "voice_note" and kept.note_id is not None
     assert [r.text for r in kept.replies] == [
-        "Nura kept your voice note.\nNura could not hear this note."
+        (
+            "Nura kept your voice note.\nNura could not hear this note.\n"
+            "If you feel unwell, call your family now."
+        )
     ]
     note = await sg.get(EventNote, kept.note_id)
     assert note is not None and note.transcript_key is None

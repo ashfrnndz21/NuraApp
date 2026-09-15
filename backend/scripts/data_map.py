@@ -709,6 +709,22 @@ CLASSES: dict[str, str] = {
     "whatsapp_group.opened_by_person_id": IDENTIFIER,
     "whatsapp_group.opened_at": OPERATIONAL,
     "whatsapp_group.members_digest": IDENTIFIER,
+    # The webhook's receipt of one inbound message (#158): the provider's id and whether it was
+    # handled, never the words and never whose it was — operational through and through.
+    "whatsapp_receipt.id": OPERATIONAL,
+    "whatsapp_receipt.provider_message_id": OPERATIONAL,
+    "whatsapp_receipt.first_seen_at": OPERATIONAL,
+    "whatsapp_receipt.handled_at": OPERATIONAL,
+    "whatsapp_receipt.failures": OPERATIONAL,
+    "whatsapp_receipt.last_failed_at": OPERATIONAL,
+    "whatsapp_receipt.last_failure": OPERATIONAL,
+    # "Which tablet?" (#162): the tablets it read out to him are his medicines — health.
+    "whatsapp_dose_question.id": HEALTH,
+    "whatsapp_dose_question.thread_id": HEALTH,
+    "whatsapp_dose_question.asked_at": OPERATIONAL,
+    "whatsapp_dose_question.expires_at": OPERATIONAL,
+    "whatsapp_dose_question.doses": HEALTH,
+    "whatsapp_dose_question.answered_at": OPERATIONAL,
     # A proposal is what was heard, waiting for the poster's yes: a reading, not yet a fact.
     "whatsapp_proposal.thread_id": HEALTH,
     "whatsapp_proposal.message_id": HEALTH,
