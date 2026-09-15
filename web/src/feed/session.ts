@@ -2,8 +2,8 @@ import * as nura from "../api/nura";
 import type { ProfileOut } from "../api/types";
 import { loadFeed, saveFeed } from "../offline/feedCache";
 import { bindingOf, clearProfileData, zoneOf } from "../offline/todayCache";
-import { speak, stopSpeaking } from "../speech/speak";
-import { browserAudio, Playback } from "./playback";
+import { voice } from "../player/voice";
+import { Playback } from "./playback";
 import { FeedStore } from "./store";
 
 /** The feed for the papers open now: one store and one player, kept while he moves between
@@ -41,9 +41,7 @@ export function feedFor(bearer: string, papers: ProfileOut): OpenFeed {
   });
   const playback = new Playback({
     fetchVoice: (itemId, language) => nura.feedVoice(bearer, profileId, itemId, language),
-    speak,
-    stopSpeaking,
-    audio: browserAudio,
+    player: voice,
     onFailure: (failure) => store.say(failure),
   });
   open = { id, store, playback };

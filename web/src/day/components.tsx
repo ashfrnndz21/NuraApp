@@ -1,11 +1,10 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { Refused } from "../api/client";
 import type { CardClipOut, FeedItemOut } from "../api/types";
-import { fill, refusalLines, t } from "../strings";
+import { fill, t } from "../strings";
 import { feedLines, whyLine } from "../today/model";
 import { Hear, Notice, Pill, Tile } from "../ui/components";
-import type { ClipPlayer } from "../visit/clip";
+import { HearClip } from "../ui/Player";
 import { clipRef, type CloudView, type NudgeShown } from "./model";
 
 /** The feeling cloud on Today (E17-01): the backend's question, then its words, biggest first.
@@ -65,42 +64,16 @@ export function NudgeTile({ shown, busy, onAnswer }: { shown: NudgeShown; busy: 
 }
 
 /** "Hear what Dr Tan said" under one line of a card (E21-03, E03-05): that stretch alone, on a
- *  tap, its caption — the card's own line — shown while it plays. A recording this key may not
- *  hear (`OnlyTheFamilyHears`, 403) shows the refusal's sentence in place of the button, never
- *  an empty player.
- *
- *  The hook for W4's shared player (#63): when `ui/Player.tsx`'s `HearClip` is on main, it
- *  takes this component's place with the same `clip` — the stretch, the caption, the refusal. */
-export function ClipButton({ clip, player, playKey }: { clip: CardClipOut; player: ClipPlayer; playKey: string }): JSX.Element {
+ *  tap, through the one player (E15-07, `ui/Player.tsx`'s `HearClip`) — its controls and the
+ *  card's own line as the transcript while it plays. A recording this key may not hear
+ *  (`OnlyTheFamilyHears`, 403) shows the refusal's sentence in place of the button, never an
+ *  empty player; any other failure is said under it. */
+export function ClipButton({ clip, playKey }: { clip: CardClipOut; playKey: string }): JSX.Element {
   const s = t();
-  const [refused, setRefused] = useState<string | null>(null);
   const [failed, setFailed] = useState<unknown>(null);
-  if (refused) {
-    return (
-      <div class="lines" role="alert" data-testid="clip-refused">
-        {refusalLines(refused).map((line, at) => (
-          <p key={at}>{line}</p>
-        ))}
-      </div>
-    );
-  }
-  const play = () => {
-    setFailed(null);
-    player.play(playKey, clipRef(clip)).catch((failure: unknown) => {
-      if (failure instanceof Refused && failure.status === 403) setRefused(failure.refusal);
-      else setFailed(failure);
-    });
-  };
   return (
     <div class="clip" data-testid="clip">
-      <Pill quiet onClick={play} testId="hear-clip">
-        {fill(s.visit.hearClip, { doctor: clip.doctor })}
-      </Pill>
-      {player.playing.value === playKey && (
-        <p class="caption" data-testid="clip-caption" aria-live="polite">
-          {clip.line}
-        </p>
-      )}
+      <HearClip name={playKey} clip={clipRef(clip)} line={clip.line} label={fill(s.visit.hearClip, { doctor: clip.doctor })} onError={setFailed} />
       <Notice error={failed} />
     </div>
   );
@@ -108,7 +81,7 @@ export function ClipButton({ clip, player, playKey }: { clip: CardClipOut; playe
 
 /** A feed card whose lines were said at a recorded visit (the memo card): each line, and under
  *  it the stretch it was said in; the boundary last; its why; its spoken twin. */
-export function ClipCard({ item, clips, player, paper, testId }: { item: FeedItemOut; clips: Map<string, CardClipOut>; player: ClipPlayer; paper: boolean; testId: string }): JSX.Element {
+export function ClipCard({ item, clips, paper, testId }: { item: FeedItemOut; clips: Map<string, CardClipOut>; paper: boolean; testId: string }): JSX.Element {
   const shown = feedLines(item);
   const why = whyLine(item);
   return (
@@ -120,7 +93,7 @@ export function ClipCard({ item, clips, player, paper, testId }: { item: FeedIte
           return (
             <div key={at} class="clip-line" data-testid="card-line">
               <p>{line}</p>
-              {clip && <ClipButton clip={clip} player={player} playKey={`${item.item_id}:${at}`} />}
+              {clip && <ClipButton clip={clip} playKey={`${item.item_id}:${at}`} />}
             </div>
           );
         })}
