@@ -372,7 +372,7 @@ What you will see (the numbers, ids, dates and times change each run; the visit 
     [changed  ] Sejak Isnin 14 September, ada 1 nombor baru dalam buku tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, 3 perkara berubah tentang ubat anda.
     [changed  ] Anda rasa pening pada Isnin 14 September.
-    [changed  ] Rasanya agak teruk dan ia bermula pagi itu.
+    [changed  ] Rasanya agak teruk sejak pagi itu.
     [questions] Tanya Dr Tan sama ada aspirin dan ubat cair darah boleh dimakan bersama.
     [questions] Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
     [bring    ] Bawa buku tekanan darah anda pada Khamis 17 September.
@@ -1085,8 +1085,8 @@ What you will see (the numbers and ids change each run):
 ✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache hit — the fixture voice is silence as long as the words take to say
 ✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, nudge_handed_over, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
 ✓ 07:40 on Tuesday 15 September, three days before his visit with Dr Tan on Friday 18 September: the pre-visit brief was rendered then and its card sent — Pa (patient): sent by whatsapp, template visit_brief; rule brief_three_days_before; 08:10 sends it no second time. What he reads:
-    → Your visit is in a few days.
-    → You see Dr Tan on Friday 18 September at 10 in the morning.
+    → Your next visit is on Friday 18 September.
+    → You see Dr Tan at 10 in the morning.
     → This visit is about your blood pressure.
     → Bring your blood pressure book on Friday 18 September.
     → Nura prepared this from your papers.

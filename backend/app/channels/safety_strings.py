@@ -364,9 +364,9 @@ SYMPTOM_LOG: Mapping[str, Mapping[str, str]] = {
         "zh": "从{since}开始。",
     },
     "sym.severity_since": {
-        "en": "It was {severity} and it started {since}.",
-        "ms": "Rasanya {severity} dan ia bermula {since}.",
-        "zh": "感觉{severity}，从{since}开始。",
+        "en": "It was {severity} from {since}.",
+        "ms": "Rasanya {severity} sejak {since}.",
+        "zh": "从{since}起感觉{severity}。",
     },
     "sym.by_voice": {
         "en": "{name} said this out loud.",
@@ -448,8 +448,8 @@ SYMPTOM_LINES: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}在{date}感到无力。",
     },
     "joint_pain": {
-        "en": "{name} had pain in the joints on {date}.",
-        "ms": "{name} sakit sendi pada {date}.",
+        "en": "{name}'s joints hurt on {date}.",
+        "ms": "Sendi {name} sakit pada {date}.",
         "zh": "{name}在{date}关节痛。",
     },
     "diarrhoea": {
@@ -478,9 +478,9 @@ SYMPTOM_LINES: Mapping[str, Mapping[str, str]] = {
         "zh": "{name}在{date}感到喘不过气。",
     },
     "one_sided_swelling": {
-        "en": "{name} had swelling on one side on {date}.",
-        "ms": "{name} bengkak sebelah pada {date}.",
-        "zh": "{name}在{date}一边肿了。",
+        "en": "One of {name}'s legs was swollen on {date}.",
+        "ms": "Sebelah kaki {name} bengkak pada {date}.",
+        "zh": "{name}在{date}有一条腿肿了。",
     },
     "worst_headache": {
         "en": "{name} had the worst headache ever on {date}.",
@@ -580,8 +580,8 @@ SYMPTOM_LINES_YOU: Mapping[str, Mapping[str, str]] = {
         "zh": "您在{date}感到无力。",
     },
     "joint_pain": {
-        "en": "You had pain in the joints on {date}.",
-        "ms": "Anda sakit sendi pada {date}.",
+        "en": "Your joints hurt on {date}.",
+        "ms": "Sendi anda sakit pada {date}.",
         "zh": "您在{date}关节痛。",
     },
     "diarrhoea": {
@@ -610,9 +610,9 @@ SYMPTOM_LINES_YOU: Mapping[str, Mapping[str, str]] = {
         "zh": "您在{date}感到喘不过气。",
     },
     "one_sided_swelling": {
-        "en": "You had swelling on one side on {date}.",
-        "ms": "Anda bengkak sebelah pada {date}.",
-        "zh": "您在{date}一边肿了。",
+        "en": "One of your legs was swollen on {date}.",
+        "ms": "Sebelah kaki anda bengkak pada {date}.",
+        "zh": "您在{date}有一条腿肿了。",
     },
     "worst_headache": {
         "en": "You had the worst headache ever on {date}.",

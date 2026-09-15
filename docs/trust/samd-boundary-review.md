@@ -85,7 +85,7 @@ The team does not build these without a new review:
 - A dose calculation, a dose suggestion, or an instruction to start, stop, change, skip or double a medicine. A different amount is a question.
 - An individualised risk score, a probability, or a "most likely cause".
 - A recommendation of a level of care ("go to A&E") that is Nura's rather than the hospital letter's own words.
-  The red flag's step on WhatsApp by tier and by the doctor's hours (ADR 0010: the ambulance, the doctor today, the emergency department of the hospital on his insurance out of hours) is such a recommendation. It was built on the operator's instruction of 15 September 2026 and does not ship to a family before question 10 is answered and a clinician signs the table.
+  The red flag's step on WhatsApp by tier and by the doctor's hours (ADR 0010: the ambulance, the doctor today, the emergency department of the hospital on his insurance out of hours) is such a recommendation. It was built on the operator's instruction of 15 September 2026 and does not ship to a family before question 10 is answered and a clinician signs the table. This is enforced in code: the table is chosen only when `NURA_RED_FLAG_TIERS=1` is set, and without it every red flag's step is the ambulance (`app.safety.red_flags.escalation_for`, tested).
 - Booking, rescheduling or messaging a clinic without a person's confirm.
 - Pharmacology, interactions or dosing from a model rather than the licensed data.
 - Closing the loop with a clinic in a way that lets Nura's output stand in for a clinician's decision.

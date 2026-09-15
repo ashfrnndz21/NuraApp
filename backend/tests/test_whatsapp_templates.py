@@ -123,6 +123,8 @@ def test_every_template_renders_and_passes_plain_words(name: str, language: str)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_reply_renders_and_passes_plain_words(key: str, language: str) -> None:
     params = {slot: FILL[slot] for slot in FILL}
+    # A day is said in the reader's language: "Isnin 14 September", "9月14日星期一".
+    params["day"] = {"en": FILL["day"], "ms": "Isnin 14 September", "zh": "9月14日星期一"}[language]
     text = reply(key, language, **params)
     assert [f for f in verify(text, language) if f.severity == "fail"] == []
 

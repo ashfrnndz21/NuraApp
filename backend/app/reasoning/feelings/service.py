@@ -125,7 +125,10 @@ class Answered:
     clinic_card: tuple[Line, ...] = ()
     """The not-feeling-well table's middle row, when his answer is it — it began yesterday or
     before, it is more than yesterday, or a medicine started in the last fourteen days lists
-    this word as a watch-out: call the clinic today (E13-02). Empty otherwise."""
+    this word as a watch-out: call the clinic today (E13-02). Empty otherwise, and empty when
+    this key cannot bring State up to the record."""
+    clinic_card_id: uuid.UUID | None = None
+    """The `WhatToDoCard` row the call-the-clinic card was rendered as, with its State."""
 
 
 A_DAY_OR_MORE_ANSWERS = frozenset({Answer.YESTERDAY, Answer.FEW_DAYS, Answer.WEEK_OR_MORE})
@@ -334,17 +337,23 @@ async def answer_tap(
         severity=QUITE_A_LOT if answer is Answer.MORE else None,
         lasting=answer in A_DAY_OR_MORE_ANSWERS,
         feelings=frozenset({tap.word}),
+        event_id=tap.event_id,
     )
-    card = clinic or ()
     if not RECOMPUTE_SCOPES <= context.scopes:
-        # A note is rendered from State, and this key cannot bring State up to the record.
-        return Answered(
-            tap=tap, note=None, red=None, note_withheld_because="no_state", clinic_card=card
-        )
+        # A note is rendered from State, and this key cannot bring State up to the record: no
+        # note, and no call-the-clinic card either — never the weaker card where the note was
+        # withheld (B1 review).
+        return Answered(tap=tap, note=None, red=None, note_withheld_because="no_state")
     note = await _render_note(
         session, context=context, tap=tap, answer=answer, registry=registry, code=code
     )
-    return Answered(tap=tap, note=note, red=None, clinic_card=card)
+    return Answered(
+        tap=tap,
+        note=note,
+        red=None,
+        clinic_card=() if clinic is None else clinic.lines,
+        clinic_card_id=None if clinic is None else clinic.card_id,
+    )
 
 
 async def _render_note(

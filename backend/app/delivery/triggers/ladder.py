@@ -421,6 +421,7 @@ def flag_message(run: Run, flag: Flag) -> Say:
                     local=run.local,
                     emergency_number=number,
                     channel=Channel.SYSTEM,
+                    tiered=run.via.settings.red_flag_tiers,
                 )
             except Refusal:
                 # Nothing about his directory may keep a flag from the family: the most

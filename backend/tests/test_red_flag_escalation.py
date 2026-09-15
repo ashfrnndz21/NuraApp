@@ -38,6 +38,7 @@ from app.keys.scopes import KeyRole
 from app.memory.models import Provider, ProviderKind
 from app.memory.spine import add_provider
 from app.reasoning.feelings.service import record_tap
+from app.reasoning.visits.strings import WEEKDAYS
 from app.regions import Region
 from app.safety.high_risk import HIGH_RISK_CLASSES
 from app.safety.not_feeling_well import not_feeling_well
@@ -138,7 +139,7 @@ def test_the_step_reads_the_doctors_hours_and_the_hospital_from_the_directory() 
     glen = _listed("Gleneagles", ProviderKind.HOSPITAL, panel=True, n=1)
     other = _listed("Changi General", ProviderKind.HOSPITAL, n=2)
     six_pm = datetime(2026, 9, 14, 18, 0, tzinfo=SGT)
-    step = escalation_for(Feeling.FALL, providers=[tan, glen, other], local=six_pm, emergency_number="995", anticoagulated=False)
+    step = escalation_for(Feeling.FALL, providers=[tan, glen, other], local=six_pm, emergency_number="995", anticoagulated=False, tiered=True)
     assert (step.step, step.after_hours, step.doctor, step.hospital) == (
         Step.HOSPITAL_NOW,
         True,
@@ -146,13 +147,13 @@ def test_the_step_reads_the_doctors_hours_and_the_hospital_from_the_directory() 
         "Gleneagles",
     )
     ten_am = datetime(2026, 9, 14, 10, 0, tzinfo=SGT)
-    step = escalation_for(Feeling.FALL, providers=[tan, other], local=ten_am, emergency_number="995", anticoagulated=False)
+    step = escalation_for(Feeling.FALL, providers=[tan, other], local=ten_am, emergency_number="995", anticoagulated=False, tiered=True)
     assert (step.step, step.hospital) == (Step.DOCTOR_TODAY, None)
     # A clinic marked by mistake is not a hospital on his insurance.
     marked_clinic = _listed("Bedok Clinic", ProviderKind.CLINIC, panel=True)
-    step = escalation_for(Feeling.FALL, providers=[marked_clinic], local=six_pm, emergency_number="995", anticoagulated=False)
+    step = escalation_for(Feeling.FALL, providers=[marked_clinic], local=six_pm, emergency_number="995", anticoagulated=False, tiered=True)
     assert step.step is Step.DOCTOR_TODAY  # the clinic keeps no hours: 08:00 to 20:00
-    assert escalation_for(Feeling.CHEST_TIGHTNESS, providers=[tan, glen], local=ten_am, emergency_number="995", anticoagulated=False).step is Step.AMBULANCE
+    assert escalation_for(Feeling.CHEST_TIGHTNESS, providers=[tan, glen], local=ten_am, emergency_number="995", anticoagulated=False, tiered=True).step is Step.AMBULANCE
 
 
 # --- on WhatsApp, end to end -----------------------------------------------------------------
@@ -161,7 +162,11 @@ AMBULANCE_IF_WORSE = "If it gets worse, call the ambulance now on 995."
 REPLY_STEP: dict[Step, list[str]] = {
     Step.AMBULANCE: ["Call the ambulance now on 995."],
     Step.DOCTOR_TODAY: ["Call Dr Tan today.", AMBULANCE_IF_WORSE],
-    Step.DOCTOR_TODAY_HOSPITAL: ["Call Dr Tan today.", "If it gets worse, go to Gleneagles now."],
+    Step.DOCTOR_TODAY_HOSPITAL: [
+        "Call Dr Tan today.",
+        "If it gets worse, go to Gleneagles now.",
+        "Gleneagles is on your insurance.",
+    ],
     Step.HOSPITAL_NOW: [
         "Go to the emergency department at Gleneagles now.",
         "Gleneagles is on your insurance.",
@@ -170,7 +175,7 @@ REPLY_STEP: dict[Step, list[str]] = {
     Step.NUMBER_IF_WORSE: [
         "Sit down and rest now.",
         AMBULANCE_IF_WORSE,
-        "Call Dr Tan in the morning.",
+        "Call Dr Tan on Tuesday morning.",
     ],
 }
 """What the thread says to do now, by step: the reply sits between "This one we do not wait
@@ -182,7 +187,8 @@ NOTICE: dict[Step, list[str]] = {
     Step.AMBULANCE: [
         "Pa is not feeling well.",
         "Call Pa now.",
-        "If Pa has not called the ambulance, call the ambulance now on 995.",
+        "Ask Pa now if an ambulance is coming.",
+        "If not, call the ambulance now on 995.",
     ],
     Step.DOCTOR_TODAY: ["Pa is not feeling well.", "Call Dr Tan today."],
     Step.DOCTOR_TODAY_HOSPITAL: ["Pa is not feeling well.", "Call Dr Tan today."],
@@ -429,7 +435,9 @@ def _step_lines(step: Step, language: str) -> list[str]:
     if language == "en":
         return REPLY_STEP[step]
     return [
-        line.format(doctor="Dr Tan", hospital="Gleneagles", emergency_number="995")
+        line.format(
+            doctor="Dr Tan", hospital="Gleneagles", emergency_number="995", day=WEEKDAYS[language][1]
+        )
         for line in RED_FLAG_STEPS[step.value][language]
     ]
 
@@ -470,7 +478,7 @@ def test_the_step_on_a_thinner_is_the_ambulance_whatever_the_directory_says() ->
         for providers in ([], [tan], [tan, glen]):
             for number in ("995", "999"):
                 step = escalation_for(
-                    Feeling.FALL, providers=providers, local=local, emergency_number=number, anticoagulated=True
+                    Feeling.FALL, providers=providers, local=local, emergency_number=number, anticoagulated=True, tiered=True
                 )
                 assert (step.step, step.urgency, step.anticoagulated, step.emergency_number) == (
                     Step.AMBULANCE,
@@ -617,7 +625,8 @@ async def test_in_malaysia_the_ambulance_is_999(my: AsyncSession, tmp_path: Path
         "This one we do not wait for.",
         "Pa is not feeling well.",
         "Call Pa now.",
-        "If Pa has not called the ambulance, call the ambulance now on 999.",
+        "Ask Pa now if an ambulance is coming.",
+        "If not, call the ambulance now on 999.",
     ]
 
 
@@ -878,4 +887,54 @@ async def test_a_real_database_error_reading_his_list_is_the_ambulance(
     assert await sg.get(Flag, handled.flag_id) is not None
     assert (await sg.scalars(select(Ladder).where(Ladder.flag_id == handled.flag_id))).one()
     assert handled.replies[0].text.splitlines()[1] == "Call the ambulance now on 995."
+    assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
+
+
+
+# --- until a clinician signs the tiers (the B1 review) -----------------------------------------
+
+
+@pytest.mark.parametrize("feeling", sorted(RED_FLAGS))
+@pytest.mark.parametrize("after_hours", (False, True))
+@pytest.mark.parametrize("hospital", (False, True))
+def test_until_the_tiers_are_signed_off_every_red_flag_is_the_ambulance(
+    feeling: Feeling, after_hours: bool, hospital: bool
+) -> None:
+    """`Settings.red_flag_tiers` unset: the one door gives the ambulance for every red flag,
+    whatever the hour, the directory or his list — no level-of-care step of Nura's own."""
+    tan = _listed("Dr Tan", ProviderKind.DOCTOR, hours=(time(9, 0), time(17, 0)))
+    glen = _listed("Gleneagles", ProviderKind.HOSPITAL, panel=True, n=1)
+    local = datetime(2026, 9, 14, 22 if after_hours else 10, 30, tzinfo=SGT)
+    step = escalation_for(
+        feeling,
+        providers=[tan, glen] if hospital else [tan],
+        local=local,
+        emergency_number="995",
+        anticoagulated=False,
+        tiered=False,
+    )
+    assert (step.step, step.tiered) == (Step.AMBULANCE, False)
+
+
+def _untiered(h: Home) -> Home:
+    """The same home on a build whose tiers are not signed off."""
+    settings = dataclasses.replace(h.via.settings, red_flag_tiers=False)
+    return dataclasses.replace(h, via=dataclasses.replace(h.via, settings=settings))
+
+
+@pytest.mark.parametrize("words", ("I fell in the bathroom", "my left leg is swollen", "my chest is tight"))
+@pytest.mark.parametrize("hour", (15, 22))
+@pytest.mark.parametrize("hospital", (False, True))
+async def test_a_build_without_the_sign_off_never_says_today_the_hospital_or_the_morning(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, words: str, hour: int, hospital: bool
+) -> None:
+    h = _untiered(await _home_with_a_directory(sg, tmp_path, clock, hospital=hospital))
+    clock.set(at(hour, 30))
+    handled = await h.inbound(sg, PA, words)
+    assert handled.outcome == "red_flag"
+    said = handled.replies[0].text.splitlines()
+    assert said[1] == "Call the ambulance now on 995."
+    for line in said:
+        for never in ("today", "emergency department", "morning", "Sit down", "insurance"):
+            assert never not in line, line
     assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]

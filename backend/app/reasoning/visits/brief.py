@@ -44,6 +44,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
 from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
+from app.reasoning.visits.guard import may_render_brief
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import Brief, MemoKind
 from app.reasoning.visits.questions import (
@@ -384,7 +385,7 @@ def compose(
         _fold(
             memos,
             MEMO_LINES,
-            Line("bring", "bring_more", say("bring_more", lang, count=max(extra, 2))),
+            Line("bring", "bring_more", say("bring_more", lang, count=max(extra, 2), day=when)),
         )
     )
     # Three boundary lines follow (`build_brief`); the whole must fit its one page.
@@ -405,8 +406,10 @@ async def build_brief(
 
     Refused whole if any line fails the verifier. The row names the snapshot it was rendered
     from and the one "what changed" was measured against, and every line carries the ids it
-    rests on.
+    rests on. Only whoever may render it — whoever may change the visits, and Nura itself at T-3
+    — gets past the first line; nothing is read for anyone else (B1 review).
     """
+    may_render_brief(context)
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )

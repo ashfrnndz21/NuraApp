@@ -22,7 +22,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,9 +111,11 @@ from app.memory.models import (
     SourceChannel,
 )
 from app.memory.semantic import assert_fact, current_facts
+from app.reasoning.visits.strings import WEEKDAYS
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
 from app.safety.red_flags import (
     FLAG_WINDOW,
+    NIGHT_UNTIL,
     Flag,
     detect,
     escalation_now,
@@ -499,6 +501,7 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
             emergency_number=EMERGENCY_NUMBER[work.context.region.value],
             channel=Channel.WHATSAPP,
+            tiered=work.settings.red_flag_tiers,
         )
         step_name, doctor, hospital = step.step.value, step.doctor, step.hospital
     except Refusal as refusal:
@@ -506,8 +509,13 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             "whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__
         )
         step_name, doctor, hospital = "ambulance", None, None
+    # "Call Dr Tan on Tuesday morning.": the morning he can call, by its day (rule 5) — this
+    # one's before the clinic's hours begin, else tomorrow's.
+    local = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region])
+    morning = local.date() + timedelta(days=0 if local.time() < NIGHT_UNTIL else 1)
     params = {
         "doctor": doctor or YOUR_DOCTOR[work.language],
+        "day": WEEKDAYS[work.language][morning.weekday()],
         "hospital": hospital or "",
         "emergency_number": EMERGENCY_NUMBER[work.context.region.value],
         "names": join_names(names, work.language),

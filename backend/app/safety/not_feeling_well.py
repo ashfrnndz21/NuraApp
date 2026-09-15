@@ -1124,6 +1124,16 @@ NOT_OFF_THE_BUTTON = frozenset({"nfw.will_call", "nfw.check_in"})
 and writes the check-in; the symptom log and the cloud's follow-up do neither."""
 
 
+@dataclass(frozen=True, slots=True)
+class ClinicCard:
+    """The call-the-clinic card off the button, and the row that records the State it was
+    rendered from (`WhatToDoCard`, kind `call_clinic`)."""
+
+    lines: tuple[Line, ...]
+    card_id: uuid.UUID
+    state_id: uuid.UUID
+
+
 async def call_clinic_card(
     session: AsyncSession,
     *,
@@ -1133,13 +1143,20 @@ async def call_clinic_card(
     severity: int | None,
     lasting: bool,
     feelings: frozenset[Feeling],
-) -> tuple[Line, ...] | None:
+    event_id: uuid.UUID,
+) -> ClinicCard | None:
     """The table's middle row where he said how he feels without pressing the button — the
     symptom log, the feeling cloud's follow-up (E13-02): the same rule (`DECISION_TABLE`), so
     "quite a lot", a day or more, or a new medicine's watch-out is "Call Dr Tan's clinic today."
     wherever it was said. Nobody was told and no check-in was written there, so the card is the
     call, rest, what to do if it gets worse, and the boundary opening "You did right to say so."
-    and ending "Nura does not decide what is wrong.". None when the row does not apply."""
+    and ending "Nura does not decide what is wrong.". None when the row does not apply.
+
+    Like every card, it is rendered from State and written down with the State it came from
+    (`WhatToDoCard`, on the moment he said it, `event_id`); a key that cannot bring State up to
+    the record is shown no card at all, never lines with no State behind them (B1 review)."""
+    if not (RECOMPUTE_SCOPES <= context.scopes and context.allows(Scope.RECORDS)):
+        return None
     new_line = await _new_medicine(session, context=context, registry=registry, said=feelings)
     decision = decide(
         Situation(
@@ -1170,10 +1187,35 @@ async def call_clinic_card(
         line_ids=tuple(one for one in decision.line_ids if one not in NOT_OFF_THE_BUTTON),
         check_in=False,
     )
-    lines = compose(
-        said, language=lang, chief=None, missed_medicine=None, doctor=doctor, clinic=clinic
+    lines = tuple(
+        within_the_boundary(
+            compose(
+                said, language=lang, chief=None, missed_medicine=None, doctor=doctor, clinic=clinic
+            ),
+            language=lang,
+            doctor=doctor,
+            told=None,
+        )
     )
-    return tuple(within_the_boundary(lines, language=lang, doctor=doctor, told=None))
+    state = await current_state(session, context=context)
+    card = await render_from_state(
+        session,
+        WhatToDoCard,
+        context,
+        Scope.RECORDS,
+        state=state,
+        surface=Surface.NOT_FEELING_WELL,
+        boundary=boundary_line(Surface.NOT_FEELING_WELL, lang, doctor=doctor, told=None),
+        kind=WhatToDoKind.CALL_CLINIC,
+        language=lang,
+        line_ids=[line.id for line in lines if not line.id.startswith(BOUNDARY_PREFIX)],
+        flag_id=None,
+        event_id=event_id,
+        check_in_at=None,
+        rendered_at=utcnow(),
+        rendered_for_person_id=context.person_id,
+    )
+    return ClinicCard(lines=lines, card_id=card.id, state_id=card.state_id)
 
 
 # --- when the phone cannot reach Nura --------------------------------------------------------

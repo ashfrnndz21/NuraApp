@@ -277,17 +277,19 @@ RED_FLAG_NOTICE_AMBULANCE = Template(
             "This one we do not wait for.\n"
             "{name} is not feeling well.\n"
             "Call {name} now.\n"
-            "If {name} has not called the ambulance, call the ambulance now on {emergency_number}."
+            "Ask {name} now if an ambulance is coming.\n"
+            "If not, call the ambulance now on {emergency_number}."
         ),
         "ms": (
             "Yang ini kita tidak tunggu.\n"
             "{name} rasa tidak sihat.\n"
             "Telefon {name} sekarang.\n"
-            "Kalau {name} belum hubungi ambulans, hubungi ambulans sekarang di talian {emergency_number}."
+            "Tanya {name} sekarang sama ada ambulans sedang datang.\n"
+            "Kalau tidak, hubungi ambulans sekarang di talian {emergency_number}."
         ),
         "zh": (
             "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
-            "如果{name}还没有叫救护车，现在就打{emergency_number}叫救护车。"
+            "现在就问{name}救护车是不是在路上。\n如果没有，现在就打{emergency_number}叫救护车。"
         ),
     },
     approved=False,
@@ -360,8 +362,8 @@ VISIT_BRIEF = Template(
     ("doctor", "day", "time", "subject"),
     {
         "en": (
-            "Your visit is in a few days.\n"
-            "You see {doctor} on {day} at {time}.\n"
+            "Your next visit is on {day}.\n"
+            "You see {doctor} at {time}.\n"
             "This visit is about {subject}.\n"
             "Bring your blood pressure book on {day}.\n"
             "Nura prepared this from your papers.\n"
@@ -369,8 +371,8 @@ VISIT_BRIEF = Template(
             "Ask {doctor}."
         ),
         "ms": (
-            "Beberapa hari lagi anda akan berjumpa doktor.\n"
-            "Anda berjumpa {doctor} pada {day} pukul {time}.\n"
+            "Lawatan anda yang seterusnya pada {day}.\n"
+            "Anda berjumpa {doctor} pukul {time}.\n"
             "Lawatan ini untuk memeriksa {subject}.\n"
             "Bawa buku tekanan darah anda pada {day}.\n"
             "Nura menyediakan ini daripada surat-surat anda.\n"
@@ -378,7 +380,7 @@ VISIT_BRIEF = Template(
             "Tanya {doctor}."
         ),
         "zh": (
-            "再过几天您就要去看医生了。\n您在{day}{time}看{doctor}。\n这次看医生是为了{subject}。\n"
+            "您下次看医生是在{day}。\n您{time}看{doctor}。\n这次看医生是为了{subject}。\n"
             "{day}，带上您的血压本。\n这是 Nura 从您的病历文件准备的。\n这不是医生的意见。\n问{doctor}。"
         ),
     },

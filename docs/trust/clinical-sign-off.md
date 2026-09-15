@@ -5,16 +5,24 @@ Wording and rules that are built but must be signed off by the pharmacist or a c
 | # | What | Where | Who signs | Status |
 |---|---|---|---|---|
 | 1 | Potassium called "your body salt" in all three languages (#126) | `backend/app/delivery/trend_strings.py`, `timeline_strings.py`; the glossary row in `docs/plain-words.md`; ADR 0007 | Pharmacist | Open |
-| 2 | The red-flag tiers (#147, ADR 0010) | `backend/app/safety/red_flags.py`: `AMBULANCE_FLAGS`, `step_for`; SaMD review, question 10 | Clinician, and the regulatory adviser | Open |
+| 2 | The red-flag tiers (#147, ADR 0010), behind `NURA_RED_FLAG_TIERS` | `backend/app/safety/red_flags.py`: `AMBULANCE_FLAGS`, `step_for`, `escalation_for`; SaMD review, question 10 | Clinician, and the regulatory adviser | Open — blocking: the out-of-hours same-day step (see 2 below) |
 | 3 | A fall on a blood thinner is the ambulance at any hour (#147) | `backend/app/safety/red_flags.py`: `ANTICOAGULANT_CLASSES`, `AMBULANCE_ON_A_THINNER`, `on_a_blood_thinner` | Clinician, with the pharmacist for the class | Open |
 
 ## 1. Potassium as "your body salt" (#126)
 
 Salt substitutes are potassium chloride. So someone told to watch his potassium may reach for "low-salt" salt, and a low result could read as "eat more salt". The choice: keep it; pair it with the name ("your potassium, a body salt"); or reword it, and update the glossary row in all three languages.
 
+## 2. The red-flag tiers
+
+**Behind a switch.** The table reaches a family only with `NURA_RED_FLAG_TIERS=1`. Unset, every red flag's step is the ambulance; that is the not-feeling-well card's own step. A dev run sets it. Before it is set in a deployment:
+
+- **Blocking question.** Out of the doctor's hours, with no hospital marked, a same-day flag is told "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan on Tuesday morning." The clinical-safety review asks that out of hours every same-day flag say "go to the nearest emergency department now" instead, whether or not a hospital is marked. Which is it?
+- The three tiered family notices must be approved by Meta. Until they are, outside the family member's 24-hour window the approved notice goes, and it says "Call Dr Tan today."
+- Question 10 of the SaMD review must be answered by the regulatory adviser.
+
 ## 3. A fall on a blood thinner
 
-**The rule.** A fall is raised while a line in force on his list is a blood thinner. That means its register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`, any case), or its generic name is one the label-photo rule's own matcher reads as that class (`high_risk_class`, whole words, so "warfarin sodium" and "dabigatran etexilate" count too). The names are read from `HIGH_RISK_CLASSES`, not copied. Then the step is the ambulance tier at any hour, whether or not a hospital is marked.
+**The rule.** With the tiers switched on (`NURA_RED_FLAG_TIERS=1`; switched off, every red flag is the ambulance anyway), a fall is raised while a line in force on his list is a blood thinner. That means its register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`, any case), or its generic name is one the label-photo rule's own matcher reads as that class (`high_risk_class`, whole words, so "warfarin sodium" and "dabigatran etexilate" count too). The names are read from `HIGH_RISK_CLASSES`, not copied. Then the step is the ambulance tier at any hour, whether or not a hospital is marked.
 - He is told "Call the ambulance now on 995." (999 in Malaysia, from the region table).
 - The family's notice is the ambulance one: "Call Pa now. If Pa has not called the ambulance, call the ambulance now on 995."
 - Without a thinner, a fall keeps its same-day rows.

@@ -377,3 +377,18 @@ async def test_the_clouds_follow_up_shows_the_call_clinic_card_by_the_same_rule(
     await new_medicine(sg, owner)
     watched = await said(Answer.TODAY)
     assert watched.clinic_card and "clinic today." in watched.clinic_card[1].text
+
+
+
+async def test_the_call_clinic_card_is_rendered_from_state_and_written_down(sg: AsyncSession) -> None:
+    """Like every card, the call-the-clinic card names the State it came from and the moment it
+    rests on: a `what_to_do_card` row of kind `call_clinic` (B1 review)."""
+    from app.safety.models import WhatToDoCard
+
+    owner = await pa(sg, phone="+6591110068")
+    quite = await _log(sg, owner, "dizzy, quite a lot")
+    assert quite.clinic_card and quite.clinic_card_id is not None
+    row = await sg.get(WhatToDoCard, quite.clinic_card_id)
+    assert row is not None and row.kind is WhatToDoKind.CALL_CLINIC
+    assert row.state_id is not None and row.event_id is not None and row.flag_id is None
+    assert row.line_ids == [line.id for line in quite.clinic_card if not line.id.startswith("boundary.")]

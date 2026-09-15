@@ -85,7 +85,7 @@ async def test_a_symptom_since_the_last_visit_is_its_own_line_in_his_words_and_n
         ("changed_readings_one", "Since Thursday 3 September, 1 new number is in your blood pressure book."),
         ("symptom", "You felt dizzy on Thursday 3 September."),
         # Since when, anchored to that day: he reads the brief days later.
-        ("symptom_detail", "It was quite bad and it started that morning."),
+        ("symptom_detail", "It was quite bad from that morning."),
     ]
     # Never counted under his papers.
     assert "changed_papers" not in {line["key"] for line in brief.lines}
@@ -103,7 +103,7 @@ async def test_a_symptom_in_malay_is_said_in_malay(sg: AsyncSession) -> None:
     said = [line["text"] for line in brief.lines if line["key"].startswith("symptom")]
     assert said == [
         "Anda rasa pening pada Khamis 3 September.",
-        "Rasanya agak teruk dan ia bermula sehari sebelumnya.",
+        "Rasanya agak teruk sejak sehari sebelumnya.",
     ]
     assert_plain(said, "ms")
 
@@ -175,7 +175,7 @@ async def test_the_brief_fits_one_page_whatever_the_record_holds(sg: AsyncSessio
     questions = [line.text for line in lines if line.section == "questions"]
     assert len(questions) == 4 and questions[-1] == "Nura has 6 more questions for Dr Tan."
     bring = [line.text for line in lines if line.section == "bring"]
-    assert bring[-1] == "Nura has 6 more things for you to bring on the day."
+    assert bring[-1] == "Nura has 6 more things for you to bring on Thursday 10 September."
     # The two fixed lines, the first memo, and one line for the rest.
     assert len(bring) == 4
     assert_plain([line.text for line in lines])
@@ -234,8 +234,8 @@ async def test_the_brief_is_rendered_three_days_before_and_its_card_goes_once_un
     doctor = "Dr Tan" if brief.appointment_id == first.id else "Dr Lim"
     hour = "10 in the morning" if brief.appointment_id == first.id else "3 in the afternoon"
     assert text == [
-        "Your visit is in a few days.",
-        f"You see {doctor} on Thursday 17 September at {hour}.",
+        "Your next visit is on Thursday 17 September.",
+        f"You see {doctor} at {hour}.",
         "This visit is about your blood pressure.",
         "Bring your blood pressure book on Thursday 17 September.",
         "Nura prepared this from your papers.",

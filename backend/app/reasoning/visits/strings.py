@@ -471,9 +471,9 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "zh": "Nura还有{count}个问题要问{doctor}。",
     },
     "bring_more": {
-        "en": "Nura has {count} more things for you to bring on the day.",
-        "ms": "Nura ada {count} lagi barang untuk anda bawa pada hari itu.",
-        "zh": "Nura还有{count}样东西要您那天带去。",
+        "en": "Nura has {count} more things for you to bring on {day}.",
+        "ms": "Nura ada {count} lagi barang untuk anda bawa pada {day}.",
+        "zh": "Nura还有{count}样东西要您在{day}带去。",
     },
     # Questions, from gaps.
     "ask_fact_expired": {

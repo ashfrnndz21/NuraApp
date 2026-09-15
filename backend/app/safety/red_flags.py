@@ -702,6 +702,9 @@ class EscalationStep:
     """The hospital marked as on his insurance, or None."""
     emergency_number: str
     anticoagulated: bool
+    tiered: bool
+    """Whether the tiers are signed off (`Settings.red_flag_tiers`). When not, the step is the
+    ambulance for every red flag."""
     """Whether a medicine the register classes as an anticoagulant is on his list: a fall is
     then the ambulance (`AMBULANCE_ON_A_THINNER`)."""
 
@@ -755,11 +758,15 @@ def escalation_for(
     local: datetime,
     emergency_number: str,
     anticoagulated: bool,
+    tiered: bool,
 ) -> EscalationStep:
     """The step for this flag at this moment on his wall clock, from his directory: the doctor
     it names, the hours that doctor or clinic keeps, and the hospital marked as on his
     insurance — and from his list, whether he is on a blood thinner (`anticoagulated`, never
-    defaulted: a fall on one is the ambulance whatever the hour or the directory)."""
+    defaulted: a fall on one is the ambulance whatever the hour or the directory). Until the
+    tiers are signed off (`tiered`, from `Settings.red_flag_tiers`), every red flag is the
+    ambulance: no level-of-care step of Nura's own reaches a family before a clinician signs
+    the table (docs/trust/samd-boundary-review.md §6, ADR 0010)."""
     listed = sorted(providers, key=lambda one: (as_utc(one.added_at), one.name))
     doctor = next((p for kind in DOCTOR_FIRST for p in listed if p.kind is kind), None)
     # The hours of the doctor the line names, and no one else's: a clinic's hours never make
@@ -775,13 +782,18 @@ def escalation_for(
         None if hours is None else hours.closes_at,
     )
     return EscalationStep(
-        step=step_for(urgency, after_hours=late, hospital=hospital is not None),
+        step=(
+            step_for(urgency, after_hours=late, hospital=hospital is not None)
+            if tiered
+            else Step.AMBULANCE
+        ),
         urgency=urgency,
         after_hours=late,
         doctor=None if doctor is None else doctor.name,
         hospital=None if hospital is None else hospital.name,
         emergency_number=emergency_number,
         anticoagulated=anticoagulated,
+        tiered=tiered,
     )
 
 
@@ -793,6 +805,7 @@ async def escalation_now(
     local: datetime,
     emergency_number: str,
     channel: Channel,
+    tiered: bool,
 ) -> EscalationStep:
     """`escalation_for`, with the directory read under the emergency scope — the part of the
     graph every role holds, and the one the emergency card names his doctor from (ADR 0002) —
@@ -804,7 +817,7 @@ async def escalation_now(
     not-feeling-well button, the symptom log or the feeling cloud."""
     providers = await audited_read(session, Provider, context, Scope.EMERGENCY, channel=channel)
     anticoagulated = False
-    if feeling in AMBULANCE_ON_A_THINNER:
+    if tiered and feeling in AMBULANCE_ON_A_THINNER:
         # In its own savepoint: nothing about reading his list may weaken the step or leave the
         # request's transaction unusable. If it cannot be read, he is taken to be on one — the
         # ambulance (B1 re-check).
@@ -822,6 +835,7 @@ async def escalation_now(
         local=local,
         emergency_number=emergency_number,
         anticoagulated=anticoagulated,
+        tiered=tiered,
     )
 
 

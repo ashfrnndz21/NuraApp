@@ -354,9 +354,21 @@ RED_FLAG_STEPS: Mapping[str, Mapping[str, Lines]] = {
         "zh": ("今天就打电话给{doctor}。", "如果变得更严重，现在就打{emergency_number}叫救护车。"),
     },
     "doctor_today_hospital": {
-        "en": ("Call {doctor} today.", "If it gets worse, go to {hospital} now."),
-        "ms": ("Telefon {doctor} hari ini.", "Kalau jadi lebih teruk, pergi ke {hospital} sekarang."),
-        "zh": ("今天就打电话给{doctor}。", "如果变得更严重，现在就去{hospital}。"),
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, go to {hospital} now.",
+            "{hospital} is on your insurance.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, pergi ke {hospital} sekarang.",
+            "{hospital} dilindungi insurans anda.",
+        ),
+        "zh": (
+            "今天就打电话给{doctor}。",
+            "如果变得更严重，现在就去{hospital}。",
+            "{hospital}在您的保险范围内。",
+        ),
     },
     "hospital_now": {
         "en": (
@@ -379,17 +391,17 @@ RED_FLAG_STEPS: Mapping[str, Mapping[str, Lines]] = {
         "en": (
             "Sit down and rest now.",
             "If it gets worse, call the ambulance now on {emergency_number}.",
-            "Call {doctor} in the morning.",
+            "Call {doctor} on {day} morning.",
         ),
         "ms": (
             "Duduk dan berehat sekarang.",
             "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
-            "Telefon {doctor} pada waktu pagi.",
+            "Telefon {doctor} pada pagi {day}.",
         ),
         "zh": (
             "现在请坐下休息。",
             "如果变得更严重，现在就打{emergency_number}叫救护车。",
-            "早上再打电话给{doctor}。",
+            "{day}早上再打电话给{doctor}。",
         ),
     },
 }
@@ -419,19 +431,22 @@ RED_FLAG_NOTICE_TEXT: Mapping[str, Mapping[str, Lines]] = {
             "This one we do not wait for.",
             "{name} is not feeling well.",
             "Call {name} now.",
-            "If {name} has not called the ambulance, call the ambulance now on {emergency_number}.",
+            "Ask {name} now if an ambulance is coming.",
+            "If not, call the ambulance now on {emergency_number}.",
         ),
         "ms": (
             "Yang ini kita tidak tunggu.",
             "{name} rasa tidak sihat.",
             "Telefon {name} sekarang.",
-            "Kalau {name} belum hubungi ambulans, hubungi ambulans sekarang di talian {emergency_number}.",
+            "Tanya {name} sekarang sama ada ambulans sedang datang.",
+            "Kalau tidak, hubungi ambulans sekarang di talian {emergency_number}.",
         ),
         "zh": (
             "这个我们不等。",
             "{name}不舒服。",
             "现在就打电话给{name}。",
-            "如果{name}还没有叫救护车，现在就打{emergency_number}叫救护车。",
+            "现在就问{name}救护车是不是在路上。",
+            "如果没有，现在就打{emergency_number}叫救护车。",
         ),
     },
     "red_flag_notice_hospital_text": {
