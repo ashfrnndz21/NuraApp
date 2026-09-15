@@ -11,9 +11,10 @@ Every red flag used to be answered the same way on WhatsApp: "Call {doctor} toda
 The red flags (`app.safety.red_flags.RED_FLAGS`) are in two tiers. `AMBULANCE_FLAGS` is a subset of that one list: chest pain, breathless at rest, the signs of a stroke (the worst headache ever, sudden blurring, confusion), and shaky and sweaty on a medicine that drops his sugar. Everything else — a fall, one-sided swelling, the weight after a heart discharge — is the same-day tier.
 
 A fall while he is on a blood thinner is the ambulance tier at any hour (`AMBULANCE_ON_A_THINNER`, the operator's instruction of 15 September 2026). "On a blood thinner" means a line in force on his list, active or held, whose register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`: warfarin, apixaban, rivaroxaban, dabigatran, edoxaban). A bleed inside the head can come hours after a fall, and needs seeing that night, not "Call Dr Tan in the morning". The list is read as the system (`on_a_blood_thinner`), so a helper's word gets the same step.
-- A thinner is known by its register class in any case, or by the generic names the label-photo rule lists for the class.
+- A thinner is known by its register class in any case, or by its generic name as the label-photo rule's matcher reads it (whole words, so "warfarin sodium" too).
 - If the list cannot be read, the step is the ambulance.
 - Among the same-day flags a message matches, a fall wins, so "I fell and my leg is swollen on one side" never misses the thinner.
+- A fall said with a flag that would be held back for want of a fact on the record ("I fell, I am shaky and sweaty", with no sugar condition or sugar medicine) is raised as the fall (`flag_to_raise`), so it is never lost. "Fall asleep" is not a fall.
 
 Awaiting the same sign-off, listed in `docs/trust/clinical-sign-off.md`.
 

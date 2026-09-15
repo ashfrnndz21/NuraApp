@@ -62,7 +62,7 @@ from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, func, or_, select
+from sqlalchemy import JSON, Boolean, ForeignKey, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -100,7 +100,7 @@ from app.memory.models import (
     _row_of_profile,
     _tied_to_profile,
 )
-from app.safety.high_risk import HIGH_RISK_CLASSES
+from app.safety.high_risk import high_risk_class
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 # --- the feeling cloud -----------------------------------------------------------------------
@@ -179,12 +179,6 @@ same class the label-photo rule guards (`app.safety.high_risk.HIGH_RISK_CLASSES`
 never a list of names; widening it (heparin injections, the antiplatelets) is the
 pharmacist's. Awaiting the clinician's sign-off (docs/trust/clinical-sign-off.md)."""
 
-ANTICOAGULANT_GENERICS: frozenset[str] = HIGH_RISK_CLASSES["anticoagulant"]
-"""The same thinners by generic name, as the label-photo rule already holds them — its one
-list, read here and never copied — so a register that files one under another class code (by
-how it works, say) still raises a fall. The class or the name is enough: the rule only ever
-errs towards the ambulance."""
-
 FLAG_TARGET = "red_flag"
 
 # --- the words written on WhatsApp (E19-05) --------------------------------------------------
@@ -238,9 +232,10 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"kabur tiba-tiba",
     ),
     Feeling.FALL: (
-        r"\bfell\b",
-        r"\bfall(?:en|s)?\b",
-        r"\bfalling\b",
+        # Never "fall asleep": on a blood thinner a fall is the ambulance (B1 re-check).
+        r"\bfell\b(?!\s+asleep)",
+        r"\bfall(?:en|s)?\b(?!\s+asleep)",
+        r"\bfalling\b(?!\s+asleep)",
         r"\bjatuh\b",
         r"terjatuh",
         r"(?:跌倒|摔倒|摔了|跌了|摔跤)",
@@ -285,14 +280,43 @@ def detect(text: str | None) -> Feeling | None:
     is the ambulance (`AMBULANCE_ON_A_THINNER`), and off one both are the same day — "I fell
     and my leg is swollen on one side" is a fall, so the thinner is never missed. The weight
     rule is a fact, not a word, so it is not in the table."""
+    found = detect_all(text)
+    return found[0] if found else None
+
+
+def detect_all(text: str | None) -> list[Feeling]:
+    """Every red flag the words match, most urgent first: the ambulance tier, then a fall,
+    then the rest, each in the table's order (`detect` is the first)."""
     if not text:
-        return None
-    found = [rule for rule, pattern in _PATTERNS if pattern.search(text)]
-    if not found:
-        return None
+        return []
+    found = list(dict.fromkeys(rule for rule, pattern in _PATTERNS if pattern.search(text)))
     urgent = [rule for rule in found if rule in AMBULANCE_FLAGS]
-    raised = [rule for rule in found if rule in AMBULANCE_ON_A_THINNER]
-    return (urgent or raised or found)[0]
+    raised = [rule for rule in found if rule in AMBULANCE_ON_A_THINNER and rule not in urgent]
+    return urgent + raised + [rule for rule in found if rule not in urgent and rule not in raised]
+
+
+RESTS_ON_THE_RECORD: frozenset[Feeling] = frozenset({Feeling.SHAKY_SWEATY, Feeling.WEIGHT_GAIN})
+"""The two flags that depend on a fact on the record (`_missing_fact`) and are written held back
+without it."""
+
+
+async def flag_to_raise(
+    session: AsyncSession, *, context: KeyContext, text: str | None
+) -> Feeling | None:
+    """The flag free text raises: `detect`'s, unless that one rests on a fact the record does not
+    hold and another flag was said too — then the most urgent one that will not be held back.
+    "I fell and I am shaky and sweaty", with no sugar condition or sugar medicine on the record,
+    is the fall, never a held-back flag that tells nobody (B1 re-check). A single flag, or one
+    that would be held back whatever else was said, is `detect`'s, as before."""
+    found = detect_all(text)
+    if len(found) < 2 or found[0] not in RESTS_ON_THE_RECORD:
+        return found[0] if found else None
+    for feeling in found:
+        if feeling not in RESTS_ON_THE_RECORD:
+            return feeling
+        if await _missing_fact(session, context=context, feeling=feeling) is None:
+            return feeling
+    return found[0]
 
 
 # --- the words heard at a visit (E05) --------------------------------------------------------
@@ -833,9 +857,11 @@ async def _system_read(
 async def on_a_blood_thinner(session: AsyncSession, *, context: KeyContext) -> bool:
     """Whether a blood thinner is on his list now: a line in force, active or held — a thinner
     held for a few days still thins his blood — whose register class is in
-    `ANTICOAGULANT_CLASSES` (any case), or whose generic name is in `ANTICOAGULANT_GENERICS`.
-    Read as the system (`_system_read`), whoever raised the flag; only the answer leaves,
-    never a medicine's name."""
+    `ANTICOAGULANT_CLASSES` (any case), or whose generic name the label-photo rule's own matcher
+    reads as one of that class (`app.safety.high_risk.high_risk_class`, whole words: "warfarin
+    sodium" too), so a register that files a thinner under another class code still raises a
+    fall. Read as the system (`_system_read`), whoever raised the flag; only the answer
+    leaves, never a medicine's name."""
     lines = await _system_read(
         session,
         context=context,
@@ -844,13 +870,13 @@ async def on_a_blood_thinner(session: AsyncSession, *, context: KeyContext) -> b
         where=(
             MedicationLine.superseded_at.is_(None),
             MedicationLine.status.in_((LineStatus.ACTIVE, LineStatus.HELD)),
-            or_(
-                func.lower(MedicationLine.drug_class).in_(ANTICOAGULANT_CLASSES),
-                func.lower(MedicationLine.generic).in_(ANTICOAGULANT_GENERICS),
-            ),
         ),
     )
-    return bool(lines)
+    return any(
+        (line.drug_class or "").lower() in ANTICOAGULANT_CLASSES
+        or high_risk_class(line.generic) in ANTICOAGULANT_CLASSES
+        for line in lines
+    )
 
 
 async def _missing_fact(
@@ -1289,7 +1315,6 @@ def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Sco
 __all__ = [
     "AMBULANCE_ON_A_THINNER",
     "ANTICOAGULANT_CLASSES",
-    "ANTICOAGULANT_GENERICS",
     "FEELING_CODE",
     "FLAG_SCOPE",
     "FLAG_TARGET",
@@ -1297,6 +1322,7 @@ __all__ = [
     "RED_FLAGS",
     "RED_FLAG_TERMS",
     "RED_FLAG_WORDS",
+    "RESTS_ON_THE_RECORD",
     "Escalation",
     "Feeling",
     "Flag",
@@ -1306,8 +1332,10 @@ __all__ = [
     "RedFlagHit",
     "SourceChannel",
     "detect",
+    "detect_all",
     "escalate",
     "find_red_flags",
+    "flag_to_raise",
     "is_red",
     "keep_row",
     "on_a_blood_thinner",

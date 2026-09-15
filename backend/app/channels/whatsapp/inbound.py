@@ -117,6 +117,7 @@ from app.safety.red_flags import (
     Flag,
     detect,
     escalation_now,
+    flag_to_raise,
     raise_flag,
     record_the_moment,
 )
@@ -436,7 +437,7 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     sweaty with no sugar condition on the record) is kept for the caregiver to see and is not
     escalated in the thread.
     """
-    feeling = detect(work.message.text)
+    feeling = await flag_to_raise(session, context=work.context, text=work.message.text)
     assert feeling is not None
     said = await record_the_moment(
         session,
@@ -501,7 +502,9 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         )
         step_name, doctor, hospital = step.step.value, step.doctor, step.hospital
     except Refusal as refusal:
-        log.warning("whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__)
+        log.warning(
+            "whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__
+        )
         step_name, doctor, hospital = "ambulance", None, None
     params = {
         "doctor": doctor or YOUR_DOCTOR[work.language],
@@ -512,7 +515,10 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     # The reply is its own savepoint: the flag and the ladder are written already, and a reply
     # that cannot go never takes them back. Failing that, the ambulance line, which names
     # nobody but who knows.
-    for key in (red_flag_reply_key(step_name, len(names)), red_flag_reply_key("ambulance", len(names))):
+    for key in (
+        red_flag_reply_key(step_name, len(names)),
+        red_flag_reply_key("ambulance", len(names)),
+    ):
         try:
             async with nested_unit_of_work(session):
                 await _say(session, work, key, **params)
@@ -595,7 +601,7 @@ async def _red_flag_unagreed(
     card leads the family's feed. The poster gets one fixed line straight from the provider,
     written down as a share of a notice, the way the consent refusal's line is.
     """
-    feeling = detect(message.text)
+    feeling = await flag_to_raise(session, context=context, text=message.text)
     assert feeling is not None
     try:
         async with unit_of_work(session):

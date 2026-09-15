@@ -14,12 +14,14 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 
 ## 3. A fall on a blood thinner
 
-**The rule.** A fall is raised while a line in force on his list is a blood thinner: its register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`, any case), or its generic name is one the label-photo rule already lists for that class (`ANTICOAGULANT_GENERICS`, read from `HIGH_RISK_CLASSES`, not copied). Then the step is the ambulance tier at any hour, whether or not a hospital is marked.
+**The rule.** A fall is raised while a line in force on his list is a blood thinner. That means its register class is in `ANTICOAGULANT_CLASSES` (the register's `anticoagulant`, any case), or its generic name is one the label-photo rule's own matcher reads as that class (`high_risk_class`, whole words, so "warfarin sodium" and "dabigatran etexilate" count too). The names are read from `HIGH_RISK_CLASSES`, not copied. Then the step is the ambulance tier at any hour, whether or not a hospital is marked.
 - He is told "Call the ambulance now on 995." (999 in Malaysia, from the region table).
 - The family's notice is the ambulance one: "Call Pa now. If Pa has not called the ambulance, call the ambulance now on 995."
 - Without a thinner, a fall keeps its same-day rows.
 - The rule only ever raises a fall; it never lowers anything.
 - A message that says a fall and another same-day flag ("I fell and my leg is swollen on one side") is heard as the fall, so the thinner is never missed.
+- A message that says a fall and a flag that is held back without a fact on the record ("I fell, I am shaky and sweaty", with no sugar condition or sugar medicine) is raised as the fall (`flag_to_raise`). It is never written down as a held-back flag that tells nobody.
+- "Fall asleep" is not a fall.
 - If his list cannot be read, the step is the ambulance.
 
 **Why.** Someone on warfarin or one of the newer thinners (apixaban, rivaroxaban, dabigatran, edoxaban) who falls can bleed inside the head hours later. That needs assessment the same night. At night with no hospital marked, the same-day row said "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan in the morning."
@@ -34,10 +36,11 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 - a fall on warfarin and on apixaban, at 14:00 and at 22:30, with and without a panel hospital, in English, Malay and Chinese
 - a fall with no thinner keeps today's rows
 - a line no longer in force (superseded) does not raise it
-- a class under another code or in capitals
-- a fall said with swelling
+- a class under another code or in capitals, and a name with its salt ("warfarin sodium")
+- a fall said with swelling, and a fall said with shaky and sweaty in three languages, on WhatsApp, the button and the log
+- "fall asleep"
 - a helper's word, and the system's read of his list on the audit trail
-- a list that cannot be read
+- a list that cannot be read, including a real database error
 - the button, the log and the cloud
 - his voice note
 - the family's notice in Malay and Chinese, and as free text inside the window
@@ -51,3 +54,4 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 4. It reads his list in Nura only. A thinner nobody recorded cannot raise it. The deployment's licensed register must be checked against the class and the names before real profiles.
 5. The step. At 14:00 in his doctor's hours, when he may be able to get there himself, is "the ambulance now" right, rather than "go to the emergency department now"?
 6. The helper can tell. When a fall gets the ambulance, a helper whose key does not open his medicines can guess that he is on a blood thinner. Is that acceptable for his safety?
+7. False alarms. The words for a fall still match "my hair is falling out", "afraid of falling", "nearly fell but held the rail" and "he did not fall". Only "fall asleep" is left out. On a thinner each of these would now be the ambulance and the family's ambulance notice. Should near-falls and "did not fall" be read as a fall or not? It errs towards the ambulance until the clinician says otherwise.

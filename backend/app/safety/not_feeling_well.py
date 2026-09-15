@@ -111,7 +111,7 @@ from app.safety.red_flags import (
     Feeling,
     Flag,
     NotAFeeling,
-    detect,
+    flag_to_raise,
     is_red,
     keep_row,
     record_the_moment,
@@ -932,7 +932,8 @@ async def not_feeling_well(
         audio=audio,
         content_type=content_type,
     )
-    feeling = feeling if feeling is not None else detect(captured.text)
+    if feeling is None:
+        feeling = await flag_to_raise(session, context=context, text=captured.text)
     parsed = parse_symptoms(captured.text)
     family = await family_of(session, context=context, profile=profile)
 

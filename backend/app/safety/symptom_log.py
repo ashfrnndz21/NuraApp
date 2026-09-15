@@ -73,7 +73,7 @@ from app.safety.not_feeling_well import (
     write_the_moment,
 )
 from app.safety.people import key_holder
-from app.safety.red_flags import Feeling, detect
+from app.safety.red_flags import Feeling, flag_to_raise
 from app.safety.symptoms import Duration, Symptom, parse_symptoms
 from app.state.models import Posture
 
@@ -250,7 +250,7 @@ async def log_symptom(
         audio=audio,
         content_type=content_type,
     )
-    feeling = detect(captured.text)
+    feeling = await flag_to_raise(session, context=context, text=captured.text)
     parsed = parse_symptoms(captured.text)
 
     flag_id: uuid.UUID | None = None
