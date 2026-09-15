@@ -117,10 +117,10 @@ for (const [label, viewport] of [
       await expect(hero.getByTestId("hero-words")).toHaveText(state.line);
       if (state.drivers.length > 0) await expect(page.getByTestId("drivers").locator(".glass-chip")).toHaveText(state.drivers.map((driver) => driver.text));
       await expect(hero.getByTestId("sparkline")).toBeVisible();
-      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last top number was 138.");
+      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
       // Where the State came from, and the way in when he is unwell, on her Home too.
       await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
-      await expect(page.getByTestId("home-screen").getByTestId("not-well")).toBeVisible();
+      expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
 
       const changed = page.getByTestId("what-changed");
       await expect(changed.locator("li").first()).toBeVisible();
@@ -153,3 +153,18 @@ for (const [label, viewport] of [
     });
   });
 }
+
+/** A red word typed into Ask or search (on the top of his Today) goes the red-flag path first,
+ *  on the backend, exactly as the same word tapped on the feeling cloud: what to do now, never
+ *  an answer looked up first. */
+test("a red word typed into Ask or search: the red-flag path first, then what to do now", async ({ page, request }) => {
+  const pa = await seedHome(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  const ask = page.getByTestId("askbar").getByTestId("ask-input");
+  await ask.fill("My chest is tight");
+  await ask.press("Enter");
+  await expect(page.getByTestId("what-to-do-screen")).toBeVisible();
+  await expect(page.getByTestId("what-to-do-lines").locator("p").first()).toBeVisible();
+  await expect(page.getByTestId("answer")).toHaveCount(0);
+});

@@ -140,7 +140,8 @@ for (const look of LOOKS) {
     await expect(page.locator('input[name="field-diastolic"]')).toHaveValue("84");
     await readable(page, look);
     await page.getByTestId("looks-right").click();
-    await expect(page.getByTestId("reading-prompt")).toBeVisible();
+    // Back where the reading was begun from: his Today with its blood pressure card, her Home (D1).
+    await expect(page.getByTestId(look === "patient" ? "reading-prompt" : "home-screen")).toBeVisible();
     const facts = (await (await request.get(`${API}/profiles/${pa.profileId}/facts?subject=blood_pressure`, auth(pa.token))).json()) as { value: { systolic?: number; diastolic?: number } }[];
     expect(facts.some((fact) => fact.value.systolic === 138 && fact.value.diastolic === 84)).toBe(true);
   });

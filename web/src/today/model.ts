@@ -227,6 +227,15 @@ export function proudLine(proud: number | null, s: Strings): string {
   return proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
 }
 
+/** The line under the State's word on her Home: nothing that reassures while a red-flag card is
+ *  on the page (the flag goes first; the State does not count it), the stale line when the State
+ *  is behind or the page is the phone's kept copy, else the backend's own line. */
+export function homeHeroWords(page: Pick<TodayModel, "stale" | "line">, on: { flagged: boolean; kept: boolean }, s: Strings): string | null {
+  if (on.flagged) return null;
+  if (page.stale || on.kept) return s.today.staleState;
+  return page.line ?? null;
+}
+
 /** The day of the week in full, in his language: "Thursday", never "Thu" (plain words, rule 5). */
 export function weekdayOf(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);

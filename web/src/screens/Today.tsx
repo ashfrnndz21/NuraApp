@@ -14,6 +14,7 @@ import {
   dueCards,
   feedLines,
   greeting,
+  homeHeroWords,
   nearestToRunOut,
   readingLead,
   stateLines,
@@ -52,8 +53,8 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
       <Hero
         greeting={greeting(now.getHours(), name, s)}
         sub={dateLine(now, locale)}
-        figure={hero?.count ?? null}
-        words={hero?.count !== null && hero?.count !== undefined ? hero.words : null}
+        figure={fromPhone ? null : (hero?.count ?? null)}
+        words={!fromPhone && hero?.count !== null && hero?.count !== undefined ? hero.words : null}
         testId="today-hero"
       />
       {/* The way in when he feels unwell comes before anything ranked (red flags escalate first). */}
@@ -116,7 +117,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
     <Shell tab="today" testId="home-screen">
       {page && <span data-testid="today-ready" hidden />}
       {page && page.stateId !== null && page.word && (
-        <Hero label={s.home.mostLikely} figure={page.word} words={page.stale || fromPhone ? s.today.staleState : (page.line ?? null)} testId="home-hero">
+        <Hero label={s.home.mostLikely} figure={page.word} words={homeHeroWords(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s)} testId="home-hero">
           <Readings />
           {drivers.length > 0 && (
             <ChipRow testId="drivers" label={s.home.mostLikely}>
@@ -140,8 +141,8 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
           )}
         </Hero>
       )}
-      <Notices v={v} saved={saved} />
       <NotWellButton />
+      <Notices v={v} saved={saved} />
       {blank ? (
         <Blank s={s} />
       ) : (
@@ -411,7 +412,7 @@ function Readings(): JSX.Element | null {
     );
   }, [bearer, papers?.profile_id]);
   if (values.length < 2) return null;
-  return <Sparkline values={values} label={fill(s.home.bpLast, { number: String(values[values.length - 1]) })} />;
+  return <Sparkline values={values} label={fill(s.home.bpLast, { number: String(values[values.length - 1]) })} caption={s.home.bpLabel} />;
 }
 
 /** How many of what changed Home shows before "See all": the mockup's three, and one more. */
@@ -471,7 +472,7 @@ function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
         <Icon name="chevron" />
       </button>
       <p class="number small">{weekdayOf(new Date(visit.scheduled_at), locale)}</p>
-      {when && <p class="source-line">{when.text}</p>}
+      <p class="source-line">{when ? when.text : dateLine(new Date(visit.scheduled_at), locale)}</p>
     </GlassTile>
   );
 }

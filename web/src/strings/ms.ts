@@ -64,11 +64,11 @@ export const ms = {
     // @patient headline
     fromName: "Daripada {name}",
     // @patient phrase
-    showAll: "Lihat semua {count}",
+    showAll: "Tunjuk semua {count}",
     // @patient phrase
     showFewer: "Tunjuk kurang",
     // @patient
-    bpLast: "Nombor atas terakhir ialah {number}.",
+    bpLast: "Tekanan darah terakhir ada nombor atas {number}.",
   },
   places: {
     // @patient headline

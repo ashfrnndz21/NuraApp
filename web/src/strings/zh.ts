@@ -68,7 +68,7 @@ export const zh = {
     // @patient phrase
     showFewer: "收起来",
     // @patient
-    bpLast: "最近一次上面的数字是{number}。",
+    bpLast: "最近一次量血压，上面的数字是{number}。",
   },
   places: {
     // @patient headline

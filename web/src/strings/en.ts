@@ -56,7 +56,7 @@ export const en = {
     // @patient headline
     buyMore: "Buy more",
     // @patient headline
-    missing: "Missing from the papers",
+    missing: "Not in the papers yet",
     // @patient
     missingSub: "Nura added these to the questions for the visit.",
     // @patient phrase
@@ -68,7 +68,7 @@ export const en = {
     // @patient phrase
     showFewer: "See fewer",
     // @patient
-    bpLast: "The last top number was {number}.",
+    bpLast: "The last blood pressure had a top number of {number}.",
   },
   places: {
     // @patient headline

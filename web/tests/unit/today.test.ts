@@ -8,6 +8,7 @@ import {
   feedCards,
   feedLines,
   greeting,
+  homeHeroWords,
   lineTitle,
   medicinesCard,
   nowCard,
@@ -269,5 +270,20 @@ describe("the words around them", () => {
 
   it("key a day in the phone's own time zone", () => {
     expect(dayKey(new Date(2026, 8, 14, 23, 59))).toBe("2026-09-14");
+  });
+});
+
+describe("her Home's hero line", () => {
+  const line = "Nothing needs you today.";
+  it("is the backend's own line when the State is current and nothing is flagged", () => {
+    expect(homeHeroWords({ stale: false, line }, { flagged: false, kept: false }, en)).toBe(line);
+  });
+  it("says the State is from earlier when it is behind, or when the page is the phone's kept copy", () => {
+    expect(homeHeroWords({ stale: true, line }, { flagged: false, kept: false }, en)).toBe(en.today.staleState);
+    expect(homeHeroWords({ stale: false, line }, { flagged: false, kept: true }, en)).toBe(en.today.staleState);
+  });
+  it("reassures nobody while a red-flag card is on the page: the flag goes first", () => {
+    expect(homeHeroWords({ stale: false, line }, { flagged: true, kept: false }, en)).toBeNull();
+    expect(homeHeroWords({ stale: true, line }, { flagged: true, kept: true }, en)).toBeNull();
   });
 });

@@ -227,6 +227,10 @@ export interface AnswerOut {
   spoken: string[];
   /** Parts of the record this key does not reach, so not read. */
   withheld: string[];
+  /** A red flag heard in the question: the red-flag path it took first, as the same word
+   *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
+   *  Null when the question carries none. */
+  red_flag?: FeelingOut | null;
 }
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for

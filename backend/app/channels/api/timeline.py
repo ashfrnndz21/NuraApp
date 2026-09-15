@@ -26,7 +26,9 @@ import uuid
 from fastapi import APIRouter, Query, Request, status
 from pydantic import AwareDatetime
 
+from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.timeline_schemas import (
     AnswerOut,
     AppointmentIn,
@@ -47,12 +49,15 @@ from app.channels.api.timeline_schemas import (
     StatusIn,
     TimelineOut,
 )
+from app.errors import Refusal
 from app.memory.attach import attach_to_appointment, attach_to_episode
 from app.memory.changes import last_look, mark_looked, what_changed
 from app.memory.providers import directory, provider_history, write_chief_note
 from app.memory.spine import add_provider, book_appointment, change_appointment_status
 from app.memory.timeline import MAX_PAGE, PAGE_SIZE, episode_view, timeline
 from app.memory.working import open_episode
+from app.reasoning.feelings.service import record_tap
+from app.safety.red_flags import detect
 from app.search.ask import recall
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
@@ -235,6 +240,28 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     they cite, each naming its ids; "Nura does not have that written down" when nothing
     answers; the boundary last. The question is kept as a MESSAGE artefact, by reference."""
     outside = providers_of(request)
+    # A red flag in the question takes the red-flag path first, exactly as the same word tapped
+    # on the feeling cloud: the moment written, the flag raised, the family told, before anything
+    # is looked up (red flags escalate before ranking; .claude/rules/safety.md). A key that
+    # cannot start that path (no emergency scope) is answered as before.
+    red: FeelingOut | None = None
+    heard = detect(body.question)
+    if heard is not None:
+        try:
+            red = FeelingOut.of(
+                await record_tap(
+                    session,
+                    context=context,
+                    word=heard,
+                    registry=outside.drug_registry,
+                    store=outside.object_store,
+                    transcriber=outside.transcriber,
+                    via=via_of(request),
+                    language=body.language,
+                )
+            )
+        except Refusal:
+            red = None
     answer = await recall(
         session,
         context=context,
@@ -245,4 +272,4 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
         registry=outside.drug_registry,
         language=body.language,
     )
-    return AnswerOut.of(answer)
+    return AnswerOut.of(answer, red_flag=red)

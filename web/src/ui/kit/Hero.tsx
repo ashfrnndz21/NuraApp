@@ -5,7 +5,7 @@ interface HeroProps {
   greeting?: string;
   /** A quiet line under the greeting: the date. */
   sub?: string;
-  /** The label over the figure: "Most likely state". */
+  /** The label over the figure: "How things are today". */
   label?: string;
   /** The one big number or state word per screen. */
   figure?: string | number | null;

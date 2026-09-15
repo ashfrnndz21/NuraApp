@@ -62,7 +62,7 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await page.reload();
   await expect(page.getByTestId("cannot-reach")).toContainText("Nura cannot reach your papers right now.");
   await expect(page.getByTestId("emergency-placeholder")).toContainText("Emergency card");
-  for (const gone of ["today-list", "now-card", "taken", "state-card", "medicines-card", "proud", "offline", "reading-prompt"]) {
+  for (const gone of ["today-list", "now-card", "taken", "state-card", "medicines-card", "proud", "offline", "reading-prompt", "hero-figure"]) {
     await expect(page.getByTestId(gone)).toHaveCount(0);
   }
   expect(await medicinesInIndexedDb(page)).toEqual([]);

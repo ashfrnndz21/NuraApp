@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut } from "../api/types";
+import { whatToDoLines } from "../day/model";
 import { answerView, askMode } from "../feed/ask";
 import { go } from "../flow";
 import { density, profile, token } from "../store/session";
@@ -40,7 +41,14 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setBusy(true);
     setError(null);
     try {
-      setAnswer(await nura.ask(bearer, papers.profile_id, text, mode, language.value));
+      const found = await nura.ask(bearer, papers.profile_id, text, mode, language.value);
+      // A red flag heard in the question went the red-flag path on the backend first: what to do
+      // now, the backend's card, exactly as after a red word tapped on Today.
+      if (found.red_flag?.red_flag) {
+        const red = found.red_flag;
+        return go({ name: "whatToDo", lines: red.card ? whatToDoLines(red.card) : red.lines, offline: null, refusal: null });
+      }
+      setAnswer(found);
     } catch (failure) {
       setAnswer(null);
       setError(failure);

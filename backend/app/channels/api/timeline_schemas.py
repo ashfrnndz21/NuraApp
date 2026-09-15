@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic import AwareDatetime, BaseModel, Field
 
+from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.schemas import FactOut, utc
 from app.channels.api.voice_schemas import VoiceScriptOut
 from app.ingestion.models import EventNote
@@ -605,9 +606,13 @@ class AnswerOut(BaseModel):
     voice_script: VoiceScriptOut
     """`spoken` as it is said (E22-03), the longer pause before the boundary."""
     withheld: list[Scope]
+    red_flag: FeelingOut | None = None
+    """A red flag heard in the question: the red-flag path it took before anything was looked up,
+    as the same word tapped on the feeling cloud (the moment written, the flag raised, the family
+    told). None when the question carries none, or the key cannot start that path."""
 
     @classmethod
-    def of(cls, answer: Answer) -> AnswerOut:
+    def of(cls, answer: Answer, red_flag: FeelingOut | None = None) -> AnswerOut:
         return cls(
             question_artifact_id=answer.question_artifact_id,
             mode=answer.mode,
@@ -638,4 +643,5 @@ class AnswerOut(BaseModel):
                 answer.spoken, answer.language, "\n".join(answer.boundary)
             ),
             withheld=list(answer.withheld),
+            red_flag=red_flag,
         )
