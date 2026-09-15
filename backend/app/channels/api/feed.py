@@ -17,7 +17,7 @@
     PATCH /profiles/{id}/search-jobs/{job}      pause or resume it
     GET  /profiles/{id}/area                    his area, coarse (owner, chief)
     PUT  /profiles/{id}/area                    set on his yes (owner, steward)
-    GET  /profiles/{id}/find?q=&where=          the ask bar's Web, Videos and Providers filters
+    POST /profiles/{id}/find                    the ask bar's Web, Videos and Providers filters
 
 Every route takes the key context. The owner reads the patient's supply; a chief, caregiver
 or steward reads the caregiver's list, narrowed to the parts of the record the key covers.
@@ -46,6 +46,7 @@ from app.channels.api.feed_schemas import (
     EventsOut,
     FeedItemOut,
     FeedPageOut,
+    FindIn,
     FindOut,
     ResultOut,
     SearchJobIn,
@@ -356,21 +357,21 @@ async def put_area(body: AreaIn, context: Context, session: Db) -> AreaOut:
     return AreaOut.of(await set_area(session, context=context, area=body.area))
 
 
-@router.get("/{profile_id}/find")
-async def find(
-    request: Request,
-    context: Context,
-    session: Db,
-    q: str = Query(min_length=1, max_length=200),
-    where: str = Query(max_length=16),
-    language: str | None = Query(default=None, max_length=8),
-) -> FindOut:
+@router.post("/{profile_id}/find")
+async def find(body: FindIn, request: Request, context: Context, session: Db) -> FindOut:
     """The ask bar's Web, Videos and Providers filters: the allowlisted sources only, said
-    in his language with the boundary; his own providers by name. Records is `POST …/ask`."""
+    in his language with the boundary; his own providers by name. Records is `POST …/ask`.
+    A POST so the words he typed about his health are in the body, never in a URL that an
+    access log, a proxy or the browser's history keeps. Nothing is written."""
     found = await find_pages(
-        session, context=context, engine=_engine(request), words=q, where=where, language=language
+        session,
+        context=context,
+        engine=_engine(request),
+        words=body.q,
+        where=body.where,
+        language=body.language,
     )
-    return FindOut(where=where, results=[ResultOut.of(one) for one in found])
+    return FindOut(where=body.where, results=[ResultOut.of(one) for one in found])
 
 
 @router.get("/{profile_id}/feed/{item_id}")

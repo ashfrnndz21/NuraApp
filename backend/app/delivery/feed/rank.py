@@ -30,7 +30,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write
+from app.audit.access import audited_profile_read, audited_read, audited_write
 from app.db import as_utc, utcnow
 from app.delivery.feed.compose import Day, can_compose, refresh, today_for
 from app.delivery.feed.models import (
@@ -238,9 +238,16 @@ async def _statuses(
     ids = [item.id for item in items]
     if not ids:
         return {}
-    engaged = await audited_read(
-        session, Engagement, context, Scope.PROFILE, where=(Engagement.item_id.in_(ids),)
-    )
+    # What became of a card is what *he* did with it: his chief's own taps on her list are
+    # not his opening it ("Pa opened this card" is said only when he did).
+    owner = (await audited_profile_read(session, context)).owner_person_id
+    engaged = [
+        one
+        for one in await audited_read(
+            session, Engagement, context, Scope.PROFILE, where=(Engagement.item_id.in_(ids),)
+        )
+        if one.person_id == owner
+    ]
     pages = await audited_read(
         session, FeedPage, context, Scope.PROFILE, where=(FeedPage.audience == DeliverTo.PATIENT,)
     )

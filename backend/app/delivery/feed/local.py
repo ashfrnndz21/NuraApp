@@ -53,24 +53,37 @@ class Hazard:
 
 HAZARDS: Mapping[str, Hazard] = {
     # Severe dengue is more likely with long-term conditions, and bleeding is the danger on a
-    # blood thinner (MOH and WHO consumer guidance).
+    # blood thinner (MOH and WHO consumer guidance). "blood_thinner" is what he told when the
+    # setup asked (E01), before any label.
     "dengue": Hazard(
         "dengue",
-        # "blood_thinner" is what he told when the setup asked (E01), before any label.
-        frozenset({"diabetes", "high_blood_pressure", "heart", "kidneys", "blood_thinner"}),
         frozenset(
-            {"warfarin", "aspirin", "clopidogrel", "ticagrelor", "apixaban", "rivaroxaban",
-             "dabigatran"}
+            {"diabetes", "high_blood_pressure", "heart", "weak_heart", "kidneys", "blood_thinner"}
+        ),
+        frozenset(
+            {"warfarin", "aspirin", "clopidogrel", "ticagrelor", "prasugrel", "ticlopidine",
+             "apixaban", "rivaroxaban", "dabigatran", "edoxaban"}
         ),
     ),
-    # Haze advisories name long-term heart and lung conditions.
-    "haze": Hazard("haze", frozenset({"heart", "breathing", "stroke"}), frozenset()),
+    # Haze advisories name long-term heart and lung conditions; an inhaler on his list is the
+    # lungs' own marker.
+    "haze": Hazard(
+        "haze",
+        frozenset({"heart", "weak_heart", "uneven_heartbeat", "breathing", "stroke"}),
+        frozenset(
+            {"salbutamol", "terbutaline", "ipratropium", "tiotropium", "budesonide",
+             "fluticasone", "beclometasone", "formoterol", "salmeterol", "montelukast"}
+        ),
+    ),
     # Heat advisories name long-term heart, kidney and sugar conditions, and water pills.
     "heat": Hazard(
         "heat",
-        frozenset({"heart", "kidneys", "diabetes", "water_pill"}),
-        frozenset({"frusemide", "furosemide", "hydrochlorothiazide", "indapamide",
-                   "spironolactone"}),
+        frozenset({"heart", "weak_heart", "kidneys", "diabetes", "water_pill"}),
+        frozenset(
+            {"frusemide", "furosemide", "bumetanide", "torasemide", "torsemide",
+             "hydrochlorothiazide", "chlorthalidone", "indapamide", "metolazone",
+             "spironolactone", "amiloride"}
+        ),
     ),
 }
 """The hazards a local watch can be for, and who each is relevant to."""
@@ -83,8 +96,25 @@ def relevant_to(hazard: str, conditions: Iterable[str], medicines: Iterable[str]
     if rule is None:
         raise NotAHazard(f"{hazard!r} is not a hazard a local watch covers")
     held = {code for code in conditions} & rule.conditions
-    taken = {name.strip().lower() for name in medicines} & rule.medicines
+    taken = {generic for name in medicines if (generic := generic_of(name)) in rule.medicines}
     return sorted(held | taken)
+
+
+SYNONYMS: Mapping[str, str] = {"acetylsalicylic acid": "aspirin", "albuterol": "salbutamol"}
+"""Other names a label gives the same medicine, by the name the table uses."""
+
+_NOT_THE_MEDICINE = re.compile(
+    r"\b(?:sodium|potassium|calcium|hydrochloride|hcl|bisulfate|besylate|besilate|maleate|"
+    r"mesylate|etexilate|tosylate|bromide|sulfate|sulphate|dipropionate|propionate|"
+    r"xinafoate|fumarate|tablets?|capsules?|\d+(?:\.\d+)?\s*(?:mg|mcg|g))\b"
+)
+
+
+def generic_of(name: str) -> str:
+    """A medicine's name as the table knows it: lower case, its salt and strength left off
+    ("Warfarin Sodium 5 mg" is warfarin), another name for it made the table's own."""
+    cleaned = " ".join(_NOT_THE_MEDICINE.sub(" ", name.strip().lower()).split())
+    return SYNONYMS.get(cleaned, cleaned)
 
 
 # --- seasons ------------------------------------------------------------------------------------
@@ -121,9 +151,10 @@ SEASONS: tuple[Season, ...] = (
         "fasting_month",
         "fasting month",
         # Expected dates; the start is announced by the religious authorities nearer the time,
-        # so the card says "around". Health advice is to plan with the doctor 1–2 months ahead.
+        # so the card says "around". Health advice is to plan with the doctor 1–2 months ahead,
+        # so the card may show from two months before.
         ((date(2026, 2, 18), date(2026, 3, 19)), (date(2027, 2, 8), date(2027, 3, 9))),
-        timedelta(days=42),
+        timedelta(days=60),
         exact=False,
         planned=False,
         conditions=frozenset({"diabetes"}),

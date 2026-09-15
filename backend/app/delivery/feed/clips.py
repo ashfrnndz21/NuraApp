@@ -48,10 +48,11 @@ CLIP_SHORTEST = 20
 CLIP_LONGEST = 30
 """The part of a video a clip keeps: 20 to 30 seconds (spec §2, E11-09)."""
 
-REUSE_LICENCES = frozenset({"cc-by", "cc-by-sa", "cc-by-nd", "permission"})
+REUSE_LICENCES = frozenset({"cc-by", "cc-by-sa", "permission"})
 """The licences under which the server may keep and serve an excerpt: a Creative Commons
-licence that allows sharing with attribution, or the publisher's written permission. Any
-other — or none named — and the clip is the still with the narration."""
+licence that allows adapting with attribution (a clip is cut to 20–30 seconds and narrated
+over, so it is a derivative — "no derivatives" does not allow it), or the publisher's written
+permission. Any other — or none named — and the clip is the still with the narration."""
 
 FEED_TARGET = FeedItem.__tablename__
 
@@ -233,7 +234,9 @@ async def _rendered(
     if renderer is None:
         raise NoClipRenderer("no clip renderer is configured on this server")
     cite = _cite(item)
-    excerpt = bool(cite.get("excerpt"))
+    # The licence is read again here, not only when the card was made: an excerpt is asked for
+    # only while the stored licence still allows reuse.
+    excerpt = bool(cite.get("excerpt")) and may_excerpt(cite.get("licence"))
     ask = ClipAsk(
         key=clip_key(item),
         language=item.language,

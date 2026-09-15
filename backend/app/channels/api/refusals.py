@@ -32,7 +32,7 @@ from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
 from app.delivery.feed.find import NotAFilter, NothingToFind
 from app.delivery.feed.local import NotACoarseArea, NotAHazard, NotASeason
 from app.delivery.feed.rank import NoCachedPage
-from app.delivery.feed.search import NoSuchSearchJob, NotACadence
+from app.delivery.feed.search import FastingIsHisToSay, NoSuchSearchJob, NotACadence
 from app.delivery.feed.sources import NotTheirsToManage
 from app.delivery.feed.twin import NotInThatLanguage
 from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
@@ -217,6 +217,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoClipRenderer, 404),
     (SecondsOnlyOnAPlay, 400),
     (NotACadence, 400),
+    (FastingIsHisToSay, 403),
     (NotAHazard, 400),
     (NotASeason, 400),
     (NotACoarseArea, 400),

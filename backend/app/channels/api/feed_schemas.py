@@ -288,6 +288,14 @@ class ResultOut(BaseModel):
         )
 
 
+class FindIn(BaseModel):
+    """What the ask bar searches for, and where: in the body, never the URL."""
+
+    q: str = Field(min_length=1, max_length=200)
+    where: str = Field(max_length=16)
+    language: str | None = Field(default=None, max_length=8)
+
+
 class FindOut(BaseModel):
     where: str
     results: list[ResultOut]

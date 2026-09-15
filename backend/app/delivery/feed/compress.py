@@ -96,8 +96,28 @@ TREATMENT_CHANGE = re.compile(
 becomes a question for the doctor and goes to the memo (docs/health-feed-spec.md §3.4, §7)."""
 
 
+TREATMENT_CHANGE_MS = re.compile(
+    r"\b(?:berhenti|hentikan|mula(?:kan)?|gandakan|tambah(?:kan)?|kurang(?:kan)?|langkau|"
+    r"tukar|jangan\s+(?:ambil|makan|telan))\b[^.]{0,40}\b(?:ubat|pil|tablet|dos|warfarin|insulin)\b",
+    re.IGNORECASE,
+)
+"""The same, in Malay: stop, start, double, add, cut, skip, change or do not take a medicine."""
+
+TREATMENT_CHANGE_ZH = re.compile(
+    r"(?:停|停止|开始|加倍|加大|增加|减少|减半|跳过|漏掉|换|改|不要)[^。]{0,12}"
+    r"(?:药|药片|剂量|华法林|胰岛素)"
+)
+"""The same, in Chinese: stop, start, double, raise, lower, halve, skip, change or do not take."""
+
+
 def changes_treatment(lines: Sequence[str]) -> bool:
-    return any(TREATMENT_CHANGE.search(line) for line in lines)
+    """Whether any line would start, stop or change a medicine, in English, Malay or Chinese:
+    every language a card or a found page is said in is checked, not the English alone."""
+    return any(
+        pattern.search(line)
+        for line in lines
+        for pattern in (TREATMENT_CHANGE, TREATMENT_CHANGE_MS, TREATMENT_CHANGE_ZH)
+    )
 
 
 def digest(text: str) -> str:

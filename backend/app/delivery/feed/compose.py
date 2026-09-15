@@ -130,14 +130,15 @@ OPENED_KINDS: frozenset[EngagementKind] = frozenset(
     {
         EngagementKind.HEARD,
         EngagementKind.TAPPED,
-        EngagementKind.OPENED,
         EngagementKind.PLAYED,
         EngagementKind.REPLAYED,
         EngagementKind.ASKED_MORE,
     }
 )
-"""What says a card was opened, for the text switch: on his screen, heard, played, tapped or
-asked about. Never how long: nothing here reads seconds."""
+"""What says he took up a text card, for the switch to voice: he heard it, played it, tapped
+it or asked about it. A card that only rested on his screen does not count — a man who cannot
+read it scrolls past it all the same, and it is him the switch is for. Never how long:
+nothing here reads seconds."""
 
 
 
@@ -393,6 +394,9 @@ async def _switch_format_if_ignored(
 async def _engaged(
     session: AsyncSession, context: KeyContext, items: Sequence[FeedItem]
 ) -> dict[uuid.UUID, set[EngagementKind]]:
+    """What he himself did with these cards. His chief reads the same cards on her list, and
+    what she opens or plays is hers: it neither counts as his nor holds back his switch."""
+    owner = (await audited_profile_read(session, context)).owner_person_id
     found = await audited_read(
         session,
         Engagement,
@@ -402,7 +406,8 @@ async def _engaged(
     )
     kinds: dict[uuid.UUID, set[EngagementKind]] = {}
     for one in found:
-        kinds.setdefault(one.item_id, set()).add(one.kind)
+        if one.person_id == owner:
+            kinds.setdefault(one.item_id, set()).add(one.kind)
     return kinds
 
 

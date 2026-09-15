@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
-from app.audit.models import Action
+from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import utcnow
 from app.delivery.feed.clips import ClipRenderer, clip_length_ok, may_excerpt
@@ -81,6 +81,16 @@ class NotACadence(Refusal):
     """How often a search runs: on a change, daily, weekly, or before visits."""
 
 
+class FastingIsHisToSay(Refusal):
+    """Whether he fasts in Ramadan is his to say — it speaks of his faith — so a watch for the
+    fasting month is added on his own key, or the steward's who holds his papers for him;
+    never by a chief or anyone else, and never guessed."""
+
+
+HIS_OWN_WORD: frozenset[str] = frozenset({"fasting month"})
+"""The watches only he (or his steward) may add: those that say something about his faith."""
+
+
 CADENCES = frozenset({"on_change", "daily", "weekly", "before_visits", "once"})
 DEFAULT_CADENCE: Mapping[JobKind, str] = {
     JobKind.EXPLAINER: "on_change",
@@ -93,6 +103,10 @@ DEFAULT_CADENCE: Mapping[JobKind, str] = {
 }
 """How often each kind runs when nobody says: an explainer when the record changes, a safety
 or local bulletin every day, a season or a food card every week."""
+
+FOOD_HELD_FOR: frozenset[str] = frozenset({"kidneys", "kidney_watched"})
+"""The conditions whose food a dietitian sets: no general food card is made for them."""
+
 
 @dataclass(frozen=True, slots=True)
 class Around:
@@ -160,6 +174,19 @@ async def create_job(
         cleaned = [check_hazard(term) for term in cleaned]
     elif kind is JobKind.SEASONAL:
         cleaned = [check_season_term(term) for term in cleaned]
+        if set(cleaned) & HIS_OWN_WORD and not (context.is_owner or context.is_steward):
+            refusal = FastingIsHisToSay(f"a {context.role} key does not say whether he fasts")
+            await record(
+                session,
+                context=context,
+                action=Action.WRITE,
+                scope=Scope.RECORDS,
+                target=JOB_TARGET,
+                outcome=Outcome.REFUSED,
+                refused_because=type(refusal).__name__,
+            )
+            refusal.written_down = True
+            raise refusal
     cadence = cadence or DEFAULT_CADENCE[kind]
     if cadence not in CADENCES:
         raise NotACadence(f"{cadence!r} is not a cadence a search runs on")
@@ -313,6 +340,12 @@ async def run_job(
             for found in found_pages:
                 rejected.append({"url": found.url, "because": "not_relevant_to_his_record"})
             found_pages = []
+    if job.kind is JobKind.FOOD and FOOD_HELD_FOR & set(around.conditions):
+        # His kidneys are on his record: a kidney diet (less potassium and phosphate) is a
+        # dietitian's to set, and a general food choice could go against it. No food card.
+        for found in found_pages:
+            rejected.append({"url": found.url, "because": "held_for_his_dietitian"})
+        found_pages = []
     if job.kind is JobKind.FOOD:
         found_pages = _food_pick(
             [one for one in found_pages if one.domain in domains], day
@@ -336,6 +369,16 @@ async def run_job(
         season = open_season(found.season, day.local.date()) if found.season else None
         if job.kind is JobKind.SEASONAL and season is None:
             rejected.append({"url": found.url, "because": "not_in_season"})
+            continue
+        if (
+            job.kind is JobKind.SEASONAL
+            and season is not None
+            and season.season.conditions
+            and not season.season.conditions & set(around.conditions)
+        ):
+            # The season's page is written for a condition he has not told ("fasting safely
+            # with diabetes"): not for him, however the watch was added.
+            rejected.append({"url": found.url, "because": "not_relevant_to_his_record"})
             continue
         compressed = engine.compressor.compress(found.text, code, _facts_for(state))
         if compressed is None:
@@ -512,10 +555,12 @@ async def run_job(
 
 
 def _key_for(kind: JobKind, found: Found, code: str, day: Day, season_year: int | None) -> str:
-    """A card is made once per page — and, for what comes round, once per day (a local
-    bulletin), per week (a food card) or per season (a seasonal page)."""
+    """A card is made once per page — and, for what comes round, once per issue of a local
+    bulletin, once per week (a food card) or once per season (a seasonal page)."""
     if kind is JobKind.LOCAL:
-        return f"local:{_hash(found)}:{code}:{day.key}"
+        # Once a bulletin: an unchanged bulletin does not take one of his two new cards a
+        # day, every day. A new issue of it (its date) is a new card.
+        return f"local:{_hash(found)}:{code}:{found.published_at or day.key}"
     if kind is JobKind.FOOD:
         return f"food:{_hash(found)}:{code}:{day.week}"
     if kind is JobKind.SEASONAL:
