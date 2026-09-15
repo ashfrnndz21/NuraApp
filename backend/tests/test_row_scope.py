@@ -592,6 +592,14 @@ async def _seed(deployment: Deployment) -> Seeded:
     )
     assert recorded.status_code == 201, recorded.text
     consult_voice = recorded.json()["recording"]["artifact_id"]
+    # A consult recording on its way in, in chunks (#129): opened by his phone.
+    opened = await client.post(
+        f"/profiles/{profile_id}/appointments/{next_visit.id}/recording/uploads",
+        json={"content_type": CONTENT_TYPE, "started_at": "2026-09-03T07:00:00+00:00"},
+        headers=his,
+    )
+    assert opened.status_code == 201, opened.text
+    upload_id = opened.json()["upload_id"]
 
     # A photo shared with the family (E12-02), with his yes to his story (E21-05): the
     # family's part, its bytes read through the thread.
@@ -665,6 +673,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "job_id": [str(uuid.uuid4())],
             "item_id": feed_items or [str(uuid.uuid4())],
             "artifact_id": [consult_voice],
+            "upload_id": [upload_id],
             "photo_id": [shared["photo"]["photo_id"]],
         }
     return seeded
@@ -806,6 +815,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/appointments/{{appointment_id}}/logistics"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recording/notice"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/recordings"),
+    Walk("GET", f"{P}/appointments/{{appointment_id}}/recording/uploads/{{upload_id}}"),
     Walk("GET", f"{P}/artifacts/{{artifact_id}}/clip", params={"start": "19.8", "end": "28.9"}),
     Walk("POST", f"{P}/transcripts/search", json={"words": "water pill"}),
     Walk("GET", f"{P}/thread/photos/{{photo_id}}/content"),
@@ -888,6 +898,21 @@ NOT_WALKED: dict[tuple[str, str], str] = {
         "keeps a consult recording; returns what it kept and its card"
     ),
     ("POST", f"{P}/appointments/{{appointment_id}}/driver"): "gives the drive on a yes; returns the task",
+    ("POST", f"{P}/appointments/{{appointment_id}}/recording/uploads"): (
+        "opens a recording's upload; returns its count"
+    ),
+    ("PUT", f"{P}/appointments/{{appointment_id}}/recording/uploads/{{upload_id}}/chunks/{{position}}"): (
+        "keeps one chunk of it; returns the count"
+    ),
+    ("POST", f"{P}/appointments/{{appointment_id}}/recording/uploads/{{upload_id}}/yes"): (
+        "writes the doctor's yes; returns the count"
+    ),
+    ("POST", f"{P}/appointments/{{appointment_id}}/recording/uploads/{{upload_id}}/finish"): (
+        "keeps the recording put together; returns what it kept and its card"
+    ),
+    ("DELETE", f"{P}/appointments/{{appointment_id}}/recording/uploads/{{upload_id}}"): (
+        "throws the upload away; returns nothing"
+    ),
     ("POST", f"{P}/appointments/{{appointment_id}}/summary/{{summary_id}}/confirm"): (
         "writes what the summary card says; returns what it wrote"
     ),

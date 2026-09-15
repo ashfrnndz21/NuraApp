@@ -58,6 +58,11 @@ class ObjectStore(Protocol):
 
     async def get(self, key: str) -> bytes: ...
 
+    async def delete(self, key: str) -> None:
+        """Let go of the bytes under a key. Nothing there is not an error: a delete sent twice
+        is one delete."""
+        ...
+
 
 @fixture
 class LocalObjectStore:
@@ -96,3 +101,6 @@ class LocalObjectStore:
         if not target.is_file():
             raise NoSuchObject(f"nothing stored under {key} in {self._region}")
         return target.read_bytes()
+
+    async def delete(self, key: str) -> None:
+        self.path_of(key).unlink(missing_ok=True)

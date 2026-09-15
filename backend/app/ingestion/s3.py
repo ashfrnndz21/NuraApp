@@ -165,3 +165,9 @@ class S3ObjectStore:
         if response.status_code != 200:
             raise ObjectStoreUnavailable(f"the bucket refused a get ({response.status_code})")
         return response.content
+
+    async def delete(self, key: str) -> None:
+        url = self.url_of(key)
+        response = await self._client.delete(url, headers=self._signed("DELETE", url, EMPTY_SHA256))
+        if response.status_code not in (200, 204, 404):
+            raise ObjectStoreUnavailable(f"the bucket refused a delete ({response.status_code})")

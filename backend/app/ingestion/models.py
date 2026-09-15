@@ -311,3 +311,56 @@ class ConsultSegment(ProfileScoped, Base):
 
 frozen(ConsultRecording)
 frozen(ConsultSegment)
+
+
+class ConsultUpload(ProfileScoped, Base):
+    """A consult recording on its way in, in chunks (#129, `app.ingestion.chunks`).
+
+    Opened as the microphone opens, on the RECORDING consent in force then (`consent_id`), by
+    the person holding the phone (`started_by_person_id`), in the recorder's own container.
+    The chunks are bytes in the region's object store, never a column; the row counts them
+    (`chunks`, `received_bytes`), so the phone knows where to start again after a dropped
+    connection. `doctor_said_yes_at` is the doctor's answer; nothing is kept as a recording
+    before it. The row ends one of two ways: put together into a `consult_recording`
+    (`finished_at`, `recording_id`), or thrown away with every chunk (`discarded_at`,
+    `discarded_because`: no, left, no_answer, unfinished, no_consent). No words, no audio."""
+
+    __tablename__ = "consult_upload"
+    __table_args__ = (
+        _row_of_profile("consult_upload"),
+        _tied_to_profile("consult_upload", "appointment_id", "appointment"),
+        _tied_to_profile("consult_upload", "recording_id", "consult_recording"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.id"), index=True)
+    consent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("consent.id"))
+    started_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    content_type: Mapped[str] = mapped_column(String(32))
+    started_at: Mapped[datetime] = mapped_column()
+    opened_at: Mapped[datetime] = mapped_column(default=utcnow)
+    chunks: Mapped[int] = mapped_column(Integer, default=0)
+    received_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    doctor_said_yes_at: Mapped[datetime | None] = mapped_column(default=None)
+    discarded_at: Mapped[datetime | None] = mapped_column(default=None)
+    discarded_because: Mapped[str | None] = mapped_column(String(16), default=None)
+    finished_at: Mapped[datetime | None] = mapped_column(default=None)
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("consult_recording.id"), default=None
+    )
+
+
+frozen(
+    ConsultUpload,
+    except_for=frozenset(
+        {
+            "chunks",
+            "received_bytes",
+            "doctor_said_yes_at",
+            "discarded_at",
+            "discarded_because",
+            "finished_at",
+            "recording_id",
+        }
+    ),
+)

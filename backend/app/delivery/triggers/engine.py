@@ -129,6 +129,7 @@ async def run_due(
     await _nudges(run)
     await run_day(run)
     await _family_group(run)
+    await _consult_uploads(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
 
@@ -629,6 +630,21 @@ async def _nudges(run: Run) -> None:
                 )
             continue
         await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
+
+
+async def _consult_uploads(run: Run) -> None:
+    """A visit's recording on its way in, in chunks (#129), that can no longer finish — the
+    doctor never answered, the phone never said Stop, or no RECORDING consent is in force any
+    more — is thrown away here, with every chunk, when the phone could not do it itself."""
+    # Imported here: the recording reaches the visit's card, and the card reaches delivery.
+    from app.ingestion.chunks import discard_stale
+
+    await discard_stale(
+        run.session,
+        context=run.acting,
+        store=run.via.providers.object_store,
+        channel=Channel.SYSTEM,
+    )
 
 
 __all__ = ["NothingToSay", "Report", "Via", "run_due"]

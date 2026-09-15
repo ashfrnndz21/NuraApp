@@ -58,6 +58,7 @@ from app.channels.api import (
     medicines,
     onboarding,
     profiles,
+    recording_uploads,
     review,
     routine,
     safety,
@@ -97,6 +98,7 @@ def _api() -> APIRouter:
     api.include_router(feed.router)
     api.include_router(medicines.router)
     api.include_router(visits.router)
+    api.include_router(recording_uploads.router)
     api.include_router(safety.router)
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
