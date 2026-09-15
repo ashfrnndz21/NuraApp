@@ -11,7 +11,10 @@ import { shareAs } from "./model";
  *  on the backend's own cached page (`GET …/feed/cached`, the last first page rendered for
  *  him), and then on the fresh first page. It asks for the next page by the cursor the last
  *  one handed back as soon as he is within two cards of the end, and asks for each cursor
- *  once: the same cursor is the same page, so what he has seen never shifts. Past the gate
+ *  once: the same cursor is the same page, so what he has seen never shifts. A fresh first
+ *  page that lands after he has read on is merged in below the card on screen — the cards he
+ *  has passed and the one he is on stay exactly where they are, and a card made since (a flag,
+ *  the post-visit memo) is the next one down, never lost. Past the gate
  *  the backend cycles his story and learning cards, so the list pages on for as long as he
  *  scrolls. A lost network keeps what is on screen; anything else — a refusal first of all —
  *  deletes what the phone kept of these papers and is said, never swallowed.
@@ -80,6 +83,11 @@ export class FeedStore {
 
   private pages: PageMark[] = [];
   private asked = new Set<string>();
+  /** Every page put on screen gets the next number, never reused: what keys its cards. */
+  private serial = 0;
+  /** Which list a page answer belongs to: a page asked for before the list was replaced (the
+   *  fresh page merged in) is dropped when it lands. */
+  private generation = 0;
   private loading: Promise<void> | null = null;
   private opening: Promise<void> | null = null;
 
@@ -102,10 +110,11 @@ export class FeedStore {
       const fresh = await this.deps.first();
       this.offline.value = false;
       const saved = await this.deps.keep.save(fresh);
-      // The fresh page takes the screen only while he is still on the first card; once he is
-      // reading on, nothing moves under his finger — the fresh page is kept for next time.
+      // The fresh page takes the screen while he is still on the first card; once he is
+      // reading on, it is merged in below the card on screen, so nothing moves under his
+      // finger and nothing made since is lost.
       if (this.current === 0 || this.entries.value.length === 0) this.show(fresh, "live", saved);
-      else this.origin.value = "live";
+      else this.merge(fresh, saved);
       await this.prefetch();
     } catch (failure) {
       await this.fail(failure);
@@ -128,12 +137,36 @@ export class FeedStore {
   }
 
   private show(page: FeedPageOut, origin: Origin, kept?: KeptFeed): void {
+    this.generation += 1;
     this.pages = [{ cursor: page.cursor, next: page.next_cursor }];
     this.asked = new Set(page.cursor ? [page.cursor] : []);
-    this.entries.value = page.items.map((item, index) => ({ key: `0:${index}`, item }));
+    const at = this.serial++;
+    this.entries.value = page.items.map((item, index) => ({ key: `${at}:${index}`, item }));
     this.origin.value = origin;
     this.keptAt.value = origin === "kept" && kept ? kept.fetchedAt : null;
     this.keptUntil.value = kept ? kept.expiresAt : null;
+    this.quiet.value = page.quiet;
+    this.ended.value = page.next_cursor === null;
+    this.audience.value = page.audience;
+  }
+
+  /** The fresh first page, after he has read on: every card up to and including the one on
+   *  screen stays where it is, and below it come the fresh page's cards he has not passed, in
+   *  the backend's order — a card made since the kept page is the next one down. The pages
+   *  then go on from the fresh page's cursor, so the rest of the list is the live one. */
+  private merge(page: FeedPageOut, kept: KeptFeed): void {
+    this.generation += 1;
+    const shown = this.entries.value;
+    const stay = shown.slice(0, Math.min(this.current, shown.length - 1) + 1);
+    const passed = new Set(stay.map((entry) => entry.item.item_id));
+    const at = this.serial++;
+    const below = page.items.filter((item) => !passed.has(item.item_id)).map((item, index) => ({ key: `${at}:${index}`, item }));
+    this.pages = [{ cursor: page.cursor, next: page.next_cursor }];
+    this.asked = new Set(page.cursor ? [page.cursor] : []);
+    this.entries.value = [...stay, ...below];
+    this.origin.value = "live";
+    this.keptAt.value = null;
+    this.keptUntil.value = kept.expiresAt;
     this.quiet.value = page.quiet;
     this.ended.value = page.next_cursor === null;
     this.audience.value = page.audience;
@@ -151,15 +184,20 @@ export class FeedStore {
     if (!last?.next || this.asked.has(last.next)) return;
     if (this.entries.value.length - 1 - this.current > PREFETCH_WITHIN) return;
     const cursor = last.next;
+    const generation = this.generation;
     this.asked.add(cursor);
     this.busy.value = true;
     let failed = false;
     this.loading = (async () => {
       try {
         const page = await this.deps.next(cursor);
+        // The list was replaced while this page was on its way (the fresh page merged in):
+        // it belongs to the old list, and the new one asks for its own.
+        if (generation !== this.generation) return;
         const at = this.pages.length;
+        const serial = this.serial++;
         this.pages.push({ cursor, next: page.next_cursor });
-        this.entries.value = [...this.entries.value, ...page.items.map((item, index) => ({ key: `${at}:${index}`, item }))];
+        this.entries.value = [...this.entries.value, ...page.items.map((item, index) => ({ key: `${serial}:${index}`, item }))];
         this.ended.value = page.next_cursor === null || page.items.length === 0;
         if (page.items.length === 0) this.pages[at] = { cursor, next: null };
         this.offline.value = false;
