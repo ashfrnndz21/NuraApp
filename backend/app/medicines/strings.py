@@ -757,9 +757,9 @@ COUNT_THEIRS: Mapping[str, Lines] = {
 
 # @patient
 REORDER_THEIRS: Mapping[str, Lines] = {
-    "en": ("{name} runs out on {date}.", "Order more for {patient}."),
-    "ms": ("{name} akan habis pada {date}.", "Pesan lagi untuk {patient}."),
-    "zh": ("{name}到{date}就吃完了。", "请给{patient}再订。"),
+    "en": ("{name} runs out on {date}.", "The family can order more for {patient}."),
+    "ms": ("{name} akan habis pada {date}.", "Keluarga boleh pesan lagi untuk {patient}."),
+    "zh": ("{name}到{date}就吃完了。", "家人可以给{patient}再订。"),
 }
 
 # @patient

@@ -1189,7 +1189,7 @@ export const zh = {
     // @patient
     noteSaved: "Nura 保存了您的笔记。",
     // @patient
-    noteSavedOther: "Nura 保存了这条笔记。",
+    noteSavedOther: "Nura 保存了这段录音。",
     // @patient
     writtenOn: "这是{date}写的。",
     // @patient headline

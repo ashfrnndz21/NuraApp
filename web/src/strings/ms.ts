@@ -1075,7 +1075,7 @@ export const ms = {
     // @patient
     added: "Nura sudah tambah ke senarai anda.",
     // @patient
-    addedOther: "Nura sudah tambah ubat ini ke senarai {patient}.",
+    addedOther: "Nura sudah tambah ke senarai {patient}.",
     // @patient headline
     moreTitle: "Ada lagi di rumah",
     // @patient
@@ -1189,7 +1189,7 @@ export const ms = {
     // @patient
     noteSaved: "Nura sudah simpan nota anda.",
     // @patient
-    noteSavedOther: "Nura sudah simpan nota itu.",
+    noteSavedOther: "Nura sudah simpan nota ini.",
     // @patient
     writtenOn: "Ini ditulis pada {date}.",
     // @patient headline
