@@ -464,7 +464,7 @@ export const zh = {
     // @patient phrase
     sendAgain: "再发送一次",
     // @patient
-    symptomsSaved: "Nura记下了。",
+    symptomsSaved: "Nura 记下了。",
     // @patient phrase
     nudgeOk: "好的",
     // @patient phrase

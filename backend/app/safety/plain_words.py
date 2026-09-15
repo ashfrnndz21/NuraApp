@@ -1238,20 +1238,6 @@ _ASKING = re.compile(
     + r"|^\W*(?:问一问|问|告诉).{0,10}?(?:医生|大夫|药剂师|dr\.?\s)",
     re.IGNORECASE,
 )
-_KEEP_TAKING = re.compile(
-    r"^\W*do not stop (?![^.?!]*\b(?:until|unless|before|after|for|when|if|and|or)\b)"
-    r"[^.?!\d]*\byourself\.?$"
-    r"|^\W*jangan berhenti (?:makan|ambil) "
-    r"(?![^.?!]*\b(?:sehingga|sampai|kecuali|sebelum|selepas|jika|kalau|dan|atau)\b)"
-    r"[^.?!\d]*\bsendiri\.?$"
-    r"|^\W*不要自己停[^。？！，\d]*。?$",
-    re.IGNORECASE,
-)
-"""The one line that puts a treatment verb beside a medicine to keep it as it is: "Do not stop
-{medicine} yourself." (#157, `app.reasoning.feelings.strings.DO_NOT_STOP`). It is the opposite
-of a change: he keeps taking it, and the doctor decides. Held to that shape: a line that adds
-anything ("Do not stop the water pill until Friday.") fails as before."""
-
 """The boundary (CLAUDE.md): no line the patient reads starts, stops or changes a medicine.
 A treatment-changing verb beside a medicine noun fails unless the line is a question put to
 the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask Dr Tan about…",
@@ -1260,6 +1246,30 @@ the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask D
 tight the other way too: a verb alone ("You can tell Nura to stop at any time.") or a noun
 alone passes."""
 
+_KEEP_TAKING: dict[str, re.Pattern[str]] = {
+    "en": re.compile(
+        r"^do not stop (?!.*\b(?:until|unless|before|after|for|when|if|and|or|but|then)\b)"
+        r"[a-z' ()-]+ yourself\.?$",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(
+        r"^jangan berhenti (?:makan|ambil) "
+        r"(?!.*\b(?:sehingga|sampai|kecuali|sebelum|selepas|jika|kalau|dan|atau|tetapi|lalu)\b)"
+        r"[a-z' ()-]+ sendiri\.?$",
+        re.IGNORECASE,
+    ),
+    "zh": re.compile(
+        r"^不要自己停(?!.*(?:直到|除非|再|但|改|加|减|和|或|以后|之后|之前|先|然后))"
+        r"[\u4e00-\u9fffA-Za-z ()（）]+。?$"
+    ),
+}
+"""The one line that puts a treatment verb beside a medicine to keep it as it is: "Do not stop
+{medicine} yourself." (#157, `app.reasoning.feelings.strings.DO_NOT_STOP`). It is the opposite
+of a change: he keeps taking it, and the doctor decides. Held to that shape and nothing more:
+one treatment verb in the line, no digit, no punctuation but the full stop, and no word that
+adds a condition or a second thing ("until Friday", "and take less", "再多吃") — those fail
+as before."""
+
 
 def _check_boundary(line: _Line) -> None:
     language = line.language if line.language in _TREATMENT_VERBS else "en"
@@ -1267,7 +1277,9 @@ def _check_boundary(line: _Line) -> None:
     verb = verbs.search(line.text)
     if verb is None or nouns.search(line.text) is None:
         return
-    if _ASKING.search(line.text) or _KEEP_TAKING.search(line.text):
+    if _ASKING.search(line.text):
+        return
+    if len(verbs.findall(line.text)) == 1 and _KEEP_TAKING[language].search(line.text.strip()):
         return
     line.add(
         14,

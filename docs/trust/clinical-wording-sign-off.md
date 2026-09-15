@@ -19,6 +19,14 @@ Row 2 in full, as he reads it (`{doctor}` is the doctor the note names, or "your
 | Straight after it | Do not stop {medicine} yourself. | Jangan berhenti makan {medicine} sendiri. | 不要自己停{medicine}。 |
 | Then | Tell {doctor} how you feel. | Beritahu {doctor} apa yang anda rasa. | 告诉{doctor}您的感觉。 |
 
+The note names a medicine only where its licensed monograph lists the feeling as a watch-out
+(`WATCH_OUT_WORDS`, `backend/app/reasoning/feelings/words.py`), so these are the feelings the
+two lines can follow: dizzy, swollen ankles, muscle ache, cramps and tummy upset. Shaky and
+sweaty is a watch-out too, but it is a red word: a tap on it goes to the red-flag path and
+never makes a note. The clinician should judge each one; muscle ache on a cholesterol tablet
+is the case where "Do not stop" most needs checking. The note also says "Tell {doctor}" twice
+(its first line, and the last of these two): keep both, or drop the second.
+
 The Malay and Chinese are a first translation that uses the glossary's words ("berhenti makan"
 and "停" as in the visit questions' "Ask {doctor} about stopping {medicine}", and "how you
 feel"). They are awaiting a native speaker's pass, as the rest of the catalogue is.
