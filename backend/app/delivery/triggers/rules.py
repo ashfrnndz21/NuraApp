@@ -140,6 +140,28 @@ RULES: Mapping[TriggerType, Rule] = {
             cap=1,
             quiet=True,
         ),
+        # His day's close (E11-01, `app.delivery.triggers.day`): the check-in at his check-in
+        # time and the evening family notice, neither on a day with an open red flag.
+        Rule(
+            TriggerType.CHECK_IN,
+            TriggerKind.RULE,
+            Category.REMINDER,
+            Scope.RECORDS,
+            "check_in_time_reached",
+            cap=1,
+            quiet=True,
+            channels=(DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP),
+        ),
+        Rule(
+            TriggerType.FAMILY_NOTICE,
+            TriggerKind.RULE,
+            Category.CONTEXT,
+            Scope.FAMILY,
+            "evening_family_notice",
+            cap=1,
+            quiet=True,
+            channels=(DeliveryChannel.APP_PUSH, DeliveryChannel.WHATSAPP),
+        ),
         Rule(
             TriggerType.FAMILY_MESSAGE,
             TriggerKind.EVENT,

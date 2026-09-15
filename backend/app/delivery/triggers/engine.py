@@ -12,7 +12,9 @@ from the WhatsApp thread and the feeling cloud); the five-minute run is the net 
 the rungs after the first, and a flag whose first word could not go.
 
 The order is the safety order: flags first, before anything is ranked or capped; then the
-ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
+ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events;
+then the close of his day (`day`: the check-in and the family notice), after the nudges so a
+check-in the day's nudge already asked is not asked again.
 Every trigger that fires writes its rule on every `Delivery` row it makes.
 """
 
@@ -35,6 +37,7 @@ from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import theirs
+from app.delivery.triggers.day import run_day
 from app.delivery.triggers.deliver import (
     Firing,
     Message,
@@ -124,6 +127,7 @@ async def run_due(
     await _papers(run)
     await _family_messages(run)
     await _nudges(run)
+    await run_day(run)
     await _family_group(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
 
