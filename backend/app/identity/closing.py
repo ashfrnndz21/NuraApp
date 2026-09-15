@@ -59,12 +59,13 @@ from app.regions import REGION_TZ
 from app.safety.red_flags import Flag
 
 log = logging.getLogger(__name__)
-_UNDER_A_PROFILE = re.compile(r"^[a-z]+/([0-9a-f-]{36})/")
+_UNDER_A_PROFILE = re.compile(r"^[a-z-]+/([0-9a-f-]{36})/")
 TARGET = AccountClosure.__tablename__
 
 OBJECT_KINDS = (
     "consults",
     "documents",
+    "family-photos",
     "imports",
     "messages",
     "photos",
@@ -230,7 +231,7 @@ async def undo_closure(
 
 # --- erasure ------------------------------------------------------------------------------------
 
-_PREFIX = re.compile(r"^[a-z]+/[0-9a-f-]{36}/$")
+_PREFIX = re.compile(r"^[a-z-]+/[0-9a-f-]{36}/$")
 
 
 async def answerable_while_closing(

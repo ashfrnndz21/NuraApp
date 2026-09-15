@@ -282,9 +282,7 @@ async def _his_language(session: AsyncSession, context: KeyContext) -> str:
     return await his_language(session, context=context)
 
 
-async def open_run(
-    session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at: datetime
-) -> Run:
+async def open_run(session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at: datetime) -> Run:
     """A run for this profile at this moment, acting as its owner — or, before he claims
     it, as the steward holding it for him (there is then no patient to send to)."""
     profile = await session.get(Profile, profile_id)
@@ -337,7 +335,9 @@ async def open_run(
     )
 
 
-def _about(run: Run, firing: Firing, person_id: uuid.UUID, rows: Sequence[Delivery]) -> list[Delivery]:
+def _about(
+    run: Run, firing: Firing, person_id: uuid.UUID, rows: Sequence[Delivery]
+) -> list[Delivery]:
     """Earlier rows of this firing for this person: to them, or meant for them."""
     found = [
         row
@@ -504,8 +504,16 @@ async def deliver(
                 passed.append("app_push: gone")
                 continue
             return await write(
-                run, firing, to, DeliveryOutcome.SENT, via=channel, passed_over=passed,
-                rung=rung, ladder=ladder, text=line, row_id=row_id,
+                run,
+                firing,
+                to,
+                DeliveryOutcome.SENT,
+                via=channel,
+                passed_over=passed,
+                rung=rung,
+                ladder=ladder,
+                text=line,
+                row_id=row_id,
             )
         if channel is DeliveryChannel.WHATSAPP:
             why_not = await _no_whatsapp(run, to.person)
@@ -518,9 +526,17 @@ async def deliver(
                 passed.append(f"whatsapp: {type(refusal).__name__}")
                 continue
             return await write(
-                run, firing, to, DeliveryOutcome.SENT, via=channel,
-                template_name=sent.template_name, message_id=sent.message_id,
-                passed_over=passed, rung=rung, ladder=ladder, text=sent.text,
+                run,
+                firing,
+                to,
+                DeliveryOutcome.SENT,
+                via=channel,
+                template_name=sent.template_name,
+                message_id=sent.message_id,
+                passed_over=passed,
+                rung=rung,
+                ladder=ladder,
+                text=sent.text,
             )
         # The caregiver: what the patient could not be reached with goes to who stands in.
         if message.stand_in is None or to.standing != "patient":
@@ -540,10 +556,19 @@ async def deliver(
             passed.append(f"caregiver: {type(refusal).__name__}")
             continue
         return await write(
-            run, firing, stand_in, DeliveryOutcome.SENT, via=channel,
-            template_name=sent.template_name, message_id=sent.message_id,
-            reason=f"for the {to.standing}", passed_over=passed, rung=rung, ladder=ladder,
-            for_person=to.person, text=sent.text,
+            run,
+            firing,
+            stand_in,
+            DeliveryOutcome.SENT,
+            via=channel,
+            template_name=sent.template_name,
+            message_id=sent.message_id,
+            reason=f"for the {to.standing}",
+            passed_over=passed,
+            rung=rung,
+            ladder=ladder,
+            for_person=to.person,
+            text=sent.text,
         )
     if any(row.outcome is DeliveryOutcome.NO_CHANNEL for row in earlier):
         return None

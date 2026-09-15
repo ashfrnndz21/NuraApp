@@ -890,7 +890,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/appointments/{{appointment_id}}/recording"): (
         "keeps a consult recording; returns what it kept and its card"
     ),
-    ("POST", f"{P}/appointments/{{appointment_id}}/driver"): "gives the drive on a yes; returns the task",
+    (
+        "POST",
+        f"{P}/appointments/{{appointment_id}}/driver",
+    ): "gives the drive on a yes; returns the task",
     ("POST", f"{P}/appointments/{{appointment_id}}/summary/{{summary_id}}/confirm"): (
         "writes what the summary card says; returns what it wrote"
     ),

@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import ast
 import datetime as dt
+from collections.abc import Sequence
 from pathlib import Path
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import tests.whatsapp_support as ws
 from app.channels.whatsapp.group import (
     members_of,
     mirror_to_group,
@@ -28,12 +31,14 @@ from app.channels.whatsapp.opt_in import record_opt_in
 from app.clock import FrozenClock
 from app.consent.models import ConsentChannel, ConsentPurpose
 from app.consent.opt_in_words import OPT_IN_VERSION
-from app.consent.service import RecordConsent
+from app.consent.service import NoConsent, RecordConsent, require_consent
 from app.consent.texts import current_version
 from app.family.thread import post_message
 from app.identity.closing import close_account, close_draft_for, undo_closure
 from app.keys.confirm import confirm
 from app.keys.context import resolve_key_context
+from app.keys.grants import revoke_key
+from app.keys.scopes import KeyRole, Scope
 from app.regions import Region
 from tests.whatsapp_support import MEI, PA, Family, family
 
@@ -152,6 +157,104 @@ async def test_a_closing_account_empties_the_group_and_his_yes_puts_them_back(
     assert home.whatsapp.groups[gid] == tuple(sorted({PA, MEI}))
 
 
+async def test_a_yes_on_a_closed_key_does_not_let_her_back_in(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Pa withdraws Mei's sharing and later lets her in again: her old yes was on the old
+    key, so she is asked again, and is in the group only on her yes on the new one."""
+    clock.set(MORNING)
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.owner, provider=home.whatsapp)
+    gid = group.provider_group_id
+    await withdraw(
+        sg,
+        context=home.owner,
+        provider=home.whatsapp,
+        purpose=ConsentPurpose.SHARE_WITH_PERSON,
+        captured_via=ConsentChannel.APP,
+        holder_person_id=home.mei.id,
+    )
+    everything = frozenset(Scope) - {Scope.PROFILE}
+    await ws.agree_to_family_sharing(
+        sg, home.owner, home.mei, scopes=everything, relationship="your daughter"
+    )
+    await ws.grant_key(
+        sg, context=home.owner, holder=home.mei, role=KeyRole.CHIEF, scopes=everything
+    )
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)  # as the route does
+    assert home.whatsapp.groups[gid] == (PA,)
+    clock.set(MORNING + dt.timedelta(minutes=1))
+    again = await resolve_key_context(
+        sg, region=Region.SG, person_id=home.mei.id, profile_id=home.profile.id
+    )
+    await record_opt_in(
+        sg,
+        context=again,
+        messages=True,
+        joins_group=True,
+        wording_version=OPT_IN_VERSION,
+        language="en",
+    )
+    await sync_group(sg, context=again, provider=home.whatsapp)
+    assert home.whatsapp.groups[gid] == tuple(sorted({PA, MEI}))
+
+
+async def test_a_provider_that_fails_never_undoes_a_withdrawal_and_the_next_run_tries_again(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.owner, provider=home.whatsapp)
+    gid = group.provider_group_id
+    told: list[tuple[str, ...]] = []
+    real = home.whatsapp.set_group_members
+
+    async def down(group_id: str, members: object) -> None:
+        raise RuntimeError("the provider is down")
+
+    monkeypatch.setattr(home.whatsapp, "set_group_members", down)
+    await withdraw(
+        sg,
+        context=home.owner,
+        provider=home.whatsapp,
+        purpose=ConsentPurpose.WHATSAPP,
+        captured_via=ConsentChannel.APP,
+    )
+    # The withdrawal stands, whatever the provider said.
+    with pytest.raises(NoConsent):
+        await require_consent(
+            sg, context=home.owner, purpose=ConsentPurpose.WHATSAPP, scope=Scope.PROFILE
+        )
+    assert home.whatsapp.groups[gid] == tuple(sorted({PA, MEI}))
+
+    async def counting(group_id: str, members: Sequence[str]) -> None:
+        told.append(tuple(members))
+        await real(group_id, members)
+
+    monkeypatch.setattr(home.whatsapp, "set_group_members", counting)
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)  # the engine's next run
+    assert home.whatsapp.groups[gid] == (MEI,)
+    # And a run with nothing changed tells the provider nothing.
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)
+    assert told == [(MEI,)]
+
+
+async def test_a_red_word_in_the_group_from_someone_no_longer_in_the_family_is_answered(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.owner, provider=home.whatsapp)
+    gid = group.provider_group_id
+    assert home.chief.key_id is not None
+    await revoke_key(sg, context=home.owner, key_id=home.chief.key_id)
+    await sync_group(sg, context=home.owner, provider=home.whatsapp)
+    before = len(home.whatsapp.sent)
+    said = await home.inbound(sg, MEI, "He fell in the kitchen just now", group_id=gid)
+    assert said.outcome == "group_not_kept" and said.flag_id is None
+    [out] = home.whatsapp.sent[before:]
+    assert out.to_e164 == MEI and out.group_id is None and "995" in out.text
+    assert (await home.inbound(sg, MEI, "Still here?", group_id=gid)).outcome == "ignored"
+
+
 # Whatever changes who reads the family thread, or whether the patient may be messaged.
 CHANGES_WHO_IS_IN = {
     "revoke_key",
@@ -161,6 +264,8 @@ CHANGES_WHO_IS_IN = {
     "record_opt_in",
     "mark_only_me",
     "lift_only_me",
+    "narrow_key",
+    "claim_profile",
 }
 
 

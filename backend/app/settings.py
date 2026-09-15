@@ -265,11 +265,15 @@ def _frozen_clock(value: str | None, *, dev_run: bool) -> datetime | None:
     if value is None:
         return None
     if not dev_run:
-        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK is for a declared dev run only (NURA_DEV_CODE_SENDER=1)")
+        raise FrozenClockOutsideDev(
+            "NURA_FROZEN_CLOCK is for a declared dev run only (NURA_DEV_CODE_SENDER=1)"
+        )
     try:
         at = datetime.fromisoformat(value)
     except ValueError as bad:
         raise FrozenClockOutsideDev(f"NURA_FROZEN_CLOCK is not an instant: {value!r}") from bad
     if at.tzinfo is None:
-        raise FrozenClockOutsideDev("NURA_FROZEN_CLOCK needs an offset, as in 2026-09-14T10:00:00+08:00")
+        raise FrozenClockOutsideDev(
+            "NURA_FROZEN_CLOCK needs an offset, as in 2026-09-14T10:00:00+08:00"
+        )
     return at

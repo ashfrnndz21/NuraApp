@@ -61,7 +61,12 @@ async def _visit(
         client,
         profile_id,
         who,
-        {"subject": "appointment", "provider_id": provider_id, "scheduled_at": at, "purpose": purpose},
+        {
+            "subject": "appointment",
+            "provider_id": provider_id,
+            "scheduled_at": at,
+            "purpose": purpose,
+        },
     )
     visit: dict[str, Any] = await _ok(
         await client.post(
@@ -82,7 +87,11 @@ async def _visit(
             client,
             profile_id,
             who,
-            {"subject": "appointment_status", "appointment_id": visit["appointment_id"], "status": status},
+            {
+                "subject": "appointment_status",
+                "appointment_id": visit["appointment_id"],
+                "status": status,
+            },
         )
         visit = await _ok(
             await client.post(
@@ -102,7 +111,9 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
 
     tan = await _ok(
         await client.post(
-            f"/profiles/{profile_id}/providers", json={"name": "Dr Tan", "kind": "doctor"}, headers=his
+            f"/profiles/{profile_id}/providers",
+            json={"name": "Dr Tan", "kind": "doctor"},
+            headers=his,
         ),
         201,
     )
@@ -170,7 +181,11 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
     done = await _ok(
         await client.post(
             f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
-            json={"decisions": decisions, "confirmation_id": yes, "episode_id": episode["episode_id"]},
+            json={
+                "decisions": decisions,
+                "confirmation_id": yes,
+                "episode_id": episode["episode_id"],
+            },
             headers=his,
         )
     )
@@ -207,7 +222,9 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
     assert [i["id"] for i in rest["items"]] == [checkup["appointment_id"]]
     only = await _ok(
         await client.get(
-            f"/profiles/{profile_id}/timeline", params={"episode": episode["episode_id"]}, headers=his
+            f"/profiles/{profile_id}/timeline",
+            params={"episode": episode["episode_id"]},
+            headers=his,
         )
     )
     assert [i["kind"] for i in only["items"]] == ["appointment", "episode"]
@@ -303,7 +320,9 @@ async def test_the_new_yeses_are_bound_to_what_they_say(deployment: Deployment) 
     his = bearer(pa["token"])
     tan = await _ok(
         await client.post(
-            f"/profiles/{profile_id}/providers", json={"name": "Dr Tan", "kind": "doctor"}, headers=his
+            f"/profiles/{profile_id}/providers",
+            json={"name": "Dr Tan", "kind": "doctor"},
+            headers=his,
         ),
         201,
     )
@@ -312,7 +331,12 @@ async def test_the_new_yeses_are_bound_to_what_they_say(deployment: Deployment) 
         client,
         profile_id,
         pa,
-        {"subject": "appointment", "provider_id": tan["provider_id"], "scheduled_at": at, "purpose": "check-up"},
+        {
+            "subject": "appointment",
+            "provider_id": tan["provider_id"],
+            "scheduled_at": at,
+            "purpose": "check-up",
+        },
     )
     other = await client.post(
         f"/profiles/{profile_id}/appointments",
@@ -332,7 +356,5 @@ async def test_the_new_yeses_are_bound_to_what_they_say(deployment: Deployment) 
         headers=his,
     )
     assert both.status_code == 422
-    missing = await client.get(
-        f"/profiles/{profile_id}/episodes/{tan['provider_id']}", headers=his
-    )
+    missing = await client.get(f"/profiles/{profile_id}/episodes/{tan['provider_id']}", headers=his)
     assert missing.status_code == 404 and missing.json() == {"refusal": "NoSuchEpisode"}

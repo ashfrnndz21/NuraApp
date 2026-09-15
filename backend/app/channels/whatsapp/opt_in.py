@@ -37,6 +37,9 @@ class WhatsAppOptIn(ProfileScoped, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    key_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("key.id"), default=None)
+    """The key the answer was given on; none for the patient's own. An answer counts only on
+    its key: a key closed and cut again is asked again."""
     said_yes: Mapped[bool] = mapped_column(Boolean)
     """His answer to "Nura may message you on WhatsApp."."""
     joins_group: Mapped[bool] = mapped_column(Boolean)
@@ -70,6 +73,7 @@ async def record_opt_in(
         context,
         Scope.PROFILE,
         person_id=context.person_id,
+        key_id=context.key_id,
         said_yes=messages,
         joins_group=joins_group,
         wording_version=wording_version,
@@ -78,14 +82,20 @@ async def record_opt_in(
 
 
 async def answers_of(session: AsyncSession, *, context: KeyContext) -> WhatsAppOptIn | None:
-    """The caller's own newest answers on this profile, or none before he has answered. Two
-    at the same instant: the one that says no to the group."""
+    """The caller's own newest answers on this key, to today's words, or none before he has
+    answered them. Two at the same instant: the one that says no to the group."""
     rows = await audited_read(
         session,
         WhatsAppOptIn,
         context,
         Scope.PROFILE,
-        where=(WhatsAppOptIn.person_id == context.person_id,),
+        where=(
+            WhatsAppOptIn.person_id == context.person_id,
+            WhatsAppOptIn.wording_version == OPT_IN_VERSION,
+            WhatsAppOptIn.key_id.is_(None)
+            if context.key_id is None
+            else WhatsAppOptIn.key_id == context.key_id,
+        ),
     )
     if not rows:
         return None

@@ -208,9 +208,7 @@ async def send(
             async with audited_guard(
                 session, context, Action.SHARE, Scope.SEND, MESSAGE, channel=Channel.WHATSAPP
             ):
-                raise TemplateNotApproved(
-                    f"{template_name} is not approved on {number.phone_e164}"
-                )
+                raise TemplateNotApproved(f"{template_name} is not approved on {number.phone_e164}")
         if state is None or state.stale is not False or state.profile_id != context.profile_id:
             raise NotFromState(f"{template_name} is composed from a current State of this profile")
         state_id = state.id
@@ -298,7 +296,11 @@ async def send_voice_note(
     if failures:
         raise NotPlainWords(f"voice note in {lang}: {failures[0].problem}")
     said = await voiced(
-        store, voice, profile_id=context.profile_id, region=context.region, lines=lines,
+        store,
+        voice,
+        profile_id=context.profile_id,
+        region=context.region,
+        lines=lines,
         language=lang,
     )
     provider_id = await provider.send_audio(

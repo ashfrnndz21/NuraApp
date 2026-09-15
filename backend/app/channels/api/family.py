@@ -107,19 +107,22 @@ router = APIRouter(tags=["family"])
 
 
 @router.put("/profiles/{profile_id}/keys/{key_id}")
-async def narrow(key_id: uuid.UUID, body: KeyNarrowIn, context: Context, session: Db) -> KeyOut:
+async def narrow(
+    key_id: uuid.UUID, body: KeyNarrowIn, request: Request, context: Context, session: Db
+) -> KeyOut:
     """Narrow a live key in place, on the caller's yes for exactly this change. Wider is
-    refused (`WouldWiden`, 403): that is a fresh consent and a new key."""
-    return KeyOut.of(
-        await narrow_key(
-            session,
-            context=context,
-            key_id=key_id,
-            scopes=body.scopes,
-            window=body.window,
-            confirmation_id=body.confirmation_id,
-        )
+    refused (`WouldWiden`, 403): that is a fresh consent and a new key. A key narrowed out of
+    the family's part is a person out of the family's WhatsApp group, now (#143)."""
+    narrowed = await narrow_key(
+        session,
+        context=context,
+        key_id=key_id,
+        scopes=body.scopes,
+        window=body.window,
+        confirmation_id=body.confirmation_id,
     )
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return KeyOut.of(narrowed)
 
 
 @router.get("/family/roles")

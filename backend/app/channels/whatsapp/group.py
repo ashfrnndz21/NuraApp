@@ -13,7 +13,7 @@ Nothing here reads a fact out of what the family says to each other.
 
 Who may be in it (#143). The patient, while his agreement to WhatsApp is in force: it is his
 agreement to be messaged there, and it is his alone. Everyone else, while their key reads the
-family's part and on their own yes to the group, given at the key-accept step, because each
+family's part and on their own yes to the group, given on that key at the key-accept step, because each
 member's number is seen by the others (`app.channels.whatsapp.opt_in`). A withdrawal, a key
 closed, a no to the group, a closing account: the group is set again at once, where it
 happens (`withdraw`, and every route that changes who reads the thread; held by a test), not
@@ -22,6 +22,8 @@ at its next use. A closing account empties it, and nothing is mirrored while it 
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -39,6 +41,7 @@ from app.channels.whatsapp.provider import WhatsAppProvider
 from app.channels.whatsapp.strings import GROUP_NAME, reply
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import Consent, ConsentChannel, ConsentPurpose
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import NoConsent, require_consent, revoke_consent
 from app.db import as_utc, utcnow
 from app.errors import Refusal
@@ -50,6 +53,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.safety.people import key_holder
 
 GROUP_TARGET = WhatsAppGroup.__tablename__
+log = logging.getLogger(__name__)
 
 
 class NoFamilyGroup(Refusal):
@@ -114,7 +118,7 @@ async def members_of(session: AsyncSession, *, context: KeyContext) -> list[Memb
         if (
             key.is_active(moment)
             and Scope.FAMILY in key.scopes_held - kept_to_himself
-            and key.holder_person_id in joined
+            and key.id in joined
         ):
             people.append((key.holder_person_id, Scope.FAMILY))
     members: list[Member] = []
@@ -138,16 +142,28 @@ async def members_of(session: AsyncSession, *, context: KeyContext) -> list[Memb
 
 
 async def said_yes_to_the_group(session: AsyncSession, *, context: KeyContext) -> set[uuid.UUID]:
-    """Everyone whose newest answer at the key-accept step is yes to the family's group. Two
-    answers at the same instant: the no stands, so nobody's number is shown on a tie."""
-    answers = await audited_read(session, WhatsAppOptIn, context, Scope.FAMILY)
+    """Every key whose holder's newest answer on that key, to today's words, is yes to the
+    family's group. A yes given on an earlier key — one closed, then cut again — or to words
+    since replaced does not count: they are asked again. Two answers at the same instant:
+    the no stands, so nobody's number is shown on a tie."""
+    answers = await audited_read(
+        session,
+        WhatsAppOptIn,
+        context,
+        Scope.FAMILY,
+        where=(
+            WhatsAppOptIn.wording_version == OPT_IN_VERSION,
+            WhatsAppOptIn.key_id.is_not(None),
+        ),
+    )
     newest: dict[uuid.UUID, tuple[datetime, bool]] = {}
     for row in answers:
+        assert row.key_id is not None
         at = as_utc(row.said_at)
-        held = newest.get(row.person_id)
+        held = newest.get(row.key_id)
         if held is None or at > held[0] or (at == held[0] and not row.joins_group):
-            newest[row.person_id] = (at, row.joins_group)
-    return {person_id for person_id, (_, yes) in newest.items() if yes}
+            newest[row.key_id] = (at, row.joins_group)
+    return {key_id for key_id, (_, yes) in newest.items() if yes}
 
 
 async def _agreed(session: AsyncSession, context: KeyContext) -> bool:
@@ -179,7 +195,20 @@ async def sync_group(
         return []
     closing = await closing_since(session, profile_id=context.profile_id) is not None
     members = [] if closing else await members_of(session, context=context)
-    await provider.set_group_members(group.provider_group_id, [m.phone_e164 for m in members])
+    numbers = sorted({m.phone_e164 for m in members})
+    digest = hashlib.sha256("\n".join(numbers).encode()).hexdigest()
+    if digest == group.members_digest:
+        return members  # the provider already has exactly these: nothing to tell, or to write
+    try:
+        await provider.set_group_members(group.provider_group_id, numbers)
+    except Exception:
+        # A provider that fails never undoes what asked for the change — a withdrawal, a key
+        # closed, a closing all stand. The digest is left as it was, so the next run of the
+        # engine tells the provider again (`app.delivery.triggers.engine._family_group`).
+        log.exception("whatsapp: the family group could not be set; the next run tries again")
+        return members
+    group.members_digest = digest
+    await session.flush()
     await record(
         session,
         context=context,

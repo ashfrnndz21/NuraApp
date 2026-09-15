@@ -27,6 +27,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=False),
+        sa.Column("key_id", sa.Uuid(), sa.ForeignKey("key.id"), nullable=True),
         sa.Column("said_yes", sa.Boolean(), nullable=False),
         sa.Column("joins_group", sa.Boolean(), nullable=False),
         sa.Column("wording_version", sa.String(length=32), nullable=False),
@@ -36,9 +37,12 @@ def upgrade() -> None:
     )
     op.create_index("ix_whatsapp_opt_in_profile_id", "whatsapp_opt_in", ["profile_id"])
     op.create_index("ix_whatsapp_opt_in_person_id", "whatsapp_opt_in", ["person_id"])
+    # What the provider was last told about the family's group, as a digest (#143).
+    op.add_column("whatsapp_group", sa.Column("members_digest", sa.String(length=64), nullable=True))
 
 
 def downgrade() -> None:
+    op.drop_column("whatsapp_group", "members_digest")
     op.drop_index("ix_whatsapp_opt_in_person_id", table_name="whatsapp_opt_in")
     op.drop_index("ix_whatsapp_opt_in_profile_id", table_name="whatsapp_opt_in")
     op.drop_table("whatsapp_opt_in")

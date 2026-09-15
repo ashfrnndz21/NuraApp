@@ -292,7 +292,9 @@ async def reach_of(session: AsyncSession, *, context: KeyContext) -> Reach:
     if row is None:
         return Reach(language=None, breakfast=None, checkin=None)
     values = values_of(row)
-    return Reach(language=values.language, breakfast=values.breakfast_time, checkin=values.checkin_time)
+    return Reach(
+        language=values.language, breakfast=values.breakfast_time, checkin=values.checkin_time
+    )
 
 
 async def his_language(session: AsyncSession, *, context: KeyContext) -> str:

@@ -118,7 +118,7 @@ class LocalObjectStore:
         return len(files)
 
 
-_ONE_PROFILE = re.compile(r"^[a-z]+/[0-9a-f-]{36}/$")
+_ONE_PROFILE = re.compile(r"^[a-z][a-z-]*/[0-9a-f-]{36}/$")
 
 
 def check_prefix(prefix: str) -> str:

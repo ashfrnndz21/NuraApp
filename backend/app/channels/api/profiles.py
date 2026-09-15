@@ -366,7 +366,7 @@ async def mint_confirmation(
 
 
 @router.post("/{profile_id}/claim")
-async def claim(body: ClaimIn, context: Context, session: Db) -> ProfileOut:
+async def claim(body: ClaimIn, request: Request, context: Context, session: Db) -> ProfileOut:
     """The patient claims the graph set up for him, with the yes he minted for it.
 
     Ownership passes to him; his agreement to Nura keeping the record is recorded in his
@@ -385,6 +385,15 @@ async def claim(body: ClaimIn, context: Context, session: Db) -> ProfileOut:
     owner = await resolve_key_context(
         session, region=context.region, person_id=context.person_id, profile_id=profile.id
     )
+    # His now: whoever reads the family thread is set in the family's WhatsApp group again,
+    # under his own key, not the claimant's (#143).
+    owner = await resolve_key_context(
+        session,
+        region=settings_of(request).region,
+        person_id=context.person_id,
+        profile_id=context.profile_id,
+    )
+    await sync_group(session, context=owner, provider=providers_of(request).whatsapp)
     return ProfileOut.of(profile, owner)
 
 

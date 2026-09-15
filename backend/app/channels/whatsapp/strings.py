@@ -65,6 +65,19 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
             "如果不能等，现在就打{emergency_number}。",
         ),
     },
+    # A post in a family's group from a number that is not in that family now (#143): nothing
+    # is kept, and a red word is answered to the sender alone, with who to call.
+    "group_not_kept": {
+        "en": (
+            "Nura did not keep this message.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak menyimpan mesej ini.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": ("Nura 没有保存这条消息。", "如果不能等，现在就打{emergency_number}。"),
+    },
     "more_than_one": {
         "en": ("You are on more than one family list.", "Open the app to say who this is about."),
         "ms": (
@@ -300,7 +313,11 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
 """The three feeling words as the read-back says them."""
 
 # @patient phrase
-GROUP_NAME: Mapping[str, str] = {"en": "{name} and family", "ms": "{name} dan keluarga", "zh": "{name}和家人"}
+GROUP_NAME: Mapping[str, str] = {
+    "en": "{name} and family",
+    "ms": "{name} dan keluarga",
+    "zh": "{name}和家人",
+}
 """The name of the family's group on WhatsApp (E11-01), as everyone in it reads it."""
 
 # @patient phrase

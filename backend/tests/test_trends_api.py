@@ -19,7 +19,9 @@ async def test_pa_reads_his_cholesterol_trend_in_malay(deployment: Deployment) -
         await confirm_paper(deployment, pa["token"], profile_id, label)
     his = bearer(pa["token"])
 
-    got = await deployment.client.get(f"/profiles/{profile_id}/trends/total_cholesterol", headers=his)
+    got = await deployment.client.get(
+        f"/profiles/{profile_id}/trends/total_cholesterol", headers=his
+    )
     assert got.status_code == 200, got.text
     body = got.json()
     assert body["language"] == "ms" and body["direction"] == "down"
@@ -84,7 +86,9 @@ async def test_a_caregiver_reads_the_trend_until_the_record_moves_past_state(
         for row in trail.json()
     )
 
-    assert (await client.get(f"/profiles/{profile_id}/state", headers=bearer(pa["token"]))).status_code == 200
+    assert (
+        await client.get(f"/profiles/{profile_id}/state", headers=bearer(pa["token"]))
+    ).status_code == 200
     caught_up = await client.get(route, headers=bearer(mei["token"]))
     assert caught_up.status_code == 200, caught_up.text
     assert [p["value"] for p in caught_up.json()["points"]] == [230, 212]

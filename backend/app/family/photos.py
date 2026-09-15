@@ -36,6 +36,7 @@ from app.regions import guard_region
 
 PHOTO_TARGET = ThreadPhoto.__tablename__
 
+
 class NotAPhoto(Refusal):
     """The bytes offered were empty, or of a kind that is not an image."""
 
@@ -107,9 +108,7 @@ async def share_photo(
     return message, photo
 
 
-async def _shared(
-    session: AsyncSession, context: KeyContext, photo_id: uuid.UUID
-) -> ThreadPhoto:
+async def _shared(session: AsyncSession, context: KeyContext, photo_id: uuid.UUID) -> ThreadPhoto:
     found = await audited_read(
         session,
         ThreadPhoto,

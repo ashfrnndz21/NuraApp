@@ -240,7 +240,11 @@ async def close(
 
 
 def tapped_by(
-    run: Run, taps: Sequence[Any], generic_of: dict[uuid.UUID, str], generic: str, day: str,
+    run: Run,
+    taps: Sequence[Any],
+    generic_of: dict[uuid.UUID, str],
+    generic: str,
+    day: str,
     anchor: str | None,
 ) -> uuid.UUID | None:
     """Who tapped Taken for this medicine at this anchor on this day of his, if anyone."""

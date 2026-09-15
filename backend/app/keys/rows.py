@@ -34,4 +34,3 @@ class RowScoped:
     """
 
     written_scope: Mapped[Scope] = mapped_column(enum_column(Scope, "scope"))
-

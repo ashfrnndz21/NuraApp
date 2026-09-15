@@ -589,11 +589,11 @@ def theirs(medicine: str, name: str, language: str | None) -> str:
     to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes."""
     code = language_for(language)
     if code == "en" and medicine.startswith("your "):
-        return f"{name}'s {medicine[len('your '):]}"
+        return f"{name}'s {medicine[len('your ') :]}"
     if code == "ms" and medicine.endswith(" anda"):
         return f"{medicine[: -len(' anda')]} {name}"
     if code == "zh" and medicine.startswith("您的"):
-        return f"{name}的{medicine[len('您的'):]}"
+        return f"{name}的{medicine[len('您的') :]}"
     return medicine
 
 

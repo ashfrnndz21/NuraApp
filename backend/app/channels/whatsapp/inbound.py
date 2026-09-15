@@ -208,6 +208,24 @@ async def _profiles_reachable(
     ]
 
 
+async def _not_kept_in_the_group(
+    providers: Providers, message: InboundMessage, *, region: Region, language: str | None
+) -> Handled:
+    """A post in a family's group from a number that is not in that family now — a stranger,
+    a number kept elsewhere, a key closed since (#143). Nothing is kept and nothing is said
+    into the group; a red word is answered to the sender alone, with who to call, because a
+    red word is never met with silence."""
+    if detect(message.text) is not None:
+        return await _stranger(
+            providers,
+            message,
+            key="group_not_kept",
+            language=language,
+            emergency_number=EMERGENCY_NUMBER[region.value],
+        )
+    return Handled(outcome="ignored")
+
+
 async def _answer_while_closing(
     session: AsyncSession,
     *,
@@ -1309,7 +1327,7 @@ async def handle_inbound(
     person = await find_person_by_phone(session, message.from_e164)
     if person is None:
         if group is not None:
-            return Handled(outcome="ignored")
+            return await _not_kept_in_the_group(providers, message, region=region, language=None)
         return await _stranger(providers, message)
     try:
         guard_region(held_in=person.region, asked_from=region)
@@ -1317,7 +1335,9 @@ async def handle_inbound(
         # A number pinned elsewhere is, to this deployment, a stranger: same words, nothing
         # about where it is known written anywhere here.
         if group is not None:
-            return Handled(outcome="ignored")
+            return await _not_kept_in_the_group(
+                providers, message, region=region, language=person.language
+            )
         return await _stranger(providers, message)
     # A voice note is heard first, in the region, so its words are read like a message's: a
     # red word in it is found before anything else, "ignore" and the consent included.
@@ -1436,8 +1456,11 @@ async def handle_inbound(
     except Refusal:
         if group is None:
             raise
-        # In the group, but no longer on this family's list: nothing kept, nothing said.
-        return Handled(outcome="ignored")
+        # In the group, but no longer on this family's list: nothing kept; a red word is
+        # answered to the sender alone, with who to call (#143).
+        return await _not_kept_in_the_group(
+            providers, message, region=region, language=person.language
+        )
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
     if flagged and not await _whatsapp_agreed(session, context=context):
         return await _red_flag_unagreed(

@@ -73,13 +73,26 @@ async def _household(session: AsyncSession, *, region: Region = Region.SG):
     owner = await pa(session, region=region, phone="+6591110041" if sg else "+60121110041")
     await water_pill(session, owner)
     mei = await let_in(
-        session, owner, phone="+6592220041" if sg else "+60122220041", name="Mei", role=KeyRole.CHIEF
+        session,
+        owner,
+        phone="+6592220041" if sg else "+60122220041",
+        name="Mei",
+        role=KeyRole.CHIEF,
     )
     lin = await let_in(
-        session, owner, phone="+6594440041" if sg else "+60124440041", name="Lin", role=KeyRole.EMERGENCY
+        session,
+        owner,
+        phone="+6594440041" if sg else "+60124440041",
+        name="Lin",
+        role=KeyRole.EMERGENCY,
     )
     siti = await let_in(
-        session, owner, phone="+6596660041" if sg else "+60126660041", name="Siti", role=KeyRole.HELPER, language="ms"
+        session,
+        owner,
+        phone="+6596660041" if sg else "+60126660041",
+        name="Siti",
+        role=KeyRole.HELPER,
+        language="ms",
     )
     kit = await let_in(
         session,
@@ -145,10 +158,14 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     flag_at = first_write_of(lines, "red_flag")
     assert flag_at > 0
     writes_before = [
-        line for line in lines[:flag_at] if line.action.value == "write" and line.outcome.value == "allowed"
+        line
+        for line in lines[:flag_at]
+        if line.action.value == "write" and line.outcome.value == "allowed"
     ]
     assert writes_before[-1].target == "event" and writes_before[-1].target_id == done.event_id
-    assert writes_before[-2].target == "artifact" and writes_before[-2].target_id == done.artifact_id
+    assert (
+        writes_before[-2].target == "artifact" and writes_before[-2].target_id == done.artifact_id
+    )
     for later in ("delivery_ladder", "fact", "what_to_do_card"):
         at = first_write_of(lines, later, after=flag_at)
         assert at > flag_at, (later, at, flag_at)
@@ -195,7 +212,10 @@ async def test_a_red_flag_by_voice_goes_through_the_transcriber(sg: AsyncSession
     owner, *_ = await _household(sg)
     done = await _press(sg, owner, audio=placeholder_voice(CHEST_PAIN), content_type=CONTENT_TYPE)
     assert done.by_voice and done.heard and done.transcript_confidence == 0.94
-    assert done.kind is WhatToDoKind.RED_FLAG and done.lines[1].text == "Call the ambulance now on 995."
+    assert (
+        done.kind is WhatToDoKind.RED_FLAG
+        and done.lines[1].text == "Call the ambulance now on 995."
+    )
     artifact = await sg.get(Artifact, done.artifact_id)
     assert artifact is not None and artifact.kind is ArtifactKind.VOICE
     assert artifact.content_type == "audio/m4a"
@@ -300,7 +320,10 @@ async def test_malaysia_is_told_999(my: AsyncSession) -> None:
         via=via_for(Region.MY),
         words="dada saya sakit",
     )
-    assert [line.text for line in done.lines][:2] == ["Mei knows now.", "Call the ambulance now on 999."]
+    assert [line.text for line in done.lines][:2] == [
+        "Mei knows now.",
+        "Call the ambulance now on 999.",
+    ]
 
 
 async def test_with_nobody_to_call_the_first_line_is_the_ambulance(sg: AsyncSession) -> None:
@@ -346,7 +369,13 @@ async def test_the_button_takes_one_of_voice_or_words(sg: AsyncSession) -> None:
     with pytest.raises(NothingSaid):
         await _press(sg, owner)
     with pytest.raises(SaidTwice):
-        await _press(sg, owner, words="tired", audio=placeholder_voice(TIRED_TODAY), content_type=CONTENT_TYPE)
+        await _press(
+            sg,
+            owner,
+            words="tired",
+            audio=placeholder_voice(TIRED_TODAY),
+            content_type=CONTENT_TYPE,
+        )
 
 
 async def test_a_helper_pressing_for_him_escalates_without_the_record(

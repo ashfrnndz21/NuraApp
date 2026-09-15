@@ -108,7 +108,9 @@ async def test_there_is_one_breakfast_time(
     prompt and the morning card are all at 07:30. He changes it to 08:15: all three move."""
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    await save_settings(sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(7, 30)))
+    await save_settings(
+        sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(7, 30))
+    )
     await make_plan(sg, context=h.owner, session_id=None, gaps=[BY_CODE["weight"]], breakfast=None)
 
     async def shared(day: int, hour: int, minute: int) -> None:
@@ -122,11 +124,19 @@ async def test_there_is_one_breakfast_time(
         [card] = _rows(await _run(sg, h, clock, at(hour, minute, day=day)), TriggerType.MORNING)
         assert card.outcome is DeliveryOutcome.SENT
         assert card.why["breakfast_at"] == f"{hour:02d}:{minute:02d}"
-        assert _rows(report_after := await _run(sg, h, clock, at(hour, minute, day=day)), TriggerType.MORNING) == []
+        assert (
+            _rows(
+                report_after := await _run(sg, h, clock, at(hour, minute, day=day)),
+                TriggerType.MORNING,
+            )
+            == []
+        )
         assert report_after.day == f"2026-09-{day}"
 
     await shared(15, 7, 30)
-    await save_settings(sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(8, 15)))
+    await save_settings(
+        sg, context=h.owner, values=SettingsValues(language="en", breakfast_time=time(8, 15))
+    )
     await shared(16, 8, 15)
 
 
@@ -406,7 +416,9 @@ async def test_the_nudge_goes_at_its_time_and_one_cap_says_how_many_a_day(
     # The family lowers the cap to one: the engine sends the better one and holds the other.
     await change(sg, context=h.owner, **caps, caps={"nudge": 1})
     due = max(as_utc(first.send_after), as_utc(second.send_after)) + timedelta(minutes=1)
-    rows = {row.why["nudge_id"]: row for row in _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)}
+    rows = {
+        row.why["nudge_id"]: row for row in _rows(await _run(sg, h, clock, due), TriggerType.NUDGE)
+    }
     sent, held = rows[str(first.id)], rows[str(second.id)]
     assert sent.outcome is DeliveryOutcome.SENT and sent.rule == "nudge_handed_over"
     assert sent.template_name == "nudge" and sent.why["kind"] == first.kind.value
@@ -414,7 +426,6 @@ async def test_the_nudge_goes_at_its_time_and_one_cap_says_how_many_a_day(
     assert _rows(await _run(sg, h, clock, due + timedelta(minutes=5)), TriggerType.NUDGE) == []
     # The planner hands over no more that day, by the same number.
     assert (await plan_nudges(sg, context=h.owner, registry=REGISTRY)).drafts == ()
-
 
 
 async def test_he_is_spoken_to_in_the_language_his_settings_say(
@@ -429,7 +440,9 @@ async def test_he_is_spoken_to_in_the_language_his_settings_say(
 
     clock.set(at(6))
     h = await home(sg, tmp_path)
-    await save_settings(sg, context=h.owner, values=SettingsValues(language="ms", breakfast_time=time(7, 30)))
+    await save_settings(
+        sg, context=h.owner, values=SettingsValues(language="ms", breakfast_time=time(7, 30))
+    )
     profile = await sg.get(Profile, h.owner.profile_id)
     assert profile is not None
     profile.language = "en"

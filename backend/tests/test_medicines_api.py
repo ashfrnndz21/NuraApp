@@ -195,7 +195,9 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
         assert (first.headers["x-voice-cache"], again.headers["x-voice-cache"]) == ("miss", "hit")
         assert again.content == first.content
     unknown = await client.get(
-        f"/profiles/{profile_id}/medicines/{line_id}/story/voice", params={"part": "price"}, headers=his
+        f"/profiles/{profile_id}/medicines/{line_id}/story/voice",
+        params={"part": "price"},
+        headers=his,
     )
     assert unknown.status_code == 422
     assert told["language"] == "ms"

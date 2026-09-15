@@ -309,7 +309,7 @@ def test_every_kind_of_stored_object_is_erased() -> None:
     """Every `<kind>/{profile_id}` key the app writes is a kind the erasure takes."""
     written = set()
     for path in APP.rglob("*.py"):
-        written |= set(re.findall(r'f"([a-z_]+)/\{[a-z_.]*profile_id\}', path.read_text()))
+        written |= set(re.findall(r'f"([a-z_-]+)/\{[a-z_.]*profile_id\}', path.read_text()))
     assert written and written <= set(OBJECT_KINDS), written - set(OBJECT_KINDS)
 
 

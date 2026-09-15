@@ -369,9 +369,7 @@ def _by_category(item: FeedItem) -> tuple[int, tuple[int, int, datetime]]:
     return (CATEGORY_ORDER.index(CATEGORY_OF[item.type]), _order_key(item))
 
 
-async def top_three(
-    session: AsyncSession, *, context: KeyContext, engine: Engine
-) -> Page:
+async def top_three(session: AsyncSession, *, context: KeyContext, engine: Engine) -> Page:
     """Today's top three for this key (E11-02): alerts first, then reminders, then insights,
     and inside each the feed's own order — from the supply this key gets, with the caps, the
     quiet hours and his "not for me" applied exactly as the feed applies them. Every card

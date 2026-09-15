@@ -114,7 +114,9 @@ async def test_taken_writes_the_tap_for_the_tablet_whose_window_is_open(
         "Mei can see you took it.",
     ]
     tap = (await sg.scalars(select(DoseTaken))).one()
-    assert tap.line_id == made.line.id and tap.anchor == "breakfast" and tap.by_person_id == home.pa.id
+    assert (
+        tap.line_id == made.line.id and tap.anchor == "breakfast" and tap.by_person_id == home.pa.id
+    )
     # Again at 15:00: no window is open, nothing is written.
     clock.set(datetime(2026, 9, 14, 7, 0, tzinfo=UTC))
     again = await home.inbound(sg, PA, "Taken")
@@ -141,7 +143,9 @@ async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name
     ma_owner = await resolve_key_context(
         sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
     )
-    await agree_to_family_sharing(sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter")
+    await agree_to_family_sharing(
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+    )
     await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
 
     handled = await home.inbound(sg, MEI, "he fell in the bathroom")

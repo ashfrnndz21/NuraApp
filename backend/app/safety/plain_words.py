@@ -1231,8 +1231,10 @@ _MEDICINE_NOUNS: dict[str, re.Pattern[str]] = {
 }
 _CLINICIAN = r"(?:dr\.?\s|doctor|doktor|pharmacist|ahli farmasi)"
 _ASKING = re.compile(
-    r"^\W*(?:ask|tell)\b.{0,16}?" + _CLINICIAN
-    + r"|^\W*(?:tanya|beritahu)\b.{0,16}?" + _CLINICIAN
+    r"^\W*(?:ask|tell)\b.{0,16}?"
+    + _CLINICIAN
+    + r"|^\W*(?:tanya|beritahu)\b.{0,16}?"
+    + _CLINICIAN
     + r"|^\W*(?:问一问|问|告诉).{0,10}?(?:医生|大夫|药剂师|dr\.?\s)",
     re.IGNORECASE,
 )

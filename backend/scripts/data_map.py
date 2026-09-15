@@ -434,6 +434,7 @@ CLASSES: dict[str, str] = {
     "whatsapp_opt_in.joins_group": CONSENT,
     "whatsapp_opt_in.wording_version": CONSENT,
     "whatsapp_opt_in.language": OPERATIONAL,
+    "whatsapp_opt_in.key_id": OPERATIONAL,
     # --- web push (ADR 0001): the browsers a person asked to get reminders on ----------------
     "push_subscription.id": OPERATIONAL,
     "push_subscription.person_id": IDENTIFIER,
@@ -707,6 +708,7 @@ CLASSES: dict[str, str] = {
     "whatsapp_group.provider_group_id": IDENTIFIER,
     "whatsapp_group.opened_by_person_id": IDENTIFIER,
     "whatsapp_group.opened_at": OPERATIONAL,
+    "whatsapp_group.members_digest": IDENTIFIER,
     # A proposal is what was heard, waiting for the poster's yes: a reading, not yet a fact.
     "whatsapp_proposal.thread_id": HEALTH,
     "whatsapp_proposal.message_id": HEALTH,

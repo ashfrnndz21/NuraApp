@@ -414,7 +414,6 @@ class PushDraft:
         }
 
 
-
 @dataclass(frozen=True, slots=True)
 class RoutineDraft:
     """A day about to be set (E10): the clock times of his anchors, the readings he is

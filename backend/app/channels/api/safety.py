@@ -84,7 +84,9 @@ async def printable(
 
 
 @router.get("/{profile_id}/not-feeling-well/offline")
-async def offline(context: Context, session: Db, language: str | None = Language) -> OfflineCardsOut:
+async def offline(
+    context: Context, session: Db, language: str | None = Language
+) -> OfflineCardsOut:
     """The two cards the phone keeps for when it cannot reach Nura (the web client, W7): one
     for a red word tapped with no network, one for the button pressed with no network. The
     catalogue's lines, verified, naming the chief and the region's ambulance number. A read:
