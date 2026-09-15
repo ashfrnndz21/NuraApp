@@ -773,13 +773,8 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/{{item_id}}/clip/captions"),
     Walk("GET", f"{P}/feed/{{item_id}}/clip/video"),
     Walk("GET", f"{P}/area"),
-    Walk(
-        "GET",
-        f"{P}/find",
-        variants=tuple(
-            {"q": "blood pressure", "where": where} for where in ("web", "videos", "providers")
-        ),
-    ),
+    # The ask bar's filters: a read, sent as a POST so his words stay out of the URL.
+    Walk("POST", f"{P}/find", json={"q": "blood pressure", "where": "web"}),
     Walk("GET", f"{P}/feed/{{item_id}}"),
     Walk("GET", f"{P}/closure"),
     Walk("GET", f"{P}/whatsapp-opt-in"),

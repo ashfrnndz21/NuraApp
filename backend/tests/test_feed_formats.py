@@ -372,7 +372,8 @@ def test_the_cues_follow_one_another_and_each_line_is_the_card_s_own() -> None:
 
 def test_only_a_licence_that_allows_reuse_lets_the_server_keep_an_excerpt() -> None:
     assert may_excerpt("cc-by") and may_excerpt("CC-BY-SA") and may_excerpt("permission")
-    for licence in (None, "", "standard", "youtube", "all rights reserved", "cc-by-nc"):
+    # "No derivatives" does not allow cutting 20–30 seconds and narrating over them.
+    for licence in (None, "", "standard", "youtube", "all rights reserved", "cc-by-nc", "cc-by-nd"):
         assert not may_excerpt(licence), licence
 
 
@@ -521,7 +522,7 @@ async def test_dengue_near_his_area_reaches_him_only_once_his_area_is_set_and_a_
     clock.step(timedelta(days=1))
     page = await _feed(penang, profile_id, his)
     [local] = await _made(penang, profile_id, CardType.LOCAL)
-    assert local.headline == "More dengue in Air Itam this week"
+    assert local.headline == "More dengue near you this week"
     assert local.why["plain"] == "You are seeing this because you live near there."
     # What to do today, then the source, then the boundary line it ends on.
     assert local.body[0] == "Keep pots and pails at home dry today."
@@ -667,10 +668,17 @@ async def test_the_fasting_month_is_added_by_a_person_and_shows_only_when_it_is_
         ).all()
     # Nura never guesses whether he fasts: no fasting-month watch is made by itself.
     assert ["fasting month"] not in [job.terms for job in planned]
-    added = await deployment.client.post(
+    # Whether he fasts speaks of his faith: his chief does not add it for him.
+    hers = await deployment.client.post(
         f"/profiles/{profile_id}/search-jobs",
         json={"kind": "seasonal", "terms": ["fasting month"]},
         headers=bearer(mei["token"]),
+    )
+    assert hers.status_code == 403 and hers.json()["refusal"] == "FastingIsHisToSay"
+    added = await deployment.client.post(
+        f"/profiles/{profile_id}/search-jobs",
+        json={"kind": "seasonal", "terms": ["fasting month"]},
+        headers=bearer(pa["token"]),
     )
     assert added.status_code == 201, added.text
     assert added.json()["cadence"] == "weekly"
@@ -693,7 +701,9 @@ async def test_the_fasting_month_is_added_by_a_person_and_shows_only_when_it_is_
         if "Ramadan" in item.headline
     ]
     assert card.headline == "Ramadan: plan it with your doctor"
-    assert card.body[0] == "See your doctor before Ramadan."
+    assert card.body[0] == "See your doctor 1 to 2 months before Ramadan."
+    # The low-sugar warning the sources give, for a man on sugar tablets or insulin who fasts.
+    assert "If you feel shaky and sweaty, check your blood sugar at once." in card.body
     assert card.why["plain"] == "Ramadan begins around Monday 8 February."
 
 
@@ -1047,9 +1057,9 @@ async def test_web_and_videos_search_the_allowlist_only_and_say_each_page_in_his
     deployment: Deployment,
 ) -> None:
     pa, profile_id = await _pa(deployment)
-    web = await deployment.client.get(
+    web = await deployment.client.post(
         f"/profiles/{profile_id}/find",
-        params={"q": "blood pressure", "where": "web", "language": "en"},
+        json={"q": "blood pressure", "where": "web", "language": "en"},
         headers=bearer(pa["token"]),
     )
     assert web.status_code == 200, web.text
@@ -1059,21 +1069,21 @@ async def test_web_and_videos_search_the_allowlist_only_and_say_each_page_in_his
         assert result["url"].startswith(("https://www.healthhub.sg/", "https://www.nhcs.com.sg/"))
         assert result["boundary"] and result["lines"]
         assert not _fails(result["lines"], "en")
-    videos = await deployment.client.get(
+    videos = await deployment.client.post(
         f"/profiles/{profile_id}/find",
-        params={"q": "blood pressure", "where": "videos"},
+        json={"q": "blood pressure", "where": "videos"},
         headers=bearer(pa["token"]),
     )
     assert {result["media"] for result in videos.json()["results"]} == {"video"}
     # A page off the allowlist is never returned, however well its words match.
-    thinners = await deployment.client.get(
+    thinners = await deployment.client.post(
         f"/profiles/{profile_id}/find",
-        params={"q": "natural blood thinners", "where": "web"},
+        json={"q": "natural blood thinners", "where": "web"},
         headers=bearer(pa["token"]),
     )
     assert all("supplement-shop" not in (one["url"] or "") for one in thinners.json()["results"])
-    bad = await deployment.client.get(
-        f"/profiles/{profile_id}/find", params={"q": "x", "where": "tiktok"}, headers=bearer(pa["token"])
+    bad = await deployment.client.post(
+        f"/profiles/{profile_id}/find", json={"q": "x", "where": "tiktok"}, headers=bearer(pa["token"])
     )
     assert bad.status_code == 400 and bad.json()["refusal"] == "NotAFilter"
 
@@ -1118,7 +1128,105 @@ async def test_providers_finds_his_own_directory_by_name(deployment: Deployment)
         headers=bearer(pa["token"]),
     )
     assert made.status_code == 201, made.text
-    found = await deployment.client.get(
-        f"/profiles/{profile_id}/find", params={"q": "tan", "where": "providers"}, headers=bearer(pa["token"])
+    found = await deployment.client.post(
+        f"/profiles/{profile_id}/find", json={"q": "tan", "where": "providers"}, headers=bearer(pa["token"])
     )
     assert [one["title"] for one in found.json()["results"]] == ["Dr Tan"]
+
+
+# --- the self-review's findings, held (privacy and clinical safety) --------------------------
+
+
+def test_the_treatment_check_reads_malay_and_chinese_as_well_as_english() -> None:
+    from app.delivery.feed.compress import changes_treatment
+
+    for line in (
+        "Skip a dose of warfarin if your number is too high.",
+        "Berhenti ambil ubat warfarin anda.",
+        "Jangan makan ubat ini esok.",
+        "不要吃华法林。",
+        "停药两天。",
+    ):
+        assert changes_treatment([line]), line
+    for line in (
+        "Tanya cara merancang makanan dan ubat anda.",
+        "Simpan ubat anda dekat dengan anda.",
+        "问问怎样安排饮食和吃药。",
+        "把药放在身边。",
+    ):
+        assert not changes_treatment([line]), line
+
+
+async def test_his_chief_s_taps_on_her_list_are_not_his(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    pa, profile_id = await _pa(deployment)
+    mei = await _chief(deployment, pa, profile_id)
+    await _reading(deployment, profile_id, pa["token"], 138, 84)
+    page = await _feed(deployment, profile_id, pa["token"])
+    reading = next(item for item in page["items"] if item["type"] == "reading")["item_id"]
+    hers = await deployment.client.post(
+        f"/profiles/{profile_id}/feed/events",
+        json=_events(
+            _event(reading, "opened", clock.now()),
+            _event(reading, "played", clock.now(), seconds=20),
+        ),
+        headers=bearer(mei["token"]),
+    )
+    assert hers.status_code == 200 and len(hers.json()["written"]) == 2
+    week = await deployment.client.get(
+        f"/profiles/{profile_id}/feed/week", headers=bearer(mei["token"])
+    )
+    status = {row["item"]["item_id"]: row["item"]["status"] for row in week.json()}
+    # "Pa opened this card" is said only when he did.
+    assert status[reading] == "sent"
+
+
+async def test_no_food_card_when_his_kidneys_are_on_his_record(deployment: Deployment) -> None:
+    pa, profile_id = await _pa(deployment)
+    await _told(deployment, pa, profile_id, "diabetes", "kidneys")
+    await _feed(deployment, profile_id, pa["token"])
+    assert await _made(deployment, profile_id, CardType.FOOD) == []
+    async with deployment.sessions() as session:
+        [job] = (
+            await session.scalars(
+                select(SearchJob).where(
+                    SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.FOOD
+                )
+            )
+        ).all()
+    assert {r["because"] for r in job.results["rejected"]} == {"held_for_his_dietitian"}
+
+
+async def test_a_bulletin_is_one_card_not_one_every_day(
+    penang: Deployment, clock: FrozenClock
+) -> None:
+    pa, profile_id = await _pa(penang, PA_MY)
+    await _told(penang, pa, profile_id, "diabetes")
+    await penang.client.put(
+        f"/profiles/{profile_id}/area", json={"area": "Air Itam"}, headers=bearer(pa["token"])
+    )
+    await _feed(penang, profile_id, pa["token"])
+    assert len(await _made(penang, profile_id, CardType.LOCAL)) == 1
+    # The same bulletin tomorrow: it does not take one of his two new cards again.
+    clock.step(timedelta(days=1))
+    await _feed(penang, profile_id, pa["token"])
+    assert len(await _made(penang, profile_id, CardType.LOCAL)) == 1
+
+
+async def test_a_season_page_for_a_condition_he_has_not_told_is_not_for_him(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    pa, profile_id = await _pa(deployment)
+    await _told(deployment, pa, profile_id, "joints")
+    added = await deployment.client.post(
+        f"/profiles/{profile_id}/search-jobs",
+        json={"kind": "seasonal", "terms": ["fasting month"]},
+        headers=bearer(pa["token"]),
+    )
+    assert added.status_code == 201, added.text
+    clock.step(datetime(2027, 1, 4, 2, 0, tzinfo=UTC) - clock.now())
+    pa = await register_by_phone(deployment, PA, "Pa")
+    await _feed(deployment, profile_id, pa["token"])
+    # "Fasting safely with diabetes" is written for diabetes, which he has not told.
+    assert await _made(deployment, profile_id, CardType.SEASONAL) == []
