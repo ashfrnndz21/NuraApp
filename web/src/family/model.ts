@@ -16,7 +16,8 @@ export const ROLES: readonly KeyRole[] = ["chief", "caregiver", "viewer", "helpe
 export const WINDOWS: readonly KeyWindow[] = ["always", "thirty_days", "seventy_two_hours", "one_day"];
 
 /** The message templates the backend keeps (`app.family.strings.PUSH_TEMPLATES`), with the
- *  slots each needs (`TEMPLATE_SLOTS`). The words are the backend's, seen only in the preview. */
+ *  slots each needs (`TEMPLATE_SLOTS`). The words are the backend's, seen only in the preview.
+ *  None names a medicine: his medicine reminders come only from his list (#164). */
 export const TEMPLATES: readonly { id: string; slots: readonly ("who" | "when" | "doctor" | "day")[] }[] = [
   { id: "pickup", slots: ["who", "when"] },
   { id: "call_you", slots: ["who", "when"] },
@@ -24,7 +25,6 @@ export const TEMPLATES: readonly { id: string; slots: readonly ("who" | "when" |
   { id: "thinking_of_you", slots: ["who"] },
   { id: "weigh_tomorrow", slots: ["who"] },
   { id: "drink_water", slots: [] },
-  { id: "water_pill_morning", slots: [] },
 ];
 
 /** Singapore and Malaysia both keep UTC+8 all year: his wall clock. */

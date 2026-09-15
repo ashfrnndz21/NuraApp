@@ -30,7 +30,13 @@ from app.delivery.triggers.models import (
     TriggerType,
 )
 from app.delivery.triggers.preferences import change
-from app.delivery.triggers.rules import RULES, AlertsAreNeverHeld, NotASetting, check_settings
+from app.delivery.triggers.rules import (
+    RULES,
+    AlertsAreNeverHeld,
+    AlertsGoEveryWay,
+    NotASetting,
+    check_settings,
+)
 from app.family.models import PushChannel, ScheduledPush
 from app.ingestion.models import DocumentKind, ReviewCard
 from app.keys.scopes import Scope
@@ -222,6 +228,10 @@ def test_an_alert_is_never_capped_and_a_setting_is_checked() -> None:
     assert RULES[TriggerType.FLAG].cap is None and RULES[TriggerType.FLAG].quiet is False
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {"flag": 3})
+    # No setting chooses how a red flag goes (#162): not one channel, not all of them.
+    for listed in (["caregiver"], ["app_push"], ["whatsapp", "app_push", "caregiver"]):
+        with pytest.raises(AlertsGoEveryWay):
+            check_settings({"flag": listed}, {})
     with pytest.raises(NotASetting):
         check_settings({"reorder": ["pigeon"]}, {})
     with pytest.raises(NotASetting):

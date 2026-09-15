@@ -639,7 +639,7 @@ export interface Strings {
     doneChip: string;
     nextVisit: string;
     messagesTitle: string;
-    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water" | "water_pill_morning", string>;
+    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water", string>;
     ownWords: string;
     slots: Record<"who" | "when" | "doctor" | "day", string>;
     memoLabel: string;
@@ -670,7 +670,7 @@ export interface Strings {
     deliveries: string;
     settings: string;
     triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
-    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver" | "in_app", string>;
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
     rule: string;
     quietFrom: string;
@@ -679,6 +679,8 @@ export interface Strings {
     cap: string;
     saveSettings: string;
     neverHeld: string;
+    /** The red-flag row: no setting chooses how it goes (#162). */
+    everyWay: string;
     documents: string;
     tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
     backs: Record<"consent" | "stewardship", string>;

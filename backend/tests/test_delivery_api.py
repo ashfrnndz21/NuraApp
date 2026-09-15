@@ -44,6 +44,15 @@ async def test_the_settings_are_read_changed_and_an_alert_is_never_capped(
         f"/profiles/{profile_id}/delivery-settings", json={"caps": {"flag": 5}}, headers=his
     )
     assert refused.status_code == 400 and refused.json()["refusal"] == "AlertsAreNeverHeld"
+    # Nor its channels (#162): a red flag goes every way each person can be reached.
+    routed = await deployment.client.put(
+        f"/profiles/{profile_id}/delivery-settings",
+        json={"channels": {"flag": ["caregiver"]}},
+        headers=his,
+    )
+    assert routed.status_code == 400 and routed.json()["refusal"] == "AlertsGoEveryWay"
+    after = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
+    assert after.json()["channels"]["flag"] == ["whatsapp", "app_push"]
 
 
 async def test_the_log_is_the_owners_and_his_chiefs_and_the_dev_run_fills_it(

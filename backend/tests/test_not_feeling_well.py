@@ -19,7 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Channel
 from app.channels.api.safety_schemas import WhatToDoOut
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.clock import FrozenClock
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.db import utcnow
 from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.family.roster import add_slot
@@ -186,7 +188,12 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     assert kit.person_id not in done.notified_person_ids
     # His WhatsApp agreement is for messages to him (#143): Mei is told on her own WhatsApp,
     # under the key his agreement to let her in rests on, though he never agreed to WhatsApp.
-    first = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    # Every way she can be reached, and the notice on her family page besides (#162).
+    assert {(row.to_person_id, row.via) for row in rows if row.via is DeliveryChannel.IN_APP} == {
+        (mei.person_id, DeliveryChannel.IN_APP)
+    }
+    first = [row for row in rows if row.via is not DeliveryChannel.IN_APP]
     assert [(row.to_person_id, row.outcome) for row in first] == [
         (mei.person_id, DeliveryOutcome.SENT)
     ]
@@ -595,3 +602,32 @@ async def test_the_rule_reads_the_record_as_the_system_whoever_pressed(
         and line.action is Action.READ
     ]
     assert {Fact.__tablename__, MedicationLine.__tablename__} <= {line.target for line in system}
+
+
+async def test_the_card_names_whose_phone_was_reached_not_someone_only_the_app_told(
+    sg: AsyncSession,
+) -> None:
+    """#162: Lin is on duty but said no to WhatsApp and has no device, so the ladder reaches
+    her only by the notice on her family page — and moves on at once to Mei, his chief, whose
+    WhatsApp it reaches. "Knows now" is Mei: Lin does not know yet."""
+    owner, mei, lin, _siti, _kit = await _household(sg)
+    await add_slot(
+        sg,
+        context=owner,
+        person_id=lin.person_id,
+        role=KeyRole.EMERGENCY,
+        from_time=time(0, 0),
+        to_time=time(23, 59),
+        weekdays=list(range(7)),
+    )
+    await record_opt_in(
+        sg,
+        context=lin,
+        messages=False,
+        joins_group=False,
+        wording_version=OPT_IN_VERSION,
+        language="en",
+    )
+    chest = await _press(sg, owner, words="chest pain")
+    assert chest.notified_person_ids == [mei.person_id]
+    assert [line.text for line in chest.lines][:1] == ["Mei knows now."]

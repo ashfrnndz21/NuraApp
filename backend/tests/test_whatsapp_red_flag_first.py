@@ -83,9 +83,12 @@ async def test_without_his_whatsapp_consent_a_red_flag_still_reaches_the_family_
     # Kit, the other one holding the emergency card, is told on his WhatsApp.
     ladder = (await sg.scalars(select(Ladder))).one()
     assert ladder.flag_id == flag.id
-    [row] = (await sg.scalars(select(Delivery))).all()
+    rows = (await sg.scalars(select(Delivery))).all()
+    # His WhatsApp, and the notice on his family page beside it (#162).
+    assert {row.via for row in rows} == {DeliveryChannel.WHATSAPP, DeliveryChannel.IN_APP}
+    [row] = [row for row in rows if row.via is DeliveryChannel.WHATSAPP]
     assert row.to_person_id == kit.id and row.outcome is DeliveryOutcome.SENT  # type: ignore[attr-defined]
-    assert row.via is DeliveryChannel.WHATSAPP and row.passed_over == []
+    assert row.passed_over == []
     assert [one.to_e164 for one in home.whatsapp.sent if one.to_e164 != MEI] == [KIT]
 
 

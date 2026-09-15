@@ -1263,6 +1263,7 @@ export const zh = {
     stopYes: "好，停止",
     // @patient phrase
     closeAccount: "关闭我的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
@@ -1373,7 +1374,6 @@ export const zh = {
       thinking_of_you: "想念您",
       weigh_tomorrow: "明天站上秤",
       drink_water: "喝一杯水",
-      water_pill_morning: "8点吃去水药",
     },
     // @patient phrase
     ownWords: "我自己的话",
@@ -1467,6 +1467,7 @@ export const zh = {
       app_push: "应用",
       whatsapp: "WhatsApp",
       caregiver: "通过照顾的人",
+      in_app: "在应用里",
     },
     // @patient phrase
     outcomes: {
@@ -1491,6 +1492,8 @@ export const zh = {
     saveSettings: "保存这些设置",
     // @patient phrase
     neverHeld: "从不暂停",
+    // @patient phrase
+    everyWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
     // @patient headline
     documents: "家人名单的文件",
     // @patient phrase
@@ -1694,6 +1697,8 @@ export const zh = {
     NoSuchReviewItem: "那一项已经不在清单里了。",
     NotWellFormed: "Nura 不明白那个。",
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
+    AlertsGoEveryWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
+    MessageNamesAMedicine: ["消息里不能写药名，也不能写吃多少。", "Nura 只按药单发吃药提醒。"],
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
     StopsByClosingTheAccount: "要让 Nura 停止保存您的文件，请关闭您的账户。",

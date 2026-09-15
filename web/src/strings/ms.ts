@@ -1263,6 +1263,7 @@ export const ms = {
     stopYes: "Ya, hentikan",
     // @patient phrase
     closeAccount: "Tutup akaun saya",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
@@ -1373,7 +1374,6 @@ export const ms = {
       thinking_of_you: "Teringatkan anda",
       weigh_tomorrow: "Naik penimbang esok",
       drink_water: "Minum segelas air",
-      water_pill_morning: "Pil air pada pukul 8",
     },
     // @patient phrase
     ownWords: "Kata-kata saya sendiri",
@@ -1467,6 +1467,7 @@ export const ms = {
       app_push: "Aplikasi",
       whatsapp: "WhatsApp",
       caregiver: "Melalui penjaga",
+      in_app: "Dalam aplikasi",
     },
     // @patient phrase
     outcomes: {
@@ -1491,6 +1492,8 @@ export const ms = {
     saveSettings: "Simpan tetapan ini",
     // @patient phrase
     neverHeld: "Tidak pernah ditahan",
+    // @patient phrase
+    everyWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
     // @patient headline
     documents: "Surat untuk senarai keluarga",
     // @patient phrase
@@ -1694,6 +1697,8 @@ export const ms = {
     NoSuchReviewItem: "Perkara itu sudah tiada dalam senarai.",
     NotWellFormed: "Nura tidak faham itu.",
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
+    AlertsGoEveryWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
+    MessageNamesAMedicine: ["Mesej tidak boleh menyebut ubat atau berapa banyak perlu diambil.", "Nura hantar peringatan ubat hanya daripada senarai ubat."],
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
     StopsByClosingTheAccount: "Untuk hentikan Nura menyimpan surat-surat anda, tutup akaun anda.",
