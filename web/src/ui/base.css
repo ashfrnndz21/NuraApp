@@ -294,9 +294,10 @@ label.pill:focus-within {
   /* Its labels are sized against its own width (below). */
   container-type: inline-size;
 }
-/* The labels grow with his text size up to the size at which the three still sit side by side
-   on his screen — the way the iPhone's tab bar stops growing with Dynamic Type — so at 200% on
-   a small phone the bar stays one line tall and leaves the page its room (E15-04). */
+/* The labels grow with his text size up to the size at which the tabs still sit side by side,
+   each label whole on one line — the way the iPhone's tab bar stops growing with Dynamic Type —
+   so at 200% on a small phone the bar stays one line tall and leaves the page its room (E15-04).
+   Three tabs take 9% of the bar's width each; four (the Record's, W5) share the same 27%. */
 .tabbar button {
   font: inherit;
   min-width: 0;
@@ -309,6 +310,9 @@ label.pill:focus-within {
   flex: 1;
   border-radius: var(--radius-pill);
   cursor: pointer;
+}
+.tabbar:has(> :nth-child(4)) button {
+  font-size: min(var(--text-body), 6.75cqi);
 }
 .tabbar button[aria-current="page"] {
   color: var(--plum);

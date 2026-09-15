@@ -284,6 +284,20 @@ for (const [look, banner] of [
     await audit(page, where("the emergency card"));
     await page.getByRole("button", { name: "Go back" }).click();
 
+    // The Record (W5, #140): its first screen and every screen it opens, each once its reads
+    // are in (a Record screen is aria-busy while they are in flight).
+    await page.getByTestId("tab-record").click();
+    await expect(page.getByTestId("record-hub")).toBeVisible();
+    await recordSettled(page);
+    await audit(page, where("the Record"));
+    for (const entry of await recordEntries(page)) {
+      await page.getByTestId(entry).click();
+      await recordSettled(page);
+      await audit(page, where(`the Record: ${entry.replace("record-", "")}`));
+      await page.getByTestId("record-back").click();
+      await expect(page.getByTestId("record-hub")).toBeVisible();
+    }
+
     await page.getByRole("button", { name: "Me", exact: true }).click();
     await audit(page, where("me"));
     await page.getByTestId("open-papers").click();
@@ -313,6 +327,30 @@ for (const [look, banner] of [
     await page.getByTestId("door-claim").click();
     await audit(page, where("these papers are yours"));
   });
+}
+
+/** A Record screen (W5) says it is busy while its reads are in flight: checked once it is not. */
+async function recordSettled(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.querySelector("main")?.getAttribute("aria-busy") !== "true");
+}
+
+/** The Record's entries as this key and this look show them, by test id. */
+async function recordEntries(page: Page): Promise<string[]> {
+  const entries = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")!));
+  expect(entries.length).toBeGreaterThan(0);
+  return entries;
+}
+
+/** Each label of the tab bar on one line, never broken inside a word: the problems, or []. */
+async function tabLabelsWhole(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>("nav.tabbar button")].flatMap((button) => {
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+      return lines.size > 1 ? [`${(button.textContent ?? "").trim()}: ${lines.size} lines`] : [];
+    }),
+  );
 }
 
 for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone${banner ? ", under the demo banner" : ""}: nothing lost, nothing sideways, nothing drawn over a line`, async ({ page, request }) => {
@@ -356,6 +394,19 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   await expect(page.getByTestId("feed-card").first()).toBeVisible();
   expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
+  // The Record (W5, #140) at twice the text: its first screen and every screen it opens.
+  await page.getByTestId("tab-record").click();
+  await expect(page.getByTestId("record-hub")).toBeVisible();
+  await recordSettled(page);
+  await check("the Record");
+  expect.soft(await tabLabelsWhole(page), "the tab bar's labels: whole words, one line each").toEqual([]);
+  for (const entry of await recordEntries(page)) {
+    await page.getByTestId(entry).click();
+    await recordSettled(page);
+    await check(`the Record: ${entry.replace("record-", "")}`);
+    await page.getByTestId("record-back").click();
+    await expect(page.getByTestId("record-hub")).toBeVisible();
+  }
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("sign-out")).toBeVisible();
   await check("me");
