@@ -8,8 +8,8 @@ import { fill, language, t } from "../strings";
 import { AskBar, Avatar, BrandMark, TabBar } from "../ui/kit";
 
 /** Ask or search (docs/ui-mockup-v2.html), wired: Enter or Ask opens the answer, E03's recall
- *  over his own papers. The voice button speaks one line — "tap the microphone on your
- *  keyboard, then say your question" — through the existing speech module (a voice on the
+ *  over his own papers. The voice button speaks two lines — "Press the microphone on your
+ *  keyboard", then "Then say your question." — through the existing speech module (a voice on the
  *  phone only), and puts the cursor in the field, so the keyboard's own microphone takes his
  *  words. The page never listens itself: no recording of his voice leaves the phone, and
  *  typing is always there. */

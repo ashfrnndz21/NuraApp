@@ -40,7 +40,7 @@ export const en = {
     // @patient phrase
     voice: "Speak",
     // @patient
-    voiceSaid1: "Tap the microphone on your keyboard.",
+    voiceSaid1: "Press the microphone on your keyboard.",
     // @patient
     voiceSaid2: "Then say your question.",
     // @patient phrase
