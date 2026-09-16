@@ -547,6 +547,8 @@ export const zh = {
     title: "您的看诊",
     // @patient phrase
     open: "看您下一次看诊",
+    // @patient phrase
+    openOther: "看{patient}下一次看诊",
     // @patient
     none: "Nura还没有记下您的看诊。",
     // @patient
@@ -739,10 +741,14 @@ export const zh = {
     nudgeNotToday: "今天不要",
     // @patient phrase
     briefOpen: "看诊前先看看",
+    // @patient phrase
+    briefOpenOther: "{patient}看诊前先看看",
     // @patient headline
     briefTitle: "看诊之前",
     // @patient phrase
     questionsOpen: "您要问医生的问题",
+    // @patient phrase
+    questionsOpenOther: "要问{patient}医生的问题",
     // @patient headline
     questionsTitle: "看诊时要问的问题",
     // @patient phrase

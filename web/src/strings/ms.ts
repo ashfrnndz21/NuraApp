@@ -547,6 +547,8 @@ export const ms = {
     title: "Lawatan anda",
     // @patient phrase
     open: "Lihat lawatan anda yang seterusnya",
+    // @patient phrase
+    openOther: "Lihat lawatan {patient} yang seterusnya",
     // @patient
     none: "Nura tiada lawatan yang ditulis untuk anda.",
     // @patient
@@ -739,10 +741,14 @@ export const ms = {
     nudgeNotToday: "Bukan hari ini",
     // @patient phrase
     briefOpen: "Baca sebelum lawatan anda",
+    // @patient phrase
+    briefOpenOther: "Baca sebelum lawatan {patient}",
     // @patient headline
     briefTitle: "Sebelum lawatan anda",
     // @patient phrase
     questionsOpen: "Soalan anda untuk doktor",
+    // @patient phrase
+    questionsOpenOther: "Soalan untuk doktor {patient}",
     // @patient headline
     questionsTitle: "Soalan untuk lawatan anda",
     // @patient phrase

@@ -547,6 +547,8 @@ export const en = {
     title: "Your visit",
     // @patient phrase
     open: "See your next visit",
+    // @patient phrase
+    openOther: "See {patient}'s next visit",
     // @patient
     none: "Nura has no visit written down for you.",
     // @patient
@@ -739,10 +741,14 @@ export const en = {
     nudgeNotToday: "Not today",
     // @patient phrase
     briefOpen: "Read before your visit",
+    // @patient phrase
+    briefOpenOther: "Read before {patient}'s visit",
     // @patient headline
     briefTitle: "Before your visit",
     // @patient phrase
     questionsOpen: "Your questions for the doctor",
+    // @patient phrase
+    questionsOpenOther: "Questions for {patient}'s doctor",
     // @patient headline
     questionsTitle: "Questions for your visit",
     // @patient phrase

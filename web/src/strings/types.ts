@@ -250,6 +250,7 @@ export interface Strings {
   visit: {
     title: string;
     open: string;
+    openOther: string;
     none: string;
     fromVisit: string;
     onDuty: string;
@@ -344,8 +345,10 @@ export interface Strings {
     nudgeWentWell: string;
     nudgeNotToday: string;
     briefOpen: string;
+    briefOpenOther: string;
     briefTitle: string;
     questionsOpen: string;
+    questionsOpenOther: string;
     questionsTitle: string;
     questionLabel: string;
     questionAdd: string;

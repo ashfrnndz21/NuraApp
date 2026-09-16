@@ -767,6 +767,7 @@ CAREGIVER_SUPPRESSED_LINE = (
 # @patient headline
 HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
+        "recap": "{patient}'s week, in 30 seconds",
         "now_tablets": "{patient}'s tablets today",
         "now_visit": "{patient} sees {doctor} today",
         "reading": "{patient}'s blood pressure today",
@@ -777,6 +778,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_trend": "{patient}'s blood test over time",
     },
     "ms": {
+        "recap": "Minggu {patient}, dalam 30 saat",
         "now_tablets": "Ubat {patient} hari ini",
         "now_visit": "{patient} berjumpa {doctor} hari ini",
         "reading": "Tekanan darah {patient} hari ini",
@@ -787,6 +789,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_trend": "Ujian darah {patient} dari masa ke masa",
     },
     "zh": {
+        "recap": "30秒看{patient}的这一周",
         "now_tablets": "{patient}今天的药",
         "now_visit": "{patient}今天看{doctor}",
         "reading": "{patient}今天的血压",
@@ -802,6 +805,10 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
 # @patient
 LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "en": {
+        "now_quiet": ("Nothing new is waiting for {patient} today.", "Swipe up to hear more."),
+        "gate": ("That is all that is new today.", "Do you want to keep going?", "Swipe up to hear more about {patient}."),
+        "learning_keep_taking": ("Ask {doctor} before {patient} stops this medicine.",),
+        "recap_intro": ("This is {patient}'s week, from {patient}'s blood pressure book.",),
         "now_tablets": (
             "{patient}'s tablets for today are on the list.",
             "{patient} takes them the way the label says.",
@@ -854,6 +861,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         ),
     },
     "ms": {
+        "now_quiet": ("Tiada yang baru menunggu {patient} hari ini.", "Leret ke atas untuk dengar lagi."),
+        "gate": ("Itu sahaja yang baru hari ini.", "Mahu terus?", "Leret ke atas untuk dengar lagi tentang {patient}."),
+        "learning_keep_taking": ("Tanya {doctor} sebelum {patient} berhenti makan ubat ini.",),
+        "recap_intro": ("Ini minggu {patient}, dari buku tekanan darah {patient}.",),
         "now_tablets": (
             "Ubat {patient} untuk hari ini ada dalam senarai.",
             "{patient} ambil ikut apa yang tertulis pada label.",
@@ -898,6 +909,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         ),
     },
     "zh": {
+        "now_quiet": ("今天没有新的事情等着{patient}。", "想多看的时候，请向上滑。"),
+        "gate": ("今天新的就这些了。", "您想继续吗？", "向上滑，多看看关于{patient}的事。"),
+        "learning_keep_taking": ("{patient}停这个药以前，先问一问{doctor}。",),
+        "recap_intro": ("这些是{patient}这一周的血压，来自{patient}的血压本。",),
         "now_tablets": (
             "{patient}今天的药在清单上。",
             "{patient}按照药盒上写的吃。",
@@ -941,6 +956,8 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
 # @patient
 WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
+        "gate": "Everything new for today has been seen.",
+        "local": "This is here because it is near {patient}'s home.",
         "now_tablets": "{patient} has medicines on the list.",
         "now_visit": "{patient}'s visit to {doctor} is today.",
         "reading": "{patient} took a blood pressure today.",
@@ -958,6 +975,8 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "learning": "This is about {topic}, which is on {patient}'s papers.",
     },
     "ms": {
+        "gate": "Semua yang baru hari ini sudah dilihat.",
+        "local": "Ini ada di sini kerana ia dekat rumah {patient}.",
         "now_tablets": "{patient} ada ubat dalam senarai.",
         "now_visit": "Lawatan {patient} kepada {doctor} hari ini.",
         "reading": "{patient} ambil tekanan darah hari ini.",
@@ -975,6 +994,8 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "learning": "Ini tentang {topic}, yang ada dalam surat-surat {patient}.",
     },
     "zh": {
+        "gate": "今天新的都看过了。",
+        "local": "这个在这里，是因为它在{patient}家附近。",
         "now_tablets": "{patient}的清单上有药。",
         "now_visit": "{patient}今天要看{doctor}。",
         "reading": "{patient}今天量了血压。",

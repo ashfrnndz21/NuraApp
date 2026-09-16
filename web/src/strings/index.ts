@@ -34,10 +34,11 @@ export const aboutWhom = signal<string | null>(null);
 /** The chrome that speaks to him, by section, each key with its "…Other" twin in the catalogue. */
 const ABOUT_HIM = {
   today: ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken", "readingTitle"],
-  day: ["notWell", "symptomsOpen", "notWellTitle", "wordsLabel", "symptomsLead"],
+  day: ["notWell", "symptomsOpen", "notWellTitle", "wordsLabel", "symptomsLead", "briefOpen", "questionsOpen"],
   places: ["visitsOwn"],
   record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes"],
   reading: ["title"],
+  visit: ["open"],
 } as const satisfies Partial<Record<keyof Strings, readonly string[]>>;
 
 /** The same, for the chrome kept as a map of lines rather than one line a key: his blood tests
