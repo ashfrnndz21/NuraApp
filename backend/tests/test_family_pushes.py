@@ -114,6 +114,9 @@ async def test_a_message_to_him_names_no_medicine_and_no_dose(
         {"memo_lines": ["早餐后吃两片药。"]},
         {"memo_lines": ["Bring your Lipitor."]},
         {"template_id": "call_you", "slots": {"who": "Mei", "when": "after your 5 mg"}},
+        # #172: a dose spelled out above five is still a dose, in English and in Malay.
+        {"memo_lines": ["Take a dozen tabs today."]},
+        {"memo_lines": ["Ambil enam biji lepas makan."]},
     ]
     for asked in refused:
         with pytest.raises(MessageNamesAMedicine):
