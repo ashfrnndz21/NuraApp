@@ -158,6 +158,9 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
     set(value);
     setPreview(null);
   };
+  // His own language changing under him (`Me.tsx`) takes the words away too: `asked()`
+  // reads `here.lang`, and nothing else here would catch it.
+  useEffect(() => setPreview(null), [here.lang]);
   const choose = (next: KeyRole) => {
     setRole(next);
     setPreview(null);
@@ -235,7 +238,7 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
             <>
               <p class="label">{words.wordsLead}</p>
               <Lines lines={preview.lines} testId="new-words" />
-              <Pill plum onClick={() => void agree()} disabled={act.busy} testId="make-key">
+              <Pill plum onClick={() => void agree()} disabled={act.busy} testId="agree-key">
                 {words.agreeKey}
               </Pill>
             </>

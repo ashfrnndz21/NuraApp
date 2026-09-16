@@ -107,7 +107,7 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   await expect(words).toContainText("Priya");
   await expect(words).toContainText("your questions to Nura");
   expect(await patientScreenOk(page)).toEqual([]);
-  await page.getByTestId("make-key").click();
+  await page.getByTestId("agree-key").click();
   const grant = page.getByTestId("grant").filter({ hasText: "Priya" });
   await expect(grant).toBeVisible();
 

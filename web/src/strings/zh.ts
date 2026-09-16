@@ -894,7 +894,7 @@ export const zh = {
       // @patient
       wordsLead: "请读一读这些话。",
       // @patient phrase
-      agree: "我同意，让他们看",
+      agree: "我同意，给他们钥匙",
       // @patient
       done: "他们现在可以看这些了。",
     },
@@ -1298,7 +1298,7 @@ export const zh = {
     // @patient
     wordsLead: "请读一读这些话。",
     // @patient phrase
-    agreeKey: "我同意，让他们看",
+    agreeKey: "我同意，给他们钥匙",
     // @patient phrase
     narrow: "改小一点",
     // @patient phrase

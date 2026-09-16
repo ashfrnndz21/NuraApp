@@ -66,9 +66,11 @@ export interface SharingBody {
 }
 
 /** The words the owner would agree to by `letSomeoneIn`, for this person and these parts,
- *  rendered by the backend before he agrees (`POST /consents/sharing/preview`). The client
- *  never composes them, and changing the person or the parts after reading takes the words
- *  away, so the yes that follows is for exactly what was shown. */
+ *  rendered by the backend before he agrees (`POST /consents/sharing/preview`); the client
+ *  never composes them. This route hands back no token binding the words to this body — the
+ *  caller (`Keys.tsx`) is the one that discards the preview the moment the person or the
+ *  parts change, so the agree that follows is only ever sent right after a read of exactly
+ *  those words. */
 export const previewSharing = (token: string, profileId: string, body: SharingBody) =>
   api<SharingPreviewOut>(`/profiles/${profileId}/consents/sharing/preview`, { method: "POST", token, body: { ...body, relationship: null } });
 

@@ -894,7 +894,7 @@ export const en = {
       // @patient
       wordsLead: "Please read these words.",
       // @patient phrase
-      agree: "I agree, let them in",
+      agree: "I agree, give them the key",
       // @patient
       done: "They can see those parts now.",
     },
@@ -1300,7 +1300,7 @@ export const en = {
     // @patient
     wordsLead: "Please read these words.",
     // @patient phrase
-    agreeKey: "I agree, let them in",
+    agreeKey: "I agree, give them the key",
     // @patient phrase
     narrow: "Make it smaller",
     // @patient phrase
