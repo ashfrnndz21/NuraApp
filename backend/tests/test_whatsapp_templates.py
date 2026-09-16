@@ -1,4 +1,4 @@
-"""E19-01, E11, B1: the nineteen templates, their slots, which are approved, and the business number."""
+"""E19-01, E11, B1: the twenty-two templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 
@@ -37,20 +37,20 @@ EVERY_TEMPLATE = (
     "red_flag_notice_ambulance",
     "red_flag_notice_hospital",
     "red_flag_notice_night",
+    "red_flag_notice_urgent",
     "visit_brief",
     "unheard_note_notice",
     "unheard_note_notice_call",
 )
 """E19's six, then E11's nine (the ladder's two asks, the reorder to the family, the count,
 the papers waiting, a family message, the red-flag notice's two variants, and the day's smart
-nudge), then B1's four (the red-flag notice for the ambulance tier, out of the doctor's hours
-with the hospital on his insurance or without, and the pre-visit brief at T-3), in the order
-they are submitted for approval."""
+nudge), then B1's five (the red-flag notice for the ambulance tier, out of the doctor's hours
+with the hospital on his insurance or without, its neutral fallback for when a tier's own
+template is not yet approved (#174), and the pre-visit brief at T-3), then #158's two, in the
+order they are submitted for approval."""
 
 E19_SIX = EVERY_TEMPLATE[:6]
 """Approved: the only templates a deployment's number carries until Meta approves the rest."""
-E19_SIX = EVERY_TEMPLATE[:6]
-"""Approved: the only templates a deployment's number carries until Meta approves E11's."""
 
 DOSES = {
     "en": "Take 1 tablet of your blood pressure tablet with breakfast.",
@@ -114,9 +114,7 @@ FILL = {
 }
 
 
-def test_there_are_twenty_one_and_each_has_every_language() -> None:
-    assert TEMPLATE_NAMES == EVERY_TEMPLATE
-def test_there_are_fifteen_and_each_has_every_language() -> None:
+def test_there_are_twenty_two_and_each_has_every_language() -> None:
     assert TEMPLATE_NAMES == EVERY_TEMPLATE
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)
