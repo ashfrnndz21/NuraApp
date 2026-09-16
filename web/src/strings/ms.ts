@@ -1724,6 +1724,15 @@ export const ms = {
       recognition: "Syabas",
       presence: "Teringatkan anda",
     },
+    // @patient phrase
+    kindsTheirs: {
+      anticipation: "Menyediakan {name}",
+      check_in: "Bertanya khabar {name}",
+      pattern: "Satu corak dalam hari-hari {name}",
+      commitment: "Satu janji yang dibuat {name}",
+      recognition: "Syabas untuk {name}",
+      presence: "Teringatkan {name}",
+    },
     // @patient headline
     calendar: "Lawatan daripada kalendar",
     // @patient phrase

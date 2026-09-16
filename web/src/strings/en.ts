@@ -1726,6 +1726,15 @@ export const en = {
       recognition: "Well done",
       presence: "Thinking of you",
     },
+    // @patient phrase
+    kindsTheirs: {
+      anticipation: "Getting {name} ready",
+      check_in: "Checking in on {name}",
+      pattern: "A pattern in {name}'s days",
+      commitment: "A promise {name} made",
+      recognition: "{name} did well",
+      presence: "Thinking of {name}",
+    },
     // @patient headline
     calendar: "Visits from a calendar",
     // @patient phrase
