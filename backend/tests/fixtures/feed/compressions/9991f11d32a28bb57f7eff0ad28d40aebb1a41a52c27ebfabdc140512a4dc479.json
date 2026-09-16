@@ -1,8 +1,8 @@
 {
   "en": {
-    "headline": "A hot day: take care today",
+    "headline": "A hot day: stay out of the sun",
     "body": [
-      "If your doctor set a limit on drinks, keep to it.",
+      "If your doctor told you how much water to drink, keep to that.",
       "If not, drink water often today.",
       "Stay out of the midday sun.",
       "Get help if you feel dizzy, confused or very weak."
@@ -11,9 +11,9 @@
     "passage": "If your doctor has limited how much fluid you should drink, follow that advice."
   },
   "ms": {
-    "headline": "Hari panas: jaga diri hari ini",
+    "headline": "Hari panas: elak matahari",
     "body": [
-      "Jika doktor anda hadkan minuman, ikut had itu.",
+      "Jika doktor anda hadkan berapa banyak air anda boleh minum, ikut had itu.",
       "Jika tidak, minum air selalu hari ini.",
       "Elakkan matahari tengah hari.",
       "Dapatkan bantuan jika anda rasa pening, keliru atau sangat lemah."
@@ -22,7 +22,7 @@
     "passage": "If your doctor has limited how much fluid you should drink, follow that advice."
   },
   "zh": {
-    "headline": "天气很热：今天要小心",
+    "headline": "天气很热：别晒太阳",
     "body": [
       "如果医生限制了您喝水的量，就照着做。",
       "如果没有，今天要常常喝水。",

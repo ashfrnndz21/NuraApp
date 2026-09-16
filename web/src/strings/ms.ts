@@ -341,7 +341,7 @@ export const ms = {
     // @patient
     foundNothing: "Nura tidak jumpa apa-apa untuk ini.",
     // @patient phrase
-    nextVisit: "Lawatan seterusnya: {date}",
+    nextVisit: "Lawatan anda yang seterusnya pada {date}.",
   },
   reading: {
     // @patient headline
@@ -417,15 +417,15 @@ export const ms = {
     // @patient phrase
     areaChange: "Pilih bandar anda",
     // @patient phrase
-    areaClear: "Buang bandar saya",
+    areaClear: "Jangan simpan bandar saya",
     // @patient
-    areaWho: "Ahli keluarga yang menjaga surat-surat anda boleh nampak bandar anda.",
+    areaWho: "Orang yang menjaga surat-surat anda boleh nampak bandar anda.",
     // @patient headline
     ramadanTitle: "Bulan puasa",
     // @patient
-    ramadanLead: "Jika anda berpuasa pada bulan Ramadan, Nura boleh bantu anda merancang.",
+    ramadanLead: "Jika anda berpuasa pada bulan puasa, Nura boleh bantu anda merancang.",
     // @patient
-    ramadanWho: "Ahli keluarga yang menjaga surat-surat anda juga akan nampak ini.",
+    ramadanWho: "Orang yang menjaga surat-surat anda juga akan nampak ini.",
     // @patient phrase
     ramadanYes: "Ya, beritahu saya sebelum bulan puasa",
     // @patient
@@ -1636,11 +1636,11 @@ export const ms = {
     // @patient
     sentNone: "Nura tidak hantar apa-apa kepada {name} minggu ini.",
     // @patient headline
-    watchingTitle: "Diperhatikan untuk {name}",
+    watchingTitle: "Nura perhatikan untuk {name}",
     // @patient
     watchingNone: "Nura belum perhatikan apa-apa lagi.",
     // @patient
-    sourcesNote: "Nura hanya baca pihak berkuasa kesihatan, hospital dan persatuan doktor.",
+    sourcesNote: "Nura hanya membaca pihak berkuasa kesihatan, hospital dan persatuan doktor.",
     // @patient phrase
     onChange: "Bila ada yang baru",
     // @patient phrase
@@ -1654,11 +1654,11 @@ export const ms = {
     // @patient phrase
     paused: "Dihentikan dulu",
     // @patient phrase
-    pause: "Henti dulu",
+    pause: "Berhenti dulu",
     // @patient phrase
     resume: "Mula semula",
     // @patient phrase
-    pauseWatch: "Berhenti perhatikan ini buat masa ini",
+    pauseWatch: "Berhenti memerhatikan ini buat masa ini",
     // @patient phrase
     add: "Perhatikan sesuatu yang baru",
     // @patient
@@ -1677,17 +1677,17 @@ export const ms = {
   // @patient
   refusals: {
     // @patient
-    FastingIsHisToSay: "Hanya pemilik surat-surat ini boleh kata ini.",
+    FastingIsHisToSay: "Hanya pemilik boleh jawab ini.",
     // @patient
     NotAClipCard: "Kad ini tiada apa-apa untuk dimainkan.",
     // @patient
-    NoExcerpt: "Yang ini gambar dengan suara.",
+    NoExcerpt: "Nura bacakan gambar ini untuk anda.",
     // @patient
     NoClipRenderer: "Nura tidak dapat tunjuk gambar ini sekarang.",
     // @patient
-    SecondsOnlyOnAPlay: "Nura tidak dapat catat ini.",
+    SecondsOnlyOnAPlay: "Nura tidak dapat tulis ini.",
     // @patient
-    NotACadence: "Sila pilih berapa kerap dari senarai.",
+    NotACadence: "Sila pilih berapa kerap daripada senarai.",
     // @patient
     NotAHazard: "Nura boleh perhatikan denggi, jerebu atau cuaca panas.",
     // @patient
@@ -1695,11 +1695,11 @@ export const ms = {
     // @patient
     NotACoarseArea: ["Sila pilih bandar anda dari senarai.", "Atau taip hanya awal poskod anda."],
     // @patient
-    OnlyHeSetsHisArea: "Hanya pemilik surat-surat ini boleh pilih bandar.",
+    OnlyHeSetsHisArea: "Hanya pemilik boleh pilih bandar.",
     // @patient
     NotAFilter: "Sila pilih di mana hendak cari.",
     // @patient
-    NothingToFind: "Sila taip satu perkataan untuk dicari.",
+    NothingToFind: "Sila taip perkataan yang anda mahu cari.",
     // @patient
     NotTheirsToManage: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     default: "Nura tidak dapat buat itu sekarang.",

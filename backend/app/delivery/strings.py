@@ -276,7 +276,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_photo": ("{who}在{day}分享了这张照片。",),
         "learning_source": ("这来自{source_name}。",),
         "learning_keep_taking": ("停这个药以前，先问一问{doctor}。",),
-        "recap_intro": ("这是您的这一周，来自您的血压本。",),
+        "recap_intro": ("这些是您这一周的血压，来自您的血压本。",),
         "flag_family": (
             "您告诉Nura您{feeling}。",
             "这个我们不等。",
@@ -356,7 +356,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who}选择了和您分享这张照片。",
         "learning": "这是关于{topic}的，它在您的文件里。",
         "local": "您看到这个，是因为这在您家附近。",
-        "local_region": "您看到这个，是因为您文件里写的情况。",
+        "local_region": "您看到这个，是因为您文件里的情况。",
         "seasonal": "{season}是{day}。",
         "seasonal_about": "{season}大约在{day}开始。",
         "flag": "这是我们从不等的事情之一。",

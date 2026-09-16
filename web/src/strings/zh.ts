@@ -341,7 +341,7 @@ export const zh = {
     // @patient
     foundNothing: "Nura 没有找到相关的内容。",
     // @patient phrase
-    nextVisit: "下次看病：{date}",
+    nextVisit: "您下次看病是{date}。",
   },
   reading: {
     // @patient headline
@@ -403,9 +403,9 @@ export const zh = {
     // @patient headline
     areaTitle: "您住的地方",
     // @patient
-    areaLead: "Nura 只用您住的地区，告诉您附近的骨痛热症、烟霾或炎热天气。",
+    areaLead: "Nura 只用您住的地方，告诉您附近的骨痛热症、烟霾或炎热天气。",
     // @patient
-    areaNone: "Nura 不知道您住在哪个地区。",
+    areaNone: "Nura 不知道您住在什么地方。",
     // @patient
     areaIs: "Nura 知道您住在{area}。",
     // @patient
@@ -415,17 +415,17 @@ export const zh = {
     // @patient phrase
     areaNo: "不是",
     // @patient phrase
-    areaChange: "选择您的地区",
+    areaChange: "选择您住的地方",
     // @patient phrase
-    areaClear: "删除我的地区",
+    areaClear: "不要记我住的地方",
     // @patient
-    areaWho: "管理您文件的家人可以看到您住的地区。",
+    areaWho: "负责这些文件的家人可以看到您住的地方。",
     // @patient headline
     ramadanTitle: "斋戒月",
     // @patient
     ramadanLead: "如果您守斋戒月，Nura 可以帮您提前准备。",
     // @patient
-    ramadanWho: "管理您文件的家人也会看到这个。",
+    ramadanWho: "负责这些文件的家人也会看到这个。",
     // @patient phrase
     ramadanYes: "好，斋戒月前告诉我",
     // @patient
@@ -1677,11 +1677,11 @@ export const zh = {
   // @patient
   refusals: {
     // @patient
-    FastingIsHisToSay: "只有这些文件的主人才能说这个。",
+    FastingIsHisToSay: "只有本人可以回答这个。",
     // @patient
     NotAClipCard: "这张卡没有可以播放的内容。",
     // @patient
-    NoExcerpt: "这是一张图片加上声音。",
+    NoExcerpt: "Nura 会念这张图片给您听。",
     // @patient
     NoClipRenderer: "Nura 现在不能显示这张图片。",
     // @patient
@@ -1695,11 +1695,11 @@ export const zh = {
     // @patient
     NotACoarseArea: ["请从列表里选择您的地区。", "或者只输入邮编的前几位。"],
     // @patient
-    OnlyHeSetsHisArea: "只有这些文件的主人才能选择地区。",
+    OnlyHeSetsHisArea: "只有本人可以选择住的地方。",
     // @patient
     NotAFilter: "请选择在哪里找。",
     // @patient
-    NothingToFind: "请输入要找的字。",
+    NothingToFind: "请输入您要找的东西。",
     // @patient
     NotTheirsToManage: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     default: "Nura 现在做不了这件事。",

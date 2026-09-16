@@ -647,7 +647,7 @@ async def test_festive_food_before_the_mid_autumn_festival_for_his_sugar(
     clock.step(timedelta(days=7))
     await _feed(deployment, profile_id, pa["token"])
     [season] = await _made(deployment, profile_id, CardType.SEASONAL)
-    assert season.headline == "Mooncakes, the small way"
+    assert season.headline == "Mooncakes: just a small slice"
     assert season.why["plain"] == "The Mid-Autumn Festival is on Friday 25 September."
     assert season.body[-3:-1] == BOUNDARY_EN
     assert not _fails([*season.body, season.why["plain"]], "en")

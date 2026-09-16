@@ -321,7 +321,7 @@ export const en = {
     // @patient phrase
     play: "Play",
     // @patient phrase
-    watchWhole: "Watch the whole video on {publisher}",
+    watchWhole: "Watch the whole video at {publisher}",
     // @patient phrase
     askOrSearch: "Ask or search",
     // @patient phrase
@@ -329,7 +329,7 @@ export const en = {
     // @patient phrase
     filterRecords: "Your papers",
     // @patient phrase
-    filterWeb: "Web",
+    filterWeb: "Online",
     // @patient phrase
     filterProviders: "Doctors and clinics",
     // @patient phrase
@@ -337,11 +337,11 @@ export const en = {
     // @patient phrase
     search: "Search",
     // @patient phrase
-    readPage: "Read the page on {publisher}",
+    readPage: "Read the page at {publisher}",
     // @patient
     foundNothing: "Nura found nothing for this.",
     // @patient phrase
-    nextVisit: "Next visit: {date}",
+    nextVisit: "Your next visit is on {date}.",
   },
   reading: {
     // @patient headline
@@ -417,15 +417,15 @@ export const en = {
     // @patient phrase
     areaChange: "Choose your town",
     // @patient phrase
-    areaClear: "Take my town off",
+    areaClear: "Forget my town",
     // @patient
-    areaWho: "The family member who looks after your papers can see your town.",
+    areaWho: "The one who looks after your papers can see your town.",
     // @patient headline
     ramadanTitle: "Ramadan",
     // @patient
-    ramadanLead: "If you keep Ramadan, Nura can help you plan for it.",
+    ramadanLead: "If you fast in Ramadan, Nura can help you plan for it.",
     // @patient
-    ramadanWho: "The family member who looks after your papers will see this too.",
+    ramadanWho: "The one who looks after your papers will see this too.",
     // @patient phrase
     ramadanYes: "Yes, tell me before Ramadan",
     // @patient
@@ -1681,11 +1681,11 @@ export const en = {
   // @patient
   refusals: {
     // @patient
-    FastingIsHisToSay: "Only the owner of these papers can say this.",
+    FastingIsHisToSay: "Only the owner can say this.",
     // @patient
     NotAClipCard: "This card has nothing to play.",
     // @patient
-    NoExcerpt: "This one is a picture with a voice.",
+    NoExcerpt: "Nura reads this picture out loud.",
     // @patient
     NoClipRenderer: "Nura cannot show this picture right now.",
     // @patient
@@ -1699,7 +1699,7 @@ export const en = {
     // @patient
     NotACoarseArea: ["Please choose your town from the list.", "Or type only the start of your postcode."],
     // @patient
-    OnlyHeSetsHisArea: "Only the owner of these papers can choose the town.",
+    OnlyHeSetsHisArea: "Only the owner can choose the town.",
     // @patient
     NotAFilter: "Please choose where to look.",
     // @patient
