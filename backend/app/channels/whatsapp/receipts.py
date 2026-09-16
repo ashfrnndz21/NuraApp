@@ -113,6 +113,9 @@ async def _claim(session: AsyncSession, key: str) -> Received | None:
         select(WhatsAppReceipt)
         .where(WhatsAppReceipt.provider_message_id == key)
         .with_for_update()
+        # The locked row's own values, not the ones already in the session: the whole point
+        # of waiting for the other try is to read what it wrote.
+        .execution_options(populate_existing=True)
     )
     if held is not None and held.handled_at is not None:
         return Received.ALREADY
