@@ -15,11 +15,12 @@ queue the first time it is actually raised for a person (`app.language.review`).
 non-nullable with a default, so an existing row reads as `source=""`, `awaiting_review=False`
 — reviewed, the only state a flag could have been written in before this column existed.
 
-Renumbered onto main's head at merge time: main took 0035 for `0035_consult_upload` first, so
-this follows it as 0036, not 0035.
+Renumbered at merge time: this and `0036_drug_match_confidence` (#209) both first claimed
+`0036` off `0035_consult_upload`, a genuine alembic fork. #209 merges first, so this follows
+it as `0037`, not `0036`.
 
-Revision ID: 0036_drug_registry_growth
-Revises: 0035_consult_upload
+Revision ID: 0037_drug_registry_growth
+Revises: 0036_drug_match_confidence
 Create Date: 2026-09-16
 """
 

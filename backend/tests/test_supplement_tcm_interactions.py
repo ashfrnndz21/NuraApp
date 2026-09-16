@@ -37,11 +37,13 @@ async def test_danshen_and_dong_quai_are_tcm_not_a_prescription_medicine(sg: Asy
     assert dong_quai and all(m.product_kind is ProductKind.TCM for m in dong_quai)
 
 
-async def test_a_reviewed_supplement_pair_is_flagged_before_save_severity_and_both_named(
+async def test_an_unreviewed_supplement_pair_is_flagged_before_save_both_named_but_not_asserted(
     sg: AsyncSession,
 ) -> None:
-    """Warfarin then ginkgo: a well-documented, already-reviewed pair — flagged the same way
-    a prescription pair is, severity and both products named, before anything is saved."""
+    """Warfarin then ginkgo: a major, well-documented pair by citation — but no pharmacist has
+    checked it (`AWAITING_REVIEW`), so it is flagged the same way a prescription pair is, both
+    products named, before anything is saved, without asserting the bleeding-risk mechanism
+    nobody has verified."""
     owner = await pa(sg)
     await add(sg, owner, label("warfarin", "3 mg", "1 tab ON", quantity=28))
     photo = await artefact(sg, owner)
@@ -51,17 +53,18 @@ async def test_a_reviewed_supplement_pair_is_flagged_before_save_severity_and_bo
     (flagged,) = shown.flagged
     assert flagged.interaction.pair == ("ginkgo biloba", "warfarin")
     assert flagged.interaction.severity is Severity.MAJOR
-    assert flagged.interaction.review_state is ReviewState.REVIEWED
+    assert flagged.interaction.review_state is ReviewState.AWAITING_REVIEW
     assert flagged.other_line.generic == "warfarin"
 
     done = await add(sg, owner, label("ginkgo biloba", "60 mg", "1 cap OD", quantity=30), photo)
     (flag,) = done.flags
-    assert not flag.awaiting_review
+    assert flag.awaiting_review
     (view,) = await interaction_flags(sg, context=owner, registry=REGISTRY, language="en")
     assert view.question == [
-        "Ask Dr Tan about taking ginkgo and the blood thinner tablet together.",
-        "Together they can make you bleed more easily.",
+        "Ask Dr Tan or the pharmacist about taking ginkgo and the blood thinner tablet together.",
+        "A pharmacist has not checked this pair yet.",
     ]
+    assert "bleed" not in " ".join(view.question).lower()
     for word in ("stop", "start", "dose"):
         assert word not in " ".join(view.question).lower()
 
@@ -130,7 +133,7 @@ async def test_an_unreviewed_pair_is_still_shown_never_silent_and_queued_for_the
 
     (view,) = await interaction_flags(sg, context=owner, registry=REGISTRY, language="en")
     assert view.question[0].startswith("Ask Dr Tan or the pharmacist about taking")
-    assert "not had this checked by a pharmacist" in view.question[1]
+    assert "has not checked this pair" in view.question[1]
     # It never asserts the severity or the mechanism of a pair nobody has verified.
     assert "bleed" not in " ".join(view.question).lower()
 

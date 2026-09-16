@@ -233,5 +233,5 @@ test("add a medicine: a pair no pharmacist has checked yet is still shown, with 
   await expect(interaction).toHaveCount(1);
   await expect(interaction.getByTestId("pair")).toHaveText("fish oil and warfarin");
   await expect(interaction.getByTestId("severity")).toHaveCount(0);
-  await expect(interaction).toContainText("Nura has not had this checked by a pharmacist yet.");
+  await expect(interaction).toContainText("A pharmacist has not checked this pair yet.");
 });

@@ -675,7 +675,7 @@ medicines named in his words and one line on why."""
 AWAITING_REVIEW: Mapping[str, Lines] = {
     "en": (
         "Ask {doctor} or the pharmacist about taking {a} and {b} together.",
-        "Nura has not had this checked by a pharmacist yet.",
+        "A pharmacist has not checked this pair yet.",
     ),
     "ms": (
         "Tanya {doctor} atau ahli farmasi tentang mengambil {a} dan {b} bersama.",
@@ -683,7 +683,7 @@ AWAITING_REVIEW: Mapping[str, Lines] = {
     ),
     "zh": (
         "问{doctor}或药剂师，{a}和{b}可以一起吃吗。",
-        "Nura还没有请药剂师检查这个。",
+        "药剂师还没有检查这一对药。",
     ),
 }
 """A pair the licensed data flags but a pharmacist has not yet checked (`ReviewState.
