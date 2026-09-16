@@ -34,7 +34,7 @@ never told the second the tablet was tapped that she could stop worrying.
 
 1. **Record it, and record when the reply came.** The tap is still written — nobody is asked a
    clarifying question, and nothing is refused. `DoseTaken` gains a stored `late: bool`
-   (migration `0036_dose_taken_late`), worked out once, when the tap is written
+   (migration `0038_dose_taken_late`), worked out once, when the tap is written
    (`app.medicines.windows.is_late`), from the anchor and the tap's own moment — never
    inferred by a reader comparing `taken_at` to the anchor's window each time it is read. A tap
    with no anchor is never late; there is no window to be late against.

@@ -34,6 +34,7 @@ from app.db import as_utc, utcnow
 from app.drafts import FactDraft
 from app.drugs.registry import DrugMatch, DrugRegistry, Interaction, LabelFields, NotIdentified
 from app.errors import Refusal
+from app.ingestion.models import CONFIDENCE_THRESHOLD
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.medicines import dose as arithmetic
@@ -171,12 +172,24 @@ def may_change_medicines(context: KeyContext) -> None:
 
 def _one_product(matches: Sequence[DrugMatch]) -> DrugMatch:
     """One product, or nothing. Two brands of the same generic and strength agree on
-    everything that matters; two strengths do not, and nothing is guessed between them."""
+    everything that matters; two strengths do not, and nothing is guessed between them.
+
+    Below `CONFIDENCE_THRESHOLD` the best match is not trusted either (#206): a name match
+    whose strength or form does not belong to that product scores low, so a label that
+    happens to collide with a real product's name is not silently taken as identifying it —
+    the same floor a document field (`app.ingestion.models`) and a WhatsApp voice transcript
+    (E19) are already held to before either is trusted.
+    """
     if not matches:
         raise NotIdentified("the label matched no product in the register")
     distinct = {(m.generic, m.strength, m.form) for m in matches}
     if len(distinct) > 1:
         raise NotIdentified("the label matched more than one product; the strength decides")
+    if matches[0].confidence < CONFIDENCE_THRESHOLD:
+        raise NotIdentified(
+            f"the label matched {matches[0].generic} at confidence "
+            f"{matches[0].confidence:.2f}, below {CONFIDENCE_THRESHOLD}"
+        )
     return matches[0]
 
 
@@ -407,6 +420,7 @@ async def _write_line(
         registration_no=plan.match.registration_no,
         drug_class=plan.match.drug_class,
         high_risk=plan.match.high_risk,
+        registry_confidence=plan.match.confidence,
         dose=label.dose.as_json(),
         prescriber=label.prescriber,
         source_kind=label.source_kind,

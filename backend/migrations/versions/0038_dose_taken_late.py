@@ -6,8 +6,12 @@ reply's own time, not the backend's processing clock. False on every row written
 migration: their `taken_at` and `anchor` are unchanged, so a caller that wants a verdict on an
 old tap can still work it out from those two fields the old way; nothing here rewrites them.
 
-Revision ID: 0036_dose_taken_late
-Revises: 0035_consult_upload
+Renumbered from 0036 to 0038 at merge time: 0036 and 0037 went to #209 and #202, landing
+first (docs/adr/0014, this migration's own docstring elsewhere, still call it "0036" in prose
+— the number changed, not the reasoning).
+
+Revision ID: 0038_dose_taken_late
+Revises: 0037_drug_registry_growth
 Create Date: 2026-09-16
 """
 
@@ -16,8 +20,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0036_dose_taken_late"
-down_revision = "0035_consult_upload"
+revision = "0038_dose_taken_late"
+down_revision = "0037_drug_registry_growth"
 branch_labels = None
 depends_on = None
 
