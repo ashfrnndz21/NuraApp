@@ -7,12 +7,12 @@ and for the day's check-in nudge alike — and for anything later that asks the 
 the same way. `inbound._check_in_open` reads this column now, in place of a check against the
 literal template name `feeling_check_in`, which is why his "OK" to the nudge's asking was
 being told there was no question open for him: two different things asked him the same
-question, and only one of their names was ever checked. Nullable at the model, non-null here
-with a false default, so every row already in the table keeps meaning what it always did — no
-feeling question was recorded against it before this column existed.
+question, and only one of their names was ever checked. Non-null with a false default, so
+every row already in the table keeps meaning what it always did — no feeling question was
+recorded against it before this column existed.
 
 Revision ID: 0039_feeling_question_marker
-Revises: 0036_drug_match_confidence
+Revises: 0037_drug_registry_growth
 Create Date: 2026-09-17
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0039_feeling_question_marker"
-down_revision = "0036_drug_match_confidence"
+down_revision = "0037_drug_registry_growth"
 branch_labels = None
 depends_on = None
 

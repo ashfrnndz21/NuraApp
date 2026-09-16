@@ -211,3 +211,27 @@ for (const look of LOOKS) {
     expect(((await (await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(pa.token))).json()) as Line[]).length).toBe(2);
   });
 }
+
+test("add a medicine: a pair no pharmacist has checked yet is still shown, with no severity claim (E04-03)", async ({ page, request }) => {
+  const pa = await openOwn(request);
+  await seedMedicine(request, pa.token, pa.profileId, { generic: "warfarin", strength: "3 mg", dose_text: "1 tab OD", quantity: 30 });
+  await signInAs(page, pa, "Pa");
+  await lookAs(page, "patient");
+  await page.getByTestId("record-medicines").click();
+  await page.getByTestId("add-medicine").click();
+  await page.getByTestId("photo-input").setInputFiles({ name: "fish-oil.png", mimeType: "image/png", buffer: unknownPng() });
+  await expect(page.getByTestId("add-label")).toBeVisible();
+  await page.getByLabel("The name on the label").fill("fish oil");
+  await page.getByLabel("How strong it is").fill("1000 mg");
+  await page.getByLabel("How to take it").fill("1 cap OD");
+  await page.getByLabel("How many are in the box").fill("30");
+  await page.getByTestId("check-medicine").click();
+
+  // Warfarin and fish oil are flagged (a pair a pharmacist has not yet checked): the question
+  // still shows, both medicines named, but no severity claim sits over it.
+  const interaction = page.getByTestId("interaction");
+  await expect(interaction).toHaveCount(1);
+  await expect(interaction.getByTestId("pair")).toHaveText("fish oil and warfarin");
+  await expect(interaction.getByTestId("severity")).toHaveCount(0);
+  await expect(interaction).toContainText("A pharmacist has not checked this pair yet.");
+});
