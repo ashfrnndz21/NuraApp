@@ -1026,7 +1026,9 @@ class MedicineIn(BaseModel):
 
 
 class DrugMatchOut(BaseModel):
-    """The product the licensed register identified. Never a guess."""
+    """The product the licensed register identified, and how sure it is (#206): never a
+    guess dressed up as a match — below `CONFIDENCE_THRESHOLD` this is not reached at all,
+    `NotIdentified` answers first (`app.medicines.service._one_product`)."""
 
     registration_no: str
     brand: str
@@ -1035,6 +1037,7 @@ class DrugMatchOut(BaseModel):
     form: str
     drug_class: str
     high_risk: bool
+    confidence: float
 
 
 class FlaggedOut(BaseModel):
@@ -1132,6 +1135,9 @@ class LineOut(BaseModel):
     registration_no: str | None
     drug_class: str
     high_risk: bool
+    registry_confidence: float | None
+    """How sure the licensed registry was that its match is this product (#206), beside
+    `confidence` below, which is the person's yes, not the register's own certainty."""
     dose: DoseIn
     prescriber: str | None
     source_kind: SourceKind
@@ -1200,6 +1206,7 @@ class LineOut(BaseModel):
             "registration_no": line.registration_no,
             "drug_class": line.drug_class,
             "high_risk": line.high_risk,
+            "registry_confidence": line.registry_confidence,
             "dose": DoseIn(
                 amount=dose.amount,
                 unit=dose.unit,
