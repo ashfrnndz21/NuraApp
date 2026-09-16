@@ -106,12 +106,6 @@ export async function setDensity(value: Density | null): Promise<void> {
   densityChosen.value = value;
 }
 
-/** Forget who was signed in and whose papers were open; keep the device's language and look. */
-export async function clearSession(): Promise<void> {
-  me.value = null;
-  await Promise.all([setToken(null), chooseProfile(null)]);
-}
-
 /** Whose papers these are, when not the reader's own: the chrome that speaks to him is said about
  *  him by name on every screen of hers (strings `aboutWhom`). */
 effect(() => {

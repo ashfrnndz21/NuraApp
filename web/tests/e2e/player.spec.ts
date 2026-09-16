@@ -19,6 +19,10 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await todayReady(page);
+  // Which of the two proud cards this walks is pinned, so its words can be checked exactly
+  // rather than against itself: with his summary unreadable, the stand-in counted from the page
+  // Today read is what he sees (Me.tsx), and its lines are the catalogue's.
+  await page.route("**/me-summary*", (route) => route.fulfill({ status: 503, body: "" }));
   // The proud number, and its Hear, are on the Me sheet (D1).
   await openMe(page);
   const proud = proudCard(page);
@@ -32,15 +36,8 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
   await expect(page.getByTestId("player")).toHaveCount(1);
   const toggle = player.getByTestId("player-toggle");
   await expect(toggle).toHaveText("Pause");
-  // The card is the backend's summary of his days where that can be read, and the stand-in
-  // counted from Today where it cannot. Either way Hear says that card's own lines, in its
-  // order, and the transcript shows the one being said — nothing composed for the player.
-  const said = await proud.locator("p").allInnerTexts();
-  const heard = await spoken(page);
-  expect(heard.length).toBeGreaterThan(0);
-  expect(said).toEqual(expect.arrayContaining(heard));
-  expect(heard[0]).toBe(said[0]);
-  await expect(player.getByTestId("player-line")).toHaveText(said[0]!);
+  expect(await spoken(page)).toEqual(["When you tap Taken, this number becomes 1.", "This number only goes up."]);
+  await expect(player.getByTestId("player-line")).toHaveText("When you tap Taken, this number becomes 1.");
   // The transcript in his body size (the patient density's 20px); Play / Pause half as tall
   // again as his 56px target.
   expect(await player.getByTestId("player-line").evaluate((el) => getComputedStyle(el).fontSize)).toBe("20px");
@@ -86,9 +83,10 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
   await expect(proud.getByTestId("speed-0.75")).toHaveAttribute("aria-pressed", "true");
   expect((await speechRates(page)).at(-1)).toBeCloseTo(0.9 * 0.75);
 
-  // Leaving the screen stops it, and the player goes with it.
+  // Leaving the screen stops it, and the player goes with it. The card is on the Me sheet now
+  // (D1), so leaving it is shutting the sheet rather than tapping a Me tab.
   const before = await cancels(page);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("sheet-close").click();
   await expect.poll(() => cancels(page)).toBeGreaterThan(before);
   await expect(page.getByTestId("player")).toHaveCount(0);
 });

@@ -1,6 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect } from "preact/hooks";
-import { afterSignIn, go, screen } from "./flow";
+import { afterSignIn, go, screen, signOutHere } from "./flow";
 import { focusHeading } from "./ui/focus";
 import { emergencyOnly } from "./offline/emergencyCache";
 import { EmergencyScreen } from "./screens/Emergency";
@@ -46,14 +46,21 @@ function Route(): JSX.Element | null {
   useEffect(() => focusHeading(), [current.name]);
   if (!restored.value) return null;
   if (current.name === "loading") {
-    if (!token.value) go({ name: "signin" });
-    else if (profile.value) {
-      go({ name: "today" });
+    if (!token.value) void signOutHere();
+    else {
+      // Nothing of the remembered papers is drawn until the session is known to be good. The
+      // check is one round trip; with no network it fails at once and Today opens from the page
+      // the phone kept, which is what a kept page is for. Rendering Today first would put the
+      // last person's name in the header on a shared phone whose token has since expired —
+      // the same leak as a sign-out that forgets nothing, through the door people actually use.
       afterSignIn().catch((failure: unknown) => {
-        // A refused session: back to sign-in. Offline, a server error: stay on Today.
-        if (afterRestoreFailure(failure) === "signin") go({ name: "signin" });
+        // A refused session: back to sign-in, with nothing of theirs left on the phone. Offline
+        // or a server error says nothing about the key: Today, from what the phone kept.
+        if (afterRestoreFailure(failure) === "signin") return void signOutHere();
+        if (profile.value) go({ name: "today" });
+        else void signOutHere();
       });
-    } else afterSignIn().catch(() => go({ name: "signin" }));
+    }
     return null;
   }
   switch (current.name) {

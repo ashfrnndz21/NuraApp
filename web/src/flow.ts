@@ -185,6 +185,32 @@ export async function openProfile(chosen: ProfileOut): Promise<void> {
   go({ name: "today" });
 }
 
+/** Nothing of anyone's papers stays on the phone: the token, the chosen profile, every cached
+ *  Today page, what the player fetched, whose papers this person could open, and his large-text
+ *  setting (read from his State). Whose papers were open is forgotten first, then the token — so
+ *  a wipe cut short never leaves the next person on the last one's papers, and a page still
+ *  being read is not kept (useToday checks the token) — and the cache goes after both.
+ *
+ *  Every way the app can land on sign-in runs this. A session that expired is the same leak as
+ *  a sign-out, through a door people walk through far more often. */
+export async function forgetEverything(): Promise<void> {
+  voice.forget();
+  await setLargeText(false);
+  await chooseProfile(null);
+  await setToken(null);
+  me.value = null;
+  todayPage.value = null;
+  await clearAllProfileData();
+  forgetFeed();
+  forgetKnown();
+}
+
+/** Back to sign-in with nothing of the last person left behind. */
+export async function signOutHere(): Promise<void> {
+  await forgetEverything();
+  go({ name: "signin" });
+}
+
 export async function signOutEverywhere(): Promise<void> {
   const bearer = token.value;
   if (bearer) {
@@ -194,23 +220,7 @@ export async function signOutEverywhere(): Promise<void> {
       /* the token is forgotten here whatever the server said */
     }
   }
-  // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
-  // profile, every cached Today page, what the player fetched and his large-text setting (read
-  // from his State) go. Whose papers were open is forgotten first, then the token — so a sign-out
-  // cut short never leaves the next person on the last one's papers, and a page still being read
-  // is not kept (useToday checks the token) — and the wipe comes after both.
-  voice.forget();
-  await setLargeText(false);
-  await chooseProfile(null);
-  await setToken(null);
-  me.value = null;
-  todayPage.value = null;
-  await clearAllProfileData();
-  forgetFeed();
-  // Whose papers this person could open goes with the rest: on a shared phone the next person
-  // must not find the last one's names in the switcher.
-  forgetKnown();
-  go({ name: "signin" });
+  await signOutHere();
 }
 
 export async function reloadDoors(): Promise<void> {

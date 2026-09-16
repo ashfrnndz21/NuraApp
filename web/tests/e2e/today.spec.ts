@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, apiToken, captureSpeech, fixClock, freshPhone, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
+import { API, apiToken, captureSpeech, fixClock, freshPhone, keptKeys, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -253,6 +253,54 @@ test("a key without the records scope opens Today on the medicines and the feed,
   await expect(page.getByTestId("state-card")).toHaveCount(0);
   await expect(page.getByTestId("notice")).toHaveCount(0);
   await expect(page.locator("nav.tabbar")).toBeVisible();
+});
+
+/** The other half of that, and the one that matters on a shared phone: the token is no longer
+ *  good (it expired, or it was signed out elsewhere). The app must not draw a line of his
+ *  before it knows — his name in the header is enough — and once it knows, nothing of his may
+ *  stay behind for whoever picks the phone up next. Sessions expire far more often than anyone
+ *  taps Sign out, so this is the door that is actually walked through. */
+test("a refused session on reopening: nothing of his is drawn, and nothing of his is left", async ({ page, request }) => {
+  const phone = freshPhone();
+  await signInThroughTheApp(page, phone, "Pa");
+  await page.getByTestId("door-for-me").click();
+  await page.getByTestId("agree").click();
+  await page.getByTestId("set-up-later").click();
+  await todayReady(page);
+  await expect(page.getByTestId("whose-name")).toHaveText("Pa");
+  // The phone still holds the token; the backend stops honouring it, as it would on expiry.
+  const bearer = (await page.evaluate(
+    () =>
+      new Promise<string>((resolve) => {
+        const opened = indexedDB.open("nura", 1);
+        opened.onsuccess = () => {
+          const got = opened.result.transaction("kv", "readonly").objectStore("kv").get("session.token");
+          got.onsuccess = () => resolve(String(got.result));
+        };
+      }),
+  )) as string;
+  const out = await request.post(`${API}/auth/logout`, { headers: { Authorization: `Bearer ${bearer}` } });
+  expect(out.ok(), await out.text()).toBe(true);
+
+  // Watch every frame from the reload: his name must never be painted.
+  const painted: string[] = [];
+  await page.exposeFunction("sawName", (text: string) => void painted.push(text));
+  await page.addInitScript(() => {
+    const look = () => {
+      const name = document.querySelector("[data-testid=whose-name]");
+      if (name?.textContent?.trim()) (window as unknown as { sawName: (t: string) => void }).sawName(name.textContent.trim());
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  });
+  await page.reload();
+
+  await expect(page.getByLabel("Your phone number")).toBeVisible();
+  expect(painted, "his name was drawn before the session was known to be refused").toEqual([]);
+  // And nothing of his is left for the next person: no token, no papers, no kept page.
+  expect(await keptKeys(page)).not.toContain("session.token");
+  expect(await keptKeys(page)).not.toContain("session.profile");
+  expect(await keptKeys(page)).not.toContain("device.text");
 });
 
 test("a server error on reopening keeps him on Today, never back at sign-in", async ({ page }) => {
