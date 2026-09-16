@@ -15,7 +15,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
@@ -126,6 +126,62 @@ class WhatsAppGroup(ProfileScoped, Base):
     that would tell it the same says nothing, and one the provider failed is tried again."""
 
 
+class WhatsAppReceipt(Base):
+    """One inbound message the provider delivered, by the provider's own id and never its words
+    (#158): whether it has been handled, and how often handling it failed.
+
+    A provider sends a webhook delivery again until it is answered with a 2xx. The webhook
+    handles each message in a savepoint of its own and answers 5xx when any message failed, so
+    the whole delivery comes again; a message whose row says it was handled is acknowledged and
+    skipped, and only the one that failed is tried again. A row that keeps counting failures is
+    what the operator reads: an id, a moment and the name of what went wrong, nothing else.
+    It names no profile — a message is received before it is known whose it is — so it holds
+    nothing about a person.
+    """
+
+    __tablename__ = "whatsapp_receipt"
+    __table_args__ = (
+        UniqueConstraint("provider_message_id", name="uq_whatsapp_receipt_provider_message"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    provider_message_id: Mapped[str] = mapped_column(String(128))
+    """The provider's id for the message (`InboundMessage.provider_message_id`): its handle."""
+    first_seen_at: Mapped[datetime] = mapped_column(default=utcnow)
+    handled_at: Mapped[datetime | None] = mapped_column(default=None)
+    """When it was handled, all the way; a redelivery after this is skipped."""
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    last_failed_at: Mapped[datetime | None] = mapped_column(default=None)
+    last_failure: Mapped[str | None] = mapped_column(String(64), default=None)
+    """The class name of what went wrong the last time, never its message."""
+
+
+class DoseQuestion(ProfileScoped, Base):
+    """ "Which tablet?" — asked when a "Taken" or "given" reply could be about more than one
+    tablet at that moment (#162). Nothing is written down until the poster answers with one
+    that says exactly which: a number from the list, "both", or the tablet's own word.
+
+    `doses` is the list exactly as it was asked, in its order — each tablet's line and the
+    moment of his day it was due at — so "1" means the first line that was read to him, not
+    the first one of a list worked out again later. Written under the medicines scope, which
+    the helper's key holds, on the thread it was asked in; it takes one change, its answer.
+    """
+
+    __tablename__ = "whatsapp_dose_question"
+    __table_args__ = (
+        _row_of_profile("whatsapp_dose_question"),
+        _tied_to_profile("whatsapp_dose_question", "thread_id", "whatsapp_thread"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    thread_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("whatsapp_thread.id"), index=True)
+    asked_at: Mapped[datetime] = mapped_column()
+    expires_at: Mapped[datetime] = mapped_column()
+    doses: Mapped[list[dict[str, str]]] = mapped_column(JSON)
+    """`[{"line_id": …, "anchor": …}, …]`, in the order the question read them out."""
+    answered_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
 class ProposalStatus(StrEnum):
     OPEN = "open"
     CONFIRMED = "confirmed"
@@ -189,6 +245,8 @@ frozen(WhatsAppMessage)
 # A group is opened once; who is in it is never a column, only the digest of what the
 # provider was last told, which is the one thing a sync changes.
 frozen(WhatsAppGroup, except_for=frozenset({"members_digest"}))
+# A question about which tablet takes one change: its answer (#162).
+frozen(DoseQuestion, except_for=frozenset({"answered_at"}))
 # A proposal takes one change, its answer, and only while the proposals service is making it.
 frozen(
     Proposal,

@@ -118,6 +118,20 @@ RULES: Mapping[TriggerType, Rule] = {
             # (`deliver`). A stored list for an alert is ignored (`config_of`).
             channels=(DeliveryChannel.WHATSAPP, DeliveryChannel.APP_PUSH),
         ),
+        # His voice note Nura could not hear (#158). A red word in it could not be read, so it
+        # is treated as the red flag it may be: an alert under the emergency card, never capped
+        # and never held for the quiet hours, on the flag's own channels — the words on
+        # WhatsApp first, then the app's content-free push.
+        Rule(
+            TriggerType.VOICE_NOTE_UNHEARD,
+            TriggerKind.EVENT,
+            Category.ALERT,
+            Scope.EMERGENCY,
+            "voice_note_not_heard",
+            cap=None,
+            quiet=False,
+            channels=(DeliveryChannel.WHATSAPP, DeliveryChannel.APP_PUSH),
+        ),
         Rule(
             TriggerType.VISIT_TOMORROW,
             TriggerKind.EVENT,

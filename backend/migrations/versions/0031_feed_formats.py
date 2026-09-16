@@ -22,8 +22,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0030_feed_formats"
-down_revision = "0028_whatsapp_opt_in"
+revision = "0031_feed_formats"
+down_revision = "0030_whatsapp_receipts"
 branch_labels = None
 depends_on = None
 
