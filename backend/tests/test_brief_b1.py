@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,15 +29,20 @@ from app.reasoning.visits.brief import (
     LINE_BUDGET,
     Changed,
     Line,
+    NoBriefYet,
     _fold,
+    brief_for,
     build_brief,
     compose,
+    latest_brief,
     lines_for,
 )
+from app.reasoning.visits.guard import can_render_brief
 from app.reasoning.visits.models import Brief
 from app.reasoning.visits.questions import require_visit
 from app.regions import Region
 from app.safety.symptom_log import log_symptom, symptoms_since
+from app.state.service import current_state
 from tests.delivery_support import Home, home, via_for
 from tests.safety_support import assert_plain, let_in, transcriber_for
 from tests.visits import REGISTRY, pa, reading, visit
@@ -255,3 +261,59 @@ async def test_the_brief_is_rendered_three_days_before_and_its_card_goes_once_un
     assert sorted(str(r.why["appointment_id"]) for r in every if r.outcome is DeliveryOutcome.SENT) == sorted(
         [str(first.id), str(second.id)]
     )
+
+
+# --- B1 review: a read-only visits key reads the brief, it does not render one ----------------
+
+
+async def test_a_read_only_visits_key_reads_the_brief_as_it_stands_after_his_state_moves(
+    sg: AsyncSession,
+) -> None:
+    """A viewer and a clinic key hold `Scope.VISITS` to read and are not among `CHANGERS`,
+    so rendering is not theirs (`guard.may_render_brief`). `GET …/brief` rebuilds whenever
+    State has moved past the newest brief — which would refuse them the read the moment the
+    record moved. They get the brief as it stands instead (B1 review)."""
+    context = await pa(sg, language="en")
+    await reading(sg, context)
+    _, appointment = await visit(sg, context)
+    stood = await brief_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    # His State moves past it: a symptom written down after the brief was rendered.
+    await _log(sg, context, "dizzy, quite a lot, since this morning")
+    moved = await current_state(sg, context=context)
+    assert moved.id != stood.state_id, "the symptom did not move his State"
+
+    for phone, name, role in (
+        ("+6591110007", "Wei", KeyRole.VIEWER),
+        ("+6591110008", "Clinic", KeyRole.CLINIC),
+    ):
+        key = await let_in(sg, context, phone=phone, name=name, role=role)
+        assert Scope.VISITS in key.scopes and not can_render_brief(key)
+        read = await brief_for(
+            sg, context=key, appointment_id=appointment.id, registry=REGISTRY
+        )
+        # The one that stands, not a new one, and no refusal.
+        assert read.id == stood.id and read.state_id == stood.state_id
+        assert await latest_brief(sg, context=key, appointment_id=appointment.id) == read
+
+    # And the key that may render it still gets the record as it is now.
+    now = await current_state(sg, context=context)
+    rebuilt = await brief_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    assert rebuilt.id != stood.id and rebuilt.state_id == now.id
+
+
+async def test_a_read_only_visits_key_is_told_when_no_brief_has_been_rendered_yet(
+    sg: AsyncSession,
+) -> None:
+    """Nothing to read and nothing it may render: `NoBriefYet`, not a brief built under a key
+    that is not allowed to render one."""
+    context = await pa(sg, language="en")
+    await reading(sg, context)
+    _, appointment = await visit(sg, context)
+    key = await let_in(sg, context, phone="+6591110009", name="Wei", role=KeyRole.VIEWER)
+    with pytest.raises(NoBriefYet):
+        await brief_for(sg, context=key, appointment_id=appointment.id, registry=REGISTRY)
+    assert await latest_brief(sg, context=key, appointment_id=appointment.id) is None

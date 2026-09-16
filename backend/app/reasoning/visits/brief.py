@@ -44,7 +44,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
 from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
-from app.reasoning.visits.guard import may_render_brief
+from app.reasoning.visits.guard import can_render_brief, may_render_brief
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import Brief, MemoKind
 from app.reasoning.visits.questions import (
@@ -85,6 +85,12 @@ the memos to bring beside the two fixed bring lines."""
 
 class NotOnePage(Refusal):
     """A brief would run over its one page. `compose` folds every section, so this is a bug."""
+
+
+class NoBriefYet(Refusal):
+    """A key that only reads the visits asked for a brief nobody has rendered yet. It reads
+    the one that stands; it never renders one (`guard.may_render_brief`), and there is none
+    to read. Nura renders it at T-3, or whoever may change the visits opens it first."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -498,8 +504,19 @@ async def brief_for(
     registry: DrugRegistry,
 ) -> Brief:
     """The brief for this visit as it stands: the newest one, rebuilt when State has moved
-    past it, so what he reads is always rendered from the record as it is now."""
+    past it, so what he reads is always rendered from the record as it is now.
+
+    Rebuilt only for a key that may render it — whoever may change the visits, and Nura at
+    T-3 (`guard.can_render_brief`). A viewer, a helper or a clinic key holds the visits scope
+    to read: it gets the brief as it stands, State moved or not, because reading the brief is
+    never rendering one and a read must not turn into a refusal the moment the record moves
+    (B1 review). `NoBriefYet` when there is none for it to read.
+    """
     newest = await latest_brief(session, context=context, appointment_id=appointment_id)
+    if not can_render_brief(context):
+        if newest is None:
+            raise NoBriefYet(f"no brief for visit {appointment_id} yet")
+        return newest
     state = await current_state(session, context=context)
     if newest is not None and newest.state_id == state.id:
         return newest
