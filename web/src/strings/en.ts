@@ -254,6 +254,8 @@ export const en = {
     hear: "Hear",
     // @patient headline
     readingTitle: "Your blood pressure",
+    // @patient headline
+    readingTitleOther: "{patient}'s blood pressure",
     // @patient
     readingLead: "Write down this morning's number.",
     // @patient
@@ -412,6 +414,8 @@ export const en = {
   reading: {
     // @patient headline
     title: "Your blood pressure",
+    // @patient headline
+    titleOther: "{patient}'s blood pressure",
     // @patient
     lead: "Type the 2 numbers from the machine.",
     // @patient phrase
@@ -1304,6 +1308,19 @@ export const en = {
       potassium: "Your body salt",
       haemoglobin: "Your blood count",
       tsh: "Your thyroid test",
+    },
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "{patient}'s cholesterol",
+      ldl: "{patient}'s bad cholesterol",
+      hdl: "{patient}'s good cholesterol",
+      triglycerides: "{patient}'s blood fat",
+      hba1c: "{patient}'s sugar test",
+      creatinine: "{patient}'s kidney number",
+      egfr: "{patient}'s kidney filter",
+      potassium: "{patient}'s body salt",
+      haemoglobin: "{patient}'s blood count",
+      tsh: "{patient}'s thyroid test",
     },
     // @patient phrase
     resultOn: "{value} {unit} on {date}",

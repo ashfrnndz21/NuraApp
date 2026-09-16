@@ -254,6 +254,8 @@ export const ms = {
     hear: "Dengar",
     // @patient headline
     readingTitle: "Tekanan darah anda",
+    // @patient headline
+    readingTitleOther: "Tekanan darah {patient}",
     // @patient
     readingLead: "Tulis nombor pagi ini.",
     // @patient
@@ -412,6 +414,8 @@ export const ms = {
   reading: {
     // @patient headline
     title: "Tekanan darah anda",
+    // @patient headline
+    titleOther: "Tekanan darah {patient}",
     // @patient
     lead: "Taip 2 nombor daripada mesin itu.",
     // @patient phrase
@@ -1302,6 +1306,19 @@ export const ms = {
       potassium: "Garam badan anda",
       haemoglobin: "Kiraan darah anda",
       tsh: "Ujian tiroid anda",
+    },
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "Kolesterol {patient}",
+      ldl: "Kolesterol jahat {patient}",
+      hdl: "Kolesterol baik {patient}",
+      triglycerides: "Lemak darah {patient}",
+      hba1c: "Ujian gula {patient}",
+      creatinine: "Nombor buah pinggang {patient}",
+      egfr: "Penapis buah pinggang {patient}",
+      potassium: "Garam badan {patient}",
+      haemoglobin: "Kiraan darah {patient}",
+      tsh: "Ujian tiroid {patient}",
     },
     // @patient phrase
     resultOn: "{value} {unit} pada {date}",

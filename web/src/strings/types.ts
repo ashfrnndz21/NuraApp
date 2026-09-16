@@ -109,6 +109,7 @@ export interface Strings {
     noMedicinesSub: string;
     hear: string;
     readingTitle: string;
+    readingTitleOther: string;
     readingLead: string;
     readingButton: string;
     readingLeadEvening: string;
@@ -179,6 +180,7 @@ export interface Strings {
   };
   reading: {
     title: string;
+    titleOther: string;
     lead: string;
     top: string;
     bottom: string;
@@ -571,6 +573,7 @@ export interface Strings {
     waiting: string;
     trendsLead: string;
     analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
+    analytesOther: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     resultOn: string;
     rangeUnder: string;
     rangeOver: string;

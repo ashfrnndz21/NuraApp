@@ -254,6 +254,8 @@ export const zh = {
     hear: "听",
     // @patient headline
     readingTitle: "您的血压",
+    // @patient headline
+    readingTitleOther: "{patient}的血压",
     // @patient
     readingLead: "把今天早上的数字记下来。",
     // @patient
@@ -412,6 +414,8 @@ export const zh = {
   reading: {
     // @patient headline
     title: "您的血压",
+    // @patient headline
+    titleOther: "{patient}的血压",
     // @patient
     lead: "请输入血压机上的两个数字。",
     // @patient phrase
@@ -1302,6 +1306,19 @@ export const zh = {
       potassium: "您身体的盐",
       haemoglobin: "您的血色素",
       tsh: "您的甲状腺检查",
+    },
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "{patient}的胆固醇",
+      ldl: "{patient}的坏胆固醇",
+      hdl: "{patient}的好胆固醇",
+      triglycerides: "{patient}的血脂",
+      hba1c: "{patient}的血糖检查",
+      creatinine: "{patient}的肾指数",
+      egfr: "{patient}的肾过滤",
+      potassium: "{patient}身体的盐",
+      haemoglobin: "{patient}的血色素",
+      tsh: "{patient}的甲状腺检查",
     },
     // @patient phrase
     resultOn: "{date}的结果是{value} {unit}",
