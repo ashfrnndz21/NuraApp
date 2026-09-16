@@ -97,12 +97,32 @@ async def change(
 async def log(
     session: AsyncSession, *, context: KeyContext, day: str | None = None
 ) -> list[Delivery]:
-    """What went out, and what was held, newest first: the parts this key covers."""
+    """What went out, and what was held, newest first: the parts this key covers (`seen_by`)."""
     owner_or_chief(context)
     where = () if day is None else (Delivery.day == day,)
     rows = await audited_read(session, Delivery, context, Scope.FAMILY, where=where)
     return sorted(
-        (row for row in rows if context.allows(row.scope)),
+        (row for row in rows if seen_by(row, context)),
         key=lambda row: (row.recorded_at, str(row.id)),
         reverse=True,
     )
+
+
+def seen_by(row: Delivery, context: KeyContext) -> bool:
+    """Whether this key sees this row of the log. Its scope, first. Then the evening family
+    notice (E11-01) only to the chief it was for, and to him: a chief is told only on a day
+    something her key opens was written down, so whether another was told says that a part of
+    his record closed to her was written today. And a hold because a red flag is open only
+    to a key that opens his emergency lines: the reason is itself a health fact."""
+    # Imported here: the day's rules run the engine's delivery, which reads these settings.
+    from app.delivery.triggers.day import A_FLAG_IS_OPEN
+
+    if not context.allows(row.scope):
+        return False
+    if (
+        row.trigger_type is TriggerType.FAMILY_NOTICE
+        and not context.is_owner
+        and row.to_person_id != context.person_id
+    ):
+        return False
+    return row.reason != A_FLAG_IS_OPEN or context.allows(Scope.EMERGENCY)

@@ -601,6 +601,12 @@ export const zh = {
     noMic: "Nura不能使用这部手机的麦克风。",
     // @patient
     noMicSub: "您可以自己写下来。",
+    // @patient
+    noConnection: "手机现在没有网络。",
+    // @patient
+    sendLater: "网络恢复后，Nura会发送录音。",
+    // @patient
+    keepOpenToSend: "在那之前，请不要离开这一页。",
   },
   // 离线时点的（E00-08）。
   held: {
@@ -1725,6 +1731,8 @@ export const zh = {
       family_message: "家人的一条消息",
       first_week_prompt: "第一周",
       nudge: "小提醒",
+      check_in: "今天感觉怎么样",
+      family_notice: "Nura这个星期记下的",
     },
     // @patient phrase
     channels: {
@@ -1741,6 +1749,13 @@ export const zh = {
       no_channel: "联系不上他们",
       no_scope: "他们的钥匙不包括这个",
       skipped: "安静的日子跳过了",
+    },
+    // @patient
+    skippedBecause: {
+      flagOpen: "暂停：今天先处理{name}身体不适的事。",
+      saidToday: "暂停：{name}今天已经说了自己的感觉。",
+      nudgeAsked: "暂停：Nura今天已经问过{name}感觉怎么样。",
+      questionOpen: "暂停：{name}还有Nura的一个问题要回答。",
     },
     // @patient phrase
     rule: "规则",
@@ -1978,6 +1993,11 @@ export const zh = {
     NoSuchRecording: "这段录音已经不在这里了。",
     NotAClip: "Nura找不到录音的这一部分。",
     OnlyTheFamilyHears: "只有本人和他让进来的家人可以听。",
+    ChunkTooLarge: "这一段录音对Nura来说太大了。",
+    UploadClosed: "Nura已经不再保存这段录音。",
+    NotYourUpload: "只有开始录音的手机才能发送。",
+    NoYesFromTheDoctor: "医生说可以之后，Nura才会保存录音。",
+    NoSuchUpload: "Nura找不到这段录音。",
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",

@@ -681,7 +681,7 @@ async def test_an_answer_cites_only_what_he_confirmed_and_the_clip_is_heard_only
         if any(c["kind"] == "visit_summary" for c in line["cites"])
     ]
     assert [line["text"] for line in on_the_card] == [
-        "Your card from Dr Tan on Saturday 5 September is waiting for your yes."
+        "What Dr Tan said on Saturday 5 September is waiting for your yes."
     ]
     _clean([line["text"] for line in on_the_card])
     assert all(line["clip"] is None for line in waiting["lines"])

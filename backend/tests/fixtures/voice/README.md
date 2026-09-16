@@ -15,6 +15,7 @@ and asks him to say it again.
 | `sakit-dada` | `023ff271d8b2…` | 'dada saya sakit' | 0.88 |
 | `pa-whatsapp-market` | `67b86fc47925…` | 'I walked to the market this morning. My knee felt fine.' | 0.9 |
 | `pa-whatsapp-fell` | `430e9cabf8ac…` | 'I fell in the bathroom this morning.' | 0.92 |
+| `consult-red-flag` (a consult, `tests/consult_audio.py`) | `a8510afcf6aa…` | the words of `tests/fixtures/visits/red-flag-chest-pain.json`: chest pain, heard at the visit (#155) | 0.9 |
 | `pa-whatsapp-taken` | `48a907c315f3…` | 'sudah makan ubat' | 0.9 |
 | `pa-whatsapp-ok` | `43fe20509c03…` | 'OK' | 0.93 |
 | `pa-whatsapp-taken-unsure` | `67e06fa9bb29…` | 'Taken.' | 0.45 |

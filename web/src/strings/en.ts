@@ -601,6 +601,12 @@ export const en = {
     noMic: "Nura cannot use the microphone on this phone.",
     // @patient
     noMicSub: "You can write it down yourself instead.",
+    // @patient
+    noConnection: "The phone has no connection right now.",
+    // @patient
+    sendLater: "Nura sends the recording when the connection is back.",
+    // @patient
+    keepOpenToSend: "Keep this page open until then.",
   },
   // Taps made while the phone could not reach Nura (E00-08).
   held: {
@@ -1728,6 +1734,8 @@ export const en = {
       family_message: "Family message",
       first_week_prompt: "First week",
       nudge: "A small reminder",
+      check_in: "How are you feeling today",
+      family_notice: "What Nura wrote down this week",
     },
     // @patient phrase
     channels: {
@@ -1744,6 +1752,13 @@ export const en = {
       no_channel: "No way to reach them",
       no_scope: "Their key does not cover it",
       skipped: "Skipped on a quiet day",
+    },
+    // @patient
+    skippedBecause: {
+      flagOpen: "Held: something about {name} not feeling well comes first today.",
+      saidToday: "Held: {name} already told Nura how things are today.",
+      nudgeAsked: "Held: Nura already asked {name} how things are today.",
+      questionOpen: "Held: {name} still has a question from Nura to answer.",
     },
     // @patient phrase
     rule: "Rule",
@@ -1983,6 +1998,11 @@ export const en = {
     NoSuchRecording: "That recording is not here any more.",
     NotAClip: "Nura cannot find that part of the recording.",
     OnlyTheFamilyHears: "Only the owner and the family he let in can hear this.",
+    ChunkTooLarge: "That part of the recording is too big for Nura.",
+    UploadClosed: "Nura is not keeping this recording any more.",
+    NotYourUpload: "Only the phone that started the recording can send it.",
+    NoYesFromTheDoctor: "Nura keeps a recording only after the doctor says yes.",
+    NoSuchUpload: "Nura cannot find that recording.",
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",

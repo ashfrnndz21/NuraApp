@@ -26,7 +26,8 @@ The confirm step shows these lines, and his yes binds to exactly them: the words
 - **Nobody opens his profile.** Every key (his family's, a helper's, an emergency contact's) and his own reads are refused by name (`AccountClosing`), and each refused reach is on his trail. Only the closing's status and his undo stay open to him.
 - **Keeping his papers is withdrawn**, on the record: the `hold_health_record` consent is marked withdrawn, by him, at that moment.
 - **The family's WhatsApp group is emptied**, and nothing is mirrored into it. A red word still posted there is answered to its sender alone, with the number to call.
-- **Nothing more is sent about him.** Every push subscription under the profile is revoked, and the delivery engine sends nothing about him.
+- **Nothing more is sent about him.** Every push subscription under the profile is revoked, and the delivery engine sends nothing about him: no morning card, no reminder, no check-in on WhatsApp, and no evening family notice.
+- **A visit's recording on its way in is thrown away.** Every chunk already sent of a recording not yet kept (#129) is deleted from the region's store at once, and the engine's next run deletes any chunk that landed as he closed.
 - **One exception, for safety.** A red flag raised *before* he closed the account is still carried to his family, rung by rung, until someone answers. It is never hidden from the day it was raised. Someone it reached can still say they have it, in the app or by answering on WhatsApp, and then nobody else is asked.
 
 ## Undo
