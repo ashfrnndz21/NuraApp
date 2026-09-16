@@ -33,8 +33,13 @@ const key = (profileId: string) => `${EMERGENCY_PREFIX}${profileId}`;
  *  Without `previous` a failed fetch would overwrite a printable page the phone already had
  *  with nothing, and the offline copy — the one thing this cache exists to keep readable and
  *  printable with no network — would lose its Print button to a single bad request. So a
- *  `null` html falls back to `previous`'s, when there is one for the same binding; a real
- *  html from this read, even empty, always wins. */
+ *  `null` html falls back to `previous`'s, when there is one in his language; a real html
+ *  from this read, even empty, always wins.
+ *
+ *  Gated on language, not just on `previous` existing: the printable page's words are his
+ *  language's (E13-01's "two languages on one card"), so a carried-over page from before a
+ *  language switch would show the wrong words under a JSON card in the new one, one `fetchedAt`
+ *  implying both are equally fresh. A stale-language `previous` is treated the same as none. */
 export async function saveCard(
   profileId: string,
   read: { card: EmergencyCardOut; html: string | null },
@@ -42,7 +47,8 @@ export async function saveCard(
   now: Date,
   previous?: KeptCard | null,
 ): Promise<KeptCard> {
-  const html = read.html ?? previous?.html ?? null;
+  const carryable = previous && previous.card.language === read.card.language;
+  const html = read.html ?? (carryable ? previous!.html : null);
   const entry: KeptCard = { card: read.card, html, binding, fetchedAt: now.toISOString() };
   await kvSet(key(profileId), entry);
   return entry;

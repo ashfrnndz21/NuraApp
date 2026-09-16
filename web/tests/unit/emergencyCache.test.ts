@@ -85,6 +85,13 @@ describe("the kept emergency card", () => {
     expect(reread.html).toBe("<p>newer</p>");
   });
 
+  it("does not carry a printable page across a language switch — his old language's words under his new language's card", async () => {
+    const kept = await saveCard("e7", card("en"), OWNER, TEN_AM);
+    const laterToday = new Date("2026-09-14T15:00:00Z");
+    const switched = await keep("e7", { card: card("ms"), html: null }, OWNER, laterToday, kept);
+    expect(switched.html).toBeNull();
+  });
+
   it("goes with the rest of the phone's copy on a refusal, a switch of papers and sign-out", async () => {
     await saveCard("e3", card(), OWNER, TEN_AM);
     await saveCard("e4", card(), OWNER, TEN_AM);
