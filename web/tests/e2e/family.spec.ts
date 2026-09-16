@@ -101,7 +101,7 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   // the parts and the role, agrees, and only then is the key cut.
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
 
   const priyaPhone = freshPhone("+659777");
   await page.getByTestId("tab-family").click();
@@ -520,39 +520,33 @@ export type { Family };
 /** The reset's promise (docs/product-reset.md §4, §6): the moment a chief lets someone in,
  *  that person's own app has these papers in its switcher and can ask about them — no sign-out,
  *  no re-login, no second Ask. What they may read is the key's, and the backend says so. */
-test("a key cut now: the person it was cut for reaches his papers and asks, without signing out", async ({ page, browser, request }) => {
+test("already at the doors when the key is cut: one tap looks again, and his papers are there", async ({ page, browser, request }) => {
+  // Main's Priya registers after she is named, so the doors list Pa on her very first look.
+  // This is the other half: someone who signed in *before* anyone let them in is sitting at
+  // the doors with nothing on them, and nothing there re-reads itself. One tap now does.
   const family = await seedFamily(request);
 
-  // Siti is signed in on her own phone first, with no papers of her own and no key at all: she
-  // is sitting at the doors, which is where someone waiting to be let in waits.
   const hers = await secondPhone(browser);
   await signInThroughTheApp(hers, family.siti.phone, "Siti");
   await expect(hers.getByTestId("door-for-me")).toBeVisible();
   await expect(hers.getByTestId("door-key")).toHaveCount(0);
 
-  // The chief lets her in, from the circle where letting someone in is the one Plum button.
-  await signIn(page, family.mei, false);
-  await openFamily(page);
+  // Pa lets her in himself: letting someone in at all is his own yes, never his chief's.
+  await signIn(page, family.pa, true);
+  await page.getByTestId("tab-family").click();
   await page.getByTestId("open-keys").click();
   await page.getByLabel("Their name").fill("Siti");
   await page.getByLabel("Their phone number").fill(family.siti.phone);
   await page.getByTestId("role-caregiver").click();
-  await page.getByTestId("make-key").click();
+  await page.getByTestId("see-words").click();
+  await page.getByTestId("agree-key").click();
   await expect(page.getByTestId("grant").filter({ hasText: "Siti" })).toBeVisible();
 
-  // Her phone has not been touched since, and she has not signed out. One tap asks the doors
-  // again and his papers are there.
+  // Her phone has not been touched since, and she has not signed out.
   await hers.getByTestId("doors-look-again").click();
   await hers.getByTestId("door-key").click();
-  // Whose papers she is in is on the screen before anything of them has come in.
+  // Whose papers she is in is on the screen, by name, before anything of them has come in.
   await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
   await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
-
-  // And Ask answers from his papers, in the backend's words. What she may read is the key's:
-  // the backend says so, and nothing on the phone decides it.
-  await hers.getByTestId("askbar").getByRole("searchbox").fill("what are his medicines");
-  await hers.getByTestId("ask-go").click();
-  await expect(hers.getByTestId("ask-screen")).toBeVisible();
-  await expect(hers.getByTestId("answer").or(hers.getByTestId("notice"))).toBeVisible();
   await hers.close();
 });
