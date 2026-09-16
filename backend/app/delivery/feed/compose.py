@@ -25,6 +25,8 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
+from app.audit.models import Action, Channel, Outcome
+from app.audit.trail import record
 from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.compress import changes_treatment
 from app.delivery.feed.days import Day, plain_day, today_for
@@ -340,31 +342,77 @@ async def refresh(
             medicines=medicines,
         )
     )
-    await _say_ahead(engine, context, made)
+    await _say_ahead(session, engine, context, made)
     return state, made
 
 
-async def _say_ahead(engine: Engine, context: KeyContext, items: Sequence[FeedItem]) -> None:
+VOICE_TARGET = "feed_item_voice"
+"""What a pre-render's audit line names: not the card row itself (`feed_item`), its spoken
+twin — so a render failure is told apart from a refusal to write the card."""
+
+
+async def _say_ahead(
+    session: AsyncSession, engine: Engine, context: KeyContext, items: Sequence[FeedItem]
+) -> None:
     """Each new card's spoken twin, said and kept the moment the card is made (E22-03):
     through the one voice port, into the region's store, under the digest of the card's voice
     script — the same lines, language and boundary the twin route says (`twin.spoken_twin`),
     so the same key, and the first play is a read. A card with no voice in its language yet,
-    or too long to say, is not said ahead; the route answers for it as it always has."""
+    or too long to say, is not said ahead; the route answers for it exactly as it always has.
+    Both `engine.voice` and `engine.store` are optional on the Engine, so a test may build one
+    without them and get the old behaviour; the running app never does — `_engine` in
+    `app.channels.api.feed` always passes `providers.voice` (the fixture voice by default) and
+    `providers.object_store` (required), so this runs on every refresh, including in dev.
+
+    A render that fails — the language is not one there is a voice for, the lines run past
+    thirty seconds, the store or the voice itself throws — never costs him the card: each
+    item renders in a savepoint of its own, and nothing here is allowed to unmake a card
+    `create_item` already wrote. But the failure is not swallowed either: it is written to
+    the trail under `VOICE_TARGET`, on the card's own scope, the way any other refused write
+    is (`app.audit.trail.record`), so the gap between "the card exists" and "its twin is
+    ready" is visible to whoever reads the trail, not just to a log line nobody reads back.
+    """
     if engine.voice is None or engine.store is None:
         return
     for item in items:
         try:
-            await voiced(
-                engine.store,
-                engine.voice,
-                profile_id=context.profile_id,
-                region=context.region,
-                lines=list(item.voice or item.body),
-                language=item.language,
-                boundary=item.boundary,
-            )
+            async with nested_unit_of_work(session):
+                await voiced(
+                    engine.store,
+                    engine.voice,
+                    profile_id=context.profile_id,
+                    region=context.region,
+                    lines=list(item.voice or item.body),
+                    language=item.language,
+                    boundary=item.boundary,
+                )
         except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
-            log.warning("voice ahead skipped: %s", type(failed).__name__)
+            log.warning("voice ahead failed for %s: %s", item.id, type(failed).__name__)
+            try:
+                async with nested_unit_of_work(session):
+                    await record(
+                        session,
+                        context=context,
+                        action=Action.WRITE,
+                        scope=item.scope,
+                        target=VOICE_TARGET,
+                        target_id=item.id,
+                        outcome=Outcome.REFUSED,
+                        refused_because=type(failed).__name__,
+                        channel=Channel.SYSTEM,
+                    )
+            except Exception as unwritten:  # noqa: BLE001 — see below
+                # Writing the trail line is itself a write, and the one thing it must never do
+                # is cost him the cards. Without this the failure leaves `_say_ahead`, leaves
+                # `refresh`, and reaches the request's own unit of work, which rolls the whole
+                # request back — every card `create_item` wrote in this refresh, not just the
+                # one whose voice failed, and the trail lines the earlier items in this loop
+                # had already earned. A voice that is down would take his day's cards with it.
+                # So the trail line degrades to a log line, the same way `_sample` below keeps
+                # its own bookkeeping from reaching the caller.
+                log.warning(
+                    "voice ahead failure not written for %s: %s", item.id, type(unwritten).__name__
+                )
             continue
 
 

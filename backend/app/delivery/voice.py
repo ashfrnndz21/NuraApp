@@ -1,11 +1,15 @@
-"""The spoken twin: the `Voice` port, the fixture behind it, and the cache (E11-04).
+"""The spoken twin: the `Voice` port, the fixture behind it, and the cache (E11-04, E22-03).
 
-Every card is also a voice script (docs/plain-words.md §4). `Voice.speak(text, language)`
-turns the lines into audio and says how long they run. The fixture returns a WAV of silence
-exactly as long as the lines would take to say at his pace, so a test and the checkpoint can
-hold the length to the rule without a speech provider. A voice note stays under thirty
-seconds (`MAX_SECONDS`, `TooLongToSay`); English, Malay and Mandarin at T1, and Hokkien and
-Tamil at T2 (`NoVoiceFor` until then).
+Every card is also a voice script (docs/plain-words.md §4, `app.language.voice_script`).
+`Voice.speak(script)` is given the whole script — one segment per line, and the silence to
+leave after each one, the boundary's own longer than the rest — and turns it into audio,
+saying how long it runs. A provider that can control its own pauses (SSML `<break>`, or
+whatever its API calls it) reads `segment.pause_ms` off each one; a provider that cannot
+still reads the words in order and the fixture's own duration still counts every pause, so a
+test and the checkpoint hold the length to the rule without a speech provider. A voice note
+stays under thirty seconds (`MAX_SECONDS`, `TooLongToSay`); English, Malay and Mandarin at
+T1, and Hokkien and Tamil at T2 (`NoVoiceFor` until then). A conformance suite any adapter
+must pass is `tests/voice_conformance.py`, proven here against the fixture.
 
 Rendered audio is a derived cache, not a record: it is Nura saying its own lines, not anyone's
 voice, so it is never a VOICE artefact and never an Artifact row (ADR 0003, addendum). It is
@@ -28,7 +32,7 @@ from typing import Protocol
 from app.errors import Refusal
 from app.fixtures import fixture
 from app.ingestion.objects import NoSuchObject, ObjectStore, check_key
-from app.language.voice_script import script_for
+from app.language.voice_script import VoiceScript, script_for
 from app.regions import Region, guard_region
 from app.settings import Settings
 
@@ -72,8 +76,10 @@ class Voice(Protocol):
     @property
     def name(self) -> str: ...
 
-    async def speak(self, text: str, language: str) -> Spoken:
-        """The lines, said in `language`, as WAV audio, and how long they run."""
+    async def speak(self, script: VoiceScript) -> Spoken:
+        """The script's segments, said in its language, as WAV audio, with the silence the
+        script asks for after each one — the boundary's own longer than the rest — and how
+        long the whole of it runs."""
         ...
 
 
@@ -86,7 +92,10 @@ def voice_language(asked: str | None) -> str:
 
 
 def seconds_to_say(text: str, language: str) -> float:
-    """How long the lines take at his pace, with a pause after each one."""
+    """How long the lines take at his pace, with a flat pause after each one: an estimate
+    used where only the words are at hand, not a script (composing a card, budgeting a
+    clip). Where a script exists, `seconds_for_script` is the true figure — it is what the
+    boundary's own longer pause is for, which this cannot see."""
     total = 0.0
     for line in (one.strip() for one in text.splitlines()):
         if not line:
@@ -94,6 +103,19 @@ def seconds_to_say(text: str, language: str) -> float:
         characters = len(_HAN.findall(line))
         words = len(_HAN.sub(" ", line).split())
         total += characters / CHARACTERS_PER_SECOND + words / WORDS_PER_SECOND + PAUSE_SECONDS
+    return round(total, 1)
+
+
+def seconds_for_script(script: VoiceScript) -> float:
+    """How long a script runs at his pace: each segment's own words, then its own pause —
+    the boundary's longer than the rest. What `Voice.speak` is held to, and what the fixture
+    times itself against."""
+    total = 0.0
+    for segment in script.segments:
+        characters = len(_HAN.findall(segment.text))
+        words = len(_HAN.sub(" ", segment.text).split())
+        total += characters / CHARACTERS_PER_SECOND + words / WORDS_PER_SECOND
+        total += segment.pause_ms / 1000
     return round(total, 1)
 
 
@@ -125,15 +147,18 @@ def wav_seconds(audio: bytes) -> float:
 
 @fixture
 class FixtureVoice:
-    """Silence as long as the lines. Deterministic: the same lines, the same bytes."""
+    """Silence as long as the script runs, its pauses counted like any other adapter's would
+    be. Deterministic: the same script, the same bytes."""
 
     name = "fixture"
 
-    async def speak(self, text: str, language: str) -> Spoken:
-        code = voice_language(language)
-        seconds = seconds_to_say(text, code)
+    async def speak(self, script: VoiceScript) -> Spoken:
+        seconds = seconds_for_script(script)
         return Spoken(
-            audio=silence(seconds), content_type=WAV, duration_seconds=seconds, language=code
+            audio=silence(seconds),
+            content_type=WAV,
+            duration_seconds=seconds,
+            language=script.language,
         )
 
 
@@ -178,9 +203,9 @@ async def voiced(
     run past thirty seconds, or when there is no voice in the language yet."""
     code = voice_language(language)  # before the script: a T2 language is refused, not guessed
     script = script_for(lines, code, boundary=boundary)
-    text = script.spoken()
-    if seconds_to_say(text, code) > MAX_SECONDS:
-        raise TooLongToSay(f"{seconds_to_say(text, code)} seconds is over {MAX_SECONDS:g}")
+    estimate = seconds_for_script(script)
+    if estimate > MAX_SECONDS:
+        raise TooLongToSay(f"{estimate} seconds is over {MAX_SECONDS:g}")
     guard_region(held_in=store.region, asked_from=region)
     key = cache_key(profile_id, voice.name, script.digest)
     try:
@@ -189,7 +214,7 @@ async def voiced(
         pass
     else:
         return Voiced(Spoken(audio, WAV, wav_seconds(audio), code), key, cached=True)
-    spoken = await voice.speak(text, code)
+    spoken = await voice.speak(script)
     if spoken.duration_seconds > MAX_SECONDS:
         raise TooLongToSay(f"{spoken.duration_seconds} seconds is over {MAX_SECONDS:g}")
     await store.put(key, spoken.audio)
