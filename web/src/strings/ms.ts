@@ -352,6 +352,8 @@ export const ms = {
     fromDays: "Nura mengira hari anda ambil ubat anda.",
     // @patient phrase
     emergencyOpen: "Kad kecemasan anda",
+    // @patient phrase
+    emergencyOpenOther: "Kad kecemasan {patient}",
   },
   feed: {
     // @patient headline

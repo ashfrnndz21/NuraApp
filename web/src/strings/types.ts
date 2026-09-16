@@ -147,6 +147,7 @@ export interface Strings {
     fromState: string;
     fromDays: string;
     emergencyOpen: string;
+    emergencyOpenOther: string;
   };
   /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
    *  lines it says itself. Every card's own words are the backend's. */

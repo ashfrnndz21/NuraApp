@@ -446,7 +446,11 @@ test("Tab goes through what can be pressed in the order the eye reads, each with
       const style = getComputedStyle(holder);
       const ring = (style.outlineStyle !== "none" && style.outlineWidth !== "0px") || style.boxShadow !== "none";
       const box = holder.getBoundingClientRect();
-      return { top: Math.round(box.top + window.scrollY), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar: Boolean(element.closest("nav.tabbar")) };
+      // The page scrolls inside its own region now (D1: the shell docks the tab bar under it),
+      // so where a control sits on the page is its box plus that region's scroll, not the
+      // window's — the window does not scroll at all.
+      const scroller = holder.closest("[data-testid=shell-scroll]") as HTMLElement | null;
+      return { top: Math.round(box.top + window.scrollY + (scroller?.scrollTop ?? 0)), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar: Boolean(element.closest("nav.tabbar")) };
     });
     if (!stop || stops.some((each) => each.name === stop.name && each.top === stop.top)) break;
     stops.push(stop);

@@ -33,7 +33,7 @@ export const aboutWhom = signal<string | null>(null);
 
 /** The chrome that speaks to him, by section, each key with its "…Other" twin in the catalogue. */
 const ABOUT_HIM = {
-  today: ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken", "readingTitle"],
+  today: ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken", "readingTitle", "emergencyOpen"],
   day: ["notWell", "symptomsOpen", "notWellTitle", "wordsLabel", "symptomsLead", "briefOpen", "questionsOpen"],
   places: ["visitsOwn"],
   record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes"],

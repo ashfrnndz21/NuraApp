@@ -352,6 +352,8 @@ export const zh = {
     fromDays: "Nura 数了您吃药的天数。",
     // @patient phrase
     emergencyOpen: "您的紧急卡",
+    // @patient phrase
+    emergencyOpenOther: "{patient}的紧急卡",
   },
   feed: {
     // @patient headline

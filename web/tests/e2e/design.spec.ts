@@ -129,17 +129,10 @@ for (const [label, viewport] of [
       await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
       expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
 
-      const changed = page.getByTestId("what-changed");
-      await expect(changed.locator("li").first()).toBeVisible();
-      for (const tone of await changed.locator(".tone-dot").evaluateAll((dots) => dots.map((dot) => dot.getAttribute("data-tone")))) {
-        expect(["good", "watch", "act", "none"]).toContain(tone);
-      }
-      expect(await changed.locator("li").count()).toBeLessThanOrEqual(4);
-      if ((await page.getByTestId("what-changed-all").count()) > 0) {
-        await page.getByTestId("what-changed-all").click();
-        expect(await changed.locator("li").count()).toBeGreaterThan(4);
-        await page.getByTestId("what-changed-all").click();
-      }
+      // "What changed" is not on her Home: `GET /changes` is itself the looking — it writes the
+      // look on his trail and the next read counts from it — so it lives on the Record's own
+      // screen, where looking is what she came to do.
+      await expect(page.getByTestId("what-changed")).toHaveCount(0);
       await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");

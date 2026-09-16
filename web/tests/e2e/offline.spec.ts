@@ -16,8 +16,7 @@ import {
   cutKey,
   keptKeys,
   seedOwner,
-  waitForWorker,
-} from "./helpers";
+  waitForWorker, expectProud} from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -120,7 +119,8 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   await breakfastAt(request, pa.token, pa.profileId);
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
   const first = (await now.locator("h2").textContent())!;
   await waitForWorker(page);
@@ -157,14 +157,14 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   const nameOf = (id: string) => lines.find((line) => line.line_id === id)!.name.toLowerCase();
   expect(taps.map((tap) => nameOf(tap.line))).toEqual([first.toLowerCase(), second.toLowerCase()]);
   expect(lines.map((line) => line.count?.taken)).toEqual([1, 1]);
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
   await expect(page.getByTestId("held-card")).toHaveCount(0);
 
   // Offline and back again, and a reload: nothing is sent twice, nothing is left held.
   await context.setOffline(true);
   await context.setOffline(false);
   await page.reload();
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
   expect(taps).toHaveLength(2);
   expect((await keptKeys(page)).some((key) => key.startsWith("queue."))).toBe(false);
 });
@@ -180,7 +180,8 @@ test("Taken whose answer is lost on the way back: held, sent again with the same
     if (call.method() === "POST" && /\/medicines\/[^/]+\/taken$/.test(new URL(call.url()).pathname)) sent.push(call.postDataJSON() as { taken_at?: string });
   });
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
 
   // The first Taken reaches the backend and is written; its answer is lost before the phone.
@@ -205,7 +206,7 @@ test("Taken whose answer is lost on the way back: held, sent again with the same
   expect(sent[0]!.taken_at).toMatch(/^2026-09-14T/);
   expect(sent[1]!.taken_at).toBe(sent[0]!.taken_at);
   expect(await count()).toBe(1);
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
 });
 
 /** A held tap the backend says no to — here, Mei's key was closed while her phone was offline —
@@ -217,7 +218,8 @@ test("a no to a held tap is said in the backend's words, and nothing of the pape
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, mei.phone, "Mei");
   await page.getByTestId("door-key").click();
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
 
   await context.setOffline(true);

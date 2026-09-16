@@ -175,7 +175,12 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
-            {!fromPhone && <WhatChanged />}
+            {/* "What changed since you last looked" belongs on her Home by the design
+                (docs/design-system.md §3), but `GET /changes` *is* the looking: it writes the
+                look down on his trail and the next read counts from it. Drawing it here would
+                burn the look on every Home open, put an entry on his trail each time, and leave
+                the Record's own "what changed" screen with nothing to say. It stays in the
+                Record until the endpoint can be read without marking. */}
             {((nextVisit && !fromPhone) || supply) && (
               <div class="two-up">
                 {nextVisit && !fromPhone && <NextVisitTile visit={nextVisit} />}
@@ -200,6 +205,10 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             </PillButton>
             <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
               {s.feed.askOrSearch}
+            </PillButton>
+            {/* His emergency card, one tap from Today — hers as much as his (W4). */}
+            <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
+              {s.today.emergencyOpen}
             </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
           </>
@@ -311,7 +320,9 @@ function StateCard({ v }: { v: TodayView }): JSX.Element | null {
 function DoseSection({ v }: { v: TodayView }): JSX.Element | null {
   const { s, page, fromPhone, stateAt, dose, doseSource, justTook, busy, take } = v;
   if (!page) return null;
-  const due = dose?.kind === "due" ? dueCards(page.slots, page.lines, s) : [];
+  // A dose he tapped with no network has its own held card (below) and must not also stand here
+  // as still due — the same slots `dose` is worked out from (`useToday`), less the held ones.
+  const due = dose?.kind === "due" ? dueCards(page.slots.filter((slot) => v.heldTapOf(slot) === undefined), page.lines, s) : [];
   return (
     <>
       <SectionLabel>{s.today.now}</SectionLabel>

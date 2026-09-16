@@ -92,7 +92,7 @@ export function EmergencyScreen(): JSX.Element {
   // An emergency-only key (a neighbour's) has the card and nothing else: no way back to a Today.
   const only = papers ? emergencyOnly(papers) : false;
   return (
-    <Shell tab={null} testId="emergency-screen" bar={!only}>
+    <Shell tab={only ? "today" : null} testId="emergency-screen">
       <Header title={s.today.emergencyTitle} onBack={only ? undefined : () => go({ name: "today" })} />
       <Notice error={error} />
       {kept ? (

@@ -352,6 +352,8 @@ export const en = {
     fromDays: "Nura counted the days you took your tablets.",
     // @patient phrase
     emergencyOpen: "Your emergency card",
+    // @patient phrase
+    emergencyOpenOther: "{patient}'s emergency card",
   },
   feed: {
     // @patient headline
