@@ -84,6 +84,10 @@ function FamilyHome(): JSX.Element | null {
   const parts = here.patient
     ? [
         pill("trail", whose(here, words.trailSelf, words.trailOther)),
+        // The owner's own selection to add and grant access to someone (E12): letting
+        // someone in at all is his own yes (`may_invite`), so only he — never his chief —
+        // sees it here; `KeysPart` reads `here.owner` to show him the words first.
+        pill("keys", words.keys),
         pill("onlyMe", words.onlyMe),
         pill("consents", whose(here, words.consentsSelf, words.consentsOther)),
         pill("thread", words.thread),

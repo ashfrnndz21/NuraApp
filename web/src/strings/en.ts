@@ -1296,6 +1296,12 @@ export const en = {
     // @patient phrase
     makeKey: "Make the key",
     // @patient phrase
+    seeWords: "See the words",
+    // @patient
+    wordsLead: "Please read these words.",
+    // @patient phrase
+    agreeKey: "I agree, let them in",
+    // @patient phrase
     narrow: "Make it smaller",
     // @patient phrase
     narrowYes: "Yes, make it smaller",

@@ -1294,6 +1294,12 @@ export const ms = {
     // @patient phrase
     makeKey: "Buat kunci",
     // @patient phrase
+    seeWords: "Lihat kata-kata itu",
+    // @patient
+    wordsLead: "Sila baca kata-kata ini.",
+    // @patient phrase
+    agreeKey: "Saya setuju, benarkan mereka",
+    // @patient phrase
     narrow: "Kecilkan",
     // @patient phrase
     narrowYes: "Ya, kecilkan",

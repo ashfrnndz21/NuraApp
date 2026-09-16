@@ -1294,6 +1294,12 @@ export const zh = {
     // @patient phrase
     makeKey: "做钥匙",
     // @patient phrase
+    seeWords: "看这些话",
+    // @patient
+    wordsLead: "请读一读这些话。",
+    // @patient phrase
+    agreeKey: "我同意，让他们看",
+    // @patient phrase
     narrow: "改小一点",
     // @patient phrase
     narrowYes: "好，改小一点",

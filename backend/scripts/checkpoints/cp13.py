@@ -10,8 +10,13 @@ is refused when she tries to widen; Pa marks his private notes "only me" and Mei
 is refused and on his trail in his words; the roster (Mei weekdays, Kit weekends) and a task
 for Siti that only Siti can tap done; the family thread with a message and a reading card;
 the digest for Kit; a message to Pa composed by Mei, previewed in Malay and scheduled; Pa's
-trail as sentences; and the LPA uploaded, found to be the same paper the graph was set up on,
-backing the stewardship.
+trail as sentences; the LPA uploaded, found to be the same paper the graph was set up on,
+backing the stewardship; and, last, the owner's own rule proven end to end (E12): Pa adds
+Priya by phone himself, reads the backend's words for exactly the parts and the role, and
+agrees — she signs in on her own account and her very first look at the doors already has
+Pa in it, she asks against his record and reads back a cited answer in her own language,
+narrowing her key takes hold on her very next ask, and closing it removes Pa from her doors
+and refuses the ask outright.
 
 Self-contained: every helper this module needs is here, so the shared runner only dispatches.
 `run(base_url, dev_log)` prints ✓/✗ lines in the runner's style and returns 0 or 1.
@@ -647,6 +652,143 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "Mei uploaded the LPA PDF placeholder: found by its digest to be the paper the graph was "
         "set up on — one artefact, now with its bytes — tagged lpa, and listed under documents "
         "backing the stewardship and the agreement Mei gave for Pa on that basis"
+    )
+
+    # 10. Pa adds Priya himself — the owner's own rule (E12): he reads the backend's words for
+    # exactly the parts and the role before he agrees, and the moment he does, Priya can ask
+    # against his record on her own key, in her own language, over her own account, at once.
+    priya = Person("Priya", fresh_phone("+659777"))
+    w.register(priya, "en")
+    priya_scopes = ["medicines", "visits", "readings", "records", "emergency", "ask"]
+    preview = check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing/preview",
+            headers=bearer(pa.token),
+            json={
+                "holder_person_id": priya.person_id,
+                "scopes": priya_scopes,
+                "relationship": "other_family",
+                "language": "ms",
+            },
+        ),
+        200,
+        "Pa reads the words before letting Priya in",
+    )
+    ok("Pa adds Priya by phone himself, chooses caregiver, these parts and the words for them:")
+    for line in preview["lines"]:
+        print(f"    {line}")
+    check(
+        client.post(
+            f"/profiles/{profile_id}/consents/sharing",
+            headers=bearer(pa.token),
+            json={
+                "holder_person_id": priya.person_id,
+                "scopes": priya_scopes,
+                "relationship": "other_family",
+                "language": "ms",
+                "captured_via": "app",
+                "wording_version": preview["wording_version"],
+            },
+        ),
+        201,
+        "Pa agrees to let Priya in",
+    )
+    priya_key = check(
+        client.post(
+            f"/profiles/{profile_id}/keys",
+            headers=bearer(pa.token),
+            json={"holder_person_id": priya.person_id, "role": "caregiver", "scopes": priya_scopes},
+        ),
+        201,
+        "Pa cuts Priya a caregiver key himself, on that same agreement",
+    )
+    ok("Pa agreed, in his own words, and cut her key on it himself — no chief needed for his own")
+
+    doors = check(
+        client.get("/doors", headers=bearer(priya.token)),
+        200,
+        "Priya's very first look at the doors, right after signing in",
+    )
+    if doors["own"] is not None or [d["profile_id"] for d in doors["invited"]] != [profile_id]:
+        raise fail("Priya's very first look at the doors", why=str(doors))
+    ok(
+        "Priya signs in on her own account and her very first GET /doors already lists Pa: no "
+        "reload, no second sign-in, no job to wait for"
+    )
+
+    asked = check(
+        client.post(
+            f"/profiles/{profile_id}/ask",
+            headers=bearer(priya.token),
+            json={"question": "what was my blood pressure", "mode": "text", "language": "en"},
+        ),
+        200,
+        "Priya asks about Pa's blood pressure, in English",
+    )
+    if not asked["answered"] or "138" not in asked["lines"][0]["text"]:
+        raise fail("Priya asks about Pa's blood pressure", why=str(asked))
+    ok(
+        "Priya asks against Pa's own record, in her own language, and reads back a cited answer: "
+        f"{asked['lines'][0]['text']}"
+    )
+
+    yes = w.yes(
+        pa,
+        profile_id,
+        {
+            "subject": "key_change",
+            "key_id": priya_key["key_id"],
+            "scopes": [s for s in priya_scopes if s != "readings"],
+        },
+        "Pa says yes to narrowing Priya's key",
+    )
+    check(
+        client.put(
+            f"/profiles/{profile_id}/keys/{priya_key['key_id']}",
+            headers=bearer(pa.token),
+            json={"scopes": [s for s in priya_scopes if s != "readings"], "confirmation_id": yes},
+        ),
+        200,
+        "Pa narrows Priya's key to take the readings out",
+    )
+    after = check(
+        client.post(
+            f"/profiles/{profile_id}/ask",
+            headers=bearer(priya.token),
+            json={"question": "what was my blood pressure", "mode": "text", "language": "en"},
+        ),
+        200,
+        "Priya asks again, outside what she now holds",
+    )
+    if after["answered"] or "readings" not in after["withheld"]:
+        raise fail("Priya asks again, outside what she now holds", why=str(after))
+    ok(
+        "narrowing took effect on her very next ask: she is refused outside her parts, in the "
+        f"backend's own words, never a guess: {after['honest'][0]}"
+    )
+    closed = check(
+        client.delete(f"/profiles/{profile_id}/keys/{priya_key['key_id']}", headers=bearer(pa.token)),
+        200,
+        "Pa closes Priya's key",
+    )
+    if closed["revoked_at"] is None:
+        raise fail("Pa closes Priya's key", why=str(closed))
+    doors_after = check(
+        client.get("/doors", headers=bearer(priya.token)),
+        200,
+        "Priya's doors after the key is closed",
+    )
+    if doors_after["invited"] != [] or doors_after["own"] is not None:
+        raise fail("Priya's doors after the key is closed", why=str(doors_after))
+    closed_ask = client.post(
+        f"/profiles/{profile_id}/ask",
+        headers=bearer(priya.token),
+        json={"question": "what was my blood pressure", "mode": "text", "language": "en"},
+    )
+    refused(closed_ask, 403, "NoKey", "Priya asks once her key is closed")
+    ok(
+        "closing her key took Pa off Priya's doors at once, and her next ask was refused "
+        "outright, on his trail"
     )
 
 

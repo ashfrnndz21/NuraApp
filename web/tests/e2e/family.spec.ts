@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import { API, apiToken, backendClock, fixClock, freshPhone, seedVisit, signInThroughTheApp } from "./helpers";
+import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp } from "./helpers";
 import { auth, caregiverScreenOk, ICS, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
@@ -51,8 +51,9 @@ test("Pa's Family, one thing a screen: his circle, his trail, a part kept to him
   await expect(circle).toContainText("Who can see your papers");
   await expect(circle.getByTestId("grant-lines").filter({ hasText: "Mei" })).toBeVisible();
   await expect(circle.getByTestId("grant-lines").filter({ hasText: "Kit" })).toBeVisible();
-  // The chief's arrangements are the caregiver density's, not his.
-  await expect(page.getByTestId("open-keys")).toHaveCount(0);
+  // Adding and granting access is his own selection, in his own density (#177) — the rest
+  // of the chief's arrangements (the roster, messages, the week's numbers) stay hers.
+  await expect(page.getByTestId("open-keys")).toBeVisible();
   await expect(page.getByTestId("open-roster")).toHaveCount(0);
   expect(await patientScreenOk(page)).toEqual([]);
 
@@ -79,6 +80,58 @@ test("Pa's Family, one thing a screen: his circle, his trail, a part kept to him
   await expect(trail).toContainText("Mei asked to see your private notes on Monday 14 September.");
   await expect(trail).not.toContainText(/OutOfScope|notes_|[0-9a-f]{8}-[0-9a-f]{4}/);
   expect(await patientScreenOk(page)).toEqual([]);
+});
+
+test("Pa adds Priya himself on the Family Keys screen, and she can ask against his record at once", async ({ page, request, browser }) => {
+  // The exact bug this proves fixed: the Family "Give someone a key" screen used to cut a
+  // key straight away, for a phone number nobody had ever let in — refused every time, for
+  // anybody new (`ConsentWithheld`). Now the owner reads the backend's own words for exactly
+  // the parts and the role, agrees, and only then is the key cut.
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await expect(page.getByTestId("proud")).toBeVisible();
+
+  const priyaPhone = freshPhone("+659777");
+  await page.getByTestId("tab-family").click();
+  const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
+  await page.getByTestId("open-keys").click();
+  await rolePresets; // the role's own preset parts and window, before a role is chosen
+  await page.getByLabel("Their name").fill("Priya");
+  await page.getByLabel("Their phone number").fill(priyaPhone);
+  await page.getByTestId("role-caregiver").click();
+  await expect(page.getByTestId("role-lines")).toContainText("Priya");
+  await expect(page.getByTestId("new-part-medicines")).toHaveAttribute("aria-pressed", "true");
+  // Owner only: the sharing agreement is his own yes, so he reads the words first.
+  await page.getByTestId("see-words").click();
+  const words = page.getByTestId("new-words");
+  await expect(words).toContainText("Priya");
+  await expect(words).toContainText("your questions to Nura");
+  expect(await patientScreenOk(page)).toEqual([]);
+  await page.getByTestId("make-key").click();
+  const grant = page.getByTestId("grant").filter({ hasText: "Priya" });
+  await expect(grant).toBeVisible();
+
+  // Priya, on a browser of her own, registers only now — nothing about her existed before Pa
+  // named her number — and her very first look at the doors already lists Pa: no reload, no
+  // second sign-in, no job to wait for.
+  const priyaPage = await secondPhone(browser);
+  await signIn(priyaPage, { phone: priyaPhone, token: "", personId: "", name: "Priya" }, false);
+
+  // She asks against Pa's own record and reads back a cited answer, over her own key.
+  await priyaPage.getByTestId("open-feed").click();
+  await expect(priyaPage.getByTestId("pager")).toBeVisible();
+  const reading = priyaPage.locator("article.feed-card[data-type=reading]").first();
+  await reading.scrollIntoViewIfNeeded();
+  await reading.getByTestId("action-ask").click();
+  const asking = priyaPage.getByTestId("ask-screen");
+  await asking.getByLabel("Your question").fill("What was my blood pressure?");
+  const [asked] = await Promise.all([
+    priyaPage.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    asking.getByTestId("ask-send").click(),
+  ]);
+  expect(asked.postDataJSON()).toMatchObject({ question: "What was my blood pressure?" });
+  await expect(asking.getByTestId("answer")).toContainText("138");
+  await priyaPage.context().close();
 });
 
 test("Pa stops letting Kit in after reading what it will do, Kit is out at once, and the record is his to print", async ({ page, request }) => {
@@ -170,6 +223,10 @@ test.describe("the caregiver density at 360 by 640", () => {
     await expect(page.getByTestId("new-part-medicines")).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("new-part-notes")).toHaveAttribute("aria-pressed", "false");
     await page.getByTestId("new-window-thirty_days").click();
+    // Mei is a chief, not the owner: letting someone in at all is Pa's own yes (`may_invite`),
+    // so her key rests on the sharing agreement `seedFamily` already gave Pa's — no words step
+    // of her own, straight to the key.
+    await expect(page.getByTestId("see-words")).toHaveCount(0);
     expect(await caregiverScreenOk(page)).toEqual([]);
     await page.getByTestId("make-key").click();
     const siti = page.getByTestId("grant").filter({ hasText: "Siti" });
