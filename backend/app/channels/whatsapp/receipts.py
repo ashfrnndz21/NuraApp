@@ -5,10 +5,15 @@ retry there is. So the webhook must never answer 200 for a message it failed to 
 red word that met a passing failure would be lost for good, and never on the trail — and it
 must never handle a message twice when the delivery comes again.
 
-`receive` is one message's walk through the webhook. The provider's id for it is looked up
-first (`WhatsAppReceipt`): a message handled already is acknowledged and skipped. Otherwise it
-is handled in a savepoint of its own (`nested_unit_of_work`), and its receipt is written in the
-same savepoint, so the message's rows and the note that it was handled stand or fall together.
+`receive` is one message's walk through the webhook. The receipt row is claimed before the
+handler runs (#173): the provider's id is inserted first, under the unique constraint, so two
+copies of one delivery arriving at the same instant cannot both run the handler — the second
+one's insert loses the race and is answered as the duplicate it is, not with a 500. A message
+whose row says it was handled already is acknowledged and skipped the same way, and a row left
+by an earlier failure is claimed for this try alone (`SELECT ... FOR UPDATE`), so a redelivery
+racing another redelivery waits and then finds it handled. Then it is handled in a savepoint
+of its own (`nested_unit_of_work`), and its receipt is marked in the same savepoint, so the
+message's rows and the note that it was handled stand or fall together.
 A refusal is an answer, not a failure: its lines are on the trail (the savepoint's keepers
 replay them) and it is not tried again. Anything else rolls the savepoint back — nothing of
 that message is left half-written — and is counted on the receipt, by the class name of what
@@ -29,6 +34,7 @@ from collections.abc import Awaitable, Callable
 from enum import StrEnum
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.whatsapp.models import WhatsAppReceipt
@@ -47,7 +53,8 @@ KEY_LENGTH = 128
 class Received(StrEnum):
     HANDLED = "handled"
     ALREADY = "already"
-    """Handled on an earlier delivery: acknowledged, and nothing is done twice."""
+    """Handled on an earlier delivery, or being handled by one running right now: acknowledged,
+    and nothing is done twice."""
     FAILED = "failed"
     """Not handled, and nothing of it kept: the provider is asked to send it again."""
 
@@ -79,6 +86,39 @@ async def _handled(session: AsyncSession, key: str) -> None:
     await session.flush()
 
 
+async def _claim(session: AsyncSession, key: str) -> Received | None:
+    """This message's receipt row, claimed for this try before the handler runs, or the
+    answer when another try holds it: `ALREADY` when it is handled, or being handled now.
+
+    The row is inserted first, in a savepoint of its own: the unique constraint on the
+    provider's id is what decides the race, so of two copies of one delivery arriving at the
+    same instant exactly one runs the handler and the other is answered as a duplicate. A row
+    an earlier try left behind is claimed with `SELECT ... FOR UPDATE`, which waits for a try
+    running right now and then reads what it wrote — handled, and there is nothing to do.
+    """
+    earlier = await _receipt(session, key)
+    if earlier is None:
+        try:
+            async with nested_unit_of_work(session):
+                session.add(
+                    WhatsAppReceipt(provider_message_id=key, first_seen_at=utcnow(), failures=0)
+                )
+                await session.flush()
+        except IntegrityError:
+            # Another copy of this delivery claimed it first: a duplicate, not a failure.
+            log.info("whatsapp: one inbound message is being handled already")
+            return Received.ALREADY
+        return None
+    held: WhatsAppReceipt | None = await session.scalar(
+        select(WhatsAppReceipt)
+        .where(WhatsAppReceipt.provider_message_id == key)
+        .with_for_update()
+    )
+    if held is not None and held.handled_at is not None:
+        return Received.ALREADY
+    return None
+
+
 async def _failed(session: AsyncSession, key: str, what: str) -> WhatsAppReceipt:
     moment = utcnow()
     receipt = await _receipt(session, key)
@@ -97,12 +137,13 @@ async def receive(
     message: InboundMessage,
     handle: Callable[[], Awaitable[object]],
 ) -> Received:
-    """One message of a webhook delivery, once: skipped when handled already; handled in a
-    savepoint of its own otherwise; and counted, with nothing of it kept, when that failed."""
+    """One message of a webhook delivery, once: its receipt row claimed before anything is
+    done, skipped when another try holds it or handled it already; handled in a savepoint of
+    its own otherwise; and counted, with nothing of it kept, when that failed."""
     key = receipt_key(message.provider_message_id)
-    earlier = await _receipt(session, key)
-    if earlier is not None and earlier.handled_at is not None:
-        return Received.ALREADY
+    claimed = await _claim(session, key)
+    if claimed is not None:
+        return claimed
     try:
         async with nested_unit_of_work(session):
             await handle()
