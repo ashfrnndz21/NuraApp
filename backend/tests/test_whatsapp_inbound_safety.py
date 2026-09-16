@@ -290,6 +290,56 @@ async def test_a_voice_note_in_the_familys_group_is_the_familys_and_pages_nobody
     assert flagged.outcome == "red_flag"
 
 
+async def test_a_group_note_without_his_whatsapp_agreement_pages_nobody_either(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # He stopped WhatsApp; the family group he opened before that is still there. A note
+    # nobody could hear posted in it is still the family's, not an alert about him (#173).
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
+
+    async def stopped(*args: object, **kwargs: object) -> bool:
+        return False
+
+    monkeypatch.setattr(inbound, "_whatsapp_agreed", stopped)
+    posted = await home.inbound(
+        sg,
+        MEI,
+        media_id="pa-voice-mumbled",
+        content_type=OGG,
+        group_id=group.provider_group_id,
+    )
+    assert posted.outcome == "ignored"
+    assert await _notices(sg) == []
+    assert (await sg.scalars(select(Ladder))).all() == []
+
+
+async def test_a_notice_that_cannot_say_who_sent_the_note_never_guesses_it_was_his(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    siti = await _siti_the_helper(sg, home)
+    push = FixturePush()
+    push.register(home.mei.id)
+    object.__setattr__(home.providers, "push", push)
+    real = ladder_module.Run.person
+
+    async def missing(run: Any, person_id: Any) -> Any:
+        # Her row has gone between the note arriving and the notice being written.
+        return None if person_id == siti.id else await real(run, person_id)
+
+    monkeypatch.setattr(ladder_module.Run, "person", missing)
+    told = await home.inbound(sg, SITI, media_id="pa-voice-mumbled", content_type=OGG)
+    assert told.outcome == "voice_note_not_heard"
+    # Saying "Pa sent a voice note" would be a claim about him that is not true, so nothing
+    # goes on WhatsApp; the push and the notice on her family page still do.
+    assert _told(home, MEI) == []
+    assert [one.person_id for one in push.sent] == [home.mei.id]
+    assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
+        DeliveryOutcome.SENT
+    ]
+
+
 async def test_an_unheard_note_without_his_whatsapp_agreement_still_tells_a_person(
     sg: AsyncSession, tmp_path: Path
 ) -> None:

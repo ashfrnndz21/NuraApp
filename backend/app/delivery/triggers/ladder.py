@@ -104,6 +104,13 @@ class NotOnTheLadder(Refusal):
     """Only someone the ladder asked, whose key covers it, answers it."""
 
 
+class SenderNotNamed(Refusal):
+    """A voice note nobody could hear, and nobody to say who sent it. The notice would have
+    to claim the patient sent it, and he may not have (#173), so it does not go on WhatsApp
+    at all: the channel falls through to the app's content-free push, and the notice on the
+    family page is written whatever carried it."""
+
+
 @dataclass(frozen=True, slots=True)
 class Escalated:
     """What `escalate_flag` did: the ladder, and who has been reached so far."""
@@ -510,25 +517,28 @@ def unheard_message(run: Run, ladder: Ladder) -> Say:
     to call him — the one thing she can actually do. Somebody else's note is never said to be
     his (#173): it names whoever sent it, and the thing to do is to call them, since they are
     the one who knows what they said. Nothing of theirs is kept, so there is never anything
-    to listen to.
+    to listen to. Only a note this run can read as his own is said to be his; with nobody to
+    name at all, the notice does not go on WhatsApp rather than guess (`SenderNotNamed`).
     """
-    from_patient = (
-        ladder.note_from_person_id is None
-        or run.patient is None
-        or ladder.note_from_person_id == run.patient.id
-    )
 
     async def notice(person: Person) -> Delivered:
         name = run.profile.display_name
-        if not from_patient:
-            assert ladder.note_from_person_id is not None
-            sender = await run.person(ladder.note_from_person_id)
-            who = sender.display_name if sender is not None else name
-            kind, params = "unheard_note_notice_from", {"who": who, "name": name}
-        else:
+        sender = (
+            None
+            if ladder.note_from_person_id is None
+            else await run.person(ladder.note_from_person_id)
+        )
+        his = sender is not None and run.patient is not None and sender.id == run.patient.id
+        if his:
             opens = ladder.note_id is not None and Scope.NOTES in await run.scopes_of(person)
             kind = "unheard_note_notice" if opens else "unheard_note_notice_call"
             params = {"name": name}
+        elif sender is not None and sender.display_name:
+            kind, params = "unheard_note_notice_from", {"who": sender.display_name, "name": name}
+        else:
+            # Nobody to name. Saying the patient sent it would be a claim about him that may
+            # not be true, so nothing goes on WhatsApp: the push and the family page still do.
+            raise SenderNotNamed(f"ladder {ladder.id} cannot say who sent the note")
         return await send(
             run.session,
             context=run.acting,
@@ -856,6 +866,7 @@ __all__ = [
     "DoseAsked",
     "Escalated",
     "NotOnTheLadder",
+    "SenderNotNamed",
     "acknowledge_dose",
     "acknowledge_flag",
     "climb",
