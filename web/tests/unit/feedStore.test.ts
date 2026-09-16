@@ -331,6 +331,21 @@ describe("side actions", () => {
     expect(feed.notes.value.size).toBe(0);
   });
 
+  it("says a card at rest on his screen was opened, once, and only for a key that may", async () => {
+    const queue = vi.fn();
+    const { feed } = store({ queue });
+    await feed.open();
+    const first = feed.entries.value[0]!.item;
+    feed.seen(first);
+    feed.seen(first);
+    expect(queue.mock.calls).toEqual([[first.item_id, "opened"]]);
+    const narrow = vi.fn();
+    const { feed: theirs } = store({ queue: narrow, canEngage: false });
+    await theirs.open();
+    theirs.seen(theirs.entries.value[0]!.item);
+    expect(narrow).not.toHaveBeenCalled();
+  });
+
   it("heard and tapped are written back only by a key that may", async () => {
     const { feed, engage } = store({ canEngage: false });
     await feed.open();

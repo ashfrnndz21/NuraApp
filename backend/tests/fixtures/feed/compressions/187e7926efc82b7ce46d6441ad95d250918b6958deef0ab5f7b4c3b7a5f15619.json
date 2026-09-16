@@ -1,0 +1,32 @@
+{
+  "en": {
+    "headline": "Mooncakes: just a small slice",
+    "body": [
+      "Share one mooncake with your family.",
+      "Have a thin slice with plain tea.",
+      "Plain tea is better than a sweet drink."
+    ],
+    "why_topic": "your blood sugar",
+    "passage": "share a mooncake, have a small slice with plain tea instead of sweet drinks"
+  },
+  "ms": {
+    "headline": "Kuih bulan, sedikit sahaja",
+    "body": [
+      "Kongsi sebiji kuih bulan dengan keluarga anda.",
+      "Makan sepotong nipis dengan teh kosong.",
+      "Teh kosong lebih baik daripada air manis."
+    ],
+    "why_topic": "gula dalam darah anda",
+    "passage": "share a mooncake, have a small slice with plain tea instead of sweet drinks"
+  },
+  "zh": {
+    "headline": "月饼，少吃一点",
+    "body": [
+      "和家人分吃一个月饼。",
+      "切一小片，配清茶吃。",
+      "清茶比甜饮料好。"
+    ],
+    "why_topic": "您的血糖",
+    "passage": "share a mooncake, have a small slice with plain tea instead of sweet drinks"
+  }
+}

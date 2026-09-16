@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 
-from app.delivery.feed.compose import MONTHS, WEEKDAYS
+from app.delivery.feed.days import MONTHS, WEEKDAYS
 from app.onboarding.strings import (
     CHECK_AGAIN,
     KEPT_BESIDE,

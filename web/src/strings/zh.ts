@@ -315,7 +315,33 @@ export const zh = {
     // @patient
     statusOpened: "{name} 打开了这张卡。",
     // @patient
+    statusPlayed: "{name} 听了这张卡。",
+    // @patient
     statusDismissed: "{name} 按了“不适合我”。",
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    watchWhole: "在{publisher}看完整的视频",
+    // @patient phrase
+    askOrSearch: "提问或搜索",
+    // @patient phrase
+    filterLabel: "在哪里找",
+    // @patient phrase
+    filterRecords: "您的文件",
+    // @patient phrase
+    filterWeb: "网上",
+    // @patient phrase
+    filterProviders: "医生和诊所",
+    // @patient phrase
+    filterVideos: "视频",
+    // @patient phrase
+    search: "搜索",
+    // @patient phrase
+    readPage: "在{publisher}看这一页",
+    // @patient
+    foundNothing: "Nura 没有找到相关的内容。",
+    // @patient phrase
+    nextVisit: "您下次看病是{date}。",
   },
   reading: {
     // @patient headline
@@ -374,6 +400,38 @@ export const zh = {
     remindersDenied1: "这部手机不允许提醒。",
     // @patient
     remindersDenied2: "您可以在手机设置里更改。",
+    // @patient headline
+    areaTitle: "您住的地方",
+    // @patient
+    areaLead: "Nura 只用您住的地方，告诉您附近的骨痛热症、烟霾或炎热天气。",
+    // @patient
+    areaNone: "Nura 不知道您住在什么地方。",
+    // @patient
+    areaIs: "Nura 知道您住在{area}。",
+    // @patient
+    areaAsk: "您住在{area}吗？",
+    // @patient phrase
+    areaYes: "是，我住在那里",
+    // @patient phrase
+    areaNo: "不是",
+    // @patient phrase
+    areaChange: "选择您住的地方",
+    // @patient phrase
+    areaClear: "不要记我住的地方",
+    // @patient
+    areaWho: "负责这些文件的家人可以看到您住的地方。",
+    // @patient headline
+    ramadanTitle: "斋戒月",
+    // @patient
+    ramadanLead: "如果您守斋戒月，Nura 可以帮您提前准备。",
+    // @patient
+    ramadanWho: "负责这些文件的家人也会看到这个。",
+    // @patient phrase
+    ramadanYes: "好，斋戒月前告诉我",
+    // @patient
+    ramadanOn: "斋戒月前 Nura 会告诉您。",
+    // @patient phrase
+    ramadanStop: "不用再告诉我",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1607,8 +1665,78 @@ export const zh = {
     // @patient phrase
     tryAgain: "再试一次",
   },
+  chief: {
+    // @patient headline
+    sentTitle: "这周发给{name}的",
+    // @patient
+    sentNone: "这周 Nura 没有发给{name}任何东西。",
+    // @patient headline
+    watchingTitle: "为{name}留意的",
+    // @patient
+    watchingNone: "Nura 还没有留意任何事。",
+    // @patient
+    sourcesNote: "Nura 只看卫生机构、医院和医生组织的内容。",
+    // @patient phrase
+    onChange: "有新消息时",
+    // @patient phrase
+    daily: "每天",
+    // @patient phrase
+    weekly: "每周",
+    // @patient phrase
+    beforeVisits: "每次看病前",
+    // @patient phrase
+    once: "一次",
+    // @patient phrase
+    paused: "已暂停",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    resume: "重新开始",
+    // @patient phrase
+    pauseWatch: "暂时不留意这个",
+    // @patient phrase
+    add: "留意新的事",
+    // @patient
+    addLead: "选择 Nura 要留意什么。",
+    // @patient
+    added: "从现在起 Nura 会留意这个。",
+    // @patient phrase
+    dengue: "骨痛热症",
+    // @patient phrase
+    haze: "烟霾",
+    // @patient phrase
+    heat: "炎热天气",
+    // @patient phrase
+    festiveFood: "节日食物",
+  },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "只有本人可以回答这个。",
+    // @patient
+    NotAClipCard: "这张卡没有可以播放的内容。",
+    // @patient
+    NoExcerpt: "Nura 会念这张图片给您听。",
+    // @patient
+    NoClipRenderer: "Nura 现在不能显示这张图片。",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura 没能记下这个。",
+    // @patient
+    NotACadence: "请从列表里选择多久一次。",
+    // @patient
+    NotAHazard: "Nura 可以留意骨痛热症、烟霾或炎热天气。",
+    // @patient
+    NotASeason: "Nura 可以留意斋戒月或节日食物。",
+    // @patient
+    NotACoarseArea: ["请从列表里选择您的地区。", "或者只输入邮编的前几位。"],
+    // @patient
+    OnlyHeSetsHisArea: "只有本人可以选择住的地方。",
+    // @patient
+    NotAFilter: "请选择在哪里找。",
+    // @patient
+    NothingToFind: "请输入您要找的东西。",
+    // @patient
+    NotTheirsToManage: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     default: "Nura 现在做不了这件事。",
     NotInTheDemo: ["演示版只接受测试电话号码。", "测试号码以 +65 0 开头。"],
     CardsStillOpen: "还有一份文件在等您同意。",

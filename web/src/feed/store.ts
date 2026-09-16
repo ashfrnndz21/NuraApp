@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { Refused, Unreachable } from "../api/client";
 import type { EngagementEvent, FeedItemOut, FeedPageOut, ThreadCardKind } from "../api/types";
+import type { QueuedKind } from "./events";
 import type { KeptFeed } from "../offline/feedCache";
 import { shareAs } from "./model";
 
@@ -55,6 +56,8 @@ export interface FeedDeps {
    *  always sent, and a refusal of it is said. */
   canEngage: boolean;
   now(): Date;
+  /** Keep one event for the next connection (E11-08, `feed/events.ts`). */
+  queue?(itemId: string, kind: QueuedKind): void;
 }
 
 interface PageMark {
@@ -80,6 +83,8 @@ export class FeedStore {
   readonly notes = signal<ReadonlyMap<string, Note>>(new Map());
   /** The index of the card on screen. */
   current = 0;
+  /** The cards already said to be opened, so each is said once — never how long it was read. */
+  private readonly opened = new Set<string>();
 
   private pages: PageMark[] = [];
   private asked = new Set<string>();
@@ -245,6 +250,14 @@ export class FeedStore {
   say(failure: unknown): void {
     if (failure instanceof Unreachable) this.offline.value = true;
     this.said.value = failure;
+  }
+
+  /** A card came to rest on his screen: it was opened, once, if this key may say so. Not a
+   *  measure of time — it is said the first time and never again. */
+  seen(item: FeedItemOut): void {
+    if (!this.deps.canEngage || this.opened.has(item.item_id)) return;
+    this.opened.add(item.item_id);
+    this.deps.queue?.(item.item_id, "opened");
   }
 
   /** Heard, tapped, shared: written back when this key may, in the background, and a

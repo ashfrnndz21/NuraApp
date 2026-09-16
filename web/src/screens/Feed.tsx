@@ -5,7 +5,8 @@ import type { CardClipOut, FeedItemOut, LineOut, OrderPreviewOut } from "../api/
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
 import { go, openTab } from "../flow";
-import { cardView, speechLanguage, statusLine, variantOf, type CardView, type SideAction } from "../feed/model";
+import { cueAt, parseVtt, type Cue } from "../feed/captions";
+import { cardView, speechLanguage, statusLine, variantOf, type CardView, type ClipView, type SideAction } from "../feed/model";
 import { lineForCard, reorderActions } from "../record/model";
 import type { Playback } from "../feed/playback";
 import { feedFor } from "../feed/session";
@@ -13,7 +14,7 @@ import type { Entry, FeedStore, Note } from "../feed/store";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
-import { Card, Notice, TabBar, Tile } from "../ui/components";
+import { Card, Notice, Pill, TabBar, Tile } from "../ui/components";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
 import "../ui/feed.css";
@@ -113,6 +114,9 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
       if (gone) playback.leave(playingKey);
     }
     const list = store.entries.peek();
+    // The card at rest on screen was opened: said once, never for how long (E11-08).
+    const resting = list[index];
+    if (resting) store.seen(resting.item);
     playback.warm(list.slice(index, index + 3).map((entry) => ({ itemId: entry.item.item_id, language: entry.item.language })));
     if (index !== store.current || index >= list.length - 1 - 2) void store.visible(index);
   };
@@ -365,6 +369,7 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
                 );
               })}
             </div>
+            {view.clip && <ClipPart itemId={item.item_id} clip={view.clip} playing={playing} onPlay={() => onHear(view)} s={s} />}
             {view.boundary.length > 0 && (
               <div class="lines boundary" data-testid="boundary">
                 {view.boundary.map((line, at) => (
@@ -458,6 +463,82 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
         </div>
       </div>
     </article>
+  );
+}
+
+/** A clip (E09-06, E11-09): its still, from Nura's own server — no video platform is asked,
+ *  so none learns who watched — and Play, which plays the card's narration (the same voice as
+ *  Hear) with its captions, the line being said shown under the still. Where the publisher's
+ *  licence let the server keep the excerpt, it plays silently under the narration; otherwise
+ *  the still is the picture. The whole video is on the publisher's own site, a link he taps.
+ *  Nothing here starts by itself: the still and the captions are fetched, never played. */
+function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
+  const [poster, setPoster] = useState<string | null>(null);
+  const [video, setVideo] = useState<string | null>(null);
+  const [cues, setCues] = useState<Cue[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const moving = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const bearer = token.value;
+    const profileId = profile.value?.profile_id;
+    if (!bearer || !profileId) return;
+    let live = true;
+    const urls: string[] = [];
+    const keep = (blob: Blob, set: (url: string) => void) => {
+      if (!live) return;
+      const url = URL.createObjectURL(blob);
+      urls.push(url);
+      set(url);
+    };
+    nura.clipPoster(bearer, profileId, itemId).then((blob) => keep(blob, setPoster), () => setPoster(null));
+    nura.clipCaptions(bearer, profileId, itemId).then((text) => live && setCues(parseVtt(text)), () => setCues([]));
+    if (clip.excerpt) nura.clipVideo(bearer, profileId, itemId).then((blob) => keep(blob, setVideo), () => setVideo(null));
+    return () => {
+      live = false;
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [itemId, clip.excerpt]);
+  useEffect(() => {
+    if (!playing) {
+      setElapsed(0);
+      moving.current?.pause();
+      return;
+    }
+    const started = performance.now();
+    const timer = setInterval(() => setElapsed((performance.now() - started) / 1000), 200);
+    return () => clearInterval(timer);
+  }, [playing]);
+  const said = playing ? cueAt(cues, elapsed) : null;
+  const play = () => {
+    onPlay();
+    if (moving.current) {
+      moving.current.currentTime = 0;
+      void moving.current.play().catch(() => undefined);
+    }
+  };
+  return (
+    <div class="clip" data-testid="clip">
+      {video ? (
+        <video ref={moving} src={video} poster={poster ?? undefined} muted playsInline preload="auto" style="max-width:100%" data-testid="clip-video" />
+      ) : (
+        poster && <img src={poster} alt="" style="max-width:100%" data-testid="clip-poster" />
+      )}
+      <Pill plum onClick={play} testId="clip-play">
+        {s.feed.play}
+      </Pill>
+      {said && (
+        <p class="caption" aria-live="polite" data-testid="clip-caption">
+          {said.text}
+        </p>
+      )}
+      {clip.fullUrl && clip.publisher && (
+        <p class="provenance source">
+          <a href={clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
+            {fill(s.feed.watchWhole, { publisher: clip.publisher })}
+          </a>
+        </p>
+      )}
+    </div>
   );
 }
 

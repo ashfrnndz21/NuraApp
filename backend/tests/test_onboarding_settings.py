@@ -198,11 +198,12 @@ async def test_his_word_on_text_stands_against_two_unopened_cards(
     reading = {"systolic": 138, "diastolic": 84}
     await call(deployment, "POST", f"/profiles/{profile_id}/readings", his, 201, json=reading)
     day_one = await call(deployment, "GET", f"/profiles/{profile_id}/feed", his, 200)
-    assert {item["format"] for item in day_one["items"]} == {"text"}
+    # The text cards (a clip is its own format, with its own switch: test_feed_formats).
+    assert {item["format"] for item in day_one["items"] if item["format"] != "clip"} == {"text"}
     clock.step(timedelta(days=1))
     await call(deployment, "POST", f"/profiles/{profile_id}/readings", his, 201, json=reading)
     day_two = await call(deployment, "GET", f"/profiles/{profile_id}/feed", his, 200)
-    assert {item["format"] for item in day_two["items"]} == {"text"}
+    assert {item["format"] for item in day_two["items"] if item["format"] != "clip"} == {"text"}
     assert (await _facts(deployment, profile_id, his))[("format", "preferred")]["value"] == "text"
 
 

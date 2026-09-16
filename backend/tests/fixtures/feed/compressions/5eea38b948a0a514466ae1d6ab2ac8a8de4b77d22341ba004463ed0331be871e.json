@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "About your cholesterol",
+    "body": [
+      "Cholesterol is a kind of fat in your blood.",
+      "Too much can narrow your blood vessels.",
+      "Your doctor checks it with a blood test.",
+      "Less fried food and being active both help."
+    ],
+    "why_topic": "your cholesterol",
+    "passage": "Eating less fried and fatty food, being active and not smoking help to lower cholesterol."
+  },
+  "ms": {
+    "headline": "Tentang kolesterol anda",
+    "body": [
+      "Kolesterol ialah sejenis lemak dalam darah anda.",
+      "Terlalu banyak boleh menyempitkan saluran darah anda.",
+      "Doktor anda memeriksanya dengan ujian darah.",
+      "Kurang makanan bergoreng dan banyak bergerak, dua-dua membantu."
+    ],
+    "why_topic": "kolesterol anda",
+    "passage": "Eating less fried and fatty food, being active and not smoking help to lower cholesterol."
+  },
+  "zh": {
+    "headline": "关于您的胆固醇",
+    "body": [
+      "胆固醇是血里的一种脂肪。",
+      "太多会让血管变窄。",
+      "医生用验血来查它。",
+      "少吃油炸食物、多活动，都有帮助。"
+    ],
+    "why_topic": "您的胆固醇",
+    "passage": "Eating less fried and fatty food, being active and not smoking help to lower cholesterol."
+  }
+}

@@ -26,9 +26,10 @@ const PREFIX = "today.";
 const key = (profileId: string) => `${PREFIX}${profileId}`;
 /** Everything the phone keeps of a profile's papers: Today's page, the feed's first page
  *  (`feedCache.ts`), the taps held while offline (`queue.ts`), the emergency card
- *  (`emergencyCache.ts`) and the not-feeling-well cards for no network (`day/offline.ts`). A
+ *  (`emergencyCache.ts`), the not-feeling-well cards for no network (`day/offline.ts`) and the
+ *  queue of what he did with his cards that has not been sent yet (`feed/events.ts`). A
  *  refusal, a switch of profile and sign-out drop them together. */
-export const KEPT_PREFIXES = [PREFIX, "feed.", "queue.", "emergency.", "nfw."] as const;
+export const KEPT_PREFIXES = [PREFIX, "feed.", "queue.", "emergency.", "nfw.", "feedEvents."] as const;
 
 export function bindingOf(profile: ProfileOut): Binding {
   return {

@@ -202,3 +202,44 @@ describe("leaving the screen", () => {
     expect(voice.key.value).toBeNull();
   });
 });
+
+describe("how much played (E11-08)", () => {
+  it("the phone's voice ending is a play with no seconds, and the next play of the card is a replay", async () => {
+    const onPlayed = vi.fn();
+    const { playback, speech } = player({ onPlayed });
+    playback.warm([{ itemId: "a", language: "en" }]);
+    await settle();
+    playback.hear(card("0:0", "a"));
+    await settle();
+    const ended = () => (speech.say.mock.calls.at(-1) as unknown as [unknown, unknown, unknown, { onEnd(): void }])[3].onEnd();
+    ended();
+    expect(onPlayed.mock.calls).toEqual([["a", null, false]]);
+    playback.hear(card("0:0", "a"));
+    await settle();
+    ended();
+    expect(onPlayed.mock.calls.at(-1)).toEqual(["a", null, true]);
+  });
+
+  it("Stop on the backend's voice says the seconds of the voice that played, once", async () => {
+    const onPlayed = vi.fn();
+    let now = 1_000;
+    const { playback } = player({ onPlayed, clock: () => now, fetchVoice: vi.fn(async () => new Blob(["voice"])) });
+    playback.warm([{ itemId: "b", language: "en" }]);
+    await settle();
+    playback.hear(card("0:1", "b"));
+    await settle();
+    now = 4_500;
+    playback.stop();
+    playback.stop();
+    expect(onPlayed.mock.calls).toEqual([["b", 3.5, false]]);
+  });
+
+  it("a voice that never started is no play", async () => {
+    const onPlayed = vi.fn();
+    const { playback } = player({ onPlayed }, { speech: { say: vi.fn(() => false), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    playback.hear(card("0:2", "c"));
+    await settle();
+    playback.stop();
+    expect(onPlayed).not.toHaveBeenCalled();
+  });
+});

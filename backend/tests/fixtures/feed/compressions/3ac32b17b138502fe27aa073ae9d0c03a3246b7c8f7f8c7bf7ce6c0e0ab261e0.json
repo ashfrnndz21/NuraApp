@@ -1,0 +1,30 @@
+{
+  "en": {
+    "headline": "Your sugar tablet",
+    "body": [
+      "It helps your body use sugar better.",
+      "An upset stomach at first is common."
+    ],
+    "why_topic": "your sugar tablet",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  },
+  "ms": {
+    "headline": "Ubat gula anda",
+    "body": [
+      "Ubat ini membantu badan anda guna gula dengan lebih baik.",
+      "Mula-mula perut anda mungkin tidak selesa.",
+      "Itu biasa."
+    ],
+    "why_topic": "ubat gula anda",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  },
+  "zh": {
+    "headline": "您的降糖药",
+    "body": [
+      "它帮身体更好地用掉糖。",
+      "刚开始时胃不舒服很常见。"
+    ],
+    "why_topic": "您的降糖药",
+    "passage": "Take it with or just after meals to reduce stomach upset."
+  }
+}

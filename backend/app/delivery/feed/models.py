@@ -19,7 +19,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
@@ -62,7 +62,26 @@ class CardType(StrEnum):
     """Something found that could change treatment, rewritten as a question for the doctor
     and held for the memo; never in the patient's feed."""
     DUTY = "duty"
-    """The caregiver's gate: who holds a key today."""
+    """Who holds a key today and who is on duty: a card for the caregiver's list, which has
+    no gate (docs/health-feed-spec.md §0), so it sits with today's cards, not in the gate's
+    place, and carries every side action a card carries."""
+    CLIP = "clip"
+    """A compressed video (E09-06, spec §2): the 20–30 seconds of an allowlisted video that
+    apply to him, narrated in his language with captions — the licensed excerpt the server
+    hosts, or the still with the narration where the licence does not allow reuse. Never
+    plays by itself."""
+    RECAP = "recap"
+    """His week in 30 seconds (E11-09): the lines of this week's story cards, narrated with
+    captions over a still. It repeats his own record and infers nothing."""
+    LOCAL = "local"
+    """A local alert (E09-07): an environmental or outbreak bulletin — dengue, haze, heat —
+    for his area, made only when a condition or a medicine on his record makes it relevant.
+    Says what to do today and ends on the boundary line."""
+    SEASONAL = "seasonal"
+    """A season coming (spec §2): the fasting month, festive food, travel — food and timing,
+    with anything about his tablets as a question for his doctor."""
+    FOOD = "food"
+    """Food and habit (spec §2): weekly, by his conditions, one concrete choice."""
 
 
 class Supply(StrEnum):
@@ -88,9 +107,15 @@ SUPPLY_OF: dict[CardType, Supply] = {
     CardType.REORDER: Supply.TODAY,
     CardType.NOTICE: Supply.TODAY,
     CardType.GATE: Supply.GATE,
-    CardType.DUTY: Supply.GATE,
+    # The caregiver's list has no gate: the duty card is one of her today cards.
+    CardType.DUTY: Supply.TODAY,
+    CardType.LOCAL: Supply.TODAY,
     CardType.STORY: Supply.STORY,
+    CardType.RECAP: Supply.STORY,
     CardType.LEARNING: Supply.LEARNING,
+    CardType.CLIP: Supply.LEARNING,
+    CardType.SEASONAL: Supply.LEARNING,
+    CardType.FOOD: Supply.LEARNING,
     CardType.QUESTION: Supply.HELD,
 }
 
@@ -131,8 +156,14 @@ CAPS_OF: dict[CardType, CapsClass] = {
     CardType.NOTICE: CapsClass.ONE,
     CardType.GATE: CapsClass.SUPPLY,
     CardType.DUTY: CapsClass.SUPPLY,
+    # Today's local alert is one of the two new cards a day, like any other today card.
+    CardType.LOCAL: CapsClass.ONE,
     CardType.STORY: CapsClass.SUPPLY,
+    CardType.RECAP: CapsClass.SUPPLY,
     CardType.LEARNING: CapsClass.SUPPLY,
+    CardType.CLIP: CapsClass.SUPPLY,
+    CardType.SEASONAL: CapsClass.SUPPLY,
+    CardType.FOOD: CapsClass.SUPPLY,
     CardType.QUESTION: CapsClass.HELD,
 }
 
@@ -148,7 +179,10 @@ class DeliverTo(StrEnum):
 class CardFormat(StrEnum):
     TEXT = "text"
     VOICE_FIRST = "voice_first"
-    """Two text cards went unopened, so the voice script leads and the text follows."""
+    """Two text cards went unopened, so the voice script leads and the text follows; or two
+    clips went unplayed, so the next one comes as a voice note instead (E11-08)."""
+    CLIP = "clip"
+    """A still or a licensed excerpt with narration and captions, played on a tap (E11-09)."""
 
 
 class FeedItem(RenderedFromState, ProfileScoped, Base):
@@ -285,7 +319,9 @@ class SearchJob(ProfileScoped, Base):
     last_run_at: Mapped[datetime | None] = mapped_column(default=None)
 
 
-frozen(SearchJob, except_for=frozenset({"status", "results", "last_run_at"}))
+frozen(SearchJob, except_for=frozenset({"status", "results", "last_run_at", "enabled"}))
+"""A run changes its status, results and time; the owner or his chief pauses or resumes it
+(`enabled`, "Watching for Pa"). What it searches for and where are fixed when it is made."""
 
 
 class EngagementKind(StrEnum):
@@ -298,6 +334,19 @@ class EngagementKind(StrEnum):
     """"Not for me": the kind of card is held back for the rest of the day."""
     SHARED = "shared"
     """Shared to the family thread."""
+    OPENED = "opened"
+    """The card was on his screen long enough to read. Not a measure of time: once, or not."""
+    PLAYED = "played"
+    """A clip or a voice note was played, with how many seconds of it played."""
+    REPLAYED = "replayed"
+    """Played again."""
+    ASKED_MORE = "asked_more"
+    """He asked about the card (Ask)."""
+
+
+PLAYS: frozenset[EngagementKind] = frozenset({EngagementKind.PLAYED, EngagementKind.REPLAYED})
+"""The only events that carry seconds: how much of a clip or a voice note played. No event
+carries time spent in the feed; the feed is not measured by it (spec §0, `test_feed_formats`)."""
 
 
 class EngagementChannel(StrEnum):
@@ -318,6 +367,7 @@ class Engagement(ProfileScoped, Base):
         _row_of_profile("feed_engagement"),
         _tied_to_profile("feed_engagement", "item_id", "feed_item"),
         _tied_to_profile("feed_engagement", "event_id", "event"),
+        UniqueConstraint("profile_id", "client_id", name="uq_feed_engagement_client"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -331,6 +381,11 @@ class Engagement(ProfileScoped, Base):
     )
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("event.id"))
     at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seconds: Mapped[float | None] = mapped_column(Float, default=None)
+    """For a play or a replay only: how many seconds of the clip or voice note played."""
+    client_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    """The id the phone gave the event in its queue (`POST …/feed/events`), so an event sent
+    twice — the answer lost on the way back — is written once."""
 
 
 frozen(Engagement)
