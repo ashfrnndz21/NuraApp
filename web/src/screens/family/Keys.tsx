@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as family from "../../api/family";
 import type { SharingPreviewOut } from "../../api/types";
@@ -33,12 +33,12 @@ function toggle(parts: Scope[], part: Scope): Scope[] {
   return parts.includes(part) ? parts.filter((each) => each !== part) : PARTS.filter((each) => each === part || parts.includes(each));
 }
 
-function PartChoices({ chosen, onToggle, testId }: { chosen: Scope[]; onToggle: (part: Scope) => void; testId: string }): JSX.Element {
+function PartChoices({ chosen, onToggle, testId, disabled }: { chosen: Scope[]; onToggle: (part: Scope) => void; testId: string; disabled?: boolean }): JSX.Element {
   const words = s();
   return (
     <div class="choices" role="group" aria-label={words.partsLabel} data-testid={testId}>
       {PARTS.map((part) => (
-        <Pill key={part} chosen={chosen.includes(part)} onClick={() => onToggle(part)} testId={`${testId}-${part}`}>
+        <Pill key={part} chosen={chosen.includes(part)} onClick={() => onToggle(part)} disabled={disabled} testId={`${testId}-${part}`}>
           {words.parts[part]}
         </Pill>
       ))}
@@ -46,12 +46,12 @@ function PartChoices({ chosen, onToggle, testId }: { chosen: Scope[]; onToggle: 
   );
 }
 
-function WindowChoices({ chosen, onChoose, testId }: { chosen: KeyWindow | null; onChoose: (window: KeyWindow) => void; testId: string }): JSX.Element {
+function WindowChoices({ chosen, onChoose, testId, disabled }: { chosen: KeyWindow | null; onChoose: (window: KeyWindow) => void; testId: string; disabled?: boolean }): JSX.Element {
   const words = s();
   return (
     <div class="choices" role="group" aria-label={words.windowLabel} data-testid={testId}>
       {WINDOWS.map((window) => (
-        <Pill key={window} chosen={chosen === window} onClick={() => onChoose(window)} testId={`${testId}-${window}`}>
+        <Pill key={window} chosen={chosen === window} onClick={() => onChoose(window)} disabled={disabled} testId={`${testId}-${window}`}>
           {words.windows[window]}
         </Pill>
       ))}
@@ -144,6 +144,13 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const [said, setSaid] = useState<RolePresetOut[] | null>(null);
   const [preview, setPreview] = useState<SharingPreviewOut | null>(null);
   const defaults = useRead(() => family.roles(here.bearer, here.lang, "Ash"), [here.lang]);
+  // Counts every change that would make an in-flight preview stale — a field, the role, or
+  // his own language — bumped everywhere `preview` is cleared by hand. `seeWords` reads it
+  // before it asks and checks it again when the answer lands: if it moved while the request
+  // was in flight, the words are for a person or parts no longer on screen, and are thrown
+  // away rather than shown — the fields are disabled meanwhile too, so in practice this is
+  // only ever a change queued the instant before the request settles.
+  const generation = useRef(0);
   useEffect(() => {
     const typed = name.trim();
     if (!typed) return setSaid(null);
@@ -157,13 +164,18 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const changed = <T,>(set: (value: T) => void) => (value: T) => {
     set(value);
     setPreview(null);
+    generation.current += 1;
   };
   // His own language changing under him (`Me.tsx`) takes the words away too: `asked()`
   // reads `here.lang`, and nothing else here would catch it.
-  useEffect(() => setPreview(null), [here.lang]);
+  useEffect(() => {
+    setPreview(null);
+    generation.current += 1;
+  }, [here.lang]);
   const choose = (next: KeyRole) => {
     setRole(next);
     setPreview(null);
+    generation.current += 1;
     const found = defaults.value?.find((each) => each.role === next);
     if (found) {
       setParts(partsOf(found.scopes));
@@ -177,9 +189,16 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
     scopes: parts,
     language: here.lang,
   });
+  // Only this form's own request, never another grant's narrow or close (`act` is shared
+  // across the whole screen) — what the inputs below are disabled on, so he cannot edit
+  // what a preview is being asked or agreed for while it is on the wire.
+  const busyHere = act.busy && act.at === "new";
   const seeWords = () =>
     act.act("new", async () => {
-      setPreview(await family.previewSharing(here.bearer, here.papers.profile_id, asked()));
+      const asOf = generation.current;
+      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked());
+      if (generation.current !== asOf) return; // stale: something changed while this was in flight
+      setPreview(rendered);
     });
   const cut = () =>
     act.act("new", async () => {
@@ -207,8 +226,8 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   return (
     <Tile paper testId="new-key">
       <h2 class="title">{words.newKey}</h2>
-      <Field name="key-holder-name" label={words.holderName} value={name} onInput={changed(setName)} autoComplete="off" />
-      <Field name="key-holder-phone" label={words.holderPhone} value={phone} onInput={changed(setPhone)} type="tel" inputMode="tel" />
+      <Field name="key-holder-name" label={words.holderName} value={name} onInput={changed(setName)} autoComplete="off" disabled={busyHere} />
+      <Field name="key-holder-phone" label={words.holderPhone} value={phone} onInput={changed(setPhone)} type="tel" inputMode="tel" disabled={busyHere} />
       <p class="label">{words.roleLabel}</p>
       <div class="choices" role="group" aria-label={words.roleLabel} data-testid="role">
         {ROLES.map((each) => (
@@ -221,9 +240,9 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
       {role && (
         <>
           <p class="label">{words.partsLabel}</p>
-          <PartChoices chosen={parts} onToggle={(part) => changed(setParts)(toggle(parts, part))} testId="new-part" />
+          <PartChoices chosen={parts} onToggle={(part) => changed(setParts)(toggle(parts, part))} testId="new-part" disabled={busyHere} />
           <p class="label">{words.windowLabel}</p>
-          <WindowChoices chosen={window} onChoose={changed(setWindow)} testId="new-window" />
+          <WindowChoices chosen={window} onChoose={changed(setWindow)} testId="new-window" disabled={busyHere} />
           {!here.owner && (
             <Pill plum onClick={() => void cut()} disabled={!ready} testId="make-key">
               {words.makeKey}

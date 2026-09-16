@@ -134,6 +134,61 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   await priyaPage.context().close();
 });
 
+test("changing what a key would open while the words for it are still on the wire never leaves a stale preview on screen", async ({ page, request }) => {
+  // The name, phone, parts and window are disabled the moment the request is sent — so this
+  // walks the one thing that is still reachable while it is in flight: the role pills, which
+  // reset the parts and the window underneath it (`choose()`). A caregiver's words landing
+  // late, after he has already moved to viewer, must never be shown as if they were viewer's.
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await page.getByTestId("tab-family").click();
+  const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
+  await page.getByTestId("open-keys").click();
+  await rolePresets;
+  await page.getByLabel("Their name").fill("Priya");
+  await page.getByLabel("Their phone number").fill(freshPhone("+659777"));
+  await page.getByTestId("role-caregiver").click();
+  await expect(page.getByTestId("new-part-medicines")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("new-part-ask")).toHaveAttribute("aria-pressed", "true");
+
+  // The preview request is held on the wire until the test releases it.
+  let release: (() => void) | null = null;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const previewUrl = /\/consents\/sharing\/preview$/;
+  let seen = 0;
+  await page.route(previewUrl, async (route) => {
+    seen += 1;
+    if (seen === 1) await held;
+    await route.continue();
+  });
+  const asCaregiver = page.waitForRequest((req) => req.method() === "POST" && previewUrl.test(req.url()));
+  await page.getByTestId("see-words").click();
+  expect((await asCaregiver).postDataJSON()).toMatchObject({ scopes: expect.arrayContaining(["ask"]) });
+
+  // While the caregiver's words are in flight: the four fields are locked, but the role is
+  // not, and taking it to viewer — narrower, and no `ask` — is exactly what invalidates them.
+  await expect(page.getByLabel("Their name")).toBeDisabled();
+  await expect(page.getByLabel("Their phone number")).toBeDisabled();
+  await expect(page.getByTestId("new-part-medicines")).toBeDisabled();
+  await expect(page.getByTestId("new-window-always")).toBeDisabled();
+  await expect(page.getByTestId("see-words")).toBeDisabled();
+  await page.getByTestId("role-viewer").click();
+  await expect(page.getByTestId("new-part-ask")).toHaveAttribute("aria-pressed", "false");
+
+  release!();
+  // The stale answer, rendered for the caregiver's parts, never reaches the screen.
+  await page.waitForResponse((res) => previewUrl.test(res.url()) && res.ok());
+  await expect(page.getByTestId("new-words")).toHaveCount(0);
+  await expect(page.getByTestId("see-words")).toBeEnabled();
+
+  // Asking again, for viewer, is his — and it is viewer's words, not the caregiver's.
+  const asViewer = page.waitForRequest((req) => req.method() === "POST" && previewUrl.test(req.url()));
+  await page.getByTestId("see-words").click();
+  expect((await asViewer).postDataJSON()).toMatchObject({ scopes: expect.not.arrayContaining(["ask"]) });
+  await expect(page.getByTestId("new-words")).toBeVisible();
+  await expect(page.getByTestId("new-words")).not.toContainText("your questions to Nura");
+});
+
 test("Pa stops letting Kit in after reading what it will do, Kit is out at once, and the record is his to print", async ({ page, request }) => {
   const family = await seedFamily(request);
   expect((await request.get(`${API}/profiles/${family.profileId}/medicines`, { headers: auth(family.kit.token) })).status()).toBe(200);

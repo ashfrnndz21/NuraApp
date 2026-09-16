@@ -657,6 +657,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     # 10. Pa adds Priya himself — the owner's own rule (E12): he reads the backend's words for
     # exactly the parts and the role before he agrees, and the moment he does, Priya can ask
     # against his record on her own key, in her own language, over her own account, at once.
+    #
+    # By phone, the same three fields the Family "Give someone a key" screen sends
+    # (`web/src/screens/family/Keys.tsx`) — that screen has no relationship field yet, so its
+    # own words never carry one; this walk passes one because the API takes it (the backend
+    # renders "Priya, your family member," rather than the bare name), to prove the route
+    # asked of it here, not to claim the web screen produces this exact line today.
     priya = Person("Priya", fresh_phone("+659777"))
     w.register(priya, "en")
     priya_scopes = ["medicines", "visits", "readings", "records", "emergency", "ask"]
@@ -665,7 +671,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             f"/profiles/{profile_id}/consents/sharing/preview",
             headers=bearer(pa.token),
             json={
-                "holder_person_id": priya.person_id,
+                "holder_phone_e164": priya.phone_e164,
+                "holder_display_name": priya.name,
                 "scopes": priya_scopes,
                 "relationship": "other_family",
                 "language": "ms",
@@ -682,7 +689,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             f"/profiles/{profile_id}/consents/sharing",
             headers=bearer(pa.token),
             json={
-                "holder_person_id": priya.person_id,
+                "holder_phone_e164": priya.phone_e164,
+                "holder_display_name": priya.name,
                 "scopes": priya_scopes,
                 "relationship": "other_family",
                 "language": "ms",
@@ -697,7 +705,7 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         client.post(
             f"/profiles/{profile_id}/keys",
             headers=bearer(pa.token),
-            json={"holder_person_id": priya.person_id, "role": "caregiver", "scopes": priya_scopes},
+            json={"holder_phone_e164": priya.phone_e164, "role": "caregiver", "scopes": priya_scopes},
         ),
         201,
         "Pa cuts Priya a caregiver key himself, on that same agreement",
