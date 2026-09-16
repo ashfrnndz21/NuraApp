@@ -124,6 +124,7 @@ async def test_his_own_taken_stops_the_ladder_before_anyone_else_is_asked(
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
         "Thank you, I wrote it down.",
+        "You took your blood pressure tablet with breakfast.",
         "Mei can see you took it.",
     ]
     assert (await sg.scalars(select(DoseTaken))).one().by_person_id == h.pa.id
@@ -182,7 +183,12 @@ async def test_a_red_flag_at_night_goes_straight_to_the_roster_not_quiet_not_cap
     ]
     # Nobody answered: five minutes on, still at night, the next rung is asked.
     later = await _run(sg, h, clock, at(22, 36))
-    assert _of(later, TriggerType.FLAG) == [(h.siti.id, 4, DeliveryOutcome.SENT)]
+    # Every way she can be reached (#162): her WhatsApp, and the notice on her family page.
+    assert _of(later, TriggerType.FLAG) == [(h.siti.id, 4, DeliveryOutcome.SENT)] * 2
+    assert [s.delivery.via for s in later.sent if s.delivery.trigger_type is TriggerType.FLAG] == [
+        DeliveryChannel.WHATSAPP,
+        DeliveryChannel.IN_APP,
+    ]
     flagged = next(s.delivery for s in later.sent if s.delivery.trigger_type is TriggerType.FLAG)
     assert flagged.category is Category.ALERT and flagged.rule == "red_flag_raised"
     # A reminder at the same hour is held for the quiet hours; the flag was not.

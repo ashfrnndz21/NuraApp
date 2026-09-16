@@ -24,10 +24,11 @@ export interface TodayEntry {
 
 const PREFIX = "today.";
 const key = (profileId: string) => `${PREFIX}${profileId}`;
-/** Every page the phone keeps of a profile's papers: Today's, the feed's first page
- *  (`feedCache.ts`) and the not-feeling-well cards for no network (`day/offline.ts`). A
+/** Everything the phone keeps of a profile's papers: Today's page, the feed's first page
+ *  (`feedCache.ts`), the taps held while offline (`queue.ts`), the emergency card
+ *  (`emergencyCache.ts`) and the not-feeling-well cards for no network (`day/offline.ts`). A
  *  refusal, a switch of profile and sign-out drop them together. */
-export const KEPT_PREFIXES = [PREFIX, "feed.", "nfw."] as const;
+export const KEPT_PREFIXES = [PREFIX, "feed.", "queue.", "emergency.", "nfw."] as const;
 
 export function bindingOf(profile: ProfileOut): Binding {
   return {

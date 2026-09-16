@@ -7,6 +7,12 @@ their own yes, and a no takes them out at once (`app.channels.whatsapp.group`). 
 answer is kept going forward and does not yet decide anything — Meta asks each recipient's
 own opt-in before real data, and that rule is its own issue. A red-flag notice to a key
 holder never waits on either.
+
+Since #163 a no is kept to (`said_no`): nobody who answered no is sent a WhatsApp message
+Nura starts — not even a red-flag notice, which reaches them by app push and on their family
+page instead (`app.delivery.triggers.deliver`). A reply to a message they wrote to the number
+themselves still answers them there. What stays open for Meta's per-recipient opt-in is #148:
+asking the members who have not answered, and needing a yes rather than the absence of a no.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.audit.access import audited_read, audited_write
+from app.audit.models import Channel
 from app.channels.strings import language_of
 from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import NotTheCurrentWording
@@ -100,3 +107,27 @@ async def answers_of(session: AsyncSession, *, context: KeyContext) -> WhatsAppO
     if not rows:
         return None
     return max(rows, key=lambda row: (as_utc(row.said_at), not row.joins_group))
+
+
+async def said_no(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    channel: Channel = Channel.APP,
+) -> bool:
+    """Whether this person's newest answer about this profile says no to WhatsApp messages from
+    Nura (#163). Any wording and any key: a no stands until they say yes, and is never read as a
+    yes because the words or the key changed since. No answer at all is not a no (#148)."""
+    rows = await audited_read(
+        session,
+        WhatsAppOptIn,
+        context,
+        Scope.PROFILE,
+        where=(WhatsAppOptIn.person_id == person_id,),
+        channel=channel,
+    )
+    if not rows:
+        return False
+    newest = max(rows, key=lambda row: (as_utc(row.said_at), not row.said_yes))
+    return not newest.said_yes

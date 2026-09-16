@@ -20,11 +20,11 @@ index is what stops the second insert on the same day; `ask_to_order` catches th
 `task_errand` gains `order` and `confirm_subject` gains `order`: non-native enums with no
 database constraint, so no schema change for them.
 
-Follows main's head when this was written (0028_whatsapp_opt_in); B1 is taking 0029, so the
-operator repoints `down_revision` at merge time if it lands first.
+Renumbered onto main's head at merge time (#166): main took 0029 and 0030
+(`0030_whatsapp_receipts`) first, so this follows it as 0031, not 0028.
 
-Revision ID: 0030_order_task
-Revises: 0028_whatsapp_opt_in
+Revision ID: 0031_order_task
+Revises: 0030_whatsapp_receipts
 Create Date: 2026-09-15
 """
 
@@ -33,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0030_order_task"
-down_revision = "0028_whatsapp_opt_in"
+revision = "0031_order_task"
+down_revision = "0030_whatsapp_receipts"
 branch_labels = None
 depends_on = None
 

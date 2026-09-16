@@ -250,6 +250,8 @@ export const en = {
     fromState: "Nura worked this out on {date}.",
     // @patient
     fromDays: "Nura counted the days you took your tablets.",
+    // @patient phrase
+    emergencyOpen: "Your emergency card",
   },
   feed: {
     // @patient headline
@@ -427,6 +429,94 @@ export const en = {
     noMic: "Nura cannot use the microphone on this phone.",
     // @patient
     noMicSub: "You can write it down yourself instead.",
+  },
+  // Taps made while the phone could not reach Nura (E00-08).
+  held: {
+    // @patient
+    held: "Nura will send what you tapped when the internet is back.",
+    // @patient
+    tapped: "You tapped this at {time}.",
+    // @patient
+    sent: "Nura sent what you tapped.",
+  },
+  // The emergency card on the phone (E00-08). The card's own lines are the backend's.
+  emergency: {
+    // @patient
+    asOf: "Nura last read this card on {date}.",
+    // @patient
+    none: "Your emergency card is not on this phone yet.",
+    // @patient
+    noneSub: "Open this card again later, with the internet on.",
+    // @patient phrase
+    callChief: "Call {name}",
+    // @patient phrase
+    callAmbulance: "Call the ambulance on {number}",
+    // @patient phrase
+    print: "Print this card",
+  },
+  // Papers from the photos (E18-01, the web's multi-pick in place of the photo library scan).
+  papers: {
+    // @patient phrase
+    open: "Add papers from your photos",
+    // @patient phrase
+    chooseMany: "Choose many photos",
+    // @patient headline
+    title: "Papers from your photos",
+    // @patient
+    lead: "Choose all the photos of your papers together.",
+    // @patient
+    lead2: "Nura sends nothing until you tap Send.",
+    // @patient phrase
+    pick: "Choose photos",
+    // @patient
+    gridLead: "Tap a photo to leave it out.",
+    // @patient phrase
+    picture: "Paper {count}",
+    // @patient
+    tileIn: "Nura will send this one.",
+    // @patient
+    tileOut: "Nura will not send this one.",
+    // @patient phrase
+    sendOne: "Send 1 paper",
+    // @patient phrase
+    send: "Send {count} papers",
+    // @patient
+    sending: "Nura is sending paper {n} of {total}.",
+    // @patient headline
+    found: "What Nura found",
+    // @patient
+    read: "Nura read this paper.",
+    // @patient phrase
+    check: "Check this paper",
+    // @patient
+    notHealth: "This is not a health paper.",
+    // @patient
+    notSent: "The internet was off, so this one did not go.",
+    // @patient phrase
+    sendRest: "Send the ones that did not go",
+    // @patient
+    nothingKept: "Nura kept no photo on this phone.",
+    // @patient phrase
+    backToday: "Back to Today",
+  },
+  // The one player (E15-07): under anything Nura says out loud.
+  player: {
+    // @patient phrase
+    play: "Play",
+    // @patient phrase
+    pause: "Pause",
+    // @patient phrase
+    speed: "How fast Nura speaks",
+    // @patient phrase
+    slower: "Slower",
+    // @patient phrase
+    usual: "Usual speed",
+    // @patient phrase
+    faster: "Faster",
+    // @patient phrase
+    nextPart: "Next part",
+    // @patient phrase
+    hearStory: "Hear about {name}",
   },
   day: {
     // @patient headline
@@ -1203,6 +1293,7 @@ export const en = {
     stopYes: "Yes, stop it",
     // @patient phrase
     closeAccount: "Close my account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
@@ -1313,7 +1404,6 @@ export const en = {
       thinking_of_you: "Thinking of you",
       weigh_tomorrow: "Stand on the scale tomorrow",
       drink_water: "Drink a glass of water",
-      water_pill_morning: "The water pill at 8",
     },
     // @patient phrase
     ownWords: "My own words",
@@ -1407,6 +1497,7 @@ export const en = {
       app_push: "App",
       whatsapp: "WhatsApp",
       caregiver: "Through the carer",
+      in_app: "In the app",
     },
     // @patient phrase
     outcomes: {
@@ -1431,6 +1522,8 @@ export const en = {
     saveSettings: "Keep these settings",
     // @patient phrase
     neverHeld: "Never held",
+    // @patient phrase
+    everyWay: "Nura always tells your family about this, every way it can.",
     // @patient headline
     documents: "Papers for the family list",
     // @patient phrase
@@ -1586,6 +1679,9 @@ export const en = {
     NotTheirsToChangeVisits: "You can see the visits but not change them.",
     NotAChief: ["Only the owner can do this.", "The one who looks after these papers can too."],
     NotOnThisVisit: "Nura cannot give this drive to that person.",
+    TapNotToday: "Nura writes down only what you tapped today.",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "That file is too big for Nura.",
     NoteNamesHealth: "Nura cannot keep a note that names a medicine or an illness.",
     NotAPlaceNote: "Please write one short line about the place.",
     NotTheirsToSet: "You can see the day but not change it.",
@@ -1633,6 +1729,8 @@ export const en = {
     NoSuchReviewItem: "That item is not in the queue any more.",
     NotWellFormed: "Nura did not understand that.",
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
+    AlertsGoEveryWay: "Nura always tells your family about this, every way it can.",
+    MessageNamesAMedicine: ["A message cannot name a medicine or say how much to take.", "Nura sends medicine reminders only from the medicines list."],
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
     StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",

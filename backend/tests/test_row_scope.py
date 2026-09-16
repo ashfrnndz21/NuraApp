@@ -774,6 +774,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
+    Walk("GET", f"{P}/reach"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -1291,7 +1292,9 @@ RAW_READS = re.compile(
 APPROVED_RAW_READS = {
     "identity/closing.py": (
         "the erasure's own read of a closed profile's storage keys as the system (#143), so "
-        "evidence stored outside the profile's prefixes goes too: nothing it reads reaches a caller"
+        "evidence stored outside the profile's prefixes goes too: nothing it reads reaches a caller. "
+        "`answerable_while_closing` also reads one Ladder and its Flag raw (#163 note), to decide "
+        "only whether an acknowledgement may pass while the closing stands; nothing reaches a caller"
     ),
     "safety/red_flags.py": (
         "the safety rules' own read of the record as the system (`_system_read`, ADR 0002): "

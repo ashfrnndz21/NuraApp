@@ -227,7 +227,7 @@ async def test_grants_only_me_roster_thread_pushes_and_documents_over_http(
     ]
     red = await client.post(
         f"/profiles/{profile_id}/pushes/preview",
-        json={"memo_lines": ["You missed your dose."], "language": "en"},
+        json={"memo_lines": ["You missed your walk."], "language": "en"},
         headers=bearer(mei["token"]),
     )
     assert red.status_code == 400 and red.json()["refusal"] == "NotPlainWords"

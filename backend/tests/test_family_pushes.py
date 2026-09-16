@@ -10,6 +10,7 @@ nothing is sent here.
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,10 +18,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
+from app.drugs.fixture import FixtureRegistry
 from app.family.common import NotAChief, NotPlainWords
 from app.family.models import PushChannel
 from app.family.pushes import (
     BadWindow,
+    MessageNamesAMedicine,
     MissingSlot,
     NoSuchTemplate,
     preview_push,
@@ -73,7 +76,7 @@ async def test_a_memo_in_red_words_is_refused_with_the_findings(
     mei = await h.ctx(sg, h.mei)
     with pytest.raises(NotPlainWords) as refused:
         await preview_push(
-            sg, context=mei, memo_lines=["You missed your dose again.", "Recheck on the 29th."]
+            sg, context=mei, memo_lines=["You missed your walk again.", "Recheck on the 29th."]
         )
     assert any("rule 11" in f for f in refused.value.findings)
     assert any("rule 12" in f for f in refused.value.findings)
@@ -89,6 +92,41 @@ async def test_a_memo_in_red_words_is_refused_with_the_findings(
         e.refused_because for e in await read_audit(sg, context=pa) if e.outcome is Outcome.REFUSED
     }
     assert {"NotPlainWords", "NotAChief"} <= names
+
+
+async def test_a_message_to_him_names_no_medicine_and_no_dose(
+    sg: AsyncSession, clock: FrozenClock, tmp_path: Path
+) -> None:
+    """#164: his medicine reminders come only from his confirmed list. No template names a
+    medicine, and a memo or a slot that names one — or a dose — is refused, the way a note
+    about a clinic that names one is (E03-03), before anything is kept."""
+    clock.set(MONDAY)
+    h = await household(sg)
+    mei = await h.ctx(sg, h.mei)
+    registry = FixtureRegistry.load()
+    assert "water_pill_morning" not in TEMPLATE_SLOTS
+    for words in PUSH_TEMPLATES.values():
+        assert "water_pill_morning" not in words
+    refused = [
+        {"memo_lines": ["Nura says the water pill is at 8.", "Take it with breakfast."]},
+        {"memo_lines": ["Take your amlodipine now."]},
+        {"memo_lines": ["Makan 2 biji selepas sarapan."]},
+        {"memo_lines": ["早餐后吃两片药。"]},
+        {"memo_lines": ["Bring your Lipitor."]},
+        {"template_id": "call_you", "slots": {"who": "Mei", "when": "after your 5 mg"}},
+    ]
+    for asked in refused:
+        with pytest.raises(MessageNamesAMedicine):
+            await preview_push(sg, context=mei, registry=registry, **asked)  # type: ignore[arg-type]
+    fine = await preview_push(
+        sg, context=mei, registry=registry, memo_lines=["Mei will call you at 6."]
+    )
+    assert fine.lines == ["Mei will call you at 6."]
+    pa = await h.ctx(sg, h.pa)
+    names = {
+        e.refused_because for e in await read_audit(sg, context=pa) if e.outcome is Outcome.REFUSED
+    }
+    assert "MessageNamesAMedicine" in names
 
 
 async def test_the_yes_binds_to_the_lines_and_the_row_names_its_state(

@@ -4,7 +4,8 @@ Outside the 24-hour customer-service window a business may send nothing but a te
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11) — is one of these fifteen, submitted once and named here: its slots, and the words a patient reads in each
+message (E11), and the notice of a voice note Nura could not hear (#158) — is one of these
+seventeen, submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -267,6 +268,46 @@ NUDGE = Template(
 )
 """The day's smart nudge (E17-03), sent by E11's engine: the planner's lines, exactly."""
 
+# @patient
+UNHEARD_NOTE_NOTICE = Template(
+    "unheard_note_notice",
+    ("name",),
+    {
+        "en": (
+            "{name} sent a voice note to Nura.\n"
+            "Nura could not hear this note.\n"
+            "Listen to it in the app, or call {name} now."
+        ),
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Dengar nota itu dalam aplikasi, atau telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n请在应用里听，或者现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""His voice note Nura could not hear, to his chief whose key opens his notes (#158): a red
+word in it could not be read, so a person listens. His words stay in his note, not here."""
+
+# @patient
+UNHEARD_NOTE_NOTICE_CALL = Template(
+    "unheard_note_notice_call",
+    ("name",),
+    {
+        "en": "{name} sent a voice note to Nura.\nNura could not hear this note.\nCall {name} now.",
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""The same notice where there is nothing she can open — the note could not be fetched, or her
+key does not open his notes — so the one thing to do is to call him."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -285,11 +326,13 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE_SELF,
         RED_FLAG_NOTICE_AMBIGUOUS,
         NUDGE,
+        UNHEARD_NOTE_NOTICE,
+        UNHEARD_NOTE_NOTICE_CALL,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All fifteen, in the order they are submitted: E19's six (approved), then E11's nine
-(pending Meta's approval, `approved=False`)."""
+"""All seventeen, in the order they are submitted: E19's six (approved), then E11's nine and
+#158's two (pending Meta's approval, `approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

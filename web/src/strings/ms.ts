@@ -250,6 +250,8 @@ export const ms = {
     fromState: "Nura mengira ini pada {date}.",
     // @patient
     fromDays: "Nura mengira hari anda ambil ubat anda.",
+    // @patient phrase
+    emergencyOpen: "Kad kecemasan anda",
   },
   feed: {
     // @patient headline
@@ -427,6 +429,94 @@ export const ms = {
     noMic: "Nura tidak boleh guna mikrofon telefon ini.",
     // @patient
     noMicSub: "Anda boleh tulis nota dengan tangan.",
+  },
+  // Tekanan semasa telefon tidak dapat capai Nura (E00-08).
+  held: {
+    // @patient
+    held: "Nura akan menghantar apa yang anda tekan apabila internet kembali.",
+    // @patient
+    tapped: "Anda tekan ini pada {time}.",
+    // @patient
+    sent: "Nura sudah menghantar apa yang anda tekan.",
+  },
+  // Kad kecemasan di telefon (E00-08).
+  emergency: {
+    // @patient
+    asOf: "Nura terakhir membaca kad ini pada {date}.",
+    // @patient
+    none: "Kad kecemasan anda belum ada di telefon ini.",
+    // @patient
+    noneSub: "Buka kad ini sekali lagi nanti, semasa internet ada.",
+    // @patient phrase
+    callChief: "Telefon {name}",
+    // @patient phrase
+    callAmbulance: "Telefon ambulans di {number}",
+    // @patient phrase
+    print: "Cetak kad ini",
+  },
+  // Surat daripada gambar (E18-01).
+  papers: {
+    // @patient phrase
+    open: "Tambah surat daripada gambar anda",
+    // @patient phrase
+    chooseMany: "Pilih banyak gambar",
+    // @patient headline
+    title: "Surat daripada gambar anda",
+    // @patient
+    lead: "Pilih semua gambar surat sekali gus.",
+    // @patient
+    lead2: "Nura tidak hantar apa-apa sehingga anda tekan Hantar.",
+    // @patient phrase
+    pick: "Pilih gambar",
+    // @patient
+    gridLead: "Tekan gambar untuk tinggalkannya.",
+    // @patient phrase
+    picture: "Surat {count}",
+    // @patient
+    tileIn: "Nura akan hantar yang ini.",
+    // @patient
+    tileOut: "Nura tidak akan hantar yang ini.",
+    // @patient phrase
+    sendOne: "Hantar 1 surat",
+    // @patient phrase
+    send: "Hantar {count} surat",
+    // @patient
+    sending: "Nura sedang menghantar surat {n} daripada {total}.",
+    // @patient headline
+    found: "Apa yang Nura jumpa",
+    // @patient
+    read: "Nura sudah membaca surat ini.",
+    // @patient phrase
+    check: "Semak surat ini",
+    // @patient
+    notHealth: "Ini bukan surat kesihatan.",
+    // @patient
+    notSent: "Internet tiada tadi, jadi yang ini belum dihantar.",
+    // @patient phrase
+    sendRest: "Hantar yang belum dihantar",
+    // @patient
+    nothingKept: "Nura tidak simpan gambar di telefon ini.",
+    // @patient phrase
+    backToday: "Kembali ke Hari Ini",
+  },
+  // Pemain yang satu (E15-07).
+  player: {
+    // @patient phrase
+    play: "Mainkan",
+    // @patient phrase
+    pause: "Berhenti sekejap",
+    // @patient phrase
+    speed: "Kelajuan Nura bercakap",
+    // @patient phrase
+    slower: "Lebih perlahan",
+    // @patient phrase
+    usual: "Kelajuan biasa",
+    // @patient phrase
+    faster: "Lebih laju",
+    // @patient phrase
+    nextPart: "Bahagian seterusnya",
+    // @patient phrase
+    hearStory: "Dengar tentang {name}",
   },
   day: {
     // @patient headline
@@ -1201,6 +1291,7 @@ export const ms = {
     stopYes: "Ya, hentikan",
     // @patient phrase
     closeAccount: "Tutup akaun saya",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
@@ -1311,7 +1402,6 @@ export const ms = {
       thinking_of_you: "Teringatkan anda",
       weigh_tomorrow: "Naik penimbang esok",
       drink_water: "Minum segelas air",
-      water_pill_morning: "Pil air pada pukul 8",
     },
     // @patient phrase
     ownWords: "Kata-kata saya sendiri",
@@ -1405,6 +1495,7 @@ export const ms = {
       app_push: "Aplikasi",
       whatsapp: "WhatsApp",
       caregiver: "Melalui penjaga",
+      in_app: "Dalam aplikasi",
     },
     // @patient phrase
     outcomes: {
@@ -1429,6 +1520,8 @@ export const ms = {
     saveSettings: "Simpan tetapan ini",
     // @patient phrase
     neverHeld: "Tidak pernah ditahan",
+    // @patient phrase
+    everyWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
     // @patient headline
     documents: "Surat untuk senarai keluarga",
     // @patient phrase
@@ -1582,6 +1675,9 @@ export const ms = {
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
+    TapNotToday: "Nura hanya menulis apa yang anda tekan hari ini.",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "Dokumen itu terlalu besar untuk Nura.",
     NoteNamesHealth: "Nura tidak boleh simpan nota yang menyebut ubat atau penyakit.",
     NotAPlaceNote: "Sila tulis satu baris pendek tentang tempat itu.",
     NotTheirsToSet: "Anda boleh lihat hari itu tetapi tidak boleh mengubahnya.",
@@ -1629,6 +1725,8 @@ export const ms = {
     NoSuchReviewItem: "Perkara itu sudah tiada dalam senarai.",
     NotWellFormed: "Nura tidak faham itu.",
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
+    AlertsGoEveryWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
+    MessageNamesAMedicine: ["Mesej tidak boleh menyebut ubat atau berapa banyak perlu diambil.", "Nura hantar peringatan ubat hanya daripada senarai ubat."],
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
     StopsByClosingTheAccount: "Untuk hentikan Nura menyimpan surat-surat anda, tutup akaun anda.",

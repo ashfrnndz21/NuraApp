@@ -1,5 +1,5 @@
-import { api, apiBlob, apiUpload } from "./client";
-import type { AnsweredOut, AnswerOut, AppointmentOut, AskedOut, AskMode, BiographyOut, BriefOut, ChangesOut, ClaimableOut, ClosedOut, CloudOut, ConditionsOut, ConfirmationOut, ConsentOut, ConsultOut, DayNudgesOut, DecisionIn, DeploymentOut, DocumentSource, DoorsOut, EngagementEvent, EngagementOut, EpisodeViewOut, FeedItemOut, FeedPageOut, FeelingOut, HandedOverOut, ItemDecision, KeyOut, LabelIn, LineOut, LogisticsOut, MedicineDraftOut, MemoCardOut, MeOut, MeSummaryOut, MoreOut, NoticeOut, NudgeAnswer, NudgePlanOut, OfflineCardsOut, OrderPreviewOut, PaperAddedOut, PlaceNoteOut, PlanOut, ProfileOut, ProudOut, ProviderHistoryOut, ProviderSummaryOut, QuestionChange, ReadingOut, ReconciledOut, ReviewCardOut, ReviewConfirmedOut, RoutineDayIn, RoutineOut, Said, SessionOut, SettingsIn, SettingsOut, SharingIn, SharingPreviewOut, SlotOut, StateOut, StoryOut, SummaryConfirmedOut, SymptomLoggedOut, SymptomLogOut, TakenOut, ThreadCardKind, ThreadEntryOut, TimelineOut, TrendOut, VisitQuestionOut, VisitQuestionsOut, VisitSummaryOut, WhatToDoOut, WordingOut } from "./types";
+import { api, apiBlob, apiText, apiUpload } from "./client";
+import type { AnswerOut, AnsweredOut, AppointmentOut, AskMode, AskedOut, BiographyOut, BriefOut, ChangesOut, ClaimableOut, ClosedOut, CloudOut, ConditionsOut, ConfirmationOut, ConsentOut, ConsultOut, DayNudgesOut, DecisionIn, DeploymentOut, DocumentSource, DoorsOut, EmergencyCardOut, EngagementEvent, EngagementOut, EpisodeViewOut, FeedItemOut, FeedPageOut, FeelingOut, HandedOverOut, ItemDecision, KeyOut, LabelIn, LineOut, LogisticsOut, MeOut, MeSummaryOut, MedicineDraftOut, MemoCardOut, MoreOut, NoticeOut, NudgeAnswer, NudgePlanOut, OfflineCardsOut, OrderPreviewOut, PaperAddedOut, PlaceNoteOut, PlanOut, ProfileOut, ProudOut, ProviderHistoryOut, ProviderSummaryOut, QuestionChange, ReadingOut, ReconciledOut, ReviewCardOut, ReviewConfirmedOut, RoutineDayIn, RoutineOut, Said, SessionOut, SettingsIn, SettingsOut, SharingIn, SharingPreviewOut, SlotOut, StateOut, StoryOut, SummaryConfirmedOut, SymptomLogOut, SymptomLoggedOut, TakenOut, ThreadCardKind, ThreadEntryOut, TimelineOut, TrendOut, VisitQuestionOut, VisitQuestionsOut, VisitSummaryOut, WhatToDoOut, WordingOut } from "./types";
 
 /** Every route the client uses, one function each, in the backend's own names. */
 
@@ -109,12 +109,26 @@ export const medicines = (token: string, profileId: string, language: string) =>
 export const dosesToday = (token: string, profileId: string, language: string) =>
   api<SlotOut[]>(`/profiles/${profileId}/medicines/today`, { token, query: { language } });
 
-export const taken = (token: string, profileId: string, lineId: string, anchor: string | null) =>
+/** His tap. `takenAt` is a tap the phone held while offline (E00-08): the moment he made it,
+ *  which the backend writes once however often it is sent. */
+export const taken = (token: string, profileId: string, lineId: string, anchor: string | null, takenAt?: string) =>
   api<TakenOut>(`/profiles/${profileId}/medicines/${lineId}/taken`, {
     method: "POST",
     token,
-    body: { anchor },
+    body: takenAt ? { anchor, taken_at: takenAt } : { anchor },
   });
+
+/** A word on the feeling strip (E17), as the phone held it while offline. */
+export const feeling = (token: string, profileId: string, word: string, language: string) =>
+  api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
+
+/** The emergency card, rendered now from State, in his language (E13-01). */
+export const emergencyCard = (token: string, profileId: string, language: string) =>
+  api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
+
+/** The same card as the backend's one printable page: self-contained, nothing fetched. */
+export const emergencyCardPage = (token: string, profileId: string, language: string) =>
+  apiText(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } });
 
 export const state = (token: string, profileId: string) =>
   api<StateOut>(`/profiles/${profileId}/state`, { token });
