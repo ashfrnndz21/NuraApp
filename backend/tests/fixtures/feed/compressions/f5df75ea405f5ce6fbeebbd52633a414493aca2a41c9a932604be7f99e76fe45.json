@@ -1,0 +1,43 @@
+{
+  "en": {
+    "headline": "Your blood pressure, in 30 seconds",
+    "body": [
+      "A heart doctor talks about blood pressure.",
+      "High blood pressure often has no signs.",
+      "Over the years it wears out your heart.",
+      "Less salt helps.",
+      "Moving about every day helps."
+    ],
+    "why_topic": "your blood pressure",
+    "passage": "[0:15] High blood pressure often has no symptoms, which is why checking it matters.",
+    "start_sec": 15,
+    "end_sec": 43
+  },
+  "ms": {
+    "headline": "Tekanan darah anda, dalam 30 saat",
+    "body": [
+      "Doktor jantung bercakap tentang tekanan darah.",
+      "Darah tinggi selalunya tiada tanda.",
+      "Lama-kelamaan ia membebankan jantung anda.",
+      "Kurang garam membantu.",
+      "Banyak bergerak juga membantu."
+    ],
+    "why_topic": "tekanan darah anda",
+    "passage": "[0:15] High blood pressure often has no symptoms, which is why checking it matters.",
+    "start_sec": 15,
+    "end_sec": 43
+  },
+  "zh": {
+    "headline": "30秒了解您的血压",
+    "body": [
+      "一位心脏科医生讲血压。",
+      "高血压常常没有感觉。",
+      "时间长了会累坏心脏。",
+      "少吃盐、多活动，都有帮助。"
+    ],
+    "why_topic": "您的血压",
+    "passage": "[0:15] High blood pressure often has no symptoms, which is why checking it matters.",
+    "start_sec": 15,
+    "end_sec": 43
+  }
+}

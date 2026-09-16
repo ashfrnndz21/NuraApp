@@ -5,8 +5,9 @@ scope, a table name, a refusal's class name. This turns each into sentences from
 `app.audit.strings` with the person's name, his words for the part, and the day on his
 wall clock, and groups them by day, newest first. The same reach repeated within a day is
 one sentence: the trail says who looked at what, not how many times. Nura's own reads — the
-delivery engine checking every few minutes — are one line a day ("On Monday 14 September,
-Nura checked your papers 288 times to remind you on time."), which the chief can open. Nothing on a line is
+delivery engine checking every few minutes — are one line a day with no number in it ("On
+Monday 14 September, Nura checked your papers to remind you on time."); the chief can open it
+for the counts, part by part (#162). Nothing on a line is
 ever a name from the code: every arm has a default, and a person the profile cannot name
 is "someone".
 """

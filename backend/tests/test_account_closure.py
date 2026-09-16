@@ -30,7 +30,13 @@ from app.consent.texts import current_version
 from app.db import as_utc, utcnow
 from app.delivery.push import b64url
 from app.delivery.subscriptions import subscribe
-from app.delivery.triggers.models import DeliveryOutcome, Ladder, PushSubscription, TriggerType
+from app.delivery.triggers.models import (
+    DeliveryChannel,
+    DeliveryOutcome,
+    Ladder,
+    PushSubscription,
+    TriggerType,
+)
 from app.identity.closing import (
     OBJECT_KINDS,
     GraphEraser,
@@ -153,9 +159,14 @@ async def test_a_red_flag_raised_before_the_closing_is_still_carried_to_the_fami
     clock.set(at(9, 1))
     await _close(sg, h)
     later = await _run(sg, h, clock, at(9, 6))
+    # Her WhatsApp, and the notice on her family page (#162): the flag, and nothing else.
     assert [
-        (s.delivery.trigger_type, s.delivery.to_person_id, s.delivery.outcome) for s in later.sent
-    ] == [(TriggerType.FLAG, h.siti.id, DeliveryOutcome.SENT)]
+        (s.delivery.trigger_type, s.delivery.to_person_id, s.delivery.outcome, s.delivery.via)
+        for s in later.sent
+    ] == [
+        (TriggerType.FLAG, h.siti.id, DeliveryOutcome.SENT, DeliveryChannel.WHATSAPP),
+        (TriggerType.FLAG, h.siti.id, DeliveryOutcome.SENT, DeliveryChannel.IN_APP),
+    ]
     # And once the ladder has run its rungs, nothing more goes.
     assert (await _run(sg, h, clock, at(9, 30))).sent == ()
 

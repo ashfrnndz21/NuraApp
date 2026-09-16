@@ -29,7 +29,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read, audited_write
@@ -44,6 +43,7 @@ from app.consent.models import Consent, ConsentChannel, ConsentPurpose
 from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import NoConsent, require_consent, revoke_consent
 from app.db import as_utc, utcnow
+from app.delivery.timeline_strings import SOMEONE
 from app.errors import Refusal
 from app.family.models import ThreadMessage
 from app.keys.context import KeyContext, closing_since
@@ -78,15 +78,6 @@ def is_member(context: KeyContext) -> bool:
     """Whether this key's holder is in the family's group: the patient, or a key that reads
     the family thread. The context is resolved from a live key, so a closed one never is."""
     return context.is_owner or Scope.FAMILY in context.scopes
-
-
-async def group_for(session: AsyncSession, provider_group_id: str) -> WhatsAppGroup | None:
-    """The family group a provider's handle names, read before anyone's key is resolved —
-    as the sender's number is (`find_person_by_phone`): the handle and its profile only."""
-    found: WhatsAppGroup | None = await session.scalar(
-        select(WhatsAppGroup).where(WhatsAppGroup.provider_group_id == provider_group_id)
-    )
-    return found
 
 
 @audited(Action.READ, Scope.FAMILY, GROUP_TARGET)
@@ -279,7 +270,9 @@ async def mirror_to_group(
     if poster is None:
         return None
     profile = await audited_profile_read(session, context)
-    said = reply("family_said", profile.language, who=poster.name) + "\n" + message.text
+    # A poster who has not given a name yet is Someone, as the family's timeline says (#158).
+    who = poster.name or SOMEONE[language_of(profile.language)]
+    said = reply("family_said", profile.language, who=who) + "\n" + message.text
     sent = await provider.send_group_text(group.provider_group_id, said)
     await record(
         session,
@@ -323,7 +316,6 @@ __all__ = [
     "Member",
     "NoFamilyGroup",
     "NotTheirsToOpen",
-    "group_for",
     "group_of",
     "is_member",
     "members_of",

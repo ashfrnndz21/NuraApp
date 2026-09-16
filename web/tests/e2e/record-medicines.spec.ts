@@ -45,13 +45,26 @@ for (const look of LOOKS) {
     await expect(card.getByTestId("source")).toHaveText(line!.source);
     await readable(page, look);
 
-    // Ask the family to order: a task on the family's list and his chief told, in the
-    // backend's words.
+    // Ask the family to order: first who Nura will ask and for what, and nothing written
+    // until his yes; then a task on the family's list and his chief told, in the backend's words.
+    const tasksOf = async () =>
+      (await (await request.get(`${API}/profiles/${pa.profileId}/tasks`, auth(mei.token))).json()) as { what: string; assigned_person_id: string }[];
     await card.getByTestId("ask-to-order").click();
+    const preview = card.getByTestId("order-preview");
+    await expect(preview).toContainText("Nura will ask Mei to order more of your blood pressure tablet.");
+    await expect(preview).toContainText("Is that OK?");
+    await readable(page, look);
+    expect(await tasksOf()).toEqual([]);
+    // "Not now" takes the question away and writes nothing.
+    await preview.getByTestId("order-no").click();
+    await expect(card.getByTestId("order-preview")).toHaveCount(0);
+    expect(await tasksOf()).toEqual([]);
+    await card.getByTestId("ask-to-order").click();
+    await card.getByTestId("order-yes").click();
     await expect(page.getByTestId("asked")).toHaveText("Nura asked Mei to order more of your blood pressure tablet.");
     await expect(card.getByTestId("ask-to-order")).toBeDisabled();
-    const tasks = (await (await request.get(`${API}/profiles/${pa.profileId}/tasks`, auth(mei.token))).json()) as { what: string; assigned_person_id: string }[];
-    expect(tasks.map((task) => [task.what, task.assigned_person_id])).toEqual([["order more of your blood pressure tablet", mei.personId]]);
+    // The task names him, and the medicine as its box does; never "your".
+    expect((await tasksOf()).map((task) => [task.what, task.assigned_person_id])).toEqual([["order more amlodipine 5 mg for Pa", mei.personId]]);
 
     // I have more at home: how many, his yes for that number, the count as the backend says it.
     await card.getByTestId("i-have-more").click();
@@ -116,9 +129,31 @@ for (const look of LOOKS) {
     await expect(card.getByTestId("ask-to-order")).toHaveText("Ask the family to order.");
     await expect(card.getByTestId("i-have-more")).toHaveText("I have more at home.");
     await card.getByTestId("ask-to-order").click();
+    await expect(card.getByTestId("order-preview")).toContainText("Nura will ask Mei to order more of your blood pressure tablet.");
+    await card.getByTestId("order-yes").click();
     await expect(card.getByTestId("asked")).toContainText("Nura asked Mei to order more of your blood pressure tablet.");
     await card.getByTestId("i-have-more").click();
     await expect(page.getByTestId("record-more")).toBeVisible();
+  });
+
+  test(`more of a high-risk medicine at home (${look}): a photo of the box or the label first, then how many`, async ({ page, request }) => {
+    const pa = await openOwn(request);
+    await seedMedicine(request, pa.token, pa.profileId, { generic: "warfarin", strength: "3 mg", dose_text: "1 tab OD", quantity: 5 });
+    await signInAs(page, pa, "Pa");
+    await lookAs(page, look);
+    await page.getByTestId("record-medicines").click();
+    await page.getByTestId("medicine-line").getByTestId("i-have-more").click();
+    const asked = page.getByTestId("more-photo");
+    await expect(asked).toContainText("Take a photo of the medicine label first.");
+    await expect(page.getByTestId("more-form")).toHaveCount(0);
+    await readable(page, look);
+    await page.getByTestId("photo-input").setInputFiles({ name: "box.png", mimeType: "image/png", buffer: unknownPng() });
+    await expect(page.getByTestId("more-photo-kept")).toBeVisible();
+    await page.getByLabel("How many more").fill("14");
+    await page.getByTestId("more-yes").click();
+    await expect(page.getByTestId("more-done")).toContainText("19");
+    const [line] = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(pa.token))).json()) as { count: { remaining: number } }[];
+    expect(line!.count.remaining).toBe(19);
   });
 
   test(`add a medicine (${look}): screened before it is saved, the severity and both medicines named; a high-risk one from a file is refused`, async ({ page, request }) => {

@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.channels.api.voice_schemas import VoiceScriptOut
+from app.delivery.feed.area import AreaView
+from app.delivery.feed.engagement import QUEUE_LIMIT, Flushed, Queued
+from app.delivery.feed.find import Result
 from app.delivery.feed.models import (
+    PLAYS,
     EngagementChannel,
     EngagementKind,
     JobKind,
@@ -20,7 +25,7 @@ from app.delivery.feed.models import (
     Source,
     SourceKind,
 )
-from app.delivery.feed.rank import Page, item_json
+from app.delivery.feed.rank import Page, Sent, item_json
 
 
 class FeedItemOut(BaseModel):
@@ -65,6 +70,8 @@ class FeedItemOut(BaseModel):
     """The card's one action: taken, hear, keep_going, call, ask_to_order, open, ask_the_doctor."""
     category: str | None = None
     """For today's top three (E11-02): alert, reminder or insight."""
+    search_job_id: str | None = None
+    """The watch that found this card, when a search made it; None for his own record's."""
 
 
 class FeedPageOut(BaseModel):
@@ -131,8 +138,15 @@ class SearchJobIn(BaseModel):
     kind: JobKind
     terms: list[str] = Field(min_length=1, max_length=8)
     source_ids: list[uuid.UUID] | None = None
-    cadence: str = Field(default="on_change", max_length=32)
+    cadence: str | None = Field(default=None, max_length=32)
+    """How often it runs; the kind's own when not named (`search.DEFAULT_CADENCE`)."""
     reason: str = Field(default="asked by hand", max_length=200)
+
+
+class SearchJobPatchIn(BaseModel):
+    """Pause a watch (false) or resume it (true)."""
+
+    enabled: bool
 
 
 class SearchJobOut(BaseModel):
@@ -147,10 +161,16 @@ class SearchJobOut(BaseModel):
     enabled: bool
     created_at: datetime
     last_run_at: datetime | None
+    label: str = ""
+    """What it watches for, in the reader's words ("Dengue near Air Itam")."""
+    sources: list[str] = []
+    """The names of the allowlisted sources it reads."""
 
     @classmethod
-    def of(cls, job: SearchJob) -> SearchJobOut:
+    def of(cls, job: SearchJob, *, label: str = "", sources: Sequence[str] = ()) -> SearchJobOut:
         return cls(
+            label=label,
+            sources=list(sources),
             job_id=job.id,
             kind=job.kind,
             terms=list(job.terms),
@@ -163,3 +183,119 @@ class SearchJobOut(BaseModel):
             created_at=job.created_at,
             last_run_at=job.last_run_at,
         )
+
+
+class QueuedIn(BaseModel):
+    """One event from the phone's queue (E11-08). `seconds` is how much of a clip or a voice
+    note played, on a play or a replay only: no event carries time spent in the feed."""
+
+    client_id: uuid.UUID
+    item_id: uuid.UUID
+    event: EngagementKind
+    at: AwareDatetime
+    channel: EngagementChannel = EngagementChannel.APP
+    seconds: float | None = Field(default=None, ge=0, le=600)
+
+    @model_validator(mode="after")
+    def seconds_only_on_a_play(self) -> QueuedIn:
+        if self.seconds is not None and self.event not in PLAYS:
+            raise ValueError("only a play or a replay says how many seconds played")
+        return self
+
+    def queued(self) -> Queued:
+        return Queued(
+            client_id=self.client_id,
+            item_id=self.item_id,
+            kind=self.event,
+            at=self.at,
+            channel=self.channel,
+            seconds=self.seconds,
+        )
+
+
+class EventsIn(BaseModel):
+    events: list[QueuedIn] = Field(max_length=QUEUE_LIMIT)
+
+
+class SkippedOut(BaseModel):
+    client_id: uuid.UUID
+    because: str
+
+
+class EventsOut(BaseModel):
+    """Which events were written, and which were not and why: the phone drops both from its
+    queue (a skipped event is never sent again)."""
+
+    written: list[uuid.UUID]
+    skipped: list[SkippedOut]
+
+    @classmethod
+    def of(cls, flushed: Flushed) -> EventsOut:
+        return cls(
+            written=[row.client_id for row in flushed.written if row.client_id is not None],
+            skipped=[SkippedOut(client_id=one, because=why) for one, why in flushed.skipped],
+        )
+
+
+class SentOut(BaseModel):
+    """One card of "Sent to Pa this week": the card as the feed answers it, with its status
+    among sent, opened, played, dismissed, held. No count of anything."""
+
+    item: FeedItemOut
+
+    @classmethod
+    def of(cls, sent: Sent) -> SentOut:
+        return cls(item=FeedItemOut(**item_json(sent.item, sent.status)))
+
+
+class AreaIn(BaseModel):
+    area: str | None = Field(default=None, max_length=40)
+
+
+class AreaOut(BaseModel):
+    area: str | None
+    districts: list[str]
+    may_set: bool
+
+    @classmethod
+    def of(cls, view: AreaView) -> AreaOut:
+        return cls(area=view.area, districts=list(view.districts), may_set=view.may_set)
+
+
+class ResultOut(BaseModel):
+    title: str
+    publisher: str | None
+    url: str | None
+    published_at: str | None
+    lines: list[str]
+    boundary: str | None
+    media: str | None
+    provider_id: str | None
+    next_visit_at: str | None
+
+    @classmethod
+    def of(cls, found: Result) -> ResultOut:
+        return cls(
+            title=found.title,
+            publisher=found.publisher,
+            url=found.url,
+            published_at=found.published_at,
+            lines=list(found.lines),
+            boundary=found.boundary,
+            media=found.media,
+            provider_id=found.provider_id,
+            next_visit_at=found.next_visit_at,
+        )
+
+
+class FindIn(BaseModel):
+    """What the ask bar searches for, and where: in the body, never the URL."""
+
+    q: str = Field(min_length=1, max_length=200)
+    where: str = Field(max_length=16)
+    language: str | None = Field(default=None, max_length=8)
+
+
+class FindOut(BaseModel):
+    where: str
+    results: list[ResultOut]

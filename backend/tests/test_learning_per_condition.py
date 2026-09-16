@@ -72,7 +72,8 @@ async def test_a_condition_he_told_starts_a_search_and_its_card_cites_its_page(
     await refresh(sg, context=context, engine=ENGINE)
 
     jobs = await list_jobs(sg, context=context)
-    [job] = [j for j in jobs if list(j.terms) == ["diabetes"]]
+    # The explainer (a condition also starts his weekly food watch: test_feed_formats).
+    [job] = [j for j in jobs if list(j.terms) == ["diabetes"] and j.kind.value == "explainer"]
     assert job.kind.value == "explainer" and job.reason["scope"] == "records"
     assert job.reason["fact_ids"]
     [card] = [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
@@ -104,7 +105,9 @@ async def test_high_blood_pressure_is_the_blood_pressure_search_not_a_second_one
     context = await pa(sg, language="en")
     await _told(sg, context, "high_blood_pressure", holds=True)
     await refresh(sg, context=context, engine=ENGINE)
-    terms = [list(j.terms) for j in await list_jobs(sg, context=context)]
+    terms = [
+        list(j.terms) for j in await list_jobs(sg, context=context) if j.kind.value == "explainer"
+    ]
     assert terms.count(["blood pressure"]) == 1 and ["high blood pressure"] not in terms
 
 
@@ -140,5 +143,9 @@ async def test_a_page_the_searcher_says_is_allowlisted_but_links_elsewhere_makes
         ),
     )
     assert not [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
-    [job] = [j for j in await list_jobs(sg, context=context) if list(j.terms) == ["diabetes"]]
+    [job] = [
+        j
+        for j in await list_jobs(sg, context=context)
+        if list(j.terms) == ["diabetes"] and j.kind.value == "explainer"
+    ]
     assert {r["because"] for r in job.results["rejected"]} == {"not_on_its_source"}

@@ -109,6 +109,9 @@ CLASSES: dict[str, str] = {
     "profile.owner_person_id": IDENTIFIER,
     "profile.patient_phone_e164": IDENTIFIER,
     "profile.created_at": OPERATIONAL,
+    # Where he lives, coarsely (a district or a postcode's first digits): it points at a
+    # person, so it is an identifier, however coarse (F1, E09-07).
+    "profile.area": IDENTIFIER,
     "stewardship.steward_person_id": IDENTIFIER,
     "stewardship.key_id": CONSENT,
     "stewardship.consent_id": CONSENT,
@@ -222,6 +225,11 @@ CLASSES: dict[str, str] = {
     "provider.phone_e164": HEALTH,
     "provider.address": HEALTH,
     "provider.added_at": OPERATIONAL,
+    # Whether a hospital is on his insurance says something about his cover and where he is
+    # treated (E19-05): health, like the provider itself. A doctor's hours are the doctor's.
+    "provider.panel": HEALTH,
+    "provider.opens_at": OPERATIONAL,
+    "provider.closes_at": OPERATIONAL,
     "appointment.provider_id": HEALTH,
     "appointment.scheduled_at": HEALTH,
     "appointment.status": HEALTH,
@@ -453,6 +461,8 @@ CLASSES: dict[str, str] = {
     "delivery_ladder.line_id": HEALTH,
     "delivery_ladder.anchor": HEALTH,
     "delivery_ladder.flag_id": HEALTH,
+    "delivery_ladder.note_id": HEALTH,
+    "delivery_ladder.note_from_person_id": IDENTIFIER,
     "delivery_ladder.rungs": IDENTIFIER,
     "delivery_ladder.started_at": HEALTH,
     "delivery_ladder.next_rung": OPERATIONAL,
@@ -466,6 +476,10 @@ CLASSES: dict[str, str] = {
     "feed_engagement.channel": OPERATIONAL,
     "feed_engagement.event_id": HEALTH,
     "feed_engagement.at": OPERATIONAL,
+    # How much of a clip or voice note about his health played: about his health.
+    "feed_engagement.seconds": HEALTH,
+    # The phone's own id for an event in its queue: says nothing about anyone.
+    "feed_engagement.client_id": OPERATIONAL,
     # The offline page is a cache of card ids for one person.
     "feed_page.person_id": IDENTIFIER,
     "feed_page.audience": OPERATIONAL,
@@ -637,6 +651,11 @@ CLASSES: dict[str, str] = {
     # A drive to a visit (E05-03): which visit, and that it is the drive.
     "task.appointment_id": HEALTH,
     "task.errand": HEALTH,
+    # An order for more of a medicine (E04-05): which of his medicine lines.
+    "task.medication_line_id": HEALTH,
+    # An order task's wall-clock day (E04-05; #166 review): timing metadata the once-a-day
+    # rule keys on, no different from `created_at`.
+    "task.opened_on": OPERATIONAL,
     "roster_slot.person_id": IDENTIFIER,
     "roster_slot.role": IDENTIFIER,
     "roster_slot.weekdays": OPERATIONAL,
@@ -683,6 +702,15 @@ CLASSES: dict[str, str] = {
     "what_to_do_card.rendered_for_person_id": IDENTIFIER,
     "what_to_do_card.state_id": HEALTH,
     "what_to_do_card.boundary": HEALTH,
+    # His insurer on the emergency card (E13-01), typed on a yes: the insurer's name and the
+    # policy reference point at him at the insurer, so both are identifiers, and so is who
+    # typed it; the yes is the consent record; when, operational.
+    "insurer.id": IDENTIFIER,
+    "insurer.name": IDENTIFIER,
+    "insurer.policy_reference": IDENTIFIER,
+    "insurer.set_by_person_id": IDENTIFIER,
+    "insurer.confirmation_id": CONSENT,
+    "insurer.set_at": OPERATIONAL,
     "emergency_card.id": HEALTH,
     "emergency_card.format": OPERATIONAL,
     "emergency_card.language": OPERATIONAL,
@@ -727,6 +755,22 @@ CLASSES: dict[str, str] = {
     "whatsapp_group.opened_by_person_id": IDENTIFIER,
     "whatsapp_group.opened_at": OPERATIONAL,
     "whatsapp_group.members_digest": IDENTIFIER,
+    # The webhook's receipt of one inbound message (#158): the provider's id and whether it was
+    # handled, never the words and never whose it was — operational through and through.
+    "whatsapp_receipt.id": OPERATIONAL,
+    "whatsapp_receipt.provider_message_id": OPERATIONAL,
+    "whatsapp_receipt.first_seen_at": OPERATIONAL,
+    "whatsapp_receipt.handled_at": OPERATIONAL,
+    "whatsapp_receipt.failures": OPERATIONAL,
+    "whatsapp_receipt.last_failed_at": OPERATIONAL,
+    "whatsapp_receipt.last_failure": OPERATIONAL,
+    # "Which tablet?" (#162): the tablets it read out to him are his medicines — health.
+    "whatsapp_dose_question.id": HEALTH,
+    "whatsapp_dose_question.thread_id": HEALTH,
+    "whatsapp_dose_question.asked_at": OPERATIONAL,
+    "whatsapp_dose_question.expires_at": OPERATIONAL,
+    "whatsapp_dose_question.doses": HEALTH,
+    "whatsapp_dose_question.answered_at": OPERATIONAL,
     # A proposal is what was heard, waiting for the poster's yes: a reading, not yet a fact.
     "whatsapp_proposal.thread_id": HEALTH,
     "whatsapp_proposal.message_id": HEALTH,

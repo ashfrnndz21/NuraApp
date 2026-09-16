@@ -50,6 +50,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import (
@@ -60,7 +61,7 @@ from app.audit.access import (
     person_display_name,
 )
 from app.audit.models import Action
-from app.db import as_utc, utcnow
+from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.models import CapsClass, CardType, FeedItem
 from app.delivery.feed.rank import QUIET_FROM, QUIET_UNTIL, in_quiet_hours
 from app.delivery.nudges import strings as said
@@ -651,15 +652,53 @@ async def plan_nudges(
     return NudgePlan(day=day, drafts=going, held=tuple(held))
 
 
+async def _handed_over(
+    session: AsyncSession, *, context: KeyContext, day: date, dedupe_key: str | None = None
+) -> Nudge | None:
+    """The day's nudge already handed over (the best, when a cap let more than one go), or the
+    one with this dedupe key."""
+    where: tuple[Any, ...] = (Nudge.day == day.isoformat(),)
+    if dedupe_key is not None:
+        where = (Nudge.dedupe_key == dedupe_key,)
+    rows = await audited_read(session, Nudge, context, Scope.PROFILE, where=where)
+    return min(rows, key=lambda n: (-n.priority, as_utc(n.handed_over_at)), default=None)
+
+
 async def hand_over(
     session: AsyncSession, *, context: KeyContext, registry: DrugRegistry, day: date | None = None
 ) -> tuple[NudgePlan, Nudge]:
-    """Plan the day, write down the one that goes, and give it to delivery. Sends nothing."""
+    """Plan the day, write down the one that goes, and give it to delivery. Sends nothing.
+
+    Two doors hand the day's nudge over — the web as he answers, and the delivery engine at the
+    nudge's planned time (`app.delivery.triggers.engine`) — and handing it over twice is one
+    nudge: when the day's nudge is already written down, it is given back, and a second write
+    of the same one racing the first finds it by its dedupe key. One row; delivery sends it
+    once."""
     plan = await plan_nudges(session, context=context, registry=registry, day=day)
     if not plan.drafts:
+        if plan.none_because is None:
+            handed = await _handed_over(session, context=context, day=plan.day)
+            if handed is not None:
+                return plan, handed
         raise NothingToHandOver(plan.none_because or "nothing to hand over for that day")
     draft = plan.drafts[0]
-    nudge = await render_from_state(
+    try:
+        async with nested_unit_of_work(session):
+            nudge = await _write_nudge(session, context=context, draft=draft)
+    except IntegrityError:
+        handed = await _handed_over(
+            session, context=context, day=draft.day, dedupe_key=draft.dedupe_key
+        )
+        if handed is None:
+            raise
+        return plan, handed
+    for delivery in deliveries:
+        await delivery.take(session, context=context, nudge=nudge, draft=draft)
+    return plan, nudge
+
+
+async def _write_nudge(session: AsyncSession, *, context: KeyContext, draft: NudgeDraft) -> Nudge:
+    return await render_from_state(
         session,
         Nudge,
         context,
@@ -681,9 +720,6 @@ async def hand_over(
         handed_over_at=utcnow(),
         handed_over_by_person_id=context.person_id,
     )
-    for delivery in deliveries:
-        await delivery.take(session, context=context, nudge=nudge, draft=draft)
-    return plan, nudge
 
 
 @audited(Action.WRITE, Scope.PROFILE, NudgeResponse.__tablename__)

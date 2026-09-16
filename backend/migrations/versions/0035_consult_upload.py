@@ -9,8 +9,8 @@ and bytes have arrived, and when the doctor said yes. It ends put together into 
 themselves are bytes in the region's object store, never a column, and are let go of either
 way. The row holds no words and no audio.
 
-Revision ID: 0030_consult_upload
-Revises: 0028_whatsapp_opt_in
+Revision ID: 0035_consult_upload
+Revises: 0034_feed_formats
 Create Date: 2026-09-15
 """
 
@@ -19,8 +19,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0030_consult_upload"
-down_revision = "0028_whatsapp_opt_in"
+revision = "0035_consult_upload"
+down_revision = "0034_feed_formats"
 branch_labels = None
 depends_on = None
 

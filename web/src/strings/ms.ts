@@ -250,6 +250,8 @@ export const ms = {
     fromState: "Nura mengira ini pada {date}.",
     // @patient
     fromDays: "Nura mengira hari anda ambil ubat anda.",
+    // @patient phrase
+    emergencyOpen: "Kad kecemasan anda",
   },
   feed: {
     // @patient headline
@@ -313,7 +315,33 @@ export const ms = {
     // @patient
     statusOpened: "{name} sudah buka kad ini.",
     // @patient
+    statusPlayed: "{name} sudah dengar kad ini.",
+    // @patient
     statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
+    // @patient phrase
+    play: "Main",
+    // @patient phrase
+    watchWhole: "Tonton seluruh video di {publisher}",
+    // @patient phrase
+    askOrSearch: "Tanya atau cari",
+    // @patient phrase
+    filterLabel: "Cari di mana",
+    // @patient phrase
+    filterRecords: "Surat anda",
+    // @patient phrase
+    filterWeb: "Web",
+    // @patient phrase
+    filterProviders: "Doktor dan klinik",
+    // @patient phrase
+    filterVideos: "Video",
+    // @patient phrase
+    search: "Cari",
+    // @patient phrase
+    readPage: "Baca halaman di {publisher}",
+    // @patient
+    foundNothing: "Nura tidak jumpa apa-apa untuk ini.",
+    // @patient phrase
+    nextVisit: "Lawatan anda yang seterusnya pada {date}.",
   },
   reading: {
     // @patient headline
@@ -372,6 +400,38 @@ export const ms = {
     remindersDenied1: "Telefon ini tidak benarkan peringatan.",
     // @patient
     remindersDenied2: "Anda boleh ubah dalam tetapan telefon.",
+    // @patient headline
+    areaTitle: "Tempat anda tinggal",
+    // @patient
+    areaLead: "Nura guna bandar anda hanya untuk denggi, jerebu atau cuaca panas dekat anda.",
+    // @patient
+    areaNone: "Nura tidak tahu bandar anda.",
+    // @patient
+    areaIs: "Nura tahu bandar anda ialah {area}.",
+    // @patient
+    areaAsk: "Adakah anda tinggal di {area}?",
+    // @patient phrase
+    areaYes: "Ya, saya tinggal di situ",
+    // @patient phrase
+    areaNo: "Tidak",
+    // @patient phrase
+    areaChange: "Pilih bandar anda",
+    // @patient phrase
+    areaClear: "Jangan simpan bandar saya",
+    // @patient
+    areaWho: "Orang yang menjaga surat-surat anda boleh nampak bandar anda.",
+    // @patient headline
+    ramadanTitle: "Bulan puasa",
+    // @patient
+    ramadanLead: "Jika anda berpuasa pada bulan puasa, Nura boleh bantu anda merancang.",
+    // @patient
+    ramadanWho: "Orang yang menjaga surat-surat anda juga akan nampak ini.",
+    // @patient phrase
+    ramadanYes: "Ya, beritahu saya sebelum bulan puasa",
+    // @patient
+    ramadanOn: "Nura akan beritahu anda sebelum bulan puasa.",
+    // @patient phrase
+    ramadanStop: "Berhenti beritahu saya",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -434,6 +494,94 @@ export const ms = {
     // @patient
     keepOpenToSend: "Biarkan halaman ini terbuka sehingga itu.",
   },
+  // Tekanan semasa telefon tidak dapat capai Nura (E00-08).
+  held: {
+    // @patient
+    held: "Nura akan menghantar apa yang anda tekan apabila internet kembali.",
+    // @patient
+    tapped: "Anda tekan ini pada {time}.",
+    // @patient
+    sent: "Nura sudah menghantar apa yang anda tekan.",
+  },
+  // Kad kecemasan di telefon (E00-08).
+  emergency: {
+    // @patient
+    asOf: "Nura terakhir membaca kad ini pada {date}.",
+    // @patient
+    none: "Kad kecemasan anda belum ada di telefon ini.",
+    // @patient
+    noneSub: "Buka kad ini sekali lagi nanti, semasa internet ada.",
+    // @patient phrase
+    callChief: "Telefon {name}",
+    // @patient phrase
+    callAmbulance: "Telefon ambulans di {number}",
+    // @patient phrase
+    print: "Cetak kad ini",
+  },
+  // Surat daripada gambar (E18-01).
+  papers: {
+    // @patient phrase
+    open: "Tambah surat daripada gambar anda",
+    // @patient phrase
+    chooseMany: "Pilih banyak gambar",
+    // @patient headline
+    title: "Surat daripada gambar anda",
+    // @patient
+    lead: "Pilih semua gambar surat sekali gus.",
+    // @patient
+    lead2: "Nura tidak hantar apa-apa sehingga anda tekan Hantar.",
+    // @patient phrase
+    pick: "Pilih gambar",
+    // @patient
+    gridLead: "Tekan gambar untuk tinggalkannya.",
+    // @patient phrase
+    picture: "Surat {count}",
+    // @patient
+    tileIn: "Nura akan hantar yang ini.",
+    // @patient
+    tileOut: "Nura tidak akan hantar yang ini.",
+    // @patient phrase
+    sendOne: "Hantar 1 surat",
+    // @patient phrase
+    send: "Hantar {count} surat",
+    // @patient
+    sending: "Nura sedang menghantar surat {n} daripada {total}.",
+    // @patient headline
+    found: "Apa yang Nura jumpa",
+    // @patient
+    read: "Nura sudah membaca surat ini.",
+    // @patient phrase
+    check: "Semak surat ini",
+    // @patient
+    notHealth: "Ini bukan surat kesihatan.",
+    // @patient
+    notSent: "Internet tiada tadi, jadi yang ini belum dihantar.",
+    // @patient phrase
+    sendRest: "Hantar yang belum dihantar",
+    // @patient
+    nothingKept: "Nura tidak simpan gambar di telefon ini.",
+    // @patient phrase
+    backToday: "Kembali ke Hari Ini",
+  },
+  // Pemain yang satu (E15-07).
+  player: {
+    // @patient phrase
+    play: "Mainkan",
+    // @patient phrase
+    pause: "Berhenti sekejap",
+    // @patient phrase
+    speed: "Kelajuan Nura bercakap",
+    // @patient phrase
+    slower: "Lebih perlahan",
+    // @patient phrase
+    usual: "Kelajuan biasa",
+    // @patient phrase
+    faster: "Lebih laju",
+    // @patient phrase
+    nextPart: "Bahagian seterusnya",
+    // @patient phrase
+    hearStory: "Dengar tentang {name}",
+  },
   day: {
     // @patient headline
     topThree: "3 perkara untuk hari ini",
@@ -467,10 +615,10 @@ export const ms = {
     symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
     // @patient phrase
     symptomsKeep: "Simpan ini",
-    // @patient
     // @patient phrase
     sendAgain: "Hantar sekali lagi",
-    symptomsSaved: "Nura sudah mencatat ini.",
+    // @patient
+    symptomsSaved: "Nura sudah tulis ini.",
     // @patient phrase
     nudgeOk: "OK",
     // @patient phrase
@@ -642,7 +790,7 @@ export const ms = {
       // @patient
       lead3: "Nura guna ini hanya untuk tahu di mana hendak melihat.",
       // @patient
-      noted: "Nura sudah catat itu.",
+      noted: "Nura sudah tulis itu.",
       // @patient
       removed: "Nura sudah buang itu.",
       // @patient phrase
@@ -806,11 +954,11 @@ export const ms = {
         records: "Surat-surat anda",
       },
       // @patient phrase
-      seeWords: "Lihat kata-kata itu",
+      seeWords: "Lihat kata-kata ini",
       // @patient
       wordsLead: "Sila baca kata-kata ini.",
       // @patient phrase
-      agree: "Saya setuju, benarkan mereka",
+      agree: "Saya setuju, beri mereka kunci",
       // @patient
       done: "Mereka boleh melihat bahagian itu sekarang.",
     },
@@ -823,8 +971,8 @@ export const ms = {
       cadence1: "Nura akan minta satu perkara sehari, tidak lebih.",
       // @patient
       cadence2: "Tekan Nanti dan Nura akan tanya sekali lagi.",
-      // @patient phrase
-      missing: "Belum ada",
+      // @patient
+      missing: "Nura belum ada yang ini.",
       // @patient
       onDay: "Nura akan minta ini pada {date}.",
       // @patient phrase
@@ -836,7 +984,7 @@ export const ms = {
       // @patient
       more: "Ada {count} lagi selepas itu.",
       // @patient
-      nothing: "Tiada apa yang tertinggal buat masa ini.",
+      nothing: "Nura sudah ada semua yang perlu buat masa ini.",
       // @patient phrase
       open: "Buka Nura",
     },
@@ -922,6 +1070,15 @@ export const ms = {
     storyForgot: "Jika anda terlupa",
     // @patient headline
     storyAsk: "Untuk ditanya kepada doktor anda",
+    // @patient phrase
+    hearParts: {
+      purpose: "Dengar untuk apa ubat ini",
+      how_to_take: "Dengar cara mengambilnya",
+      watch_out: "Dengar apa yang perlu diperhatikan",
+      avoid: "Dengar apa yang perlu dielakkan",
+      if_forgotten: "Dengar apa yang perlu dibuat jika anda terlupa",
+      doctor_question: "Dengar apa yang perlu ditanya kepada doktor anda",
+    },
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient
@@ -929,7 +1086,7 @@ export const ms = {
     // @patient phrase
     nameLabel: "Nama pada label",
     // @patient phrase
-    strengthLabel: "Kekuatannya",
+    strengthLabel: "Berapa kuat ubat ini",
     // @patient phrase
     howLabel: "Cara mengambilnya",
     // @patient
@@ -943,7 +1100,7 @@ export const ms = {
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient
-    outcomeRefill: "Ini tambahan ubat yang sudah ada dalam senarai anda.",
+    outcomeRefill: "Ini tambahan untuk ubat yang anda ambil sekarang.",
     // @patient
     outcomeChange: "Label ini ada jumlah yang lain.",
     // @patient headline
@@ -970,6 +1127,16 @@ export const ms = {
     moreLabel: "Berapa banyak lagi",
     // @patient phrase
     moreYes: "Ya, tambah",
+    // @patient
+    morePhoto: "Ambil gambar label ubat dahulu.",
+    // @patient
+    morePhotoWhy: "Untuk ubat ini, Nura perlu lihat label ubat.",
+    // @patient
+    morePhotoKept: "Nura sudah ada gambar label ubat itu.",
+    // @patient phrase
+    orderYes: "Ya, minta keluarga pesan",
+    // @patient phrase
+    orderNo: "Bukan sekarang",
     // @patient
     papersNone: "Tiada surat yang menunggu ya anda.",
     // @patient
@@ -1065,7 +1232,7 @@ export const ms = {
     // @patient headline
     notesTitle: "Nota tentang tempat ini",
     // @patient
-    notesOnly: "Hanya pemilik dan ketua keluarga boleh baca nota ini.",
+    notesOnly: "Hanya anda dan orang yang menjaga surat-surat ini boleh baca nota ini.",
     // @patient phrase
     noteLabel: "Satu nota tentang tempat ini",
     // @patient phrase
@@ -1091,20 +1258,31 @@ export const ms = {
       haemoglobin: "Kiraan darah anda",
       tsh: "Ujian tiroid anda",
     },
-    // @patient phrase
-    resultOn: "{value} {unit} pada {date}",
+    // Ayat penuh, bukan frasa: berdiri sendiri sebagai satu perenggan (Day.tsx), yang dibaca
+    // sebagai satu unit lengkap oleh pembaca skrin (#166 review).
     // @patient
-    rangeUnder: "Julatnya bawah {upper}.",
+    resultOn: "Bacaannya {value} pada {date}.",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{value} {unit} pada {date}",
     // @patient
-    rangeOver: "Julatnya atas {lower}.",
+    rangeUnder: "Bagi kebanyakan orang, nombor ini di bawah {upper}.",
     // @patient
-    rangeBetween: "Julatnya {lower} hingga {upper}.",
+    rangeOver: "Bagi kebanyakan orang, nombor ini di atas {lower}.",
     // @patient
-    noRange: "Nura tiada julat untuk yang ini.",
+    rangeBetween: "Bagi kebanyakan orang, nombor ini {lower} hingga {upper}.",
     // @patient
-    labRange: "Julat ini tercetak pada ujian darah anda.",
+    noRange: "Nura tiada nombor biasa untuk yang ini.",
     // @patient
-    guideRange: "Julat ini dari panduan untuk umur anda.",
+    labRange: "Nombor biasa itu tercetak pada ujian darah anda.",
+    // @patient
+    guideRange: "Nombor biasa itu dari panduan untuk umur anda.",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura perlukan umur anda untuk cari nombor biasa.",
+      needs_sex: "Nura perlu tahu sama ada anda lelaki atau perempuan.",
+      none_on_file: "Nura tiada nombor biasa untuk yang ini.",
+    },
     // @patient phrase
     anchors: {
       wake: "Apabila anda bangun",
@@ -1122,9 +1300,9 @@ export const ms = {
     // @patient phrase
     walk: "Berjalan kaki",
     // @patient
-    notSet: "Hari anda belum ditetapkan lagi.",
+    notSet: "Belum ada sesiapa menetapkan hari anda.",
     // @patient phrase
-    setDay: "Tetapkan hari",
+    setDay: "Tetapkan hari anda",
     // @patient phrase
     timeLabel: "Pukul berapa",
     // @patient phrase
@@ -1132,13 +1310,13 @@ export const ms = {
     // @patient phrase
     walkAfter: "Berjalan kaki selepas ini",
     // @patient phrase
-    checkDay: "Semak hari",
+    checkDay: "Semak hari anda",
     // @patient
-    dayAsk: "Adakah ini harinya?",
+    dayAsk: "Beginikah hari anda?",
     // @patient phrase
-    dayYes: "Ya, tetapkan hari",
+    dayYes: "Ya, tetapkan hari anda",
     // @patient
-    daySaved: "Nura sudah tulis hari itu.",
+    daySaved: "Nura sudah tulis hari anda.",
     // @patient headline
     tableMoment: "Bila",
     // @patient headline
@@ -1179,6 +1357,7 @@ export const ms = {
     stopYes: "Ya, hentikan",
     // @patient phrase
     closeAccount: "Tutup akaun saya",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
@@ -1208,6 +1387,12 @@ export const ms = {
     windowLabel: "Untuk berapa lama",
     // @patient phrase
     makeKey: "Buat kunci",
+    // @patient phrase
+    seeWords: "Lihat kata-kata ini",
+    // @patient
+    wordsLead: "Sila baca kata-kata ini.",
+    // @patient phrase
+    agreeKey: "Saya setuju, beri mereka kunci",
     // @patient phrase
     narrow: "Kecilkan",
     // @patient phrase
@@ -1289,7 +1474,6 @@ export const ms = {
       thinking_of_you: "Teringatkan anda",
       weigh_tomorrow: "Naik penimbang esok",
       drink_water: "Minum segelas air",
-      water_pill_morning: "Pil air pada pukul 8",
     },
     // @patient phrase
     ownWords: "Kata-kata saya sendiri",
@@ -1385,6 +1569,7 @@ export const ms = {
       app_push: "Aplikasi",
       whatsapp: "WhatsApp",
       caregiver: "Melalui penjaga",
+      in_app: "Dalam aplikasi",
     },
     // @patient phrase
     outcomes: {
@@ -1416,6 +1601,8 @@ export const ms = {
     saveSettings: "Simpan tetapan ini",
     // @patient phrase
     neverHeld: "Tidak pernah ditahan",
+    // @patient phrase
+    everyWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
     // @patient headline
     documents: "Surat untuk senarai keluarga",
     // @patient phrase
@@ -1494,8 +1681,78 @@ export const ms = {
     // @patient phrase
     tryAgain: "Cuba lagi",
   },
+  chief: {
+    // @patient headline
+    sentTitle: "Dihantar kepada {name} minggu ini",
+    // @patient
+    sentNone: "Nura tidak hantar apa-apa kepada {name} minggu ini.",
+    // @patient headline
+    watchingTitle: "Nura perhatikan untuk {name}",
+    // @patient
+    watchingNone: "Nura belum perhatikan apa-apa lagi.",
+    // @patient
+    sourcesNote: "Nura hanya membaca pihak berkuasa kesihatan, hospital dan persatuan doktor.",
+    // @patient phrase
+    onChange: "Bila ada yang baru",
+    // @patient phrase
+    daily: "Setiap hari",
+    // @patient phrase
+    weekly: "Setiap minggu",
+    // @patient phrase
+    beforeVisits: "Sebelum setiap lawatan",
+    // @patient phrase
+    once: "Sekali",
+    // @patient phrase
+    paused: "Dihentikan dulu",
+    // @patient phrase
+    pause: "Berhenti dulu",
+    // @patient phrase
+    resume: "Mula semula",
+    // @patient phrase
+    pauseWatch: "Berhenti memerhatikan ini buat masa ini",
+    // @patient phrase
+    add: "Perhatikan sesuatu yang baru",
+    // @patient
+    addLead: "Pilih apa yang Nura patut perhatikan.",
+    // @patient
+    added: "Nura akan perhatikan ini mulai sekarang.",
+    // @patient phrase
+    dengue: "Denggi",
+    // @patient phrase
+    haze: "Jerebu",
+    // @patient phrase
+    heat: "Cuaca panas",
+    // @patient phrase
+    festiveFood: "Makanan perayaan",
+  },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "Hanya pemilik boleh jawab ini.",
+    // @patient
+    NotAClipCard: "Kad ini tiada apa-apa untuk dimainkan.",
+    // @patient
+    NoExcerpt: "Nura bacakan gambar ini untuk anda.",
+    // @patient
+    NoClipRenderer: "Nura tidak dapat tunjuk gambar ini sekarang.",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura tidak dapat tulis ini.",
+    // @patient
+    NotACadence: "Sila pilih berapa kerap daripada senarai.",
+    // @patient
+    NotAHazard: "Nura boleh perhatikan denggi, jerebu atau cuaca panas.",
+    // @patient
+    NotASeason: "Nura boleh perhatikan bulan puasa atau makanan perayaan.",
+    // @patient
+    NotACoarseArea: ["Sila pilih bandar anda dari senarai.", "Atau taip hanya awal poskod anda."],
+    // @patient
+    OnlyHeSetsHisArea: "Hanya pemilik boleh pilih bandar.",
+    // @patient
+    NotAFilter: "Sila pilih di mana hendak cari.",
+    // @patient
+    NothingToFind: "Sila taip perkataan yang anda mahu cari.",
+    // @patient
+    NotTheirsToManage: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     default: "Nura tidak dapat buat itu sekarang.",
     NotInTheDemo: ["Demo ini hanya menerima nombor telefon ujian.", "Nombor ujian bermula dengan +65 0."],
     CardsStillOpen: "Satu surat masih menunggu persetujuan anda.",
@@ -1574,6 +1831,9 @@ export const ms = {
     NotTheirsToChangeVisits: "Anda boleh lihat lawatan tetapi tidak boleh mengubahnya.",
     NotAChief: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     NotOnThisVisit: "Nura tidak boleh beri tugas memandu ini kepada orang itu.",
+    TapNotToday: "Nura hanya menulis apa yang anda tekan hari ini.",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "Dokumen itu terlalu besar untuk Nura.",
     NoteNamesHealth: "Nura tidak boleh simpan nota yang menyebut ubat atau penyakit.",
     NotAPlaceNote: "Sila tulis satu baris pendek tentang tempat itu.",
     NotTheirsToSet: "Anda boleh lihat hari itu tetapi tidak boleh mengubahnya.",
@@ -1621,6 +1881,8 @@ export const ms = {
     NoSuchReviewItem: "Perkara itu sudah tiada dalam senarai.",
     NotWellFormed: "Nura tidak faham itu.",
     AlertsAreNeverHeld: "Mesej yang tidak boleh tunggu tidak pernah ditahan.",
+    AlertsGoEveryWay: "Nura sentiasa beritahu keluarga anda tentang ini, dengan setiap cara yang boleh.",
+    MessageNamesAMedicine: ["Mesej tidak boleh menyebut ubat atau berapa banyak perlu diambil.", "Nura hantar peringatan ubat hanya daripada senarai ubat."],
     NotOnTheLadder: "Nura tidak minta anda tentang yang ini.",
     NotADocument: "Nura hanya boleh simpan dokumen atau foto di sini.",
     StopsByClosingTheAccount: "Untuk hentikan Nura menyimpan surat-surat anda, tutup akaun anda.",

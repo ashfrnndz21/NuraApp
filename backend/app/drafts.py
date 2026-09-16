@@ -40,8 +40,10 @@ class ConfirmSubject(StrEnum):
     PROPOSAL = "appointment_proposal"
     ATTACH = "attach"
     DRIVE = "drive"
+    INSURER = "insurer"
     COUNT_CORRECTION = "count_correction"
     CLOSE_ACCOUNT = "close_account"
+    ORDER = "order"
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,6 +504,27 @@ class AttachDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class InsurerDraft:
+    """His insurer about to go on the emergency card (E13-01): the name and the policy
+    reference exactly as typed, or neither, to take it off. Typed by him or his chief, on the
+    typer's own yes (`app.insurance.insurer`)."""
+
+    name: str | None
+    policy_reference: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.INSURER
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"name": self.name, "policy_reference": self.policy_reference}
+
+
+@dataclass(frozen=True, slots=True)
 class CountCorrectionDraft:
     """More of one medicine found at home, about to be added to its count (E04-05, "I have
     more at home"): which line, and how many. The yes binds to the number, so a yes for 20
@@ -510,6 +533,11 @@ class CountCorrectionDraft:
 
     line_id: uuid.UUID
     quantity: int
+    artifact_id: uuid.UUID | None = None
+    """The photo of the box or the label the count rests on. A high-risk medicine's count is
+    corrected from a photo, the same rule as its dose (`app.safety.high_risk`); any other
+    medicine's may rest on his word alone. Part of the yes, so a yes for a typed count cannot
+    be spent on a photo, nor one photo's yes on another."""
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -520,7 +548,29 @@ class CountCorrectionDraft:
         return self.line_id
 
     def confirmed_content(self) -> dict[str, Any]:
-        return {"line_id": self.line_id, "quantity": self.quantity}
+        return {"line_id": self.line_id, "quantity": self.quantity, "artifact_id": self.artifact_id}
+
+
+@dataclass(frozen=True, slots=True)
+class OrderDraft:
+    """"Ask the family to order." (E04-05): which medicine line, and the one person the
+    family's task will name. The preview says both in his words ("Nura will ask Mei to order
+    more of your blood pressure tablet."), and the yes binds to both: if the roster moves on
+    before he says yes, it is a different yes, and nobody else is given the task on it."""
+
+    line_id: uuid.UUID
+    person_id: uuid.UUID
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.ORDER
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.line_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"line_id": self.line_id, "person_id": self.person_id}
 
 
 Draft = (
@@ -539,8 +589,10 @@ Draft = (
     | ProposalDraft
     | AttachDraft
     | DriveDraft
+    | InsurerDraft
     | CountCorrectionDraft
     | CloseDraft
+    | OrderDraft
 )
 
 

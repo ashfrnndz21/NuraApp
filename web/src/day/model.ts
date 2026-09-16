@@ -13,7 +13,7 @@ import type {
   WhatToDoOut,
 } from "../api/types";
 import type { Strings } from "../strings";
-import type { ClipRef } from "../visit/clip";
+import type { ClipRef } from "../player/player";
 
 /** The patient's day (W7) as Today, the Visit screen and Me show it, from the backend's answers
  *  alone. Nothing here writes a sentence: every line a function returns is a line the backend

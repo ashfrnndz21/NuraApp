@@ -85,6 +85,22 @@ describe("opening", () => {
     expect(ids(feed)[0]).toBe("flag");
   });
 
+  it("the fresh page takes the first card's place under the same keys, so the cards on screen stay the same elements (a focused card keeps its focus)", async () => {
+    const api = backend(FIRST);
+    let release: () => void = () => undefined;
+    api.first.mockImplementation(() => new Promise((done) => (release = () => done(FIRST))));
+    const { feed, kept } = store({}, api);
+    kept.value = { page: page([item("now", "now", { item_id: "k1" }), item("story", "story", { item_id: "k2" })], null, null), binding: { keyId: "owner", scopes: [] }, fetchedAt: "2026-09-14T01:00:00Z", expiresAt: "2026-09-14T16:00:00Z" };
+    const opening = feed.open();
+    await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2"]));
+    const before = feed.entries.value.map((entry) => entry.key);
+    release();
+    await opening;
+    expect(ids(feed)[0]).toBe("flag");
+    expect(feed.entries.value.slice(0, before.length).map((entry) => entry.key)).toEqual(before);
+    expect(new Set(feed.entries.value.map((entry) => entry.key)).size).toBe(feed.entries.value.length);
+  });
+
   it("uses the backend's cached page when the phone kept none, leaving out what has expired", async () => {
     const api = backend(FIRST);
     let release: () => void = () => undefined;
@@ -98,19 +114,62 @@ describe("opening", () => {
     await opening;
   });
 
-  it("does not move the list under his finger: a fresh page that lands after he has read on is kept, not shown", async () => {
+  it("does not move the list under his finger: a fresh page that lands after he has read on is merged in below the card on screen", async () => {
     const api = backend(FIRST);
     let release: () => void = () => undefined;
     api.first.mockImplementation(() => new Promise((done) => (release = () => done(FIRST))));
     const { feed, kept, deps } = store({}, api);
+    kept.value = { page: page([item("now", "now", { item_id: "k1" }), item("story", "story", { item_id: "k2" }), item("story", "story", { item_id: "k3" })], null, null), binding: { keyId: "owner", scopes: [] }, fetchedAt: "2026-09-14T01:00:00Z", expiresAt: "2026-09-14T16:00:00Z" };
+    const opening = feed.open();
+    await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2", "k3"]));
+    const before = feed.entries.value.slice(0, 2).map((entry) => entry.key);
+    await feed.visible(1);
+    release();
+    await opening;
+    // What he has passed and the card on screen stay put, keys and all; below them, the fresh
+    // page in the backend's order — the flag made since is the very next card, not lost.
+    expect(feed.entries.value.slice(0, 2).map((entry) => entry.key)).toEqual(before);
+    expect(ids(feed).slice(0, 7)).toEqual(["k1", "k2", "flag", "now", "reading", "gate", "story-a"]);
+    expect(feed.origin.value).toBe("live");
+    expect(deps.keep.save).toHaveBeenCalledWith(FIRST);
+    // The pages go on from the fresh page's cursor.
+    await feed.visible(5);
+    await vi.waitFor(() => expect(api.next).toHaveBeenCalledWith("c1"));
+  });
+
+  it("does not repeat a card he has already passed when the fresh page carries it too", async () => {
+    const fresh = page([item("now", "now", { item_id: "k1" }), item("memo", "today", { item_id: "memo" }), item("story", "story", { item_id: "k2" })], null, null);
+    const api = backend(fresh);
+    let release: () => void = () => undefined;
+    api.first.mockImplementation(() => new Promise((done) => (release = () => done(fresh))));
+    const { feed, kept } = store({}, api);
     kept.value = { page: page([item("now", "now", { item_id: "k1" }), item("story", "story", { item_id: "k2" })], null, null), binding: { keyId: "owner", scopes: [] }, fetchedAt: "2026-09-14T01:00:00Z", expiresAt: "2026-09-14T16:00:00Z" };
     const opening = feed.open();
     await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2"]));
     await feed.visible(1);
     release();
     await opening;
-    expect(ids(feed)).toEqual(["k1", "k2"]);
-    expect(deps.keep.save).toHaveBeenCalledWith(FIRST);
+    expect(ids(feed)).toEqual(["k1", "k2", "memo"]);
+    expect(new Set(feed.entries.value.map((entry) => entry.key)).size).toBe(3);
+  });
+
+  it("drops a page of the old list that lands after the fresh page was merged in", async () => {
+    const api = backend(FIRST, (n) => page([item("story", "story", { item_id: `old-${n}` })], `c${n}`, null));
+    let release: () => void = () => undefined;
+    api.first.mockImplementation(() => new Promise((done) => (release = () => done(page([item("now", "now", { item_id: "fresh-now" })], null, null)))));
+    let answer: () => void = () => undefined;
+    api.next.mockImplementation((cursor: string) => new Promise((done) => (answer = () => done(page([item("story", "story", { item_id: `old-${cursor}` })], cursor, null)))));
+    const { feed, kept } = store({}, api);
+    kept.value = { page: page([item("now", "now", { item_id: "k1" }), item("story", "story", { item_id: "k2" })], null, "k-next"), binding: { keyId: "owner", scopes: [] }, fetchedAt: "2026-09-14T01:00:00Z", expiresAt: "2026-09-14T16:00:00Z" };
+    const opening = feed.open();
+    await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2"]));
+    const reading = feed.visible(1); // within two of the end: the kept page's next is asked for
+    await vi.waitFor(() => expect(api.next).toHaveBeenCalledWith("k-next"));
+    release();
+    await vi.waitFor(() => expect(ids(feed)).toEqual(["k1", "k2", "fresh-now"]));
+    answer(); // the kept page's next page lands now, after the merge
+    await Promise.all([opening, reading]);
+    expect(ids(feed)).toEqual(["k1", "k2", "fresh-now"]);
   });
 
   it("opens once: back from Ask, what was on screen is still there and nothing is asked again", async () => {
@@ -270,6 +329,21 @@ describe("side actions", () => {
     await feed.share(feed.entries.value[2]!.item);
     expect(feed.said.value).toBe(refusal);
     expect(feed.notes.value.size).toBe(0);
+  });
+
+  it("says a card at rest on his screen was opened, once, and only for a key that may", async () => {
+    const queue = vi.fn();
+    const { feed } = store({ queue });
+    await feed.open();
+    const first = feed.entries.value[0]!.item;
+    feed.seen(first);
+    feed.seen(first);
+    expect(queue.mock.calls).toEqual([[first.item_id, "opened"]]);
+    const narrow = vi.fn();
+    const { feed: theirs } = store({ queue: narrow, canEngage: false });
+    await theirs.open();
+    theirs.seen(theirs.entries.value[0]!.item);
+    expect(narrow).not.toHaveBeenCalled();
   });
 
   it("heard and tapped are written back only by a key that may", async () => {

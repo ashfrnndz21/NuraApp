@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
-import type { LabelIn, LineOut, MedicineDraftOut, MoreOut } from "../../api/types";
+import type { LabelIn, LineOut, MedicineDraftOut, MoreOut, OrderPreviewOut } from "../../api/types";
 import { browserAudio } from "../../feed/playback";
 import { base64Of, isPdf } from "../../onboarding/actions";
 import { StoryVoice } from "../../record/storyVoice";
@@ -19,8 +19,10 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
   const s = t();
   const [note] = useState(takeNote);
   const [said, setSaid] = useState<string[] | null>(null);
-  // The line the family was asked about: its button stays down, so one tap is one task.
+  // The line the family was asked about: its button stays down, so one yes is one task.
   const [askedFor, setAskedFor] = useState<string | null>(null);
+  // What he reads before his yes: who will be asked, for which medicine (the backend's words).
+  const [preview, setPreview] = useState<OrderPreviewOut | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const { data: lines, error } = useRead(() => {
@@ -28,22 +30,44 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
     return nura.medicines(bearer, profileId, language.value);
   }, [language.value]);
 
-  /** "Ask the family to order.": the tap is the yes; the backend says who does it next. */
-  const ask = async (line: LineOut) => {
+  const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setFailure(null);
-    setSaid(null);
     try {
-      const { bearer, profileId } = session();
-      const asked = await nura.askToOrder(bearer, profileId, line.line_id, language.value);
-      setSaid(asked.lines);
-      setAskedFor(line.line_id);
+      await work();
     } catch (refused) {
       setFailure(refused);
     } finally {
       setBusy(false);
     }
   };
+
+  /** "Ask the family to order.": first the preview — who Nura will ask, and for what. If the
+   *  family was already asked today, the backend's line says so and there is nothing to add. */
+  const ask = (line: LineOut) =>
+    run(async () => {
+      setSaid(null);
+      const { bearer, profileId } = session();
+      const shown = await nura.orderPreview(bearer, profileId, line.line_id, language.value);
+      if (shown.already_asked) {
+        setSaid(shown.lines);
+        setAskedFor(line.line_id);
+        return;
+      }
+      setPreview(shown);
+    });
+
+  /** His yes, for exactly the person and the line the preview named; the backend says who
+   *  does it next. */
+  const yes = (shown: OrderPreviewOut) =>
+    run(async () => {
+      const { bearer, profileId } = session();
+      const minted = await nura.mintOrder(bearer, profileId, shown.line_id, shown.asked_person_id);
+      const asked = await nura.askToOrder(bearer, profileId, shown.line_id, minted.confirmation_id, language.value);
+      setPreview(null);
+      setSaid(asked.lines);
+      setAskedFor(shown.line_id);
+    });
 
   return (
     <RecordFrame title={s.record.medicines} back={{ name: "hub" }} testId="record-medicines">
@@ -69,7 +93,21 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
         </Tile>
       )}
       {lines && (
-        <Paged items={lines} start={start} render={(line) => <LineCard key={line.line_id} line={line} busy={busy || askedFor === line.line_id} onAsk={() => void ask(line)} />} />
+        <Paged
+          items={lines}
+          start={start}
+          render={(line) => (
+            <LineCard
+              key={line.line_id}
+              line={line}
+              busy={busy || askedFor === line.line_id}
+              preview={preview?.line_id === line.line_id ? preview : null}
+              onAsk={() => void ask(line)}
+              onYes={(shown) => void yes(shown)}
+              onNo={() => setPreview(null)}
+            />
+          )}
+        />
       )}
       <Pill onClick={() => toRecord({ name: "add" })} testId="add-medicine">
         {s.record.add}
@@ -78,7 +116,17 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
   );
 }
 
-function LineCard({ line, busy, onAsk }: { line: LineOut; busy: boolean; onAsk: () => void }): JSX.Element {
+interface LineCardProps {
+  line: LineOut;
+  busy: boolean;
+  /** The preview of "Ask the family to order." for this line, waiting for his yes. */
+  preview: OrderPreviewOut | null;
+  onAsk: () => void;
+  onYes: (shown: OrderPreviewOut) => void;
+  onNo: () => void;
+}
+
+function LineCard({ line, busy, preview, onAsk, onYes, onNo }: LineCardProps): JSX.Element {
   const s = t();
   const actions = reorderActions(line);
   const counted = [...(line.count?.lines ?? []), ...(line.count?.reorder ?? [])];
@@ -111,7 +159,7 @@ function LineCard({ line, busy, onAsk }: { line: LineOut; busy: boolean; onAsk: 
       <p class="provenance" data-testid="source">
         {line.source}
       </p>
-      {actions && (
+      {actions && !preview && (
         <>
           <Pill plum onClick={onAsk} disabled={busy} testId="ask-to-order">
             {actions.askToOrder}
@@ -120,6 +168,20 @@ function LineCard({ line, busy, onAsk }: { line: LineOut; busy: boolean; onAsk: 
             {actions.iHaveMore}
           </Pill>
         </>
+      )}
+      {preview && (
+        <div class="lines" role="group" data-testid="order-preview">
+          {preview.lines.map((text, index) => (
+            <p key={index}>{text}</p>
+          ))}
+          <Pill plum onClick={() => onYes(preview)} disabled={busy} testId="order-yes">
+            {s.record.orderYes}
+          </Pill>
+          <Pill quiet onClick={onNo} disabled={busy} testId="order-no">
+            {s.record.orderNo}
+          </Pill>
+          <Hear lines={preview.lines} />
+        </div>
       )}
       <Pill onClick={() => toRecord({ name: "story", lineId: line.line_id })} testId="open-story">
         {s.record.aboutIt}
@@ -182,7 +244,7 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
                 ))}
                 {story.voice_parts?.includes(key) && (
                   <HearPart
-                    title={title}
+                    label={s.record.hearParts[key as keyof typeof s.record.hearParts]}
                     onHear={() =>
                       void voice.hear(key, {
                         // As the backend says the part: every part but what it is for ends on the boundary.
@@ -209,11 +271,13 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
   );
 }
 
-/** One part's Hear: the same button as every card's, naming the part it plays. */
-function HearPart({ title, onHear, testId }: { title: string; onHear: () => void; testId: string }): JSX.Element {
+/** One part's Hear: the same button as every card's, naming the part it plays in one whole
+ *  phrase of the catalogue a screen reader says ("Hear what to look out for"), never a
+ *  label and a colon, and never assembled. */
+function HearPart({ label, onHear, testId }: { label: string; onHear: () => void; testId: string }): JSX.Element {
   const s = t();
   return (
-    <Pill quiet onClick={onHear} label={`${s.today.hear}: ${title}`} testId={testId}>
+    <Pill quiet onClick={onHear} label={label} testId={testId}>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 10v4h3l4 4V6L7 10H4z" />
         <path d="M15 9a4 4 0 0 1 0 6" />
@@ -350,7 +414,8 @@ export function AddMedicineScreen(): JSX.Element {
 }
 
 /** "I have more at home." (E04-05): how many, then his yes for exactly that number; the
- *  backend's count lines come back. */
+ *  backend's count lines come back. A high-risk medicine's count rests on a photo of the box
+ *  or the label, the same rule as its dose, so for one of those the photo comes first. */
 export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
   const s = t();
   // Which medicine the number is for, in the backend's words, above the question.
@@ -360,24 +425,42 @@ export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
   }, [lineId, language.value]);
   const line = lines?.find((each) => each.line_id === lineId) ?? null;
   const [typed, setTyped] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null);
   const [done, setDone] = useState<MoreOut | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const count = countOf(typed);
-  const add = async () => {
-    if (count === null) return;
+  const needsPhoto = line?.high_risk === true && photo === null;
+  const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
-      const { bearer, profileId } = session();
-      const yes = await nura.mintMore(bearer, profileId, lineId, count);
-      setDone(await nura.addMore(bearer, profileId, lineId, count, yes.confirmation_id, language.value));
+      await work();
     } catch (failure) {
       setError(failure);
     } finally {
       setBusy(false);
     }
   };
+  /** The photo of the box or the label, kept the way a label photo is (E02). A file that is
+   *  not a photo is kept too, and the backend says why it will not do. */
+  const upload = (file: File) =>
+    run(async () => {
+      const { bearer, profileId } = session();
+      const data = await base64Of(file);
+      const taken = new Date(file.lastModified || Date.now()).toISOString();
+      const card = isPdf(file)
+        ? await nura.addImport(bearer, profileId, data, "application/pdf", taken, "share")
+        : await nura.addPhoto(bearer, profileId, data, file.type || "application/octet-stream", taken);
+      setPhoto(card.artifact_id);
+    });
+  const add = () =>
+    run(async () => {
+      if (count === null) return;
+      const { bearer, profileId } = session();
+      const yes = await nura.mintMore(bearer, profileId, lineId, count, photo);
+      setDone(await nura.addMore(bearer, profileId, lineId, count, yes.confirmation_id, language.value, photo));
+    });
   return (
     <RecordFrame title={s.record.moreTitle} back={{ name: "medicines" }} testId="record-more">
       {done ? (
@@ -388,7 +471,7 @@ export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
           <Hear lines={done.count?.lines ?? []} />
         </Tile>
       ) : (
-        <Tile paper testId="more-form">
+        <Tile paper testId={needsPhoto ? "more-photo" : "more-form"}>
           {line && (
             <>
               <h2 class="title" data-testid="more-medicine">
@@ -399,11 +482,23 @@ export function MoreScreen({ lineId }: { lineId: string }): JSX.Element {
               </p>
             </>
           )}
-          <p>{s.record.moreLead}</p>
-          <Field name="more" label={s.record.moreLabel} value={typed} onInput={setTyped} inputMode="numeric" big maxLength={4} />
-          <Pill plum onClick={() => void add()} disabled={busy || count === null} testId="more-yes">
-            {s.record.moreYes}
-          </Pill>
+          {needsPhoto ? (
+            <>
+              <p>{s.record.morePhoto}</p>
+              <p>{s.record.morePhotoWhy}</p>
+              <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={s.onboarding.records.photo} />
+              <Hear lines={[s.record.morePhoto, s.record.morePhotoWhy]} />
+            </>
+          ) : (
+            <>
+              {photo && <p data-testid="more-photo-kept">{s.record.morePhotoKept}</p>}
+              <p>{s.record.moreLead}</p>
+              <Field name="more" label={s.record.moreLabel} value={typed} onInput={setTyped} inputMode="numeric" big maxLength={4} />
+              <Pill plum onClick={() => void add()} disabled={busy || count === null} testId="more-yes">
+                {s.record.moreYes}
+              </Pill>
+            </>
+          )}
         </Tile>
       )}
       <Notice error={error} />

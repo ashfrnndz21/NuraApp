@@ -26,9 +26,13 @@ from app.consent.service import (
     NotTheirConsentToWithdraw,
     StopsByClosingTheAccount,
 )
-from app.delivery.feed.engagement import NoSuchItem
+from app.delivery.feed.area import OnlyHeSetsHisArea
+from app.delivery.feed.clips import NoClipRenderer, NoExcerpt, NotAClipCard
+from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
+from app.delivery.feed.find import NotAFilter, NothingToFind
+from app.delivery.feed.local import NotACoarseArea, NotAHazard, NotASeason
 from app.delivery.feed.rank import NoCachedPage
-from app.delivery.feed.search import NoSuchSearchJob
+from app.delivery.feed.search import FastingIsHisToSay, NoSuchSearchJob, NotACadence
 from app.delivery.feed.sources import NotTheirsToManage
 from app.delivery.feed.twin import NotInThatLanguage
 from app.delivery.nudges.engine import NoSuchNudge, NotAPlanDay, NothingToHandOver
@@ -43,7 +47,13 @@ from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
 from app.family.privacy import AlreadyMarked, NotAPartToMark, NotMarked, NotTheOwner
-from app.family.pushes import BadWindow, MissingSlot, NoSuchTemplate, NotAMemo
+from app.family.pushes import (
+    BadWindow,
+    MessageNamesAMedicine,
+    MissingSlot,
+    NoSuchTemplate,
+    NotAMemo,
+)
 from app.family.roster import (
     AlreadyDone,
     NoSuchSlot,
@@ -85,6 +95,7 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
+from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
 from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
@@ -94,7 +105,7 @@ from app.language.review import (
     SourceAlreadyListed,
 )
 from app.medicines.reorder import NobodyToAsk, NotACount
-from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange
+from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.medicines.story import NoSuchStoryPart
 from app.memory.attach import AlreadyHangsThere
 from app.memory.episodic import OnlyTheFamilyHears
@@ -117,6 +128,7 @@ from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
 from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.reasoning.trends import NoSuchAnalyte
+from app.reasoning.visits.brief import NoBriefYet
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
 from app.reasoning.visits.logistics import NotOnThisVisit
@@ -153,6 +165,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchHolder, 403),
     # A key that reads the visits does not write them; same footing as the medicines.
     (NotTheirsToChangeVisits, 403),
+    # A read-only visits key asked for a brief nobody has rendered yet: it reads the one that
+    # stands and never renders one, so there is nothing to give it (B1 review).
+    (NoBriefYet, 404),
     # A webhook body not signed by the provider, or a verify token that is not ours.
     (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
@@ -168,6 +183,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToChange, 403),
     # The day, and a calendar's proposals (E10-01, E18-02): reading them is not setting them.
     (NotTheirsToSet, 403),
+    # His insurer (E13-01): typed by him or his chief; an identity card is not a policy.
+    (NotTheirsToSetInsurer, 403),
+    (NotAnInsurer, 400),
+    (NotAPolicyReference, 400),
     (NotTheirsToConnect, 403),
     (NotTheirsToDecide, 403),
     # The family's arrangements (E12): the owner's and his chief's; a key is never widened
@@ -216,6 +235,20 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A fact heard at a visit that names a drug is never written; the answer names the rule.
     (DrugNamedInAFact, 400),
     (NoSuchItem, 404),
+    # The feed's richer formats (F1): a clip's parts, the phone's queue, the watches, his
+    # area, the ask bar's filters.
+    (NotAClipCard, 404),
+    (NoExcerpt, 404),
+    (NoClipRenderer, 404),
+    (SecondsOnlyOnAPlay, 400),
+    (NotACadence, 400),
+    (FastingIsHisToSay, 403),
+    (NotAHazard, 400),
+    (NotASeason, 400),
+    (NotACoarseArea, 400),
+    (OnlyHeSetsHisArea, 403),
+    (NotAFilter, 400),
+    (NothingToFind, 400),
     (NoOneToActFor, 404),
     (NothingToSay, 404),
     # Only someone a flag's ladder reached, whose key covers it, answers it (E11-06).
@@ -314,6 +347,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAMemo,
     MissingSlot,
     BadWindow,
+    # A message to him that names a medicine or a dose (#164): his reminders come only
+    # from his confirmed list.
+    MessageNamesAMedicine,
     NotADocument,
     NotAnAnswer,
     NotAPlanDay,
@@ -331,6 +367,8 @@ _SHAPE: tuple[type[Refusal], ...] = (
     NotAConsultRecording,
     NotAClip,
     NotOnThisVisit,
+    # A tap the phone held while offline (E00-08) is written only as today's.
+    TapNotToday,
     # The reorder card's (E04-05): tablets found at home are a whole number, more than none.
     NotACount,
 )

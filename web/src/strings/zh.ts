@@ -250,6 +250,8 @@ export const zh = {
     fromState: "Nura 在 {date} 算出了这个。",
     // @patient
     fromDays: "Nura 数了您吃药的天数。",
+    // @patient phrase
+    emergencyOpen: "您的紧急卡",
   },
   feed: {
     // @patient headline
@@ -313,7 +315,33 @@ export const zh = {
     // @patient
     statusOpened: "{name} 打开了这张卡。",
     // @patient
+    statusPlayed: "{name} 听了这张卡。",
+    // @patient
     statusDismissed: "{name} 按了“不适合我”。",
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    watchWhole: "在{publisher}看完整的视频",
+    // @patient phrase
+    askOrSearch: "提问或搜索",
+    // @patient phrase
+    filterLabel: "在哪里找",
+    // @patient phrase
+    filterRecords: "您的文件",
+    // @patient phrase
+    filterWeb: "网上",
+    // @patient phrase
+    filterProviders: "医生和诊所",
+    // @patient phrase
+    filterVideos: "视频",
+    // @patient phrase
+    search: "搜索",
+    // @patient phrase
+    readPage: "在{publisher}看这一页",
+    // @patient
+    foundNothing: "Nura 没有找到相关的内容。",
+    // @patient phrase
+    nextVisit: "您下次看病是{date}。",
   },
   reading: {
     // @patient headline
@@ -372,6 +400,38 @@ export const zh = {
     remindersDenied1: "这部手机不允许提醒。",
     // @patient
     remindersDenied2: "您可以在手机设置里更改。",
+    // @patient headline
+    areaTitle: "您住的地方",
+    // @patient
+    areaLead: "Nura 只用您住的地方，告诉您附近的骨痛热症、烟霾或炎热天气。",
+    // @patient
+    areaNone: "Nura 不知道您住在什么地方。",
+    // @patient
+    areaIs: "Nura 知道您住在{area}。",
+    // @patient
+    areaAsk: "您住在{area}吗？",
+    // @patient phrase
+    areaYes: "是，我住在那里",
+    // @patient phrase
+    areaNo: "不是",
+    // @patient phrase
+    areaChange: "选择您住的地方",
+    // @patient phrase
+    areaClear: "不要记我住的地方",
+    // @patient
+    areaWho: "负责这些文件的家人可以看到您住的地方。",
+    // @patient headline
+    ramadanTitle: "斋戒月",
+    // @patient
+    ramadanLead: "如果您守斋戒月，Nura 可以帮您提前准备。",
+    // @patient
+    ramadanWho: "负责这些文件的家人也会看到这个。",
+    // @patient phrase
+    ramadanYes: "好，斋戒月前告诉我",
+    // @patient
+    ramadanOn: "斋戒月前 Nura 会告诉您。",
+    // @patient phrase
+    ramadanStop: "不用再告诉我",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -434,6 +494,94 @@ export const zh = {
     // @patient
     keepOpenToSend: "在那之前，请不要离开这一页。",
   },
+  // 离线时点的（E00-08）。
+  held: {
+    // @patient
+    held: "网络恢复后，Nura 会把您点的发出去。",
+    // @patient
+    tapped: "{time}，您点了这个。",
+    // @patient
+    sent: "Nura 已经把您点的发出去了。",
+  },
+  // 手机上的紧急卡（E00-08）。
+  emergency: {
+    // @patient
+    asOf: "Nura 最后一次读这张卡是在 {date}。",
+    // @patient
+    none: "这部手机上还没有您的紧急卡。",
+    // @patient
+    noneSub: "请晚一点在有网络的时候再打开这张卡。",
+    // @patient phrase
+    callChief: "打给{name}",
+    // @patient phrase
+    callAmbulance: "打 {number} 叫救护车",
+    // @patient phrase
+    print: "打印这张卡",
+  },
+  // 照片里的文件（E18-01）。
+  papers: {
+    // @patient phrase
+    open: "从照片里加文件",
+    // @patient phrase
+    chooseMany: "选多张照片",
+    // @patient headline
+    title: "照片里的文件",
+    // @patient
+    lead: "一次选好所有文件的照片。",
+    // @patient
+    lead2: "您点“发”之前，Nura 什么都不发。",
+    // @patient phrase
+    pick: "选照片",
+    // @patient
+    gridLead: "点一张照片就不发它。",
+    // @patient phrase
+    picture: "第 {count} 份文件",
+    // @patient
+    tileIn: "Nura 会发这份。",
+    // @patient
+    tileOut: "Nura 不发这份。",
+    // @patient phrase
+    sendOne: "发 1 份文件",
+    // @patient phrase
+    send: "发 {count} 份文件",
+    // @patient
+    sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient headline
+    found: "Nura 找到的",
+    // @patient
+    read: "Nura 读了这份文件。",
+    // @patient phrase
+    check: "看看这份文件",
+    // @patient
+    notHealth: "这不是看病的文件。",
+    // @patient
+    notSent: "刚才没有网络，这份还没发出去。",
+    // @patient phrase
+    sendRest: "发还没发出去的",
+    // @patient
+    nothingKept: "Nura 没有把照片存在这部手机上。",
+    // @patient phrase
+    backToday: "回到“今天”",
+  },
+  // 播放器（E15-07）。
+  player: {
+    // @patient phrase
+    play: "播放",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    speed: "Nura 说话的快慢",
+    // @patient phrase
+    slower: "慢一点",
+    // @patient phrase
+    usual: "平常的速度",
+    // @patient phrase
+    faster: "快一点",
+    // @patient phrase
+    nextPart: "下一部分",
+    // @patient phrase
+    hearStory: "听听{name}的介绍",
+  },
   day: {
     // @patient headline
     topThree: "今天的3件事",
@@ -467,10 +615,10 @@ export const zh = {
     symptomsLead: "说说您哪里不舒服、有多难受、从什么时候开始。",
     // @patient phrase
     symptomsKeep: "保存",
-    // @patient
     // @patient phrase
     sendAgain: "再发送一次",
-    symptomsSaved: "Nura已经记下了。",
+    // @patient
+    symptomsSaved: "Nura 记下了。",
     // @patient phrase
     nudgeOk: "好的",
     // @patient phrase
@@ -810,7 +958,7 @@ export const zh = {
       // @patient
       wordsLead: "请读一读这些话。",
       // @patient phrase
-      agree: "我同意，让他们看",
+      agree: "我同意，给他们钥匙",
       // @patient
       done: "他们现在可以看这些了。",
     },
@@ -823,8 +971,8 @@ export const zh = {
       cadence1: "Nura 每天最多只问一件事。",
       // @patient
       cadence2: "点“以后”，Nura 过几天再问一次。",
-      // @patient phrase
-      missing: "还没有",
+      // @patient
+      missing: "Nura 还没有这个。",
       // @patient
       onDay: "Nura 会在 {date} 问这件事。",
       // @patient phrase
@@ -836,7 +984,7 @@ export const zh = {
       // @patient
       more: "之后还有 {count} 件。",
       // @patient
-      nothing: "现在什么都不缺。",
+      nothing: "Nura 现在需要的都有了。",
       // @patient phrase
       open: "打开 Nura",
     },
@@ -885,7 +1033,7 @@ export const zh = {
     // @patient headline
     medicines: "您的药",
     // @patient headline
-    papers: "等您确认的文件",
+    papers: "等您说好的文件",
     // @patient headline
     routine: "您的一天",
     // @patient headline
@@ -899,9 +1047,9 @@ export const zh = {
     // @patient phrase
     back: "回到您的文件",
     // @patient
-    sureYes: "您已经确认了这一条。",
+    sureYes: "这一条您说好了。",
     // @patient
-    sureRead: "Nura 看得很清楚。",
+    sureRead: "这一条 Nura 看得很清楚。",
     // @patient
     disputed: "有人说这一条不对。",
     // @patient
@@ -922,6 +1070,15 @@ export const zh = {
     storyForgot: "如果忘了吃",
     // @patient headline
     storyAsk: "要问医生的",
+    // @patient phrase
+    hearParts: {
+      purpose: "听这个药是做什么的",
+      how_to_take: "听怎么吃",
+      watch_out: "听要注意什么",
+      avoid: "听要避开什么",
+      if_forgotten: "听忘了吃怎么办",
+      doctor_question: "听要问医生什么",
+    },
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient
@@ -929,11 +1086,11 @@ export const zh = {
     // @patient phrase
     nameLabel: "标签上的名字",
     // @patient phrase
-    strengthLabel: "药的强度",
+    strengthLabel: "这个药有多强",
     // @patient phrase
     howLabel: "怎么吃",
     // @patient
-    howHint: "照标签上写的打。",
+    howHint: "照标签上写的输入。",
     // @patient phrase
     countLabel: "盒子里有多少",
     // @patient phrase
@@ -943,7 +1100,7 @@ export const zh = {
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient
-    outcomeRefill: "这是您清单上已有的药，又多了一些。",
+    outcomeRefill: "这是您已经在吃的药，又多了一些。",
     // @patient
     outcomeChange: "这张标签上的分量不一样。",
     // @patient headline
@@ -971,7 +1128,17 @@ export const zh = {
     // @patient phrase
     moreYes: "对，加上去",
     // @patient
-    papersNone: "没有等您确认的文件。",
+    morePhoto: "先拍一张药盒标签的照片。",
+    // @patient
+    morePhotoWhy: "这个药，Nura 要先看药盒标签。",
+    // @patient
+    morePhotoKept: "Nura 已经有药盒标签的照片了。",
+    // @patient phrase
+    orderYes: "好，请家人订",
+    // @patient phrase
+    orderNo: "现在不用",
+    // @patient
+    papersNone: "没有文件在等您说好。",
     // @patient
     paperFrom: "这是{date}收到的。",
     // @patient phrase
@@ -1065,7 +1232,7 @@ export const zh = {
     // @patient headline
     notesTitle: "关于这个地方的笔记",
     // @patient
-    notesOnly: "只有主人和负责的家人能看这些笔记。",
+    notesOnly: "只有您和负责这些文件的人能看这些笔记。",
     // @patient phrase
     noteLabel: "一条关于这个地方的笔记",
     // @patient phrase
@@ -1091,20 +1258,30 @@ export const zh = {
       haemoglobin: "您的血色素",
       tsh: "您的甲状腺检查",
     },
-    // @patient phrase
-    resultOn: "{date}的结果是{value} {unit}",
+    // 整句，不是短语：它单独成一段（Day.tsx），屏幕阅读器会当作一个完整的单位读出来（#166 审查）。
     // @patient
-    rangeUnder: "范围是{upper}以下。",
+    resultOn: "{date}的数字是{value}。",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{date}的数字是{value} {unit}",
     // @patient
-    rangeOver: "范围是{lower}以上。",
+    rangeUnder: "大多数人这个数字在{upper}以下。",
     // @patient
-    rangeBetween: "范围是{lower}到{upper}。",
+    rangeOver: "大多数人这个数字在{lower}以上。",
     // @patient
-    noRange: "Nura 没有这一项的范围。",
+    rangeBetween: "大多数人这个数字在{lower}到{upper}之间。",
     // @patient
-    labRange: "这个范围印在您的验血单上。",
+    noRange: "Nura 没有这一项的平常数字。",
     // @patient
-    guideRange: "这个范围来自适合您年龄的指南。",
+    labRange: "平常的数字印在您的验血单上。",
+    // @patient
+    guideRange: "平常的数字来自适合您年龄的指南。",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura 需要知道您的年龄，才能找到平常的数字。",
+      needs_sex: "Nura 需要知道您是男是女。",
+      none_on_file: "Nura 没有这一项的平常数字。",
+    },
     // @patient phrase
     anchors: {
       wake: "起床的时候",
@@ -1124,7 +1301,7 @@ export const zh = {
     // @patient
     notSet: "还没有人设定您的一天。",
     // @patient phrase
-    setDay: "设定这一天",
+    setDay: "设定您的一天",
     // @patient phrase
     timeLabel: "几点",
     // @patient phrase
@@ -1132,13 +1309,13 @@ export const zh = {
     // @patient phrase
     walkAfter: "之后散步",
     // @patient phrase
-    checkDay: "检查这一天",
+    checkDay: "检查您的一天",
     // @patient
-    dayAsk: "这一天是这样吗？",
+    dayAsk: "您的一天是这样吗？",
     // @patient phrase
-    dayYes: "对，设定这一天",
+    dayYes: "对，设定您的一天",
     // @patient
-    daySaved: "Nura 记下了这一天。",
+    daySaved: "Nura 记下了您的一天。",
     // @patient headline
     tableMoment: "什么时候",
     // @patient headline
@@ -1179,6 +1356,7 @@ export const zh = {
     stopYes: "好，停止",
     // @patient phrase
     closeAccount: "关闭我的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
@@ -1208,6 +1386,12 @@ export const zh = {
     windowLabel: "多久",
     // @patient phrase
     makeKey: "做钥匙",
+    // @patient phrase
+    seeWords: "看这些话",
+    // @patient
+    wordsLead: "请读一读这些话。",
+    // @patient phrase
+    agreeKey: "我同意，给他们钥匙",
     // @patient phrase
     narrow: "改小一点",
     // @patient phrase
@@ -1289,7 +1473,6 @@ export const zh = {
       thinking_of_you: "想念您",
       weigh_tomorrow: "明天站上秤",
       drink_water: "喝一杯水",
-      water_pill_morning: "8点吃去水药",
     },
     // @patient phrase
     ownWords: "我自己的话",
@@ -1385,6 +1568,7 @@ export const zh = {
       app_push: "应用",
       whatsapp: "WhatsApp",
       caregiver: "通过照顾的人",
+      in_app: "在应用里",
     },
     // @patient phrase
     outcomes: {
@@ -1416,6 +1600,8 @@ export const zh = {
     saveSettings: "保存这些设置",
     // @patient phrase
     neverHeld: "从不暂停",
+    // @patient phrase
+    everyWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
     // @patient headline
     documents: "家人名单的文件",
     // @patient phrase
@@ -1494,8 +1680,78 @@ export const zh = {
     // @patient phrase
     tryAgain: "再试一次",
   },
+  chief: {
+    // @patient headline
+    sentTitle: "这周发给{name}的",
+    // @patient
+    sentNone: "这周 Nura 没有发给{name}任何东西。",
+    // @patient headline
+    watchingTitle: "为{name}留意的",
+    // @patient
+    watchingNone: "Nura 还没有留意任何事。",
+    // @patient
+    sourcesNote: "Nura 只看卫生机构、医院和医生组织的内容。",
+    // @patient phrase
+    onChange: "有新消息时",
+    // @patient phrase
+    daily: "每天",
+    // @patient phrase
+    weekly: "每周",
+    // @patient phrase
+    beforeVisits: "每次看病前",
+    // @patient phrase
+    once: "一次",
+    // @patient phrase
+    paused: "已暂停",
+    // @patient phrase
+    pause: "暂停",
+    // @patient phrase
+    resume: "重新开始",
+    // @patient phrase
+    pauseWatch: "暂时不留意这个",
+    // @patient phrase
+    add: "留意新的事",
+    // @patient
+    addLead: "选择 Nura 要留意什么。",
+    // @patient
+    added: "从现在起 Nura 会留意这个。",
+    // @patient phrase
+    dengue: "骨痛热症",
+    // @patient phrase
+    haze: "烟霾",
+    // @patient phrase
+    heat: "炎热天气",
+    // @patient phrase
+    festiveFood: "节日食物",
+  },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "只有本人可以回答这个。",
+    // @patient
+    NotAClipCard: "这张卡没有可以播放的内容。",
+    // @patient
+    NoExcerpt: "Nura 会念这张图片给您听。",
+    // @patient
+    NoClipRenderer: "Nura 现在不能显示这张图片。",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura 没能记下这个。",
+    // @patient
+    NotACadence: "请从列表里选择多久一次。",
+    // @patient
+    NotAHazard: "Nura 可以留意骨痛热症、烟霾或炎热天气。",
+    // @patient
+    NotASeason: "Nura 可以留意斋戒月或节日食物。",
+    // @patient
+    NotACoarseArea: ["请从列表里选择您的地区。", "或者只输入邮编的前几位。"],
+    // @patient
+    OnlyHeSetsHisArea: "只有本人可以选择住的地方。",
+    // @patient
+    NotAFilter: "请选择在哪里找。",
+    // @patient
+    NothingToFind: "请输入您要找的东西。",
+    // @patient
+    NotTheirsToManage: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     default: "Nura 现在做不了这件事。",
     NotInTheDemo: ["演示版只接受测试电话号码。", "测试号码以 +65 0 开头。"],
     CardsStillOpen: "还有一份文件在等您同意。",
@@ -1574,6 +1830,9 @@ export const zh = {
     NotTheirsToChangeVisits: "您可以看这些预约，但不能改。",
     NotAChief: ["只有本人可以做这件事。", "负责这些文件的家人也可以。"],
     NotOnThisVisit: "Nura不能把这次开车的事交给这个人。",
+    TapNotToday: "Nura 只记下您今天点的。",
+    // A body too large to take, answered for the app by a layer in front of it (a bare 413).
+    TooLarge: "那个文件太大了，Nura 打不开。",
     NoteNamesHealth: "Nura 不能保存写了药名或病名的笔记。",
     NotAPlaceNote: "请写一句简短的话，关于这个地方。",
     NotTheirsToSet: "您可以看这一天，但不能改。",
@@ -1621,6 +1880,8 @@ export const zh = {
     NoSuchReviewItem: "那一项已经不在清单里了。",
     NotWellFormed: "Nura 不明白那个。",
     AlertsAreNeverHeld: "不能等的消息从不暂停。",
+    AlertsGoEveryWay: "这件事，Nura 总是用每一种能用的方法告诉您的家人。",
+    MessageNamesAMedicine: ["消息里不能写药名，也不能写吃多少。", "Nura 只按药单发吃药提醒。"],
     NotOnTheLadder: "Nura 没有请您处理这个。",
     NotADocument: "Nura 在这里只能保存文件或照片。",
     StopsByClosingTheAccount: "要让 Nura 停止保存您的文件，请关闭您的账户。",

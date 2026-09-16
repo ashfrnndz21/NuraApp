@@ -1,0 +1,29 @@
+{
+  "en": {
+    "headline": "This week: half brown rice",
+    "body": [
+      "Try half brown rice, half white rice this week.",
+      "Brown rice keeps your sugar steadier after meals."
+    ],
+    "why_topic": "your blood sugar",
+    "passage": "Start by mixing half brown and half white rice"
+  },
+  "ms": {
+    "headline": "Minggu ini: separuh nasi perang",
+    "body": [
+      "Cuba separuh nasi perang, separuh nasi putih minggu ini.",
+      "Nasi perang membantu gula anda lebih stabil selepas makan."
+    ],
+    "why_topic": "gula dalam darah anda",
+    "passage": "Start by mixing half brown and half white rice"
+  },
+  "zh": {
+    "headline": "这周：一半糙米",
+    "body": [
+      "这周试试一半糙米、一半白米。",
+      "糙米让饭后血糖更稳定。"
+    ],
+    "why_topic": "您的血糖",
+    "passage": "Start by mixing half brown and half white rice"
+  }
+}

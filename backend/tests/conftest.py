@@ -44,6 +44,7 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import FixtureProvider
 from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
+from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
@@ -244,6 +245,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         region=region,
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
+        red_flag_tiers=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
         review_staff=(("pharmacist", STAFF_TOKEN),),
     )
@@ -264,6 +266,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         whatsapp=whatsapp,
         reference_ranges=FixtureRanges.load(),
         speaker_separator=FixtureSeparator(SPEAKERS, region),
+        clips=FixtureClipRenderer(FEED),
     )
     app = create_app(settings, sessions, providers)
     try:

@@ -27,6 +27,12 @@ class Settings:
     dev_code_sender: bool = False
     """Only with NURA_DEV_CODE_SENDER=1 may the logging code sender run. It prints login
     codes to the server log, which is fine on a laptop and account takeover anywhere else."""
+    red_flag_tiers: bool = False
+    """NURA_RED_FLAG_TIERS=1: the red-flag tiers of ADR 0010 are signed off by a clinician
+    (docs/trust/clinical-sign-off.md) and may reach a family — the doctor today in his hours,
+    the hospital on his insurance or rest and the morning out of them, a fall on a blood thinner
+    raised to the ambulance. Unset, every red flag's step is the ambulance, the stricter step
+    the not-feeling-well card already gives. A dev run sets it (`make dev`)."""
     object_store_root: str | None = None
     """NURA_OBJECT_STORE: the directory the local object store keeps artefact bytes under,
     one subdirectory per region (`app.ingestion.objects.LocalObjectStore`). No default: a
@@ -210,6 +216,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         region=region,
         database_url=database_url,
         dev_code_sender=dev_code_sender,
+        red_flag_tiers=source.get("NURA_RED_FLAG_TIERS", "") == "1",
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,

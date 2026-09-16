@@ -179,6 +179,8 @@ export interface FeedItemOut {
   expires_at: string;
   /** For today's top three (E11-02): alert, reminder or insight. */
   category?: string | null;
+  /** The watch that found this card, when a search made it (F1): what "Pause this watch" pauses. */
+  search_job_id?: string | null;
 }
 
 export interface FeedPageOut {
@@ -231,7 +233,7 @@ export interface AnswerOut {
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
-export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared";
+export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
 
 export interface EngagementOut {
   engagement_id: string;
@@ -275,6 +277,44 @@ export interface StateOut {
   stale_after: string | null;
   /** The line the posture is shown under (E16-01), one idea per line, joined by newlines. */
   boundary: string;
+  /** Each dimension as the snapshot keeps it, or null where the key does not cover it. The
+   *  client reads one thing here: his large-text setting (`functional.facts.vision`). */
+  dimensions?: Record<string, { facts?: Record<string, Record<string, { value?: unknown }>> } | null>;
+}
+
+/** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
+ *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
+export interface EmergencyCardOut {
+  card_id: string;
+  profile_id: string;
+  state_id: string;
+  rendered_at: string;
+  name: string;
+  language: string;
+  spoken_language: string;
+  age_band: string | null;
+  conditions: { code: string; words: string; fact_id: string }[];
+  medicines: {
+    line_id: string;
+    generic: string;
+    brand: string | null;
+    strength: string;
+    form: string;
+    plain_name: string;
+    amount: string;
+    when: string;
+    high_risk: boolean;
+    high_risk_class: string | null;
+  }[];
+  allergies: { code: string; words: string; fact_id: string }[];
+  blood_type: string | null;
+  high_risk: string[];
+  contacts: { person_id: string; name: string; phone_e164: string | null; role: string }[];
+  clinic: { provider_id: string; name: string; kind: string; phone_e164: string | null } | null;
+  last_reading_at: string | null;
+  /** The ambulance, by region: 995 in Singapore, 999 in Malaysia. */
+  emergency_number: string;
+  lines: { id: string; text: string }[];
 }
 
 export interface ProudOut {
@@ -1007,7 +1047,19 @@ export interface ReconciledOut {
   high_risk: boolean;
 }
 
-/** What "Ask the family to order." did (E04-05). */
+/** What he reads before his yes to "Ask the family to order." (E04-05): the one person the
+ *  task will name, in his words. `already_asked` when the family was asked for this line
+ *  today and the task is still open: the one line says so, and a yes answers with that task. */
+export interface OrderPreviewOut {
+  line_id: string;
+  asked_person_id: string;
+  already_asked: boolean;
+  task_id: string | null;
+  language: string;
+  lines: string[];
+}
+
+/** What "Ask the family to order." did (E04-05), on his yes. */
 export interface AskedOut {
   line_id: string;
   task_id: string;
@@ -1015,6 +1067,7 @@ export interface AskedOut {
   told_person_ids: string[];
   language: string;
   lines: string[];
+  already_asked: boolean;
 }
 
 /** What "I have more at home." wrote, and the count now (E04-05). */
@@ -1023,6 +1076,8 @@ export interface MoreOut {
   supply_id: string;
   fact_id: string;
   event_id: string;
+  /** The photo of the box or the label the count rests on; a high-risk medicine's needs one. */
+  artifact_id: string | null;
   quantity: number;
   count: CountOut | null;
 }
@@ -1348,4 +1403,71 @@ export interface DeploymentOut {
   dev?: boolean;
   /** The Web Push key the home-screen app subscribes with; null when there is no Web Push. */
   push_key?: string | null;
+}
+
+/** One event from the phone's queue (E11-08, `POST …/feed/events`). `seconds` only on a play
+ *  or a replay: how much of a clip or voice note played. Nothing measures time in the feed. */
+export interface QueuedEventIn {
+  client_id: string;
+  item_id: string;
+  event: EngagementEvent;
+  at: string;
+  channel?: "app";
+  seconds?: number | null;
+}
+
+export interface EventsOut {
+  written: string[];
+  skipped: { client_id: string; because: string }[];
+}
+
+/** One card of "Sent to Pa this week": the card and its status. No count of anything. */
+export interface SentOut {
+  item: FeedItemOut;
+}
+
+export type JobKind = "explainer" | "safety" | "local" | "food" | "provider" | "worth_knowing" | "seasonal";
+
+/** One watch of "Watching for Pa": what for (the backend's words), its sources, how often. */
+export interface SearchJobOut {
+  job_id: string;
+  kind: JobKind;
+  terms: string[];
+  source_ids: string[];
+  cadence: string;
+  reason: Record<string, unknown>;
+  status: string;
+  results: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+  last_run_at: string | null;
+  label: string;
+  sources: string[];
+}
+
+/** His area, coarse (E09-07): a town from the list or a postcode's first digits. */
+export interface AreaOut {
+  area: string | null;
+  districts: string[];
+  may_set: boolean;
+}
+
+export type FindWhere = "web" | "videos" | "providers";
+
+/** One thing the ask bar's Web, Videos or Providers filter found: the backend's words. */
+export interface FindResultOut {
+  title: string;
+  publisher: string | null;
+  url: string | null;
+  published_at: string | null;
+  lines: string[];
+  boundary: string | null;
+  media: string | null;
+  provider_id: string | null;
+  next_visit_at: string | null;
+}
+
+export interface FindOut {
+  where: string;
+  results: FindResultOut[];
 }

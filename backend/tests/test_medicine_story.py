@@ -73,7 +73,7 @@ def test_the_story_has_every_section_in_his_words_with_the_chemical_name_kept_sm
         "Never take 2 at once.",
     ]
     assert told.boundary == [
-        "This helps you take what Dr Tan prescribed.",
+        "This helps you take what Dr Tan gave you.",
         "Ask Dr Tan or the pharmacist before you change anything.",
     ]
     assert told.doctor_question == []

@@ -1,36 +1,26 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
+import { Refused, Unreachable } from "../api/client";
 import * as nura from "../api/nura";
-import type { FeedItemOut } from "../api/types";
+import type { FeedItemOut, ProfileOut, SlotOut } from "../api/types";
 import { forgetFeed } from "../feed/session";
 import { go, openTab } from "../flow";
+import { dropCard, keepsCard, loadCard, readCard, saveCard, wantsRead, type KeptCard } from "../offline/emergencyCache";
 import { dropStaleFeed } from "../offline/feedCache";
-import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type TodayEntry } from "../offline/todayCache";
+import { hold, replay, tapId, waiting, type Tap } from "../offline/queue";
+import { bindingOf, clearProfileData, loadToday, sameBinding, saveToday, shownUntil, zoneOf, type Binding, type TodayEntry } from "../offline/todayCache";
 import { readFailure } from "../restore";
 import { wantsHomeScreenHint } from "../offline/register";
-import { chooseProfile, density, me, posture, profile, token } from "../store/session";
+import { chooseProfile, density, me, posture, profile, setLargeText, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
-import {
-  dateLine,
-  boundaryOf,
-  feedCards,
-  feedLines,
-  greeting,
-  medicinesCard,
-  nowCard,
-  readingLead,
-  stateLines,
-  timeLine,
-  todayList,
-  tookLine,
-  whyLine,
-  type TodayModel,
-} from "../today/model";
+import { clockWords, dateLine, boundaryOf, feedCards, feedLines, greeting, largeTextOf, lineTitle, medicinesCard, nowCard, readingLead, stateLines, timeLine, todayList, tookLine, whyLine, type TodayModel } from "../today/model";
 import { Card, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { EmergencyCard } from "./Emergency";
+import { voice } from "../player/voice";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
-import { browserClipDeps, ClipPlayer } from "../visit/clip";
+import { ChiefPanels } from "./ChiefPanels";
 
 /** Today: the Now card, a reading prompt, today's cards and the proud number — every line the
  *  backend's or the catalogue's, every card with its source line and its spoken twin.
@@ -39,7 +29,25 @@ import { browserClipDeps, ClipPlayer } from "../visit/clip";
  *  midnight) and then, when the network is there, on the fresh one. A kept page shows today's
  *  list and no Now card: only the backend can say what is due. Past midnight, with no network,
  *  only the emergency card and one line show. A refused read — or a key that has narrowed —
- *  deletes what the phone kept of these papers and says so; nothing is swallowed. */
+ *  deletes what the phone kept of these papers and says so; nothing is swallowed.
+ *
+ *  Offline (E00-08): *Taken* on a Now card that came from a live read, tapped when the network
+ *  has gone, is held on the phone with the moment he tapped (`offline/queue.ts`) and sent once,
+ *  in order, when the network is back — the page reads again after. A no to a held tap is said
+ *  in the backend's words. The emergency card is kept too (`offline/emergencyCache.ts`), read
+ *  once a day, and opens with no network, one tap from here. */
+/** His tap, sent with its moment. A phone clock far enough from Nura's that the moment is not
+ *  today on the region's clock (`TapNotToday`) wrote nothing, and is no reason to lose a tap made
+ *  now: it is sent again at Nura's own moment. */
+async function tapTaken(bearer: string, profileId: string, lineId: string, anchor: string, at: string): Promise<void> {
+  try {
+    await nura.taken(bearer, profileId, lineId, anchor, at);
+  } catch (failure) {
+    if (!(failure instanceof Refused && failure.refusal === "TapNotToday")) throw failure;
+    await nura.taken(bearer, profileId, lineId, anchor);
+  }
+}
+
 export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const s = t();
   const bearer = token.value;
@@ -53,22 +61,51 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const [busy, setBusy] = useState(false);
   // The next visit, when the key reaches the visits: one button to its screen (E05-03).
   const [nextVisit, setNextVisit] = useState<string | null>(null);
+  // Taps held while offline, what the last replay sent, and what the backend said no to.
+  const [held, setHeld] = useState<Tap[]>([]);
+  const [sent, setSent] = useState(false);
+  const [heldRefused, setHeldRefused] = useState<Refused[]>([]);
+  const [card, setCard] = useState<KeptCard | null>(null);
   // Today's top three (E11-02), read live; a kept page shows the feed's own cards instead.
   const [topThree, setTopThree] = useState<FeedItemOut[]>([]);
-  // "Hear what Dr Tan said" on a card with a consult clip (E21-03): played on a tap only.
-  const clipPlayer = useMemo(
-    () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(bearer ?? "", papers?.profile_id ?? "", artifactId, start, end))),
-    [bearer, papers?.profile_id],
-  );
-  useEffect(() => () => clipPlayer.forget(), [clipPlayer]);
 
-  /** A refusal, or anything that is not a lost network: nothing of these papers stays. */
+  /** A refusal, or anything that is not a lost network: nothing of these papers stays, and the
+   *  no is said — it is not a lost network, whatever the page thought a moment ago. */
   const forget = async (profileId: string, failure: unknown) => {
     await clearProfileData(profileId);
     forgetFeed();
+    // The recordings the player fetched under this key go too: none replays after a no.
+    voice.forget();
+    // His large-text setting came from his State: it goes with the rest.
+    await setLargeText(false);
     setModel(null);
     setKept(null);
+    setHeld([]);
+    setCard(null);
+    setUnreached(null);
     setError(failure);
+  };
+
+  /** The emergency card: read once a day (and in a new language), kept, and never allowed to
+   *  stop Today. No network or a State behind the record keeps the card the phone has; a no to
+   *  this key deletes it. */
+  const refreshCard = async (current: ProfileOut, binding: Binding): Promise<void> => {
+    if (!bearer) return;
+    const id = current.profile_id;
+    const had = await loadCard(id, binding);
+    if (!wantsRead(had, language.value, new Date(), zoneOf(current.region))) {
+      setCard(had);
+      return;
+    }
+    try {
+      setCard(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date()));
+    } catch (failure) {
+      if (keepsCard(failure)) setCard(had);
+      else {
+        await dropCard(id);
+        setCard(null);
+      }
+    }
   };
 
   const refresh = async (): Promise<void> => {
@@ -81,14 +118,22 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     if (!sameBinding(binding, bindingOf(papers))) {
       await clearProfileData(id);
       forgetFeed();
+      voice.forget();
       setModel(null);
       setKept(null);
+      setHeld([]);
+      setCard(null);
       await chooseProfile(current);
     }
     // One call at a time; any refusal stops here and the caller deletes the phone's copy.
     // The State reads under the records scope: a key without it (a helper's, for the
     // medicines) has no State card, and Today is the medicines and the feed's cards.
     const state = current.scopes.includes("records") ? await nura.state(bearer, id) : null;
+    // His own large-text setting, as his State holds it, on his own phone (E15-04).
+    if (current.standing === "owner") {
+      const large = largeTextOf(state);
+      if (large !== null) await setLargeText(large);
+    }
     const lines = await nura.medicines(bearer, id, language.value);
     const slots = await nura.dosesToday(bearer, id, language.value);
     const counted = await nura.proud(bearer, id);
@@ -100,8 +145,8 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     }
     let chief: string | null = null;
     if (state?.posture === "act" && current.standing === "owner") {
-      const held = await nura.keys(bearer, id);
-      chief = held.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
+      const holders = await nura.keys(bearer, id);
+      chief = holders.find((key) => key.role === "chief" && !key.revoked_at && key.holder_display_name)?.holder_display_name ?? null;
     }
     const fresh: TodayModel = {
       stateId: state?.state_id ?? null,
@@ -121,19 +166,37 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     setUnreached(null);
     posture.value = fresh.posture;
     await saveToday(id, fresh, binding, new Date(), zoneOf(current.region));
+    await refreshCard(current, binding);
+  };
+
+  /** Send the taps held while offline, once each and in order, before the page is read. */
+  const replayHeld = async (): Promise<void> => {
+    if (!bearer || !papers) return;
+    const id = papers.profile_id;
+    const binding = bindingOf(papers);
+    const done = await replay(id, binding, new Date(), (tap) =>
+      tap.kind === "taken" ? nura.taken(bearer, id, tap.lineId, tap.anchor, tap.at) : nura.feeling(bearer, id, tap.word, tap.language),
+    );
+    if (done.sent.length > 0) setSent(true);
+    if (done.refused.length > 0) setHeldRefused((before) => [...before, ...done.refused.map((each) => each.failure)]);
+    setHeld(await waiting(id, binding, new Date()));
   };
 
   const load = async () => {
     if (!bearer || !papers) return;
     setError(null);
-    const entry = await loadToday(papers.profile_id, bindingOf(papers), new Date());
-    await dropStaleFeed(papers.profile_id, bindingOf(papers), new Date());
+    const binding = bindingOf(papers);
+    const entry = await loadToday(papers.profile_id, binding, new Date());
+    await dropStaleFeed(papers.profile_id, binding, new Date());
+    setCard(await loadCard(papers.profile_id, binding));
+    setHeld(await waiting(papers.profile_id, binding, new Date()));
     if (entry) {
       setKept(entry);
       setModel(entry.model);
       posture.value = entry.model.posture;
     }
     try {
+      await replayHeld();
       await refresh();
     } catch (failure) {
       const kind = readFailure(failure);
@@ -144,6 +207,13 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
 
   useEffect(() => {
     void load();
+  }, [bearer, papers?.profile_id, language.value]);
+
+  // The network is back: the held taps go, then the page is read again.
+  useEffect(() => {
+    const back = () => void load();
+    window.addEventListener("online", back);
+    return () => window.removeEventListener("online", back);
   }, [bearer, papers?.profile_id, language.value]);
 
   useEffect(() => {
@@ -166,15 +236,25 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
     if (!bearer || !papers || busy) return;
     setBusy(true);
     setError(null);
+    // The tap's moment goes with it, and the held copy keeps the same one: a tap the backend
+    // wrote whose answer the phone never got is sent again as the same tap, and written once.
+    const at = new Date().toISOString();
     try {
-      await nura.taken(bearer, papers.profile_id, lineId, anchor);
+      await tapTaken(bearer, papers.profile_id, lineId, anchor, at);
       setJustTook(tookLine(new Date().getHours(), s));
       await refresh();
     } catch (failure) {
       const kind = readFailure(failure);
       if (kind === "refused") await forget(papers.profile_id, failure);
-      else if (kind === "network") setUnreached("network");
-      else setError(failure); // the tap did not land; the page stays, and he is told
+      else if (kind === "network") {
+        // No network: the tap is held on the phone with the moment he made it, and sent once
+        // when the network is back. The Now card says so, in place of Taken.
+        if (failure instanceof Unreachable) {
+          const tap: Tap = { id: tapId(), kind: "taken", lineId, anchor, at };
+          setHeld((await hold(papers.profile_id, tap, bindingOf(papers), new Date(), zoneOf(papers.region))) ?? []);
+        }
+        setUnreached("network");
+      } else setError(failure); // the tap did not land; the page stays, and he is told
     } finally {
       setBusy(false);
     }
@@ -202,7 +282,11 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const stateAt = !page || page.stateId === null ? "none" : act ? "top" : stale && !fromPhone ? "now" : useFeed ? "none" : "forYou";
   // The all-taken and nothing-now cards speak of today's doses: the backend's source line.
   const doseSource = page?.slots[0]?.source ?? "";
-  const dose = page && !fromPhone && !stale ? nowCard(page.slots, page.lines, s) : null;
+  // A dose he tapped with no network is held on the phone: it shows as its own card, with when
+  // he tapped, and the Now card is the next dose the backend marks due.
+  const heldTapOf = (slot: SlotOut) => held.find((tap) => tap.kind === "taken" && tap.lineId === slot.line_id && tap.anchor === slot.anchor);
+  const heldSlots = page && !fromPhone && !stale ? page.slots.filter((slot) => heldTapOf(slot) !== undefined) : [];
+  const dose = page && !fromPhone && !stale ? nowCard(page.slots.filter((slot) => heldTapOf(slot) === undefined), page.lines, s) : null;
   const medicines = page ? medicinesCard(page.lines, !useFeed) : null;
   const proud = page?.proud ?? null;
   const proudLine =
@@ -211,7 +295,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   const feedCard = (item: FeedItemOut, testId: string) => {
     const clips = clipsOf(item);
     if (clips.size > 0) {
-      return <ClipCard key={item.item_id} item={item} clips={clips} player={clipPlayer} paper={density() === "patient" || item.supply === "flag"} testId={testId} />;
+      return <ClipCard key={item.item_id} item={item} clips={clips} paper={density() === "patient" || item.supply === "flag"} testId={testId} />;
     }
     return plainCard(item, testId);
   };
@@ -240,15 +324,23 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   return (
     <main class="screen" data-density={density()}>
       <header class="hero">
-        <div class="greeting">{greeting(now.getHours(), name, s)}</div>
+        <h1 class="greeting">{greeting(now.getHours(), name, s)}</h1>
         <div class="date">{dateLine(now, locale)}</div>
       </header>
       <NotWellButton />
 
+      <Notice error={error} />
+      {heldRefused.length > 0 && (
+        <div data-testid="held-refused">
+          {heldRefused.map((failure, at) => (
+            <Notice key={at} error={failure} />
+          ))}
+        </div>
+      )}
       {blank ? (
         <>
           <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
-          <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
+          {card ? <EmergencyCard kept={card} /> : <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />}
         </>
       ) : (
         <>
@@ -266,7 +358,16 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               <p>{s.reading.saved}</p>
             </Tile>
           )}
-          <Notice error={error} />
+          {sent && held.length === 0 && (
+            <Tile paper role="status" testId="held-sent">
+              <p>{s.held.sent}</p>
+            </Tile>
+          )}
+          {held.length > 0 && heldSlots.length === 0 && (
+            <Tile paper role="status" testId="held">
+              <p>{s.held.held}</p>
+            </Tile>
+          )}
 
           {page && (
             <>
@@ -281,6 +382,21 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                   <Card title={s.today.noMedicines} lines={[s.today.noMedicinesSub]} testId="no-medicines" />
                 ))}
               {stateAt === "now" && stateCard}
+              {heldSlots.map((slot) => (
+                <Card
+                  key={`${slot.line_id}:${slot.anchor}`}
+                  title={lineTitle(page.lines.find((line) => line.line_id === slot.line_id), s)}
+                  lines={[slot.card]}
+                  provenance={slot.source}
+                  testId="held-card"
+                  action={
+                    <div class="lines" role="status" data-testid="held">
+                      <p>{fill(s.held.tapped, { time: clockWords(new Date(heldTapOf(slot)!.at), language.value, zoneOf(papers?.region)) })}</p>
+                      <p>{s.held.held}</p>
+                    </div>
+                  }
+                />
+              ))}
               {dose?.kind === "due" && (
                 <Card
                   title={dose.title}
@@ -328,7 +444,7 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
 
               <h2 class="section">{s.today.forYou}</h2>
               {!fromPhone && top.length > 0 ? (
-                <TopThree items={top} player={clipPlayer} />
+                <TopThree items={top} />
               ) : (
                 useFeed && feed.forYou.map((item) => feedCard(item, "feed-card"))
               )}
@@ -336,6 +452,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
                 {s.feed.open}
               </Pill>
+              <Pill onClick={() => go({ name: "ask" })} testId="open-ask">
+                {s.feed.askOrSearch}
+              </Pill>
+              {/* The chief's Home (spec §1): what was sent to him this week, and what Nura is
+                  watching for him. His chief's and his steward's; nobody else's. */}
+              {!fromPhone && bearer && papers && density() === "caregiver" && (papers.role === "chief" || papers.standing === "steward") && (
+                <ChiefPanels bearer={bearer} papers={papers} />
+              )}
               {nextVisit && !fromPhone && (
                 <Pill onClick={() => go({ name: "visit", appointmentId: nextVisit })} testId="open-visit">
                   {s.visit.open}
@@ -360,6 +484,12 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
                 <Hear lines={[proudLine, s.today.proudSub]} />
               </Tile>
             </>
+          )}
+
+          {(page || card) && (
+            <Pill onClick={() => go({ name: "emergency" })} testId="open-emergency">
+              {s.today.emergencyOpen}
+            </Pill>
           )}
 
           {wantsHomeScreenHint() && (

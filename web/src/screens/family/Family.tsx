@@ -63,6 +63,9 @@ function FamilyHome(): JSX.Element | null {
   // A red flag still climbing that reached this person (E11-06). A key without the emergency
   // card reaches no ladder, so there is nothing to show it: the read's no is not a screen.
   const asks = useRead(here ? () => family.ladders(here.bearer, here.papers.profile_id, here.lang).catch(() => []) : null, [here?.papers.profile_id, here?.lang]);
+  // Who Nura cannot message on WhatsApp (#163): the owner's and his chief's to see. Anyone
+  // else is refused it, and that no is not a screen either.
+  const reach = useRead(here && !here.patient ? () => family.reach(here.bearer, here.papers.profile_id, here.lang).catch(() => []) : null, [here?.papers.profile_id, here?.lang, here?.patient]);
   const [answered, setAnswered] = useState<string[] | null>(null);
   const a = useAct();
   if (!here) return null;
@@ -78,9 +81,16 @@ function FamilyHome(): JSX.Element | null {
       {label}
     </Pill>
   );
-  const parts = here.patient
+  // Gated on who he is (standing), not how dense his screen reads (density, his own toggle,
+  // Me.tsx): the roster names his medicines by their box, so an owner who switches to the
+  // caregiver density for the bigger-print layout must not thereby unlock it (#166 review).
+  const parts = here.owner
     ? [
         pill("trail", whose(here, words.trailSelf, words.trailOther)),
+        // The owner's own selection to add and grant access to someone (E12): letting
+        // someone in at all is his own yes (`may_invite`), so only he — never his chief —
+        // sees it here; `KeysPart` reads `here.owner` to show him the words first.
+        pill("keys", words.keys),
         pill("onlyMe", words.onlyMe),
         pill("consents", whose(here, words.consentsSelf, words.consentsOther)),
         pill("thread", words.thread),
@@ -105,6 +115,7 @@ function FamilyHome(): JSX.Element | null {
       {asks.value?.map((ladder) => (
         <Tile paper key={ladder.ladder_id} testId="ladder">
           <Lines lines={ladder.lines} testId="ladder-lines" />
+          {(ladder.not_reached ?? []).length > 0 && <Lines lines={ladder.not_reached ?? []} testId="ladder-not-reached" />}
           <Pill plum onClick={() => void onIt(ladder.ladder_id)} disabled={a.busy} testId="on-it">
             {words.ladderYes}
           </Pill>
@@ -121,6 +132,11 @@ function FamilyHome(): JSX.Element | null {
         {circle.value?.map((grant) => (
           <Lines key={grant.key_id} lines={grant.lines} testId="grant-lines" />
         ))}
+        {reach.value
+          ?.filter((one) => one.lines.length > 0)
+          .map((one) => (
+            <Lines key={one.person_id} lines={one.lines} testId="reach-lines" />
+          ))}
         <Notice error={circle.error} />
       </Tile>
       {parts}

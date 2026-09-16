@@ -83,9 +83,12 @@ async def test_without_his_whatsapp_consent_a_red_flag_still_reaches_the_family_
     # Kit, the other one holding the emergency card, is told on his WhatsApp.
     ladder = (await sg.scalars(select(Ladder))).one()
     assert ladder.flag_id == flag.id
-    [row] = (await sg.scalars(select(Delivery))).all()
+    rows = (await sg.scalars(select(Delivery))).all()
+    # His WhatsApp, and the notice on his family page beside it (#162).
+    assert {row.via for row in rows} == {DeliveryChannel.WHATSAPP, DeliveryChannel.IN_APP}
+    [row] = [row for row in rows if row.via is DeliveryChannel.WHATSAPP]
     assert row.to_person_id == kit.id and row.outcome is DeliveryOutcome.SENT  # type: ignore[attr-defined]
-    assert row.via is DeliveryChannel.WHATSAPP and row.passed_over == []
+    assert row.passed_over == []
     assert [one.to_e164 for one in home.whatsapp.sent if one.to_e164 != MEI] == [KIT]
 
 
@@ -111,6 +114,7 @@ async def test_taken_writes_the_tap_for_the_tablet_whose_window_is_open(
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
         "Thank you, I wrote it down.",
+        "You took your blood pressure tablet with breakfast.",
         "Mei can see you took it.",
     ]
     tap = (await sg.scalars(select(DoseTaken))).one()
@@ -189,3 +193,69 @@ async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name
         )
     ).all()
     assert closing
+
+
+async def test_on_two_lists_chest_pain_tells_each_family_the_ambulance_before_it_may_be(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The ambiguous notice ("It may be about Pa. Call Mei now.") names no ambulance. In the
+    ambulance tier the family's notice is the ambulance's, even when the ambiguous template is
+    approved: a flag is never told more weakly because its sender is on two lists (B1
+    clinical-safety review)."""
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    ma = await register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6591110009", language="en"
+    )
+    ma_profile = await create_own_profile(sg, region=Region.SG, owner=ma, consent=OPENING_CONSENT)
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    await agree_to_family_sharing(
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+    )
+    await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
+    # The ambiguous template is approved here: a fall on two lists sends it (above).
+
+    handled = await home.inbound(sg, MEI, "he has chest pain")
+    assert handled.outcome == "red_flag_ambiguous"
+    flags = (await sg.scalars(select(Flag))).all()
+    assert all(flag.ambiguous_profile and flag.feeling is Feeling.CHEST_TIGHTNESS for flag in flags)
+    told = [one for one in home.whatsapp.sent if one.to_e164 == KIT]
+    assert told[-1].text.splitlines() == [
+        "This one we do not wait for.",
+        "Pa is not feeling well.",
+        "Call Pa now.",
+        "Ask Pa now if an ambulance is coming.",
+        "If not, call the ambulance now on 995.",
+    ]
+
+
+async def test_on_two_lists_a_fall_said_with_shaky_and_sweaty_is_the_fall_on_each(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Neither family's record holds a sugar condition or a sugar medicine, so shaky-and-sweaty
+    would be held back on both and tell nobody: each family's own record chooses, and the fall
+    is raised on both, each ladder started (B1 re-check)."""
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    ma = await register_person(
+        sg, region=Region.SG, display_name="Ma", phone_e164="+6591110009", language="en"
+    )
+    ma_profile = await create_own_profile(sg, region=Region.SG, owner=ma, consent=OPENING_CONSENT)
+    ma_owner = await resolve_key_context(
+        sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
+    )
+    await agree_to_family_sharing(
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+    )
+    await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
+
+    handled = await home.inbound(sg, MEI, "he fell, he is shaky and sweaty")
+    assert handled.outcome == "red_flag_ambiguous"
+    flags = (await sg.scalars(select(Flag))).all()
+    assert {flag.profile_id for flag in flags} == {home.profile.id, ma_profile.id}
+    assert all(
+        flag.feeling is Feeling.FALL and flag.suppressed_because is None for flag in flags
+    )
+    assert len((await sg.scalars(select(Ladder))).all()) == 2

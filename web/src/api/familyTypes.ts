@@ -253,6 +253,16 @@ export interface OpenLadderOut {
   subject: string;
   started_at: string;
   lines: string[];
+  /** For the owner and his chief: who the flag's ladder asked whose phone nothing reached (#162). */
+  not_reached?: string[];
+}
+
+/** One person on his circle and how Nura reaches them; `lines` only when WhatsApp cannot (#163). */
+export interface ReachOut {
+  person_id: string;
+  whatsapp: boolean;
+  push: boolean;
+  lines: string[];
 }
 
 export interface LadderOut {

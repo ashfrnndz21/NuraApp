@@ -66,6 +66,11 @@ class Profile(Base):
     )
     patient_phone_e164: Mapped[str | None] = mapped_column(String(20), unique=True, default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    area: Mapped[str | None] = mapped_column(String(40), default=None)
+    """Where he lives, coarsely: a town or district, or the first digits of a postcode —
+    never a street or a whole postcode (`app.delivery.feed.area`). Set on his own yes; read by him
+    and the chief who manages his feed; used only to match local alerts (E09-07), on this
+    server, and never sent to a searcher."""
 
     @property
     def is_stewarded(self) -> bool:

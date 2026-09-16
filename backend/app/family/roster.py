@@ -213,18 +213,31 @@ async def add_task(
     language: str = "en",
     appointment_id: uuid.UUID | None = None,
     errand: Errand | None = None,
+    medication_line_id: uuid.UUID | None = None,
+    opened_on: date | None = None,
 ) -> Task:
     """Give one person one thing to do. `what` is a label in plain words — it reaches him
     in the digest and the trail — so it passes the verifier as a phrase before it is kept.
 
+    Except an order task's (`Errand.ORDER`, E04-05): its label names his medicine as its box
+    does ("order more amlodipine 5 mg for Pa", licensed drug data the family buys by), for
+    the one who buys it, and it never reaches him — the digest says an order task in its own
+    words, which name no medicine (`app.family.thread`), and the family's list is not on his
+    screens. The only caller that makes one is `app.medicines.reorder.ask_to_order`.
+
     A task that is part of a visit's logistics names the visit and the errand (E05-03); the
     only caller that does is `app.reasoning.visits.logistics.assign_driver`, on the chief's
-    yes. The visit is on this profile, or the table refuses it."""
+    yes. An order task names the medicine line and `opened_on`, his wall-clock day (E04-05;
+    `#166 review`) — what the table's partial unique index keys on, so one open order task a
+    line a day is enforced there, not only by the check-then-act above it; the only caller
+    that sets either is `app.medicines.reorder.ask_to_order`, on his yes. The visit and the
+    line are on this profile, or the table refuses them."""
     a_chief(context)
     label = short_label(what)
-    failures = [str(f) for f in verify(label, language, "phrase") if f.severity == "fail"]
-    if failures:
-        raise NotPlainWords(failures)
+    if errand is not Errand.ORDER:
+        failures = [str(f) for f in verify(label, language, "phrase") if f.severity == "fail"]
+        if failures:
+            raise NotPlainWords(failures)
     await _on_this_profile(session, context, assigned_person_id)
     return await audited_write(
         session,
@@ -238,6 +251,8 @@ async def add_task(
         created_at=utcnow(),
         appointment_id=appointment_id,
         errand=errand,
+        medication_line_id=medication_line_id,
+        opened_on=opened_on,
     )
 
 

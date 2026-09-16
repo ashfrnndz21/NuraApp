@@ -83,6 +83,11 @@ LINE_ATTRIBUTES = ("line:", "supply:")
 """The attributes the medicines module (E04) writes — `line:<generic>`, `supply:<generic>` —
 which carry the dose inside the value, so the rule guards them too."""
 
+COUNT_ATTRIBUTES = ("count:",)
+"""A count correction ("I have more at home", E04-05): `count:<generic>`. Not a dose, but a
+typed count that is too high puts off the reorder of a warfarin line, so a high-risk
+medicine's count rests on a photo of the box or the label, the same as its dose."""
+
 MEDICATION = "medication"
 """The subject the medicines module writes every medicine fact under."""
 
@@ -175,22 +180,32 @@ def is_a_dose(draft: FactDraft) -> bool:
     )
 
 
+def is_a_count(draft: FactDraft) -> bool:
+    """A count correction on a medicine line (`COUNT_ATTRIBUTES`)."""
+    return draft.subject in MEDICINE_SUBJECTS and draft.attribute.startswith(COUNT_ATTRIBUTES)
+
+
 async def refuse_dose_without_label_photo(
     session: AsyncSession, context: KeyContext, draft: FactDraft
 ) -> None:
-    """The rule, as `before_fact_write` sees it.
+    """The rule, as `before_fact_write` sees it. A count correction is held to it too
+    (`is_a_count`), so no writer adds to a high-risk medicine's count from words alone.
 
     A dose names its drug — in the subject, inside its value (`{"drug": "warfarin", …}`,
     the shape the review card writes), or by the class the registry put on it
-    (`{"drug_class": "anticoagulant", …}`, the shape the medicines module writes). If EITHER
-    names a high-risk drug, the draft must rest on an artefact of kind PHOTO. An event alone
-    (a message, a voice note), or a PDF or a screenshot, is refused. The artefact row was
-    read a moment ago by `_check_provenance` under the writer's own key, so looking at its
-    kind here writes no second line.
+    (`{"drug_class": "anticoagulant", …}`, the shape the medicines module writes). A count
+    correction's own drug name lives in neither of those by default — `count:<generic>` is
+    the attribute, and a writer's value can be as bare as `{"quantity": 20}` — so the
+    attribute is checked too; the medicines module also echoes `drug_class`/`high_risk` into
+    the value (`app.medicines.reorder.found_more`), but that is belt, this is braces (#166
+    review). If ANY of subject, attribute or value names a high-risk drug, the draft must
+    rest on an artefact of kind PHOTO. An event alone (a message, a voice note), or a PDF or
+    a screenshot, is refused. The artefact row was read a moment ago by `_check_provenance`
+    under the writer's own key, so looking at its kind here writes no second line.
     """
-    if not is_a_dose(draft):
+    if not (is_a_dose(draft) or is_a_count(draft)):
         return
-    danger = names_high_risk(draft.subject, draft.value) or class_of(draft.value)
+    danger = names_high_risk(draft.subject, draft.attribute, draft.value) or class_of(draft.value)
     if danger is None:
         return
     if draft.artifact_id is None:

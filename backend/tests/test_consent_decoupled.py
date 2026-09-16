@@ -2,9 +2,10 @@
 
 Stopping it must never cut his family's red-flag notices. After Pa stops WhatsApp, a red flag is
 still carried to his family on their own channel, under the key his agreement to let them in
-rests on, and nothing goes to Pa on WhatsApp. The send door asks his agreement only for a
-message to him; anyone else must hold a key to his profile. A key holder's own yes to WhatsApp
-is recorded going forward, and holds nothing back.
+rests on, and nothing goes to Pa on WhatsApp. Since #163 that is the only thing his family
+hears about him there once he has stopped it: anything else Nura would start with them needs
+his agreement. Anyone else must hold a key to his profile, and someone who answered no to
+WhatsApp is sent none — a red flag reaches them in the app instead.
 """
 
 from __future__ import annotations
@@ -16,9 +17,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.channels.whatsapp.outbound.send import NotLetInHere, _may_message
+from app.channels.whatsapp.opt_in import record_opt_in
+from app.channels.whatsapp.outbound.send import NotLetInHere, SaidNoToWhatsApp, _may_message
+from app.channels.whatsapp.strings import REPLIES
 from app.clock import FrozenClock
 from app.consent.models import ConsentChannel, ConsentPurpose
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import NoConsent, revoke_consent
 from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.identity.service import register_person
@@ -44,13 +48,18 @@ async def test_after_pa_stops_whatsapp_a_red_flag_still_reaches_his_family_and_n
     await _run(sg, h, clock, at(9, 6))
     ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id == handled.flag_id))).one()
     rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
-    assert [(row.to_person_id, row.outcome, row.via, row.passed_over) for row in rows] == [
+    # Her WhatsApp, and the notice on her family page (#162).
+    assert sorted(
+        ((row.to_person_id, row.outcome, row.via, row.passed_over) for row in rows),
+        key=lambda one: str(one[2]),
+    ) == [
+        (h.siti.id, DeliveryOutcome.SENT, DeliveryChannel.IN_APP, ["app_push: no device"]),
         (h.siti.id, DeliveryOutcome.SENT, DeliveryChannel.WHATSAPP, []),
     ]
     assert [one for one in h.whatsapp.sent if one.to_e164 == PA] == []
 
 
-async def test_the_send_door_asks_his_agreement_only_for_him(
+async def test_the_send_door_after_he_stops_whatsapp_lets_only_a_red_flag_through(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     h = await home(sg, tmp_path)
@@ -58,13 +67,52 @@ async def test_the_send_door_asks_his_agreement_only_for_him(
         sg, context=h.owner, purpose=ConsentPurpose.WHATSAPP, captured_via=ConsentChannel.APP
     )
     with pytest.raises(NoConsent):
-        await _may_message(sg, context=h.owner, person=h.pa)
-    await _may_message(sg, context=h.owner, person=h.mei)  # her key lets her be told
+        await _may_message(sg, context=h.owner, person=h.pa, kind="dose_reminder")
+    # Her key lets her be told he is unwell, and answered what she wrote (#143) ...
+    await _may_message(sg, context=h.owner, person=h.mei, kind="red_flag_notice")
+    await _may_message(sg, context=h.owner, person=h.mei, kind=next(iter(REPLIES)))
+    # ... but nothing else about him starts on WhatsApp without his agreement (#163).
+    for kind in ("family_digest", "dose_check", "reorder_family", "papers_waiting", None):
+        with pytest.raises(NoConsent):
+            await _may_message(sg, context=h.owner, person=h.mei, kind=kind)
     stranger = await register_person(
         sg, region=Region.SG, display_name="Ann", phone_e164="+6598880051", language="en"
     )
     with pytest.raises(NotLetInHere):
-        await _may_message(sg, context=h.owner, person=stranger)
+        await _may_message(sg, context=h.owner, person=stranger, kind="red_flag_notice")
+
+
+async def test_a_key_holder_who_said_no_is_sent_no_whatsapp_not_even_a_red_flag(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """Siti answered no at the key-accept step (#163): the door refuses every message Nura
+    would start with her, the red-flag notice included; a reply to her own message still goes."""
+    clock.set(at(9))
+    h = await home(sg, tmp_path)
+    siti = await h.ctx(sg, h.siti)
+    await record_opt_in(
+        sg,
+        context=siti,
+        messages=False,
+        joins_group=False,
+        wording_version=OPT_IN_VERSION,
+        language="ms",
+    )
+    for kind in ("red_flag_notice", "dose_check", None):
+        with pytest.raises(SaidNoToWhatsApp):
+            await _may_message(sg, context=h.owner, person=h.siti, kind=kind)
+    await _may_message(sg, context=h.owner, person=h.siti, kind=next(iter(REPLIES)))
+    # A yes later stands: the newest answer is the one kept to.
+    clock.set(at(10))
+    await record_opt_in(
+        sg,
+        context=siti,
+        messages=True,
+        joins_group=False,
+        wording_version=OPT_IN_VERSION,
+        language="ms",
+    )
+    await _may_message(sg, context=h.owner, person=h.siti, kind="red_flag_notice")
 
 
 async def test_a_key_holder_answers_the_two_questions_for_herself(deployment: Deployment) -> None:

@@ -39,8 +39,10 @@ from app.drafts import (
     Draft,
     DriveDraft,
     FactDraft,
+    InsurerDraft,
     KeyChangeDraft,
     OnlyMeDraft,
+    OrderDraft,
     ProposalDraft,
     PushDraft,
     ReviewDraft,
@@ -76,8 +78,9 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, ReviewDraft | AttachDraft):
         return Scope.RECORDS
-    if isinstance(draft, KeyChangeDraft | OnlyMeDraft | DriveDraft):
-        # Who drives him is a task on the family list (E05-03, E12-03).
+    if isinstance(draft, KeyChangeDraft | OnlyMeDraft | DriveDraft | OrderDraft):
+        # Who drives him, and who orders more of a medicine, is a task on the family list
+        # (E05-03, E04-05, E12-03).
         return Scope.FAMILY
     if isinstance(draft, TaskDoneDraft):
         return Scope.PROFILE
@@ -89,6 +92,9 @@ def scope_of(draft: Draft) -> Scope:
     if isinstance(draft, RoutineDraft):
         # The day is read where the helper reads today's tablets (E10).
         return Scope.MEDICINES
+    if isinstance(draft, InsurerDraft):
+        # The insurer is on the emergency card, the part every role holds (E13-01).
+        return Scope.EMERGENCY
     if isinstance(draft, ProposalDraft):
         # A calendar proposal becomes a visit on the spine (E18-02).
         return Scope.VISITS

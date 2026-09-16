@@ -18,9 +18,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +71,9 @@ from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, S
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
 from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto
+
+if TYPE_CHECKING:
+    from app.routines.service import Day
 
 LINE = MedicationLine.__tablename__
 
@@ -589,6 +592,7 @@ async def record_dose_taken(
     line_id: uuid.UUID,
     anchor: str | None = None,
     amount: float | None = None,
+    taken_at: datetime | None = None,
     source_channel: SourceChannel = SourceChannel.APP,
     channel: Channel = Channel.APP,
 ) -> DoseTaken:
@@ -598,6 +602,12 @@ async def record_dose_taken(
     written under the medicines scope, so the helper who gives him his tablets can tap it
     with the medicines key she holds, and a row naming the line. Audited like every write,
     on the channel the tap came in on: the app, or a "Taken"/"given" reply on WhatsApp.
+
+    `taken_at` is a tap the phone held while it could not reach Nura (E00-08): written at the
+    moment he made it, which must be today on the region's clock and not later than now
+    (`TapNotToday`), and written once however many times it is sent — the same person, line,
+    moment and anchor is the same tap, and the row already written is the answer. The event
+    is recorded now; it happened when he tapped.
     """
     line = await _require_line(session, context=context, line_id=line_id)
     dose = Dose.from_json(line.dose)
@@ -611,6 +621,15 @@ async def record_dose_taken(
         channel=channel,
     )
     moment = utcnow()
+    tapped = moment if taken_at is None else _tap_moment(taken_at, moment, context)
+    if taken_at is not None:
+        earlier = await audited_read(
+            session, DoseTaken, context, Scope.MEDICINES, where=(DoseTaken.line_id == line.id,)
+        )
+        for tap in earlier:
+            same = tap.anchor == anchor and tap.by_person_id == context.person_id
+            if same and as_utc(tap.taken_at) == tapped:
+                return tap
     event = await audited_write(
         session,
         Event,
@@ -618,7 +637,7 @@ async def record_dose_taken(
         Scope.MEDICINES,
         channel=channel,
         kind=EventKind.DOSE_TAKEN,
-        occurred_at=moment,
+        occurred_at=tapped,
         source_channel=source_channel,
         label=f"taken: {line.generic}",
         artifact_id=None,
@@ -635,9 +654,30 @@ async def record_dose_taken(
         event_id=event.id,
         anchor=anchor,
         amount=amount if amount is not None else dose.amount,
-        taken_at=moment,
+        taken_at=tapped,
         by_person_id=context.person_id,
     )
+
+
+TAP_CLOCK_SKEW = timedelta(minutes=2)
+"""How far ahead of the backend's clock a phone's clock may run and its tap still be now."""
+
+
+class TapNotToday(Refusal):
+    """A tap the phone held while it could not reach Nura is written at the moment he made it,
+    and only when that moment is today on the region's clock: yesterday's tap is not today's
+    tablet. The phone drops a held tap at midnight; this is the backend's own guard."""
+
+
+def _tap_moment(taken_at: datetime, now: datetime, context: KeyContext) -> datetime:
+    """The moment of a held tap, in UTC, as the phone wrote it: today on the region's clock, and
+    not later than now beyond a phone's clock running a little ahead. Kept exactly as sent, so
+    the same tap sent again matches the row it wrote."""
+    tapped = as_utc(taken_at).astimezone(UTC)
+    zone = REGION_TZ[context.region]
+    if tapped > now + TAP_CLOCK_SKEW or tapped.astimezone(zone).date() != now.astimezone(zone).date():
+        raise TapNotToday(f"a tap at {tapped.isoformat()} is not today's")
+    return tapped
 
 
 # --- the list, the count, the flags ---------------------------------------------------------
@@ -684,6 +724,14 @@ class LineView:
     """One of today's doses of this line has passed its window untapped."""
     source: str = ""
     """Where the line came from and on which day, in his words: the card's source line."""
+
+
+async def _his_day(session: AsyncSession, context: KeyContext) -> Day:
+    """His day for the dose windows: his settings' breakfast, his routine's other anchors."""
+    # Imported here: the routine module reads the medicines, and the medicines read it.
+    from app.routines.service import his_day
+
+    return await his_day(session, context=context)
 
 
 def today_in(context: KeyContext) -> date:
@@ -816,6 +864,7 @@ async def active_lines(
     names = _names(registry, sorted({line.generic for line in lines}), lang)
     today = today_in(context)
     now = now_in(context)
+    day = await _his_day(session, context)
     generic_of, every_tap = await _taps_by_generic(session, context=context)
     zone = REGION_TZ[context.region]
     today_taps = [t for t in every_tap if as_utc(t.taken_at).astimezone(zone).date() == today]
@@ -868,11 +917,11 @@ async def active_lines(
                 taken_label=TAKEN[lang],
                 source=source_line(line, zone, lang),
                 due_now=any(
-                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[0]
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[0]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
                 missed=any(
-                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[1]
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[1]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
             )
@@ -959,6 +1008,7 @@ async def today(
         return []
     day = today_in(context)
     now = now_in(context)
+    his = await _his_day(session, context)
     zone = REGION_TZ[context.region]
     # A tap belongs to the medicine, not to the version of the line: a dose change this
     # afternoon does not undo the tablet he took this morning. So taps are gathered over
@@ -987,7 +1037,7 @@ async def today(
         ).if_forgotten
         for anchor in dose.scheduled_anchors:
             tapped = _tapped(anchor.value, line.generic, today_taps, generic_of)
-            due_now, missed = window_status(anchor, now, tapped)
+            due_now, missed = window_status(anchor, now, tapped, his)
             slots.append(
                 Slot(
                     line=line,

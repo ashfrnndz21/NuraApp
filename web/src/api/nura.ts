@@ -1,72 +1,71 @@
-import { api, apiBlob, apiBytes, apiUpload, sendAndForget } from "./client";
+import { api, apiBlob, apiBytes, apiText, apiUpload, sendAndForget } from "./client";
 import type {
-  AskedOut,
-  ChangesOut,
-  EpisodeViewOut,
-  LabelIn,
-  MedicineDraftOut,
-  MoreOut,
-  PlaceNoteOut,
-  ProviderHistoryOut,
-  ProviderSummaryOut,
-  ReconciledOut,
-  RoutineDayIn,
-  RoutineOut,
-  StoryOut,
-  TimelineOut,
-  TrendOut,
-  FeedItemOut,
-  UploadOut,
-  AnsweredOut,
-  BriefOut,
-  CloudOut,
-  DayNudgesOut,
-  FeelingOut,
-  HandedOverOut,
-  ItemDecision,
-  MeSummaryOut,
-  MemoCardOut,
-  NudgeAnswer,
-  NudgePlanOut,
-  OfflineCardsOut,
-  QuestionChange,
-  Said,
-  SummaryConfirmedOut,
-  SymptomLoggedOut,
-  SymptomLogOut,
-  VisitQuestionOut,
-  VisitQuestionsOut,
-  WhatToDoOut,
-  AppointmentOut,
-  ConsultOut,
-  LogisticsOut,
-  NoticeOut,
-  VisitSummaryOut,
   AnswerOut,
+  AnsweredOut,
+  AppointmentOut,
+  AreaOut,
   AskMode,
+  AskedOut,
   BiographyOut,
+  BriefOut,
+  ChangesOut,
   ClaimableOut,
   ClosedOut,
+  CloudOut,
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
+  ConsultOut,
+  DayNudgesOut,
   DecisionIn,
   DeploymentOut,
   DocumentSource,
   DoorsOut,
+  EmergencyCardOut,
   EngagementEvent,
   EngagementOut,
+  EpisodeViewOut,
+  EventsOut,
+  FeedItemOut,
   FeedPageOut,
+  FeelingOut,
+  FindOut,
+  FindWhere,
+  HandedOverOut,
+  ItemDecision,
+  JobKind,
   KeyOut,
+  LabelIn,
   LineOut,
+  LogisticsOut,
   MeOut,
+  MeSummaryOut,
+  MedicineDraftOut,
+  MemoCardOut,
+  MoreOut,
+  NoticeOut,
+  NudgeAnswer,
+  NudgePlanOut,
+  OfflineCardsOut,
+  OrderPreviewOut,
   PaperAddedOut,
+  PlaceNoteOut,
   PlanOut,
   ProfileOut,
   ProudOut,
+  ProviderHistoryOut,
+  ProviderSummaryOut,
+  QuestionChange,
+  QueuedEventIn,
   ReadingOut,
+  ReconciledOut,
   ReviewCardOut,
   ReviewConfirmedOut,
+  RoutineDayIn,
+  RoutineOut,
+  Said,
+  SearchJobOut,
+  SentOut,
   SessionOut,
   SettingsIn,
   SettingsOut,
@@ -74,9 +73,20 @@ import type {
   SharingPreviewOut,
   SlotOut,
   StateOut,
+  StoryOut,
+  SummaryConfirmedOut,
+  SymptomLogOut,
+  SymptomLoggedOut,
   TakenOut,
   ThreadCardKind,
   ThreadEntryOut,
+  TimelineOut,
+  TrendOut,
+  UploadOut,
+  VisitQuestionOut,
+  VisitQuestionsOut,
+  VisitSummaryOut,
+  WhatToDoOut,
   WordingOut,
 } from "./types";
 
@@ -188,12 +198,26 @@ export const medicines = (token: string, profileId: string, language: string) =>
 export const dosesToday = (token: string, profileId: string, language: string) =>
   api<SlotOut[]>(`/profiles/${profileId}/medicines/today`, { token, query: { language } });
 
-export const taken = (token: string, profileId: string, lineId: string, anchor: string | null) =>
+/** His tap. `takenAt` is a tap the phone held while offline (E00-08): the moment he made it,
+ *  which the backend writes once however often it is sent. */
+export const taken = (token: string, profileId: string, lineId: string, anchor: string | null, takenAt?: string) =>
   api<TakenOut>(`/profiles/${profileId}/medicines/${lineId}/taken`, {
     method: "POST",
     token,
-    body: { anchor },
+    body: takenAt ? { anchor, taken_at: takenAt } : { anchor },
   });
+
+/** A word on the feeling strip (E17), as the phone held it while offline. */
+export const feeling = (token: string, profileId: string, word: string, language: string) =>
+  api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
+
+/** The emergency card, rendered now from State, in his language (E13-01). */
+export const emergencyCard = (token: string, profileId: string, language: string) =>
+  api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
+
+/** The same card as the backend's one printable page: self-contained, nothing fetched. */
+export const emergencyCardPage = (token: string, profileId: string, language: string) =>
+  apiText(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } });
 
 export const state = (token: string, profileId: string) =>
   api<StateOut>(`/profiles/${profileId}/state`, { token });
@@ -551,24 +575,43 @@ export const addMedicine = (token: string, profileId: string, label: LabelIn, so
     body: { label, source_artifact_id: sourceArtifactId, confirmation_id: confirmationId },
   });
 
-/** The reorder card's "Ask the family to order." (E04-05): the tap is the yes. */
-export const askToOrder = (token: string, profileId: string, lineId: string, language: string) =>
-  api<AskedOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order`, { method: "POST", token, query: { language } });
+/** The reorder card's "Ask the family to order." (E04-05), step one: who would be asked, for
+ *  which medicine, in his words. Nothing is written. */
+export const orderPreview = (token: string, profileId: string, lineId: string, language: string) =>
+  api<OrderPreviewOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order/preview`, { method: "POST", token, query: { language } });
 
-/** The yes to adding exactly this many found at home (subject `count_correction`). */
-export const mintMore = (token: string, profileId: string, lineId: string, quantity: number) =>
+/** His yes to exactly the person the preview named, for this line (subject `order`). */
+export const mintOrder = (token: string, profileId: string, lineId: string, personId: string) =>
   api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
     method: "POST",
     token,
-    body: { subject: "count_correction", line_id: lineId, quantity },
+    body: { subject: "order", line_id: lineId, person_id: personId },
   });
 
-export const addMore = (token: string, profileId: string, lineId: string, quantity: number, confirmationId: string, language: string) =>
+/** The ask, spending his yes: a task on the family's list, or the one already there today. */
+export const askToOrder = (token: string, profileId: string, lineId: string, confirmationId: string, language: string) =>
+  api<AskedOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order`, {
+    method: "POST",
+    token,
+    query: { language },
+    body: { confirmation_id: confirmationId },
+  });
+
+/** The yes to adding exactly this many found at home (subject `count_correction`), resting on
+ *  the photo of the box or the label when there is one — a high-risk medicine needs it. */
+export const mintMore = (token: string, profileId: string, lineId: string, quantity: number, artifactId: string | null = null) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "count_correction", line_id: lineId, quantity, artifact_id: artifactId },
+  });
+
+export const addMore = (token: string, profileId: string, lineId: string, quantity: number, confirmationId: string, language: string, artifactId: string | null = null) =>
   api<MoreOut>(`/profiles/${profileId}/medicines/${lineId}/more`, {
     method: "POST",
     token,
     query: { language },
-    body: { quantity, confirmation_id: confirmationId },
+    body: { quantity, confirmation_id: confirmationId, artifact_id: artifactId },
   });
 
 /** The review cards, newest first; `open` for the ones still waiting for a yes (E02-04). */
@@ -688,3 +731,48 @@ export const meSummary = (token: string, profileId: string, language: string) =>
 /** One card by its id, under the card's own scope: what a push opens (`?open=<id>`, #143). */
 export const feedItem = (token: string, profileId: string, itemId: string) =>
   api<FeedItemOut>(`/profiles/${profileId}/feed/${itemId}`, { token });
+
+// --- the feed's richer formats (F1) ---------------------------------------------------------
+
+/** Flush the phone's queue of what he did with his cards (E11-08). */
+export const feedEvents = (token: string, profileId: string, events: QueuedEventIn[]) =>
+  api<EventsOut>(`/profiles/${profileId}/feed/events`, { token, method: "POST", body: { events } });
+
+/** "Sent to Pa this week": every card made for him since Monday, with its status. */
+export const feedWeek = (token: string, profileId: string) => api<SentOut[]>(`/profiles/${profileId}/feed/week`, { token });
+
+/** A clip's still, from Nura's own server (no video platform is asked). */
+export const clipPoster = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/poster`, { token, accept: "image/*" });
+
+/** A clip's captions, WebVTT, in the card's language. */
+export const clipCaptions = async (token: string, profileId: string, itemId: string): Promise<string> =>
+  (await apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/captions`, { token, accept: "text/vtt" })).text();
+
+/** A clip's excerpt, only where the licence let Nura keep one; a 404 refusal otherwise. */
+export const clipVideo = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/video`, { token, accept: "video/*" });
+
+/** "Watching for Pa": every search the engine runs for him, in the reader's words. */
+export const searchJobs = (token: string, profileId: string, language: string) =>
+  api<SearchJobOut[]>(`/profiles/${profileId}/search-jobs`, { token, query: { language } });
+
+/** Add a watch: the kind and what for. How often is the kind's own. */
+export const addSearchJob = (token: string, profileId: string, kind: JobKind, terms: string[]) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs`, { token, method: "POST", body: { kind, terms } });
+
+/** Pause a watch, or resume it. */
+export const pauseSearchJob = (token: string, profileId: string, jobId: string, enabled: boolean, language: string) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs/${jobId}`, { token, method: "PATCH", body: { enabled }, query: { language } });
+
+/** His area and the towns it may be (owner, chief). */
+export const area = (token: string, profileId: string) => api<AreaOut>(`/profiles/${profileId}/area`, { token });
+
+/** Set his area on his yes, or clear it (null). */
+export const setArea = (token: string, profileId: string, value: string | null) =>
+  api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+
+/** The ask bar's Web, Videos and Providers filters. Records is `ask`. His words go in the
+ *  body, never in the URL, where a log or the browser's history would keep them. */
+export const find = (token: string, profileId: string, q: string, where: FindWhere, language: string) =>
+  api<FindOut>(`/profiles/${profileId}/find`, { token, method: "POST", body: { q, where, language } });

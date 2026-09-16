@@ -29,6 +29,15 @@
       "title": "Measuring your blood pressure at home",
       "published_at": "2024-11-20",
       "text": "Measuring your blood pressure at home. Rest for five minutes before measuring. Sit with your back supported, feet flat on the floor and arm resting on a table at heart level. Measure at the same time each day, ideally in the morning before medication and food. Record both the systolic and diastolic readings in your log book and bring it to your next appointment."
+    },
+    {
+      "domain": "nhcs.com.sg",
+      "url": "https://www.nhcs.com.sg/patient-care/videos/understanding-high-blood-pressure",
+      "title": "Understanding high blood pressure",
+      "published_at": "2025-05-12",
+      "text": "[0:00] Hello, I am a heart doctor at the National Heart Centre. [0:15] High blood pressure often has no symptoms, which is why checking it matters. [0:22] Over the years, high pressure strains the heart and the blood vessels. [0:31] Eating less salt and staying active help to keep it down. [0:43] Bring your home readings to your appointments.",
+      "media": "video",
+      "licence": null
     }
   ],
   "safety:warfarin": [
@@ -48,6 +57,134 @@
       "title": "Diabetes",
       "published_at": "2025-06-02",
       "text": "Diabetes is a condition where there is too much sugar (glucose) in the blood. Being active helps the body use sugar: a short walk after meals is a good habit. Your doctor checks your blood sugar with a blood test such as HbA1c, usually every few months. Take your medicines as your doctor advised and bring your questions to your next visit."
+    },
+    {
+      "domain": "singhealth.com.sg",
+      "url": "https://www.singhealth.com.sg/patient-care/videos/living-well-with-diabetes",
+      "title": "Living well with diabetes",
+      "published_at": "2025-06-20",
+      "text": "[0:00] Welcome to this SingHealth video. [0:10] Diabetes means the body cannot use sugar well. [0:18] A short walk after meals helps to lower blood sugar. [0:25] Fill half your plate with vegetables. [0:31] Check your feet every day for cuts or sores. [0:38] Keep your appointments for eye and kidney checks.",
+      "media": "video",
+      "licence": null
+    }
+  ],
+  "explainer:cholesterol": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/a-z/diseases-and-conditions/high-cholesterol",
+      "title": "High blood cholesterol",
+      "published_at": "2025-04-08",
+      "text": "High blood cholesterol means there is too much fat, called cholesterol, in the blood. It usually has no symptoms and is found with a blood test. Over time it can narrow the blood vessels of the heart and brain. Eating less fried and fatty food, being active and not smoking help to lower cholesterol."
+    }
+  ],
+  "explainer:amlodipine": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/a-z/medications/amlodipine",
+      "title": "Amlodipine",
+      "published_at": "2025-02-17",
+      "text": "Amlodipine is used to treat high blood pressure. It relaxes the blood vessels so that blood flows more easily. It is usually taken once a day, at the same time each day. Some people get swollen ankles, flushing or a headache. Tell your doctor if your ankles swell."
+    }
+  ],
+  "explainer:metformin": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/a-z/medications/metformin",
+      "title": "Metformin",
+      "published_at": "2025-03-03",
+      "text": "Metformin is used to control blood sugar in type 2 diabetes. It helps the body respond better to insulin. Take it with or just after meals to reduce stomach upset. Some people have a stomach upset when they begin, which usually settles."
+    }
+  ],
+  "local:dengue": [
+    {
+      "domain": "myhealth.gov.my",
+      "url": "https://www.myhealth.gov.my/en/dengue-alert-timur-laut-penang",
+      "title": "Dengue alert: Timur Laut, Penang",
+      "published_at": "2026-09-11",
+      "text": "Dengue cases in the Timur Laut district of Penang, including Air Itam, rose this week. Aedes mosquitoes breed in clean standing water. Empty and scrub containers, flower pot plates and pails at home at least once a week. Use insect repellent in the daytime. See a doctor early if you have a fever, especially if you have other health conditions or take medicine that thins the blood.",
+      "areas": [
+        "Air Itam",
+        "George Town",
+        "Jelutong",
+        "Gelugor",
+        "Tanjung Bungah",
+        "11"
+      ]
+    }
+  ],
+  "local:haze": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/haze-and-your-health",
+      "title": "Haze and your health",
+      "published_at": "2026-09-10",
+      "text": "When the haze is at unhealthy levels, people with chronic heart or lung disease should reduce outdoor activity and stay indoors where possible. Keep windows closed and use an air purifier if you have one. Keep your medicines within reach. Seek medical attention at once if you feel chest pain, breathlessness or dizziness.",
+      "areas": []
+    }
+  ],
+  "local:heat": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/stay-safe-in-hot-weather",
+      "title": "Stay safe in hot weather",
+      "published_at": "2026-09-09",
+      "text": "During hot weather, older adults and people with heart disease, kidney disease or diabetes are at higher risk of heat illness. Drink water regularly throughout the day, even if you are not thirsty. If your doctor has limited how much fluid you should drink, follow that advice. Stay out of the midday sun. Seek help if you feel dizzy, confused or very weak.",
+      "areas": []
+    }
+  ],
+  "seasonal:festive food": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/enjoying-mooncakes-mindfully",
+      "title": "Enjoying mooncakes mindfully",
+      "published_at": "2025-09-01",
+      "text": "A traditional baked mooncake with double yolk can contain more than 800 calories and a lot of sugar and fat. People with diabetes or high cholesterol can still enjoy the festival: share a mooncake, have a small slice with plain tea instead of sweet drinks, and choose low-sugar versions where possible.",
+      "season": "mid_autumn"
+    }
+  ],
+  "seasonal:fasting month": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/fasting-safely-with-diabetes",
+      "title": "Fasting safely with diabetes",
+      "published_at": "2025-12-15",
+      "text": "If you have diabetes and plan to fast during Ramadan, see your doctor one to two months before the fasting month to plan your medicines and meals. At sahur, choose slow-release foods like wholegrain bread and oats. At buka puasa, break your fast with water and one or two dates, and avoid sweet drinks. If you feel shaky, sweaty or confused, check your blood sugar at once.",
+      "season": "fasting_month"
+    },
+    {
+      "domain": "myhealth.gov.my",
+      "url": "https://www.myhealth.gov.my/en/fasting-and-diabetes",
+      "title": "Fasting and diabetes",
+      "published_at": "2025-12-20",
+      "text": "People with diabetes who wish to fast in Ramadan should see their doctor one to two months before the fasting month to plan their medicines and meals. Choose slow-release foods at sahur. Break the fast with water and dates, and limit sweet drinks. Check your blood sugar at once if you feel shaky, sweaty or confused.",
+      "season": "fasting_month"
+    }
+  ],
+  "food:diabetes": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/make-the-switch-to-brown-rice",
+      "title": "Make the switch to brown rice",
+      "published_at": "2025-08-20",
+      "text": "Swapping white rice for brown rice adds fibre and helps keep blood sugar steadier after meals. Start by mixing half brown and half white rice, then add more brown rice over time."
+    }
+  ],
+  "food:blood pressure": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/eating-out-with-less-salt",
+      "title": "Eating out with less salt",
+      "published_at": "2025-07-14",
+      "text": "Hawker dishes can be high in salt. Ask for less gravy and less sauce, and leave the soup at the bottom of the bowl. Choose fresh fruit instead of preserved or pickled foods."
+    }
+  ],
+  "food:cholesterol": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/live-healthy/choose-steamed-over-fried",
+      "title": "Choose steamed over fried",
+      "published_at": "2025-06-30",
+      "text": "Deep-fried food adds saturated fat, which raises blood cholesterol. Choose steamed, boiled or grilled dishes, such as steamed fish instead of fried fish."
     }
   ]
 }

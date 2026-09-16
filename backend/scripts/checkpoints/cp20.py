@@ -410,21 +410,36 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         for line in sent["text"].splitlines():
             say(f"→ {line}")
 
-    # 4b. His check-in time (10:00 until he says, the time the nudges keep): the check-in, once.
-    asked = [row for row in _of(at_ten, "check_in") if row["outcome"] == "sent"]
-    if (
-        len(asked) != 1
-        or asked[0]["to_person_id"] != pa.person_id
-        or asked[0]["template_name"] != "feeling_check_in"
-    ):
-        raise fail("the check-in goes at his check-in time", why=f"got {_of(at_ten, 'check_in')}")
+    # 4b. His check-in time, 10:00: the schedule handed the day's nudge over at 10:05 and
+    #     delivery sent it; the plain check-in stands down once the day's nudge already asked
+    #     how he is; the web handing it over again as he answers is the same nudge.
+    nudged = [row for row in _of(at_ten, "nudge") if row["outcome"] == "sent"]
+    if len(nudged) != 1 or nudged[0]["at"] != "10:05" or nudged[0]["template_name"] != "nudge":
+        raise fail("the day's nudge goes at his check-in time, once", why=f"got {_of(w.seen, 'nudge')}")
+    if _of(at_ten, "check_in"):
+        raise fail("the plain check-in stands down once the nudge asked", why=f"got {_of(at_ten, 'check_in')}")
     if _of(w.run_due(profile_id, 10, 20), "check_in"):
-        raise fail("the check-in goes once a day", why="it went again")
-    ok(
-        "10:05, his check-in time (10:00 until he says, the one time his settings keep): the check-in, "
-        "once — 10:20 sends nothing. " + _line(asked[0]) + ". What he reads:"
+        raise fail("the check-in never comes back once the nudge asked", why="it went at 10:20")
+    handed = check(
+        client.post(f"/profiles/{profile_id}/nudges/plan", headers=bearer(pa.token)),
+        201,
+        "the web hands the day's nudge over as he answers",
     )
-    for line in (asked[0]["text"] or "").splitlines():
+    listed = check(
+        client.get(f"/profiles/{profile_id}/nudges", headers=bearer(pa.token)), 200, "the day's nudges"
+    )
+    if [one["nudge_id"] for one in listed["nudges"]] != [handed["nudge"]["nudge_id"]]:
+        raise fail("handing the nudge over twice is one nudge", why=f"got {listed}")
+    if any(row["trigger_type"] == "nudge" and row["outcome"] == "sent" for row in w.run_due(profile_id, 10, 10)):
+        raise fail("the nudge is sent once", why="10:10 sent it again")
+    ok(
+        "10:05, after his check-in time (10:00): the schedule handed the day's nudge over and "
+        "delivery sent it, so the plain check-in — held once a nudge already asked how he is — "
+        "sends nothing of its own — " + _line(nudged[0]) + "; the web handing it over again as "
+        "he answers (POST /nudges/plan) gives back the same nudge — one row (GET /nudges) — and "
+        "10:10 sends it no second time. What he reads:"
+    )
+    for line in (nudged[0].get("text") or "").splitlines():
         say(f"→ {line}")
 
     # 5. The reorder date reached (two tablets): the rule is true all day, so every run above
@@ -451,6 +466,22 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         f"({capped[0]['reason']}) — no second message, and no row at all on the runs after it"
     )
 
+    # 5b. His directory (E03-03): Dr Tan, and Gleneagles marked as the hospital on his insurance.
+    for provider in (
+        {"name": "Dr Tan", "kind": "doctor"},
+        {"name": "Gleneagles", "kind": "hospital", "panel": True},
+    ):
+        check(
+            client.post(f"/profiles/{profile_id}/providers", headers=bearer(mei.token), json=provider),
+            201,
+            f"Mei adds {provider['name']} to his directory",
+        )
+    ok(
+        "Mei added Dr Tan and Gleneagles to his directory (POST /profiles/{id}/providers), "
+        "Gleneagles marked as the hospital on his insurance (panel: true); Dr Tan's hours are not "
+        "set, so his clinic answers 08:00 to 20:00"
+    )
+
     # 6. 22:30, the quiet hours: Pa writes that he fell.
     fell = w.inbound(pa, "I fell in the bathroom", 22, 30)
     if fell["outcome"] != "red_flag" or not fell["flag_id"]:
@@ -465,11 +496,25 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("the flag goes straight to the roster", why=f"got {flagged}")
     if any(row["to_person_id"] == pa.person_id for row in flagged):
         raise fail("a red flag skips his own rung", why=f"got {flagged}")
-    rung = flagged[-1]
+    # Every way each person can be reached, and the notice on their family page besides
+    # (#162): the line names the first rung's WhatsApp.
+    rung = next((row for row in reversed(flagged) if row["channel"] == "whatsapp"), flagged[-1])
+    said = fell["replies"][0]["text"].splitlines() if fell["replies"] else []
+    if said != [
+        "This one we do not wait for.",
+        "Go to the emergency department at Gleneagles now.",
+        "Gleneagles is on your insurance.",
+        "If you cannot get there safely, call the ambulance now on 995.",
+        "Mei knows now.",
+        "Nura does not decide what is wrong.",
+    ]:
+        raise fail("out of hours, the hospital on his insurance, never the doctor today", why=f"got {said}")
     ok(
         "22:30, inside the quiet hours: a red flag, written first, went straight to the roster — "
         f"{rung['standing']}, {rung['outcome']} by {rung['channel']} ({rung['template_name']}), "
-        f"category {rung['category']}, never capped and never quiet; not to him. His reply:"
+        f"category {rung['category']}, never capped and never quiet; not to him. A fall is the "
+        "same-day tier, and Dr Tan's clinic is closed at 22:30: never \"call your doctor today\" — "
+        "the emergency department of the hospital on his insurance, named (E19-05). His reply:"
     )
     for sent in fell["replies"]:
         for line in sent["text"].splitlines():
@@ -546,6 +591,57 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "the delivery log",
     )})
     ok(f"every attempt is on the delivery log with the rule that fired: {', '.join(rules)}")
+
+    # 8. The pre-visit brief at T-3 (E05-01): a visit with Dr Tan on Friday 18 September; at
+    #    07:40 on Tuesday the 15th — three days before, after his breakfast — the engine
+    #    renders the brief and sends its card, once, under the cap on briefs a day.
+    listed = check(client.get(f"/profiles/{profile_id}/providers", headers=bearer(pa.token)), 200, "his directory")
+    tan = next(one["provider"] for one in listed if one["provider"]["name"] == "Dr Tan")
+    booking = {
+        "provider_id": tan["provider_id"],
+        "scheduled_at": datetime(2026, 9, 18, 10, 0, tzinfo=SGT).isoformat(),
+        "purpose": "blood pressure",
+    }
+    yes = check(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(pa.token),
+            json={"subject": "appointment", **booking},
+        ),
+        201,
+        "Pa says yes to the booking",
+    )
+    check(
+        client.post(
+            f"/profiles/{profile_id}/appointments",
+            headers=bearer(pa.token),
+            json={**booking, "confirmation_id": yes["confirmation_id"]},
+        ),
+        201,
+        "Pa writes down the visit",
+    )
+    w.clock(7, 40, days=1)
+    ran = check(client.post("/dev/run-triggers", json={"profile_id": profile_id}), 200, "the engine runs at 07:40")
+    briefs = [row for row in ran["deliveries"] if row["trigger_type"] == "visit_brief"]
+    if (
+        len(briefs) != 1
+        or briefs[0]["outcome"] != "sent"
+        or briefs[0]["rule"] != "brief_three_days_before"
+        or briefs[0]["template_name"] != "visit_brief"
+    ):
+        raise fail("the brief at T-3", why=f"got {ran['deliveries']}")
+    w.clock(8, 10, days=1)
+    again = check(client.post("/dev/run-triggers", json={"profile_id": profile_id}), 200, "the engine runs at 08:10")
+    if any(row["trigger_type"] == "visit_brief" for row in again["deliveries"]):
+        raise fail("the brief goes once", why=f"got {again['deliveries']}")
+    ok(
+        "07:40 on Tuesday 15 September, three days before his visit with Dr Tan on Friday 18 "
+        "September: the pre-visit brief was rendered then and its card sent — "
+        + _line(briefs[0])
+        + "; 08:10 sends it no second time. What he reads:"
+    )
+    for line in (briefs[0].get("text") or "").splitlines():
+        say(f"→ {line}")
 
 
 def run(base_url: str, dev_log: Path) -> int:

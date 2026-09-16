@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { CardClipOut, FeedItemOut, LineOut } from "../api/types";
+import type { CardClipOut, FeedItemOut, LineOut, OrderPreviewOut } from "../api/types";
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
-import { browserClipDeps, ClipPlayer } from "../visit/clip";
 import { go, openTab } from "../flow";
-import { cardView, speechLanguage, statusLine, variantOf, type CardView, type SideAction } from "../feed/model";
+import { cueAt, parseVtt, type Cue } from "../feed/captions";
+import { cardView, speechLanguage, statusLine, variantOf, type CardView, type ClipView, type SideAction } from "../feed/model";
 import { lineForCard, reorderActions } from "../record/model";
 import type { Playback } from "../feed/playback";
 import { feedFor } from "../feed/session";
@@ -14,7 +14,9 @@ import type { Entry, FeedStore, Note } from "../feed/store";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
-import { Card, Notice, TabBar, Tile } from "../ui/components";
+import { Card, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { PlayerControls } from "../ui/Player";
+import { voice } from "../player/voice";
 import "../ui/feed.css";
 
 /** The vertical feed (E21-01): one card fills the screen; up for the next. The backend's
@@ -40,6 +42,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   // card cites.
   const [lines, setLines] = useState<LineOut[] | null>(null);
   const [asked, setAsked] = useState<Record<string, string[]>>({});
+  // What he reads before his yes, by card: who Nura will ask, for which medicine.
+  const [previews, setPreviews] = useState<Record<string, OrderPreviewOut>>({});
   const [reorderError, setReorderError] = useState<unknown>(null);
   const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");
   useEffect(() => {
@@ -54,26 +58,43 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
     const actions = line ? reorderActions(line) : null;
     return line && actions ? { lineId: line.line_id, ...actions } : null;
   };
-  /** "Ask the family to order.": the tap is the yes; the backend's lines say who does it. */
+  /** "Ask the family to order.": first the preview — who Nura will ask, and for what. If the
+   *  family was already asked today, the backend's line says so and there is nothing to add. */
   const askToOrder = async (item: FeedItemOut, lineId: string) => {
     const bearer = token.value;
     const papers = profile.value;
     if (!bearer || !papers) return;
     setReorderError(null);
     try {
-      const done = await nura.askToOrder(bearer, papers.profile_id, lineId, language.value);
-      setAsked({ ...asked, [item.item_id]: done.lines });
+      const shown = await nura.orderPreview(bearer, papers.profile_id, lineId, language.value);
       store.record(item, "tapped");
+      if (shown.already_asked) setAsked({ ...asked, [item.item_id]: shown.lines });
+      else setPreviews({ ...previews, [item.item_id]: shown });
     } catch (failure) {
       setReorderError(failure);
     }
   };
+  /** His yes, for exactly the person and the line the preview named. */
+  const orderYes = async (item: FeedItemOut, shown: OrderPreviewOut) => {
+    const bearer = token.value;
+    const papers = profile.value;
+    if (!bearer || !papers) return;
+    setReorderError(null);
+    try {
+      const minted = await nura.mintOrder(bearer, papers.profile_id, shown.line_id, shown.asked_person_id);
+      const done = await nura.askToOrder(bearer, papers.profile_id, shown.line_id, minted.confirmation_id, language.value);
+      setAsked({ ...asked, [item.item_id]: done.lines });
+      const { [item.item_id]: _, ...rest } = previews;
+      setPreviews(rest);
+    } catch (failure) {
+      setReorderError(failure);
+    }
+  };
+  const orderNo = (item: FeedItemOut) => {
+    const { [item.item_id]: _, ...rest } = previews;
+    setPreviews(rest);
+  };
   // "Hear what Dr Tan said" under a line said at a recorded visit (E21-03): on a tap only.
-  const clipPlayer = useMemo(
-    () => new ClipPlayer(browserClipDeps((artifactId, start, end) => nura.clip(token.value ?? "", profile.value?.profile_id ?? "", artifactId, start, end))),
-    [],
-  );
-  useEffect(() => () => clipPlayer.forget(), [clipPlayer]);
 
   const cards = (): HTMLElement[] => [...(pager.current?.querySelectorAll<HTMLElement>("article.feed-card") ?? [])];
 
@@ -93,13 +114,20 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
       if (gone) playback.leave(playingKey);
     }
     const list = store.entries.peek();
+    // The card at rest on screen was opened: said once, never for how long (E11-08).
+    const resting = list[index];
+    if (resting) store.seen(resting.item);
     playback.warm(list.slice(index, index + 3).map((entry) => ({ itemId: entry.item.item_id, language: entry.item.language })));
     if (index !== store.current || index >= list.length - 1 - 2) void store.visible(index);
   };
 
   useEffect(() => {
     void store.open();
-    return () => playback.stop();
+    // Leaving the feed: its voice stops, and every recording a clip fetched is let go.
+    return () => {
+      playback.stop();
+      voice.forget();
+    };
   }, [store, playback]);
 
   // Back from Ask: the pager opens on the card he left.
@@ -166,6 +194,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
 
   return (
     <main class="feed-screen" data-density={density()} data-testid="feed-screen">
+      {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
+      <h1 class="sr-only">{s.feed.title}</h1>
       <div class="feed-strip">
         {store.offline.value && keptAt && shown.length > 0 && (
           <Tile glass testId="offline">
@@ -203,13 +233,13 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               index={index}
               view={cardView(entry.item)}
               clips={clipsOf(entry.item)}
-              player={clipPlayer}
               note={notes.get(entry.item.item_id) ?? null}
               status={statusLine(entry.item, audience)}
               patient={patient}
               owner={profile.value?.standing === "owner"}
               name={name}
               s={s}
+              playing={playback.playing.value === entry.key}
               onHear={(view) => {
                 playback.hear({ key: entry.key, itemId: view.itemId, lines: view.spoken, language: speechLanguage(view.language, language.value) });
                 store.record(entry.item, "heard");
@@ -224,7 +254,10 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               onKeepGoing={() => goTo(index + 1)}
               reorder={reorderFor(entry.item)}
               said={asked[entry.item.item_id] ?? null}
+              preview={previews[entry.item.item_id] ?? null}
               onAskToOrder={(lineId) => void askToOrder(entry.item, lineId)}
+              onOrderYes={(shown) => void orderYes(entry.item, shown)}
+              onOrderNo={() => orderNo(entry.item)}
             />
           ))}
           {store.quiet.value && store.ended.value && (
@@ -263,7 +296,6 @@ interface FeedCardProps {
   view: CardView;
   /** Where each line was said at a recorded visit, by the line's words (E21-03). */
   clips: Map<string, CardClipOut>;
-  player: ClipPlayer;
   note: Note | null;
   status: ReturnType<typeof statusLine>;
   patient: boolean;
@@ -275,10 +307,16 @@ interface FeedCardProps {
   onFamily: () => void;
   onNotForMe: () => void;
   onKeepGoing: () => void;
+  /** This card's voice is open in the player: its controls show above the side actions. */
+  playing: boolean;
   reorder: Reorder | null;
   /** What "Ask the family to order." did, in the backend's lines. */
   said: string[] | null;
+  /** Before his yes: who Nura will ask, for which medicine, in the backend's lines. */
+  preview: OrderPreviewOut | null;
   onAskToOrder: (lineId: string) => void;
+  onOrderYes: (shown: OrderPreviewOut) => void;
+  onOrderNo: () => void;
 }
 
 /** One card: the section it came from, the backend's headline and lines, its boundary, its
@@ -288,7 +326,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, clips, player, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, reorder, said, onAskToOrder }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, playing, reorder, said, preview, onAskToOrder, onOrderYes, onOrderNo }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -326,11 +364,12 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
                 return (
                   <div key={at} class="clip-line" data-testid="card-line">
                     <p>{line}</p>
-                    <ClipButton clip={clip} player={player} playKey={`${entry.key}:${at}`} />
+                    <ClipButton clip={clip} playKey={`${entry.key}:${at}`} />
                   </div>
                 );
               })}
             </div>
+            {view.clip && <ClipPart itemId={item.item_id} clip={view.clip} playing={playing} onPlay={() => onHear(view)} s={s} />}
             {view.boundary.length > 0 && (
               <div class="lines boundary" data-testid="boundary">
                 {view.boundary.map((line, at) => (
@@ -364,6 +403,13 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             ))}
           </div>
         )}
+        {preview && (
+          <div class="feed-note" role="group" data-testid="order-preview">
+            {preview.lines.map((line, at) => (
+              <p key={at}>{line}</p>
+            ))}
+          </div>
+        )}
         {note && (
           <div class="feed-note" role="status" data-testid="note">
             {note === "declined" && (
@@ -383,7 +429,17 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             {s.feed.keepGoing}
           </button>
         )}
-        {!declined && reorder && (
+        {!declined && preview && (
+          <>
+            <button type="button" class="pill plum" onClick={() => onOrderYes(preview)} data-testid="order-yes">
+              {s.record.orderYes}
+            </button>
+            <button type="button" class="pill" onClick={onOrderNo} data-testid="order-no">
+              {s.record.orderNo}
+            </button>
+          </>
+        )}
+        {!declined && reorder && !preview && (
           <>
             <button type="button" class="pill plum" onClick={() => onAskToOrder(reorder.lineId)} disabled={said !== null} data-testid="ask-to-order">
               {reorder.askToOrder}
@@ -398,6 +454,7 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
             {s.feed.toTablets}
           </button>
         )}
+        {playing && <PlayerControls />}
         <div class={actions.length === 1 ? "feed-actions one" : "feed-actions"} role="group" aria-label={view.headline}>
           {actions.map((action) => (
             <SideButton key={action} action={action} s={s} onClick={{ hear: () => onHear(view), ask: onAsk, family: onFamily, notForMe: onNotForMe }[action]} />
@@ -406,6 +463,82 @@ function FeedCard({ entry, index, view, clips, player, note, status, patient, ow
         </div>
       </div>
     </article>
+  );
+}
+
+/** A clip (E09-06, E11-09): its still, from Nura's own server — no video platform is asked,
+ *  so none learns who watched — and Play, which plays the card's narration (the same voice as
+ *  Hear) with its captions, the line being said shown under the still. Where the publisher's
+ *  licence let the server keep the excerpt, it plays silently under the narration; otherwise
+ *  the still is the picture. The whole video is on the publisher's own site, a link he taps.
+ *  Nothing here starts by itself: the still and the captions are fetched, never played. */
+function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
+  const [poster, setPoster] = useState<string | null>(null);
+  const [video, setVideo] = useState<string | null>(null);
+  const [cues, setCues] = useState<Cue[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const moving = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const bearer = token.value;
+    const profileId = profile.value?.profile_id;
+    if (!bearer || !profileId) return;
+    let live = true;
+    const urls: string[] = [];
+    const keep = (blob: Blob, set: (url: string) => void) => {
+      if (!live) return;
+      const url = URL.createObjectURL(blob);
+      urls.push(url);
+      set(url);
+    };
+    nura.clipPoster(bearer, profileId, itemId).then((blob) => keep(blob, setPoster), () => setPoster(null));
+    nura.clipCaptions(bearer, profileId, itemId).then((text) => live && setCues(parseVtt(text)), () => setCues([]));
+    if (clip.excerpt) nura.clipVideo(bearer, profileId, itemId).then((blob) => keep(blob, setVideo), () => setVideo(null));
+    return () => {
+      live = false;
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [itemId, clip.excerpt]);
+  useEffect(() => {
+    if (!playing) {
+      setElapsed(0);
+      moving.current?.pause();
+      return;
+    }
+    const started = performance.now();
+    const timer = setInterval(() => setElapsed((performance.now() - started) / 1000), 200);
+    return () => clearInterval(timer);
+  }, [playing]);
+  const said = playing ? cueAt(cues, elapsed) : null;
+  const play = () => {
+    onPlay();
+    if (moving.current) {
+      moving.current.currentTime = 0;
+      void moving.current.play().catch(() => undefined);
+    }
+  };
+  return (
+    <div class="clip" data-testid="clip">
+      {video ? (
+        <video ref={moving} src={video} poster={poster ?? undefined} muted playsInline preload="auto" style="max-width:100%" data-testid="clip-video" />
+      ) : (
+        poster && <img src={poster} alt="" style="max-width:100%" data-testid="clip-poster" />
+      )}
+      <Pill plum onClick={play} testId="clip-play">
+        {s.feed.play}
+      </Pill>
+      {said && (
+        <p class="caption" aria-live="polite" data-testid="clip-caption">
+          {said.text}
+        </p>
+      )}
+      {clip.fullUrl && clip.publisher && (
+        <p class="provenance source">
+          <a href={clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
+            {fill(s.feed.watchWhole, { publisher: clip.publisher })}
+          </a>
+        </p>
+      )}
+    </div>
   );
 }
 

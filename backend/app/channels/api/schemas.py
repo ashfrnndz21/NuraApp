@@ -635,13 +635,33 @@ class DriveConfirmIn(BaseModel):
     person_id: uuid.UUID
 
 
+class InsurerConfirmIn(BaseModel):
+    """A yes to his insurer on the emergency card exactly as typed (E13-01); no name takes it
+    off the card. The typer's own yes: his, the steward's or his chief's."""
+
+    subject: Literal[ConfirmSubject.INSURER]
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
+
+
 class CountCorrectionConfirmIn(BaseModel):
-    """A yes to adding tablets found at home to one medicine's count (E04-05): which line and
-    how many, exactly what `POST /medicines/{line}/more` will write with it."""
+    """A yes to adding tablets found at home to one medicine's count (E04-05): which line,
+    how many, and the photo of the box or the label it rests on — exactly what `POST
+    /medicines/{line}/more` will write with it. A high-risk medicine's count needs the photo."""
 
     subject: Literal[ConfirmSubject.COUNT_CORRECTION]
     line_id: uuid.UUID
     quantity: int = Field(gt=0, le=1000)
+    artifact_id: uuid.UUID | None = None
+
+
+class OrderConfirmIn(BaseModel):
+    """His yes to "Ask the family to order." (E04-05): this line, and the person the preview
+    (`POST /medicines/{line}/ask-to-order/preview`) named — exactly who the task will name."""
+
+    subject: Literal[ConfirmSubject.ORDER]
+    line_id: uuid.UUID
+    person_id: uuid.UUID
 
 
 class TaskDoneConfirmIn(BaseModel):
@@ -719,16 +739,18 @@ ConfirmIn = Annotated[
     | StatusConfirmIn
     | AttachConfirmIn
     | CountCorrectionConfirmIn
+    | OrderConfirmIn
     | RoutineConfirmIn
     | ProposalConfirmIn
-    | DriveConfirmIn,
+    | DriveConfirmIn
+    | InsurerConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01)."""
 
 
 class ConfirmationOut(BaseModel):
@@ -1269,9 +1291,31 @@ class ReconciledOut(BaseModel):
         )
 
 
+class OrderPreviewOut(BaseModel):
+    """What he reads before his yes to "Ask the family to order." (E04-05): the person the
+    task will name, and the lines, in his words. `already_asked` when the family was asked
+    for this line today and the task is still open: the line then says so, and a yes answers
+    with that task."""
+
+    line_id: uuid.UUID
+    asked_person_id: uuid.UUID
+    already_asked: bool
+    task_id: uuid.UUID | None
+    language: str
+    lines: list[str]
+
+
+class AskIn(BaseModel):
+    """His yes to the preview, minted at `POST /confirmations` with subject `order`. Without
+    one the answer is `NotAConfirmerHere`, and nothing is written."""
+
+    confirmation_id: uuid.UUID | None = None
+
+
 class AskedOut(BaseModel):
     """What "Ask the family to order." did (E04-05): the task on the family's list, who it was
-    given to, who was told, and the lines he reads, in his words."""
+    given to, who was told, and the lines he reads, in his words. `already_asked` when the
+    task was on the list before this yes (one open order task a line a day)."""
 
     line_id: uuid.UUID
     task_id: uuid.UUID
@@ -1279,13 +1323,15 @@ class AskedOut(BaseModel):
     told_person_ids: list[uuid.UUID]
     language: str
     lines: list[str]
+    already_asked: bool = False
 
 
 class MoreIn(BaseModel):
-    """Tablets found at home, with the yes minted for exactly this line and number."""
+    """Tablets found at home, with the yes minted for exactly this line, number and photo."""
 
     quantity: int = Field(gt=0, le=1000)
     confirmation_id: uuid.UUID
+    artifact_id: uuid.UUID | None = None
 
 
 class MoreOut(BaseModel):
@@ -1296,6 +1342,7 @@ class MoreOut(BaseModel):
     supply_id: uuid.UUID
     fact_id: uuid.UUID
     event_id: uuid.UUID
+    artifact_id: uuid.UUID | None = None
     quantity: int
     count: CountOut | None
 
@@ -1303,6 +1350,10 @@ class MoreOut(BaseModel):
 class TakenIn(BaseModel):
     anchor: Anchor | None = None
     amount: float | None = Field(default=None, gt=0)
+    taken_at: AwareDatetime | None = None
+    """When he tapped, for a tap the phone held while it could not reach Nura (E00-08): today on
+    the region's clock and not later than now (`TapNotToday` otherwise). The same tap sent twice
+    — a replay whose answer was lost — is written once. Absent, the tap is now."""
 
 
 class TakenOut(BaseModel):
@@ -1322,7 +1373,7 @@ class TakenOut(BaseModel):
             event_id=taken.event_id,
             anchor=taken.anchor,
             amount=taken.amount,
-            taken_at=taken.taken_at,
+            taken_at=as_utc(taken.taken_at),
             by_person_id=taken.by_person_id,
         )
 
@@ -1863,10 +1914,21 @@ class BriefOut(BaseModel):
     voice_script: VoiceScriptOut
     """The brief as it is said (E22-03): each line's spoken words, a pause after each, a longer
     one before the boundary."""
+    withheld: list[Scope] = []
+    """The parts of the record this key does not open whose lines were left off: the record's,
+    for the lines about how he feels (B1)."""
 
     @classmethod
-    def of(cls, brief: Brief) -> BriefOut:
-        lines = [BriefLineOut(**{"spoken": line["text"], **line}) for line in brief.lines]
+    def of(
+        cls,
+        brief: Brief,
+        shown: list[dict[str, Any]] | None = None,
+        withheld: list[Scope] | None = None,
+    ) -> BriefOut:
+        lines = [
+            BriefLineOut(**{"spoken": line["text"], **line})
+            for line in (brief.lines if shown is None else shown)
+        ]
         return cls(
             brief_id=brief.id,
             appointment_id=brief.appointment_id,
@@ -1876,6 +1938,7 @@ class BriefOut(BaseModel):
             built_at=utc(brief.built_at),
             lines=lines,
             boundary=brief.boundary,
+            withheld=list(withheld or []),
             voice_script=VoiceScriptOut.of(
                 [line.spoken for line in lines], brief.language, brief.boundary
             ),
@@ -2556,7 +2619,8 @@ class TaskOut(BaseModel):
     done_by_person_id: uuid.UUID | None
     appointment_id: uuid.UUID | None = None
     errand: str | None = None
-    """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); else none."""
+    """`drive` for "drive Pa to Dr Tan", a visit's logistics (E05-03); `order` for more of a
+    medicine (E04-05); else none."""
 
     @classmethod
     def of(cls, task: Task) -> TaskOut:

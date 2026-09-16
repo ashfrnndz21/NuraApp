@@ -1,10 +1,12 @@
-"""The six approved templates: the only proactive messages the number may send (E19-01).
+"""The approved templates: the only proactive messages the number may send (E19-01).
 
 Outside the 24-hour customer-service window a business may send nothing but a template Meta
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11) — is one of these fifteen, submitted once and named here: its slots, and the words a patient reads in each
+message (E11), the red-flag notice by tier and by the doctor's hours, the pre-visit brief
+(B1), and the notice of a voice note Nura could not hear (#158) — is one of these twenty-one,
+submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -119,9 +121,26 @@ RED_FLAG_NOTICE = Template(
     },
 )
 
-# The Chinese red-flag notice above is the wording submitted for approval: "这个不能等。". The card
-# and the replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02); `make language` notes
-# the difference as a follow-up, and the template changes only when it is submitted again.
+# The Chinese red-flag notice above is the wording Meta approved: "这个不能等。". The card and the
+# replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02), and an approved template is
+# not edited in place. So the same notice in today's words is submitted again as its own
+# template, `RED_FLAG_NOTICE_V2`, below; the ladder sends it wherever the number approves it and
+# this one otherwise, so a flag never waits on Meta. `make language` notes the old words until
+# this one is retired.
+
+# @patient
+RED_FLAG_NOTICE_V2 = Template(
+    "red_flag_notice_v2",
+    ("name", "who", "doctor"),
+    {
+        "en": "This one we do not wait for.\n{who} said {name} is not well.\nCall {doctor} today.",
+        "ms": "Yang ini kita tidak tunggu.\n{who} kata {name} tidak sihat.\nTelefon {doctor} hari ini.",
+        "zh": "这个我们不等。\n{who}说{name}不舒服。\n今天就打电话给{doctor}。",
+    },
+    approved=False,
+)
+"""The red-flag notice in the glossary's words (#160): the English and the Malay as approved, the
+Chinese as the card says it. Pending Meta's approval, then it replaces `RED_FLAG_NOTICE`."""
 
 # @patient
 DOSE_REMINDER = Template(
@@ -177,15 +196,15 @@ DOSES_COUNT = Template(
     {
         "en": (
             "{name} did not say Taken {count} times this week.\n"
-            "This is a count, not a worry.\n"
+            "This is only a count.\n"
             "You can see which ones in the app."
         ),
         "ms": (
             "Minggu ini {name} tidak kata Sudah ambil sebanyak {count} kali.\n"
-            "Ini kiraan sahaja, bukan sesuatu yang merisaukan.\n"
+            "Ini hanya kiraan.\n"
             "Anda boleh lihat yang mana dalam aplikasi."
         ),
-        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数，不用担心。\n您可以在应用里看是哪几次。",
+        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数。\n您可以在应用里看是哪几次。",
     },
     approved=False,
 )
@@ -224,7 +243,7 @@ RED_FLAG_NOTICE_SELF = Template(
     {
         "en": "This one we do not wait for.\n{name} is not feeling well.\nCall {doctor} today.",
         "ms": "Yang ini kita tidak tunggu.\n{name} rasa tidak sihat.\nTelefon {doctor} hari ini.",
-        "zh": "这个不能等。\n{name}不舒服。\n今天就打电话给{doctor}。",
+        "zh": "这个我们不等。\n{name}不舒服。\n今天就打电话给{doctor}。",
     },
     approved=False,
 )
@@ -247,7 +266,7 @@ RED_FLAG_NOTICE_AMBIGUOUS = Template(
             "Mungkin tentang {name}.\n"
             "Telefon {who} sekarang."
         ),
-        "zh": "这个不能等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
+        "zh": "这个我们不等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
     },
     approved=False,
 )
@@ -267,6 +286,189 @@ NUDGE = Template(
 )
 """The day's smart nudge (E17-03), sent by E11's engine: the planner's lines, exactly."""
 
+# @patient
+RED_FLAG_NOTICE_AMBULANCE = Template(
+    "red_flag_notice_ambulance",
+    ("name", "emergency_number"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not feeling well.\n"
+            "Call {name} now.\n"
+            "Ask {name} now if an ambulance is coming.\n"
+            "If not, call the ambulance now on {emergency_number}."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} rasa tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Tanya {name} sekarang sama ada ambulans sedang datang.\n"
+            "Kalau tidak, hubungi ambulans sekarang di talian {emergency_number}."
+        ),
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "现在就问{name}救护车是不是在路上。\n如果没有，现在就打{emergency_number}叫救护车。"
+        ),
+    },
+    approved=False,
+)
+"""A red flag in the ambulance tier (chest pain, breathless at rest, the signs of a stroke,
+shaky and sweaty on a sugar medicine), to the family: call him, and the ambulance if he has not
+— never "call the doctor today", at any hour (E19-05)."""
+
+# @patient
+RED_FLAG_NOTICE_HOSPITAL = Template(
+    "red_flag_notice_hospital",
+    ("name", "hospital", "emergency_number"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not feeling well.\n"
+            "Call {name} now.\n"
+            "Help {name} get to the emergency department at {hospital} now.\n"
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} rasa tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.\n"
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}."
+        ),
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "现在就帮{name}去{hospital}的急诊部。\n"
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。"
+        ),
+    },
+    approved=False,
+)
+"""A same-day red flag out of the doctor's hours, with a hospital on his insurance marked in
+the directory: its emergency department, named, and the ambulance if he cannot get there
+safely (E19-05)."""
+
+# @patient
+RED_FLAG_NOTICE_NIGHT = Template(
+    "red_flag_notice_night",
+    ("name", "emergency_number"),
+    {
+        "en": (
+            "This one we do not wait for.\n"
+            "{name} is not feeling well.\n"
+            "Call {name} now.\n"
+            "If it gets worse, call the ambulance now on {emergency_number}."
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.\n"
+            "{name} rasa tidak sihat.\n"
+            "Telefon {name} sekarang.\n"
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}."
+        ),
+        "zh": (
+            "这个我们不等。\n{name}不舒服。\n现在就打电话给{name}。\n"
+            "如果变得更严重，现在就打{emergency_number}叫救护车。"
+        ),
+    },
+    approved=False,
+)
+"""A same-day red flag out of the doctor's hours with no hospital marked: call him now, the
+ambulance if it gets worse — never "call the doctor today" at night (E19-05)."""
+
+# @patient
+VISIT_BRIEF = Template(
+    "visit_brief",
+    ("doctor", "day", "time", "subject"),
+    {
+        "en": (
+            "Your next visit is on {day}.\n"
+            "You see {doctor} at {time}.\n"
+            "This visit is about {subject}.\n"
+            "Bring your blood pressure book on {day}.\n"
+            "Nura prepared this from your papers.\n"
+            "This is not a doctor's advice.\n"
+            "Ask {doctor}."
+        ),
+        "ms": (
+            "Lawatan anda yang seterusnya pada {day}.\n"
+            "Anda berjumpa {doctor} pukul {time}.\n"
+            "Lawatan ini untuk memeriksa {subject}.\n"
+            "Bawa buku tekanan darah anda pada {day}.\n"
+            "Nura menyediakan ini daripada surat-surat anda.\n"
+            "Ini bukan nasihat doktor.\n"
+            "Tanya {doctor}."
+        ),
+        "zh": (
+            "您下次看医生是在{day}。\n您{time}看{doctor}。\n这次看医生是为了{subject}。\n"
+            "{day}，带上您的血压本。\n这是 Nura 从您的病历文件准备的。\n这不是医生的意见。\n问{doctor}。"
+        ),
+    },
+    approved=False,
+)
+"""The pre-visit brief three days before a visit (E05-01), sent by E11's engine: the brief
+card's own lines — who and when, what it is about, what to bring — ending on its boundary.
+Every slot is one word or name on one line: a Meta template parameter holds no line break."""
+UNHEARD_NOTE_NOTICE = Template(
+    "unheard_note_notice",
+    ("name",),
+    {
+        "en": (
+            "{name} sent a voice note to Nura.\n"
+            "Nura could not hear this note.\n"
+            "Listen to it in the app, or call {name} now."
+        ),
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Dengar nota itu dalam aplikasi, atau telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n请在应用里听，或者现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""His voice note Nura could not hear, to his chief whose key opens his notes (#158): a red
+word in it could not be read, so a person listens. His words stay in his note, not here."""
+
+# @patient
+UNHEARD_NOTE_NOTICE_CALL = Template(
+    "unheard_note_notice_call",
+    ("name",),
+    {
+        "en": "{name} sent a voice note to Nura.\nNura could not hear this note.\nCall {name} now.",
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""The same notice where there is nothing she can open — the note could not be fetched, or her
+key does not open his notes — so the one thing to do is to call him."""
+
+# @patient
+UNHEARD_NOTE_NOTICE_FROM = Template(
+    "unheard_note_notice_from",
+    ("who", "name"),
+    {
+        "en": (
+            "{who} sent a voice note to Nura about {name}.\n"
+            "Nura could not hear this note.\n"
+            "Call {who} now."
+        ),
+        "ms": (
+            "{who} hantar nota suara kepada Nura tentang {name}.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {who} sekarang."
+        ),
+        "zh": "{who}给 Nura 发了一条关于{name}的语音留言。\nNura 听不清这段录音。\n现在就打电话给{who}。",
+    },
+    approved=False,
+)
+"""A voice note somebody other than the patient sent — the helper, another key holder — that
+Nura could not hear (#173). Nothing of it is kept, so there is nothing to listen to; the one
+thing to do is to call whoever sent it, and the notice never says the patient sent it."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -285,11 +487,19 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE_SELF,
         RED_FLAG_NOTICE_AMBIGUOUS,
         NUDGE,
+        RED_FLAG_NOTICE_AMBULANCE,
+        RED_FLAG_NOTICE_HOSPITAL,
+        RED_FLAG_NOTICE_NIGHT,
+        VISIT_BRIEF,
+        UNHEARD_NOTE_NOTICE,
+        UNHEARD_NOTE_NOTICE_CALL,
+        UNHEARD_NOTE_NOTICE_FROM,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All fifteen, in the order they are submitted: E19's six (approved), then E11's nine
-(pending Meta's approval, `approved=False`)."""
+"""All twenty-two, in the order they are submitted: E19's six (approved), then E11's nine, the
+red-flag notice by tier and by the doctor's hours with the pre-visit brief (B1), #158's two and
+#173's one — all pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

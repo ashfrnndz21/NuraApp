@@ -13,7 +13,10 @@ the family notice from `day`); the dev-only routes call `run_morning` and
   without a second yes (`inbound._check_in_answer` says why);
 - the visit card: the next visit on the spine, with who takes him;
 - the family notice: to each chief, in the evening, how many things were written down this
-  week, counted over what her key opens (`app.delivery.triggers.day.family_notice`).
+  week, counted over what her key opens (`app.delivery.triggers.day.family_notice`) — only
+  while his WhatsApp agreement stands, and never to a chief who said no to WhatsApp (#163);
+  the digest is read in the app either way. `run_family_notice` below is the same message
+  sent by hand, for the dev route and the checkpoints, unscoped by chief.
 
 Every one goes through `send`: the profile's WHATSAPP consent, a template outside the
 window, plain words, a SHARE line. All of it runs in the owner's own key context — the
@@ -23,7 +26,9 @@ patient's day is sent to the patient about the patient.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,9 +36,15 @@ from app.audit.access import audited_read
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.outbound.send import Delivered, send, send_voice_note
+from app.channels.whatsapp.outbound.send import (
+    Delivered,
+    SaidNoToWhatsApp,
+    send,
+    send_voice_note,
+)
 from app.channels.whatsapp.strings import YOUR_DOCTOR
 from app.channels.whatsapp.templates import language_of
+from app.consent.service import NoConsent
 from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType
 from app.delivery.feed.rank import morning_supply
@@ -47,6 +58,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.medicines.service import today
 from app.medicines.strings import say_date
 from app.memory.models import Provider
+from app.memory.semantic import current_facts
 from app.memory.spine import upcoming_appointments
 from app.regions import REGION_TZ
 from app.settings import Settings
@@ -316,10 +328,55 @@ async def _first_chief(session: AsyncSession, *, context: KeyContext) -> str | N
     return None
 
 
+async def run_family_notice(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    profile_id: uuid.UUID,
+) -> Sequence[Delivered]:
+    """To each chief: how many things were written down about him this week. A count, never
+    what they said; the app is where the digest is read. Not on WhatsApp once he has stopped
+    it, nor to a chief who said no to it (#163): the send door refuses both, on the trail, and
+    that chief reads the digest in the app."""
+    profile, _, context = await _owner(session, settings=settings, profile_id=profile_id)
+    moment = utcnow()
+    facts = await current_facts(session, context=context)
+    this_week = [f for f in facts if as_utc(f.asserted_at) > moment - timedelta(days=7)]
+    state = await current_state(session, context=context)
+    keys = await audited_read(session, Key, context, Scope.FAMILY, channel=Channel.WHATSAPP)
+    sent: list[Delivered] = []
+    for key in sorted(keys, key=lambda k: as_utc(k.granted_at)):
+        if not key.is_active(moment) or key.role is not KeyRole.CHIEF:
+            continue
+        chief = await session.get(Person, key.holder_person_id)
+        if chief is None or not chief.phone_e164:
+            continue
+        try:
+            sent.append(
+                await send(
+                    session,
+                    context=context,
+                    to_person=chief,
+                    kind="family_digest",
+                    params={"name": profile.display_name, "count": str(len(this_week))},
+                    provider=providers.whatsapp,
+                    number=number,
+                    language=chief.language,
+                    state=state,
+                )
+            )
+        except (NoConsent, SaidNoToWhatsApp):
+            continue
+    return sent
+
+
 __all__ = [
     "Morning",
     "NoPatientYet",
     "compose_morning",
+    "run_family_notice",
     "run_feeling_check_in",
     "run_morning",
     "run_visit_card",

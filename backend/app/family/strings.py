@@ -158,6 +158,8 @@ DIGEST: Mapping[str, Mapping[str, str]] = {
         "visit": "{name} sees the doctor on {day}.",
         "task_done": "{who} finished this on {day}: {what}.",
         "task_open": "{who} will do this: {what}.",
+        "order_done": "{who} ordered more medicine for {name} on {day}.",
+        "order_open": "{who} will order more medicine for {name}.",
         "on_duty": "{who} is on duty today.",
         "nobody_on_duty": "Nobody is on duty today.",
         "quiet": "There is nothing new since {day}.",
@@ -170,6 +172,8 @@ DIGEST: Mapping[str, Mapping[str, str]] = {
         "visit": "{name} berjumpa doktor pada {day}.",
         "task_done": "{who} sudah selesai pada {day}: {what}.",
         "task_open": "{who} akan buat ini: {what}.",
+        "order_done": "{who} sudah pesan lagi ubat untuk {name} pada {day}.",
+        "order_open": "{who} akan pesan lagi ubat untuk {name}.",
         "on_duty": "{who} bertugas hari ini.",
         "nobody_on_duty": "Tiada siapa bertugas hari ini.",
         "quiet": "Tiada apa yang baru sejak {day}.",
@@ -182,6 +186,8 @@ DIGEST: Mapping[str, Mapping[str, str]] = {
         "visit": "{name}在{day}看医生。",
         "task_done": "{who}在{day}做完了：{what}。",
         "task_open": "{who}会做这件事：{what}。",
+        "order_done": "{who}在{day}为{name}再订了药。",
+        "order_open": "{who}会为{name}再订药。",
         "on_duty": "今天{who}值班。",
         "nobody_on_duty": "今天没有人值班。",
         "quiet": "从{day}起没有新的事。",
@@ -196,7 +202,6 @@ other, not a line Nura wrote."""
 # @patient
 PUSH_TEMPLATES: Mapping[str, Mapping[str, Lines]] = {
     "en": {
-        "water_pill_morning": ("Nura says the water pill is at 8.", "Take it with breakfast."),
         "pickup": ("{who} will pick you up at {when}.", "Bring your blood pressure book."),
         "call_you": ("{who} will call you {when}.", "It is not a worry."),
         "drink_water": ("Drink a glass of water now.", "Water is OK."),
@@ -208,7 +213,6 @@ PUSH_TEMPLATES: Mapping[str, Mapping[str, Lines]] = {
         "thinking_of_you": ("{who} is thinking of you today.", "Have a good rest."),
     },
     "ms": {
-        "water_pill_morning": ("Nura kata pil air pada pukul 8.", "Ambil bersama sarapan."),
         "pickup": ("{who} akan ambil anda pada {when}.", "Bawa buku tekanan darah anda."),
         "call_you": ("{who} akan telefon anda {when}.", "Ini bukan satu kebimbangan."),
         "drink_water": ("Minum segelas air sekarang.", "Air kosong boleh."),
@@ -220,7 +224,6 @@ PUSH_TEMPLATES: Mapping[str, Mapping[str, Lines]] = {
         "thinking_of_you": ("{who} teringat anda hari ini.", "Berehatlah dengan baik."),
     },
     "zh": {
-        "water_pill_morning": ("Nura 说去水药是 8 点吃。", "和早餐一起吃。"),
         "pickup": ("{who}会在{when}来接您。", "带上您的血压本。"),
         "call_you": ("{who}{when}会打电话给您。", "不用担心。"),
         "drink_water": ("现在喝一杯水。", "喝水没问题。"),
@@ -231,11 +234,10 @@ PUSH_TEMPLATES: Mapping[str, Mapping[str, Lines]] = {
 }
 """What a chief can send him, by template id: whole lines, filled with the chief's name
 (`{who}`), a time in words (`{when}`), the doctor's name (`{doctor}`) and a day (`{day}`).
-Nothing here tells him to start, stop or change a medicine: the water-pill line says when
-the tablet he already takes is due, as his list does."""
+None names a medicine or a dose, and no line the family writes may (`app.family.pushes`,
+#164): his medicine reminders come only from his confirmed list, at the times it gives."""
 
 TEMPLATE_SLOTS: Mapping[str, frozenset[str]] = {
-    "water_pill_morning": frozenset(),
     "pickup": frozenset({"who", "when"}),
     "call_you": frozenset({"who", "when"}),
     "drink_water": frozenset(),

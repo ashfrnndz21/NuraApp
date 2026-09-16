@@ -21,7 +21,7 @@ from app.delivery.feed.models import CapsClass
 from app.delivery.feed.rank import in_quiet_hours
 from app.delivery.nudges import handoff
 from app.delivery.nudges import strings as said
-from app.delivery.nudges.engine import NothingToHandOver, hand_over, plan_nudges, respond
+from app.delivery.nudges.engine import hand_over, plan_nudges, respond
 from app.delivery.nudges.handoff import Commitment, NudgeDraft, NudgePlan
 from app.delivery.nudges.models import Nudge, NudgeKind, ResponseKind
 from app.family.thread import post_message
@@ -191,8 +191,10 @@ async def test_one_a_day_counts_the_one_already_handed_over(
     assert nudge.kind is NudgeKind.RECOGNITION
     again = await _plan(sg, owner)
     assert again.drafts == () and _held(again) == {NudgeKind.PRESENCE: "one_a_day"}
-    async with refused_unit(sg, NothingToHandOver):
-        await hand_over(sg, context=owner, registry=REGISTRY)
+    # Handed over again — by the web as he answers, or by the schedule (W7): the same nudge,
+    # one row, never a second one past the cap.
+    _, again = await hand_over(sg, context=owner, registry=REGISTRY)
+    assert again.id == nudge.id
 
 
 async def test_a_kind_ignored_twice_rests_for_a_week(sg: AsyncSession, clock: FrozenClock) -> None:

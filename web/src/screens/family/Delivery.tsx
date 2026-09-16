@@ -62,9 +62,10 @@ export function DeliveriesPart(): JSX.Element | null {
 }
 
 /** E11-05: the quiet hours, whether a quiet day skips the morning card, and per kind of
- *  message the channels in the order they are tried and how many a day. An alert is never
- *  held; the backend refuses a cap on one, in its words. Anyone with a key reads; the owner
- *  and his chief change. */
+ *  message the channels in the order they are tried and how many a day. An alert — a red
+ *  flag — is never held and goes every way Nura can reach each person, so its row is read
+ *  only and never sent back (#162); the backend refuses a cap or a channel list for one, in
+ *  its words. Anyone with a key reads; the owner and his chief change. */
 export function SettingsPart(): JSX.Element | null {
   const here = useHere();
   const words = s();
@@ -81,16 +82,19 @@ export function SettingsPart(): JSX.Element | null {
     const next = now.includes(channel) ? now.filter((each) => each !== channel) : CHANNELS.filter((each) => each === channel || now.includes(each));
     setDraft({ ...draft, channels: { ...draft.channels, [type]: next } });
   };
+  // An alert has no cap (null): it is also the row no setting routes.
+  const isAlert = (type: string) => draft?.caps[type] === null;
   const save = () =>
     a.act("save", async () => {
       if (!draft) return;
       const caps = Object.fromEntries(Object.entries(draft.caps).filter((entry): entry is [string, number] => entry[1] !== null));
+      const channels = Object.fromEntries(Object.entries(draft.channels).filter(([type]) => !isAlert(type)));
       setDraft(
         await family.changeDeliverySettings(here.bearer, here.papers.profile_id, {
           skip_quiet_days: draft.skip_quiet_days,
           quiet_from: `${hhmm(draft.quiet_from)}:00`,
           quiet_until: `${hhmm(draft.quiet_until)}:00`,
-          channels: draft.channels,
+          channels,
           caps,
         }),
       );
@@ -113,14 +117,18 @@ export function SettingsPart(): JSX.Element | null {
           {Object.keys(draft.channels).map((type) => (
             <Tile paper key={type} testId={`kind-${type}`}>
               <h2 class="title">{(words.triggers as Record<string, string>)[type] ?? type}</h2>
-              <div class="choices" role="group">
-                {CHANNELS.map((channel) => (
-                  <Pill key={channel} chosen={(draft.channels[type] ?? []).includes(channel)} onClick={() => toggle(type, channel)} testId={`channel-${type}-${channel}`}>
-                    {words.channels[channel]}
-                  </Pill>
-                ))}
-              </div>
-              {draft.caps[type] === null ? (
+              {isAlert(type) ? (
+                <p data-testid={`every-way-${type}`}>{words.everyWay}</p>
+              ) : (
+                <div class="choices" role="group">
+                  {CHANNELS.map((channel) => (
+                    <Pill key={channel} chosen={(draft.channels[type] ?? []).includes(channel)} onClick={() => toggle(type, channel)} testId={`channel-${type}-${channel}`}>
+                      {words.channels[channel]}
+                    </Pill>
+                  ))}
+                </div>
+              )}
+              {isAlert(type) ? (
                 <p class="label">{words.neverHeld}</p>
               ) : (
                 <Field

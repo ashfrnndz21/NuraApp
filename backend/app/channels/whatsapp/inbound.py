@@ -12,6 +12,13 @@ a yes or a no against the poster's own open proposal, coordination kept for the 
 everything else not kept at all. Every step runs inside the sender's key context through
 the same doors as the app, so an out-of-scope caregiver gets the same refusal, on the trail.
 A stranger's message gets one fixed reply and leaves nothing behind.
+
+A voice note is heard in the region before any of that, whoever sent it, so its words are
+read like a message's. One with no words in it — a mumble, the transcriber down, the audio
+never fetched — may carry a red word nobody could read, so a person is always told: the
+chief on her own channels, as an alert that climbs a ladder of its own (#173). That holds for
+the helper's note as much as his, and on a profile whose patient has not agreed to WhatsApp,
+where nothing of the note is kept and the sender gets one fixed line.
 """
 
 from __future__ import annotations
@@ -22,7 +29,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,9 +46,10 @@ from app.channels.whatsapp.classifier import (
     Kind,
 )
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.group import group_for, is_member, sync_group
+from app.channels.whatsapp.group import is_member, sync_group
 from app.channels.whatsapp.models import (
     Direction,
+    DoseQuestion,
     MessageKind,
     WhatsAppMessage,
     WhatsAppThread,
@@ -55,23 +63,38 @@ from app.channels.whatsapp.proposals import (
     propose,
 )
 from app.channels.whatsapp.provider import InboundMessage, Media, MediaTooLarge, NoSuchMedia
-from app.channels.whatsapp.strings import FEELING_WORDS, YOU, YOUR_DOCTOR, join_names, reply
+from app.channels.whatsapp.strings import (
+    BOXED,
+    DOSE_CHOICE,
+    DOSE_CHOICE_BARE,
+    FEELING_WORDS,
+    TOOK,
+    YOU,
+    YOUR_DOCTOR,
+    join_names,
+    red_flag_reply_key,
+    reply,
+)
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
 from app.db import as_utc, nested_unit_of_work, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
-from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.deliver import Via, open_run
 from app.delivery.triggers.ladder import (
+    DoseAsked,
     acknowledge_dose,
     acknowledge_flag,
+    climb_unheard,
     close,
-    dose_for_reply,
+    doses_for_reply,
     escalate_flag,
     medicine_words,
+    unheard_ladder,
 )
-from app.delivery.triggers.models import Ladder
+from app.delivery.triggers.models import PHONE, DeliveryOutcome, Ladder, TriggerType
 from app.drafts import FactDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
@@ -89,9 +112,12 @@ from app.keys.context import (
     owned_profile,
     resolve_key_context,
 )
+from app.keys.handles import profile_for_group
 from app.keys.models import Key
 from app.keys.scopes import Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
+from app.medicines.service import today as doses_today
+from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME, say_date
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Artifact,
@@ -105,7 +131,16 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact, current_facts
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
-from app.safety.red_flags import FLAG_WINDOW, Flag, detect, raise_flag, record_the_moment
+from app.safety.red_flags import (
+    FLAG_WINDOW,
+    NIGHT_UNTIL,
+    Flag,
+    detect,
+    escalation_now,
+    flag_to_raise,
+    raise_flag,
+    record_the_moment,
+)
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -422,7 +457,7 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     sweaty with no sugar condition on the record) is kept for the caregiver to see and is not
     escalated in the thread.
     """
-    feeling = detect(work.message.text)
+    feeling = await flag_to_raise(session, context=work.context, text=work.message.text)
     assert feeling is not None
     said = await record_the_moment(
         session,
@@ -454,7 +489,6 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             artifact_id=artifact.id,
             flag_id=flag.id,
         )
-    doctor = await _doctor(session, work)
     # The ladder at once (E11-06): straight to the roster, whatever the hour, whatever the
     # caps. The reply names exactly who it reached — nobody is said to know who was not told.
     reached = await _escalate(
@@ -472,11 +506,55 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         person = await session.get(Person, person_id)
         if person is not None and person.display_name and person.display_name not in names:
             names.append(person.display_name)
-    if names:
-        key = "red_flag_one" if len(names) == 1 else "red_flag"
-        await _say(session, work, key, doctor=doctor, names=join_names(names, work.language))
-    else:
-        await _say(session, work, "red_flag_alone", doctor=doctor)
+    # What to do now (E19-05): the flag's tier, the doctor's hours and the hospital marked as
+    # on his insurance, at the moment the words were written — the ambulance at any hour for
+    # chest pain and the signs of a stroke; out of the doctor's hours, never "call the doctor
+    # today". Read under the emergency scope, so a helper's word names the same doctor. If
+    # the directory cannot be read, the ambulance: nothing about it may weaken the step.
+    try:
+        step = await escalation_now(
+            session,
+            context=work.context,
+            feeling=feeling,
+            local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
+            emergency_number=EMERGENCY_NUMBER[work.context.region.value],
+            channel=Channel.WHATSAPP,
+            tiered=work.settings.red_flag_tiers,
+        )
+        step_name, doctor, hospital = step.step.value, step.doctor, step.hospital
+    except Refusal as refusal:
+        log.warning(
+            "whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__
+        )
+        step_name, doctor, hospital = "ambulance", None, None
+    # "Call Dr Tan on Tuesday 15 September in the morning.": the morning he can call, by its
+    # day and date (rule 5) — this one's before the clinic's hours begin, else tomorrow's.
+    local = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region])
+    morning = local.date() + timedelta(days=0 if local.time() < NIGHT_UNTIL else 1)
+    params = {
+        "doctor": doctor or YOUR_DOCTOR[work.language],
+        "day": say_date(morning, work.language),
+        "name": work.profile.display_name,
+        "hospital": hospital or "",
+        "emergency_number": EMERGENCY_NUMBER[work.context.region.value],
+        "names": join_names(names, work.language),
+    }
+    # The reply is its own savepoint: the flag and the ladder are written already, and a reply
+    # that cannot go never takes them back. Failing that, the ambulance line, which names
+    # nobody but who knows.
+    # Written by someone who is not him (his chief, his helper): the words say who does the
+    # next thing — "Help Pa sit down and rest now." — and whose insurance it is (rule 7).
+    about = not work.thread.is_patient
+    for key in (
+        red_flag_reply_key(step_name, len(names), about=about),
+        red_flag_reply_key("ambulance", len(names), about=about),
+    ):
+        try:
+            async with nested_unit_of_work(session):
+                await _say(session, work, key, **params)
+            break
+        except Exception as failed:  # noqa: BLE001 — the flag stands; the reply is logged
+            log.warning("whatsapp: the red-flag reply %s not sent: %s", key, type(failed).__name__)
     # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
     # and who is still to be asked; nothing else is written beside it.
     return Handled(
@@ -553,7 +631,7 @@ async def _red_flag_unagreed(
     card leads the family's feed. The poster gets one fixed line straight from the provider,
     written down as a share of a notice, the way the consent refusal's line is.
     """
-    feeling = detect(message.text)
+    feeling = await flag_to_raise(session, context=context, text=message.text)
     assert feeling is not None
     try:
         async with unit_of_work(session):
@@ -627,8 +705,7 @@ async def _red_flag_everywhere(
     The sender is asked which one, in one fixed line, written down as a share on each. None
     when the sender holds the emergency card on none of them.
     """
-    feeling = detect(message.text)
-    assert feeling is not None
+    assert detect(message.text) is not None
     raised: list[tuple[Profile, KeyContext, Flag]] = []
     for profile_id in profiles:
         context = await resolve_key_context(
@@ -636,6 +713,10 @@ async def _red_flag_everywhere(
         )
         if not context.allows(Scope.EMERGENCY):
             continue
+        # Each family's own record chooses the flag: a fall said with shaky-and-sweaty is the
+        # fall where no sugar condition or sugar medicine is on it (B1 re-check).
+        feeling = await flag_to_raise(session, context=context, text=message.text)
+        assert feeling is not None
         profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
         try:
             async with unit_of_work(session):
@@ -779,55 +860,174 @@ async def _which_one(
     return Handled(outcome="which_one", profile_id=chosen.id)
 
 
-async def _taken(session: AsyncSession, work: _Work) -> Handled:
-    """ "Taken" from him, "given" from the helper: the Taken tap, said as a reply (E11-01).
+DOSE_QUESTION_FOR = timedelta(hours=2)
+"""How long "which tablet?" stays open for its answer (#162)."""
+ALL_OF_THEM = re.compile(
+    r"^\s*(?:(?:i\s+|he\s+|she\s+)?(?:took|gave|had|have taken|have given)\s+|"
+    r"(?:sudah|dah)\s+(?:ambil|beri|bagi|makan)\s+)?"
+    r"(?:both|all|both of them|all of them|semua|kedua-dua|kedua-duanya|"
+    r"都|都吃了|都给了|两个都|两种都|全部)\s*[.!。！]?\s*$",
+    re.IGNORECASE,
+)
+"""An answer to "which tablet?" that names every tablet it read out."""
+NUMBERS_ONLY = re.compile(
+    r"^\s*\d{1,2}(?:\s*(?:,|，|、|&|\+|\band\b|\bdan\b|和|\s)\s*\d{1,2})*\s*[.!。！]?\s*$",
+    re.IGNORECASE,
+)
+"""An answer made of the question's numbers and nothing else: "1", "2", "1 and 2"."""
+_POSSESSIVE = re.compile(r"^(?:your |the )|(?: anda)$|^您的")
+_QUOTES = re.compile(r"[\"'“”‘’「」『』]")
+NOT = re.compile(
+    r"(?<!\w)(?:not|no|never|didn'?t|did not|haven'?t|have not|tidak|tak|belum|bukan)(?!\w)"
+    r"|不|没",
+    re.IGNORECASE,
+)
+"""A "no" in an answer naming a tablet: it does not say which he took (#162)."""
 
-    It is about the tablet the ladder last asked this person about today, else the one whose
-    window is open now with no Taken yet; with neither, nothing is written and the reply says
-    so. The tap is written the way the app's button writes it — the tap is the yes, under
-    the medicines scope the helper's key holds — on the WhatsApp channel, and the ladder for
-    that tablet stops at once.
-    """
-    registry = work.providers.drug_registry
-    asked = await dose_for_reply(
-        session, context=work.context, registry=registry, at=work.message.at
-    )
-    if asked is None:
-        await _say(session, work, "taken_nothing_due")
-        return Handled(
-            outcome="nothing_due", replies=tuple(work.replies), profile_id=work.profile.id
+
+def _question_closes(moment: datetime, region: Region) -> datetime:
+    """When "which tablet?" stops taking an answer: two hours on, or at the end of his day if
+    that comes first — a tablet is his day's, and tomorrow's is another (#162)."""
+    zone = REGION_TZ[region]
+    local = as_utc(moment).astimezone(zone)
+    midnight = datetime.combine(local.date() + timedelta(days=1), time(0), zone)
+    return min(as_utc(moment) + DOSE_QUESTION_FOR, midnight.astimezone(UTC))
+
+
+def _medicine(work: _Work, dose: DoseAsked) -> str:
+    """His words for the tablet, said to whoever wrote: his own to him, "Pa's" to anyone else."""
+    words = medicine_words(work.providers.drug_registry, dose.generic, work.language)
+    if work.thread.is_patient:
+        return words
+    return theirs(words, work.profile.display_name, work.language)
+
+
+def _box_number(strength: str) -> str | None:
+    """The strength as the number on his box: "5 mg" is 5, "5/80 mg" is 5/80. None when
+    there is no number."""
+    found = re.match(r"\s*(\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)*)", strength or "")
+    return None if found is None else re.sub(r"\s+", "", found.group(1))
+
+
+def _named(work: _Work, dose: DoseAsked, listed: Sequence[DoseAsked]) -> str:
+    """The tablet as a reply names it: his words, and the number on its box too when another
+    tablet on the list goes by the same words, so the read-back says which one it was."""
+    words = _medicine(work, dose)
+    strength = _box_number(dose.strength)
+    clashes = any(other != dose and _medicine(work, other) == words for other in listed)
+    if not clashes or strength is None:
+        return words
+    return BOXED[work.language].format(medicine=words, strength=strength)
+
+
+def _dose_lines(work: _Work, doses: Sequence[DoseAsked]) -> str:
+    """The question's list, one line a tablet, numbered from 1 in the order it is read out."""
+    lines: list[str] = []
+    for number, dose in enumerate(doses, start=1):
+        strength = _box_number(dose.strength)
+        words = DOSE_CHOICE if strength is not None else DOSE_CHOICE_BARE
+        lines.append(
+            words[work.language].format(
+                number=str(number),
+                medicine=_medicine(work, dose),
+                strength=strength or "",
+                anchor=ANCHOR_WORDS[work.language][dose.anchor],
+            )
         )
+    return "\n".join(lines)
+
+
+def _which_key(work: _Work, doses: Sequence[DoseAsked]) -> str:
+    asked = "taken_which" if work.thread.is_patient else "given_which"
+    return asked if len(doses) == 2 else f"{asked}_all"
+
+
+async def _ask_which(session: AsyncSession, work: _Work, doses: Sequence[DoseAsked]) -> Handled:
+    """ "Which tablet?" — a "Taken" or "given" that could be about more than one tablet at that
+    moment (#162). Nothing is written down: the question is kept, with the tablets in the
+    order they were read out, under the medicines scope the reply's key holds, and each is
+    read out by number, in his words, with its strength and its moment."""
+    moment = utcnow()
+    # A new question closes any still open in this thread: only the newest is answered.
+    earlier = await _open_question(session, work)
+    if earlier is not None:
+        await _close_question(session, work, earlier)
+    await audited_write(
+        session,
+        DoseQuestion,
+        work.context,
+        Scope.MEDICINES,
+        channel=Channel.WHATSAPP,
+        thread_id=work.thread.id,
+        asked_at=moment,
+        expires_at=_question_closes(moment, work.context.region),
+        doses=[{"line_id": str(dose.line_id), "anchor": dose.anchor} for dose in doses],
+    )
+    await _say(
+        session,
+        work,
+        _which_key(work, doses),
+        doses=_dose_lines(work, doses),
+        name=work.profile.display_name,
+    )
+    return Handled(outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id)
+
+
+async def _write_taken(
+    session: AsyncSession,
+    work: _Work,
+    doses: Sequence[DoseAsked],
+    *,
+    listed: Sequence[DoseAsked] = (),
+    already: frozenset[tuple[uuid.UUID, str]] = frozenset(),
+) -> Handled:
+    """The Taken taps for exactly these tablets, the way the app's button writes each — the
+    tap is the yes, under the medicines scope the helper's key holds — on the WhatsApp
+    channel; the ladder stops for these and for no other (#162). One tapped since the
+    question was asked (`already`) is not tapped twice. The reply names them, each told apart
+    from the others on the list (`listed`) where their words are the same."""
+    listed = listed or doses
     artifact = await _keep_text(session, work=work, scope=Scope.MEDICINES)
     row = await _keep_row(session, work=work, kind=MessageKind.TAKEN, artifact=artifact)
-    await record_dose_taken(
-        session,
-        context=work.context,
-        line_id=asked.line_id,
-        anchor=asked.anchor,
-        source_channel=SourceChannel.WHATSAPP,
-        channel=Channel.WHATSAPP,
-    )
     day = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]).date().isoformat()
-    await acknowledge_dose(
-        session,
-        context=work.context,
-        line_id=asked.line_id,
-        anchor=asked.anchor,
-        day=day,
-        channel=Channel.WHATSAPP,
-    )
+    for dose in doses:
+        if (dose.line_id, dose.anchor) in already:
+            continue
+        await record_dose_taken(
+            session,
+            context=work.context,
+            line_id=dose.line_id,
+            anchor=dose.anchor,
+            source_channel=SourceChannel.WHATSAPP,
+            channel=Channel.WHATSAPP,
+        )
+        await acknowledge_dose(
+            session,
+            context=work.context,
+            line_id=dose.line_id,
+            anchor=dose.anchor,
+            day=day,
+            channel=Channel.WHATSAPP,
+        )
     if work.thread.is_patient:
+        took: list[str] = []
+        for anchor in dict.fromkeys(dose.anchor for dose in doses):
+            named = [_named(work, dose, listed) for dose in doses if dose.anchor == anchor]
+            took.append(
+                TOOK[work.language].format(
+                    medicine=join_names(named, work.language),
+                    anchor=ANCHOR_WORDS[work.language][anchor],
+                )
+            )
         who = await _who_checks(session, work)
         if who != YOU[work.language]:
-            await _say(session, work, "taken_patient", who=who)
+            # "took it" names one tablet; more than one is "took them" (#173).
+            key = "taken_patient" if len(doses) == 1 else "taken_patient_many"
+            await _say(session, work, key, who=who, took="\n".join(took))
         else:
-            await _say(session, work, "taken_alone")
+            await _say(session, work, "taken_alone", took="\n".join(took))
     else:
-        medicine = theirs(
-            medicine_words(registry, asked.generic, work.language),
-            work.profile.display_name,
-            work.language,
-        )
+        medicine = join_names([_named(work, dose, listed) for dose in doses], work.language)
         await _say(session, work, "given", name=work.profile.display_name, medicine=medicine)
     return Handled(
         outcome="taken",
@@ -835,6 +1035,167 @@ async def _taken(session: AsyncSession, work: _Work) -> Handled:
         profile_id=work.profile.id,
         message_id=row.id,
         artifact_id=artifact.id,
+    )
+
+
+async def _taken(session: AsyncSession, work: _Work) -> Handled:
+    """ "Taken" from him, "given" from the helper: the Taken tap, said as a reply (E11-01).
+
+    It is about every tablet the ladder has asked this person about today and is still open,
+    and every one whose window is open now with no Taken yet (`doses_for_reply`). One is
+    written down at once, and named in the reply. More than one is never a guess (#162): he
+    is asked which, by number, and nothing is written until he answers. None: nothing is
+    written and the reply says so.
+    """
+    doses = await doses_for_reply(
+        session, context=work.context, registry=work.providers.drug_registry, at=work.message.at
+    )
+    if not doses:
+        await _say(session, work, "taken_nothing_due")
+        return Handled(
+            outcome="nothing_due", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    if len(doses) > 1:
+        return await _ask_which(session, work, doses)
+    return await _write_taken(session, work, doses)
+
+
+async def _open_question(session: AsyncSession, work: _Work) -> DoseQuestion | None:
+    """The newest "which tablet?" still open in this thread, if its key reads the medicines."""
+    if not work.context.allows(Scope.MEDICINES):
+        return None
+    found = await audited_read(
+        session,
+        DoseQuestion,
+        work.context,
+        Scope.MEDICINES,
+        where=(
+            DoseQuestion.thread_id == work.thread.id,
+            DoseQuestion.answered_at.is_(None),
+            DoseQuestion.expires_at > utcnow(),
+        ),
+        order_by=(DoseQuestion.asked_at.desc(),),
+        limit=1,
+        channel=Channel.WHATSAPP,
+    )
+    return found[0] if found else None
+
+
+def _words_for(registry: DrugRegistry, dose: DoseAsked) -> set[str]:
+    """What names one tablet in an answer: its generic name, and his words for it in every
+    language, without "your" or "the"."""
+    words = {dose.generic.lower()}
+    plain = registry.monograph(dose.generic).plain_name_id
+    for language in PLAIN_NAME.values():
+        said = language.get(plain)
+        if said:
+            words.add(_POSSESSIVE.sub("", said.lower()).strip())
+    return {word for word in words if word}
+
+
+def _chosen(
+    text: str, doses: Sequence[DoseAsked], registry: DrugRegistry
+) -> list[DoseAsked] | None:
+    """Exactly which tablets an answer to "which tablet?" says, or None when it does not say
+    exactly (#162): a number from the list, several numbers, "both" or "all", or the
+    tablet's own word. A number that is not on the list, or a word that names more than one
+    tablet on it, says nothing, and nothing is written."""
+    said = _QUOTES.sub("", text).strip().lower()
+    if ALL_OF_THEM.match(said):
+        return list(doses)
+    if NUMBERS_ONLY.match(said):
+        numbers = sorted({int(number) for number in re.findall(r"\d+", said)})
+        if numbers and all(1 <= number <= len(doses) for number in numbers):
+            return [doses[number - 1] for number in numbers]
+        return None
+    named: dict[str, set[int]] = {}
+    for index, dose in enumerate(doses):
+        for word in _words_for(registry, dose):
+            named.setdefault(word, set()).add(index)
+    found: set[int] = set()
+    for word, which in named.items():
+        if re.search(rf"(?<!\w){re.escape(word)}(?!\w)", said) or (
+            not word.isascii() and word in said
+        ):
+            if len(which) > 1:
+                return None
+            found |= which
+    # A name answers only when it names exactly one tablet, with no "not" beside it: "the
+    # aspirin, not the water pill" and "the aspirin and the water pill" say nothing sure.
+    if len(found) != 1 or NOT.search(said):
+        return None
+    return [doses[index] for index in sorted(found)]
+
+
+async def _answer_which(
+    session: AsyncSession, work: _Work, question: DoseQuestion, what: Classification
+) -> Handled | None:
+    """An answer to the open "which tablet?" (#162). Exactly which: the question is answered
+    and the Taken written for those tablets alone. Not exactly which: nothing is written, he
+    is told so and asked again. None when the message is not an answer at all."""
+    slots = await doses_today(session, context=work.context, registry=work.providers.drug_registry)
+    lines = {slot.line.id: slot.line for slot in slots}
+    doses = [
+        DoseAsked(
+            line_id=line.id, anchor=asked["anchor"], generic=line.generic, strength=line.strength
+        )
+        for asked in question.doses
+        if (line := lines.get(uuid.UUID(asked["line_id"]))) is not None
+    ]
+    if len(doses) != len(question.doses):
+        # A tablet it read out has left today's list since: its numbers no longer mean what
+        # was read to him. Nothing is written; he is asked again from what is open now.
+        await _close_question(session, work, question)
+        await _say(session, work, "which_not_sure")
+        fresh = await doses_for_reply(
+            session,
+            context=work.context,
+            registry=work.providers.drug_registry,
+            at=work.message.at,
+        )
+        if fresh:
+            return await _ask_which(session, work, fresh)
+        return Handled(
+            outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    chosen = _chosen(work.message.text or "", doses, work.providers.drug_registry)
+    if chosen is None:
+        if what.kind is not Kind.OTHER and not (
+            what.kind is Kind.HEALTH_EVENT
+            and what.event is not None
+            and what.event.subject == "medication"
+        ):
+            return None
+        await _say(session, work, "which_not_sure")
+        if doses:
+            await _say(
+                session,
+                work,
+                _which_key(work, doses),
+                doses=_dose_lines(work, doses),
+                name=work.profile.display_name,
+            )
+        return Handled(
+            outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    await _close_question(session, work, question)
+    tapped = frozenset((slot.line.id, slot.anchor) for slot in slots if slot.taken)
+    return await _write_taken(session, work, chosen, listed=doses, already=tapped)
+
+
+async def _close_question(session: AsyncSession, work: _Work, question: DoseQuestion) -> None:
+    """The question's one change: answered, or asked again — it takes no answer after this."""
+    question.answered_at = utcnow()
+    await session.flush()
+    await record(
+        session,
+        context=work.context,
+        action=Action.WRITE,
+        scope=Scope.MEDICINES,
+        target=DoseQuestion.__tablename__,
+        target_id=question.id,
+        rows=1,
+        channel=Channel.WHATSAPP,
     )
 
 
@@ -1147,14 +1508,22 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
     his own words, so on the agreement to hold the record and never the recording consent
     (ADR 0003) — with the words heard in it by reference, private to him and a chief preset
     to his notes, and findable by recall. Anyone else's voice note is not kept: it may carry
-    other people's voices, which only a consult keeps, on the consent to record."""
+    other people's voices, which only a consult keeps, on the consent to record. One of
+    theirs that Nura could not hear still reaches a person, all the same (#173)."""
     if not work.context.is_owner:
+        if _nothing_heard(work):
+            return await _note_unheard_from_someone_else(session, work)
         return await _other(session, work)
     view = await _keep_voice(session, work)
     row = await _keep_row(session, work=work, kind=MessageKind.VOICE_NOTE, artifact=view.artifact)
-    await _say(
-        session, work, "voice_note_kept" if view.transcript is not None else "voice_note_unheard"
-    )
+    if view.transcript is not None:
+        await _say(session, work, "voice_note_kept")
+    else:
+        # Nothing heard in it — a mumble, or the transcriber down: a red word in it could not
+        # be read (#158). His chief is told to listen, and he is told what to do if he feels
+        # unwell — and who knows now, once the notice has actually gone (#173).
+        reached = await _tell_family_unheard(session, work, note_id=view.note.id)
+        await _say_unheard(session, work, "voice_note_unheard", reached)
     return Handled(
         outcome="voice_note",
         replies=tuple(work.replies),
@@ -1165,15 +1534,79 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
     )
 
 
+def _nothing_heard(work: _Work) -> bool:
+    """Whether this voice note reached Nura with no words in it: the audio never arrived, ran
+    past its cap, or the transcriber heard nothing in what did arrive."""
+    return work.voice_missing or work.heard is None or not work.heard.heard
+
+
+async def _say_unheard(
+    session: AsyncSession, work: _Work, key: str, reached: Sequence[uuid.UUID]
+) -> None:
+    """The reply to a note Nura could not hear, with who the notice reached — and nobody named
+    who was not told (#173): the plain line where it reached nobody, "Mei knows now." where it
+    reached one, "Mei and Kit know now." where it reached more.
+
+    The notice goes first, so this can say who knows; and this runs in a savepoint of its own,
+    so a reply that fails is logged by name and never rolls the note or the notice back —
+    which would have the family told again on the provider's retry, and him told twice that
+    Nura could not hear him. It is the same rule the red flag's reply follows.
+    """
+    names: list[str] = []
+    for person_id in reached:
+        person = await session.get(Person, person_id)
+        if person is not None and person.display_name and person.display_name not in names:
+            names.append(person.display_name)
+    told = key if not names else f"{key}_told" if len(names) == 1 else f"{key}_told_many"
+    params = {} if not names else {"names": join_names(names, work.language)}
+    try:
+        async with nested_unit_of_work(session):
+            await _say(session, work, told, **params)
+    except Exception as failed:  # noqa: BLE001 — the notice stands; the reply is logged by name
+        log.warning(
+            "whatsapp: the reply to an unheard voice note not sent: %s", type(failed).__name__
+        )
+
+
 async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
-    """His voice note that could not be fetched, or ran past its cap: nothing of it is kept,
-    the refusal is on his trail by name, and he is told plainly — with what to do if he feels
-    unwell, since a red word in it could not be read. Anyone else's gets the usual line."""
+    """A voice note that could not be fetched, or ran past its cap: nothing of it is kept, the
+    refusal is on the trail by name, and the sender is told plainly. His reply carries what to
+    do if he feels unwell, since a red word in it could not be read; anyone else's asks them to
+    write what they said instead. Either way a person is told, so someone can call him."""
     if not work.context.is_owner:
-        return await _other(session, work)
+        return await _note_unheard_from_someone_else(session, work)
+    await _refused_the_note(session, work.context)
+    reached = await _tell_family_unheard(session, work, note_id=None)
+    await _say_unheard(session, work, "voice_note_not_fetched", reached)
+    return Handled(
+        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+async def _note_unheard_from_someone_else(session: AsyncSession, work: _Work) -> Handled:
+    """A voice note from the helper, or any other key holder, that Nura could not hear (#173).
+
+    Hers is not kept — it may carry other people's voices, which only a consult keeps, on the
+    consent to record — and the refusal is on the trail by name. But a red word she spoke could
+    not be read either, so it is treated exactly as one of his: the chief is told on her own
+    channels, as an alert. The notice names whoever sent it and never says the patient did,
+    and what it asks is to call them: there is nothing of theirs to listen to, and they are
+    the one who knows what they said. The sender is told plainly and asked to write it; the
+    line telling him to call his family is his, and is said to nobody else.
+    """
+    await _refused_the_note(session, work.context)
+    reached = await _tell_family_unheard(session, work, note_id=None)
+    await _say_unheard(session, work, "note_unheard_other", reached)
+    return Handled(
+        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+async def _refused_the_note(session: AsyncSession, context: KeyContext) -> None:
+    """A voice note nothing was kept of, on the trail by name and never by its words."""
     await record(
         session,
-        context=work.context,
+        context=context,
         action=Action.WRITE,
         scope=Scope.RECORDS,
         target="event_note",
@@ -1181,10 +1614,149 @@ async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
         refused_because="VoiceNoteNotHeard",
         channel=Channel.WHATSAPP,
     )
-    await _say(session, work, "voice_note_not_fetched")
-    return Handled(
-        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+
+
+UNHEARD = TriggerType.VOICE_NOTE_UNHEARD
+
+
+async def _tell_family_unheard(
+    session: AsyncSession, work: _Work, *, note_id: uuid.UUID | None
+) -> tuple[uuid.UUID, ...]:
+    """The same, for a message the thread is handling: `_tell_unheard` for its work."""
+    return await _tell_unheard(
+        session,
+        settings=work.settings,
+        providers=work.providers,
+        number=work.number,
+        profile_id=work.profile.id,
+        at=work.message.at,
+        provider_message_id=work.message.provider_message_id,
+        from_person_id=work.person.id,
+        note_id=note_id,
     )
+
+
+async def _tell_unheard(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    profile_id: uuid.UUID,
+    at: datetime,
+    provider_message_id: str,
+    from_person_id: uuid.UUID,
+    note_id: uuid.UUID | None,
+) -> tuple[uuid.UUID, ...]:
+    """A voice note Nura could not hear, told to a person (#158, #173), so a person listens.
+
+    A red word in it could not be read, so it goes the way a red flag's notice goes: an alert
+    under the emergency card (`RULES[VOICE_NOTE_UNHEARD]`), never capped and never held by
+    the quiet hours, on the rule's own channels whatever a setting says — WhatsApp, then the
+    app's content-free push — and every attempt a `Delivery` row. Whose note it was does not
+    change any of that: the helper's unheard note tells a person exactly as his does.
+
+    It climbs a ladder of its own (`unheard_ladder`), so a chief who does not say she has it
+    is followed by whoever is on duty and then by everyone else whose key holds the emergency
+    card; one person's "I'm on it" stops it for the rest (`acknowledge_flag`). Whoever sent it
+    is left off the ladder — they know already. With nobody on any rung, there is nobody to
+    tell and the reply says nothing about who knows.
+
+    It carries no word of the note and none of its audio: the note stays private to him and a
+    chief preset to his notes. Her key opens them: she is told to listen in the app, or to
+    call him; it does not, or there is no note at all: she is told to call him. Somebody
+    else's note is never said to be his: the notice names whoever sent it.
+
+    It runs in a savepoint of its own, so a door's no here leaves his note standing. Anything
+    else — a lock, the database gone — is a failure and goes on up: the message is not
+    handled, the webhook answers 5xx and the provider sends it again, so a note nobody could
+    hear never ends in a 200 with nobody told. Nothing has been said to the sender at this
+    point — his reply is the last thing, and says who this reached — so a retry never tells
+    him twice that Nura could not hear him (#173).
+
+    Whose phone it reached.
+    """
+    handle = hashlib.sha256(provider_message_id.encode()).hexdigest()[:16]
+    try:
+        async with nested_unit_of_work(session):
+            run = await open_run(
+                session,
+                via=Via(settings=settings, providers=providers, number=number),
+                profile_id=profile_id,
+                at=at,
+            )
+            ladder = await unheard_ladder(
+                run,
+                dedupe_key=f"{UNHEARD.value}:{note_id or handle}",
+                note_id=note_id,
+                from_person_id=from_person_id,
+            )
+            await climb_unheard(run, ladder)
+    except Refusal as refusal:
+        # A door said no: a decision, not a failure, and on the trail already. His note and
+        # his reply stand, and nothing is sent again.
+        log.warning("whatsapp: an unheard voice note not told: %s", type(refusal).__name__)
+        return ()
+    return tuple(
+        dict.fromkeys(
+            sent.delivery.to_person_id
+            for sent in run.report
+            if sent.delivery.outcome is DeliveryOutcome.SENT
+            and sent.delivery.via in PHONE
+            and sent.delivery.to_person_id is not None
+        )
+    )
+
+
+async def _unheard_unagreed(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    person: Person,
+    context: KeyContext,
+    profile: Profile,
+    message: InboundMessage,
+) -> Handled:
+    """A voice note Nura could not hear on a profile whose patient has not agreed to WhatsApp.
+
+    Nothing of it is kept — no artefact, no thread, no message row — the way a red-flag word
+    on such a profile is raised on the word alone. A person is still told all the same: the
+    notice is an alert, so it goes every way each person can be reached (#163) and the notice
+    on their family page is written whatever else carried it. The sender gets one fixed line
+    straight from the provider, written down as a share of a notice, content-free.
+    """
+    await _refused_the_note(session, context)
+    await _tell_unheard(
+        session,
+        settings=settings,
+        providers=providers,
+        number=number,
+        profile_id=profile.id,
+        at=message.at,
+        provider_message_id=message.provider_message_id,
+        from_person_id=person.id,
+        note_id=None,
+    )
+    text = reply(
+        "note_unheard_fixed",
+        person.language,
+        emergency_number=EMERGENCY_NUMBER[settings.region.value],
+    )
+    await providers.whatsapp.send_text(message.from_e164, text)
+    await record(
+        session,
+        context=context,
+        action=Action.SHARE,
+        scope=Scope.EMERGENCY,
+        target="unheard_note_notice",
+        channel=Channel.WHATSAPP,
+        rows=1,
+        shared_with_person_id=person.id,
+        shared_with_label="note_unheard_fixed",
+    )
+    return Handled(outcome="voice_note_unheard_unagreed", profile_id=profile.id)
 
 
 async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
@@ -1252,6 +1824,12 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
                 return flagged
             return replace(flagged, note_id=kept.note.id)
         return flagged
+    if work.message.group_id is not None and (work.voice is not None or work.voice_missing):
+        # A voice note in the family's group is the family's, the way a photo there is: not
+        # kept, and never an alert. The group is where they talk to each other, and a note
+        # Nura could not hear in it would page everyone (#173). A red word in one was read
+        # above, before this, and is a flag like any other.
+        return Handled(outcome="ignored", profile_id=work.profile.id)
     if work.voice_missing:
         return await _voice_not_heard(session, work)
     if work.voice is not None:
@@ -1261,6 +1839,13 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
             return await _group_message(session, work)
         # A photo or a file in the family's group is the family's, never one of his papers.
         return Handled(outcome="ignored", profile_id=work.profile.id)
+    if work.message.text and what.kind in (Kind.OTHER, Kind.HEALTH_EVENT):
+        # An answer to "which tablet?" (#162): a number, "both", or the tablet's own word.
+        question = await _open_question(session, work)
+        if question is not None:
+            answered = await _answer_which(session, work, question, what)
+            if answered is not None:
+                return answered
     if what.kind is Kind.DOCUMENT:
         return await _document(session, work)
     if what.kind is Kind.HEALTH_EVENT:
@@ -1320,7 +1905,11 @@ async def handle_inbound(
     region = settings.region
     # The family's group names its family (E11-01). A group this number does not keep is
     # not read, and nothing is said into any group from here.
-    group = None if message.group_id is None else await group_for(session, message.group_id)
+    group = (
+        None
+        if message.group_id is None
+        else await profile_for_group(session, region=region, provider_group_id=message.group_id)
+    )
     if message.group_id is not None and group is None:
         log.info("whatsapp: a message in a group this number does not keep")
         return Handled(outcome="ignored")
@@ -1356,7 +1945,7 @@ async def handle_inbound(
         log.info("whatsapp: ignored by request %s", _handle(person.id, message.from_e164))
         return Handled(outcome="ignored")
 
-    if group is not None and await closing_since(session, profile_id=group.profile_id) is not None:
+    if group is not None and await closing_since(session, profile_id=group) is not None:
         # The family's group of a closing account (#143) was emptied; a post that still
         # arrives is not taken in. A red word is answered, to the sender alone, with who to call.
         if flagged:
@@ -1369,7 +1958,7 @@ async def handle_inbound(
             )
         return Handled(outcome="ignored")
     reachable = (
-        [group.profile_id]
+        [group]
         if group is not None
         else await _profiles_reachable(session, region=region, person=person)
     )
@@ -1464,6 +2053,27 @@ async def handle_inbound(
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
     if flagged and not await _whatsapp_agreed(session, context=context):
         return await _red_flag_unagreed(
+            session,
+            settings=settings,
+            providers=providers,
+            number=number,
+            person=person,
+            context=context,
+            profile=profile,
+            message=message,
+        )
+    if (
+        not flagged
+        and group is None
+        and _is_voice(message)
+        and not (heard is not None and heard.heard)
+        and not await _whatsapp_agreed(session, context=context)
+    ):
+        # A voice note with no words in it, on a profile whose patient has not agreed to
+        # WhatsApp (#173). The consent refusal below would answer the sender and tell nobody;
+        # a red word nobody could read must still reach a person, so it goes first. One
+        # posted in the family's group is the family's, here as in `_dispatch`.
+        return await _unheard_unagreed(
             session,
             settings=settings,
             providers=providers,

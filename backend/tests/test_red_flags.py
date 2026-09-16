@@ -19,7 +19,7 @@ from app.channels import safety_strings as strings
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import FrozenClock
 from app.db import utcnow
-from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.identity.service import register_person
 from app.ingestion.transcribe import NOTHING_HEARD, FixtureTranscriber
 from app.ingestion.voice import NotAVoiceNote, VoiceNoteTooLong, check_voice_note
@@ -230,7 +230,11 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     lines = handled.replies[0].text.splitlines()
     assert lines[0] == "This one we do not wait for."
     assert lines[1] == "Call your doctor today."
-    assert lines[2] == "Kit knows now."
+    # In his doctor's hours, the doctor today — and the ambulance if it gets worse (E19-05).
+    assert lines[2] == "If it gets worse, call the ambulance now on 995."
+    assert lines[3] == "Kit knows now."
+    # Mei wrote it, not Pa: the closing names him (plain words, rule 7).
+    assert lines[4] == "Nura does not decide what is wrong with Pa."
 
     # The ladder (E11-06), the one record of who is told: never his own rung (he is the one
     # in trouble), never the poster (she knows). Nobody is on duty and the only chief posted
@@ -239,7 +243,10 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     assert [(step["standing"], step["person_id"]) for step in ladder.rungs] == [
         ("key_holder", str(kit.id))
     ]
-    sent = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).one()
+    rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    # His WhatsApp, and the notice on his family page beside it (#162).
+    assert {row.via for row in rows} == {DeliveryChannel.WHATSAPP, DeliveryChannel.IN_APP}
+    [sent] = [row for row in rows if row.via is DeliveryChannel.WHATSAPP]
     assert sent.to_person_id == kit.id and sent.outcome is DeliveryOutcome.SENT
     assert sent.template_name == "red_flag_notice" and sent.rule == "red_flag_raised"
     assert list(await sg.scalars(select(Escalation))) == []
@@ -528,6 +535,7 @@ FILLERS = {
     "symptom": "dizzy",
     "severity": "quite bad",
     "since": "this morning",
+    "insurer": "Great Eastern",
 }
 
 

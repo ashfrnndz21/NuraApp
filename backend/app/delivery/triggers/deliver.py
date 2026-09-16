@@ -6,10 +6,31 @@ second time is held by the cap), whether the person's key covers what it speaks 
 is told what their key does not open), the quiet hours (an alert ignores them), the cap for
 its type (an alert has none), and then the channel list, where the first channel that can
 carry it wins: an app push when the person has a device; a WhatsApp template when they have
-a number and the patient agreed to WhatsApp; the caregiver on duty when the patient himself
+a number and may be sent it (`_no_whatsapp`); the caregiver on duty when the patient himself
 could not be reached. Whatever the answer, one `Delivery` row records the attempt and its
 rule, and a delivery that reached a person is a SHARE on the trail, under the scope of what
 it spoke of.
+
+A channel that failed falls through to the next one (#173). A door's no is a refusal and
+stands with the trail line it wrote; anything else — the provider unreachable, the push
+service down — is this channel not carrying it, and the message goes on to the channel after
+it with the failure written on the row (`passed_over`), never by name of a person and never
+its words. Its savepoint is rolled back, so nothing half-written stands and the session is
+whole for the next channel. An alert then still writes the notice on the family page, so a
+send that failed never leaves a red flag reaching nobody.
+
+An alert — a red flag — is not "the first that works" and follows no setting (#162): it goes
+by every channel the person can be reached on, a row for each, and the notice on their family
+page (`DeliveryChannel.IN_APP`) is written whatever else carried it. When nothing reached
+their phone, a NO_CHANNEL row says so beside the notice: the chief sees who could not be
+reached, and the ladder moves on at once (`ladder.climb`).
+
+Who may be sent WhatsApp (#163): the patient on his own agreement; anyone else on the key his
+agreement to let them in rests on, and — for anything but a red flag — only while his WhatsApp
+agreement stands (`told_without_his_agreement`; a voice note nobody could hear is an alert but
+not a red flag, so without his agreement it reaches them through the app). Someone who
+answered no to WhatsApp at the key-accept step is sent none, red flags included: those reach
+them by app push and on their family page.
 
 Everything here runs as Nura itself with the reach of the profile's owner (the steward before a
 claim): the patient's graph, sent about the patient on his agreement, and every line on the
@@ -19,6 +40,7 @@ day. A `Run` is one evaluation at one moment: it reads what it needs once and re
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -32,12 +54,13 @@ from app.audit.access import audited_read, audited_write, record_share
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber, business_number_for
+from app.channels.whatsapp.opt_in import said_no
 from app.channels.whatsapp.outbound.send import Delivered
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import active_consents
 from app.consent.texts import current_version
-from app.db import as_utc
+from app.db import as_utc, session_keepers
 from app.delivery.push import NoDevice
 from app.delivery.strings import PUSH_LINE
 from app.delivery.triggers.models import (
@@ -48,7 +71,13 @@ from app.delivery.triggers.models import (
     Ladder,
     TriggerType,
 )
-from app.delivery.triggers.rules import RULES, Config, config_of
+from app.delivery.triggers.rules import (
+    RULES,
+    Config,
+    config_of,
+    is_alert,
+    told_without_his_agreement,
+)
 from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile, Stewardship
@@ -67,6 +96,8 @@ from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 from app.settings import Settings
 from app.state.service import StateView, current_state
+
+log = logging.getLogger("nura.delivery")
 
 LOOK_BACK = timedelta(days=8)
 """How far back a run reads its own deliveries: the longest dedupe (a week's pattern) and a
@@ -152,6 +183,7 @@ class Run:
     _ladders: list[Ladder] | None = None
     _taps: tuple[list[DoseTaken], dict[uuid.UUID, str]] | None = None
     _scopes: dict[uuid.UUID, frozenset[Scope]] = field(default_factory=dict)
+    _said_no: dict[uuid.UUID, bool] = field(default_factory=dict)
     said_language: str | None = None
     """His language as his settings say it (`his_language`), read once for the run."""
 
@@ -193,6 +225,14 @@ class Run:
                 for row in rows
             )
         return self._whatsapp
+
+    async def said_no_to_whatsapp(self, person: Person) -> bool:
+        """Whether this person answered no to WhatsApp messages from Nura (#163)."""
+        if person.id not in self._said_no:
+            self._said_no[person.id] = await said_no(
+                self.session, context=self.acting, person_id=person.id, channel=Channel.SYSTEM
+            )
+        return self._said_no[person.id]
 
     async def deliveries(self) -> list[Delivery]:
         if self._deliveries is None:
@@ -370,14 +410,20 @@ async def stand_in_for(
     return None
 
 
-async def _no_whatsapp(run: Run, person: Person) -> str | None:
+async def _no_whatsapp(run: Run, person: Person, type: TriggerType) -> str | None:
     """Why this person cannot be sent this on WhatsApp, if they cannot. His WhatsApp agreement
     is for messages to him (#143); anyone else is told under the key his agreement to let
-    them in rests on, whose scope was checked for this message before any channel."""
+    them in rests on, whose scope was checked for this message before any channel — and, for
+    anything but an alert, only while his agreement stands (#163). Nobody who said no to
+    WhatsApp is sent it, an alert included. The send door checks the same (`send`)."""
     if not person.phone_e164:
         return "no number"
     to_him = run.patient is not None and person.id == run.patient.id
-    if to_him and not await run.whatsapp_agreed():
+    if to_him:
+        return None if await run.whatsapp_agreed() else "not agreed"
+    if await run.said_no_to_whatsapp(person):
+        return "said no"
+    if not told_without_his_agreement(type) and not await run.whatsapp_agreed():
         return "not agreed"
     return None
 
@@ -435,7 +481,10 @@ async def write(
             context=run.acting,
             scope=rule.scope,
             target=Delivery.__tablename__,
-            channel=Channel.APP if via is DeliveryChannel.APP_PUSH else Channel.WHATSAPP,
+            # WhatsApp only for what went there; a push and the in-app notice are the app's.
+            channel=Channel.WHATSAPP
+            if via in (DeliveryChannel.WHATSAPP, DeliveryChannel.CAREGIVER)
+            else Channel.APP,
             shared_with_person_id=to.person.id,
             target_id=row.id,
         )
@@ -484,60 +533,22 @@ async def deliver(
         if len(sent_today) >= cap:
             return await hold(DeliveryOutcome.CAPPED, f"{cap} a day")
 
+    if is_alert(firing.type):
+        return await _every_way(run, firing, to, message, rung=rung, ladder=ladder)
     passed: list[str] = []
     for channel in message.channels or run.config.channels_for(firing.type):
         if channel is DeliveryChannel.APP_PUSH:
-            push = run.via.providers.push
-            if not await push.reachable(run.session, run.acting, to.person.id):
-                passed.append("app_push: no device")
-                continue
-            line = PUSH_LINE[run.language_for(to.person)]
-            # The push says only the line and an id the app opens: the card on his feed, or the
-            # nudge (`GET /profiles/{id}/nudges?day=`), when the trigger names one; else this
-            # delivery's own row. No health word rides it.
-            row_id = uuid.uuid4()
-            ref = str(firing.why.get("feed_item_id") or firing.why.get("nudge_id") or row_id)
-            try:
-                await push.push(run.session, run.acting, to.person.id, line, ref=ref)
-            except NoDevice:
-                # Every device the push service knew of has gone (404, 410): the next channel.
-                passed.append("app_push: gone")
-                continue
-            return await write(
-                run,
-                firing,
-                to,
-                DeliveryOutcome.SENT,
-                via=channel,
-                passed_over=passed,
-                rung=rung,
-                ladder=ladder,
-                text=line,
-                row_id=row_id,
-            )
+            pushed = await _by_push(run, firing, to, passed, rung=rung, ladder=ladder)
+            if pushed is not None:
+                return pushed
+            continue
         if channel is DeliveryChannel.WHATSAPP:
-            why_not = await _no_whatsapp(run, to.person)
-            if why_not is not None:
-                passed.append(f"whatsapp: {why_not}")
-                continue
-            try:
-                sent = await message.whatsapp(to.person)
-            except Refusal as refusal:
-                passed.append(f"whatsapp: {type(refusal).__name__}")
-                continue
-            return await write(
-                run,
-                firing,
-                to,
-                DeliveryOutcome.SENT,
-                via=channel,
-                template_name=sent.template_name,
-                message_id=sent.message_id,
-                passed_over=passed,
-                rung=rung,
-                ladder=ladder,
-                text=sent.text,
-            )
+            said = await _by_whatsapp(run, firing, to, message, passed, rung=rung, ladder=ladder)
+            if said is not None:
+                return said
+            continue
+        if channel is not DeliveryChannel.CAREGIVER:
+            continue
         # The caregiver: what the patient could not be reached with goes to who stands in.
         if message.stand_in is None or to.standing != "patient":
             passed.append("caregiver: not for this message")
@@ -546,14 +557,12 @@ async def deliver(
         if stand_in is None:
             passed.append("caregiver: nobody to stand in")
             continue
-        why_not = await _no_whatsapp(run, stand_in.person)
+        why_not = await _no_whatsapp(run, stand_in.person, firing.type)
         if why_not is not None:
             passed.append(f"caregiver: {why_not}")
             continue
-        try:
-            sent = await message.stand_in(stand_in.person)
-        except Refusal as refusal:
-            passed.append(f"caregiver: {type(refusal).__name__}")
+        sent = await _attempt(run, message.stand_in, stand_in.person, passed, "caregiver")
+        if sent is None:
             continue
         return await write(
             run,
@@ -575,3 +584,167 @@ async def deliver(
     return await write(
         run, firing, to, DeliveryOutcome.NO_CHANNEL, passed_over=passed, rung=rung, ladder=ladder
     )
+
+
+async def _attempt(
+    run: Run, say: Say, person: Person, passed: list[str], channel: str
+) -> Delivered | None:
+    """One channel's try at one message: what went out, or None with `passed` saying why not.
+
+    A door's no is a refusal: it stands with the line it wrote on the trail, which is the
+    point of it. Anything else is this channel failing — the provider unreachable, a socket
+    closed — and a channel that failed falls through to the next one (#173): its savepoint is
+    rolled back, so nothing half-written stands and the session is whole for the channel
+    after it, and what went wrong is kept by the name of its class, never its message.
+    """
+    kept = len(session_keepers(run.session))
+    savepoint = await run.session.begin_nested()
+    try:
+        sent = await say(person)
+    except Refusal as refusal:
+        # The refusal's own lines stand, the way they did before any of this had a savepoint.
+        await savepoint.commit()
+        passed.append(f"{channel}: {type(refusal).__name__}")
+        return None
+    except Exception as failed:  # noqa: BLE001 — the next channel is tried; logged by name
+        await savepoint.rollback()
+        # Nothing written inside it survives, so neither may a keeper registered inside it:
+        # replayed at the request's boundary it would write against rows that are gone.
+        del session_keepers(run.session)[kept:]
+        log.warning(
+            "delivery: %s did not carry one message: %s", channel, type(failed).__name__
+        )
+        passed.append(f"{channel}: {type(failed).__name__}")
+        return None
+    await savepoint.commit()
+    return sent
+
+
+async def _by_push(
+    run: Run,
+    firing: Firing,
+    to: Recipient,
+    passed: list[str],
+    *,
+    rung: int | None,
+    ladder: Ladder | None,
+) -> Delivery | None:
+    """The app push, when the person has a device: its row. Else None, and `passed` says why."""
+    push = run.via.providers.push
+    if not await push.reachable(run.session, run.acting, to.person.id):
+        passed.append("app_push: no device")
+        return None
+    line = PUSH_LINE[run.language_for(to.person)]
+    # The push says only the line and an id the app opens: the card on his feed, or the
+    # nudge (`GET /profiles/{id}/nudges?day=`), when the trigger names one; else this
+    # delivery's own row. No health word rides it.
+    row_id = uuid.uuid4()
+    ref = str(firing.why.get("feed_item_id") or firing.why.get("nudge_id") or row_id)
+    savepoint = await run.session.begin_nested()
+    try:
+        await push.push(run.session, run.acting, to.person.id, line, ref=ref)
+    except NoDevice:
+        # Every device the push service knew of has gone (404, 410): the next channel.
+        await savepoint.commit()
+        passed.append("app_push: gone")
+        return None
+    except Exception as failed:  # noqa: BLE001 — a channel that failed falls through (#173)
+        await savepoint.rollback()
+        log.warning("delivery: the push did not carry one message: %s", type(failed).__name__)
+        passed.append(f"app_push: {type(failed).__name__}")
+        return None
+    await savepoint.commit()
+    return await write(
+        run,
+        firing,
+        to,
+        DeliveryOutcome.SENT,
+        via=DeliveryChannel.APP_PUSH,
+        passed_over=list(passed),
+        rung=rung,
+        ladder=ladder,
+        text=line,
+        row_id=row_id,
+    )
+
+
+async def _by_whatsapp(
+    run: Run,
+    firing: Firing,
+    to: Recipient,
+    message: Message,
+    passed: list[str],
+    *,
+    rung: int | None,
+    ladder: Ladder | None,
+) -> Delivery | None:
+    """The WhatsApp message, when this person may be sent it: its row. Else None, and
+    `passed` says why."""
+    why_not = await _no_whatsapp(run, to.person, firing.type)
+    if why_not is not None:
+        passed.append(f"whatsapp: {why_not}")
+        return None
+    sent = await _attempt(run, message.whatsapp, to.person, passed, "whatsapp")
+    if sent is None:
+        return None
+    return await write(
+        run,
+        firing,
+        to,
+        DeliveryOutcome.SENT,
+        via=DeliveryChannel.WHATSAPP,
+        template_name=sent.template_name,
+        message_id=sent.message_id,
+        passed_over=list(passed),
+        rung=rung,
+        ladder=ladder,
+        text=sent.text,
+    )
+
+
+async def _every_way(
+    run: Run,
+    firing: Firing,
+    to: Recipient,
+    message: Message,
+    *,
+    rung: int | None,
+    ladder: Ladder | None,
+) -> Delivery:
+    """An alert, every way this person can be reached (#162): the app push when they have a
+    device and WhatsApp where they may be sent it, a row for each; then, whatever carried it,
+    the notice on their family page, which is what their "I'm on it" answers. When no phone
+    was reached, a NO_CHANNEL row says so first. No setting changes any of it. The first row
+    that reached their phone, else the notice."""
+    passed: list[str] = []
+    carried: list[Delivery] = []
+    for channel in run.config.channels_for(firing.type):
+        row: Delivery | None = None
+        if channel is DeliveryChannel.APP_PUSH:
+            row = await _by_push(run, firing, to, passed, rung=rung, ladder=ladder)
+        elif channel is DeliveryChannel.WHATSAPP:
+            row = await _by_whatsapp(run, firing, to, message, passed, rung=rung, ladder=ladder)
+        if row is not None:
+            carried.append(row)
+    if not carried:
+        await write(
+            run,
+            firing,
+            to,
+            DeliveryOutcome.NO_CHANNEL,
+            passed_over=passed,
+            rung=rung,
+            ladder=ladder,
+        )
+    notice = await write(
+        run,
+        firing,
+        to,
+        DeliveryOutcome.SENT,
+        via=DeliveryChannel.IN_APP,
+        reason="on their family page",
+        passed_over=passed,
+        rung=rung,
+        ladder=ladder,
+    )
+    return carried[0] if carried else notice

@@ -128,6 +128,7 @@ export interface Strings {
     fromToday: string;
     fromState: string;
     fromDays: string;
+    emergencyOpen: string;
   };
   /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
    *  lines it says itself. Every card's own words are the backend's. */
@@ -162,7 +163,20 @@ export interface Strings {
     statusHeld: string;
     statusSent: string;
     statusOpened: string;
+    statusPlayed: string;
     statusDismissed: string;
+    play: string;
+    watchWhole: string;
+    askOrSearch: string;
+    filterLabel: string;
+    filterRecords: string;
+    filterWeb: string;
+    filterProviders: string;
+    filterVideos: string;
+    search: string;
+    readPage: string;
+    foundNothing: string;
+    nextVisit: string;
   };
   reading: {
     title: string;
@@ -194,6 +208,22 @@ export interface Strings {
     remindersStop: string;
     remindersDenied1: string;
     remindersDenied2: string;
+    areaTitle: string;
+    areaLead: string;
+    areaNone: string;
+    areaIs: string;
+    areaAsk: string;
+    areaYes: string;
+    areaNo: string;
+    areaChange: string;
+    areaClear: string;
+    areaWho: string;
+    ramadanTitle: string;
+    ramadanLead: string;
+    ramadanWho: string;
+    ramadanYes: string;
+    ramadanOn: string;
+    ramadanStop: string;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
@@ -227,6 +257,45 @@ export interface Strings {
     noConnection: string;
     sendLater: string;
     keepOpenToSend: string;
+  };
+  /** Taps made while the phone could not reach Nura (E00-08): held, then sent once. */
+  held: { held: string; tapped: string; sent: string };
+  /** The emergency card on the phone (E00-08, E13-01): the card's lines are the backend's. */
+  emergency: { asOf: string; none: string; noneSub: string; callChief: string; callAmbulance: string; print: string };
+  /** Papers from the photos (E18-01's web substitute): the grid, the sending, what was found. */
+  papers: {
+    open: string;
+    chooseMany: string;
+    title: string;
+    lead: string;
+    lead2: string;
+    pick: string;
+    gridLead: string;
+    picture: string;
+    tileIn: string;
+    tileOut: string;
+    sendOne: string;
+    send: string;
+    sending: string;
+    found: string;
+    read: string;
+    check: string;
+    notHealth: string;
+    notSent: string;
+    sendRest: string;
+    nothingKept: string;
+    backToday: string;
+  };
+  /** The one player (E15-07): its button, its three speeds and the name of their group. */
+  player: {
+    play: string;
+    pause: string;
+    speed: string;
+    slower: string;
+    usual: string;
+    faster: string;
+    nextPart: string;
+    hearStory: string;
   };
   /** The patient's day (W7): the not-feeling-well button, the symptom log, the nudge's two
    *  buttons, the brief, the questions and the post-visit card's yes. Every card's own lines
@@ -454,6 +523,7 @@ export interface Strings {
     storyAvoid: string;
     storyForgot: string;
     storyAsk: string;
+    hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
     addLead: string;
     addLead2: string;
     nameLabel: string;
@@ -476,6 +546,11 @@ export interface Strings {
     moreLead: string;
     moreLabel: string;
     moreYes: string;
+    morePhoto: string;
+    morePhotoWhy: string;
+    morePhotoKept: string;
+    orderYes: string;
+    orderNo: string;
     papersNone: string;
     paperFrom: string;
     paperOpen: string;
@@ -522,12 +597,14 @@ export interface Strings {
     trendsLead: string;
     analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     resultOn: string;
+    resultOnUnit: string;
     rangeUnder: string;
     rangeOver: string;
     rangeBetween: string;
     noRange: string;
     labRange: string;
     guideRange: string;
+    noRangeBecause: Record<"needs_age" | "needs_sex" | "none_on_file", string>;
     anchors: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
     readings: Record<"blood_pressure" | "blood_sugar" | "weight", string>;
     walk: string;
@@ -577,6 +654,9 @@ export interface Strings {
     partsLabel: string;
     windowLabel: string;
     makeKey: string;
+    seeWords: string;
+    wordsLead: string;
+    agreeKey: string;
     narrow: string;
     narrowYes: string;
     closeKey: string;
@@ -602,7 +682,7 @@ export interface Strings {
     doneChip: string;
     nextVisit: string;
     messagesTitle: string;
-    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water" | "water_pill_morning", string>;
+    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water", string>;
     ownWords: string;
     slots: Record<"who" | "when" | "doctor" | "day", string>;
     memoLabel: string;
@@ -633,7 +713,7 @@ export interface Strings {
     deliveries: string;
     settings: string;
     triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge" | "check_in" | "family_notice", string>;
-    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver" | "in_app", string>;
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
     /** Why a message was held, where it was not a quiet day: said instead of the outcome, with
      *  `{name}` his (E11-01). Keyed by `HELD_BECAUSE` in `screens/family/Delivery.tsx`. */
@@ -645,6 +725,8 @@ export interface Strings {
     cap: string;
     saveSettings: string;
     neverHeld: string;
+    /** The red-flag row: no setting chooses how it goes (#162). */
+    everyWay: string;
     documents: string;
     tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
     backs: Record<"consent" | "stewardship", string>;
@@ -681,5 +763,31 @@ export interface Strings {
   };
   errors: { network: string; tryAgain: string };
   /** One line per refusal, or two when the second says what to do next; each line one idea. */
+  /** The chief's panels on Home (docs/health-feed-spec.md §1): "Sent to Pa this week" and
+   *  "Watching for Pa". Each watch and each card is the backend's line; these name the panels,
+   *  how often a watch runs, and what she can do. */
+  chief: {
+    sentTitle: string;
+    sentNone: string;
+    watchingTitle: string;
+    watchingNone: string;
+    sourcesNote: string;
+    onChange: string;
+    daily: string;
+    weekly: string;
+    beforeVisits: string;
+    once: string;
+    paused: string;
+    pause: string;
+    resume: string;
+    pauseWatch: string;
+    add: string;
+    addLead: string;
+    added: string;
+    dengue: string;
+    haze: string;
+    heat: string;
+    festiveFood: string;
+  };
   refusals: Record<string, string | readonly string[]> & { default: string };
 }

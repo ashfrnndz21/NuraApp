@@ -9,6 +9,11 @@ the port, never a list of our own), by the high-risk table, by the chemical name
 glossary keeps second and small, and by his own names for them; a condition from
 `CONDITIONS`, in English, Malay and Chinese. It says which kind it found and never the word,
 so a refusal built on it carries nothing of what was written.
+
+A message the family writes to him is held tighter (#164): it may name no medicine and no
+dose at all (`names_medicine_or_dose`) — the same finders, plus the plain words for any
+medicine ("tablet", "ubat", "药") and an amount with its unit ("5 mg", "2 biji", "两片"). His
+medicine reminders come only from his confirmed list, never from a line someone typed.
 """
 
 from __future__ import annotations
@@ -122,6 +127,46 @@ CONDITIONS: Mapping[str, frozenset[str]] = {
 """Conditions a note about a place has no business naming. Short on purpose: the words a
 family would actually type, in the three languages the product speaks."""
 
+MEDICINE_WORDS: Mapping[str, frozenset[str]] = {
+    "en": frozenset(
+        {
+            "medicine",
+            "medicines",
+            "medication",
+            "medications",
+            "tablet",
+            "tablets",
+            "pill",
+            "pills",
+            "capsule",
+            "capsules",
+            "dose",
+            "doses",
+            "dosage",
+            "injection",
+            "injections",
+            "insulin",
+            "inhaler",
+            "syrup",
+            "prescription",
+        }
+    ),
+    "ms": frozenset({"ubat", "pil", "tablet", "kapsul", "dos", "suntikan", "preskripsi"}),
+    "zh": frozenset({"药", "胶囊", "剂量", "打针", "胰岛素"}),
+}
+"""The plain words for any medicine or a dose of one. A message to him names none of them."""
+
+_DOSE = re.compile(
+    r"(?:\d+(?:[.,]\d+)?|\b(?:one|two|three|four|five|half|satu|dua|tiga|empat|lima|setengah"
+    r"|separuh)\b|[一二两三四五六七八九十半])"
+    r"\s*(?:mg|mcg|µg|ml|iu|g|units?|tabs?|caps?|puffs?|drops?|biji|sudu"
+    r"|粒|片|颗|毫克|毫升|滴|单位)(?![a-z])",
+    re.IGNORECASE,
+)
+"""An amount with its unit, in digits or in words: "5 mg", "2 biji", "dua biji", "two tabs",
+"两片". A number with no unit ("take two") is not a dose on its own; with a medicine word it
+is caught by `MEDICINE_WORDS`."""
+
 _LATIN = re.compile(r"[a-z0-9]+(?:['’][a-z]+)?")
 _CJK = re.compile(r"[㐀-䶿一-鿿]")
 _PREFIXES = ("your ", "the ", "您的")
@@ -168,6 +213,34 @@ def _grams(words: list[str]) -> Iterator[str]:
         yield f"{first} {second}"
 
 
+def names_medicine(text: str, registry: DrugRegistry | None = None) -> bool:
+    """Whether the text names a medicine: his names for one, the high-risk table's, the
+    chemical names, or — through the port — one the licensed registry knows."""
+    words = _words(text)
+    joined = f" {' '.join(words)} "
+    if any(_has(phrase, joined, text) for phrase in MEDICINE_PHRASES):
+        return True
+    if registry is not None:
+        for gram in _grams(words):
+            if registry.identify(LabelFields(generic=gram)) or registry.identify(
+                LabelFields(brand=gram)
+            ):
+                return True
+    return False
+
+
+def names_medicine_or_dose(text: str, registry: DrugRegistry | None = None) -> bool:
+    """Whether a line to him names a medicine or a dose (#164). Never which word."""
+    if names_medicine(text, registry):
+        return True
+    words = set(_words(text))
+    for table in MEDICINE_WORDS.values():
+        for word in table:
+            if (word in text) if _CJK.search(word) else (word in words):
+                return True
+    return _DOSE.search(text) is not None
+
+
 def names_health(text: str, registry: DrugRegistry | None = None) -> str | None:
     """`MEDICINE` or `CONDITION` if the text names one, else None. Never the word itself."""
     words = _words(text)
@@ -188,4 +261,13 @@ def names_health(text: str, registry: DrugRegistry | None = None) -> str | None:
     return None
 
 
-__all__ = ["CONDITION", "CONDITIONS", "MEDICINE", "MEDICINE_PHRASES", "names_health"]
+__all__ = [
+    "CONDITION",
+    "CONDITIONS",
+    "MEDICINE",
+    "MEDICINE_PHRASES",
+    "MEDICINE_WORDS",
+    "names_health",
+    "names_medicine",
+    "names_medicine_or_dose",
+]

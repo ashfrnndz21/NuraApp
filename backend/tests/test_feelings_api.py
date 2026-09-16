@@ -135,8 +135,10 @@ async def test_the_nudge_plan_and_its_hand_over_over_http(deployment: Deployment
         f"/profiles/{profile_id}/nudges/{nudge_id}/response", json={"kind": "accepted"}, headers=his
     )
     assert answered.status_code == 201, answered.text
-    nothing = await deployment.client.post(f"/profiles/{profile_id}/nudges/plan", headers=his)
-    assert nothing.status_code == 409 and nothing.json() == {"refusal": "NothingToHandOver"}
+    # Handed over twice — the web as he answers, the schedule at its time (W7): the same nudge.
+    again = await deployment.client.post(f"/profiles/{profile_id}/nudges/plan", headers=his)
+    assert again.status_code == 201
+    assert again.json()["nudge"]["nudge_id"] == handed.json()["nudge"]["nudge_id"]
 
 
 def test_no_route_is_declared_twice(deployment: Deployment) -> None:
