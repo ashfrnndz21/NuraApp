@@ -124,6 +124,28 @@ describe("hear on tap", () => {
     expect(voice.line.value).toBe("a one. a two.");
   });
 
+  it("never plays a stale card's audio for the card that corrected it (E22-03): each item id its own fetch, its own bytes", async () => {
+    // A card whose text was wrong is never edited (backend/app/db.py: FeedItem rows are
+    // frozen); a corrected card is a new row, a new item id, its own voice script digest —
+    // so it is fetched, and played, entirely apart from the card it replaced.
+    const original = new Blob(["stale"], { type: "audio/mpeg" });
+    const corrected = new Blob(["fixed"], { type: "audio/mpeg" });
+    const fetchVoice = vi.fn(async (id: string) => (id === "old" ? original : corrected));
+    const { playback, played } = player({ fetchVoice });
+    playback.warm([{ itemId: "old", language: "en" }]);
+    await settle();
+    playback.warm([{ itemId: "new", language: "en" }]);
+    await settle();
+    expect(fetchVoice).toHaveBeenNthCalledWith(1, "old", "en");
+    expect(fetchVoice).toHaveBeenNthCalledWith(2, "new", "en");
+    playback.hear(card("0:1", "new"));
+    await settle();
+    expect(played[0]!.src).toBe("blob:nura/voice");
+    // The player was handed the corrected card's own blob, never the stale one: the two
+    // fetches were kept apart by item id, so nothing lets "new" play what "old" fetched.
+    expect(playback.playing.value).toBe("0:1");
+  });
+
   it("reads the spoken twin, still in the tap, when the phone will not play the bytes", async () => {
     const blob = new Blob(["x"], { type: "audio/mpeg" });
     const refusing = {
