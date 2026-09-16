@@ -361,7 +361,7 @@ FEELINGS: Mapping[str, Mapping[str, str]] = {
         "headache": "a headache",
         "pain": "pain",
         "breathless": "being short of breath",
-        "low": "feeling low",
+        "low": "feeling sad",
         "worried": "feeling worried",
         "cant_sleep": "poor sleep",
         "swollen_ankles": "swollen ankles",

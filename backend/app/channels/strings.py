@@ -134,7 +134,15 @@ DEMO_HEADLINE: dict[str, str] = {
 
 # @patient
 DEMO_LINES: dict[str, tuple[str, ...]] = {
-    "en": ("This is a demo.", "Do not put real health information in it."),
-    "ms": ("Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar."),
-    "zh": ("这是演示版。", "请不要输入真实的健康信息。"),
+    "en": (
+        "This is a demo.",
+        "Do not put real health information in it.",
+        "Everything here is wiped each night.",
+    ),
+    "ms": (
+        "Ini ialah demo.",
+        "Jangan masukkan maklumat kesihatan sebenar.",
+        "Semua di sini dipadam setiap malam.",
+    ),
+    "zh": ("这是演示版。", "请不要输入真实的健康信息。", "这里的一切每晚都会清除。"),
 }

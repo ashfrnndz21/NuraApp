@@ -41,7 +41,7 @@ WORDS: Mapping[str, Mapping[Feeling, str]] = {
         Feeling.HEADACHE: "Headache",
         Feeling.PAIN: "Pain",
         Feeling.BREATHLESS: "Short of breath",
-        Feeling.LOW: "Low",
+        Feeling.LOW: "Sad",
         Feeling.WORRIED: "Worried",
         Feeling.CANT_SLEEP: "Poor sleep",
         Feeling.SWOLLEN_ANKLES: "Swollen ankles",
@@ -216,7 +216,7 @@ TELL: Mapping[str, Mapping[Feeling, str]] = {
         Feeling.TIRED: "Tell {doctor} you feel tired {when}.",
         Feeling.PAIN: "Tell {doctor} about the pain {when}.",
         Feeling.BREATHLESS: "Tell {doctor} you get short of breath {when}.",
-        Feeling.LOW: "Tell {doctor} you feel low {when}.",
+        Feeling.LOW: "Tell {doctor} you feel sad {when}.",
         Feeling.WORRIED: "Tell {doctor} you feel worried {when}.",
         Feeling.CANT_SLEEP: "Tell {doctor} you are not sleeping well {when}.",
         Feeling.CRAMPS: "Tell {doctor} about the cramps {when}.",
@@ -317,8 +317,20 @@ REASON: Mapping[str, Mapping[str, str]] = {
     },
 }
 """The second thing to mention, when the record has one: what the tap was read against. A
-medicine line is said only where its licensed monograph lists this feeling; a direction in
-his blood pressure only where the arithmetic shows one. Never a cause, never a condition."""
+medicine line is said only where its licensed monograph lists this feeling, and never without
+`DO_NOT_STOP` straight after it; a direction in his blood pressure only where the arithmetic
+shows one. Never a condition, never a diagnosis, never an amount."""
+
+# @patient
+DO_NOT_STOP: Mapping[str, tuple[str, str]] = {
+    "en": ("Do not stop {medicine} yourself.", "Tell {doctor} how you feel."),
+    "ms": ("Jangan berhenti makan {medicine} sendiri.", "Beritahu {doctor} apa yang anda rasa."),
+    "zh": ("不要自己停{medicine}。", "告诉{doctor}您的感觉。"),
+}
+"""Said right after a line that names a medicine (#157): the note names a medicine his
+feeling can come from, so it says, in the same breath, that he keeps taking it and the doctor
+decides. `{doctor}` is the doctor the note names, or "your doctor". Awaiting the clinician's
+and the pharmacist's sign-off (docs/trust/clinical-wording-sign-off.md)."""
 
 # @patient
 THEN: Mapping[str, Mapping[str, str]] = {
@@ -352,5 +364,6 @@ def catalogue() -> list[tuple[str, str]]:
         found.append((code, NOTE_HEADLINE[code]))
         found.extend((code, line) for line in TELL[code].values())
         found.extend((code, line) for line in REASON[code].values())
+        found.extend((code, line) for line in DO_NOT_STOP[code])
         found.extend((code, line) for line in THEN[code].values())
     return found
