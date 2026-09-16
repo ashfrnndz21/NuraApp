@@ -181,7 +181,20 @@ export interface Strings {
     statusHeld: string;
     statusSent: string;
     statusOpened: string;
+    statusPlayed: string;
     statusDismissed: string;
+    play: string;
+    watchWhole: string;
+    askOrSearch: string;
+    filterLabel: string;
+    filterRecords: string;
+    filterWeb: string;
+    filterProviders: string;
+    filterVideos: string;
+    search: string;
+    readPage: string;
+    foundNothing: string;
+    nextVisit: string;
   };
   reading: {
     title: string;
@@ -215,6 +228,22 @@ export interface Strings {
     remindersStop: string;
     remindersDenied1: string;
     remindersDenied2: string;
+    areaTitle: string;
+    areaLead: string;
+    areaNone: string;
+    areaIs: string;
+    areaAsk: string;
+    areaYes: string;
+    areaNo: string;
+    areaChange: string;
+    areaClear: string;
+    areaWho: string;
+    ramadanTitle: string;
+    ramadanLead: string;
+    ramadanWho: string;
+    ramadanYes: string;
+    ramadanOn: string;
+    ramadanStop: string;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
@@ -755,5 +784,31 @@ export interface Strings {
   };
   errors: { network: string; tryAgain: string };
   /** One line per refusal, or two when the second says what to do next; each line one idea. */
+  /** The chief's panels on Home (docs/health-feed-spec.md §1): "Sent to Pa this week" and
+   *  "Watching for Pa". Each watch and each card is the backend's line; these name the panels,
+   *  how often a watch runs, and what she can do. */
+  chief: {
+    sentTitle: string;
+    sentNone: string;
+    watchingTitle: string;
+    watchingNone: string;
+    sourcesNote: string;
+    onChange: string;
+    daily: string;
+    weekly: string;
+    beforeVisits: string;
+    once: string;
+    paused: string;
+    pause: string;
+    resume: string;
+    pauseWatch: string;
+    add: string;
+    addLead: string;
+    added: string;
+    dengue: string;
+    haze: string;
+    heat: string;
+    festiveFood: string;
+  };
   refusals: Record<string, string | readonly string[]> & { default: string };
 }

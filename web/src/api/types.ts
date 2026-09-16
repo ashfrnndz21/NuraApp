@@ -179,6 +179,8 @@ export interface FeedItemOut {
   expires_at: string;
   /** For today's top three (E11-02): alert, reminder or insight. */
   category?: string | null;
+  /** The watch that found this card, when a search made it (F1): what "Pause this watch" pauses. */
+  search_job_id?: string | null;
 }
 
 export interface FeedPageOut {
@@ -236,7 +238,7 @@ export interface AnswerOut {
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
-export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared";
+export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
 
 export interface EngagementOut {
   engagement_id: string;
@@ -1431,4 +1433,71 @@ export interface DeploymentOut {
   dev?: boolean;
   /** The Web Push key the home-screen app subscribes with; null when there is no Web Push. */
   push_key?: string | null;
+}
+
+/** One event from the phone's queue (E11-08, `POST …/feed/events`). `seconds` only on a play
+ *  or a replay: how much of a clip or voice note played. Nothing measures time in the feed. */
+export interface QueuedEventIn {
+  client_id: string;
+  item_id: string;
+  event: EngagementEvent;
+  at: string;
+  channel?: "app";
+  seconds?: number | null;
+}
+
+export interface EventsOut {
+  written: string[];
+  skipped: { client_id: string; because: string }[];
+}
+
+/** One card of "Sent to Pa this week": the card and its status. No count of anything. */
+export interface SentOut {
+  item: FeedItemOut;
+}
+
+export type JobKind = "explainer" | "safety" | "local" | "food" | "provider" | "worth_knowing" | "seasonal";
+
+/** One watch of "Watching for Pa": what for (the backend's words), its sources, how often. */
+export interface SearchJobOut {
+  job_id: string;
+  kind: JobKind;
+  terms: string[];
+  source_ids: string[];
+  cadence: string;
+  reason: Record<string, unknown>;
+  status: string;
+  results: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+  last_run_at: string | null;
+  label: string;
+  sources: string[];
+}
+
+/** His area, coarse (E09-07): a town from the list or a postcode's first digits. */
+export interface AreaOut {
+  area: string | null;
+  districts: string[];
+  may_set: boolean;
+}
+
+export type FindWhere = "web" | "videos" | "providers";
+
+/** One thing the ask bar's Web, Videos or Providers filter found: the backend's words. */
+export interface FindResultOut {
+  title: string;
+  publisher: string | null;
+  url: string | null;
+  published_at: string | null;
+  lines: string[];
+  boundary: string | null;
+  media: string | null;
+  provider_id: string | null;
+  next_visit_at: string | null;
+}
+
+export interface FindOut {
+  where: string;
+  results: FindResultOut[];
 }

@@ -40,9 +40,28 @@ Held items never reach the patient: doctor questions go to the memo; notices wit
 | Own-data insight | A trend or a comparison | One number, one direction, one sentence | Text card + voice |
 | Local alert | Environmental or outbreak bulletin matching address and conditions | What to do today | Text card |
 | Food and habit | Weekly, by conditions and season | One concrete choice | Text card |
-| Safety notice | Regulator or manufacturer notice matching a medicine | Checked against pack batch; sent only if action needed | Held or text card |
+| Safety notice | Regulator or manufacturer notice matching a medicine | Checked against pack batch; **never a card in his feed** — held for the chief, and for the memo where it is a question for the doctor | Held |
 | Worth knowing | Guideline change, formulary addition, new option | Framed as a question for the doctor | Held → Doctor Memo |
 | Seasonal | Fasting month, festive food, travel | Timing and food adjustments | Text card |
+
+**A safety notice is never his card** (resolved 2026-09-16; §0 wins). This table and §9 once
+read as though a notice matching the batch on his pack could be sent to him as a text card,
+while §0 says no safety notices in the patient's feed. §0 is the rule. A regulator's notice
+about one of his medicines is held for the chief, and where it is a question for his doctor it
+goes to the memo — it is never a card he reads.
+
+What he sees instead is a card about something **he** must do, in his own words, made the way
+every other card of his is made and read by the pharmacist's first fifty before it reaches him
+(`REVIEWED_TYPES`, `app/language/review.py`). "Your pack is one of the batches; bring it to the
+pharmacy" is his card, because it is his to act on. "This batch was recalled" is not.
+
+**The code does not do this yet.** `app/delivery/feed/search.py` still sends a `NOTICE` whose
+batch matches the pack to `DeliverTo.PATIENT`, and `tests/test_feed.py` asserts that it does.
+The rule above is the decision (2026-09-16); the change is filed separately, because taking his
+batch-match card away is only safe once the "something you must do" card that replaces it
+exists — otherwise a recall that matches his own box reaches nobody but his chief, and he is
+told nothing at all.
+
 
 Every card carries: `headline`, `body` (plain words), `why` (one sentence, plain), `source` (name, URL, date), `profileRefs` (facts it was built from), `format`, `language`, `audioURL`, `mediaURL`, `expiresAt`, `deliverTo` (patient / caregiver / memo).
 
@@ -141,7 +160,7 @@ Cards sent per profile per week (target ≤ 10); open rate by type and format; p
 
 - A new lab result produces an explainer card within 10 minutes, in the profile's language, with a voice note, citing the result and one allowlisted page.
 - A new medicine produces an explainer and starts a daily safety-notice job within 1 minute.
-- A safety notice matching a medicine but not the pack batch is held for the caregiver and never sent to the patient.
+- A safety notice is never a card in the patient's feed, whether or not it matches the batch on his pack: it is held for the caregiver, and for the doctor memo where it is a question for the doctor (§0, and the note under §2). Where there is something *he* must do, he gets his own card saying that, in his words, after the pharmacist's review.
 - The patient's feed shows Now first, at most 2 new cards for today, then the gate card; past the gate it pages endlessly through his own story and evergreen learning without a single card from outside the allowlist or outside his profile.
 - No card starts audio or video by itself; the next card never autoplays.
 - Two unopened text cards switch the profile to voice-first delivery.

@@ -1,5 +1,95 @@
 import { api, apiBlob, apiText, apiUpload } from "./client";
-import type { AnswerOut, AnsweredOut, AppointmentOut, AskMode, AskedOut, BiographyOut, BriefOut, ChangesOut, ClaimableOut, ClosedOut, CloudOut, ConditionsOut, ConfirmationOut, ConsentOut, ConsultOut, DayNudgesOut, DecisionIn, DeploymentOut, DocumentSource, DoorsOut, EmergencyCardOut, EngagementEvent, EngagementOut, EpisodeViewOut, FactOut, FeedItemOut, FeedPageOut, FeelingOut, HandedOverOut, ItemDecision, KeyOut, LabelIn, LineOut, LogisticsOut, MeOut, MeSummaryOut, MedicineDraftOut, MemoCardOut, MoreOut, NoticeOut, NowOut, NudgeAnswer, NudgePlanOut, OfflineCardsOut, OrderPreviewOut, PaperAddedOut, PlaceNoteOut, PlanOut, ProfileOut, ProudOut, ProviderHistoryOut, ProviderSummaryOut, QuestionChange, ReadingOut, ReconciledOut, ReviewCardOut, ReviewConfirmedOut, RoutineDayIn, RoutineOut, Said, SessionOut, SettingsIn, SettingsOut, SharingIn, SharingPreviewOut, SlotOut, StateOut, StoryOut, SummaryConfirmedOut, SymptomLogOut, SymptomLoggedOut, TakenOut, ThreadCardKind, ThreadEntryOut, TimelineOut, TrendOut, VisitQuestionOut, VisitQuestionsOut, VisitSummaryOut, WhatToDoOut, WordingOut } from "./types";
+import type {
+  AnswerOut,
+  AnsweredOut,
+  AppointmentOut,
+  AreaOut,
+  AskMode,
+  AskedOut,
+  BiographyOut,
+  BriefOut,
+  ChangesOut,
+  ClaimableOut,
+  ClosedOut,
+  CloudOut,
+  ConditionsOut,
+  ConfirmationOut,
+  ConsentOut,
+  ConsultOut,
+  DayNudgesOut,
+  DecisionIn,
+  DeploymentOut,
+  DocumentSource,
+  DoorsOut,
+  EmergencyCardOut,
+  EngagementEvent,
+  EngagementOut,
+  EpisodeViewOut,
+  EventsOut,
+  FactOut,
+  FeedItemOut,
+  FeedPageOut,
+  FeelingOut,
+  FindOut,
+  FindWhere,
+  HandedOverOut,
+  ItemDecision,
+  JobKind,
+  KeyOut,
+  LabelIn,
+  LineOut,
+  LogisticsOut,
+  MeOut,
+  MeSummaryOut,
+  MedicineDraftOut,
+  MemoCardOut,
+  MoreOut,
+  NoticeOut,
+  NowOut,
+  NudgeAnswer,
+  NudgePlanOut,
+  OfflineCardsOut,
+  OrderPreviewOut,
+  PaperAddedOut,
+  PlaceNoteOut,
+  PlanOut,
+  ProfileOut,
+  ProudOut,
+  ProviderHistoryOut,
+  ProviderSummaryOut,
+  QuestionChange,
+  QueuedEventIn,
+  ReadingOut,
+  ReconciledOut,
+  ReviewCardOut,
+  ReviewConfirmedOut,
+  RoutineDayIn,
+  RoutineOut,
+  Said,
+  SearchJobOut,
+  SentOut,
+  SessionOut,
+  SettingsIn,
+  SettingsOut,
+  SharingIn,
+  SharingPreviewOut,
+  SlotOut,
+  StateOut,
+  StoryOut,
+  SummaryConfirmedOut,
+  SymptomLogOut,
+  SymptomLoggedOut,
+  TakenOut,
+  ThreadCardKind,
+  ThreadEntryOut,
+  TimelineOut,
+  TrendOut,
+  VisitQuestionOut,
+  VisitQuestionsOut,
+  VisitSummaryOut,
+  WhatToDoOut,
+  WordingOut,
+} from "./types";
 
 /** Every route the client uses, one function each, in the backend's own names. */
 
@@ -620,3 +710,48 @@ export const feedItem = (token: string, profileId: string, itemId: string) =>
  *  one self-contained page, every line the backend's, read with his key and shown as it is. */
 export const emergencyCardPage = (token: string, profileId: string, language: string) =>
   apiBlob(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } }).then((page) => page.text());
+
+// --- the feed's richer formats (F1) ---------------------------------------------------------
+
+/** Flush the phone's queue of what he did with his cards (E11-08). */
+export const feedEvents = (token: string, profileId: string, events: QueuedEventIn[]) =>
+  api<EventsOut>(`/profiles/${profileId}/feed/events`, { token, method: "POST", body: { events } });
+
+/** "Sent to Pa this week": every card made for him since Monday, with its status. */
+export const feedWeek = (token: string, profileId: string) => api<SentOut[]>(`/profiles/${profileId}/feed/week`, { token });
+
+/** A clip's still, from Nura's own server (no video platform is asked). */
+export const clipPoster = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/poster`, { token, accept: "image/*" });
+
+/** A clip's captions, WebVTT, in the card's language. */
+export const clipCaptions = async (token: string, profileId: string, itemId: string): Promise<string> =>
+  (await apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/captions`, { token, accept: "text/vtt" })).text();
+
+/** A clip's excerpt, only where the licence let Nura keep one; a 404 refusal otherwise. */
+export const clipVideo = (token: string, profileId: string, itemId: string) =>
+  apiBlob(`/profiles/${profileId}/feed/${itemId}/clip/video`, { token, accept: "video/*" });
+
+/** "Watching for Pa": every search the engine runs for him, in the reader's words. */
+export const searchJobs = (token: string, profileId: string, language: string) =>
+  api<SearchJobOut[]>(`/profiles/${profileId}/search-jobs`, { token, query: { language } });
+
+/** Add a watch: the kind and what for. How often is the kind's own. */
+export const addSearchJob = (token: string, profileId: string, kind: JobKind, terms: string[]) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs`, { token, method: "POST", body: { kind, terms } });
+
+/** Pause a watch, or resume it. */
+export const pauseSearchJob = (token: string, profileId: string, jobId: string, enabled: boolean, language: string) =>
+  api<SearchJobOut>(`/profiles/${profileId}/search-jobs/${jobId}`, { token, method: "PATCH", body: { enabled }, query: { language } });
+
+/** His area and the towns it may be (owner, chief). */
+export const area = (token: string, profileId: string) => api<AreaOut>(`/profiles/${profileId}/area`, { token });
+
+/** Set his area on his yes, or clear it (null). */
+export const setArea = (token: string, profileId: string, value: string | null) =>
+  api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+
+/** The ask bar's Web, Videos and Providers filters. Records is `ask`. His words go in the
+ *  body, never in the URL, where a log or the browser's history would keep them. */
+export const find = (token: string, profileId: string, q: string, where: FindWhere, language: string) =>
+  api<FindOut>(`/profiles/${profileId}/find`, { token, method: "POST", body: { q, where, language } });

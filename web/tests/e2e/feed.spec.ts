@@ -112,13 +112,13 @@ async function pageDown(page: Page): Promise<void> {
 }
 
 /** The card across the pager's middle: the one on screen. */
-async function onScreen(page: Page): Promise<{ type: string; itemId: string; index: number }> {
+async function onScreen(page: Page): Promise<{ type: string; supply: string; itemId: string; index: number }> {
   return page.getByTestId("pager").evaluate((root) => {
     const middle = root.scrollTop + root.clientHeight / 2;
     const cards = [...root.querySelectorAll<HTMLElement>("article.feed-card")];
     let at = cards[0]!;
     for (const card of cards) if (card.offsetTop <= middle) at = card;
-    return { type: at.dataset.type!, itemId: at.dataset.itemId!, index: Number(at.dataset.index) };
+    return { type: at.dataset.type!, supply: at.dataset.supply!, itemId: at.dataset.itemId!, index: Number(at.dataset.index) };
   });
 }
 
@@ -183,7 +183,8 @@ test("the pager: one card a screen, in the backend's order, the gate, endless pa
   await expect(gate).toContainText("That is all that is new today.");
   await expect(gate.getByTestId("action-notForMe")).toHaveCount(0);
   await gate.getByTestId("keep-going").click();
-  await expect.poll(async () => (await onScreen(page)).type).toMatch(/^(story|learning)$/);
+  // Past the gate: his story and learning — his week in 30 seconds and a clip are among them.
+  await expect.poll(async () => (await onScreen(page)).supply).toMatch(/^(story|learning)$/);
 
   // Past the gate it pages on: each next page asked for once, by the cursor the page before
   // handed back, and everything past the gate is his story or learning.

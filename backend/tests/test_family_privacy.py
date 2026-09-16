@@ -34,12 +34,15 @@ from app.family.privacy import (
     only_me_draft,
 )
 from app.family.trail import trail
+from app.identity.service import register_person
 from app.keys.confirm import NotWhatWasConfirmed, confirm
 from app.keys.context import OutOfScope
 from app.keys.grants import grant_key, revoke_key
-from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
+from app.keys.scopes import ALL_SCOPES, ROLE_SCOPES, KeyRole, KeyWindow, Scope
 from app.notes.service import list_notes, write_note
+from app.regions import Region
 from tests.family_support import MONDAY, household
+from tests.support import agree_to_family_sharing
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
@@ -98,6 +101,61 @@ async def test_only_me_takes_the_part_out_of_a_live_key_at_once_and_it_is_on_the
         "Mei asked to see your private notes on Monday 14 September.",
         "Only you can.",
     ] in [line.sentences for line in lines]
+
+
+async def test_chief_reads_his_notes_a_viewer_and_a_helper_are_refused_on_his_trail(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """CP13 step 4, pinned below the checkpoint script (which walks it over HTTP but is
+    dev-only and never runs in CI, so nothing here caught a regression before this test):
+    a chief holding `Scope.NOTES` (`ROLE_SCOPES[KeyRole.CHIEF]` is every scope) reads Pa's
+    private note; a viewer and a helper — neither role ever preset to NOTES (`scopes.py`) —
+    are refused in the backend's own words, on his own trail, without Pa marking anything
+    "only me" first.
+    """
+    clock.set(MONDAY)
+    h = await household(sg)
+    pa = await h.ctx(sg, h.pa)
+    await write_note(sg, context=pa, text="I did not tell the children about the fall.")
+
+    mei = await h.ctx(sg, h.mei)
+    assert [n.text for n in await list_notes(sg, context=mei)] == [
+        "I did not tell the children about the fall."
+    ], "Mei, his chief, reads the note"
+
+    priya = await register_person(
+        sg, region=Region.SG, display_name="Priya", phone_e164="+6598880005"
+    )
+    await agree_to_family_sharing(
+        sg, pa, priya, scopes=ROLE_SCOPES[KeyRole.VIEWER], relationship="niece"
+    )
+    await grant_key(sg, context=pa, holder=priya, role=KeyRole.VIEWER, window=KeyWindow.THIRTY_DAYS)
+    priya_ctx = await h.ctx(sg, priya)
+    with pytest.raises(OutOfScope):
+        await list_notes(sg, context=priya_ctx)
+
+    siti = await h.ctx(sg, h.siti)
+    with pytest.raises(OutOfScope):
+        await list_notes(sg, context=siti)
+
+    for actor in (priya.id, h.siti.id):
+        refused = [
+            e
+            for e in await read_audit(sg, context=pa, actor_person_id=actor)
+            if e.outcome is Outcome.REFUSED and e.scope is Scope.NOTES
+        ]
+        assert refused and refused[0].refused_because == "OutOfScope"
+
+    days = await trail(sg, context=pa, language="en")
+    lines = [line.sentences for day in days for line in day.lines]
+    assert [
+        "Priya asked to see your private notes on Monday 14 September.",
+        "Only you can.",
+    ] in lines
+    assert [
+        "Siti asked to see your private notes on Monday 14 September.",
+        "Only you can.",
+    ] in lines
 
 
 async def test_only_me_keeps_a_new_key_out_of_the_part_until_it_is_lifted(

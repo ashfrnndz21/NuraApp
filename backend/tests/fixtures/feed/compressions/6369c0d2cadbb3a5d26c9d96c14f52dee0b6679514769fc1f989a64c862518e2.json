@@ -1,0 +1,29 @@
+{
+  "en": {
+    "headline": "This week: less gravy",
+    "body": [
+      "Ask for less gravy at the coffee shop.",
+      "Leave the soup at the bottom of the bowl."
+    ],
+    "why_topic": "your blood pressure",
+    "passage": "Ask for less gravy and less sauce, and leave the soup at the bottom of the bowl."
+  },
+  "ms": {
+    "headline": "Minggu ini: kurang kuah",
+    "body": [
+      "Minta kurang kuah di gerai makanan.",
+      "Tinggalkan sup di dasar mangkuk."
+    ],
+    "why_topic": "tekanan darah anda",
+    "passage": "Ask for less gravy and less sauce, and leave the soup at the bottom of the bowl."
+  },
+  "zh": {
+    "headline": "这周：少要一点汁",
+    "body": [
+      "在咖啡店买饭时，要少一点汁。",
+      "碗底的汤不要喝完。"
+    ],
+    "why_topic": "您的血压",
+    "passage": "Ask for less gravy and less sauce, and leave the soup at the bottom of the bowl."
+  }
+}

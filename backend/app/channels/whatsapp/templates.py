@@ -4,8 +4,10 @@ Outside the 24-hour customer-service window a business may send nothing but a te
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11), the red-flag notice by tier and by the doctor's hours, the pre-visit brief
-(B1), and the notice of a voice note Nura could not hear (#158) — is one of these twenty-one,
+message (E11), the red-flag notice by tier and by the doctor's hours, the neutral urgent
+notice for when a tier's own template is not yet approved (#174), the pre-visit brief (B1),
+and the notices of a voice note Nura could not hear (#158, #173) — is one of these
+twenty-three,
 submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
@@ -375,6 +377,25 @@ RED_FLAG_NOTICE_NIGHT = Template(
 ambulance if it gets worse — never "call the doctor today" at night (E19-05)."""
 
 # @patient
+RED_FLAG_NOTICE_URGENT = Template(
+    "red_flag_notice_urgent",
+    ("name",),
+    {
+        "en": "This one we do not wait for.\n{name} is not feeling well.\nOpen Nura now.",
+        "ms": "Yang ini kita tidak tunggu.\n{name} rasa tidak sihat.\nBuka Nura sekarang.",
+        "zh": "这个我们不等。\n{name}不舒服。\n现在就打开 Nura。",
+    },
+    approved=False,
+)
+"""A tier's own notice could not go this way — not approved yet, and outside the family
+member's 24-hour window a reply cannot go at all — so this states no action of its own and
+sends nobody anywhere: it only says to open the app, where the tier's own words are waiting.
+An urgent alert is never told at a lower tier (E19-05, #174): this is the one fallback
+"call {doctor} today" and its variants are never candidates once a tier applies. Where even
+this is not approved, no WhatsApp goes at all; the app push and the family page's notice
+carry it regardless (#162, #169)."""
+
+# @patient
 VISIT_BRIEF = Template(
     "visit_brief",
     ("doctor", "day", "time", "subject"),
@@ -490,6 +511,7 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE_AMBULANCE,
         RED_FLAG_NOTICE_HOSPITAL,
         RED_FLAG_NOTICE_NIGHT,
+        RED_FLAG_NOTICE_URGENT,
         VISIT_BRIEF,
         UNHEARD_NOTE_NOTICE,
         UNHEARD_NOTE_NOTICE_CALL,
@@ -498,8 +520,9 @@ TEMPLATES: Mapping[str, Template] = {
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
 """All twenty-two, in the order they are submitted: E19's six (approved), then E11's nine, the
-red-flag notice by tier and by the doctor's hours with the pre-visit brief (B1), #158's two and
-#173's one — all pending Meta's approval (`approved=False`)."""
+red-flag notice by tier and by the doctor's hours with its neutral fallback (#174), the
+pre-visit brief (B1), and the three for a voice note nobody could hear (#158, #173) — all
+pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

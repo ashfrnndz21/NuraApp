@@ -1,33 +1,46 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { AnswerOut, FeedItemOut } from "../api/types";
+import type { AnswerOut, FeedItemOut, FindOut, FindWhere } from "../api/types";
 import { whatToDoLines } from "../day/model";
 import { askStartedTheRedPath, whenNotReached } from "../day/redPath";
 import { keptCards } from "../day/offline";
 import { bindingOf } from "../offline/todayCache";
 import { answerView, askMode } from "../feed/ask";
+import { feedFor } from "../feed/session";
 import { go } from "../flow";
 import { density, profile, token } from "../store/session";
-import { fill, language, t } from "../strings";
+import { fill, language, LOCALE, t } from "../strings";
+import { dateLine } from "../today/model";
 import { voice } from "../player/voice";
 import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
 import { HearClip } from "../ui/Player";
 import { Shell } from "./Shell";
 
-/** Ask about a card (E21-04), answered by E03's recall (`POST /profiles/{id}/ask`): voice
- *  mode in the patient's density, text in the caregiver's. He types his question — or says it
- *  into the phone's own keyboard microphone; the page does not listen, so no recording of his
- *  voice leaves the phone. The answer is the backend's: each cited line under its source line,
- *  the honest line when nothing on his papers answers, and the boundary last. Hear reads it
- *  out on tap, never by itself. A refusal is said in one plain sentence. */
+/** Where the ask bar looks (spec §0, mockup v2): his records — Ask, E03's recall — or the web,
+ *  his providers, or videos. The web and videos are the allowlisted sources only, each page said
+ *  in his language by the backend with the boundary last; providers is his own directory. */
+export type Where = "records" | FindWhere;
+const WHERES: readonly Where[] = ["records", "web", "providers", "videos"];
+
+/** Ask about a card (E21-04), or ask or search from Today, answered by E03's recall
+ *  (`POST /profiles/{id}/ask`): voice mode in the patient's density, text in the caregiver's.
+ *  He types his question — or says it into the phone's own keyboard microphone; the page does
+ *  not listen, so no recording of his voice leaves the phone. The answer is the backend's: each
+ *  cited line under its source line, the honest line when nothing on his papers answers, and
+ *  the boundary last. Hear reads it out on tap, never by itself. A refusal is said in one plain
+ *  sentence. In the caregiver's density the ask bar has its filters: Records, Web, Providers,
+ *  Videos. The patient's has one thing: his records. */
 export function AskScreen({ item, question: asked }: { item?: FeedItemOut; question?: string }): JSX.Element {
   const s = t();
   const [question, setQuestion] = useState(asked ?? "");
+  const [where, setWhere] = useState<Where>("records");
   const [answer, setAnswer] = useState<AnswerOut | null>(null);
+  const [found, setFound] = useState<FindOut | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const mode = askMode(density());
+  const filters = density() === "caregiver";
   // Leaving Ask: a clip stops and its recording is let go.
   useEffect(() => () => voice.forget(), []);
 
@@ -38,15 +51,26 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     if (!bearer || !papers || busy || !text) return;
     setBusy(true);
     setError(null);
+    setAnswer(null);
+    setFound(null);
     try {
-      const found = await nura.ask(bearer, papers.profile_id, text, mode, language.value);
-      // A red flag heard in the question went the red-flag path on the backend first: what to do
-      // now, the backend's card, exactly as after a red word tapped on Today.
-      if (found.red_flag?.red_flag) {
-        const red = found.red_flag;
-        return go({ name: "whatToDo", lines: red.card ? whatToDoLines(red.card) : red.lines, offline: null, refusal: null });
+      if (where === "records") {
+        const heard = await nura.ask(bearer, papers.profile_id, text, mode, language.value);
+        // A red flag heard in the question went the red-flag path on the backend first: what to
+        // do now, the backend's card, exactly as after a red word tapped on Today.
+        if (heard.red_flag?.red_flag) {
+          const red = heard.red_flag;
+          return go({ name: "whatToDo", lines: red.card ? whatToDoLines(red.card) : red.lines, offline: null, refusal: null });
+        }
+        setAnswer(heard);
+        // He asked more about this card: kept for the next connection (E11-08).
+        if (item) {
+          const events = feedFor(bearer, papers).events;
+          if (papers.standing === "owner" || papers.scopes.includes("records")) void events.add(item.item_id, "asked_more").then(() => events.flush());
+        }
+      } else {
+        setFound(await nura.find(bearer, papers.profile_id, text, where, language.value));
       }
-      setAnswer(found);
     } catch (failure) {
       // A red word the backend heard but this key may not raise: the kept card and the refusal
       // named, as a refused red tap on the cloud gets — never nothing, never an answer instead.
@@ -66,7 +90,9 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     if (asked && asked.trim()) void send();
   }, []);
 
+  const words: Record<Where, string> = { records: s.feed.filterRecords, web: s.feed.filterWeb, providers: s.feed.filterProviders, videos: s.feed.filterVideos };
   const view = answer ? answerView(answer) : null;
+  const locale = LOCALE[language.value];
   return (
     <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
       <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
@@ -78,9 +104,18 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
       )}
       <Tile paper>
         <Field label={s.feed.askLabel} name="question" value={question} onInput={setQuestion} maxLength={300} />
+        {filters && (
+          <div class="choices two" role="group" aria-label={s.feed.filterLabel} data-testid="ask-filters">
+            {WHERES.map((each) => (
+              <Pill key={each} chosen={where === each} onClick={() => setWhere(each)} testId={`filter-${each}`}>
+                {words[each]}
+              </Pill>
+            ))}
+          </div>
+        )}
         <p class="caption">{s.feed.askLead}</p>
         <Pill plum onClick={() => void send()} disabled={busy || question.trim().length === 0} testId="ask-send">
-          {s.feed.ask}
+          {where === "records" ? s.feed.ask : s.feed.search}
         </Pill>
       </Tile>
       <Notice error={error} />
@@ -117,6 +152,42 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
           <Hear lines={view.spoken} />
         </Tile>
       )}
+      {found && found.results.length === 0 && (
+        <Tile paper testId="found-nothing">
+          <p>{s.feed.foundNothing}</p>
+        </Tile>
+      )}
+      {found?.results.map((result, at) => {
+        const boundary = (result.boundary ?? "").split("\n").filter((line) => line.trim() !== "");
+        return (
+          <Tile paper key={at} testId="found">
+            <h2 class="title">{result.title}</h2>
+            {result.lines.length > 0 && (
+              <div class="lines">
+                {result.lines.map((line, n) => (
+                  <p key={n}>{line}</p>
+                ))}
+              </div>
+            )}
+            {boundary.length > 0 && (
+              <div class="lines boundary" data-testid="boundary">
+                {boundary.map((line, n) => (
+                  <p key={n}>{line}</p>
+                ))}
+              </div>
+            )}
+            {result.next_visit_at && <p class="provenance">{fill(s.feed.nextVisit, { date: dateLine(new Date(result.next_visit_at), locale) })}</p>}
+            {result.url && result.url.startsWith("https://") && result.publisher && (
+              <p class="provenance source">
+                <a href={result.url} target="_blank" rel="noopener noreferrer" data-testid="found-link">
+                  {fill(result.media === "video" ? s.feed.watchWhole : s.feed.readPage, { publisher: result.publisher })}
+                </a>
+              </p>
+            )}
+            {result.lines.length > 0 && <Hear lines={[result.title, ...result.lines, ...boundary]} />}
+          </Tile>
+        );
+      })}
       {item && (
         <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
           {s.feed.back}

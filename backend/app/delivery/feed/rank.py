@@ -30,10 +30,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read, audited_write
+from app.audit.access import audited_profile_read, audited_read, audited_write
 from app.db import as_utc, utcnow
 from app.delivery.feed.compose import Day, can_compose, refresh, today_for
 from app.delivery.feed.models import (
+    PLAYS,
     SUPPLY_ORDER,
     CapsClass,
     CardType,
@@ -45,6 +46,7 @@ from app.delivery.feed.models import (
     Supply,
 )
 from app.delivery.feed.search import Engine
+from app.delivery.feed.sources import require_manager
 from app.errors import Refusal
 from app.family.photos import taken_back
 from app.keys.context import KeyContext
@@ -61,6 +63,21 @@ QUIET_UNTIL = time(7, 0)
 """Nothing is delivered between these, on the patient's wall clock, except a flag."""
 DECLINED = "declined"
 """The subject of the "not for me" fact; the attribute is the card type."""
+OPENED: frozenset[EngagementKind] = frozenset(
+    {
+        EngagementKind.SEEN,
+        EngagementKind.OPENED,
+        EngagementKind.HEARD,
+        EngagementKind.TAPPED,
+        EngagementKind.ASKED_MORE,
+    }
+)
+"""What says a card was opened: on his screen, heard, tapped or asked about."""
+WEEK_TARGET = "feed_item.week"
+"""What the trail names when "Sent to Pa this week" is read, or refused."""
+NOT_IN_THE_WEEK: frozenset[CardType] = frozenset({CardType.NOW, CardType.GATE, CardType.DUTY})
+"""The cards that are not something sent: the now card is Today's, the gate is a turn of the
+page, the duty card is hers."""
 
 
 class NotACursor(Refusal):
@@ -221,9 +238,22 @@ async def _statuses(
     ids = [item.id for item in items]
     if not ids:
         return {}
-    engaged = await audited_read(
-        session, Engagement, context, Scope.PROFILE, where=(Engagement.item_id.in_(ids),)
-    )
+    # What became of a card is what *he* did with it: his chief's own taps on her list are
+    # not his opening it ("Pa opened this card" is said only when he did).
+    #
+    # On a graph he has not claimed yet there is no owner, and nothing here is his: a claimant
+    # key carries `Scope.PROFILE` alone (`app.keys.context.CLAIMANT_SCOPES`), so he cannot
+    # open a card until he claims it, and every card rightly reads as sent. This is spelled
+    # out rather than left to fall out of a comparison against None, so that widening what a
+    # claimant may read fails here loudly instead of quietly crediting his chief's taps to him.
+    owner = (await audited_profile_read(session, context)).owner_person_id
+    engaged = [
+        one
+        for one in await audited_read(
+            session, Engagement, context, Scope.PROFILE, where=(Engagement.item_id.in_(ids),)
+        )
+        if one.person_id == owner
+    ]
     pages = await audited_read(
         session, FeedPage, context, Scope.PROFILE, where=(FeedPage.audience == DeliverTo.PATIENT,)
     )
@@ -236,7 +266,9 @@ async def _statuses(
         kinds = by_item.get(item.id, set())
         if EngagementKind.DISMISSED in kinds:
             status[item.id] = "dismissed"
-        elif kinds & {EngagementKind.HEARD, EngagementKind.TAPPED, EngagementKind.SEEN}:
+        elif kinds & PLAYS:
+            status[item.id] = "played"
+        elif kinds & OPENED:
             status[item.id] = "opened"
         elif item.id in sent:
             status[item.id] = "sent"
@@ -358,6 +390,12 @@ CATEGORY_OF: dict[CardType, str] = {
     CardType.NOTICE: "insight",
     CardType.STORY: "insight",
     CardType.LEARNING: "insight",
+    # A local alert says what to do today; the rest are something to know.
+    CardType.LOCAL: "reminder",
+    CardType.CLIP: "insight",
+    CardType.RECAP: "insight",
+    CardType.SEASONAL: "insight",
+    CardType.FOOD: "insight",
 }
 """What each card is to "today's top three" (E11-02): an alert, a reminder, or an insight.
 The gate, the duty card and a doctor's question are none of the three."""
@@ -400,6 +438,48 @@ async def top_three(session: AsyncSession, *, context: KeyContext, engine: Engin
         held_by_caps=dict(held),
         status=await _statuses(session, context=context, items=chosen, held=held),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Sent:
+    """One card made for him this week, as his chief's list shows it (spec §1): the card and
+    what became of it. Never how many times, and never for how long: the list says whether a
+    card was opened or played, and no count of anything (spec §0, "no counts")."""
+
+    item: FeedItem
+    status: str
+
+
+async def sent_this_week(session: AsyncSession, *, context: KeyContext) -> list[Sent]:
+    """Every card made for him since Monday on his wall clock — delivered, held for her, or
+    kept for the doctor's memo — newest first, each with its status (sent, opened, played,
+    dismissed, held): "Sent to Pa this week". The now card, the gate and her own duty card are
+    not sent things and are left out. Narrowed to the parts the key covers, like every read
+    of the feed; the owner's and his chief's to read (`NotTheirsToManage`). Nothing is made
+    here."""
+    await require_manager(session, context=context, target=WEEK_TARGET)
+    day = today_for(context)
+    found = await audited_read(
+        session,
+        FeedItem,
+        context,
+        Scope.PROFILE,
+        where=(FeedItem.created_at >= day.week_starts_at, FeedItem.created_at <= day.now),
+    )
+    visible = await _without_photos_taken_back(session, context, _visible_to(found, context))
+    if context.is_owner:
+        # His own read of the week is of what reached him: a card held for his chief or kept
+        # for the doctor's memo is not on his feed, so it is not on his week either.
+        visible = [item for item in visible if item.deliver_to is DeliverTo.PATIENT]
+    shown = sorted(
+        (item for item in visible if item.type not in NOT_IN_THE_WEEK),
+        key=lambda item: (as_utc(item.created_at), item.priority),
+        reverse=True,
+    )
+    if not shown:
+        return []
+    status = await _statuses(session, context=context, items=shown, held=Counter())
+    return [Sent(item, status.get(item.id, "generated")) for item in shown]
 
 
 class NoCachedPage(Refusal):
@@ -479,4 +559,7 @@ def item_json(item: FeedItem, status: str) -> dict[str, Any]:
         "colour": item.colour,
         "action": item.action,
         "category": CATEGORY_OF.get(item.type),
+        # The watch that found it, for a card a search made: what her "Pause this watch" on
+        # "Sent to Pa this week" pauses. None for every card made from his own record.
+        "search_job_id": None if item.search_job_id is None else str(item.search_job_id),
     }

@@ -46,6 +46,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_change": "How your blood pressure moved",
         "story_trend": "Your blood test over time",
         "story_photo": "A photo from {who}",
+        "recap": "Your week, in 30 seconds",
         "flag": "This one we do not wait for",
     },
     "ms": {
@@ -66,6 +67,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_change": "Bagaimana tekanan darah anda berubah",
         "story_trend": "Ujian darah anda dari masa ke masa",
         "story_photo": "Gambar daripada {who}",
+        "recap": "Minggu anda, dalam 30 saat",
         "flag": "Yang ini kita tidak tunggu",
     },
     "zh": {
@@ -86,6 +88,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_change": "您的血压有什么变化",
         "story_trend": "您的验血结果",
         "story_photo": "{who}分享的照片",
+        "recap": "30秒看您的这一周",
         "flag": "这个我们不等",
     },
 }
@@ -152,6 +155,9 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("At your visit on {day}, {doctor} said this:",),
         "story_photo": ("{who} shared this photo on {day}.",),
         "learning_source": ("This comes from {source_name}.",),
+        # A card about one of his medicines never reads as a reason to stop it.
+        "learning_keep_taking": ("Ask {doctor} before you stop this medicine.",),
+        "recap_intro": ("This is your week, from your blood pressure book.",),
         "flag_family": (
             "You told Nura about {feeling}.",
             "This one we do not wait for.",
@@ -224,6 +230,8 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("Semasa lawatan anda pada {day}, {doctor} kata begini:",),
         "story_photo": ("{who} berkongsi gambar ini pada {day}.",),
         "learning_source": ("Ini datang dari {source_name}.",),
+        "learning_keep_taking": ("Tanya {doctor} sebelum anda berhenti makan ubat ini.",),
+        "recap_intro": ("Ini minggu anda, dari buku tekanan darah anda.",),
         "flag_family": (
             "Anda beritahu Nura tentang {feeling}.",
             "Yang ini kita tidak tunggu.",
@@ -268,6 +276,8 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_doctor": ("{day}看病时{doctor}这样说：",),
         "story_photo": ("{who}在{day}分享了这张照片。",),
         "learning_source": ("这来自{source_name}。",),
+        "learning_keep_taking": ("停这个药以前，先问一问{doctor}。",),
+        "recap_intro": ("这些是您这一周的血压，来自您的血压本。",),
         "flag_family": (
             "您告诉Nura您{feeling}。",
             "这个我们不等。",
@@ -298,6 +308,10 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "story_trend": "This is from your own blood tests.",
         "story_photo": "{who} chose to share this photo with you.",
         "learning": "This is about {topic}, which is on your papers.",
+        "local": "You are seeing this because it is near your home.",
+        "local_region": "You are seeing this because of what is on your papers.",
+        "seasonal": "{season} is on {day}.",
+        "seasonal_about": "{season} begins around {day}.",
         "flag": "This is one of the things we never wait for.",
     },
     "ms": {
@@ -318,6 +332,10 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "story_trend": "Ini dari ujian darah anda sendiri.",
         "story_photo": "{who} memilih untuk berkongsi gambar ini dengan anda.",
         "learning": "Ini tentang {topic}, yang ada dalam surat-surat anda.",
+        "local": "Anda nampak ini kerana ia dekat rumah anda.",
+        "local_region": "Anda nampak ini kerana apa yang ada dalam surat-surat anda.",
+        "seasonal": "{season} jatuh pada {day}.",
+        "seasonal_about": "{season} bermula sekitar {day}.",
         "flag": "Ini salah satu perkara yang kita tidak pernah tunggu.",
     },
     "zh": {
@@ -338,6 +356,10 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "story_trend": "这来自您自己的验血结果。",
         "story_photo": "{who}选择了和您分享这张照片。",
         "learning": "这是关于{topic}的，它在您的文件里。",
+        "local": "您看到这个，是因为这在您家附近。",
+        "local_region": "您看到这个，是因为您文件里的情况。",
+        "seasonal": "{season}是{day}。",
+        "seasonal_about": "{season}大约在{day}开始。",
         "flag": "这是我们从不等的事情之一。",
     },
 }
@@ -541,27 +563,144 @@ def learning_lines(
     topic: str,
     source_name: str,
     doctor: str,
+    why: str = "learning",
+    keep_taking: bool = False,
+    **slots: Any,
 ) -> Lines:
     """A learning card: the compressed lines, then where they came from, then the boundary
-    line every inferring card carries, then why it is here.
+    line every inferring card carries, then why it is here. A card about one of his medicines
+    (`keep_taking`) says, after its lines, not to stop it without asking his doctor: a line
+    about what a medicine can do is never read as a reason to stop it.
 
     The boundary is `app.safety.boundary`'s line for the learning-card surface (E16-01) —
     what Nura did, "This is not a doctor's advice.", "Ask {doctor}." — the same words as on
     every inferring surface, never a copy of them kept here. It ends the body and the voice
     and rides on `Lines.boundary`, so `items.create_item` writes it on the row."""
     code = language_for(language)
-    slots = {"source_name": source_name, "doctor": doctor, "topic": topic}
-    source = tuple(_fill(line, slots) for line in LINES[code]["learning_source"])
+    filled = {"source_name": source_name, "doctor": doctor, "topic": topic, **slots}
+    source = tuple(_fill(line, filled) for line in LINES[code]["learning_source"])
     boundary = boundary_line(Surface.LEARNING_CARD, code, doctor=doctor)
-    lines = (*body, *source, *boundary.splitlines())
+    keep = tuple(_fill(line, filled) for line in LINES[code]["learning_keep_taking"]) if keep_taking else ()
+    lines = (*body, *keep, *source, *boundary.splitlines())
     return Lines(
         language=code,
         headline=headline,
         body=lines,
         voice=lines,
-        why=_fill(WHY[code]["learning"], slots),
+        why=_fill(WHY[code][why], filled),
         boundary=boundary,
     )
+
+
+# @patient phrase
+SEASON_NAMES: Mapping[str, Mapping[str, str]] = {
+    # "Fasting" is his word for no food before a blood test (the glossary), so in English the
+    # month is its name.
+    "en": {"mid_autumn": "The Mid-Autumn Festival", "fasting_month": "Ramadan"},
+    "ms": {"mid_autumn": "Pesta Kuih Bulan", "fasting_month": "Bulan puasa"},
+    "zh": {"mid_autumn": "中秋节", "fasting_month": "斋戒月"},
+}
+"""His words for a season, to fill the seasonal card's why line (`app.delivery.feed.local`),
+which it begins, so each starts with a capital."""
+
+
+def season_name(code: str, language: str | None) -> str:
+    return SEASON_NAMES[language_for(language)][code]
+
+
+# @patient phrase
+TERM_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "blood pressure": "blood pressure",
+        "diabetes": "diabetes",
+        "cholesterol": "cholesterol",
+        "heart": "the heart",
+        "kidneys": "the kidneys",
+        "dengue": "dengue",
+        "haze": "the haze",
+        "heat": "hot weather",
+        "festive food": "festive food",
+        "fasting month": "Ramadan",
+    },
+    "ms": {
+        "blood pressure": "tekanan darah",
+        "diabetes": "kencing manis",
+        "cholesterol": "kolesterol",
+        "heart": "jantung",
+        "kidneys": "buah pinggang",
+        "dengue": "denggi",
+        "haze": "jerebu",
+        "heat": "cuaca panas",
+        "festive food": "makanan perayaan",
+        "fasting month": "bulan puasa",
+    },
+    "zh": {
+        "blood pressure": "血压",
+        "diabetes": "糖尿病",
+        "cholesterol": "胆固醇",
+        "heart": "心脏",
+        "kidneys": "肾脏",
+        "dengue": "骨痛热症",
+        "haze": "烟霾",
+        "heat": "炎热天气",
+        "festive food": "节日食物",
+        "fasting month": "斋戒月",
+    },
+}
+"""A search term in the reader's words, for the "Watching for Pa" list. A medicine's generic
+name is the same in every language and is shown as it is."""
+
+AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
+
+
+def term_words(terms: tuple[str, ...] | list[str], language: str | None) -> str:
+    code = language_for(language)
+    words = [TERM_WORDS[code].get(term, term) for term in terms]
+    return AND[code].join(words)
+
+
+# @patient headline
+WATCH_LABELS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "explainer": "{term}, in simple words",
+        "safety": "Safety notices about {term}",
+        "local": "{term} near {area}",
+        "local_region": "{term} anywhere in the country",
+        "seasonal": "{term}, before it comes",
+        "food": "Food choices for {term}",
+        "provider": "News from {term}",
+        "worth_knowing": "Worth asking about {term}",
+    },
+    "ms": {
+        "explainer": "{term}, dalam kata-kata mudah",
+        "safety": "Notis keselamatan tentang {term}",
+        "local": "{term} dekat {area}",
+        "local_region": "{term} di seluruh negara",
+        "seasonal": "{term}, sebelum tiba",
+        "food": "Pilihan makanan untuk {term}",
+        "provider": "Berita dari {term}",
+        "worth_knowing": "Patut ditanya tentang {term}",
+    },
+    "zh": {
+        "explainer": "用简单的话讲{term}",
+        "safety": "关于{term}的安全通知",
+        "local": "{area}附近的{term}",
+        "local_region": "全国各地的{term}",
+        "seasonal": "{term}来临前的提醒",
+        "food": "适合{term}的食物选择",
+        "provider": "来自{term}的消息",
+        "worth_knowing": "值得问的：{term}",
+    },
+}
+"""What one search job watches for, in the caregiver's words ("Watching for Pa", spec §1)."""
+
+
+def watch_label(kind: str, terms: list[str], language: str | None, area: str | None) -> str:
+    """What one watch is for, as a line that starts with a capital ("Dengue near Air Itam")."""
+    code = language_for(language)
+    key = "local_region" if kind == "local" and not area else kind
+    line = _fill(WATCH_LABELS[code][key], {"term": term_words(terms, code), "area": area or ""})
+    return line[:1].upper() + line[1:]
 
 
 def feeling_words(word: str, language: str | None) -> str:

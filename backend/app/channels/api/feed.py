@@ -5,9 +5,19 @@
     GET  /profiles/{id}/feed/{item}/voice       the card's spoken twin, as audio (E11-04)
     GET  /profiles/{id}/feed/cached             the last first page rendered for this person
     POST /profiles/{id}/feed/{item}/engagement  seen, heard, tapped, not for me, shared
+    POST /profiles/{id}/feed/events             the phone's queue: opened, played, replayed, …
+    GET  /profiles/{id}/feed/week               "Sent to Pa this week": every card, its status
+    GET  /profiles/{id}/feed/{item}/clip/poster      a clip's still (E09-06)
+    GET  /profiles/{id}/feed/{item}/clip/captions    its captions, WebVTT, in its language
+    GET  /profiles/{id}/feed/{item}/clip/video       its excerpt, where the licence allows one
     GET  /profiles/{id}/sources                 the allowlist (owner, chief)
+    GET  /profiles/{id}/search-jobs             "Watching for Pa": each watch, its sources, cadence
     POST /profiles/{id}/search-jobs             a self-search, allowlist-scoped (owner, chief)
     GET  /profiles/{id}/search-jobs/{job}       what it found
+    PATCH /profiles/{id}/search-jobs/{job}      pause or resume it
+    GET  /profiles/{id}/area                    his area, coarse (owner, chief)
+    PUT  /profiles/{id}/area                    set on his yes (owner, steward)
+    POST /profiles/{id}/find                    the ask bar's Web, Videos and Providers filters
 
 Every route takes the key context. The owner reads the patient's supply; a chief, caregiver
 or steward reads the caregiver's list, narrowed to the parts of the record the key covers.
@@ -23,27 +33,48 @@ import uuid
 
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.channels.api.feed_schemas import (
+    AreaIn,
+    AreaOut,
     EngagementIn,
     EngagementOut,
+    EventsIn,
+    EventsOut,
     FeedItemOut,
     FeedPageOut,
+    FindIn,
+    FindOut,
+    ResultOut,
     SearchJobIn,
     SearchJobOut,
+    SearchJobPatchIn,
+    SentOut,
     SourceOut,
 )
-from app.db import utcnow
-from app.delivery.feed.compose import today_for
-from app.delivery.feed.engagement import record_engagement
-from app.delivery.feed.rank import NotOnADevRun, cached_page, feed_page, item_json, top_three
-from app.delivery.feed.search import Engine, create_job, get_job, list_jobs
-from app.delivery.feed.sources import list_sources
+from app.delivery.feed.area import read_area, set_area
+from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
+from app.delivery.feed.compose import around_for, today_for
+from app.delivery.feed.engagement import record_engagement, record_events
+from app.delivery.feed.find import find as find_pages
+from app.delivery.feed.models import SearchJob
+from app.delivery.feed.rank import (
+    NotOnADevRun,
+    cached_page,
+    feed_page,
+    item_json,
+    sent_this_week,
+    top_three,
+)
+from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
+from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
-from app.delivery.strings import language_for
+from app.delivery.strings import language_for, watch_label
+from app.keys.context import KeyContext
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 log = logging.getLogger("nura.channels.feed")
@@ -58,6 +89,7 @@ def _engine(request: Request) -> Engine:
         ranges=providers.reference_ranges,
         voice=providers.voice,
         store=providers.object_store,
+        clips=providers.clips,
     )
 
 
@@ -123,6 +155,66 @@ async def feed_voice(
     )
 
 
+@router.post("/{profile_id}/feed/events")
+async def feed_events(body: EventsIn, context: Context, session: Db) -> EventsOut:
+    """The phone's queue of what he did with his cards, flushed on the next connection
+    (E11-08): each event written once, at the moment it happened, by the id the phone gave it.
+    The answer names what was written and what was skipped and why; the phone forgets both."""
+    flushed = await record_events(
+        session, context=context, events=[event.queued() for event in body.events]
+    )
+    return EventsOut.of(flushed)
+
+
+@router.get("/{profile_id}/feed/week")
+async def feed_week(context: Context, session: Db) -> list[SentOut]:
+    """Sent to Pa this week (spec §1): every card made for him since Monday, newest first,
+    with what became of it — sent, opened, played, dismissed, held — and its source."""
+    return [SentOut.of(one) for one in await sent_this_week(session, context=context)]
+
+
+@router.get("/{profile_id}/feed/{item_id}/clip/poster")
+async def feed_clip_poster(
+    item_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> Response:
+    """A clip's still (E09-06), from this server: no third-party player, no embed."""
+    providers = providers_of(request)
+    data, kind = await clip_poster(
+        session,
+        context=context,
+        item_id=item_id,
+        renderer=providers.clips,
+        store=providers.object_store,
+    )
+    return Response(content=data, media_type=kind, headers={"Cache-Control": "private"})
+
+
+@router.get("/{profile_id}/feed/{item_id}/clip/captions")
+async def feed_clip_captions(item_id: uuid.UUID, context: Context, session: Db) -> Response:
+    """A clip's captions as WebVTT, in the card's language: its narration's lines, timed."""
+    text = await clip_captions(session, context=context, item_id=item_id)
+    return Response(
+        content=text, media_type="text/vtt; charset=utf-8", headers={"Cache-Control": "private"}
+    )
+
+
+@router.get("/{profile_id}/feed/{item_id}/clip/video")
+async def feed_clip_video(
+    item_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> Response:
+    """A clip's excerpt, kept on this server, only where the publisher's licence allows
+    reuse; `NoExcerpt` (404) otherwise, and the phone shows the still with the narration."""
+    providers = providers_of(request)
+    data, kind = await clip_video(
+        session,
+        context=context,
+        item_id=item_id,
+        renderer=providers.clips,
+        store=providers.object_store,
+    )
+    return Response(content=data, media_type=kind, headers={"Cache-Control": "private"})
+
+
 @router.get("/{profile_id}/feed/cached")
 async def cached(context: Context, session: Db) -> FeedPageOut:
     """The last first page rendered for this person, as it was: the offline page."""
@@ -175,31 +267,114 @@ async def add_search_job(
         from app.delivery.feed.models import FeedItem
         from app.keys.scopes import Scope
 
-        held = await audited_read(
-            session, FeedItem, context, Scope.PROFILE, where=(FeedItem.expires_at > utcnow(),)
-        )
+        every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+        engine = _engine(request)
         await run_job(
             session,
             context=context,
             job=job,
-            engine=_engine(request),
+            engine=engine,
             state=state,
             language=language_for(profile.language),
-            day=today_for(context).key,
+            around=await around_for(
+                session,
+                context=context,
+                engine=engine,
+                state=state,
+                day=today_for(context),
+                profile=profile,
+            ),
             doctor=None,
-            existing={item.dedupe_key for item in held},
+            existing={item.dedupe_key for item in every},
         )
-    return SearchJobOut.of(job)
+    return await _job_out(session, context, job, None)
+
+
+async def _job_out(
+    session: AsyncSession, context: KeyContext, job: SearchJob, language: str | None
+) -> SearchJobOut:
+    """A job with what it watches for in the reader's words, and the sources it reads."""
+    profile = await audited_profile_read(session, context)
+    names = {
+        str(source.id): source.name
+        for source in await usable_sources(session, region=context.region)
+    }
+    return SearchJobOut.of(
+        job,
+        label=watch_label(
+            job.kind.value, list(job.terms), language or profile.language, profile.area
+        ),
+        sources=sorted({names[one] for one in job.source_ids if one in names}),
+    )
 
 
 @router.get("/{profile_id}/search-jobs")
-async def search_jobs(context: Context, session: Db) -> list[SearchJobOut]:
-    return [SearchJobOut.of(job) for job in await list_jobs(session, context=context)]
+async def search_jobs(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, max_length=8),
+) -> list[SearchJobOut]:
+    """Watching for Pa (spec §1): every search the engine runs for him — what for, in the
+    reader's words, which allowlisted sources, how often, and whether it is paused."""
+    return [
+        await _job_out(session, context, job, language)
+        for job in await list_jobs(session, context=context)
+    ]
 
 
 @router.get("/{profile_id}/search-jobs/{job_id}")
-async def search_job(job_id: uuid.UUID, context: Context, session: Db) -> SearchJobOut:
-    return SearchJobOut.of(await get_job(session, context=context, job_id=job_id))
+async def search_job(
+    job_id: uuid.UUID,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, max_length=8),
+) -> SearchJobOut:
+    return await _job_out(
+        session, context, await get_job(session, context=context, job_id=job_id), language
+    )
+
+
+@router.patch("/{profile_id}/search-jobs/{job_id}")
+async def pause_search_job(
+    job_id: uuid.UUID,
+    body: SearchJobPatchIn,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, max_length=8),
+) -> SearchJobOut:
+    """Pause a watch, or resume it. The owner's and his chief's; on the trail."""
+    job = await pause_job(session, context=context, job_id=job_id, enabled=body.enabled)
+    return await _job_out(session, context, job, language)
+
+
+@router.get("/{profile_id}/area")
+async def area(context: Context, session: Db) -> AreaOut:
+    """His area and the towns it may be: for him and the chief who manages his feed."""
+    return AreaOut.of(await read_area(session, context=context))
+
+
+@router.put("/{profile_id}/area")
+async def put_area(body: AreaIn, context: Context, session: Db) -> AreaOut:
+    """Set his area on his yes — a town from the list or a postcode's first digits, never a
+    street — or clear it. His own key, or the steward's before he claims."""
+    return AreaOut.of(await set_area(session, context=context, area=body.area))
+
+
+@router.post("/{profile_id}/find")
+async def find(body: FindIn, request: Request, context: Context, session: Db) -> FindOut:
+    """The ask bar's Web, Videos and Providers filters: the allowlisted sources only, said
+    in his language with the boundary; his own providers by name. Records is `POST …/ask`.
+    A POST so the words he typed about his health are in the body, never in a URL that an
+    access log, a proxy or the browser's history keeps. Nothing is written."""
+    found = await find_pages(
+        session,
+        context=context,
+        engine=_engine(request),
+        words=body.q,
+        where=body.where,
+        language=body.language,
+    )
+    return FindOut(where=body.where, results=[ResultOut.of(one) for one in found])
 
 
 @router.get("/{profile_id}/feed/{item_id}")

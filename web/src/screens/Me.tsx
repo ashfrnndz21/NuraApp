@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { MeSummaryOut } from "../api/types";
+import type { AreaOut, MeSummaryOut, SearchJobOut } from "../api/types";
 import { closeMe, go, meOpen, reloadDoors, signOutEverywhere } from "../flow";
 import { emergencyOnly } from "../offline/emergencyCache";
 import { wantsHomeScreenHint } from "../offline/register";
@@ -12,7 +12,7 @@ import { density, densityChosen, me, profile, setDensity, setLanguage, token } f
 import { fill, LANGUAGES, language, t, type Language } from "../strings";
 import { proudLine } from "../today/model";
 import { todayPage } from "../today/page";
-import { Hear, Pill, Tile } from "../ui/components";
+import { Hear, Notice, Pill, Tile } from "../ui/components";
 import { Sheet } from "../ui/kit";
 
 /** Me (D1): a sheet from the header's avatar, over whatever screen is open — never a tab. Who
@@ -128,6 +128,8 @@ export function MeSheet(): JSX.Element | null {
           </Pill>
         )}
       </Tile>
+      <Area />
+      <Ramadan />
       <Reminders />
       {papers && (papers.standing === "owner" || papers.scopes.includes("emergency")) && (
         <Tile paper>
@@ -203,6 +205,133 @@ function Reminders(): JSX.Element | null {
           </Pill>
         )
       )}
+    </Tile>
+  );
+}
+
+/** Where he lives (E09-07), coarsely: a town from the region's list, set on his own yes — the
+ *  town is asked back ("Do you live in Air Itam?") before it is kept. Nura uses it only to
+ *  match a dengue or haze bulletin near him, on its own server; it is never sent to a search.
+ *  His own key, or the steward's who holds his papers until he claims them, sets it; the chief
+ *  who looks after his papers can read it (why a local card came), and this screen says so
+ *  before he says yes. */
+function Area(): JSX.Element | null {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [view, setView] = useState<AreaOut | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const mine = papers?.standing === "owner" || papers?.standing === "steward";
+  useEffect(() => {
+    if (!bearer || !papers || !mine) return setView(null);
+    nura.area(bearer, papers.profile_id).then(setView, () => setView(null));
+  }, [bearer, papers?.profile_id]);
+  if (!bearer || !papers || !view || !view.may_set) return null;
+  const keep = async (value: string | null) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await nura.setArea(bearer, papers.profile_id, value));
+      setAsking(null);
+      setChoosing(false);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Tile paper testId="area">
+      <h2 class="title">{s.me.areaTitle}</h2>
+      <p>{s.me.areaLead}</p>
+      <p>{s.me.areaWho}</p>
+      <p data-testid="area-now">{view.area ? fill(s.me.areaIs, { area: view.area }) : s.me.areaNone}</p>
+      {asking ? (
+        <>
+          <p data-testid="area-ask">{fill(s.me.areaAsk, { area: asking })}</p>
+          <Pill plum onClick={() => void keep(asking)} disabled={busy} testId="area-yes">
+            {s.me.areaYes}
+          </Pill>
+          <Pill onClick={() => setAsking(null)} disabled={busy} testId="area-no">
+            {s.me.areaNo}
+          </Pill>
+        </>
+      ) : choosing ? (
+        <div class="choices" role="group" aria-label={s.me.areaChange}>
+          {view.districts.map((district) => (
+            <Pill key={district} onClick={() => setAsking(district)} testId="area-choice">
+              {district}
+            </Pill>
+          ))}
+        </div>
+      ) : (
+        <Pill onClick={() => setChoosing(true)} testId="area-change">
+          {s.me.areaChange}
+        </Pill>
+      )}
+      {view.area && !asking && !choosing && (
+        <Pill quiet onClick={() => void keep(null)} disabled={busy} testId="area-clear">
+          {s.me.areaClear}
+        </Pill>
+      )}
+      <Notice error={error} />
+    </Tile>
+  );
+}
+
+/** Ramadan (docs/health-feed-spec.md §2, seasonal): whether he fasts speaks of his faith, so
+ *  it is his to say — on his own key, or the steward's who holds his papers — and Nura never
+ *  guesses it from a name or a language. On his yes a weekly watch is added; two months before
+ *  Ramadan it brings the card (plan it with the doctor, what to eat, what to do if shaky and
+ *  sweaty). The screen says, before he says yes, that his chief will see it too. */
+function Ramadan(): JSX.Element | null {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [job, setJob] = useState<SearchJobOut | null | undefined>(undefined);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const mine = papers?.standing === "owner" || papers?.standing === "steward";
+  const find = (jobs: SearchJobOut[]) => jobs.find((one) => one.kind === "seasonal" && one.terms.includes("fasting month")) ?? null;
+  useEffect(() => {
+    if (!bearer || !papers || !mine) return setJob(undefined);
+    nura.searchJobs(bearer, papers.profile_id, language.value).then((jobs) => setJob(find(jobs)), () => setJob(undefined));
+  }, [bearer, papers?.profile_id]);
+  if (!bearer || !papers || job === undefined) return null;
+  const on = job !== null && job.enabled;
+  const choose = async (yes: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (job) setJob(await nura.pauseSearchJob(bearer, papers.profile_id, job.job_id, yes, language.value));
+      else if (yes) setJob(await nura.addSearchJob(bearer, papers.profile_id, "seasonal", ["fasting month"]));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Tile paper testId="ramadan">
+      <h2 class="title">{s.me.ramadanTitle}</h2>
+      <p>{s.me.ramadanLead}</p>
+      <p>{s.me.ramadanWho}</p>
+      {on ? (
+        <>
+          <p data-testid="ramadan-on">{s.me.ramadanOn}</p>
+          <Pill quiet onClick={() => void choose(false)} disabled={busy} testId="ramadan-stop">
+            {s.me.ramadanStop}
+          </Pill>
+        </>
+      ) : (
+        <Pill plum onClick={() => void choose(true)} disabled={busy} testId="ramadan-yes">
+          {s.me.ramadanYes}
+        </Pill>
+      )}
+      <Notice error={error} />
     </Tile>
   );
 }

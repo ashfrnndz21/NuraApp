@@ -32,8 +32,9 @@ export type Screen =
   | { name: "emergency" }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
-  /** Ask (E03's recall, `POST /profiles/{id}/ask`), shown as the backend wrote it: about one
-   *  card, or the question typed into the ask bar on top of Today and Home. */
+  /** Ask about one card, or ask or search from Today: E03's recall (`POST /profiles/{id}/ask`)
+   *  and the ask bar's Web, Providers and Videos filters, shown as the backend wrote them.
+   *  `question` is what was typed into the ask bar the shell puts on every screen (D1). */
   | { name: "ask"; item?: FeedItemOut; question?: string }
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */

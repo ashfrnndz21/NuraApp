@@ -419,7 +419,33 @@ export const ms = {
     // @patient
     statusOpened: "{name} sudah buka kad ini.",
     // @patient
+    statusPlayed: "{name} sudah dengar kad ini.",
+    // @patient
     statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
+    // @patient phrase
+    play: "Main",
+    // @patient phrase
+    watchWhole: "Tonton seluruh video di {publisher}",
+    // @patient phrase
+    askOrSearch: "Tanya atau cari",
+    // @patient phrase
+    filterLabel: "Cari di mana",
+    // @patient phrase
+    filterRecords: "Surat anda",
+    // @patient phrase
+    filterWeb: "Web",
+    // @patient phrase
+    filterProviders: "Doktor dan klinik",
+    // @patient phrase
+    filterVideos: "Video",
+    // @patient phrase
+    search: "Cari",
+    // @patient phrase
+    readPage: "Baca halaman di {publisher}",
+    // @patient
+    foundNothing: "Nura tidak jumpa apa-apa untuk ini.",
+    // @patient phrase
+    nextVisit: "Lawatan anda yang seterusnya pada {date}.",
   },
   reading: {
     // @patient headline
@@ -482,6 +508,38 @@ export const ms = {
     remindersDenied1: "Telefon ini tidak benarkan peringatan.",
     // @patient
     remindersDenied2: "Anda boleh ubah dalam tetapan telefon.",
+    // @patient headline
+    areaTitle: "Tempat anda tinggal",
+    // @patient
+    areaLead: "Nura guna bandar anda hanya untuk denggi, jerebu atau cuaca panas dekat anda.",
+    // @patient
+    areaNone: "Nura tidak tahu bandar anda.",
+    // @patient
+    areaIs: "Nura tahu bandar anda ialah {area}.",
+    // @patient
+    areaAsk: "Adakah anda tinggal di {area}?",
+    // @patient phrase
+    areaYes: "Ya, saya tinggal di situ",
+    // @patient phrase
+    areaNo: "Tidak",
+    // @patient phrase
+    areaChange: "Pilih bandar anda",
+    // @patient phrase
+    areaClear: "Jangan simpan bandar saya",
+    // @patient
+    areaWho: "Orang yang menjaga surat-surat anda boleh nampak bandar anda.",
+    // @patient headline
+    ramadanTitle: "Bulan puasa",
+    // @patient
+    ramadanLead: "Jika anda berpuasa pada bulan puasa, Nura boleh bantu anda merancang.",
+    // @patient
+    ramadanWho: "Orang yang menjaga surat-surat anda juga akan nampak ini.",
+    // @patient phrase
+    ramadanYes: "Ya, beritahu saya sebelum bulan puasa",
+    // @patient
+    ramadanOn: "Nura akan beritahu anda sebelum bulan puasa.",
+    // @patient phrase
+    ramadanStop: "Berhenti beritahu saya",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1769,8 +1827,78 @@ export const ms = {
     // @patient phrase
     tryAgain: "Cuba lagi",
   },
+  chief: {
+    // @patient headline
+    sentTitle: "Dihantar kepada {name} minggu ini",
+    // @patient
+    sentNone: "Nura tidak hantar apa-apa kepada {name} minggu ini.",
+    // @patient headline
+    watchingTitle: "Nura perhatikan untuk {name}",
+    // @patient
+    watchingNone: "Nura belum perhatikan apa-apa lagi.",
+    // @patient
+    sourcesNote: "Nura hanya membaca pihak berkuasa kesihatan, hospital dan persatuan doktor.",
+    // @patient phrase
+    onChange: "Bila ada yang baru",
+    // @patient phrase
+    daily: "Setiap hari",
+    // @patient phrase
+    weekly: "Setiap minggu",
+    // @patient phrase
+    beforeVisits: "Sebelum setiap lawatan",
+    // @patient phrase
+    once: "Sekali",
+    // @patient phrase
+    paused: "Dihentikan dulu",
+    // @patient phrase
+    pause: "Berhenti dulu",
+    // @patient phrase
+    resume: "Mula semula",
+    // @patient phrase
+    pauseWatch: "Berhenti memerhatikan ini buat masa ini",
+    // @patient phrase
+    add: "Perhatikan sesuatu yang baru",
+    // @patient
+    addLead: "Pilih apa yang Nura patut perhatikan.",
+    // @patient
+    added: "Nura akan perhatikan ini mulai sekarang.",
+    // @patient phrase
+    dengue: "Denggi",
+    // @patient phrase
+    haze: "Jerebu",
+    // @patient phrase
+    heat: "Cuaca panas",
+    // @patient phrase
+    festiveFood: "Makanan perayaan",
+  },
   // @patient
   refusals: {
+    // @patient
+    FastingIsHisToSay: "Hanya pemilik boleh jawab ini.",
+    // @patient
+    NotAClipCard: "Kad ini tiada apa-apa untuk dimainkan.",
+    // @patient
+    NoExcerpt: "Nura bacakan gambar ini untuk anda.",
+    // @patient
+    NoClipRenderer: "Nura tidak dapat tunjuk gambar ini sekarang.",
+    // @patient
+    SecondsOnlyOnAPlay: "Nura tidak dapat tulis ini.",
+    // @patient
+    NotACadence: "Sila pilih berapa kerap daripada senarai.",
+    // @patient
+    NotAHazard: "Nura boleh perhatikan denggi, jerebu atau cuaca panas.",
+    // @patient
+    NotASeason: "Nura boleh perhatikan bulan puasa atau makanan perayaan.",
+    // @patient
+    NotACoarseArea: ["Sila pilih bandar anda dari senarai.", "Atau taip hanya awal poskod anda."],
+    // @patient
+    OnlyHeSetsHisArea: "Hanya pemilik boleh pilih bandar.",
+    // @patient
+    NotAFilter: "Sila pilih di mana hendak cari.",
+    // @patient
+    NothingToFind: "Sila taip perkataan yang anda mahu cari.",
+    // @patient
+    NotTheirsToManage: ["Hanya pemilik boleh buat ini.", "Orang yang menjaga surat-surat ini juga boleh."],
     default: "Nura tidak dapat buat itu sekarang.",
     NotInTheDemo: ["Demo ini hanya menerima nombor telefon ujian.", "Nombor ujian bermula dengan +65 0."],
     CardsStillOpen: "Satu surat masih menunggu persetujuan anda.",

@@ -19,12 +19,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.delivery.feed.models import (
+    SUPPLY_OF,
     CardType,
     DeliverTo,
     FeedItem,
     ReviewStatus,
     Source,
     SourceKind,
+    Supply,
 )
 from app.delivery.feed.sources import usable
 from app.delivery.strings import LINES
@@ -32,6 +34,7 @@ from app.language import review
 from app.language.models import ReviewItem, ReviewKind, Verdict
 from app.language.review import (
     FIRST,
+    KEPT_AS_WRITTEN,
     NOT_THE_CATALOGUES,
     REVIEWED_TYPES,
     AlreadyReviewed,
@@ -279,6 +282,34 @@ async def test_the_same_rendering_is_queued_once_and_a_caregivers_card_not_at_al
     assert await sample_card(sg, _reading_card(1)) is not None
     assert await sample_card(sg, _reading_card(1)) is None
     assert await sample_card(sg, _reading_card(2, DeliverTo.CAREGIVER)) is None
+
+
+def test_every_card_type_he_is_shown_is_reviewed() -> None:
+    """The queue's list is not self-certifying: it is checked against the supply itself.
+
+    A card type the patient reads goes in front of the pharmacist's first fifty. Two types do
+    not: the doctor questions held for the memo (`Supply.HELD`), which never reach him, and
+    the caregiver's duty card, which is hers. Every other type in `SUPPLY_OF` is his, so a
+    type added later without a line in `REVIEWED_TYPES` fails here rather than quietly
+    skipping the only human read of its words (F1: clip, recap, local, seasonal, food).
+    """
+    his = {
+        card_type
+        for card_type, supply in SUPPLY_OF.items()
+        if supply is not Supply.HELD and card_type is not CardType.DUTY
+    }
+    assert his - set(REVIEWED_TYPES) == set(), "a card type he is shown that no pharmacist reads"
+    assert set(REVIEWED_TYPES) - his == set(), "a reviewed type the patient is never shown"
+
+
+def test_the_pages_he_is_shown_keep_their_compressed_words() -> None:
+    """A card whose lines come from an outside page is kept as written, so the pharmacist
+    reads the words themselves; a card made of his own record is not kept at all."""
+    assert KEPT_AS_WRITTEN <= set(REVIEWED_TYPES)
+    for card_type in (CardType.CLIP, CardType.LOCAL, CardType.SEASONAL, CardType.FOOD):
+        assert card_type in KEPT_AS_WRITTEN, f"{card_type} is compressed from a page"
+    for card_type in (CardType.MEMO, CardType.READING, CardType.RECAP):
+        assert card_type not in KEPT_AS_WRITTEN, f"{card_type} is his record's own words"
 
 
 async def test_a_type_shows_a_flag_until_its_first_fifty_are_decided(sg: AsyncSession) -> None:

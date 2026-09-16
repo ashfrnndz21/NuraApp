@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.whatsapp.provider import WhatsAppProvider
 from app.db import unit_of_work
+from app.delivery.feed.clips import ClipRenderer
 from app.delivery.feed.compress import Compressor, Searcher
 from app.delivery.push import NoDevices, PushSender
 from app.delivery.voice import FixtureVoice, Voice
@@ -82,6 +83,11 @@ class Providers:
     """Who spoke when in a consult recording, in this deployment's region (E02-05): the
     fixture one on a laptop; None where no separator is configured, and then a recording is
     kept as one stretch by an unknown speaker (`app.ingestion.speakers.Unseparated`)."""
+    clips: ClipRenderer | None = None
+    """What makes a clip's still and, where the licence allows, its excerpt (E09-06,
+    `app.delivery.feed.clips`): the fixture on a laptop and the demo, which serves one still
+    and never an excerpt; None where none is configured, and a clip is its narration and
+    captions alone."""
     retriever: Retriever = field(default_factory=KeywordRetriever)
     """Which things on the record a question is about, for Ask (E03-05): keywords until a
     model-backed retriever exists behind the same port; the tests pass a fixture one."""

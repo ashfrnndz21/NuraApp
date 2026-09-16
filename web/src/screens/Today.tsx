@@ -34,6 +34,7 @@ import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
 import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, PanelList, PaperTile, PillButton, SectionLabel, Sparkline, toneOf } from "../ui/kit";
 import { AskField, Shell } from "./Shell";
+import { ChiefPanels } from "./ChiefPanels";
 
 /** Today (D1, docs/ui-mockup.html and docs/ui-mockup-v2.html): his Today in the patient's
  *  density, the chief's Home in the caregiver's. Both read the same page (`useToday`); every
@@ -100,6 +101,9 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
+            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
+              {s.feed.askOrSearch}
+            </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             {nextVisit && !fromPhone && <VisitTile visit={nextVisit} />}
             {!fromPhone && <FamilyNote />}
@@ -121,6 +125,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
 function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
   const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt } = v;
+  const bearer = token.value;
   const drivers = page?.drivers ?? [];
   const hero = page ? homeHero(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s) : null;
   const locale = LOCALE[language.value];
@@ -179,7 +184,9 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             )}
             {nextVisit && !fromPhone && <GapsTile visit={nextVisit} />}
             <AskAboutPill />
-            {/* F1: "Watching for {name}" and "Sent to {name} this week" (PanelList) go here. */}
+            {/* The chief's Home (F1, #177): what was sent to him this week, and what Nura is
+                watching for him. Her key's and his steward's; nobody else's. */}
+            {!fromPhone && bearer && v.papers && (v.papers.role === "chief" || v.papers.standing === "steward") && <ChiefPanels bearer={bearer} papers={v.papers} />}
             {/* His doses, only for a key that may tap Taken for him (one that opens the medicines). */}
             {v.papers?.scopes.includes("medicines") && <DoseSection v={v} />}
             <SectionLabel>{s.today.forYou}</SectionLabel>
@@ -190,6 +197,9 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             )}
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
+            </PillButton>
+            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
+              {s.feed.askOrSearch}
             </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
           </>
