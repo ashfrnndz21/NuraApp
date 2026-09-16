@@ -155,6 +155,16 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo }: LineCardProps): J
         </div>
       )}
       <p data-testid="confidence">{sure}</p>
+      {/* The register's own match, not his yes (#206): only said when Nura had to match by
+          name alone, without a strength to check it against — the ordinary case, an exact
+          strength match too, says nothing extra here. */}
+      {(line.registry_confidence ?? 1) < 1 && (
+        <div class="lines" data-testid="registry-confidence">
+          {s.record.matchByNameOnly.map((text, index) => (
+            <p key={index}>{text}</p>
+          ))}
+        </div>
+      )}
       {twice && <p data-testid="duplicate">{s.record.twice}</p>}
       <p class="provenance" data-testid="source">
         {line.source}

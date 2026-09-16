@@ -118,6 +118,10 @@ export interface LineOut {
   high_risk: boolean;
   /** A prescription medicine, a supplement or a TCM remedy (E04-03). */
   product_kind?: ProductKind;
+  /** How sure the licensed registry was that its match is this product (#206) — never
+   *  below the floor a line had to clear to be written at all. Distinct from `confidence`
+   *  below, which is the person's yes, not the register's own certainty. */
+  registry_confidence?: number | null;
   dose: { amount: number; unit: string; frequency: string; anchors: string[] };
   prescriber: string | null;
   status: string;
@@ -1057,6 +1061,7 @@ export interface MedicineDraftOut {
     product_name: string;
     licence_status: string;
     active_ingredients: string[];
+    confidence: number;
   };
   matched_line_id: string | null;
   flagged: FlaggedOut[];

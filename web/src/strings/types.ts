@@ -514,6 +514,7 @@ export interface Strings {
     sureYes: string;
     sureRead: string;
     disputed: string;
+    matchByNameOnly: string[];
     twice: string;
     aboutIt: string;
     add: string;

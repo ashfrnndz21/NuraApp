@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 
 import pytest
 
@@ -103,11 +104,15 @@ def assert_registry_conforms(
     assert registry.identify(LabelFields()) == []  # nothing named identifies nothing
 
     # identify(): a registration number is case-insensitive and, when it is on the register,
-    # decides alone — the strongest key (module doc, `DrugRegistry.identify`).
+    # decides alone — the strongest key (module doc, `DrugRegistry.identify`). It answers at
+    # full confidence (#206): a bare generic name is not, so the two lookups are compared on
+    # product identity, not on the whole `DrugMatch` — `confidence` is legitimately allowed to
+    # differ by how the match was made, not a property of which product it is.
     for generic in sample_generics[:3]:
         (one, *_rest) = registry.identify(LabelFields(generic=generic))
         by_number = registry.identify(LabelFields(registration_no=one.registration_no.lower()))
-        assert one in by_number
+        assert replace(one, confidence=1.0) in by_number
+        assert all(match.confidence == 1.0 for match in by_number)
 
     # interactions(): a single generic, or none, flags nothing — there is no pair to flag
     # with only one drug named (or zero).
