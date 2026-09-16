@@ -49,6 +49,7 @@ from app.delivery.feed.models import (
     Source,
     SourceKind,
 )
+from app.drugs.registry import Interaction
 from app.errors import Refusal
 from app.family.common import NotPlainWords
 from app.language.memory import SLOT_CLASSES, Memory, runtime_memory
@@ -468,6 +469,44 @@ async def propose_source(
     return row
 
 
+def _interaction_lines(interaction: Interaction) -> dict[str, Any]:
+    a, b = sorted(interaction.pair)
+    return {
+        "pair": [a, b],
+        "severity": interaction.severity.value,
+        "text_id": interaction.text_id,
+        "source": interaction.source,
+    }
+
+
+async def queue_pending_interaction(
+    session: AsyncSession, interaction: Interaction
+) -> ReviewItem | None:
+    """Queue this interaction pair for a pharmacist's review if it is not already queued
+    (E04-03). Called the first time the pair is actually flagged for a person — not for every
+    pair the registry could ever answer, only the ones that mattered to someone — and it
+    carries no profile: two drug names, the severity the registry gave it, and the source a
+    pharmacist would check it against. The pair is still shown to the patient the moment it is
+    flagged (`app.medicines.story.interaction_question`); queuing it is separate from, and
+    does not gate, that."""
+    lines = _interaction_lines(interaction)
+    digest = _digest("interaction", lines["pair"], lines["text_id"])
+    if await session.scalar(select(ReviewItem.id).where(ReviewItem.digest == digest)):
+        return None
+    row = ReviewItem(
+        kind=ReviewKind.INTERACTION,
+        lines=lines,
+        catalogue_ids=[],
+        digest=digest,
+        verdict=Verdict.PENDING,
+        created_at=utcnow(),
+    )
+    session.add(row)
+    await session.flush()
+    log.info("review: interaction queued item=%s pair=%s", row.id, lines["pair"])
+    return row
+
+
 async def queue(
     session: AsyncSession,
     *,
@@ -568,6 +607,8 @@ async def decide(
     if verdict is Verdict.REWRITTEN:
         if item.kind is ReviewKind.SOURCE:
             raise NotARewrite("a source is approved or rejected, not rewritten")
+        if item.kind is ReviewKind.INTERACTION:
+            raise NotARewrite("an interaction pair is approved or rejected, not rewritten")
         item.proposed = _proposal(item, rewrite or {})
     if item.kind is ReviewKind.SOURCE and item.source_id is not None:
         source = await session.get(Source, item.source_id)

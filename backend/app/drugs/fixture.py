@@ -1,9 +1,13 @@
 """The fixture registry: the port, answered from a JSON file.
 
-The file is `tests/fixtures/drugs/registry.json`, a dozen medicines common in Malaysia and
-Singapore with NPRA- and HSA-shaped registration numbers, a few interaction pairs, and a
-monograph of rule ids per generic. It stands in for a licensed database in the tests and on a
-dev run, and nowhere else: a deployment names its registry in its settings.
+The file is `tests/fixtures/drugs/registry.json`: at least 200 products common on a Malaysian
+or Singaporean community pharmacy shelf and chronic-disease list, with NPRA- and HSA-shaped
+registration numbers — prescription medicines across cardiovascular, diabetes, lipid,
+analgesic, gastro and respiratory care, plus the supplements and TCM remedies patients
+actually take beside them; interaction pairs among all three kinds; and a monograph of rule
+ids per generic. It stands in for a licensed database in the tests and on a dev run, and
+nowhere else: a deployment names its registry in its settings, and a licensed feed is a second
+adapter behind the same port (`tests/test_drug_registry_conformance.py` is what it must pass).
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ from app.drugs.registry import (
     Interaction,
     LabelFields,
     Monograph,
+    ProductKind,
+    ReviewState,
     Severity,
     UnknownDrug,
 )
@@ -53,6 +59,10 @@ class FixtureRegistry:
                 form=p["form"],
                 drug_class=p["drug_class"],
                 high_risk=is_high_risk(p["drug_class"]),
+                product_kind=ProductKind(p.get("product_kind", ProductKind.PRESCRIPTION.value)),
+                product_name=p.get("product_name", ""),
+                licence_status=p.get("licence_status", "registered"),
+                active_ingredients=tuple(p.get("active_ingredients", ())),
             )
             for p in data["products"]
         ]
@@ -61,6 +71,8 @@ class FixtureRegistry:
                 pair=(i["pair"][0], i["pair"][1]),
                 severity=Severity(i["severity"]),
                 text_id=i["text_id"],
+                source=i.get("source", ""),
+                review_state=ReviewState(i.get("review_state", ReviewState.REVIEWED.value)),
             )
             for i in data.get("interactions", [])
         ]

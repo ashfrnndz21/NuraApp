@@ -32,7 +32,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
-from app.drugs.registry import Severity
+from app.drugs.registry import ProductKind, Severity
 from app.memory.models import LABEL_LENGTH, ConfidenceState
 
 
@@ -114,6 +114,12 @@ class MedicationLine(ProfileScoped, Base):
     registration_no: Mapped[str | None] = mapped_column(String(32), default=None)
     drug_class: Mapped[str] = mapped_column(String(48))
     high_risk: Mapped[bool] = mapped_column(Boolean)
+    product_kind: Mapped[ProductKind | None] = mapped_column(
+        enum_column(ProductKind, "medicine_product_kind"), default=None
+    )
+    """A prescription medicine, a supplement or a TCM remedy (E04-03) — from the registry's
+    own `DrugMatch.product_kind`. Nullable: a line written before this column existed carries
+    none, and is read as a prescription medicine, the only kind the register held then."""
     dose: Mapped[dict[str, Any]] = mapped_column(JSON)
     prescriber: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     source_kind: Mapped[SourceKind] = mapped_column(enum_column(SourceKind, "medicine_source_kind"))
@@ -199,6 +205,13 @@ class InteractionFlag(ProfileScoped, Base):
     other_line_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("medication_line.id"))
     severity: Mapped[Severity] = mapped_column(enum_column(Severity, "interaction_severity"))
     text_id: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(200), default="")
+    """What a pharmacist would check this pair against — the registry's `Interaction.source`,
+    kept on the row so it survives a registry reload (E00-06)."""
+    awaiting_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    """Whether a pharmacist had already checked this pair when it was flagged
+    (`Interaction.review_state`, E04-03). Never changes what was true at the moment; a later
+    pharmacist decision is on the review queue, not on this row."""
     flagged_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 

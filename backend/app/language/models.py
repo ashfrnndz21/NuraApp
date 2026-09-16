@@ -1,8 +1,10 @@
 """The pharmacist's review queue (E22-04): one table, and no profile in it.
 
 A `ReviewItem` is one thing waiting for, or holding, a pharmacist's decision: a new source
-for the learning cards (`kind` SOURCE, pointing at the `source` row it would allowlist), or
-one of the first fifty renderings of a kind of card (`kind` CARD). It is operator data, not
+for the learning cards (`kind` SOURCE, pointing at the `source` row it would allowlist), one
+of the first fifty renderings of a kind of card (`kind` CARD), or a drug-interaction pair the
+licensed registry flags but has not yet been checked by a pharmacist (`kind` INTERACTION,
+E04-03). It is operator data, not
 profile data — the same queue for every family on this deployment — so it is not
 `ProfileScoped`, it names no profile and no person, and no patient key reaches it
 (docs/adr/0007-the-pharmacist-review-queue.md).
@@ -39,6 +41,11 @@ class ReviewKind(StrEnum):
     """A publisher proposed for the allowlist; unused until approved."""
     CARD = "card"
     """One of the first fifty renderings of a kind of card, de-identified."""
+    INTERACTION = "interaction"
+    """A drug-interaction pair the licensed registry flags but has not yet been checked by a
+    pharmacist (`app.drugs.registry.ReviewState.AWAITING_REVIEW`), queued the first time it is
+    actually raised for a person (E04-03). It carries no profile: a pair of drug names and the
+    source it should be checked against, never a person's own pair of medicines."""
 
 
 class Verdict(StrEnum):

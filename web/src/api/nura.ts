@@ -524,9 +524,11 @@ export const story = (token: string, profileId: string, lineId: string, language
 export const storyVoice = (token: string, profileId: string, lineId: string, part: string, language: string) =>
   apiBlob(`/profiles/${profileId}/medicines/${lineId}/story/voice`, { token, query: { part, language } });
 
-/** What this label would do to the list, screened before anything is saved (E04-03). */
-export const medicineDraft = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
-  api<MedicineDraftOut>(`/profiles/${profileId}/medicines/draft`, { method: "POST", token, body: { label, source_artifact_id: sourceArtifactId } });
+/** What this label would do to the list, screened before anything is saved (E04-03),
+ *  including a supplement or a TCM remedy — screened the same way a prescription medicine
+ *  is. In `language`, or the profile's own. */
+export const medicineDraft = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string, language?: string) =>
+  api<MedicineDraftOut>(`/profiles/${profileId}/medicines/draft`, { method: "POST", token, query: { language }, body: { label, source_artifact_id: sourceArtifactId } });
 
 export const mintMedicine = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
   api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {

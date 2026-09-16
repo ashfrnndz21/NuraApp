@@ -1,5 +1,5 @@
 {
-  "_about": "The fixture drug registry: a dozen medicines common in Malaysia and Singapore, shaped like the NPRA and HSA registers with a licensed monograph beside each. Registration numbers are shaped like real ones and are not real ones. This file is the only source of pharmacology in the tests and on a dev run; nothing in app/ writes drug facts from anywhere else. Monographs carry rule ids, not prose: the sentences live in app/medicines/strings.py.",
+  "_about": "The fixture drug registry: a dozen medicines common in Malaysia and Singapore, shaped like the NPRA and HSA registers with a licensed monograph beside each. Registration numbers are shaped like real ones and are not real ones. This file is the only source of pharmacology in the tests and on a dev run; nothing in app/ writes drug facts from anywhere else. Monographs carry rule ids, not prose: the sentences live in app/medicines/strings.py. Grown to a real sample of at least 200 MY/SG products (E00-06): the original dozen stay exactly as they were; every product after them is new, across the common community-pharmacy and chronic-disease list — cardiovascular, diabetes, lipids, analgesia, gastro, respiratory — plus the supplements and TCM remedies patients take beside them (E04-03), all screened for interactions the same way a prescription medicine is; `product_kind` says which is which. An interaction's `source` is what a pharmacist would check it against; `review_state` is `awaiting_review` for a pair not yet checked by one — still flagged, never silent, queued for the pharmacist review queue (`app.language.review`) the first time it is actually raised for a person.",
   "products": [
     {
       "registration_no": "MAL19970001A",
@@ -7,7 +7,13 @@
       "generic": "amlodipine",
       "strength": "5 mg",
       "form": "tablet",
-      "drug_class": "calcium_channel_blocker"
+      "drug_class": "calcium_channel_blocker",
+      "product_kind": "prescription",
+      "product_name": "Norvasc 5 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "amlodipine"
+      ]
     },
     {
       "registration_no": "MAL19970002A",
@@ -15,7 +21,13 @@
       "generic": "amlodipine",
       "strength": "10 mg",
       "form": "tablet",
-      "drug_class": "calcium_channel_blocker"
+      "drug_class": "calcium_channel_blocker",
+      "product_kind": "prescription",
+      "product_name": "Norvasc 10 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "amlodipine"
+      ]
     },
     {
       "registration_no": "MAL20050031A",
@@ -23,7 +35,13 @@
       "generic": "amlodipine",
       "strength": "5 mg",
       "form": "tablet",
-      "drug_class": "calcium_channel_blocker"
+      "drug_class": "calcium_channel_blocker",
+      "product_kind": "prescription",
+      "product_name": "Amlong 5 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "amlodipine"
+      ]
     },
     {
       "registration_no": "SIN04412P",
@@ -31,7 +49,13 @@
       "generic": "metformin",
       "strength": "500 mg",
       "form": "tablet",
-      "drug_class": "biguanide"
+      "drug_class": "biguanide",
+      "product_kind": "prescription",
+      "product_name": "Glucophage 500 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "metformin"
+      ]
     },
     {
       "registration_no": "MAL20011207A",
@@ -39,7 +63,13 @@
       "generic": "atorvastatin",
       "strength": "20 mg",
       "form": "tablet",
-      "drug_class": "statin"
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "product_name": "Lipitor 20 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "atorvastatin"
+      ]
     },
     {
       "registration_no": "SIN02231P",
@@ -47,7 +77,13 @@
       "generic": "warfarin",
       "strength": "3 mg",
       "form": "tablet",
-      "drug_class": "anticoagulant"
+      "drug_class": "anticoagulant",
+      "product_kind": "prescription",
+      "product_name": "Marevan 3 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "warfarin"
+      ]
     },
     {
       "registration_no": "SIN02232P",
@@ -55,7 +91,13 @@
       "generic": "warfarin",
       "strength": "1 mg",
       "form": "tablet",
-      "drug_class": "anticoagulant"
+      "drug_class": "anticoagulant",
+      "product_kind": "prescription",
+      "product_name": "Marevan 1 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "warfarin"
+      ]
     },
     {
       "registration_no": "SIN14471P",
@@ -63,7 +105,13 @@
       "generic": "apixaban",
       "strength": "5 mg",
       "form": "tablet",
-      "drug_class": "anticoagulant"
+      "drug_class": "anticoagulant",
+      "product_kind": "prescription",
+      "product_name": "Eliquis 5 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "apixaban"
+      ]
     },
     {
       "registration_no": "SIN12208P",
@@ -71,7 +119,13 @@
       "generic": "insulin glargine",
       "strength": "100 units/ml",
       "form": "pen",
-      "drug_class": "insulin"
+      "drug_class": "insulin",
+      "product_kind": "prescription",
+      "product_name": "Lantus SoloStar 100 units/ml Pen",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "insulin glargine"
+      ]
     },
     {
       "registration_no": "MAL19881011A",
@@ -79,7 +133,13 @@
       "generic": "aspirin",
       "strength": "100 mg",
       "form": "tablet",
-      "drug_class": "antiplatelet"
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "product_name": "Cardiprin 100 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "aspirin"
+      ]
     },
     {
       "registration_no": "MAL19960119A",
@@ -87,7 +147,13 @@
       "generic": "losartan",
       "strength": "50 mg",
       "form": "tablet",
-      "drug_class": "angiotensin_receptor_blocker"
+      "drug_class": "angiotensin_receptor_blocker",
+      "product_kind": "prescription",
+      "product_name": "Cozaar 50 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "losartan"
+      ]
     },
     {
       "registration_no": "MAL19850044A",
@@ -95,7 +161,13 @@
       "generic": "frusemide",
       "strength": "40 mg",
       "form": "tablet",
-      "drug_class": "loop_diuretic"
+      "drug_class": "loop_diuretic",
+      "product_kind": "prescription",
+      "product_name": "Lasix 40 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "frusemide"
+      ]
     },
     {
       "registration_no": "SIN06171P",
@@ -103,7 +175,13 @@
       "generic": "omeprazole",
       "strength": "20 mg",
       "form": "capsule",
-      "drug_class": "proton_pump_inhibitor"
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "product_name": "Losec 20 mg Capsule",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "omeprazole"
+      ]
     },
     {
       "registration_no": "MAL20020911A",
@@ -111,7 +189,13 @@
       "generic": "gliclazide",
       "strength": "30 mg",
       "form": "tablet",
-      "drug_class": "sulfonylurea"
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "product_name": "Diamicron MR 30 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "gliclazide"
+      ]
     },
     {
       "registration_no": "SIN09931P",
@@ -119,7 +203,13 @@
       "generic": "methotrexate",
       "strength": "2.5 mg",
       "form": "tablet",
-      "drug_class": "antimetabolite"
+      "drug_class": "antimetabolite",
+      "product_kind": "prescription",
+      "product_name": "Trexan 2.5 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "methotrexate"
+      ]
     },
     {
       "registration_no": "MAL19910602X",
@@ -127,7 +217,13 @@
       "generic": "paracetamol",
       "strength": "500 mg",
       "form": "tablet",
-      "drug_class": "analgesic"
+      "drug_class": "analgesic",
+      "product_kind": "prescription",
+      "product_name": "Panadol 500 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "paracetamol"
+      ]
     },
     {
       "registration_no": "MAL19920217A",
@@ -135,7 +231,2323 @@
       "generic": "simvastatin",
       "strength": "20 mg",
       "form": "tablet",
-      "drug_class": "statin"
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "product_name": "Zocor 20 mg Tablet",
+      "licence_status": "registered",
+      "active_ingredients": [
+        "simvastatin"
+      ]
+    },
+    {
+      "registration_no": "MAL20021977A",
+      "brand": "Coversyl",
+      "product_name": "Coversyl 4 mg Tablet",
+      "generic": "perindopril",
+      "strength": "4 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20091984A",
+      "brand": "Coversyl",
+      "product_name": "Coversyl 8 mg Tablet",
+      "generic": "perindopril",
+      "strength": "8 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01013P",
+      "brand": "Coversyl Plus",
+      "product_name": "Coversyl Plus 4 mg Tablet",
+      "generic": "perindopril",
+      "strength": "4 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20161991A",
+      "brand": "Perindo",
+      "product_name": "Perindo 4 mg Tablet",
+      "generic": "perindopril",
+      "strength": "4 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19881998A",
+      "brand": "Duopharma Perindopril",
+      "product_name": "Duopharma Perindopril 4 mg Tablet",
+      "generic": "perindopril",
+      "strength": "4 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01026P",
+      "brand": "Hovid Perindopril",
+      "product_name": "Hovid Perindopril 4 mg Tablet",
+      "generic": "perindopril",
+      "strength": "4 mg",
+      "form": "tablet",
+      "drug_class": "ace_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952005A",
+      "brand": "Concor",
+      "product_name": "Concor 2.5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "2.5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022012A",
+      "brand": "Concor",
+      "product_name": "Concor 5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01039P",
+      "brand": "Concor",
+      "product_name": "Concor 5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092019A",
+      "brand": "Duopharma Bisoprolol",
+      "product_name": "Duopharma Bisoprolol 2.5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "2.5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01052P",
+      "brand": "Hovid Bisoprolol",
+      "product_name": "Hovid Bisoprolol 2.5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "2.5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162026A",
+      "brand": "Y.S.P. Bisoprolol",
+      "product_name": "Y.S.P. Bisoprolol 2.5 mg Tablet",
+      "generic": "bisoprolol",
+      "strength": "2.5 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882033A",
+      "brand": "Tenormin",
+      "product_name": "Tenormin 50 mg Tablet",
+      "generic": "atenolol",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952040A",
+      "brand": "Tenormin",
+      "product_name": "Tenormin 100 mg Tablet",
+      "generic": "atenolol",
+      "strength": "100 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022047A",
+      "brand": "Duopharma Atenolol",
+      "product_name": "Duopharma Atenolol 50 mg Tablet",
+      "generic": "atenolol",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01065P",
+      "brand": "Hovid Atenolol",
+      "product_name": "Hovid Atenolol 50 mg Tablet",
+      "generic": "atenolol",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092054A",
+      "brand": "Y.S.P. Atenolol",
+      "product_name": "Y.S.P. Atenolol 50 mg Tablet",
+      "generic": "atenolol",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01078P",
+      "brand": "Kotra Atenolol",
+      "product_name": "Kotra Atenolol 50 mg Tablet",
+      "generic": "atenolol",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "beta_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162061A",
+      "brand": "Hydrosaluric",
+      "product_name": "Hydrosaluric 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01091P",
+      "brand": "HCTZ",
+      "product_name": "HCTZ 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882068A",
+      "brand": "Duopharma Hydrochlorothiazide",
+      "product_name": "Duopharma Hydrochlorothiazide 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01104P",
+      "brand": "Hovid Hydrochlorothiazide",
+      "product_name": "Hovid Hydrochlorothiazide 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952075A",
+      "brand": "Y.S.P. Hydrochlorothiazide",
+      "product_name": "Y.S.P. Hydrochlorothiazide 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01117P",
+      "brand": "Kotra Hydrochlorothiazide",
+      "product_name": "Kotra Hydrochlorothiazide 25 mg Tablet",
+      "generic": "hydrochlorothiazide",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "thiazide_diuretic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022082A",
+      "brand": "Aldactone",
+      "product_name": "Aldactone 25 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092089A",
+      "brand": "Aldactone",
+      "product_name": "Aldactone 100 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "100 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01130P",
+      "brand": "Spirotone",
+      "product_name": "Spirotone 25 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162096A",
+      "brand": "Duopharma Spironolactone",
+      "product_name": "Duopharma Spironolactone 25 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01143P",
+      "brand": "Hovid Spironolactone",
+      "product_name": "Hovid Spironolactone 25 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882103A",
+      "brand": "Y.S.P. Spironolactone",
+      "product_name": "Y.S.P. Spironolactone 25 mg Tablet",
+      "generic": "spironolactone",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "aldosterone_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952110A",
+      "brand": "Plavix",
+      "product_name": "Plavix 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01156P",
+      "brand": "Plavix",
+      "product_name": "Plavix 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022117A",
+      "brand": "Clopilet",
+      "product_name": "Clopilet 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092124A",
+      "brand": "Duopharma Clopidogrel",
+      "product_name": "Duopharma Clopidogrel 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01169P",
+      "brand": "Hovid Clopidogrel",
+      "product_name": "Hovid Clopidogrel 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162131A",
+      "brand": "Y.S.P. Clopidogrel",
+      "product_name": "Y.S.P. Clopidogrel 75 mg Tablet",
+      "generic": "clopidogrel",
+      "strength": "75 mg",
+      "form": "tablet",
+      "drug_class": "antiplatelet",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882138A",
+      "brand": "Amaryl",
+      "product_name": "Amaryl 1 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952145A",
+      "brand": "Amaryl",
+      "product_name": "Amaryl 2 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "2 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022152A",
+      "brand": "Duopharma Glimepiride",
+      "product_name": "Duopharma Glimepiride 1 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01182P",
+      "brand": "Hovid Glimepiride",
+      "product_name": "Hovid Glimepiride 1 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092159A",
+      "brand": "Y.S.P. Glimepiride",
+      "product_name": "Y.S.P. Glimepiride 1 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01195P",
+      "brand": "Kotra Glimepiride",
+      "product_name": "Kotra Glimepiride 1 mg Tablet",
+      "generic": "glimepiride",
+      "strength": "1 mg",
+      "form": "tablet",
+      "drug_class": "sulfonylurea",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01208P",
+      "brand": "Januvia",
+      "product_name": "Januvia 50 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01221P",
+      "brand": "Januvia",
+      "product_name": "Januvia 100 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "100 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162166A",
+      "brand": "Duopharma Sitagliptin",
+      "product_name": "Duopharma Sitagliptin 50 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01234P",
+      "brand": "Hovid Sitagliptin",
+      "product_name": "Hovid Sitagliptin 50 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882173A",
+      "brand": "Y.S.P. Sitagliptin",
+      "product_name": "Y.S.P. Sitagliptin 50 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01247P",
+      "brand": "Kotra Sitagliptin",
+      "product_name": "Kotra Sitagliptin 50 mg Tablet",
+      "generic": "sitagliptin",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "dpp4_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01260P",
+      "brand": "Jardiance",
+      "product_name": "Jardiance 10 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01273P",
+      "brand": "Jardiance",
+      "product_name": "Jardiance 25 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "25 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952180A",
+      "brand": "Duopharma Empagliflozin",
+      "product_name": "Duopharma Empagliflozin 10 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01286P",
+      "brand": "Hovid Empagliflozin",
+      "product_name": "Hovid Empagliflozin 10 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022187A",
+      "brand": "Y.S.P. Empagliflozin",
+      "product_name": "Y.S.P. Empagliflozin 10 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01299P",
+      "brand": "Kotra Empagliflozin",
+      "product_name": "Kotra Empagliflozin 10 mg Tablet",
+      "generic": "empagliflozin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "sglt2_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01312P",
+      "brand": "Crestor",
+      "product_name": "Crestor 10 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01325P",
+      "brand": "Crestor",
+      "product_name": "Crestor 20 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092194A",
+      "brand": "Duopharma Rosuvastatin",
+      "product_name": "Duopharma Rosuvastatin 10 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01338P",
+      "brand": "Hovid Rosuvastatin",
+      "product_name": "Hovid Rosuvastatin 10 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162201A",
+      "brand": "Y.S.P. Rosuvastatin",
+      "product_name": "Y.S.P. Rosuvastatin 10 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01351P",
+      "brand": "Kotra Rosuvastatin",
+      "product_name": "Kotra Rosuvastatin 10 mg Tablet",
+      "generic": "rosuvastatin",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "statin",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882208A",
+      "brand": "Brufen",
+      "product_name": "Brufen 200 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952215A",
+      "brand": "Brufen",
+      "product_name": "Brufen 400 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "400 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01364P",
+      "brand": "Advil",
+      "product_name": "Advil 200 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022222A",
+      "brand": "Duopharma Ibuprofen",
+      "product_name": "Duopharma Ibuprofen 200 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01377P",
+      "brand": "Hovid Ibuprofen",
+      "product_name": "Hovid Ibuprofen 200 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092229A",
+      "brand": "Y.S.P. Ibuprofen",
+      "product_name": "Y.S.P. Ibuprofen 200 mg Tablet",
+      "generic": "ibuprofen",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162236A",
+      "brand": "Voltaren",
+      "product_name": "Voltaren 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882243A",
+      "brand": "Duopharma Diclofenac",
+      "product_name": "Duopharma Diclofenac 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01390P",
+      "brand": "Hovid Diclofenac",
+      "product_name": "Hovid Diclofenac 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952250A",
+      "brand": "Y.S.P. Diclofenac",
+      "product_name": "Y.S.P. Diclofenac 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01403P",
+      "brand": "Kotra Diclofenac",
+      "product_name": "Kotra Diclofenac 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022257A",
+      "brand": "Pharmaniaga Diclofenac",
+      "product_name": "Pharmaniaga Diclofenac 50 mg Tablet",
+      "generic": "diclofenac",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01416P",
+      "brand": "Naprosyn",
+      "product_name": "Naprosyn 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092264A",
+      "brand": "Duopharma Naproxen",
+      "product_name": "Duopharma Naproxen 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01429P",
+      "brand": "Hovid Naproxen",
+      "product_name": "Hovid Naproxen 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162271A",
+      "brand": "Y.S.P. Naproxen",
+      "product_name": "Y.S.P. Naproxen 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01442P",
+      "brand": "Kotra Naproxen",
+      "product_name": "Kotra Naproxen 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882278A",
+      "brand": "Pharmaniaga Naproxen",
+      "product_name": "Pharmaniaga Naproxen 250 mg Tablet",
+      "generic": "naproxen",
+      "strength": "250 mg",
+      "form": "tablet",
+      "drug_class": "nsaid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952285A",
+      "brand": "Tramal",
+      "product_name": "Tramal 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022292A",
+      "brand": "Duopharma Tramadol",
+      "product_name": "Duopharma Tramadol 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01455P",
+      "brand": "Hovid Tramadol",
+      "product_name": "Hovid Tramadol 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092299A",
+      "brand": "Y.S.P. Tramadol",
+      "product_name": "Y.S.P. Tramadol 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01468P",
+      "brand": "Kotra Tramadol",
+      "product_name": "Kotra Tramadol 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162306A",
+      "brand": "Pharmaniaga Tramadol",
+      "product_name": "Pharmaniaga Tramadol 50 mg Capsule",
+      "generic": "tramadol",
+      "strength": "50 mg",
+      "form": "capsule",
+      "drug_class": "opioid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882313A",
+      "brand": "Pantoloc",
+      "product_name": "Pantoloc 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952320A",
+      "brand": "Duopharma Pantoprazole",
+      "product_name": "Duopharma Pantoprazole 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01481P",
+      "brand": "Hovid Pantoprazole",
+      "product_name": "Hovid Pantoprazole 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022327A",
+      "brand": "Y.S.P. Pantoprazole",
+      "product_name": "Y.S.P. Pantoprazole 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01494P",
+      "brand": "Kotra Pantoprazole",
+      "product_name": "Kotra Pantoprazole 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092334A",
+      "brand": "Pharmaniaga Pantoprazole",
+      "product_name": "Pharmaniaga Pantoprazole 40 mg Tablet",
+      "generic": "pantoprazole",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "proton_pump_inhibitor",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162341A",
+      "brand": "Famotel",
+      "product_name": "Famotel 20 mg Tablet",
+      "generic": "famotidine",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882348A",
+      "brand": "Famotel",
+      "product_name": "Famotel 40 mg Tablet",
+      "generic": "famotidine",
+      "strength": "40 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952355A",
+      "brand": "Duopharma Famotidine",
+      "product_name": "Duopharma Famotidine 20 mg Tablet",
+      "generic": "famotidine",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01507P",
+      "brand": "Hovid Famotidine",
+      "product_name": "Hovid Famotidine 20 mg Tablet",
+      "generic": "famotidine",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022362A",
+      "brand": "Y.S.P. Famotidine",
+      "product_name": "Y.S.P. Famotidine 20 mg Tablet",
+      "generic": "famotidine",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01520P",
+      "brand": "Kotra Famotidine",
+      "product_name": "Kotra Famotidine 20 mg Tablet",
+      "generic": "famotidine",
+      "strength": "20 mg",
+      "form": "tablet",
+      "drug_class": "h2_blocker",
+      "product_kind": "prescription",
+      "licence_status": "cancelled"
+    },
+    {
+      "registration_no": "MAL20092369A",
+      "brand": "Motilium",
+      "product_name": "Motilium 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162376A",
+      "brand": "Duopharma Domperidone",
+      "product_name": "Duopharma Domperidone 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01533P",
+      "brand": "Hovid Domperidone",
+      "product_name": "Hovid Domperidone 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882383A",
+      "brand": "Y.S.P. Domperidone",
+      "product_name": "Y.S.P. Domperidone 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01546P",
+      "brand": "Kotra Domperidone",
+      "product_name": "Kotra Domperidone 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952390A",
+      "brand": "Pharmaniaga Domperidone",
+      "product_name": "Pharmaniaga Domperidone 10 mg Tablet",
+      "generic": "domperidone",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "prokinetic",
+      "product_kind": "prescription",
+      "licence_status": "cancelled"
+    },
+    {
+      "registration_no": "MAL20022397A",
+      "brand": "Ventolin",
+      "product_name": "Ventolin 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01559P",
+      "brand": "Ventolin",
+      "product_name": "Ventolin 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092404A",
+      "brand": "Duopharma Salbutamol",
+      "product_name": "Duopharma Salbutamol 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01572P",
+      "brand": "Hovid Salbutamol",
+      "product_name": "Hovid Salbutamol 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162411A",
+      "brand": "Y.S.P. Salbutamol",
+      "product_name": "Y.S.P. Salbutamol 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01585P",
+      "brand": "Kotra Salbutamol",
+      "product_name": "Kotra Salbutamol 100 mcg/puff Inhaler",
+      "generic": "salbutamol",
+      "strength": "100 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "short_acting_bronchodilator",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882418A",
+      "brand": "Pulmicort",
+      "product_name": "Pulmicort 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952425A",
+      "brand": "Duopharma Budesonide",
+      "product_name": "Duopharma Budesonide 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01598P",
+      "brand": "Hovid Budesonide",
+      "product_name": "Hovid Budesonide 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022432A",
+      "brand": "Y.S.P. Budesonide",
+      "product_name": "Y.S.P. Budesonide 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01611P",
+      "brand": "Kotra Budesonide",
+      "product_name": "Kotra Budesonide 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092439A",
+      "brand": "Pharmaniaga Budesonide",
+      "product_name": "Pharmaniaga Budesonide 200 mcg/puff Inhaler",
+      "generic": "budesonide",
+      "strength": "200 mcg/puff",
+      "form": "inhaler",
+      "drug_class": "inhaled_corticosteroid",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01624P",
+      "brand": "Singulair",
+      "product_name": "Singulair 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162446A",
+      "brand": "Duopharma Montelukast",
+      "product_name": "Duopharma Montelukast 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01637P",
+      "brand": "Hovid Montelukast",
+      "product_name": "Hovid Montelukast 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882453A",
+      "brand": "Y.S.P. Montelukast",
+      "product_name": "Y.S.P. Montelukast 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01650P",
+      "brand": "Kotra Montelukast",
+      "product_name": "Kotra Montelukast 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952460A",
+      "brand": "Pharmaniaga Montelukast",
+      "product_name": "Pharmaniaga Montelukast 10 mg Tablet",
+      "generic": "montelukast",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "leukotriene_antagonist",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022467A",
+      "brand": "Zyrtec",
+      "product_name": "Zyrtec 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092474A",
+      "brand": "Duopharma Cetirizine",
+      "product_name": "Duopharma Cetirizine 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01663P",
+      "brand": "Hovid Cetirizine",
+      "product_name": "Hovid Cetirizine 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162481A",
+      "brand": "Y.S.P. Cetirizine",
+      "product_name": "Y.S.P. Cetirizine 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01676P",
+      "brand": "Kotra Cetirizine",
+      "product_name": "Kotra Cetirizine 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882488A",
+      "brand": "Pharmaniaga Cetirizine",
+      "product_name": "Pharmaniaga Cetirizine 10 mg Tablet",
+      "generic": "cetirizine",
+      "strength": "10 mg",
+      "form": "tablet",
+      "drug_class": "antihistamine",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952495A",
+      "brand": "Eltroxin",
+      "product_name": "Eltroxin 50 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "50 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022502A",
+      "brand": "Eltroxin",
+      "product_name": "Eltroxin 100 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01689P",
+      "brand": "Euthyrox",
+      "product_name": "Euthyrox 100 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092509A",
+      "brand": "Duopharma Levothyroxine",
+      "product_name": "Duopharma Levothyroxine 50 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "50 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01702P",
+      "brand": "Hovid Levothyroxine",
+      "product_name": "Hovid Levothyroxine 50 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "50 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162516A",
+      "brand": "Y.S.P. Levothyroxine",
+      "product_name": "Y.S.P. Levothyroxine 50 mcg Tablet",
+      "generic": "levothyroxine",
+      "strength": "50 mcg",
+      "form": "tablet",
+      "drug_class": "thyroid_hormone",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882523A",
+      "brand": "Cravit",
+      "product_name": "Cravit 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952530A",
+      "brand": "Duopharma Levofloxacin",
+      "product_name": "Duopharma Levofloxacin 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01715P",
+      "brand": "Hovid Levofloxacin",
+      "product_name": "Hovid Levofloxacin 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022537A",
+      "brand": "Y.S.P. Levofloxacin",
+      "product_name": "Y.S.P. Levofloxacin 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01728P",
+      "brand": "Kotra Levofloxacin",
+      "product_name": "Kotra Levofloxacin 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092544A",
+      "brand": "Pharmaniaga Levofloxacin",
+      "product_name": "Pharmaniaga Levofloxacin 500 mg Tablet",
+      "generic": "levofloxacin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "quinolone_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162551A",
+      "brand": "Hiconcil",
+      "product_name": "Hiconcil 500 mg Capsule",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01741P",
+      "brand": "Ospamox",
+      "product_name": "Ospamox 500 mg Tablet",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882558A",
+      "brand": "Duopharma Amoxicillin",
+      "product_name": "Duopharma Amoxicillin 500 mg Capsule",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01754P",
+      "brand": "Hovid Amoxicillin",
+      "product_name": "Hovid Amoxicillin 500 mg Capsule",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952565A",
+      "brand": "Y.S.P. Amoxicillin",
+      "product_name": "Y.S.P. Amoxicillin 500 mg Capsule",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01767P",
+      "brand": "Kotra Amoxicillin",
+      "product_name": "Kotra Amoxicillin 500 mg Capsule",
+      "generic": "amoxicillin",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "penicillin_antibiotic",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022572A",
+      "brand": "Ginkovital",
+      "product_name": "Ginkovital 60 mg Capsule",
+      "generic": "ginkgo biloba",
+      "strength": "60 mg",
+      "form": "capsule",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01780P",
+      "brand": "Ginkgold",
+      "product_name": "Ginkgold 120 mg Tablet",
+      "generic": "ginkgo biloba",
+      "strength": "120 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092579A",
+      "brand": "Duopharma Ginkgo Biloba",
+      "product_name": "Duopharma Ginkgo Biloba 60 mg Capsule",
+      "generic": "ginkgo biloba",
+      "strength": "60 mg",
+      "form": "capsule",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01793P",
+      "brand": "Hovid Ginkgo Biloba",
+      "product_name": "Hovid Ginkgo Biloba 60 mg Capsule",
+      "generic": "ginkgo biloba",
+      "strength": "60 mg",
+      "form": "capsule",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162586A",
+      "brand": "Y.S.P. Ginkgo Biloba",
+      "product_name": "Y.S.P. Ginkgo Biloba 60 mg Capsule",
+      "generic": "ginkgo biloba",
+      "strength": "60 mg",
+      "form": "capsule",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01806P",
+      "brand": "Kotra Ginkgo Biloba",
+      "product_name": "Kotra Ginkgo Biloba 60 mg Capsule",
+      "generic": "ginkgo biloba",
+      "strength": "60 mg",
+      "form": "capsule",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882593A",
+      "brand": "Jarsin",
+      "product_name": "Jarsin 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952600A",
+      "brand": "Duopharma St John'S Wort",
+      "product_name": "Duopharma St John'S Wort 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01819P",
+      "brand": "Hovid St John'S Wort",
+      "product_name": "Hovid St John'S Wort 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022607A",
+      "brand": "Y.S.P. St John'S Wort",
+      "product_name": "Y.S.P. St John'S Wort 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01832P",
+      "brand": "Kotra St John'S Wort",
+      "product_name": "Kotra St John'S Wort 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092614A",
+      "brand": "Pharmaniaga St John'S Wort",
+      "product_name": "Pharmaniaga St John'S Wort 300 mg Tablet",
+      "generic": "st john's wort",
+      "strength": "300 mg",
+      "form": "tablet",
+      "drug_class": "herbal_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162621A",
+      "brand": "Seven Seas",
+      "product_name": "Seven Seas 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01845P",
+      "brand": "Blackmores Omega Daily",
+      "product_name": "Blackmores Omega Daily 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882628A",
+      "brand": "Duopharma Fish Oil",
+      "product_name": "Duopharma Fish Oil 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01858P",
+      "brand": "Hovid Fish Oil",
+      "product_name": "Hovid Fish Oil 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952635A",
+      "brand": "Y.S.P. Fish Oil",
+      "product_name": "Y.S.P. Fish Oil 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01871P",
+      "brand": "Kotra Fish Oil",
+      "product_name": "Kotra Fish Oil 1000 mg Capsule",
+      "generic": "fish oil",
+      "strength": "1000 mg",
+      "form": "capsule",
+      "drug_class": "omega3_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022642A",
+      "brand": "Natural K",
+      "product_name": "Natural K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092649A",
+      "brand": "Duopharma Vitamin K",
+      "product_name": "Duopharma Vitamin K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01884P",
+      "brand": "Hovid Vitamin K",
+      "product_name": "Hovid Vitamin K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162656A",
+      "brand": "Y.S.P. Vitamin K",
+      "product_name": "Y.S.P. Vitamin K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01897P",
+      "brand": "Kotra Vitamin K",
+      "product_name": "Kotra Vitamin K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882663A",
+      "brand": "Pharmaniaga Vitamin K",
+      "product_name": "Pharmaniaga Vitamin K 100 mcg Tablet",
+      "generic": "vitamin k",
+      "strength": "100 mcg",
+      "form": "tablet",
+      "drug_class": "vitamin_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952670A",
+      "brand": "Span-K",
+      "product_name": "Span-K 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01910P",
+      "brand": "Slow-K",
+      "product_name": "Slow-K 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022677A",
+      "brand": "Duopharma Potassium Chloride",
+      "product_name": "Duopharma Potassium Chloride 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01923P",
+      "brand": "Hovid Potassium Chloride",
+      "product_name": "Hovid Potassium Chloride 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092684A",
+      "brand": "Y.S.P. Potassium Chloride",
+      "product_name": "Y.S.P. Potassium Chloride 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01936P",
+      "brand": "Kotra Potassium Chloride",
+      "product_name": "Kotra Potassium Chloride 600 mg Tablet",
+      "generic": "potassium chloride",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162691A",
+      "brand": "Caltrate",
+      "product_name": "Caltrate 600 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01949P",
+      "brand": "Caltrate",
+      "product_name": "Caltrate 600 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882698A",
+      "brand": "Osteocare",
+      "product_name": "Osteocare 500 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "500 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952705A",
+      "brand": "Duopharma Calcium Carbonate",
+      "product_name": "Duopharma Calcium Carbonate 600 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01962P",
+      "brand": "Hovid Calcium Carbonate",
+      "product_name": "Hovid Calcium Carbonate 600 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022712A",
+      "brand": "Y.S.P. Calcium Carbonate",
+      "product_name": "Y.S.P. Calcium Carbonate 600 mg Tablet",
+      "generic": "calcium carbonate",
+      "strength": "600 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092719A",
+      "brand": "Ferrofort",
+      "product_name": "Ferrofort 200 mg Tablet",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01975P",
+      "brand": "Fefol",
+      "product_name": "Fefol 200 mg Capsule",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "capsule",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162726A",
+      "brand": "Duopharma Ferrous Fumarate",
+      "product_name": "Duopharma Ferrous Fumarate 200 mg Tablet",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01988P",
+      "brand": "Hovid Ferrous Fumarate",
+      "product_name": "Hovid Ferrous Fumarate 200 mg Tablet",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882733A",
+      "brand": "Y.S.P. Ferrous Fumarate",
+      "product_name": "Y.S.P. Ferrous Fumarate 200 mg Tablet",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02001P",
+      "brand": "Kotra Ferrous Fumarate",
+      "product_name": "Kotra Ferrous Fumarate 200 mg Tablet",
+      "generic": "ferrous fumarate",
+      "strength": "200 mg",
+      "form": "tablet",
+      "drug_class": "mineral_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02014P",
+      "brand": "Blackmores Glucosamine",
+      "product_name": "Blackmores Glucosamine 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952740A",
+      "brand": "Osteo Bi-Flex",
+      "product_name": "Osteo Bi-Flex 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022747A",
+      "brand": "Duopharma Glucosamine",
+      "product_name": "Duopharma Glucosamine 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02027P",
+      "brand": "Hovid Glucosamine",
+      "product_name": "Hovid Glucosamine 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092754A",
+      "brand": "Y.S.P. Glucosamine",
+      "product_name": "Y.S.P. Glucosamine 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02040P",
+      "brand": "Kotra Glucosamine",
+      "product_name": "Kotra Glucosamine 1500 mg Tablet",
+      "generic": "glucosamine",
+      "strength": "1500 mg",
+      "form": "tablet",
+      "drug_class": "joint_supplement",
+      "product_kind": "supplement",
+      "licence_status": "cancelled"
+    },
+    {
+      "registration_no": "MAL20162761A",
+      "brand": "Tongrentang Danshen Pian",
+      "product_name": "Tongrentang Danshen Pian 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882768A",
+      "brand": "Duopharma Danshen",
+      "product_name": "Duopharma Danshen 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02053P",
+      "brand": "Hovid Danshen",
+      "product_name": "Hovid Danshen 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952775A",
+      "brand": "Y.S.P. Danshen",
+      "product_name": "Y.S.P. Danshen 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02066P",
+      "brand": "Kotra Danshen",
+      "product_name": "Kotra Danshen 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022782A",
+      "brand": "Pharmaniaga Danshen",
+      "product_name": "Pharmaniaga Danshen 0.25 g Tablet",
+      "generic": "danshen",
+      "strength": "0.25 g",
+      "form": "tablet",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02079P",
+      "brand": "Eu Yan Sang Dang Gui",
+      "product_name": "Eu Yan Sang Dang Gui 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092789A",
+      "brand": "Duopharma Dong Quai",
+      "product_name": "Duopharma Dong Quai 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02092P",
+      "brand": "Hovid Dong Quai",
+      "product_name": "Hovid Dong Quai 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162796A",
+      "brand": "Y.S.P. Dong Quai",
+      "product_name": "Y.S.P. Dong Quai 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02105P",
+      "brand": "Kotra Dong Quai",
+      "product_name": "Kotra Dong Quai 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882803A",
+      "brand": "Pharmaniaga Dong Quai",
+      "product_name": "Pharmaniaga Dong Quai 500 mg Capsule",
+      "generic": "dong quai",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952810A",
+      "brand": "Eu Yan Sang Korean Ginseng",
+      "product_name": "Eu Yan Sang Korean Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02118P",
+      "brand": "Cordyceps & Ginseng",
+      "product_name": "Cordyceps & Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20022817A",
+      "brand": "Duopharma Ginseng",
+      "product_name": "Duopharma Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02131P",
+      "brand": "Hovid Ginseng",
+      "product_name": "Hovid Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092824A",
+      "brand": "Y.S.P. Ginseng",
+      "product_name": "Y.S.P. Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN02144P",
+      "brand": "Kotra Ginseng",
+      "product_name": "Kotra Ginseng 500 mg Capsule",
+      "generic": "ginseng",
+      "strength": "500 mg",
+      "form": "capsule",
+      "drug_class": "tcm_herb",
+      "product_kind": "tcm",
+      "licence_status": "registered"
     }
   ],
   "interactions": [
@@ -186,6 +2598,196 @@
       ],
       "severity": "minor",
       "text_id": "low_sugar"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "ibuprofen"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "apixaban",
+        "ibuprofen"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "diclofenac"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "clopidogrel",
+        "ibuprofen"
+      ],
+      "severity": "moderate",
+      "text_id": "bleeding_check",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "ginkgo biloba"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Natural Medicines Database",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "dong quai"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Natural Medicines Database",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "danshen"
+      ],
+      "severity": "major",
+      "text_id": "bleeding_risk",
+      "source": "Natural Medicines Database",
+      "review_state": "awaiting_review"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "fish oil"
+      ],
+      "severity": "moderate",
+      "text_id": "bleeding_check",
+      "source": "Natural Medicines Database",
+      "review_state": "awaiting_review"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "vitamin k"
+      ],
+      "severity": "moderate",
+      "text_id": "warfarin_vitamin_k",
+      "source": "Natural Medicines Database",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "warfarin",
+        "ginseng"
+      ],
+      "severity": "moderate",
+      "text_id": "bleeding_check",
+      "source": "Natural Medicines Database",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "st john's wort",
+        "sitagliptin"
+      ],
+      "severity": "minor",
+      "text_id": "low_sugar",
+      "source": "Natural Medicines Database",
+      "review_state": "awaiting_review"
+    },
+    {
+      "pair": [
+        "apixaban",
+        "st john's wort"
+      ],
+      "severity": "major",
+      "text_id": "sjw_weakens_doac",
+      "source": "Natural Medicines Database",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "losartan",
+        "potassium chloride"
+      ],
+      "severity": "major",
+      "text_id": "high_potassium",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "perindopril",
+        "potassium chloride"
+      ],
+      "severity": "major",
+      "text_id": "high_potassium",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "spironolactone",
+        "potassium chloride"
+      ],
+      "severity": "major",
+      "text_id": "high_potassium",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "levothyroxine",
+        "calcium carbonate"
+      ],
+      "severity": "moderate",
+      "text_id": "absorption_apart",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "levothyroxine",
+        "ferrous fumarate"
+      ],
+      "severity": "moderate",
+      "text_id": "absorption_apart",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "levofloxacin",
+        "calcium carbonate"
+      ],
+      "severity": "moderate",
+      "text_id": "absorption_apart",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
+    },
+    {
+      "pair": [
+        "levofloxacin",
+        "ferrous fumarate"
+      ],
+      "severity": "moderate",
+      "text_id": "absorption_apart",
+      "source": "Lexicomp Drug Interactions",
+      "review_state": "reviewed"
     }
   ],
   "duplicate_therapy": {
@@ -372,6 +2974,355 @@
       "avoid_ids": [
         "grapefruit"
       ]
+    },
+    "perindopril": {
+      "plain_name_id": "blood_pressure_tablet",
+      "purpose_id": "blood_pressure",
+      "food_rule_id": "morning",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "dizzy_standing"
+      ],
+      "avoid_ids": [
+        "salt_substitutes"
+      ]
+    },
+    "bisoprolol": {
+      "plain_name_id": "blood_pressure_tablet",
+      "purpose_id": "blood_pressure",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "dizzy_standing"
+      ],
+      "avoid_ids": []
+    },
+    "atenolol": {
+      "plain_name_id": "blood_pressure_tablet",
+      "purpose_id": "blood_pressure",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "dizzy_standing"
+      ],
+      "avoid_ids": []
+    },
+    "hydrochlorothiazide": {
+      "plain_name_id": "water_pill",
+      "purpose_id": "water",
+      "food_rule_id": "morning",
+      "missed_dose_rule_id": "skip_if_late_in_day",
+      "watch_out_ids": [
+        "dizzy_standing",
+        "cramps"
+      ],
+      "avoid_ids": [
+        "salt_substitutes"
+      ]
+    },
+    "spironolactone": {
+      "plain_name_id": "water_pill",
+      "purpose_id": "water",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "skip_if_late_in_day",
+      "watch_out_ids": [
+        "cramps"
+      ],
+      "avoid_ids": [
+        "salt_substitutes"
+      ]
+    },
+    "clopidogrel": {
+      "plain_name_id": "blood_thinner_tablet",
+      "purpose_id": "clots",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "bleeding_signs",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask"
+      ]
+    },
+    "glimepiride": {
+      "plain_name_id": "sugar_tablet",
+      "purpose_id": "sugar",
+      "food_rule_id": "with_breakfast",
+      "missed_dose_rule_id": "skip_and_take_next",
+      "watch_out_ids": [
+        "shaky_sweaty"
+      ],
+      "avoid_ids": [
+        "skipping_meals",
+        "alcohol"
+      ]
+    },
+    "sitagliptin": {
+      "plain_name_id": "sugar_tablet",
+      "purpose_id": "sugar",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "skip_and_take_next",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "empagliflozin": {
+      "plain_name_id": "sugar_tablet",
+      "purpose_id": "sugar",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "skip_and_take_next",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "rosuvastatin": {
+      "plain_name_id": "cholesterol_tablet",
+      "purpose_id": "cholesterol",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "muscle_ache"
+      ],
+      "avoid_ids": [
+        "grapefruit"
+      ]
+    },
+    "ibuprofen": {
+      "plain_name_id": "pain_tablet",
+      "purpose_id": "pain",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [
+        "tummy_upset",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "alcohol"
+      ]
+    },
+    "diclofenac": {
+      "plain_name_id": "pain_tablet",
+      "purpose_id": "pain",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [
+        "tummy_upset",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "alcohol"
+      ]
+    },
+    "naproxen": {
+      "plain_name_id": "pain_tablet",
+      "purpose_id": "pain",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [
+        "tummy_upset",
+        "black_stools"
+      ],
+      "avoid_ids": [
+        "painkillers_ask",
+        "alcohol"
+      ]
+    },
+    "tramadol": {
+      "plain_name_id": "strong_pain_tablet",
+      "purpose_id": "pain",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": [
+        "alcohol"
+      ]
+    },
+    "pantoprazole": {
+      "plain_name_id": "stomach_tablet",
+      "purpose_id": "stomach",
+      "food_rule_id": "before_breakfast",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": []
+    },
+    "famotidine": {
+      "plain_name_id": "stomach_tablet",
+      "purpose_id": "stomach",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": []
+    },
+    "domperidone": {
+      "plain_name_id": "stomach_tablet",
+      "purpose_id": "stomach",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": []
+    },
+    "salbutamol": {
+      "plain_name_id": "reliever_inhaler",
+      "purpose_id": "breathing",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "budesonide": {
+      "plain_name_id": "preventer_inhaler",
+      "purpose_id": "breathing",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "montelukast": {
+      "plain_name_id": "breathing_tablet",
+      "purpose_id": "breathing",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "cetirizine": {
+      "plain_name_id": "allergy_tablet",
+      "purpose_id": "allergy",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "when_needed_none",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "levothyroxine": {
+      "plain_name_id": "thyroid_tablet",
+      "purpose_id": "thyroid",
+      "food_rule_id": "before_breakfast",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [],
+      "avoid_ids": [
+        "calcium_iron_separate_timing"
+      ]
+    },
+    "levofloxacin": {
+      "plain_name_id": "antibiotic_tablet",
+      "purpose_id": "infection",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "finish_the_course",
+      "watch_out_ids": [],
+      "avoid_ids": [
+        "calcium_iron_separate_timing"
+      ]
+    },
+    "amoxicillin": {
+      "plain_name_id": "antibiotic_tablet",
+      "purpose_id": "infection",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "finish_the_course",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "ginkgo biloba": {
+      "plain_name_id": "ginkgo",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "st john's wort": {
+      "plain_name_id": "st_johns_wort",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "fish oil": {
+      "plain_name_id": "fish_oil",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "vitamin k": {
+      "plain_name_id": "vitamin_k",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "potassium chloride": {
+      "plain_name_id": "potassium",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "calcium carbonate": {
+      "plain_name_id": "calcium",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": [
+        "calcium_iron_separate_timing"
+      ]
+    },
+    "ferrous fumarate": {
+      "plain_name_id": "iron",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [
+        "tummy_upset"
+      ],
+      "avoid_ids": [
+        "calcium_iron_separate_timing"
+      ]
+    },
+    "glucosamine": {
+      "plain_name_id": "glucosamine",
+      "purpose_id": "supplement_general",
+      "food_rule_id": "with_food",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "danshen": {
+      "plain_name_id": "danshen",
+      "purpose_id": "tcm_general",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "dong quai": {
+      "plain_name_id": "dong_quai",
+      "purpose_id": "tcm_general",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
+    },
+    "ginseng": {
+      "plain_name_id": "ginseng",
+      "purpose_id": "tcm_general",
+      "food_rule_id": "no_food_rule",
+      "missed_dose_rule_id": "follow_the_products_own_instructions",
+      "watch_out_ids": [],
+      "avoid_ids": []
     }
   }
 }

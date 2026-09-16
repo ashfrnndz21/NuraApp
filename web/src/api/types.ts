@@ -94,7 +94,18 @@ export interface FlaggedOut {
   text_id: string;
   /** The interaction as a question for the doctor, both medicines in his words. */
   question: string[];
+  /** What a pharmacist would check this pair against (E04-03). */
+  source?: string;
+  /** True while no pharmacist has checked this pair yet: `question` then asks him to check
+   *  with a pharmacist too, rather than naming a severity or a mechanism (E04-03). Still
+   *  shown, never silent. */
+  awaiting_review?: boolean;
 }
+
+/** A prescription medicine, a supplement (a vitamin, a mineral or a Western-style herbal
+ *  product), or a traditional remedy — TCM (E04-03). Screened for interactions the same way;
+ *  never shown as though it were a prescription medicine. */
+export type ProductKind = "prescription" | "supplement" | "tcm";
 
 export interface LineOut {
   line_id: string;
@@ -105,6 +116,8 @@ export interface LineOut {
   strength: string;
   form: string;
   high_risk: boolean;
+  /** A prescription medicine, a supplement or a TCM remedy (E04-03). */
+  product_kind?: ProductKind;
   dose: { amount: number; unit: string; frequency: string; anchors: string[] };
   prescriber: string | null;
   status: string;
@@ -1019,7 +1032,19 @@ export type MedicineOutcome = "new_line" | "refill" | "dose_change" | "duplicate
 /** What a label would do to the list, before anyone says yes: screened for interactions. */
 export interface MedicineDraftOut {
   outcome: MedicineOutcome;
-  match: { registration_no: string; brand: string; generic: string; strength: string; form: string; drug_class: string; high_risk: boolean };
+  match: {
+    registration_no: string;
+    brand: string;
+    generic: string;
+    strength: string;
+    form: string;
+    drug_class: string;
+    high_risk: boolean;
+    product_kind: ProductKind;
+    product_name: string;
+    licence_status: string;
+    active_ingredients: string[];
+  };
   matched_line_id: string | null;
   flagged: FlaggedOut[];
   needs_label_photo: boolean;

@@ -58,6 +58,7 @@ from app.medicines.service import (
     active_lines,
     history,
     interaction_flags,
+    language_for,
     plan,
     proud_days,
     reconcile,
@@ -66,7 +67,7 @@ from app.medicines.service import (
     today,
 )
 from app.medicines.story import STORY_PARTS, interaction_question, story_part
-from app.medicines.strings import PLAIN_NAME, language_of
+from app.medicines.strings import PLAIN_NAME
 from app.memory.episodic import withheld_references
 
 router = APIRouter(prefix="/profiles", tags=["medicines"])
@@ -105,11 +106,19 @@ async def medicines(
 
 @router.post("/{profile_id}/medicines/draft")
 async def draft(
-    body: MedicineDraftIn, request: Request, context: Context, session: Db
+    body: MedicineDraftIn,
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Language,
 ) -> MedicineDraftOut:
     """What this label means against the list — refill, dose change, new line, duplicate —
     with the interactions a new line would be flagged for and whether the high-risk rule
-    wants a label photo first. Nothing is written."""
+    wants a label photo first, all in `language` (or the profile's own). Nothing is written.
+
+    Including a supplement or a TCM remedy (E04-03): a new line's generic is screened against
+    everything active the same way a prescription medicine is, whatever kind it is.
+    """
     registry = providers_of(request).drug_registry
     what = await plan(
         session,
@@ -118,7 +127,7 @@ async def draft(
         label=body.label.as_label(),
         source_artifact_id=body.source_artifact_id,
     )
-    lang = language_of(None)
+    lang = await language_for(session, context, language)
     names = {
         g: PLAIN_NAME[lang][registry.monograph(g).plain_name_id]
         for g in {what.match.generic, *(each.other_line.generic for each in what.flagged)}
@@ -178,6 +187,8 @@ async def interactions(
             "other_generic": view.other.generic,
             "severity": view.flag.severity.value,
             "text_id": view.flag.text_id,
+            "source": view.flag.source,
+            "awaiting_review": view.flag.awaiting_review,
             "question": view.question,
         }
         for view in flags
