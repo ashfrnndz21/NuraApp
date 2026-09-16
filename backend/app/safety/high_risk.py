@@ -193,15 +193,19 @@ async def refuse_dose_without_label_photo(
 
     A dose names its drug — in the subject, inside its value (`{"drug": "warfarin", …}`,
     the shape the review card writes), or by the class the registry put on it
-    (`{"drug_class": "anticoagulant", …}`, the shape the medicines module writes). If EITHER
-    names a high-risk drug, the draft must rest on an artefact of kind PHOTO. An event alone
-    (a message, a voice note), or a PDF or a screenshot, is refused. The artefact row was
-    read a moment ago by `_check_provenance` under the writer's own key, so looking at its
-    kind here writes no second line.
+    (`{"drug_class": "anticoagulant", …}`, the shape the medicines module writes). A count
+    correction's own drug name lives in neither of those by default — `count:<generic>` is
+    the attribute, and a writer's value can be as bare as `{"quantity": 20}` — so the
+    attribute is checked too; the medicines module also echoes `drug_class`/`high_risk` into
+    the value (`app.medicines.reorder.found_more`), but that is belt, this is braces (#166
+    review). If ANY of subject, attribute or value names a high-risk drug, the draft must
+    rest on an artefact of kind PHOTO. An event alone (a message, a voice note), or a PDF or
+    a screenshot, is refused. The artefact row was read a moment ago by `_check_provenance`
+    under the writer's own key, so looking at its kind here writes no second line.
     """
     if not (is_a_dose(draft) or is_a_count(draft)):
         return
-    danger = names_high_risk(draft.subject, draft.value) or class_of(draft.value)
+    danger = names_high_risk(draft.subject, draft.attribute, draft.value) or class_of(draft.value)
     if danger is None:
         return
     if draft.artifact_id is None:

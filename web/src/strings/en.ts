@@ -1170,7 +1170,7 @@ export const en = {
     // @patient headline
     notesTitle: "Notes about this place",
     // @patient
-    notesOnly: "Only the owner and the one who looks after these papers read these notes.",
+    notesOnly: "Only the owner and the one who looks after these papers can read these notes.",
     // @patient phrase
     noteLabel: "A note about this place",
     // @patient phrase
