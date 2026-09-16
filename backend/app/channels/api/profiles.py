@@ -21,7 +21,12 @@ from fastapi.responses import HTMLResponse
 from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_profile_read, audited_read, person_display_name
+from app.audit.access import (
+    audited_guard,
+    audited_profile_read,
+    audited_read,
+    person_display_name,
+)
 from app.audit.models import Action
 from app.audit.trail import read_audit
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
@@ -706,12 +711,15 @@ async def let_someone_in(
     # is written: a refused caller leaves no account behind for the number he gave.
     await may_invite(session, context=context)
     named = (body.holder_display_name or "").strip()
-    if body.holder_phone_e164 is not None and not named:
-        # The words name the person; nothing is made for the number without that name.
-        raise HolderNeedsAName("a person let in by phone is named by the one letting them in")
-    holder = await _holder(
-        session, request=request, body=body, name=named, named_by=context.person_id
-    )
+    # Past the door, a refusal is still the owner's to see: a number with no name, or an id
+    # that is nobody here, is written on his trail before it is passed on (#156).
+    async with audited_guard(session, context, Action.WRITE, Scope.FAMILY, Consent.__tablename__):
+        if body.holder_phone_e164 is not None and not named:
+            # The words name the person; nothing is made for the number without that name.
+            raise HolderNeedsAName("a person let in by phone is named by the one letting them in")
+        holder = await _holder(
+            session, request=request, body=body, name=named, named_by=context.person_id
+        )
     consent = await grant_consent(
         session,
         context=context,
@@ -739,16 +747,21 @@ async def preview_letting_in(
     is what is kept, word for word. Nothing is written but the READ on his trail: no account
     is made for a number, and by phone the words use only the name he typed, so they never
     say whether the number is already someone's. The owner's, or the steward's setting up for
-    him; `HolderNeedsAName` (400) without a name."""
-    if body.holder_person_id is not None:
-        found = await session.get(Person, body.holder_person_id)
-        if found is None or found.region is not settings_of(request).region:
-            raise NoSuchHolder(
-                f"no person {body.holder_person_id} in {settings_of(request).region}"
-            )
-        name = found.display_name.strip()
-    else:
-        name = (body.holder_display_name or "").strip()
+    him; `HolderNeedsAName` (400) without a name, `NoSuchHolder` (403) for an id that is nobody
+    here. Both are written on his trail (#156)."""
+    async with audited_guard(session, context, Action.READ, Scope.FAMILY, Consent.__tablename__):
+        # The family scope first, as `preview_sharing`'s own door checks it: a caller it does
+        # not cover learns nothing about whether an id is someone's.
+        context.require(Scope.FAMILY)
+        if body.holder_person_id is not None:
+            found = await session.get(Person, body.holder_person_id)
+            if found is None or found.region is not settings_of(request).region:
+                raise NoSuchHolder(
+                    f"no person {body.holder_person_id} in {settings_of(request).region}"
+                )
+            name = found.display_name.strip()
+        else:
+            name = (body.holder_display_name or "").strip()
     version, words = await preview_sharing(
         session,
         context=context,

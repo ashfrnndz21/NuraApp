@@ -43,6 +43,7 @@ from tests.feelings_support import (
     new_medicine,
 )
 from tests.medicines_support import pa
+from tests.safety_support import gliclazide
 
 
 async def _cloud(session: AsyncSession, context: KeyContext, language: str | None = None) -> Cloud:
@@ -114,6 +115,35 @@ async def test_a_medicine_is_new_for_a_fortnight_and_then_brings_nothing(
     cloud = await _cloud(sg, owner)
     assert _reasons(cloud, Feeling.DIZZY) == {ReasonCode.BASE}
     assert Feeling.SWOLLEN_ANKLES not in _words(cloud)
+
+
+async def test_on_a_sugar_medicine_shaky_and_sweaty_stays_within_reach(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """#157: a man on a medicine that can drop his sugar has the red word for a low sugar on
+    his cloud for as long as he takes it, not only in its first fortnight, and a tap on it
+    takes the red-flag path, held back by nothing."""
+    owner = await _owner(sg)
+    assert Feeling.SHAKY_SWEATY not in _words(await _cloud(sg, owner))
+    await gliclazide(sg, owner)
+    assert _reasons(await _cloud(sg, owner), Feeling.SHAKY_SWEATY) == {
+        ReasonCode.NEW_MEDICINE,
+        ReasonCode.SUGAR_MEDICINE,
+    }
+    clock.step(timedelta(days=15))
+    cloud = await _cloud(sg, owner)
+    assert _reasons(cloud, Feeling.SHAKY_SWEATY) == {ReasonCode.SUGAR_MEDICINE}
+    tapped = await record_tap(
+        sg,
+        context=owner,
+        word=Feeling.SHAKY_SWEATY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    assert tapped.red is not None and tapped.question is None
+    assert tapped.red.flag.suppressed_because is None
 
 
 async def test_the_words_re_rank_within_a_second_of_a_state_change(sg: AsyncSession) -> None:

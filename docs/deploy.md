@@ -31,8 +31,11 @@ that stack exists. It runs the same container and the same migrations.
 - **One Postgres, in Singapore.** The release step runs `alembic upgrade heads` before a new
   version takes traffic. The `backend-postgres` CI job runs every migration up, down and up
   again, and runs the whole test suite on Postgres 16.
-- **One place for artefact bytes, in Singapore.** That is a bucket (Fly: Tigris; or AWS S3 in
-  ap-southeast-1). A demo may use the instance's own disk instead (Render, below).
+- **One place for artefact bytes, in Singapore.** That is a bucket that keeps its bytes in
+  Singapore: AWS S3 in ap-southeast-1, or on Fly a Tigris bucket created single-region in
+  Singapore (`sin`). A Tigris bucket is Global unless it is created that way, and
+  `fly storage create` cannot create it that way (Fly, step 3). A demo may use the instance's
+  own disk instead (Render, below).
   - **The largest thing stored is a consult recording**: up to 48 MiB, sent on Stop as its
     own bytes (`audio/webm`) in one request.
     - The app refuses anything larger (`MAX_CONSULT_BYTES`), and nothing in front of it sets a
@@ -96,7 +99,7 @@ the repo, `fly.toml` or `render.yaml`.
 | `NURA_DATABASE_URL` | **yes** | the platform's Postgres URL | the same | Required. `postgres://…` and `?sslmode=` are accepted as the platform gives them. Use the direct URL, not a pooled (PgBouncer) one. |
 | `NURA_DEMO_MODE` | no | `1` | **absent** | ADR 0008. |
 | `NURA_DEMO_LOGIN_CODE` | **yes** | six digits you choose | **absent** (refused) | Required with demo mode. Give it only to the people you invite. |
-| `NURA_OBJECT_BUCKET_URL` | no | Fly: `https://fly.storage.tigris.dev/<bucket>` | the region's bucket, e.g. `https://<bucket>.s3.ap-southeast-1.amazonaws.com` | A bucket in Singapore. |
+| `NURA_OBJECT_BUCKET_URL` | no | Fly: `https://t3.storage.dev/<bucket>` (a single-region Tigris bucket in `sin`) | the region's bucket, e.g. `https://<bucket>.s3.ap-southeast-1.amazonaws.com` | A bucket in Singapore. |
 | `NURA_OBJECT_BUCKET_REGION` | no | `auto` (Tigris) | `ap-southeast-1` | The bucket's signing region. |
 | `NURA_OBJECT_ACCESS_KEY_ID` | **yes** | from the bucket | from the bucket | |
 | `NURA_OBJECT_SECRET_ACCESS_KEY` | **yes** | from the bucket | from the bucket | |
@@ -166,14 +169,33 @@ You create the account (the operator cannot). Install `flyctl`, the platform's o
 
        fly secrets set NURA_DATABASE_URL='postgres://…'
 
-3. **Create the bucket, then set its values** under Nura's names:
+3. **Create a bucket that keeps its bytes in Singapore, then set its values** under Nura's
+   names. Do not run a bare `fly storage create`. It makes a Tigris bucket whose location is
+   Global, which keeps objects near whoever writes or reads them, and it has no option to pin
+   the bucket to one region. Use one of these two instead.
 
-       fly storage create
+   - **Tigris, single-region in Singapore.** Tigris makes a single-region bucket when the
+     bucket is created through its S3 API with the location constraint `sin` ("Bucket
+     locations" in the Tigris docs). Use a Tigris access key that may create buckets, from the
+     Tigris dashboard:
 
-   It prints the bucket name and its keys. Then:
+         aws s3api --endpoint-url https://t3.storage.dev create-bucket --bucket <bucket> \
+           --create-bucket-configuration '{"LocationConstraint":"sin"}'
 
-       fly secrets set NURA_OBJECT_BUCKET_URL=https://fly.storage.tigris.dev/<bucket> \
-         NURA_OBJECT_ACCESS_KEY_ID=<AWS_ACCESS_KEY_ID> NURA_OBJECT_SECRET_ACCESS_KEY=<AWS_SECRET_ACCESS_KEY>
+     Then open the bucket in the Tigris dashboard and check that its location reads
+     single-region, Singapore (`sin`). If it says anything else, delete the bucket and use AWS
+     instead. The Tigris docs do not say a location can be changed later, so get it right when
+     the bucket is made.
+
+         fly secrets set NURA_OBJECT_BUCKET_URL=https://t3.storage.dev/<bucket> \
+           NURA_OBJECT_ACCESS_KEY_ID=<access key id> NURA_OBJECT_SECRET_ACCESS_KEY=<secret access key>
+
+   - **AWS S3 in ap-southeast-1 (Asia Pacific, Singapore).** Create the bucket there, with an
+     access key that can read and write only that bucket, and change `NURA_OBJECT_BUCKET_REGION`
+     in `fly.toml` to `ap-southeast-1`. Then:
+
+         fly secrets set NURA_OBJECT_BUCKET_URL=https://<bucket>.s3.ap-southeast-1.amazonaws.com \
+           NURA_OBJECT_ACCESS_KEY_ID=<access key id> NURA_OBJECT_SECRET_ACCESS_KEY=<secret access key>
 
    In the bucket's settings, add a lifecycle rule that expires objects after one day. That is
    the demo's nightly wipe for bytes.

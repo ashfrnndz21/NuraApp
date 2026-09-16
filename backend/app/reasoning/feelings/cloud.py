@@ -3,7 +3,8 @@
 `weigh` is the rule, and it is arithmetic over what `record.read_situation` read: every base
 word at the base weight; a medicine started in the last fortnight brings forward the words its
 licensed monograph lists as watch-outs (`WATCH_OUT_WORDS`, by the registry's rule ids — never
-a word the registry did not name); the first week after a discharge, an open episode and a
+a word the registry did not name); a medicine the register classes as dropping his sugar keeps
+the red word for a low sugar within reach for as long as he takes it; the first week after a discharge, an open episode and a
 direction in his own blood pressure bring forward theirs; and his own words from the last
 month come back. Each word keeps every reason it has, by code and id; the reasons are on the
 answer and on the tap for the audit and the metrics, and never on the screen.
@@ -49,7 +50,7 @@ from app.reasoning.feelings.words import (
     Weight,
 )
 from app.safety.plain_words import verify
-from app.safety.red_flags import Feeling, is_red
+from app.safety.red_flags import HYPOGLYCAEMIC_CLASSES, Feeling, is_red
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +101,13 @@ def weigh(situation: Situation) -> list[Weighed]:
 
     for word in BASE:
         put(word, Weight.BASE, Reason(ReasonCode.BASE, None))
+    # Shaky and sweaty is a red flag on a medicine that can drop his sugar, by the red-flag
+    # module's own classes. It is his word for a low sugar, so while he takes one it is always
+    # within reach, as chest pain is — not only in the medicine's first fortnight (#157).
+    for line in situation.lines:
+        if line.drug_class in HYPOGLYCAEMIC_CLASSES:
+            sugar: dict[str, Any] = {"line_id": str(line.line_id), "generic": line.generic}
+            put(Feeling.SHAKY_SWEATY, Weight.BASE, Reason(ReasonCode.SUGAR_MEDICINE, None, sugar))
     for line in sorted(situation.lines, key=lambda one: one.started_at, reverse=True):
         if now - line.started_at > NEW_MEDICINE_WINDOW:
             continue

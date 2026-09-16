@@ -8,7 +8,9 @@ is the State the cloud was read from. A red word is a tap too, with the flag it 
 week's taps can be counted without reading anything else.
 
 A `FeelingNote` is what a tap and its answer were read into: at most two lines of things to
-tell the doctor, who does the next thing, and the boundary last. It is a rendered row of an
+tell the doctor — plus, right after a line that names a medicine, the two lines that keep it
+as it is and hand the decision to him (`DO_NOT_STOP`, #157) — who does the next thing, and
+the boundary last. It is a rendered row of an
 inferring surface (`Surface.FEELING_INFERENCE`): it names the State it was rendered from and
 carries the boundary line, or it is not written (`app.state.service.render_from_state`).
 """
@@ -80,8 +82,10 @@ class NoteOutcome(StrEnum):
 class FeelingNote(RenderedFromState, ProfileScoped, Base):
     """What one tap and its answer were read into, as he was shown it.
 
-    `lines` are the things to tell the doctor (at most two), `then` who does the next thing,
-    and `voice` the spoken twin — headline, lines, then, and the boundary. `reasons` names
+    `lines` are the things to tell the doctor (at most two) — plus, right after a line that
+    names a medicine, the two lines that keep it as it is and hand the decision to him
+    (`DO_NOT_STOP`, #157) — `then` who does the next thing, and `voice` the spoken twin —
+    headline, lines, then, and the boundary. `reasons` names
     what the tap was read against by id: the medicine line and the monograph rule, the facts
     of a direction in his blood pressure, the event of a visit or a discharge.
     """
