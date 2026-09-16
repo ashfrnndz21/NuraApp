@@ -458,8 +458,9 @@ URGENT_NOTICE = "red_flag_notice_urgent"
 and its own template cannot go — not approved, and outside the family member's 24-hour window a
 reply cannot go at all. Never "call {doctor} today" or its variants: an urgent alert is never
 told at a lower tier than the one it is (#174). Where this is not approved either, no WhatsApp
-goes at all, and the delivery's own trail says why; the app push and the family page's notice
-reach the family regardless (#162, #169)."""
+goes at all, and the delivery's own trail says why; the family still reaches it (#162, #169):
+the family page's notice carries the tier, and the app push — its own words fixed and
+content-free (`PUSH_LINE`) — only opens it."""
 
 
 def flag_message(run: Run, flag: Flag) -> Say:
