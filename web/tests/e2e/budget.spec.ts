@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { BASE_URL } from "../../playwright.config";
-import { fixClock, keptKeys, seedOwner, signInThroughTheApp, throttleCpu, waitForWorker } from "./helpers";
+import { fixClock, keptKeys, seedOwner, signInThroughTheApp, throttleCpu, waitForWorker, todayReady} from "./helpers";
 
 /** E00-08's budget: "cold start under 3 s on a reference low-end device; card readable with no
  *  data", at 360 px. The reference is Lighthouse's mid-tier phone — a processor 4 times slower
@@ -19,7 +19,7 @@ test("cold start on a slow phone at 360 by 640: his list and the emergency card 
   test.skip(BASE_URL.includes(":5173"), "needs the built app the backend serves (the worker is not built in dev)");
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
   await waitForWorker(page);
 

@@ -305,7 +305,7 @@ test("the not-feeling-well cards on the phone: served with no network after a re
 
   // Back online Today reads them again; sign-out leaves none of it on the phone.
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(true);
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("sign-out").click();
@@ -321,7 +321,7 @@ test("an account closing: nothing of its papers stays on the phone, and the door
   const pa = await seedOwner(request);
   const kept = async () => (await keptKeys(page)).filter((key) => key.endsWith(pa.profileId));
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("emergency."))).toBe(true);
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("nfw."))).toBe(true);
   expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);

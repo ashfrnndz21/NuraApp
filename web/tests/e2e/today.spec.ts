@@ -158,7 +158,8 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await openMe(page);
   await expect(page.locator("[data-testid=me-proud], [data-testid=proud]").first()).toContainText("Nura counted the days you took your tablets.");
   await page.getByTestId("sheet-close").click();
-  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Medicines\s*Papers\s*Visits\s*$/);
+  // One tab set, the same for everyone (D1, the reset): Family is a tab now, not a way in on Me.
+  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Medicines\s*Papers\s*Visits\s*Family\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);

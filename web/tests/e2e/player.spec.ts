@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { API, captureSpeech, cutKey, fakeRecorder, fixClock, seedOwner, seedVisitDay, signInThroughTheApp, speechRates, stand } from "./helpers";
+import { API, captureSpeech, cutKey, fakeRecorder, fixClock, seedOwner, seedVisitDay, signInThroughTheApp, speechRates, stand, openMe, proudCard, todayReady} from "./helpers";
 
 /** E15-07, the one player: a card's voice on tap and never by itself; a big Play / Pause; his
  *  speed, remembered on the phone; the line being said under it, in his body size; a visit's clip
@@ -18,7 +18,10 @@ const cancels = (page: Page) => page.evaluate(() => (window as unknown as { __ca
 test("Hear opens the one player: nothing before the tap, Play and Pause, his speed kept on the phone, the line being said in his body size", async ({ page, request }) => {
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const proud = page.getByTestId("proud");
+  await todayReady(page);
+  // The proud number, and its Hear, are on the Me sheet (D1).
+  await openMe(page);
+  const proud = proudCard(page);
   await expect(proud).toBeVisible();
   await expect(page.getByTestId("player")).toHaveCount(0);
   expect(await spoken(page)).toEqual([]);

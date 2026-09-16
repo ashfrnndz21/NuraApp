@@ -687,6 +687,12 @@ export async function openMe(page: Page): Promise<void> {
   await expect(page.getByTestId("me-sheet")).toBeVisible();
 }
 
+/** The proud number's card, inside the Me sheet (D1): the backend's summary when it can be
+ *  read, and the stand-in counted from Today when it cannot. The sheet must already be open. */
+export function proudCard(page: Page): Locator {
+  return page.locator("[data-testid=me-proud], [data-testid=proud]").first();
+}
+
 /** The proud number, read on the Me sheet (D1): the sheet opened, read, and closed again. */
 export async function expectProud(page: Page, value: string): Promise<void> {
   await openMe(page);
