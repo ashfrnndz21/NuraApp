@@ -392,8 +392,9 @@ member's 24-hour window a reply cannot go at all — so this states no action of
 sends nobody anywhere: it only says to open the app, where the tier's own words are waiting.
 An urgent alert is never told at a lower tier (E19-05, #174): this is the one fallback
 "call {doctor} today" and its variants are never candidates once a tier applies. Where even
-this is not approved, no WhatsApp goes at all; the app push and the family page's notice
-carry it regardless (#162, #169)."""
+this is not approved, no WhatsApp goes at all; the family still reaches it regardless
+(#162, #169) — the family page's notice carries the tier, and the app push, its own words
+fixed and content-free, only opens it."""
 
 # @patient
 VISIT_BRIEF = Template(
