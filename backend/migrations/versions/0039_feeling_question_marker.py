@@ -12,7 +12,7 @@ every row already in the table keeps meaning what it always did — no feeling q
 recorded against it before this column existed.
 
 Revision ID: 0039_feeling_question_marker
-Revises: 0037_drug_registry_growth
+Revises: 0038_dose_taken_late
 Create Date: 2026-09-17
 """
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0039_feeling_question_marker"
-down_revision = "0037_drug_registry_growth"
+down_revision = "0038_dose_taken_late"
 branch_labels = None
 depends_on = None
 

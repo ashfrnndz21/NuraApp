@@ -282,7 +282,7 @@ async def test_the_days_nudge_opens_his_answer_the_same_way_the_plain_check_in_d
         context=home.owner,
         to_person=home.pa,
         kind="nudge",
-        params={"message": f"You told Nura about tired last week.\n{PROMPT['en']}"},
+        params={"message": f"You told Nura you felt tired last week.\n{PROMPT['en']}"},
         provider=home.providers.whatsapp,
         number=home.number,
         language="en",
