@@ -151,6 +151,8 @@ export const zh = {
     waiting: "有一份文件在等您",
     // @patient
     waitingLine: "{name} 为您准备好了这些文件。",
+    // @patient phrase
+    lookAgain: "再看一次",
   },
   consent: {
     // @patient headline

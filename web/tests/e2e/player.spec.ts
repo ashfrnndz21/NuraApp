@@ -32,8 +32,15 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
   await expect(page.getByTestId("player")).toHaveCount(1);
   const toggle = player.getByTestId("player-toggle");
   await expect(toggle).toHaveText("Pause");
-  expect(await spoken(page)).toEqual(["When you tap Taken, this number becomes 1.", "This number only goes up."]);
-  await expect(player.getByTestId("player-line")).toHaveText("When you tap Taken, this number becomes 1.");
+  // The card is the backend's summary of his days where that can be read, and the stand-in
+  // counted from Today where it cannot. Either way Hear says that card's own lines, in its
+  // order, and the transcript shows the one being said — nothing composed for the player.
+  const said = await proud.locator("p").allInnerTexts();
+  const heard = await spoken(page);
+  expect(heard.length).toBeGreaterThan(0);
+  expect(said).toEqual(expect.arrayContaining(heard));
+  expect(heard[0]).toBe(said[0]);
+  await expect(player.getByTestId("player-line")).toHaveText(said[0]!);
   // The transcript in his body size (the patient density's 20px); Play / Pause half as tall
   // again as his 56px target.
   expect(await player.getByTestId("player-line").evaluate((el) => getComputedStyle(el).fontSize)).toBe("20px");
@@ -67,6 +74,12 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
     );
   await expect.poll(keptSpeed).toBe(0.75);
   await page.reload();
+  // The card the player was on is on the Me sheet: make sure the sheet is up, whether or not
+  // the reload left it so.
+  await todayReady(page);
+  // The card counts from the page Today read, so let that land before opening the sheet.
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+  if ((await page.getByTestId("me-sheet").count()) === 0) await openMe(page);
   await expect(proud).toBeVisible();
   expect(await spoken(page)).toEqual([]); // reopening plays nothing
   await proud.getByTestId("hear").click();

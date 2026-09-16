@@ -66,6 +66,7 @@ export interface Strings {
     invitedLine: string;
     waiting: string;
     waitingLine: string;
+    lookAgain: string;
   };
   consent: { title: string; lead: string; agree: string; language: string };
   claim: { title: string; setUpBy: string; keepsSeeing: string; mine: string };

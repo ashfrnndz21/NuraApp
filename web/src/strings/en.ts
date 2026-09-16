@@ -151,6 +151,8 @@ export const en = {
     waiting: "Papers are waiting for you",
     // @patient
     waitingLine: "{name} made this for you.",
+    // @patient phrase
+    lookAgain: "Look again",
   },
   consent: {
     // @patient headline

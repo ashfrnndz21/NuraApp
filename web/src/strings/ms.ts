@@ -151,6 +151,8 @@ export const ms = {
     waiting: "Ada surat-surat menunggu anda",
     // @patient
     waitingLine: "{name} menyediakannya untuk anda.",
+    // @patient phrase
+    lookAgain: "Cuba lihat lagi",
   },
   consent: {
     // @patient headline

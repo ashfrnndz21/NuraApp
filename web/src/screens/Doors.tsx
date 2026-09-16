@@ -66,6 +66,11 @@ export function DoorsScreen({ doors, refusal }: { doors: DoorsOut; refusal?: str
           <p>{s.doors.forSomeoneLine}</p>
         </button>
       </Tile>
+      {/* Someone waiting to be let in is sitting here when the key is cut. One tap asks the
+          doors again, so the papers appear without signing out and back in. */}
+      <Pill quiet onClick={() => void reloadDoors()} testId="doors-look-again">
+        {s.doors.lookAgain}
+      </Pill>
     </main>
   );
 }

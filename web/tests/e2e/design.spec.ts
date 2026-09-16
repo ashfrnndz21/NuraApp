@@ -10,6 +10,9 @@ test.beforeEach(async ({ page }) => {
   await fixClock(page);
 });
 
+/** One tab set, the same for everyone (docs/product-reset.md §6, the owner's decision). */
+const TAB_SET = ["Today", "Medicines", "Papers", "Visits", "Family"];
+
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
 
 /** The shell's promise, checked at the top, the middle and the end of the page: the page ends
@@ -67,8 +70,9 @@ for (const [label, viewport] of [
       await expect(page.getByTestId("now-card")).toHaveCount(slots.filter((slot) => slot.due_now && !slot.taken).length);
       if (now.count !== null && slots.some((slot) => slot.due_now)) await expect(page.getByTestId("now-card")).toHaveCount(now.count);
 
-      // His four tabs, his ask bar, the family's note, the visit, and the coral pill under the hero.
-      await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
+      // One tab set (D1, the reset), his ask bar, the family's note, the visit, and the coral
+      // pill under the hero.
+      await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
       await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask Nura a question");
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
@@ -86,7 +90,10 @@ for (const [label, viewport] of [
       // Me is a sheet from the avatar: everything that was on the Me tab, 56 by 56, then Close.
       await openMe(page);
       const sheet = page.getByTestId("me-sheet");
-      for (const id of ["lang-en", "density-patient", "me-family", "switch-profile", "me-emergency", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
+      for (const id of ["lang-en", "density-patient", "switch-profile", "me-emergency", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
+      // Family is a tab for everyone now (D1, the reset), so the sheet no longer carries it.
+      await expect(sheet.getByTestId("me-family")).toHaveCount(0);
+      await expect(page.getByTestId("tab-family")).toBeVisible();
       // The chosen language and look are outlined, not filled: at most one Plum button in the sheet.
       await expect(sheet.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
       expect(await sheet.locator("button.plum").count()).toBeLessThanOrEqual(1);
@@ -137,7 +144,8 @@ for (const [label, viewport] of [
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");
 
-      await expect(page.locator("nav.tabbar button")).toHaveText(["Home", "Papers", "Medicines", "Plan", "Family"]);
+      // The same list for her: density changes the look, never the tabs.
+      await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
       await expect(page.locator(".shell-ask").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask about Pa");
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label" })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
