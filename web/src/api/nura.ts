@@ -1,84 +1,5 @@
 import { api, apiBlob, apiText, apiUpload } from "./client";
-import type {
-  AskedOut,
-  ChangesOut,
-  EpisodeViewOut,
-  LabelIn,
-  MedicineDraftOut,
-  MoreOut,
-  PlaceNoteOut,
-  ProviderHistoryOut,
-  ProviderSummaryOut,
-  ReconciledOut,
-  RoutineDayIn,
-  RoutineOut,
-  StoryOut,
-  TimelineOut,
-  TrendOut,
-  FeedItemOut,
-  AnsweredOut,
-  BriefOut,
-  CloudOut,
-  DayNudgesOut,
-  FeelingOut,
-  HandedOverOut,
-  ItemDecision,
-  MeSummaryOut,
-  MemoCardOut,
-  NudgeAnswer,
-  NudgePlanOut,
-  OfflineCardsOut,
-  QuestionChange,
-  Said,
-  SummaryConfirmedOut,
-  SymptomLoggedOut,
-  SymptomLogOut,
-  VisitQuestionOut,
-  VisitQuestionsOut,
-  WhatToDoOut,
-  AppointmentOut,
-  ConsultOut,
-  LogisticsOut,
-  NoticeOut,
-  VisitSummaryOut,
-  AnswerOut,
-  AskMode,
-  BiographyOut,
-  ClaimableOut,
-  ClosedOut,
-  ConditionsOut,
-  ConfirmationOut,
-  ConsentOut,
-  DecisionIn,
-  DeploymentOut,
-  DocumentSource,
-  DoorsOut,
-  EmergencyCardOut,
-  EngagementEvent,
-  EngagementOut,
-  FeedPageOut,
-  KeyOut,
-  LineOut,
-  MeOut,
-  PaperAddedOut,
-  PlanOut,
-  ProfileOut,
-  ProudOut,
-  ReadingOut,
-  ReviewCardOut,
-  ReviewConfirmedOut,
-  SessionOut,
-  SettingsIn,
-  SettingsOut,
-  SharingIn,
-  SharingPreviewOut,
-  SlotOut,
-  StateOut,
-  TakenOut,
-  ThreadCardKind,
-  ThreadEntryOut,
-  WordingOut,
-} from "./types";
+import type { AnswerOut, AnsweredOut, AppointmentOut, AskMode, AskedOut, BiographyOut, BriefOut, ChangesOut, ClaimableOut, ClosedOut, CloudOut, ConditionsOut, ConfirmationOut, ConsentOut, ConsultOut, DayNudgesOut, DecisionIn, DeploymentOut, DocumentSource, DoorsOut, EmergencyCardOut, EngagementEvent, EngagementOut, EpisodeViewOut, FeedItemOut, FeedPageOut, FeelingOut, HandedOverOut, ItemDecision, KeyOut, LabelIn, LineOut, LogisticsOut, MeOut, MeSummaryOut, MedicineDraftOut, MemoCardOut, MoreOut, NoticeOut, NudgeAnswer, NudgePlanOut, OfflineCardsOut, OrderPreviewOut, PaperAddedOut, PlaceNoteOut, PlanOut, ProfileOut, ProudOut, ProviderHistoryOut, ProviderSummaryOut, QuestionChange, ReadingOut, ReconciledOut, ReviewCardOut, ReviewConfirmedOut, RoutineDayIn, RoutineOut, Said, SessionOut, SettingsIn, SettingsOut, SharingIn, SharingPreviewOut, SlotOut, StateOut, StoryOut, SummaryConfirmedOut, SymptomLogOut, SymptomLoggedOut, TakenOut, ThreadCardKind, ThreadEntryOut, TimelineOut, TrendOut, VisitQuestionOut, VisitQuestionsOut, VisitSummaryOut, WhatToDoOut, WordingOut } from "./types";
 
 /** Every route the client uses, one function each, in the backend's own names. */
 
@@ -533,24 +454,43 @@ export const addMedicine = (token: string, profileId: string, label: LabelIn, so
     body: { label, source_artifact_id: sourceArtifactId, confirmation_id: confirmationId },
   });
 
-/** The reorder card's "Ask the family to order." (E04-05): the tap is the yes. */
-export const askToOrder = (token: string, profileId: string, lineId: string, language: string) =>
-  api<AskedOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order`, { method: "POST", token, query: { language } });
+/** The reorder card's "Ask the family to order." (E04-05), step one: who would be asked, for
+ *  which medicine, in his words. Nothing is written. */
+export const orderPreview = (token: string, profileId: string, lineId: string, language: string) =>
+  api<OrderPreviewOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order/preview`, { method: "POST", token, query: { language } });
 
-/** The yes to adding exactly this many found at home (subject `count_correction`). */
-export const mintMore = (token: string, profileId: string, lineId: string, quantity: number) =>
+/** His yes to exactly the person the preview named, for this line (subject `order`). */
+export const mintOrder = (token: string, profileId: string, lineId: string, personId: string) =>
   api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
     method: "POST",
     token,
-    body: { subject: "count_correction", line_id: lineId, quantity },
+    body: { subject: "order", line_id: lineId, person_id: personId },
   });
 
-export const addMore = (token: string, profileId: string, lineId: string, quantity: number, confirmationId: string, language: string) =>
+/** The ask, spending his yes: a task on the family's list, or the one already there today. */
+export const askToOrder = (token: string, profileId: string, lineId: string, confirmationId: string, language: string) =>
+  api<AskedOut>(`/profiles/${profileId}/medicines/${lineId}/ask-to-order`, {
+    method: "POST",
+    token,
+    query: { language },
+    body: { confirmation_id: confirmationId },
+  });
+
+/** The yes to adding exactly this many found at home (subject `count_correction`), resting on
+ *  the photo of the box or the label when there is one — a high-risk medicine needs it. */
+export const mintMore = (token: string, profileId: string, lineId: string, quantity: number, artifactId: string | null = null) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "count_correction", line_id: lineId, quantity, artifact_id: artifactId },
+  });
+
+export const addMore = (token: string, profileId: string, lineId: string, quantity: number, confirmationId: string, language: string, artifactId: string | null = null) =>
   api<MoreOut>(`/profiles/${profileId}/medicines/${lineId}/more`, {
     method: "POST",
     token,
     query: { language },
-    body: { quantity, confirmation_id: confirmationId },
+    body: { quantity, confirmation_id: confirmationId, artifact_id: artifactId },
   });
 
 /** The review cards, newest first; `open` for the ones still waiting for a yes (E02-04). */

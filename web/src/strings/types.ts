@@ -491,6 +491,7 @@ export interface Strings {
     storyAvoid: string;
     storyForgot: string;
     storyAsk: string;
+    hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
     addLead: string;
     addLead2: string;
     nameLabel: string;
@@ -513,6 +514,11 @@ export interface Strings {
     moreLead: string;
     moreLabel: string;
     moreYes: string;
+    morePhoto: string;
+    morePhotoWhy: string;
+    morePhotoKept: string;
+    orderYes: string;
+    orderNo: string;
     papersNone: string;
     paperFrom: string;
     paperOpen: string;
@@ -559,12 +565,14 @@ export interface Strings {
     trendsLead: string;
     analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     resultOn: string;
+    resultOnUnit: string;
     rangeUnder: string;
     rangeOver: string;
     rangeBetween: string;
     noRange: string;
     labRange: string;
     guideRange: string;
+    noRangeBecause: Record<"needs_age" | "needs_sex" | "none_on_file", string>;
     anchors: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
     readings: Record<"blood_pressure" | "blood_sugar" | "weight", string>;
     walk: string;

@@ -969,7 +969,7 @@ export const zh = {
     // @patient headline
     medicines: "您的药",
     // @patient headline
-    papers: "等您确认的文件",
+    papers: "等您说好的文件",
     // @patient headline
     routine: "您的一天",
     // @patient headline
@@ -983,9 +983,9 @@ export const zh = {
     // @patient phrase
     back: "回到您的文件",
     // @patient
-    sureYes: "您已经确认了这一条。",
+    sureYes: "这一条您说好了。",
     // @patient
-    sureRead: "Nura 看得很清楚。",
+    sureRead: "这一条 Nura 看得很清楚。",
     // @patient
     disputed: "有人说这一条不对。",
     // @patient
@@ -1006,6 +1006,15 @@ export const zh = {
     storyForgot: "如果忘了吃",
     // @patient headline
     storyAsk: "要问医生的",
+    // @patient phrase
+    hearParts: {
+      purpose: "听这个药是做什么的",
+      how_to_take: "听怎么吃",
+      watch_out: "听要注意什么",
+      avoid: "听要避开什么",
+      if_forgotten: "听忘了吃怎么办",
+      doctor_question: "听要问医生什么",
+    },
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient
@@ -1013,11 +1022,11 @@ export const zh = {
     // @patient phrase
     nameLabel: "标签上的名字",
     // @patient phrase
-    strengthLabel: "药的强度",
+    strengthLabel: "这个药有多强",
     // @patient phrase
     howLabel: "怎么吃",
     // @patient
-    howHint: "照标签上写的打。",
+    howHint: "照标签上写的输入。",
     // @patient phrase
     countLabel: "盒子里有多少",
     // @patient phrase
@@ -1027,7 +1036,7 @@ export const zh = {
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient
-    outcomeRefill: "这是您清单上已有的药，又多了一些。",
+    outcomeRefill: "这是您已经在吃的药，又多了一些。",
     // @patient
     outcomeChange: "这张标签上的分量不一样。",
     // @patient headline
@@ -1055,7 +1064,17 @@ export const zh = {
     // @patient phrase
     moreYes: "对，加上去",
     // @patient
-    papersNone: "没有等您确认的文件。",
+    morePhoto: "先拍一张药盒标签的照片。",
+    // @patient
+    morePhotoWhy: "这个药，Nura 要先看药盒标签。",
+    // @patient
+    morePhotoKept: "Nura 已经有药盒标签的照片了。",
+    // @patient phrase
+    orderYes: "好，请家人订",
+    // @patient phrase
+    orderNo: "现在不用",
+    // @patient
+    papersNone: "没有文件在等您说好。",
     // @patient
     paperFrom: "这是{date}收到的。",
     // @patient phrase
@@ -1149,7 +1168,7 @@ export const zh = {
     // @patient headline
     notesTitle: "关于这个地方的笔记",
     // @patient
-    notesOnly: "只有主人和负责的家人能看这些笔记。",
+    notesOnly: "只有您和负责这些文件的人能看这些笔记。",
     // @patient phrase
     noteLabel: "一条关于这个地方的笔记",
     // @patient phrase
@@ -1175,20 +1194,30 @@ export const zh = {
       haemoglobin: "您的血色素",
       tsh: "您的甲状腺检查",
     },
-    // @patient phrase
-    resultOn: "{date}的结果是{value} {unit}",
+    // 整句，不是短语：它单独成一段（Day.tsx），屏幕阅读器会当作一个完整的单位读出来（#166 审查）。
     // @patient
-    rangeUnder: "范围是{upper}以下。",
+    resultOn: "{date}的数字是{value}。",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{date}的数字是{value} {unit}",
     // @patient
-    rangeOver: "范围是{lower}以上。",
+    rangeUnder: "大多数人这个数字在{upper}以下。",
     // @patient
-    rangeBetween: "范围是{lower}到{upper}。",
+    rangeOver: "大多数人这个数字在{lower}以上。",
     // @patient
-    noRange: "Nura 没有这一项的范围。",
+    rangeBetween: "大多数人这个数字在{lower}到{upper}之间。",
     // @patient
-    labRange: "这个范围印在您的验血单上。",
+    noRange: "Nura 没有这一项的平常数字。",
     // @patient
-    guideRange: "这个范围来自适合您年龄的指南。",
+    labRange: "平常的数字印在您的验血单上。",
+    // @patient
+    guideRange: "平常的数字来自适合您年龄的指南。",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura 需要知道您的年龄，才能找到平常的数字。",
+      needs_sex: "Nura 需要知道您是男是女。",
+      none_on_file: "Nura 没有这一项的平常数字。",
+    },
     // @patient phrase
     anchors: {
       wake: "起床的时候",
@@ -1208,7 +1237,7 @@ export const zh = {
     // @patient
     notSet: "还没有人设定您的一天。",
     // @patient phrase
-    setDay: "设定这一天",
+    setDay: "设定您的一天",
     // @patient phrase
     timeLabel: "几点",
     // @patient phrase
@@ -1216,13 +1245,13 @@ export const zh = {
     // @patient phrase
     walkAfter: "之后散步",
     // @patient phrase
-    checkDay: "检查这一天",
+    checkDay: "检查您的一天",
     // @patient
-    dayAsk: "这一天是这样吗？",
+    dayAsk: "您的一天是这样吗？",
     // @patient phrase
-    dayYes: "对，设定这一天",
+    dayYes: "对，设定您的一天",
     // @patient
-    daySaved: "Nura 记下了这一天。",
+    daySaved: "Nura 记下了您的一天。",
     // @patient headline
     tableMoment: "什么时候",
     // @patient headline
