@@ -301,6 +301,9 @@ CLASSES: dict[str, str] = {
     "medication_line.registration_no": HEALTH,
     "medication_line.drug_class": HEALTH,
     "medication_line.high_risk": HEALTH,
+    # Whether a product is a prescription medicine, a supplement or a TCM remedy (E04-03) is a
+    # fact about the person's health — what he takes — not an operational detail.
+    "medication_line.product_kind": HEALTH,
     "medication_line.dose": HEALTH,
     "medication_line.prescriber": HEALTH,
     "medication_line.source_kind": HEALTH,
@@ -335,6 +338,12 @@ CLASSES: dict[str, str] = {
     "interaction_flag.other_line_id": HEALTH,
     "interaction_flag.severity": HEALTH,
     "interaction_flag.text_id": HEALTH,
+    # What a pharmacist would check the pair against (E04-03): the clinical basis for a flag
+    # on this person's medicines, same standing as severity and text_id.
+    "interaction_flag.source": HEALTH,
+    # Whether a pharmacist has reviewed the pair yet: review workflow state, not itself a
+    # fact about the person's health — the same standing as confidence_state below.
+    "interaction_flag.awaiting_review": OPERATIONAL,
     "interaction_flag.flagged_at": OPERATIONAL,
     # --- notes --------------------------------------------------------------------------------
     "note.text": HEALTH,

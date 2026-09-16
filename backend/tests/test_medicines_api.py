@@ -266,7 +266,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
     aspirin = _label("aspirin", "100 mg", "1 tab OD", 30)
     aspirin_photo = await _artefact(client, profile_id, pa, "three")
     shown = await client.post(
-        f"/profiles/{profile_id}/medicines/draft",
+        f"/profiles/{profile_id}/medicines/draft?language=en",
         json={"label": aspirin, "source_artifact_id": aspirin_photo},
         headers=his,
     )
@@ -479,9 +479,14 @@ async def test_the_label_must_name_a_medicine_and_say_the_dose_one_way(
         headers=his,
     )
     assert unread.status_code == 400 and unread.json() == {"refusal": "DoseNotRead"}
+    # A well-formed label the register has no product for is refused too — NotIdentified
+    # answers "no product in this register matches", not "this label is malformed"; digoxin
+    # is deliberately never in the fixture (tests/test_drugs.py::
+    # test_a_monograph_is_rule_ids_not_prose relies on the same gap), so the case does not
+    # depend on the fixture's coverage staying thin as it grows.
     unknown = await deployment.client.post(
         f"/profiles/{profile_id}/medicines/draft",
-        json={"label": _label("ibuprofen", "200 mg", "1 tab BD"), "source_artifact_id": photo},
+        json={"label": _label("digoxin", "0.125 mg", "1 tab OD"), "source_artifact_id": photo},
         headers=his,
     )
     assert unknown.status_code == 400 and unknown.json() == {"refusal": "NotIdentified"}

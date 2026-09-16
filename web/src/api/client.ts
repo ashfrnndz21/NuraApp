@@ -63,16 +63,29 @@ function bareRefusal(status: number): string {
  *  at once; a queue costs a few milliseconds and makes the app's behaviour the same on a
  *  laptop as on the deployment.
  *
- *  An `urgent` call — a red word on the feeling cloud, the not-feeling-well button — goes
- *  next: ahead of every call still waiting, behind only the one already on the wire (and any
- *  urgent call before it). A red word reaches the flag before any page read that was queued
- *  first (W7, E13-02, E17-02). */
+ *  An `urgent` call — a red word on the feeling cloud, the not-feeling-well button, a symptom
+ *  logged — goes next: ahead of every call still waiting, and ahead too of a background read
+ *  already on the wire when it was made (a page's own refresh, a feed's prefetch, a restore
+ *  after sign-in) — that read is aborted, its caller sees `Unreachable` and copes exactly as
+ *  it would with no network, and the urgent call is sent in its place. A write already on the
+ *  wire (a tap held offline being replayed, a nudge answered) is left to finish: it cannot be
+ *  taken back once the backend may have seen it, so the urgent call waits the moment or two
+ *  that takes, never longer. A red word reaches the flag before any page read, whatever was
+ *  queued first or already sending (W7, E13-02, E17-01, E17-02, E17-04). */
 interface Job {
   urgent: boolean;
+  /** A read with no side effect: safe to abort and let its caller coldly fail, since nothing
+   *  it does is lost by not finishing. A write is never abortable — once it may be on the
+   *  wire, taking it back is not this queue's to decide. */
+  abortable: boolean;
+  control: AbortController;
   run: () => Promise<void>;
 }
 const waiting: Job[] = [];
 let sending = false;
+/** The job presently inside `run()` — on the wire, not merely waiting — so an urgent call
+ *  arriving behind it can still reach past it (see `enqueue`). */
+let current: Job | null = null;
 
 /** How long an urgent call may take from the tap before it is given up as unreachable, whatever
  *  is on the wire: the red-flag path shows the backend's offline card then, never a page that
@@ -84,7 +97,7 @@ export const URGENT_DEADLINE_MS = 10_000;
  *  request never holds the queue — and an urgent call behind it — for ever. */
 export const CALL_DEADLINE_MS = 30_000;
 
-function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false): Promise<T> {
+function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false, abortable = false): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const control = new AbortController();
     let settled = false;
@@ -97,6 +110,8 @@ function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false): 
     };
     const job: Job = {
       urgent,
+      abortable,
+      control,
       run: () =>
         settled
           ? Promise.resolve()
@@ -108,6 +123,10 @@ function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false): 
     if (urgent) {
       const first = waiting.findIndex((one) => !one.urgent);
       waiting.splice(first < 0 ? waiting.length : first, 0, job);
+      // Nothing that only reads may sit ahead of a red word, whether it is still waiting
+      // (the splice above) or already sending: a background refresh caught on the wire is
+      // stopped here, not left to decide by whatever moment it happened to start.
+      if (current && !current.urgent && current.abortable) current.control.abort();
       deadline = setTimeout(
         () =>
           settle(() => {
@@ -142,15 +161,21 @@ async function pump(): Promise<void> {
   if (sending) return;
   sending = true;
   try {
-    for (let job = waiting.shift(); job; job = waiting.shift()) await job.run();
+    for (let job = waiting.shift(); job; job = waiting.shift()) {
+      current = job;
+      await job.run();
+    }
   } finally {
+    current = null;
     sending = false;
   }
 }
 
-/** One call to the API. Bearer token in a header, never a cookie; JSON in and out. */
+/** One call to the API. Bearer token in a header, never a cookie; JSON in and out. A `GET` is
+ *  the only shape a background read takes here, and the only shape it is safe to abort for an
+ *  urgent call arriving behind it (see `enqueue`). */
 export function api<T>(path: string, call: Call = {}): Promise<T> {
-  return enqueue((signal) => send<T>(path, call, signal), call.urgent);
+  return enqueue((signal) => send<T>(path, call, signal), call.urgent, (call.method ?? "GET") === "GET");
 }
 
 function urlFor(path: string, call: Call): URL {
@@ -165,7 +190,7 @@ function urlFor(path: string, call: Call): URL {
  *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
  *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
 export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
-  return enqueue((signal) => sendBlob(path, call, signal), call.urgent);
+  return enqueue((signal) => sendBlob(path, call, signal), call.urgent, true);
 }
 
 async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<Blob> {
@@ -215,12 +240,13 @@ export function apiText(path: string, call: Call = {}): Promise<string> {
       throw new Refused(response.status === 404 ? "NotFound" : bareRefusal(response.status), response.status);
     }
     return text;
-  }, call.urgent);
+  }, call.urgent, true);
 }
 
-/** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). */
+/** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). Always
+ *  a write (`sendBytes` is `POST` only): never abortable, the same as any other write. */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
-  return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent);
+  return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent, false);
 }
 
 async function sendBytes<T>(path: string, body: Blob, contentType: string, call: Call, signal: AbortSignal): Promise<T> {
