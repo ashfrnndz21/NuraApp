@@ -197,6 +197,10 @@
   flex: none;
   display: flex;
   gap: 2px;
+  /* When the writing is large enough that a word would have to break, the bar takes a second
+     row rather than breaking it: every label stays one whole word on one line (E15-04), and
+     nothing goes sideways. */
+  flex-wrap: wrap;
   margin: var(--space-1) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
   padding: 6px;
   border-radius: var(--radius-pill);
@@ -207,6 +211,7 @@
   box-shadow: var(--glass-highlight), var(--tile-shadow);
 }
 .tabbar button {
+  /* Every tab takes an equal share of the row, so each keeps the density's target width. */
   flex: 1 1 0;
   min-width: 0;
   min-height: var(--target);
@@ -919,4 +924,9 @@ html.shot-full .shell > .shell-scroll {
 }
 :root[data-text="large"] .me-word {
   display: none;
+}
+
+/* The word on a tab is one line and one whole word, at any text size. */
+.tabbar button .tab-word {
+  white-space: nowrap;
 }
