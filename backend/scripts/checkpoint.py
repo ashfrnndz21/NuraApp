@@ -2748,7 +2748,13 @@ def checkpoint_8(client: httpx.Client) -> None:
     if not boundary or learning[0]["body"][-len(boundary) :] != boundary:
         raise fail("Pa reads the learning card", why="it does not end on the boundary line")
     shown = [item for page in (first, second, third) for item in page["items"]]
-    if any(item.get("boundary") for item in shown if item["type"] not in {"learning", "notice"}):
+    # Every card made from an allowlisted page infers, so every one of them ends on the line:
+    # the explainer, the safety notice, and the feed's richer formats (F1) — a clip, a local
+    # bulletin, a season coming, the week's food card. His week in 30 seconds is not among
+    # them: it reads his own record back to him, so it carries no line, like every card that
+    # shows the record.
+    INFERRING = {"learning", "notice", "clip", "local", "seasonal", "food"}
+    if any(item.get("boundary") for item in shown if item["type"] not in INFERRING):
         raise fail("Pa reads the learning card", why="a card that infers nothing carries a line")
     ok(
         f"self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, "
