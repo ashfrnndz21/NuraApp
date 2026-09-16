@@ -15,12 +15,22 @@ export const profile = signal<ProfileOut | null>(null);
 export const densityChosen = signal<Density | null>(null);
 export const posture = signal<Posture>("stable");
 export const restored = signal(false);
+/** His large-text setting (E15-04), taken from his State on his own phone: one step bigger
+ *  than his density, on top of whatever text size the phone itself is set to. */
+export const largeText = signal(false);
+/** His speed for the one player, as the phone keeps it: read with the rest of the session,
+ *  before any screen shows, so the first tap after opening is already at his speed. The player
+ *  takes it from here (`player/voice.ts`). */
+export const savedSpeed = signal<number | null>(null);
+export const SPEED_KEY = "device.speed";
 
 const KEYS = {
   token: "session.token",
   profile: "session.profile",
   language: "device.language",
   density: "device.density",
+  text: "device.text",
+  speed: SPEED_KEY,
 } as const;
 
 /** Patient density for the owner of the papers; caregiver density for anyone holding a key. */
@@ -44,15 +54,21 @@ effect(() => {
   html.dataset.density = densityFor(profile.value?.standing, densityChosen.value);
   html.dataset.posture = posture.value;
   html.lang = language.value;
+  if (largeText.value) html.dataset.text = "large";
+  else delete html.dataset.text;
 });
 
 export async function restoreSession(): Promise<void> {
-  const [savedToken, savedProfile, savedLanguage, savedDensity] = await Promise.all([
+  const [savedToken, savedProfile, savedLanguage, savedDensity, savedText, savedRate] = await Promise.all([
     kvGet<string>(KEYS.token),
     kvGet<ProfileOut>(KEYS.profile),
     kvGet<string>(KEYS.language),
     kvGet<Density>(KEYS.density),
+    kvGet<string>(KEYS.text),
+    kvGet<number>(KEYS.speed),
   ]);
+  largeText.value = savedText === "large";
+  savedSpeed.value = typeof savedRate === "number" ? savedRate : null;
   language.value = isLanguage(savedLanguage)
     ? savedLanguage
     : deviceLanguage(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
@@ -76,6 +92,13 @@ export async function chooseProfile(value: ProfileOut | null): Promise<void> {
 export async function setLanguage(code: Language): Promise<void> {
   await kvSet(KEYS.language, code);
   language.value = code;
+}
+
+/** His large-text setting, as his State says it: kept on the phone so it opens that way offline. */
+export async function setLargeText(value: boolean): Promise<void> {
+  if (largeText.peek() === value) return;
+  await (value ? kvSet(KEYS.text, "large") : kvDel(KEYS.text));
+  largeText.value = value;
 }
 
 export async function setDensity(value: Density | null): Promise<void> {

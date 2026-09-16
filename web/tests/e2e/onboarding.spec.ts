@@ -333,7 +333,11 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   });
   expect(stored.local).toBe(0);
   expect(stored.session).toBe(0);
-  for (const key of stored.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.|feed\.|nfw\.)/);
+  // Today's own copies, not onboarding's: `emergency.` is the emergency card Today keeps for
+  // offline, `queue.` the taps held while offline (E00-08), `nfw.` the not-feeling-well cards
+  // for no network (ADR 0012) — each bound to the key that read it and deleted with the Today
+  // page on a refusal, a switch of papers and sign-out.
+  for (const key of stored.keys) expect(key).toMatch(/^(session\.|device\.|today\.|proud\.|takenDays\.|feed\.|emergency\.|queue\.|nfw\.)/);
 });
 
 test("the caregiver density, for a chief setting up her father", async ({ page }) => {

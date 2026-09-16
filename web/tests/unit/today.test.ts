@@ -271,3 +271,15 @@ describe("the words around them", () => {
     expect(dayKey(new Date(2026, 8, 14, 23, 59))).toBe("2026-09-14");
   });
 });
+
+describe("his large-text setting, from State", () => {
+  it("is on when the vision fact says so, off when it says no or says nothing, and unknown to a key that does not read it", async () => {
+    const { largeTextOf } = await import("../../src/today/model");
+    const facts = (value: unknown) => ({ dimensions: { functional: { facts: { vision: { large_text: { value } } } } } });
+    expect(largeTextOf(facts(true))).toBe(true);
+    expect(largeTextOf(facts(false))).toBe(false);
+    expect(largeTextOf({ dimensions: { functional: { facts: {} } } })).toBe(false);
+    expect(largeTextOf({ dimensions: { functional: null } })).toBeNull();
+    expect(largeTextOf(null)).toBeNull();
+  });
+});

@@ -1,9 +1,11 @@
 import type { ComponentChildren, JSX } from "preact";
-import { speak, type SpokenCard } from "../speech/speak";
+import { useEffect, useId, useRef } from "preact/hooks";
+import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
 import type { Tab } from "../flow";
 import { demo } from "../store/deployment";
+import { PlayerControls } from "./Player";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
 
@@ -83,18 +85,30 @@ export function Pill({ onClick, children, plum, coral, done, quiet, disabled, la
   );
 }
 
-/** The spoken twin of a card. Audio starts here and nowhere else. */
+/** The spoken twin of a card. Audio starts here and nowhere else: the tap opens the one
+ *  player (E15-07) under the button — Play / Pause, his speed, the line being said — and
+ *  leaving the screen stops it. */
 export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
-  const card: SpokenCard = { lines, language: language.value };
+  const key = `hear:${useId()}`;
+  const open = voice.key.value === key;
+  useEffect(() => () => voice.leave(key), [key]);
   return (
-    <Pill quiet onClick={() => speak(card)} label={`${t().today.hear}: ${lines[0] ?? ""}`} testId="hear">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 10v4h3l4 4V6L7 10H4z" />
-        <path d="M15 9a4 4 0 0 1 0 6" />
-        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-      </svg>
-      {t().today.hear}
-    </Pill>
+    <>
+      <Pill
+        quiet
+        onClick={() => void voice.play({ kind: "speech", key, lines, language: language.value }).catch(() => undefined)}
+        label={`${t().today.hear}: ${lines[0] ?? ""}`}
+        testId="hear"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 10v4h3l4 4V6L7 10H4z" />
+          <path d="M15 9a4 4 0 0 1 0 6" />
+          <path d="M17.5 6.5a8 8 0 0 1 0 11" />
+        </svg>
+        {t().today.hear}
+      </Pill>
+      {open && <PlayerControls />}
+    </>
   );
 }
 
@@ -222,8 +236,20 @@ export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Ta
     ["family", s.tabs.family],
     ["me", s.tabs.me],
   ] as const;
+  // The screen keeps room under its last line for the bar as tall as it is: at a large text
+  // size a label can take two lines, and a fixed allowance would leave a line under the bar.
+  const bar = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = bar.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const measure = () => document.documentElement.style.setProperty("--tabbar-h", `${Math.ceil(element.getBoundingClientRect().height)}px`);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(element);
+    return () => watch.disconnect();
+  }, []);
   return (
-    <nav class="tabbar" aria-label={s.appName}>
+    <nav class="tabbar" aria-label={s.appName} ref={bar}>
       {tabs.map(([tab, label]) => (
         <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
           {label}
@@ -235,15 +261,22 @@ export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Ta
 
 /** On a demo deployment (ADR 0008), first on every screen: what this is, in the person's
  *  language, and that real health information does not belong in it. */
+/** The demo banner (ADR 0008). Its headline is pinned to the top of every screen; the lines
+ *  under it sit above the screen and scroll away with it, so that at a large text size the part
+ *  that never moves stays one headline tall and is never drawn over his lines (E15-04). */
 export function DemoBanner(): JSX.Element | null {
   if (!demo.value) return null;
   const s = t().demo;
   return (
-    <aside class="demo-banner" role="note" data-testid="demo-banner">
-      <strong>{s.banner}</strong>
-      {s.lines.map((line, index) => (
-        <span key={index}>{line}</span>
-      ))}
-    </aside>
+    <>
+      <aside class="demo-banner" role="note" data-testid="demo-banner">
+        <strong>{s.banner}</strong>
+      </aside>
+      <div class="demo-lines" data-testid="demo-lines">
+        {s.lines.map((line, index) => (
+          <span key={index}>{line}</span>
+        ))}
+      </div>
+    </>
   );
 }

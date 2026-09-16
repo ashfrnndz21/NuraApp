@@ -19,7 +19,7 @@ from app.channels import safety_strings as strings
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import FrozenClock
 from app.db import utcnow
-from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.identity.service import register_person
 from app.ingestion.transcribe import NOTHING_HEARD, FixtureTranscriber
 from app.ingestion.voice import NotAVoiceNote, VoiceNoteTooLong, check_voice_note
@@ -239,7 +239,10 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
     assert [(step["standing"], step["person_id"]) for step in ladder.rungs] == [
         ("key_holder", str(kit.id))
     ]
-    sent = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).one()
+    rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    # His WhatsApp, and the notice on his family page beside it (#162).
+    assert {row.via for row in rows} == {DeliveryChannel.WHATSAPP, DeliveryChannel.IN_APP}
+    [sent] = [row for row in rows if row.via is DeliveryChannel.WHATSAPP]
     assert sent.to_person_id == kit.id and sent.outcome is DeliveryOutcome.SENT
     # The sandbox number approves every template, so the notice goes in today's words (#160);
     # a number that does not approve `red_flag_notice_v2` sends the approved one.

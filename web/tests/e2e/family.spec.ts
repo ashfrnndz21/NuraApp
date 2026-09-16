@@ -305,6 +305,9 @@ test.describe("the caregiver density at 360 by 640", () => {
     await openFamilyPart(page, "settings");
     await expect(page.getByLabel("Quiet from")).toHaveValue("21:30");
     await expect(page.getByTestId("kind-flag")).toContainText("Never held");
+    // No setting chooses how a red flag goes (#162): the row says so and offers no channel.
+    await expect(page.getByTestId("every-way-flag")).toHaveText("Nura always tells your family about this, every way it can.");
+    await expect(page.getByTestId("kind-flag").getByTestId(/^channel-flag-/)).toHaveCount(0);
     expect(await caregiverScreenOk(page)).toEqual([]);
 
     await openFamilyPart(page, "documents");

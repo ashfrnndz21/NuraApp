@@ -1,4 +1,6 @@
 import type { JSX } from "preact";
+import { useEffect } from "preact/hooks";
+import { focusHeading } from "../../ui/focus";
 import { stage } from "../../onboarding/state";
 import { AboutStep } from "./About";
 import { AsksStep } from "./Asks";
@@ -7,13 +9,15 @@ import { InviteStep } from "./Invite";
 import { PlanStep } from "./Plan";
 import { QuestionsStep } from "./Questions";
 import { ReadBackStep } from "./ReadBack";
-import { RecordsStep, ReviewStep } from "./Records";
+import { BatchStep, RecordsStep, ReviewStep } from "./Records";
 
 /** Onboarding (TASKS.md Session 12, on the web per ADR 0001): about you, the word cloud, the
  *  follow-up questions, the read-back, the papers with their review cards, the questions the
  *  papers raise, and the gaps. One step at a time; no tab bar until it is done. */
 export function OnboardingScreen(): JSX.Element {
   const current = stage.value;
+  // Each step is a new screen for the screen reader: it starts at the step's heading.
+  useEffect(() => focusHeading(), [current.name, current.name === "review" ? current.card.card_id : ""]);
   switch (current.name) {
     case "about":
       return <AboutStep only={current.only} />;
@@ -33,5 +37,7 @@ export function OnboardingScreen(): JSX.Element {
       return <PlanStep />;
     case "invite":
       return <InviteStep />;
+    case "batch":
+      return <BatchStep />;
   }
 }

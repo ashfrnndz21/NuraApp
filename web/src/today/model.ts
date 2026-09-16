@@ -1,5 +1,5 @@
-import type { FeedItemOut, LineOut, Posture, SlotOut } from "../api/types";
-import { fill, type Strings } from "../strings";
+import type { FeedItemOut, LineOut, Posture, SlotOut, StateOut } from "../api/types";
+import { fill, type Language, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
  *  cards with the backend's own `due_now` / `missed` and source line, the reconciled list with
@@ -176,6 +176,15 @@ export function medicinesCard(lines: readonly LineOut[], withSupply: boolean): {
   return { lines: body, provenance: about?.source ?? "" };
 }
 
+/** His large-text setting as his State holds it (the `vision` subject of the functional
+ *  dimension, E01's settings): true or false, or null when this key does not read that part of
+ *  the State and the phone keeps what it has. */
+export function largeTextOf(state: Pick<StateOut, "dimensions"> | null): boolean | null {
+  const functional = state?.dimensions?.functional;
+  if (!functional) return null;
+  return functional.facts?.vision?.large_text?.value === true;
+}
+
 export function dayKey(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -193,4 +202,26 @@ export function dateLine(date: Date, locale: string): string {
 /** "8:05 pm" in English; "20:05" in Malay and Chinese, with no abbreviation to decode. */
 export function timeLine(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: locale.startsWith("en") }).format(date);
+}
+
+/** The hour the way he says it (plain words, rule 5; the backend's `when_words.say_clock`):
+ *  "10 in the morning", "half past 7 in the evening", "8.05 in the morning"; in Malay
+ *  "pukul 8 pagi", in Chinese "上午8点半". Twelve-hour, never a colon, on the region's clock. */
+export function clockWords(date: Date, language: Language, zone?: string): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "numeric", hourCycle: "h23", timeZone: zone }).formatToParts(date);
+  const hour24 = Number(parts.find((part) => part.type === "hour")?.value ?? "0") % 24;
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  const words = {
+    en: ["in the morning", "in the afternoon", "in the evening", "at night"],
+    ms: ["pagi", "petang", "malam", "malam"],
+    zh: ["上午", "下午", "晚上", "晚上"],
+  }[language];
+  const part = words[hour24 < 12 ? 0 : hour24 < 17 ? 1 : hour24 < 21 ? 2 : 3];
+  const hour = hour24 % 12 || 12;
+  const padded = String(minute).padStart(2, "0");
+  if (language === "zh") return `${part}${hour}点${minute === 0 ? "" : minute === 30 ? "半" : `${minute}分`}`;
+  if (language === "ms") return `pukul ${minute === 0 ? hour : `${hour}.${padded}`} ${part}`;
+  if (minute === 0) return `${hour} ${part}`;
+  if (minute === 30) return `half past ${hour} ${part}`;
+  return `${hour}.${padded} ${part}`;
 }

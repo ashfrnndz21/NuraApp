@@ -66,6 +66,18 @@ async def test_the_person_a_flag_reached_says_im_on_it_and_the_ladder_stops(
         "Nura asked you to check on Pa on Monday 14 September at 10 in the morning.",
         "Once you tap I'm on it, Nura asks nobody else.",
     ]
+    # Mei, his chief, was reached on her WhatsApp: nobody is listed as out of reach (#162).
+    assert ladder["not_reached"] == []
+    # Who Nura cannot message on WhatsApp is his chief's to see (#163); Kit is refused it.
+    reach = await client.get(f"/profiles/{profile_id}/reach", headers=bearer(mei["token"]))
+    assert reach.status_code == 200, reach.text
+    assert {one["person_id"]: one["whatsapp"] for one in reach.json()} == {
+        mei["person_id"]: True,
+        kit["person_id"]: True,
+    }
+    assert all(one["lines"] == [] for one in reach.json())
+    refused = await client.get(f"/profiles/{profile_id}/reach", headers=bearer(kit["token"]))
+    assert refused.status_code == 403, refused.text
     # In Malay, for a reader who reads Malay.
     malay = await client.get(
         f"/profiles/{profile_id}/ladders", params={"language": "ms"}, headers=bearer(mei["token"])

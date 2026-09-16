@@ -18,7 +18,7 @@ from app.regions import Region
 from app.safety.plain_words import verify
 from app.settings import Settings
 
-SIXTEEN = (
+EIGHTEEN = (
     "morning_card",
     "visit_reminder",
     "reorder",
@@ -35,13 +35,15 @@ SIXTEEN = (
     "red_flag_notice_ambiguous",
     "nudge",
     "red_flag_notice_v2",
+    "unheard_note_notice",
+    "unheard_note_notice_call",
 )
 """E19's six, then E11's nine (the ladder's two asks, the reorder to the family, the count,
 the papers waiting, a family message, the red-flag notice's two variants, and the day's smart
-nudge), then the red-flag notice in the glossary's words (#160), in the order they are
-submitted for approval."""
+nudge), then the red-flag notice in the glossary's words (#160) and the two notices of a
+voice note Nura could not hear (#158), in the order they are submitted for approval."""
 
-E19_SIX = SIXTEEN[:6]
+E19_SIX = EIGHTEEN[:6]
 """Approved: the only templates a deployment's number carries until Meta approves E11's."""
 
 DOSES = {
@@ -50,6 +52,23 @@ DOSES = {
     "zh": "早餐时吃 1 片您的血压药。",
 }
 """The doses slot is what the medicines module renders in the profile's language."""
+
+CHOICES = {
+    "en": (
+        "Send 1 for your blood pressure tablet, 5 on the box, with breakfast.\n"
+        "Send 2 for the water pill, 40 on the box, with breakfast."
+    ),
+    "ms": (
+        "Hantar 1 untuk ubat tekanan darah anda, kotak bertulis 5, bersama sarapan.\n"
+        "Hantar 2 untuk pil air, kotak bertulis 40, bersama sarapan."
+    ),
+    "zh": "请发 1：您的血压药，盒子上写着 5，早餐时吃。\n请发 2：去水药，盒子上写着 40，早餐时吃。",
+}
+TOOK_LINES = {
+    "en": "You took your blood pressure tablet with breakfast.",
+    "ms": "Anda sudah ambil ubat tekanan darah anda bersama sarapan.",
+    "zh": "您早餐时吃了您的血压药。",
+}
 
 MESSAGES = {
     "en": "Mei will pick you up at 9.",
@@ -87,8 +106,8 @@ FILL = {
 }
 
 
-def test_there_are_sixteen_and_each_has_every_language() -> None:
-    assert TEMPLATE_NAMES == SIXTEEN
+def test_there_are_eighteen_and_each_has_every_language() -> None:
+    assert TEMPLATE_NAMES == EIGHTEEN
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)
         for language, body in template.text.items():
@@ -96,7 +115,7 @@ def test_there_are_sixteen_and_each_has_every_language() -> None:
                 assert f"{{{slot}}}" in body, (template.name, language, slot)
 
 
-@pytest.mark.parametrize("name", SIXTEEN)
+@pytest.mark.parametrize("name", EIGHTEEN)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_template_renders_and_passes_plain_words(name: str, language: str) -> None:
     fill = {
@@ -117,6 +136,10 @@ def test_every_template_renders_and_passes_plain_words(name: str, language: str)
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_every_reply_renders_and_passes_plain_words(key: str, language: str) -> None:
     params = {slot: FILL[slot] for slot in FILL}
+    # The list in "which tablet?" and the lines naming what "Taken" wrote down (#162) are
+    # whole lines, in the reader's language, as the inbound thread fills them.
+    params["doses"] = CHOICES[language]
+    params["took"] = TOOK_LINES[language]
     text = reply(key, language, **params)
     assert [f for f in verify(text, language) if f.severity == "fail"] == []
 
@@ -137,7 +160,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
     assert sandbox.region is Region.MY
     assert sandbox.provider_name == "fixture"
     assert sandbox.verification is VerificationState.SANDBOX
-    assert sandbox.templates == SIXTEEN
+    assert sandbox.templates == EIGHTEEN
     assert sandbox.approves("morning_card") and not sandbox.approves("marketing_blast")
     named = business_number_for(
         Settings(
@@ -153,7 +176,7 @@ def test_the_business_number_names_its_provider_state_and_templates() -> None:
 
 def test_e11s_templates_wait_for_meta_and_a_deployment_carries_only_the_approved() -> None:
     pending = [template.name for template in TEMPLATES.values() if not template.approved]
-    assert pending == list(SIXTEEN[6:])
+    assert pending == list(EIGHTEEN[6:])
     live = business_number_for(
         Settings(region=Region.SG, database_url="sqlite://", dev_code_sender=False)
     )

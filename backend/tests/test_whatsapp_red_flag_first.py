@@ -83,9 +83,12 @@ async def test_without_his_whatsapp_consent_a_red_flag_still_reaches_the_family_
     # Kit, the other one holding the emergency card, is told on his WhatsApp.
     ladder = (await sg.scalars(select(Ladder))).one()
     assert ladder.flag_id == flag.id
-    [row] = (await sg.scalars(select(Delivery))).all()
+    rows = (await sg.scalars(select(Delivery))).all()
+    # His WhatsApp, and the notice on his family page beside it (#162).
+    assert {row.via for row in rows} == {DeliveryChannel.WHATSAPP, DeliveryChannel.IN_APP}
+    [row] = [row for row in rows if row.via is DeliveryChannel.WHATSAPP]
     assert row.to_person_id == kit.id and row.outcome is DeliveryOutcome.SENT  # type: ignore[attr-defined]
-    assert row.via is DeliveryChannel.WHATSAPP and row.passed_over == []
+    assert row.passed_over == []
     assert [one.to_e164 for one in home.whatsapp.sent if one.to_e164 != MEI] == [KIT]
 
 
@@ -111,6 +114,7 @@ async def test_taken_writes_the_tap_for_the_tablet_whose_window_is_open(
     assert handled.outcome == "taken"
     assert handled.replies[0].text.splitlines() == [
         "Thank you, I wrote it down.",
+        "You took your blood pressure tablet with breakfast.",
         "Mei can see you took it.",
     ]
     tap = (await sg.scalars(select(DoseTaken))).one()

@@ -4,6 +4,7 @@
     PUT  /profiles/{id}/delivery-settings             change it (owner, chief)
     GET  /profiles/{id}/deliveries?day=               every attempt and its rule (owner, chief)
     GET  /profiles/{id}/ladders?language=             the open flag ladders that reached the caller
+    GET  /profiles/{id}/reach?language=               who Nura cannot message on WhatsApp (owner, chief)
     POST /profiles/{id}/ladders/{ladder}/acknowledge  "I have it": a flag's ladder stops
     POST /profiles/{id}/push-subscriptions            this phone gets reminders (Web Push)
     DELETE /profiles/{id}/push-subscriptions          this phone stops getting them
@@ -24,7 +25,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.audit.access import audited_profile_read
+from app.audit.access import audited_profile_read, person_display_name
 from app.channels.api.deps import (
     ClosingContext,
     Context,
@@ -37,15 +38,18 @@ from app.channels.api.deps import (
 from app.db import as_utc
 from app.delivery.ladder_words import answered_lines, asked_lines
 from app.delivery.ladder_words import language_of as ladder_language
+from app.delivery.reach import who_nura_reaches
+from app.delivery.reach_words import not_reached_line
 from app.delivery.subscriptions import subscribe, unsubscribe
 from app.delivery.triggers.deliver import Sent, Via
 from app.delivery.triggers.engine import run_due
-from app.delivery.triggers.ladder import acknowledge_flag, open_flags_for
+from app.delivery.triggers.ladder import acknowledge_flag, not_reached, open_flags_for
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder, TriggerType
 from app.delivery.triggers.preferences import change, current, log
 from app.delivery.triggers.rules import Config
 from app.delivery.when_words import say_clock
 from app.identity.closing import answerable_while_closing
+from app.keys.scopes import KeyRole
 from app.medicines.strings import say_date
 from app.regions import REGION_TZ
 from app.settings import Settings
@@ -203,6 +207,16 @@ class OpenLadderOut(BaseModel):
     subject: str
     started_at: datetime
     lines: list[str]
+    not_reached: list[str] = Field(default_factory=list)
+    """For the owner and his chief: who this flag's ladder asked whose phone nothing reached —
+    they have only the notice on their family page (#162). Empty for anyone else."""
+
+
+class ReachOut(BaseModel):
+    person_id: uuid.UUID
+    whatsapp: bool
+    push: bool
+    lines: list[str]
 
 
 @router.get("/profiles/{profile_id}/delivery-settings")
@@ -215,7 +229,8 @@ async def settings_now(context: Context, session: Db) -> SettingsOut:
 @router.put("/profiles/{profile_id}/delivery-settings")
 async def settings_change(body: SettingsIn, context: Context, session: Db) -> SettingsOut:
     """Change them: a new row, the newest in force. An alert's cap is refused
-    (`AlertsAreNeverHeld`, 400)."""
+    (`AlertsAreNeverHeld`, 400), and so is an alert's channel list (`AlertsGoEveryWay`, 400):
+    a red flag goes every way each person can be reached, whatever is set (#162)."""
     changed = await change(
         session,
         context=context,
@@ -255,9 +270,19 @@ async def open_ladders(
     profile = await audited_profile_read(session, context)
     words = ladder_language(language or profile.language)
     zone = REGION_TZ[context.region]
+    runs_it = context.is_owner or context.is_steward or context.role is KeyRole.CHIEF
     shown: list[OpenLadderOut] = []
     for ladder in found:
         local = as_utc(ladder.started_at).astimezone(zone)
+        missed = (
+            [
+                not_reached_line(await person_display_name(session, context, person), words)
+                for person in await not_reached(session, context=context, ladder=ladder)
+                if person != context.person_id
+            ]
+            if runs_it
+            else []
+        )
         shown.append(
             OpenLadderOut(
                 ladder_id=ladder.id,
@@ -269,9 +294,32 @@ async def open_ladders(
                     time=say_clock(local.time(), words),
                     language=words,
                 ),
+                not_reached=missed,
             )
         )
     return shown
+
+
+@router.get("/profiles/{profile_id}/reach")
+async def reach(
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> list[ReachOut]:
+    """Each person holding a live key, and whether Nura can message them on WhatsApp and push
+    to them, with a line for each it cannot message on WhatsApp (#163). Owner and chief."""
+    profile = await audited_profile_read(session, context)
+    found = await who_nura_reaches(
+        session,
+        context=context,
+        push=providers_of(request).push,
+        language=language or profile.language,
+    )
+    return [
+        ReachOut(person_id=one.person_id, whatsapp=one.whatsapp, push=one.push, lines=one.lines)
+        for one in found
+    ]
 
 
 @router.post("/profiles/{profile_id}/ladders/{ladder_id}/acknowledge")
