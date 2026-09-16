@@ -14,7 +14,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.drugs.registry import ProductKind, ReviewState, Severity
-from app.language.models import ReviewItem, ReviewKind, Verdict
+from app.language.models import ReviewKind, Verdict
 from app.language.review import queue
 from app.medicines.service import interaction_flags
 from app.medicines.story import interaction_question
@@ -70,13 +70,14 @@ async def test_every_flagged_supplement_and_tcm_pair_names_both_in_all_three_lan
     sg: AsyncSession,
 ) -> None:
     """Every pair the story names — warfarin/danshen/dong quai/ginseng, St John's wort with an
-    SSRI-shaped generic and with a DOAC, potassium with an ACE inhibitor/ARB/spironolactone,
+    an SSRI (sertraline) and with a DOAC, potassium with an ACE inhibitor/ARB/spironolactone,
     calcium or iron with levothyroxine or a quinolone, an NSAID with an anticoagulant — reads
     in English, Malay and Chinese with both products named, before it is saved."""
     pairs = [
         ("warfarin", "3 mg", "danshen", "0.25 g"),
         ("warfarin", "3 mg", "dong quai", "500 mg"),
         ("warfarin", "3 mg", "ginseng", "500 mg"),
+        ("sertraline", "50 mg", "st john's wort", "300 mg"),
         ("apixaban", "5 mg", "st john's wort", "300 mg"),
         ("losartan", "50 mg", "potassium chloride", "600 mg"),
         ("perindopril", "4 mg", "potassium chloride", "600 mg"),
@@ -156,14 +157,24 @@ async def test_a_pair_flagged_twice_is_queued_for_the_pharmacist_once(sg: AsyncS
     assert len(matching) == 1
 
 
+BANNED_WORDS = {
+    "en": {"stop", "start", "increase", "reduce", "double", "halve", "dose", "doses"},
+    "ms": {"berhenti", "hentikan", "mula", "mulakan", "naikkan", "kurangkan", "gandakan"},
+}
+BANNED_CHARACTERS_ZH = ("停", "開始", "开始", "增加", "減少", "减少", "加倍")
+
+
 async def test_the_boundary_no_flagged_pair_tells_him_to_stop_or_change_a_medicine() -> None:
     """Every interaction pair in the fixture, screened, reads as a question for the doctor —
-    never an instruction to start, stop, or change what he takes."""
-    banned = {"stop", "start", "increase", "reduce", "double", "halve", "dose", "doses"}
+    never an instruction to start, stop, or change what he takes — in every language."""
     for interaction in REGISTRY.interactions(sorted(REGISTRY.generics)):
-        for language in ("en",):
+        for language in ("en", "ms", "zh"):
             question = interaction_question(
                 interaction, names={}, prescriber="Dr Tan", language=language
             )
-            words = set(" ".join(question).lower().replace(".", "").split())
-            assert not (words & banned), (interaction.pair, question)
+            said = " ".join(question)
+            if language == "zh":
+                assert not any(c in said for c in BANNED_CHARACTERS_ZH), (interaction.pair, said)
+            else:
+                words = set(said.lower().replace(".", "").split())
+                assert not (words & BANNED_WORDS[language]), (interaction.pair, question)

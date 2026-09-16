@@ -387,7 +387,10 @@ export function AddMedicineScreen(): JSX.Element {
           </Tile>
           {draft.flagged.map((flag) => (
             <Tile paper key={flag.other_line_id + flag.text_id} testId="interaction">
-              <p data-testid="severity">{severityLine(flag.severity, s)}</p>
+              {/* A pair a pharmacist has not yet checked (E04-03) never shows a severity
+                  nobody has verified: `flag.question` already asks him to check with a
+                  pharmacist too, in place of the usual "matters a lot/matters" claim. */}
+              {!flag.awaiting_review && <p data-testid="severity">{severityLine(flag.severity, s)}</p>}
               <div class="lines">
                 {flag.question.map((line, index) => (
                   <p key={index}>{line}</p>
@@ -397,7 +400,7 @@ export function AddMedicineScreen(): JSX.Element {
               <p class="caption" data-testid="pair">
                 {fill(s.record.pair, { one: draft.match.generic, two: flag.other_generic })}
               </p>
-              <Hear lines={[severityLine(flag.severity, s), ...flag.question]} />
+              <Hear lines={flag.awaiting_review ? flag.question : [severityLine(flag.severity, s), ...flag.question]} />
             </Tile>
           ))}
           <Pill plum onClick={() => void save()} disabled={busy} testId="add-it">

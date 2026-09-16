@@ -1825,6 +1825,72 @@
     },
     {
       "registration_no": "MAL20022572A",
+      "brand": "Zoloft",
+      "product_name": "Zoloft 50 mg Tablet",
+      "generic": "sertraline",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20092579A",
+      "brand": "Zoloft",
+      "product_name": "Zoloft 100 mg Tablet",
+      "generic": "sertraline",
+      "strength": "100 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01780P",
+      "brand": "Zoloft",
+      "product_name": "Zoloft 50 mg Tablet",
+      "generic": "sertraline",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL20162586A",
+      "brand": "Duopharma Sertraline",
+      "product_name": "Duopharma Sertraline 50 mg Tablet",
+      "generic": "sertraline",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "SIN01793P",
+      "brand": "Hovid Sertraline",
+      "product_name": "Hovid Sertraline 50 mg Tablet",
+      "generic": "sertraline",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19882593A",
+      "brand": "Y.S.P. Sertraline",
+      "product_name": "Y.S.P. Sertraline 50 mg Tablet",
+      "generic": "sertraline",
+      "strength": "50 mg",
+      "form": "tablet",
+      "drug_class": "ssri",
+      "product_kind": "prescription",
+      "licence_status": "registered"
+    },
+    {
+      "registration_no": "MAL19952600A",
       "brand": "Ginkovital",
       "product_name": "Ginkovital 60 mg Capsule",
       "generic": "ginkgo biloba",
@@ -1835,7 +1901,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01780P",
+      "registration_no": "SIN01806P",
       "brand": "Ginkgold",
       "product_name": "Ginkgold 120 mg Tablet",
       "generic": "ginkgo biloba",
@@ -1846,7 +1912,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092579A",
+      "registration_no": "MAL20022607A",
       "brand": "Duopharma Ginkgo Biloba",
       "product_name": "Duopharma Ginkgo Biloba 60 mg Capsule",
       "generic": "ginkgo biloba",
@@ -1857,7 +1923,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01793P",
+      "registration_no": "SIN01819P",
       "brand": "Hovid Ginkgo Biloba",
       "product_name": "Hovid Ginkgo Biloba 60 mg Capsule",
       "generic": "ginkgo biloba",
@@ -1868,7 +1934,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162586A",
+      "registration_no": "MAL20092614A",
       "brand": "Y.S.P. Ginkgo Biloba",
       "product_name": "Y.S.P. Ginkgo Biloba 60 mg Capsule",
       "generic": "ginkgo biloba",
@@ -1879,7 +1945,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01806P",
+      "registration_no": "SIN01832P",
       "brand": "Kotra Ginkgo Biloba",
       "product_name": "Kotra Ginkgo Biloba 60 mg Capsule",
       "generic": "ginkgo biloba",
@@ -1890,7 +1956,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882593A",
+      "registration_no": "MAL20162621A",
       "brand": "Jarsin",
       "product_name": "Jarsin 300 mg Tablet",
       "generic": "st john's wort",
@@ -1901,7 +1967,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952600A",
+      "registration_no": "MAL19882628A",
       "brand": "Duopharma St John'S Wort",
       "product_name": "Duopharma St John'S Wort 300 mg Tablet",
       "generic": "st john's wort",
@@ -1912,7 +1978,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01819P",
+      "registration_no": "SIN01845P",
       "brand": "Hovid St John'S Wort",
       "product_name": "Hovid St John'S Wort 300 mg Tablet",
       "generic": "st john's wort",
@@ -1923,7 +1989,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022607A",
+      "registration_no": "MAL19952635A",
       "brand": "Y.S.P. St John'S Wort",
       "product_name": "Y.S.P. St John'S Wort 300 mg Tablet",
       "generic": "st john's wort",
@@ -1934,7 +2000,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01832P",
+      "registration_no": "SIN01858P",
       "brand": "Kotra St John'S Wort",
       "product_name": "Kotra St John'S Wort 300 mg Tablet",
       "generic": "st john's wort",
@@ -1945,7 +2011,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092614A",
+      "registration_no": "MAL20022642A",
       "brand": "Pharmaniaga St John'S Wort",
       "product_name": "Pharmaniaga St John'S Wort 300 mg Tablet",
       "generic": "st john's wort",
@@ -1956,7 +2022,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162621A",
+      "registration_no": "MAL20092649A",
       "brand": "Seven Seas",
       "product_name": "Seven Seas 1000 mg Capsule",
       "generic": "fish oil",
@@ -1967,7 +2033,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01845P",
+      "registration_no": "SIN01871P",
       "brand": "Blackmores Omega Daily",
       "product_name": "Blackmores Omega Daily 1000 mg Capsule",
       "generic": "fish oil",
@@ -1978,7 +2044,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882628A",
+      "registration_no": "MAL20162656A",
       "brand": "Duopharma Fish Oil",
       "product_name": "Duopharma Fish Oil 1000 mg Capsule",
       "generic": "fish oil",
@@ -1989,7 +2055,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01858P",
+      "registration_no": "SIN01884P",
       "brand": "Hovid Fish Oil",
       "product_name": "Hovid Fish Oil 1000 mg Capsule",
       "generic": "fish oil",
@@ -2000,7 +2066,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952635A",
+      "registration_no": "MAL19882663A",
       "brand": "Y.S.P. Fish Oil",
       "product_name": "Y.S.P. Fish Oil 1000 mg Capsule",
       "generic": "fish oil",
@@ -2011,7 +2077,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01871P",
+      "registration_no": "SIN01897P",
       "brand": "Kotra Fish Oil",
       "product_name": "Kotra Fish Oil 1000 mg Capsule",
       "generic": "fish oil",
@@ -2022,7 +2088,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022642A",
+      "registration_no": "MAL19952670A",
       "brand": "Natural K",
       "product_name": "Natural K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2033,7 +2099,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092649A",
+      "registration_no": "MAL20022677A",
       "brand": "Duopharma Vitamin K",
       "product_name": "Duopharma Vitamin K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2044,7 +2110,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01884P",
+      "registration_no": "SIN01910P",
       "brand": "Hovid Vitamin K",
       "product_name": "Hovid Vitamin K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2055,7 +2121,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162656A",
+      "registration_no": "MAL20092684A",
       "brand": "Y.S.P. Vitamin K",
       "product_name": "Y.S.P. Vitamin K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2066,7 +2132,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01897P",
+      "registration_no": "SIN01923P",
       "brand": "Kotra Vitamin K",
       "product_name": "Kotra Vitamin K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2077,7 +2143,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882663A",
+      "registration_no": "MAL20162691A",
       "brand": "Pharmaniaga Vitamin K",
       "product_name": "Pharmaniaga Vitamin K 100 mcg Tablet",
       "generic": "vitamin k",
@@ -2088,7 +2154,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952670A",
+      "registration_no": "MAL19882698A",
       "brand": "Span-K",
       "product_name": "Span-K 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2099,7 +2165,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01910P",
+      "registration_no": "SIN01936P",
       "brand": "Slow-K",
       "product_name": "Slow-K 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2110,7 +2176,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022677A",
+      "registration_no": "MAL19952705A",
       "brand": "Duopharma Potassium Chloride",
       "product_name": "Duopharma Potassium Chloride 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2121,7 +2187,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01923P",
+      "registration_no": "SIN01949P",
       "brand": "Hovid Potassium Chloride",
       "product_name": "Hovid Potassium Chloride 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2132,7 +2198,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092684A",
+      "registration_no": "MAL20022712A",
       "brand": "Y.S.P. Potassium Chloride",
       "product_name": "Y.S.P. Potassium Chloride 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2143,7 +2209,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01936P",
+      "registration_no": "SIN01962P",
       "brand": "Kotra Potassium Chloride",
       "product_name": "Kotra Potassium Chloride 600 mg Tablet",
       "generic": "potassium chloride",
@@ -2154,7 +2220,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162691A",
+      "registration_no": "MAL20092719A",
       "brand": "Caltrate",
       "product_name": "Caltrate 600 mg Tablet",
       "generic": "calcium carbonate",
@@ -2165,7 +2231,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01949P",
+      "registration_no": "SIN01975P",
       "brand": "Caltrate",
       "product_name": "Caltrate 600 mg Tablet",
       "generic": "calcium carbonate",
@@ -2176,7 +2242,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882698A",
+      "registration_no": "MAL20162726A",
       "brand": "Osteocare",
       "product_name": "Osteocare 500 mg Tablet",
       "generic": "calcium carbonate",
@@ -2187,7 +2253,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952705A",
+      "registration_no": "MAL19882733A",
       "brand": "Duopharma Calcium Carbonate",
       "product_name": "Duopharma Calcium Carbonate 600 mg Tablet",
       "generic": "calcium carbonate",
@@ -2198,7 +2264,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01962P",
+      "registration_no": "SIN01988P",
       "brand": "Hovid Calcium Carbonate",
       "product_name": "Hovid Calcium Carbonate 600 mg Tablet",
       "generic": "calcium carbonate",
@@ -2209,7 +2275,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022712A",
+      "registration_no": "MAL19952740A",
       "brand": "Y.S.P. Calcium Carbonate",
       "product_name": "Y.S.P. Calcium Carbonate 600 mg Tablet",
       "generic": "calcium carbonate",
@@ -2220,7 +2286,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092719A",
+      "registration_no": "MAL20022747A",
       "brand": "Ferrofort",
       "product_name": "Ferrofort 200 mg Tablet",
       "generic": "ferrous fumarate",
@@ -2231,7 +2297,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01975P",
+      "registration_no": "SIN02001P",
       "brand": "Fefol",
       "product_name": "Fefol 200 mg Capsule",
       "generic": "ferrous fumarate",
@@ -2242,7 +2308,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162726A",
+      "registration_no": "MAL20092754A",
       "brand": "Duopharma Ferrous Fumarate",
       "product_name": "Duopharma Ferrous Fumarate 200 mg Tablet",
       "generic": "ferrous fumarate",
@@ -2253,7 +2319,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN01988P",
+      "registration_no": "SIN02014P",
       "brand": "Hovid Ferrous Fumarate",
       "product_name": "Hovid Ferrous Fumarate 200 mg Tablet",
       "generic": "ferrous fumarate",
@@ -2264,7 +2330,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882733A",
+      "registration_no": "MAL20162761A",
       "brand": "Y.S.P. Ferrous Fumarate",
       "product_name": "Y.S.P. Ferrous Fumarate 200 mg Tablet",
       "generic": "ferrous fumarate",
@@ -2275,7 +2341,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02001P",
+      "registration_no": "SIN02027P",
       "brand": "Kotra Ferrous Fumarate",
       "product_name": "Kotra Ferrous Fumarate 200 mg Tablet",
       "generic": "ferrous fumarate",
@@ -2286,7 +2352,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02014P",
+      "registration_no": "SIN02040P",
       "brand": "Blackmores Glucosamine",
       "product_name": "Blackmores Glucosamine 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2297,7 +2363,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952740A",
+      "registration_no": "MAL19882768A",
       "brand": "Osteo Bi-Flex",
       "product_name": "Osteo Bi-Flex 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2308,7 +2374,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022747A",
+      "registration_no": "MAL19952775A",
       "brand": "Duopharma Glucosamine",
       "product_name": "Duopharma Glucosamine 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2319,7 +2385,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02027P",
+      "registration_no": "SIN02053P",
       "brand": "Hovid Glucosamine",
       "product_name": "Hovid Glucosamine 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2330,7 +2396,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092754A",
+      "registration_no": "MAL20022782A",
       "brand": "Y.S.P. Glucosamine",
       "product_name": "Y.S.P. Glucosamine 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2341,7 +2407,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02040P",
+      "registration_no": "SIN02066P",
       "brand": "Kotra Glucosamine",
       "product_name": "Kotra Glucosamine 1500 mg Tablet",
       "generic": "glucosamine",
@@ -2352,7 +2418,7 @@
       "licence_status": "cancelled"
     },
     {
-      "registration_no": "MAL20162761A",
+      "registration_no": "MAL20092789A",
       "brand": "Tongrentang Danshen Pian",
       "product_name": "Tongrentang Danshen Pian 0.25 g Tablet",
       "generic": "danshen",
@@ -2363,7 +2429,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882768A",
+      "registration_no": "MAL20162796A",
       "brand": "Duopharma Danshen",
       "product_name": "Duopharma Danshen 0.25 g Tablet",
       "generic": "danshen",
@@ -2374,7 +2440,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02053P",
+      "registration_no": "SIN02079P",
       "brand": "Hovid Danshen",
       "product_name": "Hovid Danshen 0.25 g Tablet",
       "generic": "danshen",
@@ -2385,7 +2451,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952775A",
+      "registration_no": "MAL19882803A",
       "brand": "Y.S.P. Danshen",
       "product_name": "Y.S.P. Danshen 0.25 g Tablet",
       "generic": "danshen",
@@ -2396,7 +2462,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02066P",
+      "registration_no": "SIN02092P",
       "brand": "Kotra Danshen",
       "product_name": "Kotra Danshen 0.25 g Tablet",
       "generic": "danshen",
@@ -2407,7 +2473,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022782A",
+      "registration_no": "MAL19952810A",
       "brand": "Pharmaniaga Danshen",
       "product_name": "Pharmaniaga Danshen 0.25 g Tablet",
       "generic": "danshen",
@@ -2418,7 +2484,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02079P",
+      "registration_no": "SIN02105P",
       "brand": "Eu Yan Sang Dang Gui",
       "product_name": "Eu Yan Sang Dang Gui 500 mg Capsule",
       "generic": "dong quai",
@@ -2429,7 +2495,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092789A",
+      "registration_no": "MAL20022817A",
       "brand": "Duopharma Dong Quai",
       "product_name": "Duopharma Dong Quai 500 mg Capsule",
       "generic": "dong quai",
@@ -2440,7 +2506,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02092P",
+      "registration_no": "SIN02118P",
       "brand": "Hovid Dong Quai",
       "product_name": "Hovid Dong Quai 500 mg Capsule",
       "generic": "dong quai",
@@ -2451,7 +2517,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20162796A",
+      "registration_no": "MAL20092824A",
       "brand": "Y.S.P. Dong Quai",
       "product_name": "Y.S.P. Dong Quai 500 mg Capsule",
       "generic": "dong quai",
@@ -2462,7 +2528,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02105P",
+      "registration_no": "SIN02131P",
       "brand": "Kotra Dong Quai",
       "product_name": "Kotra Dong Quai 500 mg Capsule",
       "generic": "dong quai",
@@ -2473,7 +2539,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19882803A",
+      "registration_no": "MAL20162831A",
       "brand": "Pharmaniaga Dong Quai",
       "product_name": "Pharmaniaga Dong Quai 500 mg Capsule",
       "generic": "dong quai",
@@ -2484,7 +2550,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL19952810A",
+      "registration_no": "MAL19882838A",
       "brand": "Eu Yan Sang Korean Ginseng",
       "product_name": "Eu Yan Sang Korean Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2495,7 +2561,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02118P",
+      "registration_no": "SIN02144P",
       "brand": "Cordyceps & Ginseng",
       "product_name": "Cordyceps & Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2506,7 +2572,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20022817A",
+      "registration_no": "MAL19952845A",
       "brand": "Duopharma Ginseng",
       "product_name": "Duopharma Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2517,7 +2583,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02131P",
+      "registration_no": "SIN02157P",
       "brand": "Hovid Ginseng",
       "product_name": "Hovid Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2528,7 +2594,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "MAL20092824A",
+      "registration_no": "MAL20022852A",
       "brand": "Y.S.P. Ginseng",
       "product_name": "Y.S.P. Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2539,7 +2605,7 @@
       "licence_status": "registered"
     },
     {
-      "registration_no": "SIN02144P",
+      "registration_no": "SIN02170P",
       "brand": "Kotra Ginseng",
       "product_name": "Kotra Ginseng 500 mg Capsule",
       "generic": "ginseng",
@@ -2701,13 +2767,13 @@
     },
     {
       "pair": [
-        "st john's wort",
-        "sitagliptin"
+        "sertraline",
+        "st john's wort"
       ],
-      "severity": "minor",
-      "text_id": "low_sugar",
+      "severity": "major",
+      "text_id": "sjw_serotonin_risk",
       "source": "Natural Medicines Database",
-      "review_state": "awaiting_review"
+      "review_state": "reviewed"
     },
     {
       "pair": [
@@ -3173,7 +3239,7 @@
     "salbutamol": {
       "plain_name_id": "reliever_inhaler",
       "purpose_id": "breathing",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "when_needed_none",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3181,7 +3247,7 @@
     "budesonide": {
       "plain_name_id": "preventer_inhaler",
       "purpose_id": "breathing",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "take_now_unless_next_is_near",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3230,10 +3296,20 @@
       "watch_out_ids": [],
       "avoid_ids": []
     },
+    "sertraline": {
+      "plain_name_id": "mood_tablet",
+      "purpose_id": "mood",
+      "food_rule_id": "with_or_without_food",
+      "missed_dose_rule_id": "take_now_unless_next_is_near",
+      "watch_out_ids": [],
+      "avoid_ids": [
+        "alcohol"
+      ]
+    },
     "ginkgo biloba": {
       "plain_name_id": "ginkgo",
       "purpose_id": "supplement_general",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "follow_the_products_own_instructions",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3241,7 +3317,7 @@
     "st john's wort": {
       "plain_name_id": "st_johns_wort",
       "purpose_id": "supplement_general",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "follow_the_products_own_instructions",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3303,7 +3379,7 @@
     "danshen": {
       "plain_name_id": "danshen",
       "purpose_id": "tcm_general",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "follow_the_products_own_instructions",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3311,7 +3387,7 @@
     "dong quai": {
       "plain_name_id": "dong_quai",
       "purpose_id": "tcm_general",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "follow_the_products_own_instructions",
       "watch_out_ids": [],
       "avoid_ids": []
@@ -3319,7 +3395,7 @@
     "ginseng": {
       "plain_name_id": "ginseng",
       "purpose_id": "tcm_general",
-      "food_rule_id": "no_food_rule",
+      "food_rule_id": "with_or_without_food",
       "missed_dose_rule_id": "follow_the_products_own_instructions",
       "watch_out_ids": [],
       "avoid_ids": []
