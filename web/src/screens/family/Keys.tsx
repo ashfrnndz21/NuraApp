@@ -1,6 +1,7 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as family from "../../api/family";
+import type { SharingPreviewOut } from "../../api/types";
 import type { GrantOut, KeyRole, KeyWindow, RolePresetOut, Scope } from "../../api/familyTypes";
 import { PARTS, partsOf, ROLES, WINDOWS } from "../../family/model";
 import { Field, Notice, Pill, Tile } from "../../ui/components";
@@ -32,12 +33,12 @@ function toggle(parts: Scope[], part: Scope): Scope[] {
   return parts.includes(part) ? parts.filter((each) => each !== part) : PARTS.filter((each) => each === part || parts.includes(each));
 }
 
-function PartChoices({ chosen, onToggle, testId }: { chosen: Scope[]; onToggle: (part: Scope) => void; testId: string }): JSX.Element {
+function PartChoices({ chosen, onToggle, testId, disabled }: { chosen: Scope[]; onToggle: (part: Scope) => void; testId: string; disabled?: boolean }): JSX.Element {
   const words = s();
   return (
     <div class="choices" role="group" aria-label={words.partsLabel} data-testid={testId}>
       {PARTS.map((part) => (
-        <Pill key={part} chosen={chosen.includes(part)} onClick={() => onToggle(part)} testId={`${testId}-${part}`}>
+        <Pill key={part} chosen={chosen.includes(part)} onClick={() => onToggle(part)} disabled={disabled} testId={`${testId}-${part}`}>
           {words.parts[part]}
         </Pill>
       ))}
@@ -45,12 +46,12 @@ function PartChoices({ chosen, onToggle, testId }: { chosen: Scope[]; onToggle: 
   );
 }
 
-function WindowChoices({ chosen, onChoose, testId }: { chosen: KeyWindow | null; onChoose: (window: KeyWindow) => void; testId: string }): JSX.Element {
+function WindowChoices({ chosen, onChoose, testId, disabled }: { chosen: KeyWindow | null; onChoose: (window: KeyWindow) => void; testId: string; disabled?: boolean }): JSX.Element {
   const words = s();
   return (
     <div class="choices" role="group" aria-label={words.windowLabel} data-testid={testId}>
       {WINDOWS.map((window) => (
-        <Pill key={window} chosen={chosen === window} onClick={() => onChoose(window)} testId={`${testId}-${window}`}>
+        <Pill key={window} chosen={chosen === window} onClick={() => onChoose(window)} disabled={disabled} testId={`${testId}-${window}`}>
           {words.windows[window]}
         </Pill>
       ))}
@@ -122,7 +123,17 @@ function GrantTile({ grant, here, act, reload }: { grant: GrantOut; here: Here; 
 }
 
 /** A key for one person: who, as what, which parts, for how long. The role's own words,
- *  said for the name typed, come from the backend (`GET /family/roles`). */
+ *  said for the name typed, come from the backend (`GET /family/roles`).
+ *
+ *  Letting someone in at all rests on the owner's own agreement (`may_invite`): only he can
+ *  give it, on his own basis, never a chief on his say-so. So the owner reads the sharing
+ *  words the backend renders for this person and these parts (`POST
+ *  /consents/sharing/preview`) and agrees to them before the key is cut, exactly as the
+ *  invite gap of onboarding does (`Invite.tsx`) — changing who this is for, or the parts,
+ *  after reading takes the words away. A chief cutting a key skips that: the key still
+ *  rests on a sharing agreement, but it is one the owner already gave, earlier, himself; a
+ *  chief naming someone the owner never let in is the backend's own refusal
+ *  (`ConsentWithheld`), read where it happened. */
 function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Promise<void> }): JSX.Element {
   const words = s();
   const [name, setName] = useState("");
@@ -131,7 +142,15 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const [parts, setParts] = useState<Scope[]>([]);
   const [window, setWindow] = useState<KeyWindow>("always");
   const [said, setSaid] = useState<RolePresetOut[] | null>(null);
+  const [preview, setPreview] = useState<SharingPreviewOut | null>(null);
   const defaults = useRead(() => family.roles(here.bearer, here.lang, "Ash"), [here.lang]);
+  // Counts every change that would make an in-flight preview stale — a field, the role, or
+  // his own language — bumped everywhere `preview` is cleared by hand. `seeWords` reads it
+  // before it asks and checks it again when the answer lands: if it moved while the request
+  // was in flight, the words are for a person or parts no longer on screen, and are thrown
+  // away rather than shown — the fields are disabled meanwhile too, so in practice this is
+  // only ever a change queued the instant before the request settles.
+  const generation = useRef(0);
   useEffect(() => {
     const typed = name.trim();
     if (!typed) return setSaid(null);
@@ -140,29 +159,75 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
     }, 250);
     return () => clearTimeout(timer);
   }, [name, here.lang]);
+  // Changing who this is for, or what he is about to let them see, after reading the words
+  // takes them away: the yes that follows is only ever for exactly what was shown.
+  const changed = <T,>(set: (value: T) => void) => (value: T) => {
+    set(value);
+    setPreview(null);
+    generation.current += 1;
+  };
+  // His own language changing under him (`Me.tsx`) takes the words away too: `asked()`
+  // reads `here.lang`, and nothing else here would catch it.
+  useEffect(() => {
+    setPreview(null);
+    generation.current += 1;
+  }, [here.lang]);
   const choose = (next: KeyRole) => {
     setRole(next);
-    const preset = defaults.value?.find((each) => each.role === next);
-    if (preset) {
-      setParts(partsOf(preset.scopes));
-      setWindow(preset.window);
+    setPreview(null);
+    generation.current += 1;
+    const found = defaults.value?.find((each) => each.role === next);
+    if (found) {
+      setParts(partsOf(found.scopes));
+      setWindow(found.window);
     }
   };
   const shown = role && said?.find((each) => each.role === role);
-  const make = () =>
+  const asked = () => ({
+    holder_phone_e164: phone.replace(/\s+/g, ""),
+    holder_display_name: name.trim(),
+    scopes: parts,
+    language: here.lang,
+  });
+  // Only this form's own request, never another grant's narrow or close (`act` is shared
+  // across the whole screen) — what the inputs below are disabled on, so he cannot edit
+  // what a preview is being asked or agreed for while it is on the wire.
+  const busyHere = act.busy && act.at === "new";
+  const seeWords = () =>
+    act.act("new", async () => {
+      const asOf = generation.current;
+      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked());
+      if (generation.current !== asOf) return; // stale: something changed while this was in flight
+      setPreview(rendered);
+    });
+  const cut = () =>
     act.act("new", async () => {
       if (!role) return;
       await family.makeKey(here.bearer, here.papers.profile_id, { holder_phone_e164: phone.replace(/\s+/g, ""), role, scopes: parts, window });
       setName("");
       setPhone("+65");
       setRole(null);
+      setParts([]);
       await reload();
     });
+  const agree = () =>
+    act.act("new", async () => {
+      if (!role || !preview) return;
+      await family.letSomeoneIn(here.bearer, here.papers.profile_id, asked(), preview.wording_version);
+      await family.makeKey(here.bearer, here.papers.profile_id, { holder_phone_e164: phone.replace(/\s+/g, ""), role, scopes: parts, window });
+      setName("");
+      setPhone("+65");
+      setRole(null);
+      setParts([]);
+      setPreview(null);
+      await reload();
+    });
+  const ready = !act.busy && !!name.trim() && phone.replace(/\D/g, "").length >= 8 && parts.length > 0;
   return (
     <Tile paper testId="new-key">
       <h2 class="title">{words.newKey}</h2>
-      <Field name="key-holder-name" label={words.holderName} value={name} onInput={setName} autoComplete="off" />
-      <Field name="key-holder-phone" label={words.holderPhone} value={phone} onInput={setPhone} type="tel" inputMode="tel" />
+      <Field name="key-holder-name" label={words.holderName} value={name} onInput={changed(setName)} autoComplete="off" disabled={busyHere} />
+      <Field name="key-holder-phone" label={words.holderPhone} value={phone} onInput={changed(setPhone)} type="tel" inputMode="tel" disabled={busyHere} />
       <p class="label">{words.roleLabel}</p>
       <div class="choices" role="group" aria-label={words.roleLabel} data-testid="role">
         {ROLES.map((each) => (
@@ -175,12 +240,28 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
       {role && (
         <>
           <p class="label">{words.partsLabel}</p>
-          <PartChoices chosen={parts} onToggle={(part) => setParts(toggle(parts, part))} testId="new-part" />
+          <PartChoices chosen={parts} onToggle={(part) => changed(setParts)(toggle(parts, part))} testId="new-part" disabled={busyHere} />
           <p class="label">{words.windowLabel}</p>
-          <WindowChoices chosen={window} onChoose={setWindow} testId="new-window" />
-          <Pill plum onClick={() => void make()} disabled={act.busy || !name.trim() || phone.replace(/\D/g, "").length < 8} testId="make-key">
-            {words.makeKey}
-          </Pill>
+          <WindowChoices chosen={window} onChoose={changed(setWindow)} testId="new-window" disabled={busyHere} />
+          {!here.owner && (
+            <Pill plum onClick={() => void cut()} disabled={!ready} testId="make-key">
+              {words.makeKey}
+            </Pill>
+          )}
+          {here.owner && !preview && (
+            <Pill plum onClick={() => void seeWords()} disabled={!ready} testId="see-words">
+              {words.seeWords}
+            </Pill>
+          )}
+          {here.owner && preview && (
+            <>
+              <p class="label">{words.wordsLead}</p>
+              <Lines lines={preview.lines} testId="new-words" />
+              <Pill plum onClick={() => void agree()} disabled={act.busy} testId="agree-key">
+                {words.agreeKey}
+              </Pill>
+            </>
+          )}
         </>
       )}
       <NoticeAt act={act} where="new" />

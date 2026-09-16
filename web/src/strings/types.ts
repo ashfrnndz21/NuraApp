@@ -514,7 +514,9 @@ export interface Strings {
     storyWatch: string;
     storyAvoid: string;
     storyForgot: string;
-    storyAsk: string; storyAskOther: string;
+    storyAsk: string;
+    storyAskOther: string;
+    hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
     addLead: string;
     addLead2: string;
     nameLabel: string;
@@ -537,7 +539,13 @@ export interface Strings {
     moreLead: string;
     moreLabel: string;
     moreYes: string;
-    papersNone: string; papersNoneOther: string;
+    morePhoto: string;
+    morePhotoWhy: string;
+    morePhotoKept: string;
+    orderYes: string;
+    orderNo: string;
+    papersNone: string;
+    papersNoneOther: string;
     paperFrom: string;
     paperOpen: string;
     older: string;
@@ -584,12 +592,14 @@ export interface Strings {
     analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     analytesOther: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     resultOn: string;
+    resultOnUnit: string;
     rangeUnder: string;
     rangeOver: string;
     rangeBetween: string;
     noRange: string;
     labRange: string;
     guideRange: string;
+    noRangeBecause: Record<"needs_age" | "needs_sex" | "none_on_file", string>;
     anchors: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
     readings: Record<"blood_pressure" | "blood_sugar" | "weight", string>;
     walk: string;
@@ -639,6 +649,9 @@ export interface Strings {
     partsLabel: string;
     windowLabel: string;
     makeKey: string;
+    seeWords: string;
+    wordsLead: string;
+    agreeKey: string;
     narrow: string;
     narrowYes: string;
     closeKey: string;
@@ -664,7 +677,7 @@ export interface Strings {
     doneChip: string;
     nextVisit: string;
     messagesTitle: string;
-    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water" | "water_pill_morning", string>;
+    templates: Record<"pickup" | "call_you" | "see_doctor" | "thinking_of_you" | "weigh_tomorrow" | "drink_water", string>;
     ownWords: string;
     slots: Record<"who" | "when" | "doctor" | "day", string>;
     memoLabel: string;
@@ -695,7 +708,7 @@ export interface Strings {
     deliveries: string;
     settings: string;
     triggers: Record<"morning" | "dose" | "reorder" | "doses_untapped" | "flag" | "visit_tomorrow" | "papers" | "family_message" | "first_week_prompt" | "nudge", string>;
-    channels: Record<"app_push" | "whatsapp" | "caregiver", string>;
+    channels: Record<"app_push" | "whatsapp" | "caregiver" | "in_app", string>;
     outcomes: Record<"sent" | "capped" | "quiet" | "no_channel" | "no_scope" | "skipped", string>;
     rule: string;
     quietFrom: string;
@@ -704,6 +717,8 @@ export interface Strings {
     cap: string;
     saveSettings: string;
     neverHeld: string;
+    /** The red-flag row: no setting chooses how it goes (#162). */
+    everyWay: string;
     documents: string;
     tags: Record<"lpa" | "medical_letter" | "consent_form", string>;
     backs: Record<"consent" | "stewardship", string>;

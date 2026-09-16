@@ -774,6 +774,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/delivery-settings"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
+    Walk("GET", f"{P}/reach"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -870,8 +871,11 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",
     ("POST", f"{P}/medicines/{{line_id}}/taken"): "writes a dose taken; returns it",
+    ("POST", f"{P}/medicines/{{line_id}}/ask-to-order/preview"): (
+        "says who would be asked to order more, in his words; returns no rows"
+    ),
     ("POST", f"{P}/medicines/{{line_id}}/ask-to-order"): (
-        "gives the family a task to order more; returns the task and his lines"
+        "gives the family a task to order more, on his yes; returns the task and his lines"
     ),
     ("POST", f"{P}/medicines/{{line_id}}/more"): (
         "writes tablets found at home on a yes; returns the supply and the count"
@@ -925,6 +929,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/plan/later"): "moves the first-week plan to later",
     ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
+    ("PUT", f"{P}/emergency-card/insurer"): "sets his insurer on the typer's yes; returns it",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
     ("POST", f"{P}/push-subscriptions"): "keeps this phone for his reminders; returns its id",
     ("POST", f"{P}/closure/preview"): "renders the words of closing his account; returns no rows",
@@ -1044,6 +1049,10 @@ CARD_FIELDS = frozenset(
         "contacts",
         "clinic",
         "last_reading_at",
+        # E13-01: his insurer as he or his chief typed it on a yes (the policy reference as
+        # data, never in a sentence), and the same lines in English for the ambulance crew.
+        "insurer",
+        "english_lines",
     }
 )
 NOT_ON_THE_CARD = (
@@ -1289,7 +1298,9 @@ RAW_READS = re.compile(
 APPROVED_RAW_READS = {
     "identity/closing.py": (
         "the erasure's own read of a closed profile's storage keys as the system (#143), so "
-        "evidence stored outside the profile's prefixes goes too: nothing it reads reaches a caller"
+        "evidence stored outside the profile's prefixes goes too: nothing it reads reaches a caller. "
+        "`answerable_while_closing` also reads one Ladder and its Flag raw (#163 note), to decide "
+        "only whether an acknowledgement may pass while the closing stands; nothing reaches a caller"
     ),
     "safety/red_flags.py": (
         "the safety rules' own read of the record as the system (`_system_read`, ADR 0002): "

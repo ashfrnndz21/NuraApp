@@ -669,9 +669,9 @@ export const en = {
     symptomsLeadOther: "Say what {patient} feels, how bad it is and since when.",
     // @patient phrase
     symptomsKeep: "Keep this",
-    // @patient
     // @patient phrase
     sendAgain: "Send it again",
+    // @patient
     symptomsSaved: "Nura wrote this down.",
     // @patient phrase
     nudgeOk: "OK",
@@ -844,7 +844,7 @@ export const en = {
       // @patient
       lead3: "Nura only uses this to know where to look.",
       // @patient
-      noted: "Nura noted that.",
+      noted: "Nura wrote that down.",
       // @patient
       removed: "Nura took that off.",
       // @patient phrase
@@ -1012,7 +1012,7 @@ export const en = {
       // @patient
       wordsLead: "Please read these words.",
       // @patient phrase
-      agree: "I agree, let them in",
+      agree: "I agree, give them the key",
       // @patient
       done: "They can see those parts now.",
     },
@@ -1025,8 +1025,8 @@ export const en = {
       cadence1: "Nura will ask for one thing a day, never more.",
       // @patient
       cadence2: "Tap Later and Nura asks once more.",
-      // @patient phrase
-      missing: "Not in the papers yet",
+      // @patient
+      missing: "Nura does not have this yet.",
       // @patient
       onDay: "Nura will ask for this on {date}.",
       // @patient phrase
@@ -1038,7 +1038,7 @@ export const en = {
       // @patient
       more: "There are {count} more after that.",
       // @patient
-      nothing: "Nothing is missing for now.",
+      nothing: "Nura has everything it needs for now.",
       // @patient phrase
       open: "Open Nura",
     },
@@ -1145,6 +1145,14 @@ export const en = {
     // @patient headline
     storyAsk: "To ask your doctor",
     // @patient phrase
+    hearParts: {
+      purpose: "Hear what it is for",
+      how_to_take: "Hear how to take it",
+      watch_out: "Hear what to look out for",
+      avoid: "Hear what to stay away from",
+      if_forgotten: "Hear what to do if you forget it",
+      doctor_question: "Hear what to ask your doctor",
+    },
     storyAskOther: "To ask {patient}'s doctor",
     // @patient
     addLead: "Take a photo of the label first.",
@@ -1167,9 +1175,8 @@ export const en = {
     // @patient
     outcomeNew: "This is a new medicine for your list.",
     // @patient
+    outcomeRefill: "This is more of a medicine you already take.",
     outcomeNewOther: "This is a new medicine for {patient}'s list.",
-    // @patient
-    outcomeRefill: "This is more of a medicine on your list.",
     // @patient
     outcomeRefillOther: "This is more of a medicine on {patient}'s list.",
     // @patient
@@ -1202,6 +1209,16 @@ export const en = {
     moreLabel: "How many more",
     // @patient phrase
     moreYes: "Yes, add them",
+    // @patient
+    morePhoto: "Take a photo of the medicine label first.",
+    // @patient
+    morePhotoWhy: "For this medicine, Nura needs to see the label.",
+    // @patient
+    morePhotoKept: "Nura has the photo of the medicine label.",
+    // @patient phrase
+    orderYes: "Yes, ask the family",
+    // @patient phrase
+    orderNo: "Not now",
     // @patient
     papersNone: "No paper is waiting for your yes.",
     // @patient
@@ -1299,7 +1316,7 @@ export const en = {
     // @patient headline
     notesTitle: "Notes about this place",
     // @patient
-    notesOnly: "Only the owner and the chief can read these notes.",
+    notesOnly: "Only you and the one who looks after these papers can read them.",
     // @patient phrase
     noteLabel: "A note about this place",
     // @patient phrase
@@ -1340,20 +1357,31 @@ export const en = {
       haemoglobin: "{patient}'s blood count",
       tsh: "{patient}'s thyroid test",
     },
-    // @patient phrase
-    resultOn: "{value} {unit} on {date}",
+    // A whole sentence, not a phrase: it stands alone as its own paragraph (Day.tsx), which
+    // a screen reader reads as a complete unit (#166 review).
     // @patient
-    rangeUnder: "The range is under {upper}.",
+    resultOn: "It was {value} on {date}.",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{value} {unit} on {date}",
     // @patient
-    rangeOver: "The range is over {lower}.",
+    rangeUnder: "For most people this number is under {upper}.",
     // @patient
-    rangeBetween: "The range is {lower} to {upper}.",
+    rangeOver: "For most people this number is over {lower}.",
     // @patient
-    noRange: "Nura has no range for this one.",
+    rangeBetween: "For most people this number is {lower} to {upper}.",
     // @patient
-    labRange: "This range is printed on your blood test.",
+    noRange: "Nura has no usual number for this one.",
     // @patient
-    guideRange: "This range is from a guide for your age.",
+    labRange: "The usual number is printed on your blood test.",
+    // @patient
+    guideRange: "The usual number comes from a guide for your age.",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura needs your age to find the usual number.",
+      needs_sex: "Nura needs to know if you are a man or a woman.",
+      none_on_file: "Nura has no usual number for this one.",
+    },
     // @patient phrase
     anchors: {
       wake: "When you wake up",
@@ -1371,9 +1399,9 @@ export const en = {
     // @patient phrase
     walk: "A walk",
     // @patient
-    notSet: "Nobody has set the day yet.",
+    notSet: "Nobody has set your day yet.",
     // @patient phrase
-    setDay: "Set the day",
+    setDay: "Set your day",
     // @patient phrase
     timeLabel: "What time",
     // @patient phrase
@@ -1381,13 +1409,13 @@ export const en = {
     // @patient phrase
     walkAfter: "A walk after this",
     // @patient phrase
-    checkDay: "Check the day",
+    checkDay: "Check your day",
     // @patient
-    dayAsk: "Is this the day?",
+    dayAsk: "Is this how your day goes?",
     // @patient phrase
-    dayYes: "Yes, set the day",
+    dayYes: "Yes, set your day",
     // @patient
-    daySaved: "Nura wrote down the day.",
+    daySaved: "Nura wrote down your day.",
     // @patient headline
     tableMoment: "When",
     // @patient headline
@@ -1428,6 +1456,7 @@ export const en = {
     stopYes: "Yes, stop it",
     // @patient phrase
     closeAccount: "Close my account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
@@ -1457,6 +1486,12 @@ export const en = {
     windowLabel: "For how long",
     // @patient phrase
     makeKey: "Make the key",
+    // @patient phrase
+    seeWords: "See the words",
+    // @patient
+    wordsLead: "Please read these words.",
+    // @patient phrase
+    agreeKey: "I agree, give them the key",
     // @patient phrase
     narrow: "Make it smaller",
     // @patient phrase
@@ -1538,7 +1573,6 @@ export const en = {
       thinking_of_you: "Thinking of you",
       weigh_tomorrow: "Stand on the scale tomorrow",
       drink_water: "Drink a glass of water",
-      water_pill_morning: "The water pill at 8",
     },
     // @patient phrase
     ownWords: "My own words",
@@ -1632,6 +1666,7 @@ export const en = {
       app_push: "App",
       whatsapp: "WhatsApp",
       caregiver: "Through the carer",
+      in_app: "In the app",
     },
     // @patient phrase
     outcomes: {
@@ -1656,6 +1691,8 @@ export const en = {
     saveSettings: "Keep these settings",
     // @patient phrase
     neverHeld: "Never held",
+    // @patient phrase
+    everyWay: "Nura always tells your family about this, every way it can.",
     // @patient headline
     documents: "Papers for the family list",
     // @patient phrase
@@ -1861,6 +1898,8 @@ export const en = {
     NoSuchReviewItem: "That item is not in the queue any more.",
     NotWellFormed: "Nura did not understand that.",
     AlertsAreNeverHeld: "A message that cannot wait is never held.",
+    AlertsGoEveryWay: "Nura always tells your family about this, every way it can.",
+    MessageNamesAMedicine: ["A message cannot name a medicine or say how much to take.", "Nura sends medicine reminders only from the medicines list."],
     NotOnTheLadder: "Nura did not ask you about this one.",
     NotADocument: "Nura can only keep a file or a photo here.",
     StopsByClosingTheAccount: "To stop Nura keeping your papers, close your account.",

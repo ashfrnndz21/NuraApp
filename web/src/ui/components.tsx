@@ -184,9 +184,10 @@ interface FieldProps {
   big?: boolean;
   name: string;
   maxLength?: number;
+  disabled?: boolean;
 }
 
-export function Field({ label, value, onInput, type = "text", inputMode, autoComplete, big, name, maxLength }: FieldProps): JSX.Element {
+export function Field({ label, value, onInput, type = "text", inputMode, autoComplete, big, name, maxLength, disabled }: FieldProps): JSX.Element {
   return (
     <label style="display:flex;flex-direction:column;gap:6px">
       <span class="label">{label}</span>
@@ -198,6 +199,7 @@ export function Field({ label, value, onInput, type = "text", inputMode, autoCom
         inputMode={inputMode}
         autoComplete={autoComplete}
         maxLength={maxLength}
+        disabled={disabled}
         onInput={(event) => onInput((event.target as HTMLInputElement).value)}
       />
     </label>

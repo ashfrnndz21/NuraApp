@@ -24,6 +24,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.audit.models import Channel
@@ -47,9 +48,11 @@ from app.channels.whatsapp.outbound.send import Delivered, thread_messages
 from app.channels.whatsapp.provider import (
     DevInbound,
     FixtureProvider,
+    InboundMessage,
     NotAWebhook,
     WebhookTooLarge,
 )
+from app.channels.whatsapp.receipts import Received, receive
 from app.db import utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
@@ -182,15 +185,27 @@ photo, a PDF or a voice note comes as the provider's id and is fetched by it, ag
 own cap — so a megabyte holds a long batch; a body past it is not a delivery (#136)."""
 
 
-@router.post("/whatsapp/webhook")
-async def webhook(request: Request, session: Db) -> dict[str, int]:
+WEBHOOK_FAILED = status.HTTP_503_SERVICE_UNAVAILABLE
+"""The answer while any message of a delivery failed: not a 2xx, so the provider sends the
+whole delivery again — its only retry (#158)."""
+
+
+@router.post("/whatsapp/webhook", response_model=None)
+async def webhook(request: Request, session: Db) -> JSONResponse:
     """Inbound messages. The body is read against its cap as it arrives (`read_capped`):
     one declared longer is refused before a byte is read, and one that runs longer is refused
     at the first chunk past the cap, both with a 413, before anything is parsed (#136). The
     signature is then checked over exactly the bytes read, and only a signed body is read as
-    JSON; each message walks `handle_inbound`, where a red flag is looked for before the ignore
-    and the consent checks. The provider gets a 200 and a count; what each message became is
-    on the profile's trail, not on the wire."""
+    JSON.
+
+    Each message walks `handle_inbound` once, by the provider's id for it (#158,
+    `app.channels.whatsapp.receipts`): one handled on an earlier delivery is skipped; any
+    other is handled in a savepoint of its own, where a red flag is looked for before the
+    ignore and the consent checks. One that fails is rolled back, nothing of it kept, and
+    never holds back the rest of the delivery; then the answer is a 503, so the provider
+    sends the delivery again and only the message that failed is tried again. A 200 means
+    every message in it was handled. What each message became is on the profile's trail, not
+    on the wire: the provider gets counts."""
     body = await read_capped(
         request.stream(),
         Cap(WEBHOOK_BYTES, WebhookTooLarge),
@@ -206,12 +221,11 @@ async def webhook(request: Request, session: Db) -> dict[str, int]:
     if not isinstance(payload, dict):
         raise NotAWebhook("the webhook body is not a delivery")
     settings = settings_of(request)
-    handled = 0
+    counted = {outcome: 0 for outcome in Received}
     for message in providers.whatsapp.parse_inbound(payload):
-        # Each message on its own: one that fails never holds back the rest of the delivery,
-        # a red flag among them least of all.
-        try:
-            await handle_inbound(
+
+        async def handle(message: InboundMessage = message) -> Handled:
+            return await handle_inbound(
                 session,
                 settings=settings,
                 providers=providers,
@@ -219,12 +233,17 @@ async def webhook(request: Request, session: Db) -> dict[str, int]:
                 classifier=CLASSIFIER,
                 message=message,
             )
-        except Exception as failed:  # noqa: BLE001 — logged by name; the rest of the batch goes on
-            log.warning("whatsapp: one inbound message not handled: %s", type(failed).__name__)
-            await session.rollback()
-            continue
-        handled += 1
-    return {"handled": handled}
+
+        counted[await receive(session, message, handle)] += 1
+    answer = {"handled": counted[Received.HANDLED]}
+    if counted[Received.ALREADY]:
+        answer["already"] = counted[Received.ALREADY]
+    if counted[Received.FAILED]:
+        # Returned, not raised: the messages that were handled, and the failures counted on
+        # their receipts, are committed with the request; only the failed ones come again.
+        answer["failed"] = counted[Received.FAILED]
+        return JSONResponse(answer, status_code=WEBHOOK_FAILED)
+    return JSONResponse(answer)
 
 
 # --- the thread -------------------------------------------------------------------------------

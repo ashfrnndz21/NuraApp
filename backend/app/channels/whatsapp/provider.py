@@ -16,7 +16,7 @@ import hashlib
 import hmac
 import json
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -118,6 +118,20 @@ class WhatsAppProvider(Protocol):
     def parse_inbound(self, payload: Mapping[str, Any]) -> Sequence[InboundMessage]:
         """The messages in one webhook delivery. Statuses and anything else are dropped."""
         ...
+
+
+REDELIVERIES = 5
+"""How many times the fixture sends one delivery in all, the first time included (#158)."""
+
+Post = Callable[[bytes, Mapping[str, str]], Awaitable[int]]
+"""A webhook POST as a test makes it: the body and its headers in, the answer's status out."""
+
+
+def redelivers(status_code: int) -> bool:
+    """Whether the provider sends a webhook delivery again after this answer (#158): after
+    anything that is not a 2xx, the same bytes, until it gets one or gives up. It is the only
+    retry there is, so the webhook answers 5xx while any message in a delivery failed."""
+    return not 200 <= status_code < 300
 
 
 class NoSuchMedia(Refusal):
@@ -244,6 +258,21 @@ class FixtureProvider:
     def sign(self, body: bytes) -> str:
         """What a provider would put in `X-Hub-Signature-256` for this body. Tests only."""
         return "sha256=" + hmac.new(self._secret, body, hashlib.sha256).hexdigest()
+
+    async def deliver(
+        self, post: Post, payload: Mapping[str, Any], *, tries: int = REDELIVERIES
+    ) -> list[int]:
+        """One webhook delivery the way the provider makes it (#158): the payload signed and
+        posted, then posted again — the same bytes — while the answer is not a 2xx
+        (`redelivers`), `tries` times at most. The answers, in order. Tests only."""
+        body = json.dumps(payload).encode()
+        headers = {"content-type": "application/json", "X-Hub-Signature-256": self.sign(body)}
+        answers: list[int] = []
+        for _ in range(tries):
+            answers.append(await post(body, headers))
+            if not redelivers(answers[-1]):
+                break
+        return answers
 
     def verify_webhook(self, signature: str | None, body: bytes) -> bool:
         if not signature:

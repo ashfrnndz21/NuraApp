@@ -64,6 +64,9 @@ function FamilyHome(): JSX.Element | null {
   // A red flag still climbing that reached this person (E11-06). A key without the emergency
   // card reaches no ladder, so there is nothing to show it: the read's no is not a screen.
   const asks = useRead(here ? () => family.ladders(here.bearer, here.papers.profile_id, here.lang).catch(() => []) : null, [here?.papers.profile_id, here?.lang]);
+  // Who Nura cannot message on WhatsApp (#163): the owner's and his chief's to see. Anyone
+  // else is refused it, and that no is not a screen either.
+  const reach = useRead(here && !here.patient ? () => family.reach(here.bearer, here.papers.profile_id, here.lang).catch(() => []) : null, [here?.papers.profile_id, here?.lang, here?.patient]);
   const [answered, setAnswered] = useState<string[] | null>(null);
   const a = useAct();
   if (!here) return null;
@@ -83,7 +86,10 @@ function FamilyHome(): JSX.Element | null {
       <Icon name="chevron" />
     </button>
   );
-  const parts = here.patient
+  // Gated on who he is (standing), not how dense his screen reads (density, his own toggle,
+  // Me.tsx): the roster names his medicines by their box, so an owner who switches to the
+  // caregiver density for the bigger-print layout must not thereby unlock it (#166 review).
+  const parts = here.owner
     ? [
         row("trail", whose(here, words.trailSelf, words.trailOther), "note"),
         row("onlyMe", words.onlyMe, "records"),
@@ -109,6 +115,7 @@ function FamilyHome(): JSX.Element | null {
       {asks.value?.map((ladder) => (
         <Tile paper key={ladder.ladder_id} testId="ladder">
           <Lines lines={ladder.lines} testId="ladder-lines" />
+          {(ladder.not_reached ?? []).length > 0 && <Lines lines={ladder.not_reached ?? []} testId="ladder-not-reached" />}
           <Pill plum onClick={() => void onIt(ladder.ladder_id)} disabled={a.busy} testId="on-it">
             {words.ladderYes}
           </Pill>
@@ -125,12 +132,18 @@ function FamilyHome(): JSX.Element | null {
         {circle.value?.map((grant) => (
           <Lines key={grant.key_id} lines={grant.lines} testId="grant-lines" />
         ))}
+        {reach.value
+          ?.filter((one) => one.lines.length > 0)
+          .map((one) => (
+            <Lines key={one.person_id} lines={one.lines} testId="reach-lines" />
+          ))}
         <Notice error={circle.error} />
-        {/* Letting someone in is what this screen is for, so it is the one Plum button on it
-            and it sits with the circle it changes — not a row in a list of settings. The
-            moment the key is cut, that person's app has these papers in its switcher and can
-            ask about them, within what the key opens. */}
-        {!here.patient && (
+        {/* Letting someone in at all is his own yes (`may_invite`), so this is the owner's and
+            never his chief's (#166 review). It is the one Plum button on the screen and it sits
+            with the circle it changes, rather than a row in a list of settings: the moment the
+            key is cut, that person's app reaches these papers and can ask about them, within
+            what the key opens. */}
+        {here.owner && (
           <PillButton variant="primary" onClick={open("keys")} testId="open-keys">
             {words.newKey}
           </PillButton>

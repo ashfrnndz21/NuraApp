@@ -1,7 +1,9 @@
 """The one door a message leaves through.
 
 `send` takes who it is for, what it is (a template name, or a reply key from the catalogue)
-and the slots, and does the rest in order: the recipient's WHATSAPP consent on this profile,
+and the slots, and does the rest in order: whether Nura may message this person about the
+profile (`_may_message`: his WHATSAPP consent for him; for anyone else a key, their own answer,
+and his agreement for anything but a red flag),
 the recipient's thread and where its 24-hour window stands, the rendered words through the
 plain-words verifier, the provider, the message row naming the template or the key and the
 State it came from, and the SHARE line. A template outside the window is sent as a
@@ -26,6 +28,7 @@ from app.channels.whatsapp.models import (
     WhatsAppMessage,
     WhatsAppThread,
 )
+from app.channels.whatsapp.opt_in import said_no
 from app.channels.whatsapp.provider import WhatsAppProvider
 from app.channels.whatsapp.strings import REPLIES, reply
 from app.channels.whatsapp.templates import TEMPLATES, language_of, render
@@ -130,14 +133,60 @@ async def thread_for(
     )
 
 
+NAME_SLOTS: frozenset[str] = frozenset(
+    {"name", "names", "who", "doctor", "hospital", "patient", "chief", "insurer", "clinic", "both", "either"}
+)
+"""Slots that hold a name: a person's, a doctor's, a hospital's, an insurer's. The standard
+leaves names alone — a name is said as it is written — so the words are verified with each name
+slot standing in as a plain name (`NAME_STAND_IN`) and sent with the real one: "SGH" is a
+hospital's name, not an abbreviation in his sentence, and a red flag's reply is never refused
+for it (B1 review)."""
+
+NAME_STAND_IN = "Ash"
+
+
 class NotLetInHere(Refusal):
     """This person holds no key to the profile, so Nura says nothing to them about it."""
 
 
-async def _may_message(session: AsyncSession, *, context: KeyContext, person: Person) -> None:
-    """Whether Nura may message this person about the profile (#143). The patient's WhatsApp
-    agreement is for messages to him; anyone else is told under the key his agreement to let
-    them in rests on — a daughter's red-flag notice never waits on his WhatsApp."""
+class SaidNoToWhatsApp(Refusal):
+    """This person answered no to WhatsApp messages from Nura at the key-accept step (#163):
+    Nura starts none with them, a red-flag notice included — that reaches them by app push and
+    on their family page. A reply to a message they wrote themselves still goes."""
+
+
+RED_FLAG_NOTICE = "red_flag_notice"
+"""Every notice a red flag sends is named for it: the approved one, the self and ambiguous
+variants, the tiered ones (the ambulance, the hospital now, the number if worse, #147), their
+free-text twins outside the window, and any later version of the words (#160). They are the one
+kind of message about him his family is sent on WhatsApp after he stops it (#163), so they are
+matched by that name and not by a list — a notice added later is never held back at the moment
+it matters most.
+
+A voice note nobody could hear is not one of them (#173). It is an alert and reaches his
+family every other way — the app push, the notice on their family page — but what he was told
+when he stopped WhatsApp says a red flag, and only a new version of those words could say
+more (`app.consent.withdrawal.STILL_TOLD`, and the same rule in the delivery door,
+`rules.told_without_his_agreement`)."""
+
+
+def is_red_flag_notice(kind: str | None) -> bool:
+    return kind is not None and kind.startswith(RED_FLAG_NOTICE)
+
+
+async def _may_message(
+    session: AsyncSession, *, context: KeyContext, person: Person, kind: str | None
+) -> None:
+    """Whether Nura may message this person about the profile (#143, #163). `kind` is the
+    template or the reply key; None for a voice note.
+
+    The patient's WhatsApp agreement is for messages to him. Anyone else must hold a key his
+    agreement to let them in rests on. A message Nura starts with them — a template or a voice
+    note — needs two things more: that they did not answer no to WhatsApp (`SaidNoToWhatsApp`),
+    and, unless it is a red-flag notice, that his WhatsApp agreement stands. So after he stops
+    WhatsApp his family hears about him there only when he is unwell, which is what his stop
+    lines say (`app.consent.withdrawal.STILL_TOLD`). A reply answers something they wrote, and
+    the inbound door has asked his agreement before it (or it is a red flag's fixed line)."""
     profile = await session.get(Profile, context.profile_id)
     assert profile is not None  # the context was resolved from this row
     patient = profile.owner_person_id == person.id or (
@@ -154,21 +203,36 @@ async def _may_message(session: AsyncSession, *, context: KeyContext, person: Pe
             channel=Channel.WHATSAPP,
         )
         return
+    starts = kind is None or kind in TEMPLATES
     async with audited_guard(
         session, context, Action.SHARE, Scope.SEND, "whatsapp_message", channel=Channel.WHATSAPP
     ):
         if not await holds_the_profile(session, profile_id=context.profile_id, person_id=person.id):
             raise NotLetInHere(f"person {person.id} holds no key here")
+        if starts and await said_no(
+            session, context=context, person_id=person.id, channel=Channel.WHATSAPP
+        ):
+            raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
+    if starts and not is_red_flag_notice(kind):
+        await require_consent(
+            session,
+            context=context,
+            purpose=ConsentPurpose.WHATSAPP,
+            scope=Scope.SEND,
+            channel=Channel.WHATSAPP,
+        )
 
 
 def _render(
     kind: str, language: str, params: Mapping[str, str]
-) -> tuple[str, str | None, str | None]:
-    """The words, and which of a template or a catalogue key they came from."""
+) -> tuple[str, str | None, str | None, str]:
+    """The words, which of a template or a catalogue key they came from, and the words as the
+    verifier reads them — every name slot standing in as a plain name."""
+    stand_in = {key: NAME_STAND_IN if key in NAME_SLOTS else value for key, value in params.items()}
     if kind in TEMPLATES:
-        return render(kind, language, params), kind, None
+        return render(kind, language, params), kind, None, render(kind, language, stand_in)
     if kind in REPLIES:
-        return reply(kind, language, **params), None, kind
+        return reply(kind, language, **params), None, kind, reply(kind, language, **stand_in)
     raise NotAMessage(f"{kind!r} is neither an approved template nor a catalogue reply")
 
 
@@ -193,12 +257,12 @@ async def send(
     """
     if not to_person.phone_e164:
         raise NoNumber(f"person {to_person.id} has no phone number")
-    await _may_message(session, context=context, person=to_person)
+    await _may_message(session, context=context, person=to_person, kind=kind)
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)
-    text, template_name, catalogue_key = _render(kind, lang, params)
-    failures = [finding for finding in verify(text, lang) if finding.severity == "fail"]
+    text, template_name, catalogue_key, checked = _render(kind, lang, params)
+    failures = [finding for finding in verify(checked, lang) if finding.severity == "fail"]
     if failures:
         raise NotPlainWords(f"{kind} in {lang}: {failures[0].problem}")
 
@@ -285,7 +349,7 @@ async def send_voice_note(
     """
     if not to_person.phone_e164:
         raise NoNumber(f"person {to_person.id} has no phone number")
-    await _may_message(session, context=context, person=to_person)
+    await _may_message(session, context=context, person=to_person, kind=None)
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)

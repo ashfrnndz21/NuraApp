@@ -10,7 +10,9 @@ hour — nothing here is scheduled yet, and the dev-only route calls `run_mornin
 - the feeling check-in: three words, one tap; his answer is his own and is written down
   without a second yes (`inbound._check_in_answer` says why);
 - the visit card: the next visit on the spine, with who takes him;
-- the family notice: to each chief, how many things were written down this week.
+- the family notice: to each chief, how many things were written down this week — only
+  while his WhatsApp agreement stands, and never to a chief who said no to WhatsApp (#163);
+  the digest is read in the app either way.
 
 Every one goes through `send`: the profile's WHATSAPP consent, a template outside the
 window, plain words, a SHARE line. All of it runs in the owner's own key context — the
@@ -30,9 +32,15 @@ from app.audit.access import audited_read
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.outbound.send import Delivered, send, send_voice_note
+from app.channels.whatsapp.outbound.send import (
+    Delivered,
+    SaidNoToWhatsApp,
+    send,
+    send_voice_note,
+)
 from app.channels.whatsapp.strings import YOUR_DOCTOR
 from app.channels.whatsapp.templates import language_of
+from app.consent.service import NoConsent
 from app.db import as_utc, utcnow
 from app.delivery.feed.models import CardType
 from app.delivery.feed.rank import morning_supply
@@ -325,7 +333,9 @@ async def run_family_notice(
     profile_id: uuid.UUID,
 ) -> Sequence[Delivered]:
     """To each chief: how many things were written down about him this week. A count, never
-    what they said; the app is where the digest is read."""
+    what they said; the app is where the digest is read. Not on WhatsApp once he has stopped
+    it, nor to a chief who said no to it (#163): the send door refuses both, on the trail, and
+    that chief reads the digest in the app."""
     profile, _, context = await _owner(session, settings=settings, profile_id=profile_id)
     moment = utcnow()
     facts = await current_facts(session, context=context)
@@ -339,19 +349,22 @@ async def run_family_notice(
         chief = await session.get(Person, key.holder_person_id)
         if chief is None or not chief.phone_e164:
             continue
-        sent.append(
-            await send(
-                session,
-                context=context,
-                to_person=chief,
-                kind="family_digest",
-                params={"name": profile.display_name, "count": str(len(this_week))},
-                provider=providers.whatsapp,
-                number=number,
-                language=chief.language,
-                state=state,
+        try:
+            sent.append(
+                await send(
+                    session,
+                    context=context,
+                    to_person=chief,
+                    kind="family_digest",
+                    params={"name": profile.display_name, "count": str(len(this_week))},
+                    provider=providers.whatsapp,
+                    number=number,
+                    language=chief.language,
+                    state=state,
+                )
             )
-        )
+        except (NoConsent, SaidNoToWhatsApp):
+            continue
     return sent
 
 

@@ -8,10 +8,12 @@ rows, and Coral only where the design system allows it: nowhere on this page, be
 card is not the not-feeling-well button. The ambulance number sits under its own sentence
 ("The ambulance number is 995."), like every other number on the page sits beside a name.
 
-Every sentence on the page is one of the card's verified lines. The two things the standard
-keeps out of sentences and a stranger needs — the chief's phone number, the medicine's
-strength — are printed as data in a table beside them, with the generic name the register
-gave. The lock-screen widget of the native client is deferred (docs/adr/0001-web-first-client.md);
+Every sentence on the page is one of the card's verified lines. The things the standard keeps
+out of sentences and a stranger needs — the chief's phone number, the medicine's strength,
+the insurer's policy reference — are printed as data beside them, with the generic name the
+register gave. Two languages on one page (E13-01): when his language is not English, each
+sentence is followed by its English twin (`lang="en"`), so the ambulance crew reads the same
+card he does. The lock-screen widget of the native client is deferred (docs/adr/0001-web-first-client.md);
 this page, and the home-screen icon that opens the card in one tap, are its substitute.
 """
 
@@ -69,6 +71,7 @@ table {{ width: 100%; border-collapse: collapse; }}
 td, th {{ text-align: left; padding: 8px 4px; border-top: 1px solid var(--mist); vertical-align: top; }}
 th {{ font-weight: 500; }}
 .caption {{ font-size: 16px; color: var(--ink-soft); }}
+.twin {{ font-size: 18px; font-style: italic; margin-top: -4px; }}
 .demo {{ background: var(--ink); color: var(--paper); }}
 @media print {{ body {{ background: var(--paper); }} .paper {{ box-shadow: none; border: 1px solid var(--mist); }} }}
 """
@@ -95,9 +98,22 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
     by_id: dict[str, list[str]] = {}
     for line in card.lines:
         by_id.setdefault(line.id, []).append(line.text)
+    english: dict[str, list[str]] = {}
+    for line in card.english_lines:
+        english.setdefault(line.id, []).append(line.text)
+
+    def twin(one: str, index: int) -> str:
+        said = english.get(one, [])
+        if index >= len(said):
+            return ""
+        return f'<p class="twin" lang="en">{escape(said[index])}</p>'
 
     def section(*ids: str) -> str:
-        return "".join(f"<p>{escape(text)}</p>" for one in ids for text in by_id.get(one, []))
+        return "".join(
+            f"<p>{escape(text)}</p>{twin(one, index)}"
+            for one in ids
+            for index, text in enumerate(by_id.get(one, []))
+        )
 
     medicines = "".join(
         "<tr>"
@@ -126,6 +142,19 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
             )
             + "</div>"
         )
+    insurer = ""
+    if card.insurer is not None:
+        insurer = (
+            section("ec.insurer")
+            + '<div class="contact">'
+            + f"<span>{escape(card.insurer.name)}</span>"
+            + (
+                f"<span>{escape(card.insurer.policy_reference)}</span>"
+                if card.insurer.policy_reference
+                else ""
+            )
+            + "</div>"
+        )
     ambulance = (
         f'{section("ec.ambulance")}<div class="contact">'
         f'<span class="number"><a href="{_tel(card.emergency_number)}">{escape(card.emergency_number)}</a></span>'
@@ -138,13 +167,14 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{escape(title)}</title><style>{_style()}</style></head><body><main>"
         + (_demo_banner(card.language) if demo else "")
-        + f'<section class="paper"><h1>{escape(title)}</h1>{section("ec.show", "ec.language", "ec.age")}</section>'
+        + f'<section class="paper"><h1>{escape(title)}</h1>{twin("ec.title", 0)}'
+        f'{section("ec.show", "ec.language", "ec.age")}</section>'
         f'<section class="paper">{section("ec.condition", "ec.no_condition")}</section>'
         f'<section class="paper">{section("ec.medicine", "ec.medicine_when", "ec.high_risk", "ec.no_medicine")}'
         + (f"<table><tbody>{medicines}</tbody></table>" if medicines else "")
         + "</section>"
         f'<section class="paper">{section("ec.allergy", "ec.no_allergy", "ec.blood_type")}</section>'
-        f'<section class="paper">{section("ec.chief_who", "ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor", "ec.clinic")}{clinic}{ambulance}</section>'
+        f'<section class="paper">{section("ec.chief_who", "ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor", "ec.clinic")}{clinic}{insurer}{ambulance}</section>'
         f'<section class="paper">{section("ec.last_reading", "ec.boundary")}</section>'
         "</main></body></html>"
     )

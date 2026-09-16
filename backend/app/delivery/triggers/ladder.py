@@ -11,7 +11,17 @@ never held for the quiet hours (`rules.RULES[FLAG]`).
 
 A rung is a `Delivery` row, audited as a SHARE when it reached a person; nobody is on a rung
 whose key does not cover the part it is about — the medicines for a dose, the emergency card
-for a flag — "only me" taken out. A rung with nobody on it is skipped and costs no wait.
+for a flag — "only me" taken out. A rung with nobody on it is skipped and costs no wait. A
+flag's rung goes every way each person on it can be reached, and the notice on their family
+page is always written (`deliver`, #162); a flag's rung whose people no phone reached costs no
+wait either — the next rung is asked at once, and the chief sees who could not be reached
+(`not_reached`).
+
+A voice note Nura could not hear climbs the same way (#173). It is not a flag — nothing was
+read in it — but a red word in it could not be read either, so it is treated as one: the
+chief first, because it is hers to listen to; whoever is on duty five minutes later if she
+has not said she has it; then everyone else whose key holds the emergency card. It stops the
+same way a flag's does, on one person saying they have it (`acknowledge_flag`).
 
 `escalate_flag` is the one door a red flag is escalated through, and the ladder is the one
 record of who is told: the WhatsApp thread calls it the moment a flag is heard, the feeling
@@ -34,9 +44,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_read, audited_write
 from app.audit.models import Action, Channel
 from app.audit.trail import record
-from app.channels.whatsapp.outbound.send import Delivered, send
+from app.channels.whatsapp.outbound.send import (
+    Delivered,
+    NotPlainWords,
+    OutsideTheWindow,
+    TemplateNotApproved,
+    send,
+)
 from app.db import as_utc, utcnow
-from app.delivery.strings import theirs
+from app.delivery.strings import EMERGENCY_NUMBER, theirs
 from app.delivery.triggers.deliver import (
     Firing,
     Message,
@@ -47,7 +63,9 @@ from app.delivery.triggers.deliver import (
     open_run,
 )
 from app.delivery.triggers.models import (
+    ANSWERED_BY_A_PERSON,
     LADDER_STEP,
+    PHONE,
     Delivery,
     DeliveryOutcome,
     Ladder,
@@ -68,7 +86,7 @@ from app.regions import REGION_TZ
 from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 from app.safety.boundary import YOUR_DOCTOR
-from app.safety.red_flags import FLAG_WINDOW, Flag
+from app.safety.red_flags import FLAG_WINDOW, Flag, Step, escalation_now, is_red
 
 PATIENT, HELPER, ON_DUTY, CHIEF, KEY_HOLDER = "patient", "helper", "on_duty", "chief", "key_holder"
 RUNG_OF = {PATIENT: 0, HELPER: 1, ON_DUTY: 2, CHIEF: 3, KEY_HOLDER: 4}
@@ -81,10 +99,22 @@ FLAG_RUNGS: tuple[tuple[str, int], ...] = ((ON_DUTY, 0), (CHIEF, 5), (KEY_HOLDER
 """Whoever the roster puts on duty (the helper or a caregiver), at once; the chief five
 minutes later if nobody has answered; then everyone else whose key holds the emergency card.
 With nobody on duty, the chief is asked at once; with no chief either, everyone else is."""
+UNHEARD_RUNGS: tuple[tuple[str, int], ...] = ((CHIEF, 0), (ON_DUTY, 5), (KEY_HOLDER, 5))
+"""A voice note Nura could not hear (#173): the chief first, because it is her note to
+listen to; whoever is on duty five minutes later if she has not said she has it; then
+everyone else whose key holds the emergency card. With no chief, the roster is asked at
+once — a rung with nobody on it costs no wait."""
 
 
 class NotOnTheLadder(Refusal):
     """Only someone the ladder asked, whose key covers it, answers it."""
+
+
+class SenderNotNamed(Refusal):
+    """A voice note nobody could hear, and nobody to say who sent it. The notice would have
+    to claim the patient sent it, and he may not have (#173), so it does not go on WhatsApp
+    at all: the channel falls through to the app's content-free push, and the notice on the
+    family page is written whatever carried it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,10 +123,11 @@ class Escalated:
 
     ladder: Ladder | None
     told: tuple[uuid.UUID, ...]
-    """Who a message reached, now."""
+    """Whose phone a message reached, now: an app push or WhatsApp. The notice on a family
+    page is written for everyone asked, and is not counted here."""
     asked: tuple[uuid.UUID, ...]
-    """Who the ladder called first — the flag leads their feed, and a message went to them
-    by the first channel that could carry it (none, where none could)."""
+    """Who the ladder called first — the flag leads their feed and waits on their family page,
+    and a message went to them every way that could carry one (none, where none could)."""
     deliveries: tuple[Delivery, ...]
 
 
@@ -166,6 +197,8 @@ async def start(
     line_id: uuid.UUID | None = None,
     anchor: str | None = None,
     flag_id: uuid.UUID | None = None,
+    note_id: uuid.UUID | None = None,
+    note_from_person_id: uuid.UUID | None = None,
 ) -> Ladder:
     """The ladder for this action, started now — or the one it already has."""
     for ladder in await run.ladders():
@@ -185,6 +218,8 @@ async def start(
         line_id=line_id,
         anchor=anchor,
         flag_id=flag_id,
+        note_id=note_id,
+        note_from_person_id=note_from_person_id,
         rungs=rungs,
         started_at=as_utc(started_at),
         next_rung=0,
@@ -260,7 +295,7 @@ def tapped_by(
 
 
 async def _answered(run: Run, ladder: Ladder) -> uuid.UUID | None:
-    if ladder.subject is Subject.FLAG:
+    if ladder.subject in ANSWERED_BY_A_PERSON:
         return ladder.acknowledged_by_person_id
     taps, generic_of = await run.taps()
     if ladder.line_id is None or ladder.line_id not in generic_of:
@@ -282,29 +317,60 @@ async def climb(run: Run, ladder: Ladder, say: Say, type: TriggerType) -> None:
         return
     started = as_utc(ladder.started_at)
     over = (ladder.subject is Subject.DOSE and ladder.day < run.day) or (
-        ladder.subject is Subject.FLAG and run.at - started >= FLAG_WINDOW
+        ladder.subject in ANSWERED_BY_A_PERSON and run.at - started >= FLAG_WINDOW
     )
     if over:
         await close(run.session, run.acting, ladder, "lapsed")
         return
     elapsed = (run.at - started).total_seconds() / 60
     reached = ladder.next_rung
-    for step in ladder.rungs:
-        if step["after_minutes"] > elapsed:
-            continue
-        person = await run.person(uuid.UUID(step["person_id"]))
-        if person is None:
-            continue
-        to = Recipient(person, step["standing"])
-        firing = Firing(
-            type=type,
-            dedupe_key=f"{ladder.dedupe_key}:r{step['rung']}",
-            why={"ladder_id": str(ladder.id), "rung": step["rung"], "action": ladder.dedupe_key},
-        )
-        await deliver(run, firing, to, say(to), rung=step["rung"], ladder=ladder)
-        reached = max(reached, int(step["rung"]) + 1)
+    # A flag's rung whose people no phone reached moves the ladder on at once: the next
+    # rung is due now, and the ones after it keep their gaps from there (#162). Worked out
+    # from the rows each run, so every run agrees on it.
+    early = 0
+    offsets = sorted({int(step["after_minutes"]) for step in ladder.rungs})
+    for index, offset in enumerate(offsets):
+        if offset - early > elapsed:
+            break
+        group = [step for step in ladder.rungs if int(step["after_minutes"]) == offset]
+        for step in group:
+            person = await run.person(uuid.UUID(step["person_id"]))
+            if person is None:
+                continue
+            to = Recipient(person, step["standing"])
+            firing = Firing(
+                type=type,
+                dedupe_key=f"{ladder.dedupe_key}:r{step['rung']}",
+                why={
+                    "ladder_id": str(ladder.id),
+                    "rung": step["rung"],
+                    "action": ladder.dedupe_key,
+                },
+            )
+            await deliver(run, firing, to, say(to), rung=step["rung"], ladder=ladder)
+            reached = max(reached, int(step["rung"]) + 1)
+        later = index + 1 < len(offsets)
+        if (
+            later
+            and ladder.subject in ANSWERED_BY_A_PERSON
+            and not await _a_phone_reached(run, ladder, group)
+        ):
+            early += offsets[index + 1] - offset
     if reached != ladder.next_rung:
         await _move(run.session, run.acting, ladder, next_rung=reached)
+
+
+async def _a_phone_reached(run: Run, ladder: Ladder, group: Sequence[dict[str, Any]]) -> bool:
+    """Whether anyone on this rung was reached on their phone about this ladder, this run or
+    an earlier one: an app push, WhatsApp, or the caregiver standing in."""
+    people = {step["person_id"] for step in group}
+    return any(
+        row.ladder_id == ladder.id
+        and row.outcome is DeliveryOutcome.SENT
+        and row.via in PHONE
+        and (str(row.to_person_id) in people or str(row.for_person_id) in people)
+        for row in await run.deliveries()
+    )
 
 
 # --- what each rung says --------------------------------------------------------------------------
@@ -378,12 +444,24 @@ async def _doctor(run: Run, language: str) -> str:
     return YOUR_DOCTOR[language]
 
 
+TIERED_NOTICE: dict[Step, str] = {
+    Step.AMBULANCE: "red_flag_notice_ambulance",
+    Step.HOSPITAL_NOW: "red_flag_notice_hospital",
+    Step.NUMBER_IF_WORSE: "red_flag_notice_night",
+}
+"""The notice for a step that is not "call the doctor today" (E19-05): the ambulance tier at any
+hour, and a same-day flag out of the doctor's hours — the hospital on his insurance, or the
+emergency number."""
+
+
 def flag_message(run: Run, flag: Flag) -> Say:
     """The red-flag notice, in the reader's language: "This one we do not wait for. Mei said Pa
-    is not well. Call Dr Tan today." When he raised it himself, "Pa is not feeling well."; when
-    the person who raised it is on more than one family's list and has not said which, "It may
-    be about Pa." — each variant only where the number approves it, the approved notice
-    otherwise, so a flag never waits on Meta."""
+    is not well. Call Dr Tan today." When the flag is in the ambulance tier, or it is out of
+    the doctor's hours, the notice that says so (`TIERED_NOTICE`: call him now, then the
+    ambulance, the hospital's emergency department or the emergency number). When he raised
+    it himself, "Pa is not feeling well."; when the person who raised it is on more than one
+    family's list and has not said which, "It may be about Pa." — each variant only where the
+    number approves it, the approved notice otherwise, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
         lang = run.language_for(person)
@@ -392,16 +470,140 @@ def flag_message(run: Run, flag: Flag) -> Say:
         who = raiser.display_name if raiser is not None else name
         doctor = await _doctor(run, lang)
         approves = run.via.number.approves
-        # The approved notice always goes; its two variants go where the number approves them.
-        kind, params = "red_flag_notice", {"name": name, "who": who, "doctor": doctor}
+        number = EMERGENCY_NUMBER[run.acting.region.value]
+        tiered: tuple[str, dict[str, str]] | None = None
+        go_now = False  # the ambulance or the hospital now: never traded for a weaker notice
+        if flag.feeling is not None and is_red(flag.feeling):
+            try:
+                step = await escalation_now(
+                    run.session,
+                    context=run.acting,
+                    feeling=flag.feeling,
+                    local=run.local,
+                    emergency_number=number,
+                    channel=Channel.SYSTEM,
+                    tiered=run.via.settings.red_flag_tiers,
+                )
+            except Refusal:
+                # Nothing about his directory may keep a flag from the family: the most
+                # urgent notice, the ambulance's.
+                tiered = (TIERED_NOTICE[Step.AMBULANCE], {"name": name, "emergency_number": number})
+                go_now = True
+            else:
+                go_now = step.step in (Step.AMBULANCE, Step.HOSPITAL_NOW)
+                if step.step is Step.HOSPITAL_NOW and step.hospital is not None:
+                    tiered = (
+                        TIERED_NOTICE[step.step],
+                        {"name": name, "hospital": step.hospital, "emergency_number": number},
+                    )
+                elif step.step in TIERED_NOTICE:
+                    tiered = (TIERED_NOTICE[step.step], {"name": name, "emergency_number": number})
+        # In order, the first that goes: the ambiguous notice; the tiered one — its template
+        # where Meta approved it, else the same words as free text inside the window; the
+        # notice he raised himself; the approved notice, which always can. When the step is
+        # the ambulance or the hospital now, the tiered notice goes before the ambiguous one,
+        # which names no ambulance and no hospital (B1 clinical-safety review).
+        candidates: list[tuple[str, dict[str, str]]] = []
+        told_now: tuple[str, dict[str, str]] | None = None
+        if tiered is not None:
+            told_now = (tiered[0] if approves(tiered[0]) else f"{tiered[0]}_text", tiered[1])
+        if told_now is not None and go_now:
+            candidates.append(told_now)
         if flag.ambiguous_profile and approves("red_flag_notice_ambiguous"):
-            kind, params = "red_flag_notice_ambiguous", {"who": who, "name": name}
-        elif (
+            candidates.append(("red_flag_notice_ambiguous", {"who": who, "name": name}))
+        if told_now is not None and not go_now:
+            candidates.append(told_now)
+        if (
             raiser is not None
             and raiser.id == run.profile.owner_person_id
             and approves("red_flag_notice_self")
         ):
-            kind, params = "red_flag_notice_self", {"name": name, "doctor": doctor}
+            candidates.append(("red_flag_notice_self", {"name": name, "doctor": doctor}))
+        candidates.append(("red_flag_notice", {"name": name, "who": who, "doctor": doctor}))
+        passed: Refusal | None = None
+        for kind, params in candidates:
+            try:
+                return await send(
+                    run.session,
+                    context=run.acting,
+                    to_person=person,
+                    kind=kind,
+                    params=params,
+                    provider=run.via.providers.whatsapp,
+                    number=run.via.number,
+                    language=lang,
+                    state=await run.state(),
+                )
+            except (NotPlainWords, OutsideTheWindow, TemplateNotApproved) as refused:
+                passed = refused  # the words could not go this way: the next notice
+        assert passed is not None
+        raise passed
+
+    return lambda to: Message(whatsapp=notice)
+
+
+# --- a voice note Nura could not hear ---------------------------------------------------------------
+
+
+UNHEARD_SCOPE = Scope.EMERGENCY
+"""What an unheard note speaks of: a red word in it could not be read, so it is the emergency
+card, the same as a flag's — a helper's key holds it, and a key without it is told nothing."""
+
+
+async def unheard_ladder(
+    run: Run,
+    *,
+    dedupe_key: str,
+    note_id: uuid.UUID | None,
+    from_person_id: uuid.UUID,
+) -> Ladder:
+    """The ladder for one voice note nobody could hear: the chief, then the roster, then
+    everyone else whose key holds the emergency card. Whoever sent it is left off it — they
+    know already — and the ladder remembers who that was, so the notice can name them."""
+    return await start(
+        run,
+        subject=Subject.UNHEARD_NOTE,
+        scope=UNHEARD_SCOPE,
+        dedupe_key=dedupe_key,
+        spec=UNHEARD_RUNGS,
+        exclude=(from_person_id,),
+        started_at=run.at,
+        note_id=note_id,
+        note_from_person_id=from_person_id,
+    )
+
+
+def unheard_message(run: Run, ladder: Ladder) -> Say:
+    """The unheard-note notice, in the reader's language. It carries no word of the note and
+    none of its audio: who sent it, that Nura could not hear it, and the one thing to do.
+
+    His own note: where this person's key opens his notes and there is a note to open, she is
+    told to listen in the app or to call him; where it does not, or the audio never arrived,
+    to call him — the one thing she can actually do. Somebody else's note is never said to be
+    his (#173): it names whoever sent it, and the thing to do is to call them, since they are
+    the one who knows what they said. Nothing of theirs is kept, so there is never anything
+    to listen to. Only a note this run can read as his own is said to be his; with nobody to
+    name at all, the notice does not go on WhatsApp rather than guess (`SenderNotNamed`).
+    """
+
+    async def notice(person: Person) -> Delivered:
+        name = run.profile.display_name
+        sender = (
+            None
+            if ladder.note_from_person_id is None
+            else await run.person(ladder.note_from_person_id)
+        )
+        his = sender is not None and run.patient is not None and sender.id == run.patient.id
+        if his:
+            opens = ladder.note_id is not None and Scope.NOTES in await run.scopes_of(person)
+            kind = "unheard_note_notice" if opens else "unheard_note_notice_call"
+            params = {"name": name}
+        elif sender is not None and sender.display_name:
+            kind, params = "unheard_note_notice_from", {"who": sender.display_name, "name": name}
+        else:
+            # Nobody to name. Saying the patient sent it would be a claim about him that may
+            # not be true, so nothing goes on WhatsApp: the push and the family page still do.
+            raise SenderNotNamed(f"ladder {ladder.id} cannot say who sent the note")
         return await send(
             run.session,
             context=run.acting,
@@ -410,11 +612,17 @@ def flag_message(run: Run, flag: Flag) -> Say:
             params=params,
             provider=run.via.providers.whatsapp,
             number=run.via.number,
-            language=lang,
+            language=run.language_for(person),
             state=await run.state(),
         )
 
     return lambda to: Message(whatsapp=notice)
+
+
+async def climb_unheard(run: Run, ladder: Ladder) -> None:
+    """One unheard-note ladder, asked as far as it is due. The engine calls this on every
+    open one, so a chief who has not said she has it is followed by the next rung (#173)."""
+    await climb(run, ladder, unheard_message(run, ladder), TriggerType.VOICE_NOTE_UNHEARD)
 
 
 # --- red flags -------------------------------------------------------------------------------------
@@ -469,9 +677,13 @@ async def escalate_flag(
     ladder = await flag_ladder(run, flag, exclude=told_already, now=True)
     await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
     reached = tuple(
-        sent.delivery.to_person_id
-        for sent in run.report
-        if sent.delivery.outcome is DeliveryOutcome.SENT and sent.delivery.to_person_id is not None
+        dict.fromkeys(
+            sent.delivery.to_person_id
+            for sent in run.report
+            if sent.delivery.outcome is DeliveryOutcome.SENT
+            and sent.delivery.via in PHONE
+            and sent.delivery.to_person_id is not None
+        )
     )
     asked = tuple(
         uuid.UUID(step["person_id"]) for step in ladder.rungs if step["after_minutes"] == 0
@@ -491,10 +703,14 @@ async def acknowledge_flag(
     ladder_id: uuid.UUID | None = None,
     channel: Channel = Channel.APP,
 ) -> Ladder | None:
-    """Someone the flag's ladder reached says they have it: the ladder stops. The newest open
-    flag ladder that reached this person, or the one named; `NotOnTheLadder` when the named
-    one never reached them. Under the emergency scope: a key without it answers nothing."""
-    where: list[Any] = [Ladder.subject == Subject.FLAG, Ladder.closed_at.is_(None)]
+    """Someone the ladder reached says they have it: the ladder stops. The newest open ladder
+    of the kind a person answers — a red flag, or a voice note Nura could not hear (#173) —
+    that reached this person, or the one named; `NotOnTheLadder` when the named one never
+    reached them. Under the emergency scope: a key without it answers nothing."""
+    where: list[Any] = [
+        Ladder.subject.in_(sorted(ANSWERED_BY_A_PERSON)),
+        Ladder.closed_at.is_(None),
+    ]
     if ladder_id is not None:
         where.append(Ladder.id == ladder_id)
     ladders = await audited_read(
@@ -528,15 +744,19 @@ async def acknowledge_flag(
 
 
 async def open_flags_for(session: AsyncSession, *, context: KeyContext) -> list[Ladder]:
-    """The open red-flag ladders that reached this person, newest first: the ones their "I'm
-    on it" (`acknowledge_flag`) would stop. Read under the emergency scope, like the
-    acknowledging: a key without it answers nothing."""
+    """The open ladders that reached this person and wait on a person's word — a red flag, or
+    a voice note Nura could not hear (#173) — newest first: the ones their "I'm on it"
+    (`acknowledge_flag`) would stop. Read under the emergency scope, like the acknowledging:
+    a key without it answers nothing."""
     ladders = await audited_read(
         session,
         Ladder,
         context,
         Scope.EMERGENCY,
-        where=(Ladder.subject == Subject.FLAG, Ladder.closed_at.is_(None)),
+        where=(
+            Ladder.subject.in_(sorted(ANSWERED_BY_A_PERSON)),
+            Ladder.closed_at.is_(None),
+        ),
     )
     if not ladders:
         return []
@@ -557,6 +777,31 @@ async def open_flags_for(session: AsyncSession, *, context: KeyContext) -> list[
         key=lambda ladder: as_utc(ladder.started_at),
         reverse=True,
     )
+
+
+async def not_reached(
+    session: AsyncSession, *, context: KeyContext, ladder: Ladder
+) -> list[uuid.UUID]:
+    """Everyone this flag's ladder asked whose phone nothing reached — only the notice on their
+    family page — in the order they were asked. What the chief is shown (#162). Read under the
+    emergency scope, like the ladder itself."""
+    rows = await audited_read(
+        session,
+        Delivery,
+        context,
+        Scope.EMERGENCY,
+        where=(Delivery.ladder_id == ladder.id,),
+    )
+    asked: list[uuid.UUID] = []
+    phoned: set[uuid.UUID] = set()
+    for row in sorted(rows, key=lambda one: (as_utc(one.recorded_at), one.rung or 0)):
+        if row.to_person_id is None:
+            continue
+        if row.to_person_id not in asked:
+            asked.append(row.to_person_id)
+        if row.outcome is DeliveryOutcome.SENT and row.via in PHONE:
+            phoned.add(row.to_person_id)
+    return [person for person in asked if person not in phoned]
 
 
 # --- doses -----------------------------------------------------------------------------------------
@@ -590,24 +835,30 @@ async def acknowledge_dose(
 
 @dataclass(frozen=True, slots=True)
 class DoseAsked:
+    """One tablet at one moment of his day, as a "Taken" or "given" reply could mean it."""
+
     line_id: uuid.UUID
     anchor: str
     generic: str
+    strength: str = ""
 
 
-async def dose_for_reply(
+async def doses_for_reply(
     session: AsyncSession,
     *,
     context: KeyContext,
     registry: DrugRegistry,
     at: datetime | None = None,
     channel: Channel = Channel.WHATSAPP,
-) -> DoseAsked | None:
-    """Which tablet a "Taken" or "given" reply is about: the one the ladder last asked this
-    person about that day; else the one whose window is open at that moment and has no Taken
-    yet; else the latest one today whose moment has passed with none; else none — and then
-    nothing is written down. The moments are his routine's (E10-01). `at` is when the reply was sent (the
-    message's own time, as the provider stamps it); now when not given."""
+) -> list[DoseAsked]:
+    """Every tablet a "Taken" or "given" reply could be about at that moment (#162), never a
+    guess among them: each one the ladder has asked this person about that day and is still
+    open, and each one whose window is open and has no Taken yet; with neither, every tablet
+    at the latest moment today that has passed with none. Earliest moment first. One is
+    written down; more than one is asked about, by name, before anything is written
+    (`app.channels.whatsapp.inbound`); none, nothing. The moments are his routine's
+    (E10-01). `at` is when the reply was sent (the message's own time, as the provider stamps
+    it); now when not given."""
     zone = REGION_TZ[context.region]
     moment = as_utc(at) if at is not None else utcnow()
     local = moment.astimezone(zone)
@@ -628,46 +879,67 @@ async def dose_for_reply(
         and any(step["person_id"] == str(context.person_id) for step in ladder.rungs)
     ]
     slots = await doses_today(session, context=context, registry=registry)
-    generic_of = {slot.line.id: slot.line.generic for slot in slots}
-    if asked:
-        newest = max(asked, key=lambda ladder: as_utc(ladder.started_at))
-        assert newest.line_id is not None and newest.anchor is not None
-        generic = generic_of.get(newest.line_id)
-        if generic is not None:
-            return DoseAsked(line_id=newest.line_id, anchor=newest.anchor, generic=generic)
+    lines = {slot.line.id: slot.line for slot in slots}
     config = config_of(
         None,
         await current_routine(session, context=context),
         await breakfast_time(session, context=context),
     )
+    found: dict[tuple[uuid.UUID, str], DoseAsked] = {}
+
+    def one(line_id: uuid.UUID, anchor: str) -> None:
+        line = lines.get(line_id)
+        if line is not None and (line_id, anchor) not in found:
+            found[(line_id, anchor)] = DoseAsked(
+                line_id=line_id, anchor=anchor, generic=line.generic, strength=line.strength
+            )
+
+    for ladder in asked:
+        assert ladder.line_id is not None and ladder.anchor is not None
+        one(ladder.line_id, ladder.anchor)
     untapped = [slot for slot in slots if not slot.taken]
     for slot in untapped:
         opens, closes = config.window(local.date(), slot.anchor, zone)
         if opens <= local < closes:
-            return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
-    # Late: the latest tablet today whose moment has passed with no Taken yet.
-    passed = [
-        slot
-        for slot in untapped
-        if datetime.combine(local.date(), config.anchor_at(slot.anchor), zone) <= local
-    ]
-    if passed:
-        slot = max(passed, key=lambda one: config.anchor_at(one.anchor))
-        return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
-    return None
+            one(slot.line.id, slot.anchor)
+    if not found:
+        # Late: the tablets at the latest moment today that has passed with no Taken yet.
+        passed = [
+            slot
+            for slot in untapped
+            if datetime.combine(local.date(), config.anchor_at(slot.anchor), zone) <= local
+        ]
+        if passed:
+            latest = max(config.anchor_at(slot.anchor) for slot in passed)
+            for slot in passed:
+                if config.anchor_at(slot.anchor) == latest:
+                    one(slot.line.id, slot.anchor)
+    order = {(slot.line.id, slot.anchor): index for index, slot in enumerate(slots)}
+    return sorted(
+        found.values(),
+        key=lambda dose: (
+            config.anchor_at(dose.anchor),
+            order.get((dose.line_id, dose.anchor), len(order)),
+        ),
+    )
 
 
 __all__ = [
     "DOSE_RUNGS",
     "FLAG_RUNGS",
+    "UNHEARD_RUNGS",
     "DoseAsked",
     "Escalated",
     "NotOnTheLadder",
+    "SenderNotNamed",
     "acknowledge_dose",
     "acknowledge_flag",
     "climb",
-    "dose_for_reply",
+    "climb_unheard",
+    "doses_for_reply",
     "escalate_flag",
+    "not_reached",
     "open_flags_for",
     "time",
+    "unheard_ladder",
 ]

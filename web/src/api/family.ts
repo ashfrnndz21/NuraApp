@@ -1,5 +1,12 @@
 import { api, apiText } from "./client";
-import type { AppointmentOut, ConfirmationOut, ConsentOut, KeyOut, WordingOut } from "./types";
+import type {
+  AppointmentOut,
+  ConfirmationOut,
+  ConsentOut,
+  KeyOut,
+  SharingPreviewOut,
+  WordingOut,
+} from "./types";
 import type {
   AcceptedOut,
   ConnectorOut,
@@ -10,6 +17,7 @@ import type {
   DocumentTag,
   LadderOut,
   OpenLadderOut,
+  ReachOut,
   DigestOut,
   GrantOut,
   KeyRole,
@@ -49,8 +57,36 @@ export const roles = (token: string, language: string, name: string) =>
 export const grants = (token: string, profileId: string, language: string) =>
   api<GrantOut[]>(`/profiles/${profileId}/grants`, { token, query: { language } });
 
+/** Who a new key is for, by phone, and the parts it would open: what a key for them rests
+ *  on (`previewSharing`, `letSomeoneIn`), and what `makeKey` narrows no wider than. */
+export interface SharingBody {
+  holder_phone_e164: string;
+  holder_display_name: string;
+  scopes: Scope[];
+  language: string;
+}
+
+/** The words the owner would agree to by `letSomeoneIn`, for this person and these parts,
+ *  rendered by the backend before he agrees (`POST /consents/sharing/preview`); the client
+ *  never composes them. This route hands back no token binding the words to this body — the
+ *  caller (`Keys.tsx`) is the one that discards the preview the moment the person or the
+ *  parts change, so the agree that follows is only ever sent right after a read of exactly
+ *  those words. */
+export const previewSharing = (token: string, profileId: string, body: SharingBody) =>
+  api<SharingPreviewOut>(`/profiles/${profileId}/consents/sharing/preview`, { method: "POST", token, body: { ...body, relationship: null } });
+
+/** The owner's own yes to letting this person in, in the words he was shown (their version):
+ *  what a key for them can then rest on (`makeKey`). Only the owner's own basis; a chief
+ *  cutting a key for someone the owner has already let in needs no fresh yes here. */
+export const letSomeoneIn = (token: string, profileId: string, body: SharingBody, wording_version: string) =>
+  api<ConsentOut>(`/profiles/${profileId}/consents/sharing`, {
+    method: "POST",
+    token,
+    body: { ...body, relationship: null, captured_via: "app", wording_version },
+  });
+
 /** A key for one person: a role, the parts, a window. It rests on the owner's own agreement to
- *  let that person in; without it the backend refuses (`ConsentWithheld`). */
+ *  let that person in (`letSomeoneIn`); without it the backend refuses (`ConsentWithheld`). */
 export const makeKey = (token: string, profileId: string, body: { holder_phone_e164: string; role: KeyRole; scopes: Scope[]; window: KeyWindow }) =>
   api<KeyOut>(`/profiles/${profileId}/keys`, { method: "POST", token, body });
 
@@ -209,6 +245,9 @@ export const ladders = (token: string, profileId: string, language: string) =>
 
 export const acknowledge = (token: string, profileId: string, ladderId: string, language: string) =>
   api<LadderOut>(`/profiles/${profileId}/ladders/${ladderId}/acknowledge`, { method: "POST", token, query: { language } });
+
+/** Who Nura cannot message on WhatsApp, in the backend's words (owner and chief; #163). */
+export const reach = (token: string, profileId: string, language: string) => api<ReachOut[]>(`/profiles/${profileId}/reach`, { token, query: { language } });
 
 // --- E12-09: the papers behind the family list ----------------------------------------------------
 

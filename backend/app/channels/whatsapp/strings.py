@@ -117,10 +117,25 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Nura sudah simpan nota suara anda.",),
         "zh": ("Nura 保存了您的语音留言。",),
     },
+    # His voice note kept, but no words heard in it (#158): a red word in it could not be read,
+    # so, like its twin `voice_note_not_fetched`, the reply says what to do if he feels unwell,
+    # and his chief is told to listen (`inbound._tell_family_unheard`).
     "voice_note_unheard": {
-        "en": ("Nura kept your voice note.", "Nura could not hear this note."),
-        "ms": ("Nura sudah simpan nota suara anda.", "Nura tidak dapat mendengar nota ini."),
-        "zh": ("Nura 保存了您的语音留言。", "Nura 听不清这段录音。"),
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
     },
     "voice_note_not_fetched": {
         "en": ("Nura could not hear your voice note.", "If you feel unwell, call your family now."),
@@ -130,10 +145,166 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("Nura 听不到您的语音留言。", "如果您不舒服，现在就打电话给家人。"),
     },
+    # The same two, with who the notice actually reached (#173): nobody is said to know who
+    # was not told, so these are said only once a notice went out, and never before it.
+    "voice_note_unheard_told": {
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "{names} knows now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_unheard_told_many": {
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "{names} know now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_not_fetched_told": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} knows now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_not_fetched_told_many": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} know now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    # A voice note from the helper or another key holder that Nura could not hear (#173). It
+    # is not kept — it may carry other people's voices — and the line telling him to call his
+    # family is his, so this asks the sender to write instead. The chief is told either way.
+    # The notice reached nobody, so this one says who to call: every other line for a note
+    # nobody could hear ends on a way through, and this one must too.
+    "note_unheard_other": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "Please write what you said.",
+            "If it cannot wait, call the family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Sila tulis apa yang anda kata.",
+            "Kalau tidak boleh tunggu, telefon keluarga sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "请把您说的话写下来。",
+            "如果不能等，现在就打电话给家人。",
+        ),
+    },
+    "note_unheard_other_told": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} knows now.",
+            "Please write what you said.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Sila tulis apa yang anda kata.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "请把您说的话写下来。",
+        ),
+    },
+    "note_unheard_other_told_many": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} know now.",
+            "Please write what you said.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Sila tulis apa yang anda kata.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "请把您说的话写下来。",
+        ),
+    },
+    # A voice note Nura could not hear on a profile whose patient has not agreed to WhatsApp
+    # (#173): nothing of it is kept and the thread is not opened, so this one fixed line goes
+    # straight from the provider, the way the red flag's fixed line does. His family is told
+    # through the app all the same.
+    "note_unheard_fixed": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "Nura did not keep this note.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Nura tidak menyimpan nota ini.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "Nura 没有保存这段录音。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
+    },
+    # Said in the family's WhatsApp group, which he reads, above a message written in the app
+    # (#158): his words for where it was written, the same in every language, and a subject
+    # always — `mirror_to_group` fills an unnamed poster as Someone.
     "family_said": {
-        "en": ("{who} wrote in the family thread:",),
-        "ms": ("{who} menulis dalam perbualan keluarga:",),
-        "zh": ("{who}在家人群里写道：",),
+        "en": ("{who} wrote this in the Nura app:",),
+        "ms": ("{who} menulis ini dalam aplikasi Nura:",),
+        "zh": ("{who}在 Nura 应用里写道：",),
     },
     "propose_blood_pressure": {
         "en": (
@@ -204,21 +375,6 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("{name}文件里的这部分没有开放给您。", "{name}可以在应用里更改。"),
     },
-    "red_flag": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} know now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_one": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} knows now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_alone": {
-        "en": ("This one we do not wait for.", "Call {doctor} today."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。"),
-    },
     # A flag written but held back (it depends on a fact not on his papers): no alarm, and
     # still the next step for a worried family member.
     "red_flag_held": {
@@ -226,15 +382,68 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Saya sudah tulis.", "Kalau jadi lebih teruk, telefon {doctor} hari ini."),
         "zh": ("我记下了。", "如果变得更严重，今天就打电话给{doctor}。"),
     },
+    # His "Taken", written down: the tablets it was written against, by name, so a wrong one
+    # can be caught (#162). `{took}` is one `TOOK` line per moment of his day.
     "taken_patient": {
-        "en": ("Thank you, I wrote it down.", "{who} can see you took it."),
-        "ms": ("Terima kasih, saya sudah tulis.", "{who} boleh lihat anda sudah ambil."),
-        "zh": ("谢谢，我记下了。", "{who}能看到您吃了。"),
+        "en": ("Thank you, I wrote it down.", "{took}", "{who} can see you took it."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{took}", "{who}能看到您吃了。"),
+    },
+    # More than one tablet written down at once: "it" would name only one of them (#173).
+    "taken_patient_many": {
+        "en": ("Thank you, I wrote it down.", "{took}", "{who} can see you took them."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{took}", "{who}能看到您吃了。"),
     },
     "taken_alone": {
-        "en": ("Thank you, I wrote it down.",),
-        "ms": ("Terima kasih, saya sudah tulis.",),
-        "zh": ("谢谢，我记下了。",),
+        "en": ("Thank you, I wrote it down.", "{took}"),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}"),
+        "zh": ("谢谢，我记下了。", "{took}"),
+    },
+    # A "Taken" that could be about more than one tablet at that moment (#162): nothing is
+    # written down until he says which. `{doses}` is one `DOSE_CHOICE` line per tablet.
+    "taken_which": {
+        "en": ("Which tablet did you take?", "{doses}", "Send both if you took both."),
+        "ms": (
+            "Ubat yang mana anda sudah ambil?",
+            "{doses}",
+            "Kalau anda sudah ambil semua, hantar semua.",
+        ),
+        "zh": ("您吃了哪一种药？", "{doses}", "都吃了的话，请发“都”。"),
+    },
+    "taken_which_all": {
+        "en": ("Which tablet did you take?", "{doses}", "Send all if you took them all."),
+        "ms": (
+            "Ubat yang mana anda sudah ambil?",
+            "{doses}",
+            "Kalau anda sudah ambil semua, hantar semua.",
+        ),
+        "zh": ("您吃了哪一种药？", "{doses}", "都吃了的话，请发“都”。"),
+    },
+    # The helper's "given", the same way (#162).
+    "given_which": {
+        "en": ("Which tablet did you give {name}?", "{doses}", "Send both if you gave both."),
+        "ms": (
+            "Ubat yang mana anda sudah beri kepada {name}?",
+            "{doses}",
+            "Kalau anda sudah beri semua, hantar semua.",
+        ),
+        "zh": ("您给{name}吃了哪一种药？", "{doses}", "都给了的话，请发“都”。"),
+    },
+    "given_which_all": {
+        "en": ("Which tablet did you give {name}?", "{doses}", "Send all if you gave them all."),
+        "ms": (
+            "Ubat yang mana anda sudah beri kepada {name}?",
+            "{doses}",
+            "Kalau anda sudah beri semua, hantar semua.",
+        ),
+        "zh": ("您给{name}吃了哪一种药？", "{doses}", "都给了的话，请发“都”。"),
+    },
+    # An answer to "which tablet?" that does not say exactly which: nothing is written (#162).
+    "which_not_sure": {
+        "en": ("I am not sure which tablet you mean.", "I did not write anything down yet."),
+        "ms": ("Saya tidak pasti ubat yang mana.", "Saya belum tulis apa-apa."),
+        "zh": ("我不确定您说的是哪一种药。", "我还没有记下任何东西。"),
     },
     "given": {
         "en": ("Thank you, I wrote it down.", "{name} had {medicine}."),
@@ -312,6 +521,41 @@ FEELING_WORDS: Mapping[str, Mapping[str, str]] = {
 }
 """The three feeling words as the read-back says them."""
 
+# @patient
+DOSE_CHOICE: Mapping[str, str] = {
+    "en": "Send {number} for {medicine}, {strength} on the box, {anchor}.",
+    "ms": "Hantar {number} untuk {medicine}, kotak bertulis {strength}, {anchor}.",
+    "zh": "请发 {number}：{medicine}，盒子上写着 {strength}，{anchor}吃。",
+}
+"""One tablet in "which tablet?" (#162): the number that answers it, his words for the
+tablet, its strength as the number on his box (never "mg", a unit he does not use) and the
+moment of his day it is for."""
+
+# @patient
+DOSE_CHOICE_BARE: Mapping[str, str] = {
+    "en": "Send {number} for {medicine} {anchor}.",
+    "ms": "Hantar {number} untuk {medicine} {anchor}.",
+    "zh": "请发 {number}：{medicine}，{anchor}吃。",
+}
+"""The same line for a tablet whose strength has no number on it to say."""
+
+# @patient phrase
+BOXED: Mapping[str, str] = {
+    "en": "{medicine}, {strength} on the box,",
+    "ms": "{medicine}, kotak bertulis {strength},",
+    "zh": "{medicine}（盒子上写着 {strength}）",
+}
+"""A tablet named with the number on its box, where another on the list goes by the same
+words: the read-back then says which one was written down (#162)."""
+
+# @patient
+TOOK: Mapping[str, str] = {
+    "en": "You took {medicine} {anchor}.",
+    "ms": "Anda sudah ambil {medicine} {anchor}.",
+    "zh": "您{anchor}吃了{medicine}。",
+}
+"""What his "Taken" was written against, in his reply (#162): the tablets at one moment."""
+
 # @patient phrase
 GROUP_NAME: Mapping[str, str] = {
     "en": "{name} and family",
@@ -333,6 +577,288 @@ AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
 
 # @patient phrase
 OR: Mapping[str, str] = {"en": " or ", "ms": " atau ", "zh": "还是"}
+
+
+# --- a red flag, answered in the thread (E19-05) ------------------------------------------------
+#
+# Every reply to a red flag is three parts, each a whole line: that we do not wait for this
+# one, what to do now — the one step `app.safety.red_flags.step_for` chose from the flag's
+# tier, the doctor's hours and the hospital marked as on his insurance — and who knows now.
+# The replies are the parts joined, one key per step and per how many were told
+# (`red_flag_reply_key`); the send path verifies the whole reply again before it goes.
+
+# @patient
+RED_FLAG_OPENING: Mapping[str, str] = {
+    "en": "This one we do not wait for.",
+    "ms": "Yang ini kita tidak tunggu.",
+    "zh": "这个我们不等。",
+}
+
+# @patient action
+RED_FLAG_STEPS: Mapping[str, Mapping[str, Lines]] = {
+    "ambulance": {
+        "en": ("Call the ambulance now on {emergency_number}.",),
+        "ms": ("Hubungi ambulans sekarang di talian {emergency_number}.",),
+        "zh": ("现在就打{emergency_number}叫救护车。",),
+    },
+    "doctor_today": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": ("今天就打电话给{doctor}。", "如果变得更严重，现在就打{emergency_number}叫救护车。"),
+    },
+    "doctor_today_hospital": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, go to {hospital} now.",
+            "{hospital} is on your insurance.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, pergi ke {hospital} sekarang.",
+            "{hospital} dilindungi insurans anda.",
+        ),
+        "zh": (
+            "今天就打电话给{doctor}。",
+            "如果变得更严重，现在就去{hospital}。",
+            "{hospital}在您的保险范围内。",
+        ),
+    },
+    "hospital_now": {
+        "en": (
+            "Go to the emergency department at {hospital} now.",
+            "{hospital} is on your insurance.",
+            "If you cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "{hospital} dilindungi insurans anda.",
+            "Kalau anda tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "现在就去{hospital}的急诊部。",
+            "{hospital}在您的保险范围内。",
+            "如果您不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "number_if_worse": {
+        "en": (
+            "Sit down and rest now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+            "Call {doctor} on {day} in the morning.",
+        ),
+        "ms": (
+            "Duduk dan berehat sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+            "Telefon {doctor} pada pagi {day}.",
+        ),
+        "zh": (
+            "现在请坐下休息。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+            "{day}早上再打电话给{doctor}。",
+        ),
+    },
+}
+"""What to do now, by `app.safety.red_flags.Step`. The ambulance line is the same at any hour;
+out of the doctor's hours "call the doctor today" is never said; every step that is not the
+ambulance carries what to do if it gets worse (B1 review)."""
+
+# @patient action
+RED_FLAG_STEPS_ABOUT: Mapping[str, Mapping[str, Lines]] = {
+    "ambulance": RED_FLAG_STEPS["ambulance"],
+    "doctor_today": RED_FLAG_STEPS["doctor_today"],
+    "doctor_today_hospital": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, take {name} to {hospital} now.",
+            "{hospital} is on {name}'s insurance.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, bawa {name} ke {hospital} sekarang.",
+            "{hospital} dilindungi insurans {name}.",
+        ),
+        "zh": (
+            "今天就打电话给{doctor}。",
+            "如果变得更严重，现在就带{name}去{hospital}。",
+            "{hospital}在{name}的保险范围内。",
+        ),
+    },
+    "hospital_now": {
+        "en": (
+            "Help {name} get to the emergency department at {hospital} now.",
+            "{hospital} is on {name}'s insurance.",
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "{hospital} dilindungi insurans {name}.",
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "现在就帮{name}去{hospital}的急诊部。",
+            "{hospital}在{name}的保险范围内。",
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "number_if_worse": {
+        "en": (
+            "Help {name} sit down and rest now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+            "Call {doctor} on {day} in the morning.",
+        ),
+        "ms": (
+            "Bantu {name} duduk dan berehat sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+            "Telefon {doctor} pada pagi {day}.",
+        ),
+        "zh": (
+            "现在就帮{name}坐下休息。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+            "{day}早上再打电话给{doctor}。",
+        ),
+    },
+}
+"""The same steps for a sender who is not him — his chief, his helper — writing that he is
+unwell: who does the next thing is them, and the hospital is on his insurance, not theirs
+(plain words, rule 7; B1 plain-words review). The same keys, `_about`."""
+
+# @patient
+RED_FLAG_KNOWS: Mapping[str, Mapping[str, str]] = {
+    "many": {"en": "{names} know now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+    "one": {"en": "{names} knows now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+}
+
+# @patient
+RED_FLAG_CLOSING: Mapping[str, str] = {
+    "en": "Nura does not decide what is wrong.",
+    "ms": "Nura tidak menentukan apa masalahnya.",
+    "zh": "Nura 不判断您出了什么问题。",
+}
+
+# @patient
+RED_FLAG_CLOSING_ABOUT: Mapping[str, str] = {
+    "en": "Nura does not decide what is wrong with {name}.",
+    "ms": "Nura tidak menentukan apa masalah {name}.",
+    "zh": "Nura 不判断{name}出了什么问题。",
+}
+"""The closing line for a sender who is not him: it names him, so it never reads as if she
+were the one unwell (in Chinese the plain closing says "you")."""
+"""The last line of every reply to a red flag: the step is Nura's to say, and what is wrong is
+not (the not-feeling-well card's own closing line, `app.safety.boundary.URGENT_CLOSING`)."""
+
+# @patient action
+RED_FLAG_NOTICE_TEXT: Mapping[str, Mapping[str, Lines]] = {
+    "red_flag_notice_ambulance_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "Ask {name} now if an ambulance is coming.",
+            "If not, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Tanya {name} sekarang sama ada ambulans sedang datang.",
+            "Kalau tidak, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "现在就问{name}救护车是不是在路上。",
+            "如果没有，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "red_flag_notice_hospital_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "Help {name} get to the emergency department at {hospital} now.",
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "现在就帮{name}去{hospital}的急诊部。",
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "red_flag_notice_night_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+}
+"""The family's red-flag notice for a step that is not "call the doctor today", as free text:
+the same words as the pending templates (`red_flag_notice_ambulance`, `_hospital`, `_night`),
+sent inside the family member's 24-hour window while Meta has not approved them — the in-app
+wording until the template is approved (B1). Outside the window the approved notice goes."""
+
+_TOLD: tuple[tuple[str, str | None], ...] = (("", "many"), ("_one", "one"), ("_alone", None))
+
+
+def _red_flag_replies() -> dict[str, Mapping[str, Lines]]:
+    made: dict[str, Mapping[str, Lines]] = {}
+    for about, steps, closing in (
+        ("", RED_FLAG_STEPS, RED_FLAG_CLOSING),
+        ("_about", RED_FLAG_STEPS_ABOUT, RED_FLAG_CLOSING_ABOUT),
+    ):
+        for step, said in steps.items():
+            for suffix, knows in _TOLD:
+                made[f"red_flag_{step}{suffix}{about}"] = {
+                    lang: (
+                        RED_FLAG_OPENING[lang],
+                        *said[lang],
+                        *(() if knows is None else (RED_FLAG_KNOWS[knows][lang],)),
+                        closing[lang],
+                    )
+                    for lang in RED_FLAG_OPENING
+                }
+    return made
+
+
+REPLIES = {**REPLIES, **_red_flag_replies(), **RED_FLAG_NOTICE_TEXT}
+
+
+def red_flag_reply_key(step: str, told: int, *, about: bool = False) -> str:
+    """The reply for this step, naming nobody, one person or several as knowing now; with
+    `about`, the words for a sender who is not him (`RED_FLAG_STEPS_ABOUT`)."""
+    if step not in RED_FLAG_STEPS:
+        raise NotACatalogueKey(f"no red-flag step named {step!r}")
+    suffix = "_alone" if told == 0 else "_one" if told == 1 else ""
+    return f"red_flag_{step}{suffix}{'_about' if about else ''}"
 
 
 def reply(key: str, language: str | None, **params: str) -> str:

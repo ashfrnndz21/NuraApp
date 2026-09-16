@@ -7,39 +7,87 @@ the backend counted — never one it worked out or kept for itself.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import FrozenClock
+from app.delivery.triggers.preferences import current
 from app.keys.scopes import KeyRole, Scope
 from app.medicines.dose import Anchor
 from app.medicines.service import active_lines, proud_days, record_dose_taken, today
 from app.medicines.windows import window_status
+from app.onboarding.settings import SettingsValues, save_settings
+from app.routines.service import day_of
 from tests.conftest import Deployment
 from tests.medicines_support import REGISTRY, add, label, let_in, pa
 
 SGT = timedelta(hours=8)
 
 
-def test_window_status_by_local_hour() -> None:
-    at = lambda hour: datetime(2026, 9, 3, hour, 0, tzinfo=UTC)
-    assert window_status(Anchor.BREAKFAST, at(7), taken=False) == (True, False)
-    assert window_status(Anchor.BREAKFAST, at(11), taken=False) == (False, True)
-    assert window_status(Anchor.BREAKFAST, at(4), taken=False) == (False, False)
-    assert window_status(Anchor.DINNER, at(16), taken=False) == (True, False)
-    assert window_status(Anchor.DINNER, at(20), taken=False) == (True, False)
-    assert window_status(Anchor.BED, at(20), taken=False) == (True, False)
-    assert window_status(Anchor.BED, at(23), taken=False) == (True, False)
+def test_window_status_follows_his_day() -> None:
+    """His day (E04-02): an anchor's window opens an hour before its time and closes an hour
+    after, or at the next anchor. Breakfast at 07:30 is 06:30 to 08:30; moved to 08:15 it is
+    07:15 to 09:15 — the window moves with his breakfast, not with a fixed hour."""
+    sgt = timezone(timedelta(hours=8))
+
+    def at(hour: int, minute: int = 0) -> datetime:
+        return datetime(2026, 9, 3, hour, minute, tzinfo=sgt)
+
+    usual = day_of(None)
+    assert window_status(Anchor.BREAKFAST, at(6, 29), False, usual) == (False, False)
+    assert window_status(Anchor.BREAKFAST, at(6, 30), False, usual) == (True, False)
+    assert window_status(Anchor.BREAKFAST, at(8, 29), False, usual) == (True, False)
+    assert window_status(Anchor.BREAKFAST, at(8, 30), False, usual) == (False, True)
+    later = day_of(None, time(8, 15))
+    assert window_status(Anchor.BREAKFAST, at(7, 14), False, later) == (False, False)
+    assert window_status(Anchor.BREAKFAST, at(8, 50), False, later) == (True, False)
+    assert window_status(Anchor.BREAKFAST, at(9, 15), False, later) == (False, True)
+    # Lunch 12:30, dinner 18:30, bed 22:00, as the routine has them until someone sets them.
+    assert window_status("lunch", at(12), False, usual) == (True, False)
+    assert window_status(Anchor.DINNER, at(17, 30), False, usual) == (True, False)
+    assert window_status(Anchor.DINNER, at(19, 30), False, usual) == (False, True)
+    assert window_status(Anchor.BED, at(21), False, usual) == (True, False)
+    assert window_status(Anchor.BED, at(23), False, usual) == (False, True)
     # A taken dose is neither due nor missed, whatever the hour.
-    assert window_status(Anchor.BREAKFAST, at(11), taken=True) == (False, False)
-    assert window_status("lunch", at(12), taken=False) == (True, False)
+    assert window_status(Anchor.BREAKFAST, at(11), True, usual) == (False, False)
+
+
+async def test_moving_breakfast_to_08_15_moves_the_morning_window_and_its_taken_card(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """E04-02: the dose windows follow his breakfast from his settings (`reach_of`, the one
+    settings read), not a fixed hour. At 08:50 with breakfast at 07:30 the morning tablet's
+    window has closed: the missed card. He moves breakfast to 08:15: at 08:50 the Taken card
+    is up again, and the ladder's window — the same one — moved with it."""
+    owner = await pa(sg)
+    await add(sg, owner, label("amlodipine", "5 mg", "1 tab OD"))
+    clock.set(datetime(2026, 9, 4, 0, 50, tzinfo=UTC))  # 08:50 in Singapore
+    [slot] = await today(sg, context=owner, registry=REGISTRY, language="en")
+    assert (slot.anchor, slot.due_now, slot.missed) == ("breakfast", False, True)
+    assert slot.if_forgotten, "the missed card carries the story's own lines"
+
+    await save_settings(
+        sg, context=owner, values=SettingsValues(language="en", breakfast_time=time(8, 15))
+    )
+    [slot] = await today(sg, context=owner, registry=REGISTRY, language="en")
+    assert (slot.due_now, slot.missed, slot.if_forgotten) == (True, False, [])
+    config, _ = await current(sg, context=owner)
+    sgt = ZoneInfo("Asia/Singapore")
+    opens, closes = config.window(date(2026, 9, 4), "breakfast", sgt)
+    assert (opens.time(), closes.time()) == (time(7, 15), time(9, 15))
+
+    clock.set(datetime(2026, 9, 4, 1, 15, tzinfo=UTC))  # 09:15: the window has closed
+    [slot] = await today(sg, context=owner, registry=REGISTRY, language="en")
+    assert (slot.due_now, slot.missed) == (False, True)
 
 
 async def test_todays_slots_say_due_now_and_missed_from_the_window(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
-    """Frozen at 16:00 in Singapore: breakfast has passed, dinner is open, bed is not yet."""
+    """Frozen at 16:00 in Singapore: breakfast (07:30) has passed; dinner (18:30) opens at
+    17:30, so it is not due yet."""
     owner = await pa(sg)
     await add(sg, owner, label("amlodipine", "5 mg", "1 tab BD"))  # breakfast and dinner
     await add(sg, owner, label("metformin", "500 mg", "1 tab OD"))  # breakfast
@@ -49,7 +97,7 @@ async def test_todays_slots_say_due_now_and_missed_from_the_window(
         False,
         True,
     )
-    assert (by["amlodipine", "dinner"].due_now, by["amlodipine", "dinner"].missed) == (True, False)
+    assert (by["amlodipine", "dinner"].due_now, by["amlodipine", "dinner"].missed) == (False, False)
     assert (by["metformin", "breakfast"].due_now, by["metformin", "breakfast"].missed) == (
         False,
         True,
@@ -65,10 +113,10 @@ async def test_todays_slots_say_due_now_and_missed_from_the_window(
     # The line view agrees.
     views = await active_lines(sg, context=owner, registry=REGISTRY, language="en")
     lines = {v.line.generic: v for v in views}
-    assert (lines["amlodipine"].due_now, lines["amlodipine"].missed) == (True, True)
+    assert (lines["amlodipine"].due_now, lines["amlodipine"].missed) == (False, True)
     assert (lines["metformin"].due_now, lines["metformin"].missed) == (False, True)
     assert lines["metformin"].source == by["metformin", "breakfast"].source
-    # A tap on the dinner dose: nothing is due any more; the breakfast one stays missed.
+    # A tap on the dinner dose: it is taken, never due; the breakfast one stays missed.
     amlodipine = by["amlodipine", "dinner"].line.id
     await record_dose_taken(sg, context=owner, line_id=amlodipine, anchor="dinner", amount=None)
     slots = await today(sg, context=owner, registry=REGISTRY, language="en")

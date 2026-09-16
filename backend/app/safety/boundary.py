@@ -27,7 +27,8 @@ letter ("Dr Tan wrote this in your hospital letter."), and still ends on the bou
 opens with a reassurance, because a man who has just said he feels unwell is not met with
 three refusals in a row (docs/plain-words.md rule 9). A red flag makes the card urgent
 (`urgent=True`): the reassurance, the calls, and one closing line, "Nura does not decide what is
-wrong." — after an emergency number the card never says "Ask your doctor."
+wrong." — after an emergency number the card never says "Ask your doctor." Every other
+not-feeling-well card ends on the same line, after the two closing lines (E13-02).
 """
 
 from __future__ import annotations
@@ -164,9 +165,11 @@ URGENT_CLOSING: Mapping[str, str] = {
     "ms": "Nura tidak menentukan apa masalahnya.",
     "zh": "Nura 不判断您出了什么问题。",
 }
-"""The one closing line of an urgent card — a red flag on the not-feeling-well surface. After
-"Call the ambulance now on 995." nothing sends him anywhere but the call: the boundary is this
-one line, and "Ask your doctor." is never said after an emergency number."""
+"""The last line of every not-feeling-well card (E13-02). On an urgent card — a red flag — it is
+the one closing line: after "Call the ambulance now on 995." nothing sends him anywhere but the
+call, and "Ask your doctor." is never said after an emergency number. On every other card of
+that surface it follows the two closing lines, so whatever row he is shown — rest, call the
+clinic, a tablet with no Taken — the card ends saying Nura does not decide what is wrong."""
 
 
 def boundary_lines(
@@ -211,6 +214,8 @@ def boundary_lines(
         lines.append(URGENT_CLOSING[code])
     else:
         lines.extend(NOT_ADVICE[code])
+        if surface is Surface.NOT_FEELING_WELL:
+            lines.append(URGENT_CLOSING[code])
     return tuple(line.format(doctor=who) for line in lines)
 
 
@@ -255,18 +260,24 @@ def is_boundary_line(surface: Surface, text: str | None) -> bool:
     """Whether `text` is this module's line for `surface`, in any language, with any doctor.
 
     What `render_from_state` asks before it writes a rendered row for an inferring surface.
-    The closing two lines must be `NOT_ADVICE` and last; the register's line for the surface
-    must be there; and on the not-feeling-well card, whatever else is carried (the
-    reassurance, the letter's words) sits between the register's line and the closing, with
-    the letter named. The not-feeling-well card of a red flag may instead be urgent: the
-    reassurance, the letter if any, and `URGENT_CLOSING` alone at the end. Nothing else passes.
+    The closing two lines must be `NOT_ADVICE` and last — on the not-feeling-well card, last
+    but for `URGENT_CLOSING` after them; the register's line for the surface must be there;
+    and on the not-feeling-well card, whatever else is carried (the reassurance, the letter's
+    words) sits between the register's line and the closing, with the letter named. The
+    not-feeling-well card of a red flag may instead be urgent: the reassurance, the letter if
+    any, and `URGENT_CLOSING` alone at the end. Nothing else passes.
     """
     if not text:
         return False
-    lines = text.strip().splitlines()
-    if surface is Surface.NOT_FEELING_WELL and _is_urgent(lines):
+    every = text.strip().splitlines()
+    if surface is Surface.NOT_FEELING_WELL and _is_urgent(every):
         return True
     for code in LANGUAGES:
+        lines = every
+        if surface is Surface.NOT_FEELING_WELL:
+            if not every or every[-1] != URGENT_CLOSING[code]:
+                continue
+            lines = every[:-1]
         closing = [_pattern(t) for t in NOT_ADVICE[code]]
         if len(lines) < 3 or not all(
             p.match(line) for p, line in zip(closing, lines[-2:], strict=True)

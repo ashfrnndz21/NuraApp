@@ -58,7 +58,13 @@ from app.reasoning.feelings.words import (
     red_answer,
 )
 from app.safety.boundary import Surface
-from app.safety.not_feeling_well import WhatToDoNow, not_feeling_well
+from app.safety.not_feeling_well import (
+    QUITE_A_LOT,
+    Line,
+    WhatToDoNow,
+    call_clinic_card,
+    not_feeling_well,
+)
 from app.safety.red_flags import Feeling, Flag, is_red
 from app.state.service import RECOMPUTE_SCOPES, render_from_state
 
@@ -116,6 +122,17 @@ class Answered:
     note: FeelingNote | None
     red: RedPath | None
     note_withheld_because: str | None = None
+    clinic_card: tuple[Line, ...] = ()
+    """The not-feeling-well table's middle row, when his answer is it — it began yesterday or
+    before, it is more than yesterday, or a medicine started in the last fourteen days lists
+    this word as a watch-out: call the clinic today (E13-02). Empty otherwise, and empty when
+    this key cannot bring State up to the record."""
+    clinic_card_id: uuid.UUID | None = None
+    """The `WhatToDoCard` row the call-the-clinic card was rendered as, with its State."""
+
+
+A_DAY_OR_MORE_ANSWERS = frozenset({Answer.YESTERDAY, Answer.FEW_DAYS, Answer.WEEK_OR_MORE})
+"""Answers to "since when" that are a day or more: the table's "lasting a day or more"."""
 
 
 async def _language(session: AsyncSession, context: KeyContext, asked: str | None) -> str:
@@ -314,13 +331,34 @@ async def answer_tap(
     )
     if red is not None:
         return Answered(tap=tap, note=None, red=red)
+    # The table's middle row, by the button's own rule (E13-02): "more than yesterday" counts as
+    # "quite a lot", "yesterday" or longer as "a day or more", and the tapped word is read
+    # against a new medicine's monograph.
+    clinic = await call_clinic_card(
+        session,
+        context=context,
+        registry=registry,
+        language=code,
+        severity=QUITE_A_LOT if answer is Answer.MORE else None,
+        lasting=answer in A_DAY_OR_MORE_ANSWERS,
+        feelings=frozenset({tap.word}),
+        event_id=tap.event_id,
+    )
     if not RECOMPUTE_SCOPES <= context.scopes:
-        # A note is rendered from State, and this key cannot bring State up to the record.
+        # A note is rendered from State, and this key cannot bring State up to the record: no
+        # note, and no call-the-clinic card either — never the weaker card where the note was
+        # withheld (B1 review).
         return Answered(tap=tap, note=None, red=None, note_withheld_because="no_state")
     note = await _render_note(
         session, context=context, tap=tap, answer=answer, registry=registry, code=code
     )
-    return Answered(tap=tap, note=note, red=None)
+    return Answered(
+        tap=tap,
+        note=note,
+        red=None,
+        clinic_card=() if clinic is None else clinic.lines,
+        clinic_card_id=None if clinic is None else clinic.card_id,
+    )
 
 
 async def _render_note(

@@ -305,6 +305,49 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     )
     ok("Pa typed in a blood pressure (138 over 84): a reading event and a fact resting on it")
 
+    # 2b. His insurer on the card (E13-01): typed by him, on his yes for exactly these words.
+    insurer = {"name": "Great Eastern", "policy_reference": "GE-4471-0932"}
+    yes = check(
+        client.post(f"/profiles/{profile_id}/confirmations", headers=his, json={"subject": "insurer", **insurer}),
+        201,
+        "Pa says yes to his insurer",
+    )
+    check(
+        client.put(
+            f"/profiles/{profile_id}/emergency-card/insurer",
+            headers=his,
+            json={**insurer, "confirmation_id": yes["confirmation_id"]},
+        ),
+        200,
+        "Pa puts his insurer on the card",
+    )
+    refused(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=bearer(lin.token),
+            json={"subject": "insurer", "name": "AIA"},
+        ),
+        403,
+        "NotTheirsToSetInsurer",
+        "Lin tries to set his insurer",
+    )
+    refused(
+        client.post(
+            f"/profiles/{profile_id}/confirmations",
+            headers=his,
+            json={"subject": "insurer", "name": "AIA", "policy_reference": "S1234567D"},
+        ),
+        400,
+        "NotAPolicyReference",
+        "an identity-card number offered as a policy reference",
+    )
+    ok(
+        "Pa typed his insurer (Great Eastern, policy GE-4471-0932) on his yes (subject insurer, "
+        "PUT /profiles/{id}/emergency-card/insurer); Lin, with the emergency card only, cannot set it "
+        "(NotTheirsToSetInsurer, 403), and an identity-card number is refused as a policy reference "
+        "(NotAPolicyReference, 400)"
+    )
+
     # 3. Pa's emergency card, as JSON and as the printable page.
     card = check(client.get(f"/profiles/{profile_id}/emergency-card", headers=his), 200, "Pa reads his emergency card")
     texts = [line["text"] for line in card["lines"]]
@@ -316,11 +359,16 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         or card["emergency_number"] != "995"
         or texts[0] != "This is Pa's emergency card."
         or card["last_reading_at"] is None
+        or card["insurer"] != insurer
+        or "Pa's insurance is with Great Eastern." not in texts
+        or any("GE-4471" in text for text in texts)
+        or card["english_lines"] != []
     ):
         raise fail("Pa reads his emergency card", why=f"got {card}")
     ok(
         "Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its "
-        "strength and how much, Mei's name and number, the last blood pressure's date, 995 for "
+        "strength and how much, Mei's name and number, his insurer (the policy reference as data, "
+        "never in a sentence), the last blood pressure's date, 995 for "
         f"Singapore, rendered from State {card['state_id'][:8]}… and written down as render "
         f"{card['card_id'][:8]}…; the lines, every one verified:"
     )
@@ -333,7 +381,12 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     for forbidden in ("http://", "https://", "<script", "<link", "<img"):
         if forbidden in html:
             raise fail("the printable page is self-contained", why=f"found {forbidden!r}")
-    if "#2B2733" not in html or "font-size: 20px" not in html or "40 mg" not in html:
+    if (
+        "#2B2733" not in html
+        or "font-size: 20px" not in html
+        or "40 mg" not in html
+        or "GE-4471-0932" not in html
+    ):
         raise fail("the printable page carries the tokens and the data", why="a token or the strength is missing")
     parsed = _Text()
     parsed.feed(html)
@@ -351,11 +404,42 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     theirs = check(client.get(f"/profiles/{profile_id}/emergency-card", headers=bearer(lin.token)), 200, "Lin reads the card")
     if theirs["state_id"] != card["state_id"] or theirs["lines"] != card["lines"]:
         raise fail("Lin reads the card", why="a different State or different lines from Pa's")
+    if hers["insurer"] != insurer or theirs["insurer"] != {"name": "Great Eastern", "policy_reference": "••••0932"}:
+        raise fail(
+            "Lin reads the card",
+            why=f"expected the insurer in full for Mei and its last four for Lin: {hers['insurer']} / {theirs['insurer']}",
+        )
     ok(
         f"Mei read the card with her chief key (render {hers['card_id'][:8]}…), and Lin read it with "
-        "her emergency-only key — the same lines, stamped with the same State: an emergency key "
-        "opens the card's fixed projection and nothing else, and is refused a stale card"
+        "her emergency-only key — the same lines, the insurer included, stamped with the same State: "
+        "an emergency key opens the card's fixed projection and nothing else, and is refused a stale "
+        "card; the policy reference is his and his chief's in full, and the last four for Lin (••••0932)"
     )
+
+    # 4b. Two languages on one card (E13-01): in Chinese, every line with its English twin, for
+    #     the ambulance crew — on the JSON and on the printable page.
+    zh = check(
+        client.get(f"/profiles/{profile_id}/emergency-card?language=zh", headers=bearer(lin.token)),
+        200,
+        "Lin reads the card in Chinese",
+    )
+    twins = list(zip([one["text"] for one in zh["lines"]], [one["text"] for one in zh["english_lines"]], strict=False))
+    if (
+        zh["language"] != "zh"
+        or [one["id"] for one in zh["english_lines"]] != [one["id"] for one in zh["lines"]]
+        or zh["english_lines"][0]["text"] != "This is Pa's emergency card."
+    ):
+        raise fail("Lin reads the card in Chinese", why=f"got {zh}")
+    printed = client.get(f"/profiles/{profile_id}/emergency-card.html?language=zh", headers=bearer(lin.token))
+    if printed.status_code != 200 or '<p class="twin" lang="en">' not in printed.text:
+        raise fail("the printable page in two languages", printed, "expected the English twins")
+    ok(
+        "Lin read the card in Chinese (GET …/emergency-card?language=zh): every line with its English "
+        f"twin under the same id ({len(twins)} lines), on the JSON and on the printable page "
+        '(`<p class="twin" lang="en">`), so the ambulance crew reads what he reads; the first three:'
+    )
+    for said, english in twins[:3]:
+        say(f"{said}  /  {english}")
 
     # 5. Pa says "tired today": a symptom, rest, Mei will call, a check-in in two hours.
     tired = check(

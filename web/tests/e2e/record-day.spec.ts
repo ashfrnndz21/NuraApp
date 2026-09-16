@@ -18,6 +18,7 @@ for (const look of LOOKS) {
     const trend = (await (await request.get(`${API}/profiles/${pa.profileId}/trends/total_cholesterol?language=en`, auth(pa.token))).json()) as {
       lines: string[];
       boundary: string;
+      unit: string;
       points: unknown[];
     };
     expect(trend.points).toHaveLength(2);
@@ -32,7 +33,13 @@ for (const look of LOOKS) {
     for (const line of trend.lines.filter((each) => !boundary.includes(each))) await expect(tile.getByTestId("trend-lines")).toContainText(line);
     const points = tile.getByTestId("trend-point");
     await expect(points).toHaveCount(2);
-    for (const point of await points.all()) await expect(point).toContainText("The range is");
+    for (const point of await points.all()) {
+      await expect(point).toContainText("For most people this number is");
+      // The unit is hers, not his: never shown to the owner, whatever density he reads in —
+      // "caregiver" here is still Pa's own toggle from Me.tsx, not a second person (#166
+      // review; plain words rule 12).
+      await expect(point).not.toContainText(trend.unit);
+    }
     await expect(tile.locator(":scope > .lines").last()).toHaveAttribute("data-testid", "boundary");
     for (const line of boundary) await expect(tile.getByTestId("boundary")).toContainText(line);
     await readable(page, look);
@@ -48,7 +55,7 @@ test("the day: the chief sets it once on her yes; it reads to him as one line pe
   await signInAs(page, mei, "Mei", true);
   await openRecord(page);
   await page.getByTestId("record-routine").click();
-  await expect(page.getByTestId("routine-not-set")).toHaveText("Nobody has set the day yet.");
+  await expect(page.getByTestId("routine-not-set")).toHaveText("Nobody has set your day yet.");
   await expect(page.getByTestId("routine-table")).toBeVisible();
   await readable(page, "caregiver");
 
@@ -58,10 +65,13 @@ test("the day: the chief sets it once on her yes; it reads to him as one line pe
   await page.getByTestId("reading-blood_pressure-wake").click();
   await page.getByTestId("walk-dinner").click();
   await page.getByTestId("check-day").click();
-  await expect(page.getByTestId("day-ask")).toContainText("Is this the day?");
+  await expect(page.getByTestId("day-ask")).toContainText("Is this how your day goes?");
+  // Each time read back the way every time in the app is said ("7:00 am"), never a bare code.
+  await expect(page.getByTestId("day-ask")).toContainText(/\b\d{1,2}:\d{2}\sam/);
+  await expect(page.getByTestId("day-ask")).not.toContainText(/\b\d{2}:\d{2}\b(?!\s[ap]m)/);
   await readable(page, "caregiver");
   await page.getByTestId("day-yes").click();
-  await expect(page.getByTestId("record-note")).toHaveText("Nura wrote down the day.");
+  await expect(page.getByTestId("record-note")).toHaveText("Nura wrote down your day.");
   await expect(page.getByTestId("routine-not-set")).toHaveCount(0);
   const table = page.getByTestId("routine-table");
   await expect(table.locator('tr[data-anchor="wake"]')).toContainText("Blood pressure");

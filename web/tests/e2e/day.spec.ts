@@ -569,8 +569,16 @@ test("the post-visit card on the web: each line with where it was said, one left
   expect(closed.items.find((item) => item.kind === "medication_change")?.flag_id).toBeTruthy();
 
   // E21-03: the memo card on his feed, each line with the stretch it was said in, played on a tap.
+  // Today reads its own page first; then the pager's fresh first page — the one with the memo
+  // card made since — is waited for, never raced: a page that lands after he has scrolled is
+  // merged in below the card on screen (`feed/store.ts`), and the test does not depend on when.
+  const isFeedPage = (response: { request(): { method(): string }; url(): string }) => response.request().method() === "GET" && /\/profiles\/[^/]+\/feed$/.test(new URL(response.url()).pathname);
+  const todays = page.waitForResponse(isFeedPage);
   await page.getByRole("button", { name: "Today", exact: true }).click();
+  await todays;
+  const fresh = page.waitForResponse(isFeedPage);
   await page.getByTestId("open-feed").click();
+  await fresh;
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   // The pager may open on the backend's cached page, from before his yes; the fresh page takes

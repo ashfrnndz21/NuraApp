@@ -11,8 +11,9 @@ A red flag does not wait for it: it is escalated the moment it is raised (`escal
 from the WhatsApp thread and the feeling cloud); the five-minute run is the net under that —
 the rungs after the first, and a flag whose first word could not go.
 
-The order is the safety order: flags first, before anything is ranked or capped; then the
-ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
+The order is the safety order: flags first, before anything is ranked or capped, and beside
+them the ladders of voice notes Nura could not hear (#173), which climb the way a flag's
+does; then the ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
 Every trigger that fires writes its rule on every `Delivery` row it makes.
 """
 
@@ -31,7 +32,7 @@ from app.audit.models import Channel
 from app.channels.whatsapp.group import sync_group
 from app.channels.whatsapp.outbound.level0 import compose_morning, run_visit_card, send_morning
 from app.channels.whatsapp.outbound.send import Delivered, send
-from app.db import as_utc, utcnow
+from app.db import as_utc, nested_unit_of_work, utcnow
 from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.nudges.models import Nudge, NudgeKind, NudgeResponse, ResponseKind
 from app.delivery.strings import theirs
@@ -52,6 +53,7 @@ from app.delivery.triggers.ladder import (
     DOSE_RUNGS,
     PATIENT,
     climb,
+    climb_unheard,
     dose_message,
     flag_ladder,
     flag_message,
@@ -60,7 +62,7 @@ from app.delivery.triggers.ladder import (
     tapped_by,
 )
 from app.delivery.triggers.models import DeliveryChannel, DeliveryOutcome, Subject, TriggerType
-from app.delivery.triggers.rules import MORNING_LATEST
+from app.delivery.triggers.rules import BRIEF_DAYS_BEFORE, MORNING_LATEST
 from app.errors import Refusal
 from app.family.models import PushChannel, ScheduledPush
 from app.identity.models import Person
@@ -74,6 +76,7 @@ from app.memory.spine import upcoming_appointments
 from app.onboarding.plan import PLAN_SCOPE, due_prompts
 from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ
+from app.safety.health_words import names_medicine_or_dose
 from app.safety.red_flags import open_flags
 
 PATTERN_DAYS = 7
@@ -115,6 +118,7 @@ async def run_due(
         await _flags(run, raised_before=closing)
         return Report(at=run.at, day=run.day, sent=tuple(run.report))
     await _flags(run)
+    await _unheard_notes(run)
     if run.patient is not None and run.acting.allows(Scope.MEDICINES):
         lines = await active_lines(
             session,
@@ -127,8 +131,10 @@ async def run_due(
         await _reorder(run, lines)
         await _pattern(run, lines)
     await _visit_tomorrow(run)
+    await _brief(run)
     await _papers(run)
     await _family_messages(run)
+    await _hand_over_nudge(run)
     await _nudges(run)
     await _family_group(run)
     return Report(at=run.at, day=run.day, sent=tuple(run.report))
@@ -147,6 +153,16 @@ async def _flags(run: Run, *, raised_before: datetime | None = None) -> None:
             continue
         ladder = await flag_ladder(run, flag, exclude=())
         await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
+
+
+async def _unheard_notes(run: Run) -> None:
+    """Every open ladder for a voice note Nura could not hear (#173): asked as far as it is
+    due. The first rung went the moment the note arrived (`whatsapp.inbound`); this is the net
+    under it — the chief who has not said she has it is followed by the next rung."""
+    for ladder in list(await run.ladders()):
+        if ladder.subject is not Subject.UNHEARD_NOTE or not ladder.is_open:
+            continue
+        await climb_unheard(run, ladder)
 
 
 # --- tablets ---------------------------------------------------------------------------------------
@@ -425,6 +441,104 @@ async def _visit_tomorrow(run: Run) -> None:
     await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
 
 
+async def _brief(run: Run) -> None:
+    """The pre-visit brief at T-3 (E05-01): three days before a visit, from his breakfast on,
+    the brief is rendered from State — the row is written then — and its card handed to him
+    under the cap on briefs a day (`brief_three_days_before`, one a day, quiet hours held). A
+    visit booked inside the three days gets its brief the first run it can, until the day
+    before, which is the visit reminder's. The card is the brief's own words, as the feed's
+    visit card carries them: who and when, what the visit is about, what to bring, and the
+    brief's boundary line."""
+    if run.patient is None or not run.acting.allows(Scope.VISITS):
+        return
+    zone = REGION_TZ[run.acting.region]
+    today = run.local.date()
+    if run.at < run.config.morning(today, zone):
+        return
+    # Imported here: the brief reaches back into delivery.
+    from app.reasoning.visits.brief import brief_for
+    from app.reasoning.visits.questions import require_visit
+    from app.reasoning.visits.strings import (
+        YOUR_HEALTH,
+        day_and_date,
+        language_for,
+        purpose_code,
+        time_of_day,
+        visit_subject_words,
+    )
+
+    for visit in await upcoming_appointments(run.session, context=run.acting, at=run.at, limit=5):
+        days = (as_utc(visit.scheduled_at).astimezone(zone).date() - today).days
+        if not 1 < days <= BRIEF_DAYS_BEFORE:
+            continue
+        firing = Firing(
+            type=TriggerType.BRIEF,
+            dedupe_key=f"brief:{visit.id}",
+            why={"appointment_id": str(visit.id), "days_before": days},
+        )
+        earlier = _about(run, firing, run.patient.id, await run.deliveries())
+        if any(row.outcome is DeliveryOutcome.SENT for row in earlier):
+            continue
+        try:
+            async with nested_unit_of_work(run.session):
+                brief = await brief_for(
+                    run.session,
+                    context=run.acting,
+                    appointment_id=visit.id,
+                    registry=run.via.providers.drug_registry,
+                )
+        except Refusal as refused:
+            # Written down once a day, not on every run: the next run tries the brief again.
+            if not any(
+                row.outcome is DeliveryOutcome.SKIPPED and row.day == run.day for row in earlier
+            ):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason=f"no brief: {type(refused).__name__}"[:64],
+                )
+            continue
+        run.forget_state()
+        seen = await require_visit(
+            run.session,
+            context=run.acting,
+            appointment_id=visit.id,
+            registry=run.via.providers.drug_registry,
+        )
+        lang = language_for(brief.language)
+        code = purpose_code(seen.appointment.purpose)
+        # The brief card's own words in the template's fixed lines: one name or one day in
+        # each slot, never a line break (a Meta template parameter holds none).
+        params = {
+            "doctor": seen.doctor,
+            "day": day_and_date(seen.appointment.scheduled_at, lang, run.acting.region),
+            "time": time_of_day(seen.appointment.scheduled_at, lang, run.acting.region),
+            "subject": YOUR_HEALTH[lang] if code is None else visit_subject_words(code, lang),
+        }
+        firing = Firing(
+            type=TriggerType.BRIEF,
+            dedupe_key=firing.dedupe_key,
+            why={**firing.why, "brief_id": str(brief.id), "state_id": str(brief.state_id)},
+        )
+
+        async def say(person: object, params: dict[str, str] = params, lang: str = lang) -> Delivered:
+            return await send(
+                run.session,
+                context=run.acting,
+                to_person=person,  # type: ignore[arg-type]
+                kind="visit_brief",
+                params=params,
+                provider=run.via.providers.whatsapp,
+                number=run.via.number,
+                language=lang,
+                state=await run.state(),
+            )
+
+        await deliver(run, firing, Recipient(run.patient, PATIENT), Message(whatsapp=say))
+
+
 async def _papers(run: Run) -> None:
     """A paper read into a review card and waiting for a yes: the chief is told there are
     papers to check, never what they say."""
@@ -475,7 +589,9 @@ async def _papers(run: Run) -> None:
 
 async def _family_messages(run: Run) -> None:
     """A chief's message to him, come due (E12-06): delivered between its moment and its
-    end, by the channel she asked for first. The lines are exactly what she previewed."""
+    end, by the channel she asked for first. The lines are exactly what she previewed. One
+    that names a medicine or a dose — scheduled before #164 refused them at the composer — is
+    skipped, and the skip written down: his medicine reminders come only from his list."""
     if run.patient is None:
         return
     pushes = await audited_read(
@@ -502,6 +618,17 @@ async def _family_messages(run: Run) -> None:
             dedupe_key=f"family:{push.id}",
             why={"scheduled_push_id": str(push.id), "composed_from_state": str(push.state_id)},
         )
+        registry = run.via.providers.drug_registry
+        if any(names_medicine_or_dose(line, registry) for line in push.lines):
+            if not any(row.dedupe_key == firing.dedupe_key for row in await run.deliveries()):
+                await write(
+                    run,
+                    firing,
+                    Recipient(run.patient, PATIENT),
+                    DeliveryOutcome.SKIPPED,
+                    reason="names a medicine or a dose",
+                )
+            continue
 
         async def say(
             person: object,
@@ -525,6 +652,31 @@ async def _family_messages(run: Run) -> None:
         )
 
 
+async def _hand_over_nudge(run: Run) -> None:
+    """The day's planned nudge, handed over at its planned time (E17-03, W7): no earlier than
+    the planner's `send_after` — his check-in time — never in the quiet hours his delivery
+    settings keep, and never on a day a red flag was raised (the planner holds every nudge
+    then). Through the same door the web uses as he answers (`app.delivery.nudges.engine.
+    hand_over`), which gives back the day's nudge when it was handed over already: one row, and
+    `_nudges`, right after, sends it once under the cap on nudges a day."""
+    if run.patient is None or run.config.is_quiet(run.local):
+        return
+    # Imported here: the planner reads delivery's cap, and delivery reads the planner.
+    from app.delivery.nudges.engine import PLAN_SCOPES, hand_over, plan_nudges
+
+    if not PLAN_SCOPES <= run.acting.scopes:
+        return
+    registry = run.via.providers.drug_registry
+    try:
+        plan = await plan_nudges(run.session, context=run.acting, registry=registry)
+        if not plan.drafts or as_utc(plan.drafts[0].send_after) > run.at:
+            return
+        await hand_over(run.session, context=run.acting, registry=registry)
+    except Refusal:
+        return
+    run.forget_state()
+
+
 async def _family_group(run: Run) -> None:
     """The family's WhatsApp group follows the keys (E11-01, #143), set again at every run: a
     key that lapsed — however long the engine was away — is a person out of the group at the
@@ -542,8 +694,8 @@ async def _nudges(run: Run) -> None:
     queue (`app.delivery.nudges.handoff`). It goes to him from its `send_after` until it
     expires, never in the quiet hours, under the cap on nudges a day — the same cap the
     planner hands over by (`preferences.daily_cap`). Its lines are exactly the planner's. A
-    visit's anticipation nudge is skipped on a day the visit reminder reached him: one
-    reminder of a visit a day."""
+    visit's anticipation nudge is skipped on a day the visit reminder or the brief reached him:
+    one reminder of a visit a day."""
     if run.patient is None:
         return
     nudges = await audited_read(
@@ -579,7 +731,7 @@ async def _nudges(run: Run) -> None:
     reminded = {
         str(row.why.get("appointment_id"))
         for row in rows
-        if row.trigger_type is TriggerType.VISIT_TOMORROW
+        if row.trigger_type in (TriggerType.VISIT_TOMORROW, TriggerType.BRIEF)
         and row.outcome is DeliveryOutcome.SENT
         and row.day == run.day
     }

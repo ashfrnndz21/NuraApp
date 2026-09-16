@@ -186,6 +186,9 @@ async def new_provider(body: ProviderIn, context: Context, session: Db) -> Provi
         region=body.region or context.region,
         phone_e164=body.phone_e164,
         address=body.address,
+        panel=body.panel,
+        opens_at=body.opens_at,
+        closes_at=body.closes_at,
     )
     return ProviderOut.of(provider)
 

@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.schemas import FactOut, utc
@@ -68,6 +68,19 @@ class ProviderIn(BaseModel):
     region: Region | None = None
     phone_e164: str | None = Field(default=None, pattern=PHONE)
     address: str | None = Field(default=None, max_length=300)
+    panel: bool = False
+    """A hospital on his insurance: a red flag's escalation names it (E19-05)."""
+    opens_at: time | None = None
+    closes_at: time | None = None
+    """When a doctor or clinic answers, on his wall clock; both or neither."""
+
+    @model_validator(mode="after")
+    def _panel_and_hours(self) -> ProviderIn:
+        if self.panel and self.kind is not ProviderKind.HOSPITAL:
+            raise ValueError("only a hospital is marked as on his insurance")
+        if (self.opens_at is None) != (self.closes_at is None):
+            raise ValueError("a doctor's hours say when they open and when they close")
+        return self
 
 
 class AppointmentIn(BaseModel):
@@ -120,6 +133,9 @@ class ProviderOut(BaseModel):
     region: Region
     phone_e164: str | None
     address: str | None
+    panel: bool = False
+    opens_at: time | None = None
+    closes_at: time | None = None
 
     @classmethod
     def of(cls, provider: Provider) -> ProviderOut:
@@ -130,6 +146,9 @@ class ProviderOut(BaseModel):
             region=provider.region,
             phone_e164=provider.phone_e164,
             address=provider.address,
+            panel=bool(provider.panel),
+            opens_at=provider.opens_at,
+            closes_at=provider.closes_at,
         )
 
 

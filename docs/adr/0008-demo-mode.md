@@ -119,7 +119,8 @@ A demo holds none. Before a deployment holds real health information, as well as
 providers, the data protection officer and the breach tabletop:
 
 - **The bucket is Singapore-only.** Tigris and the instance's own disk are acceptable for the
-  demo only.
+  demo only, and Tigris only as a bucket created single-region in Singapore (`sin`): a Tigris
+  bucket is Global by default (#161, docs/deploy.md).
 - **The platform's request logs have been checked.** Where they are kept, and for how long,
   matters because URLs carry profile ids, though never names or numbers.
 - **The platform accepts the largest request Nura sends.** That is a consult recording of up to

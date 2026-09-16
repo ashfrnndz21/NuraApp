@@ -71,7 +71,7 @@ from app.ingestion.consult import (
 from app.keys.scopes import Scope
 from app.memory.models import Provider
 from app.memory.spine import upcoming_appointments
-from app.reasoning.visits.brief import brief_for
+from app.reasoning.visits.brief import brief_for, lines_for
 from app.reasoning.visits.guard import can_change_visits
 from app.reasoning.visits.logistics import assign_driver, logistics_for
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card
@@ -115,15 +115,16 @@ async def brief(
     """The pre-visit brief in the profile's language: purpose, what changed since the last
     visit, the open questions, what to bring. Rebuilt when State has moved past the last
     one. Every line passed the plain-words verifier; a brief that would not is refused
-    (`NotPlainEnough`, 400) rather than shown."""
-    return BriefOut.of(
-        await brief_for(
-            session,
-            context=context,
-            appointment_id=appointment_id,
-            registry=providers_of(request).drug_registry,
-        )
+    (`NotPlainEnough`, 400) rather than shown. The lines about how he feels are the record's: a key without it reads the
+    brief without them, and `withheld` says so."""
+    brief = await brief_for(
+        session,
+        context=context,
+        appointment_id=appointment_id,
+        registry=providers_of(request).drug_registry,
     )
+    shown, withheld = lines_for(brief, context)
+    return BriefOut.of(brief, shown, withheld)
 
 
 @router.get("/{profile_id}/appointments/{appointment_id}/questions")
