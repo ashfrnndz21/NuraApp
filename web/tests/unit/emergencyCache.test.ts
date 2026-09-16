@@ -69,6 +69,22 @@ describe("the kept emergency card", () => {
     expect(wantsRead(null, "en", laterToday, SG)).toBe(true);
   });
 
+  it("keeps the printable page it already has when a read's own fetch of it fails — a hiccup on one request must not cost him the Print button", async () => {
+    const kept = await saveCard("e5", card(), OWNER, TEN_AM);
+    expect(kept.html).toBe("<p>printable</p>");
+    const laterToday = new Date("2026-09-14T15:00:00Z");
+    const missed = await keep("e5", { card: card(), html: null }, OWNER, laterToday, kept);
+    expect(missed.html).toBe("<p>printable</p>");
+    expect((await loadCard("e5", OWNER))?.html).toBe("<p>printable</p>");
+  });
+
+  it("still replaces the printable page with a fresh, successful read of it", async () => {
+    const kept = await saveCard("e6", card(), OWNER, TEN_AM);
+    const laterToday = new Date("2026-09-14T15:00:00Z");
+    const reread = await keep("e6", { card: card(), html: "<p>newer</p>" }, OWNER, laterToday, kept);
+    expect(reread.html).toBe("<p>newer</p>");
+  });
+
   it("goes with the rest of the phone's copy on a refusal, a switch of papers and sign-out", async () => {
     await saveCard("e3", card(), OWNER, TEN_AM);
     await saveCard("e4", card(), OWNER, TEN_AM);

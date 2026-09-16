@@ -27,13 +27,23 @@ export interface KeptCard {
 export const EMERGENCY_PREFIX = "emergency.";
 const key = (profileId: string) => `${EMERGENCY_PREFIX}${profileId}`;
 
+/** Keep this read as the phone's copy. The card's lines always replace what stood before —
+ *  they are what this read is for. The printable page does not: `readCard` already tried it
+ *  and a `null` here means that one fetch failed, not that the card has no printable page.
+ *  Without `previous` a failed fetch would overwrite a printable page the phone already had
+ *  with nothing, and the offline copy — the one thing this cache exists to keep readable and
+ *  printable with no network — would lose its Print button to a single bad request. So a
+ *  `null` html falls back to `previous`'s, when there is one for the same binding; a real
+ *  html from this read, even empty, always wins. */
 export async function saveCard(
   profileId: string,
   read: { card: EmergencyCardOut; html: string | null },
   binding: Binding,
   now: Date,
+  previous?: KeptCard | null,
 ): Promise<KeptCard> {
-  const entry: KeptCard = { card: read.card, html: read.html, binding, fetchedAt: now.toISOString() };
+  const html = read.html ?? previous?.html ?? null;
+  const entry: KeptCard = { card: read.card, html, binding, fetchedAt: now.toISOString() };
   await kvSet(key(profileId), entry);
   return entry;
 }
@@ -62,8 +72,9 @@ export function wantsRead(entry: KeptCard | null, language: string, now: Date, z
   return midnightAfter(new Date(entry.fetchedAt), zone).getTime() <= now.getTime();
 }
 
-/** Read the card now — its JSON, then its printable page — for keeping. The page is a
- *  nice-to-have: if it alone cannot be read, the card is still kept, without it. */
+/** Read the card now — its JSON, then its printable page — for keeping. The page's own fetch
+ *  is best-effort: if it alone fails, `html` comes back `null` and the card is still kept —
+ *  `saveCard` is the one that decides what a `null` here means for the phone's copy. */
 export async function readCard(bearer: string, profileId: string, language: string): Promise<{ card: EmergencyCardOut; html: string | null }> {
   const card = await nura.emergencyCard(bearer, profileId, language);
   let html: string | null = null;
