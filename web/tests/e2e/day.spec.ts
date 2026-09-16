@@ -88,9 +88,14 @@ async function notUnderTheBanner(page: Page): Promise<string[]> {
   });
 }
 
-/** Every /api request the page makes, with its order, for the red-flag paths. */
-function apiTrail(page: Page): { log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request }[]; inflight: () => number } {
-  const log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request }[] = [];
+/** Every /api request the page makes, with its order, for the red-flag paths. An "end" carries
+ *  `ok`: true when the request ran to a real response (`requestfinished`, whatever its HTTP
+ *  status — the exchange was allowed to complete), false when it was cut short
+ *  (`requestfailed` — an abort, among them the urgent queue's own: `api/client.ts`'s `enqueue`
+ *  aborting a background read for a red word, #191). The distinction is the point: a background
+ *  read ending in `ok: false` beside a red word is the mechanism working, not a violation of it. */
+function apiTrail(page: Page): { log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request; ok?: boolean }[]; inflight: () => number } {
+  const log: { at: number; kind: "start" | "end"; method: string; path: string; req: Request; ok?: boolean }[] = [];
   let open = 0;
   let n = 0;
   page.on("request", (sent) => {
@@ -98,13 +103,13 @@ function apiTrail(page: Page): { log: { at: number; kind: "start" | "end"; metho
     open += 1;
     log.push({ at: n++, kind: "start", method: sent.method(), path: new URL(sent.url()).pathname, req: sent });
   });
-  const done = (sent: Request) => {
+  const done = (ok: boolean) => (sent: Request) => {
     if (!isApi(sent)) return;
     open -= 1;
-    log.push({ at: n++, kind: "end", method: sent.method(), path: new URL(sent.url()).pathname, req: sent });
+    log.push({ at: n++, kind: "end", method: sent.method(), path: new URL(sent.url()).pathname, req: sent, ok });
   };
-  page.on("requestfinished", done);
-  page.on("requestfailed", done);
+  page.on("requestfinished", done(true));
+  page.on("requestfailed", done(false));
   return { log, inflight: () => open };
 }
 
@@ -198,26 +203,30 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
   // Nothing of Today's reads still on the wire: the next request is his.
   await expect.poll(trail.inflight).toBe(0);
   const mark = trail.log.length;
-  const spoke = Date.now();
   const answered = page.waitForResponse(posted(/\/not-feeling-well$/));
   await page.getByTestId("not-well-stop").click();
   const card = (await (await answered).json()) as WhatToDo;
-  /** His voice note reaches the flag before any background read, but "reaches the flag before"
-   *  is not the same claim as "is the very first request to start" — Today's own background
-   *  reads (the emergency card among them, #213, #194) keep running on their own schedule, and
-   *  one can start in the instant before he speaks (`readCard` in `offline/emergencyCache.ts`,
-   *  read from `useToday`'s `refreshCard`). When that happens it is not a wait: `api/client.ts`'s
-   *  urgent queue aborts whatever is on the wire the moment his call is made (see the
-   *  deterministic proof of that mechanism in `tests/unit/client.test.ts`, "the urgent queue
-   *  (#191)"), so a background read's *start* may occasionally land first in this trail, but his
-   *  call is never left waiting behind it — it is sent and answered right away, whatever else
-   *  happened to be starting around it. That is what is checked here: not the trail's exact
-   *  interleaving (a background read's own timing is not this test's to pin down), but that his
-   *  call, from the tap to the answer, took as long as a plain request to the backend, not as
-   *  long as sitting behind Today's whole background load. */
-  const roundTripMs = Date.now() - spoke;
-  expect(roundTripMs).toBeLessThan(3000);
-  expect(trail.log.slice(mark).some((entry) => entry.kind === "start" && entry.method === "POST" && entry.path === `/api/profiles/${pa.profileId}/not-feeling-well`)).toBe(true);
+  /** His voice note reaches the flag before any background read completes — but "reaches the
+   *  flag before" is not the same claim as "is the very first request to *start*": Today's own
+   *  background reads (the emergency card among them, #213, #194) keep running on their own
+   *  schedule, and one can start in the instant before he speaks (`readCard` in
+   *  `offline/emergencyCache.ts`, read from `useToday`'s `refreshCard`). When that happens it is
+   *  not a wait — it is the urgent queue's own mechanism: `api/client.ts`'s `enqueue` aborts
+   *  whatever is on the wire the moment his call is made (deterministic proof of that in
+   *  `tests/unit/client.test.ts`, "the urgent queue (#191)"), so a background read's *start* may
+   *  occasionally land first in this trail, and its *end* may too, as an abort. What #191
+   *  actually promises, and what is checked here, is stronger and exact: nothing else is
+   *  *allowed to finish* — to run to a real, successful response — before his call does. An
+   *  aborted background read ending here is the mechanism working; a background read completing
+   *  normally ahead of him would mean he waited behind it, and that is what would fail this. */
+  const afterMark = trail.log.slice(mark);
+  const flagPath = `/api/profiles/${pa.profileId}/not-feeling-well`;
+  const flagStart = afterMark.find((entry) => entry.kind === "start" && entry.method === "POST" && entry.path === flagPath);
+  expect(flagStart).toBeTruthy();
+  const flagEnd = afterMark.findIndex((entry) => entry.kind === "end" && entry.req === flagStart!.req);
+  expect(flagEnd).toBeGreaterThan(-1);
+  const finishedBeforeHim = afterMark.slice(0, flagEnd).filter((entry) => entry.kind === "end" && entry.ok === true && entry.req !== flagStart!.req);
+  expect(finishedBeforeHim).toEqual([]);
   expect(card.kind).toBe("red_flag");
   expect(card.by_voice).toBe(true);
   expect(card.flag_id).toBeTruthy();
@@ -295,7 +304,6 @@ test("a red word on the cloud reaches the flag before any other request, the lad
   await expect.poll(trail.inflight).toBe(0);
 
   const mark = trail.log.length;
-  const tapped = Date.now();
   const answered = page.waitForResponse(posted(/\/feelings$/));
   await cloud.locator('[data-word="chest_tightness"]').click();
   const felt = (await (await answered).json()) as { red_flag: boolean; flag_id: string; escalation_id: string; told: string[]; card: WhatToDo };
@@ -303,15 +311,19 @@ test("a red word on the cloud reaches the flag before any other request, the lad
   expect(await nothingCovers(page)).toEqual([]);
   expect(await notUnderTheBanner(page)).toEqual([]);
 
-  // Reaches the flag before any background read (#191), not necessarily the very first request
-  // to *start* in this trail: a background read of Today's own (the emergency card among them)
-  // can start in the instant before he taps, and is aborted, not waited for — see the note by
-  // the not-feeling-well test above, and the deterministic proof of the abort itself in
-  // `tests/unit/client.test.ts`. What is checked here is that his tap answers as fast as a
-  // plain request, not as slow as sitting behind Today's whole background load.
-  expect(Date.now() - tapped).toBeLessThan(3000);
+  // Reaches the flag before any background read completes (#191) — not necessarily the very
+  // first request to *start* in this trail: a background read of Today's own (the emergency
+  // card among them) can start in the instant before he taps, and is aborted, not waited for —
+  // see the fuller note by the not-feeling-well test above, and the deterministic proof of the
+  // abort itself in `tests/unit/client.test.ts`. What is checked here is the exact guarantee:
+  // nothing else is allowed to run to a real, successful completion before his tap's own does.
   const after = trail.log.slice(mark);
-  expect(after.some((entry) => entry.kind === "start" && entry.method === "POST" && entry.path === `/api/profiles/${pa.profileId}/feelings`)).toBe(true);
+  const flagPath = `/api/profiles/${pa.profileId}/feelings`;
+  const flagStart = after.find((entry) => entry.kind === "start" && entry.method === "POST" && entry.path === flagPath);
+  expect(flagStart).toBeTruthy();
+  const flagDone = after.findIndex((entry) => entry.kind === "end" && entry.req === flagStart!.req);
+  expect(flagDone).toBeGreaterThan(-1);
+  expect(after.slice(0, flagDone).filter((entry) => entry.kind === "end" && entry.ok === true && entry.req !== flagStart!.req)).toEqual([]);
   expect(felt.red_flag).toBe(true);
   expect(felt.flag_id).toBeTruthy();
   expect(felt.told).toContain(pa.meiId);
