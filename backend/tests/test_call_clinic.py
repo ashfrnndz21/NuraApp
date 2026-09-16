@@ -392,3 +392,82 @@ async def test_the_call_clinic_card_is_rendered_from_state_and_written_down(sg: 
     assert row is not None and row.kind is WhatToDoKind.CALL_CLINIC
     assert row.state_id is not None and row.event_id is not None and row.flag_id is None
     assert row.line_ids == [line.id for line in quite.clinic_card if not line.id.startswith("boundary.")]
+
+
+async def test_no_call_clinic_card_where_the_note_is_withheld_for_want_of_state(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The weaker-provenance surface never survives where the stronger one was judged unsafe:
+    on the `no_state` branch the note is withheld, and the call-the-clinic card goes with it —
+    nothing shown to him that no State stands behind (B1 review, `not_feeling_well.py` §5)."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.keys.scopes import ROLE_SCOPES, Scope
+    from app.reasoning.feelings import service
+    from app.safety.not_feeling_well import ClinicCard, Line
+    from app.reasoning.feelings.service import answer_tap, record_tap
+    from app.reasoning.feelings.words import Answer
+    from app.safety.models import WhatToDoCard
+    from app.safety.red_flags import Feeling
+    from app.state.service import RECOMPUTE_SCOPES, current_state
+    from tests.family_support import household
+    from tests.feelings_support import REGISTRY as CLOUD_REGISTRY
+    from tests.feelings_support import STORE, TRANSCRIBER, VIA
+
+    # A caregiver's key without the family scope: it opens the record, and it cannot bring
+    # State up to it.
+    home = await household(sg, kit_scopes=ROLE_SCOPES[KeyRole.CAREGIVER])
+    owner = await home.ctx(sg, home.pa)
+    await current_state(sg, context=owner)  # the profile has a State; this key still cannot.
+    kit = await home.ctx(sg, home.kit)
+    assert Scope.RECORDS in kit.scopes and not RECOMPUTE_SCOPES <= kit.scopes
+
+    tapped = await record_tap(
+        sg, context=kit, word=Feeling.DIZZY, registry=CLOUD_REGISTRY, store=STORE,
+        transcriber=TRANSCRIBER, via=VIA,
+    )
+    # "A few days" is the table's middle row — the answer that gives the owner the card.
+    answered = await answer_tap(
+        sg, context=kit, tap_id=tapped.tap.id, answer=Answer.FEW_DAYS,
+        registry=CLOUD_REGISTRY, store=STORE, transcriber=TRANSCRIBER, via=VIA,
+    )
+    assert answered.note is None and answered.note_withheld_because == "no_state"
+    assert answered.clinic_card == () and answered.clinic_card_id is None
+    # And nothing was written down either: no card row with no State behind it.
+    assert (await sg.scalars(select(WhatToDoCard))).all() == []
+
+    # Two doors hold this, and each is held on its own. The card is never built for a key
+    # that cannot compute State...
+    from app.safety.not_feeling_well import call_clinic_card
+
+    assert (
+        await call_clinic_card(
+            sg, context=kit, registry=CLOUD_REGISTRY, language="en", severity=None,
+            lasting=True, feelings=frozenset({Feeling.DIZZY}), event_id=tapped.tap.event_id,
+        )
+        is None
+    )
+    # ...and the `no_state` branch withholds one even if it were handed a card, which is what
+    # the reviewed code did: it returned `clinic_card=card` on exactly this branch.
+    built: list[object] = []
+
+    async def _as_if_it_built_one(*args: object, **kwargs: object) -> object:
+        made = ClinicCard(lines=(Line("nfw.call_clinic", "Call the clinic today."),),
+                          card_id=uuid.uuid4(), state_id=uuid.uuid4())
+        built.append(made)
+        return made
+
+    monkeypatch.setattr(service, "call_clinic_card", _as_if_it_built_one)
+    again = await record_tap(
+        sg, context=kit, word=Feeling.DIZZY, registry=CLOUD_REGISTRY, store=STORE,
+        transcriber=TRANSCRIBER, via=VIA,
+    )
+    withheld = await answer_tap(
+        sg, context=kit, tap_id=again.tap.id, answer=Answer.FEW_DAYS,
+        registry=CLOUD_REGISTRY, store=STORE, transcriber=TRANSCRIBER, via=VIA,
+    )
+    assert built, "the stand-in was never reached"
+    assert withheld.note_withheld_because == "no_state"
+    assert withheld.clinic_card == () and withheld.clinic_card_id is None
