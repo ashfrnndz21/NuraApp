@@ -88,6 +88,10 @@ class Bucket:
         if request.method == "PUT":
             self.objects[path] = body
             return httpx.Response(200)
+        if request.method == "DELETE":
+            # S3 answers 204 whether or not anything was there.
+            self.objects.pop(path, None)
+            return httpx.Response(204)
         if path in self.objects:
             return httpx.Response(200, content=self.objects[path])
         return httpx.Response(404)
@@ -112,6 +116,21 @@ async def test_bytes_go_in_under_the_region_and_come_back_out() -> None:
     assert set(bucket.objects) == {"/SG/photos/abc/0123"}
     assert await store.get("photos/abc/0123") == b"\x89PNG placeholder"
     assert all(r.url.host == "nura-sg.s3.ap-southeast-1.amazonaws.com" for r in bucket.seen)
+
+
+async def test_bytes_are_let_go_of_under_the_region_and_a_second_delete_is_one() -> None:
+    """A consult recording's chunks are let go of once put together or thrown away (#129): a
+    signed DELETE under the region, and nothing there is not an error."""
+    bucket = Bucket()
+    store = _store(bucket)
+    await store.put("consult-uploads/abc/000000", b"chunk")
+    await store.delete("consult-uploads/abc/000000")
+    assert bucket.objects == {}
+    await store.delete("consult-uploads/abc/000000")
+    deletes = [r for r in bucket.seen if r.method == "DELETE"]
+    assert [r.url.path for r in deletes] == ["/SG/consult-uploads/abc/000000"] * 2
+    with pytest.raises(NoSuchObject):
+        await store.get("consult-uploads/abc/000000")
 
 
 async def test_one_regions_store_cannot_read_the_others_bytes() -> None:

@@ -217,4 +217,14 @@ describe("the day's nudge", () => {
     expect(nudgeToShow(day([]), plan, now)).toMatchObject({ from: "planned", kind: "anticipation", lines: ["You see Dr Tan tomorrow."] });
     expect(nudgeToShow(day([]), { ...plan, drafts: [] }, now)).toBeNull();
   });
+  it("never renders a nudge with no why (E17-03): not the handed one, not the plan's draft, and not either with only blank space", () => {
+    expect(nudgeToShow(day([{ ...handed, why: "" }]), plan, now)).toBeNull();
+    expect(nudgeToShow(day([{ ...handed, why: "   " }]), plan, now)).toBeNull();
+    const blankDraft = { ...plan, drafts: [{ ...plan.drafts[0]!, why: "" }] };
+    expect(nudgeToShow(day([]), blankDraft, now)).toBeNull();
+  });
+  it("stays quiet for the rest of the day once the day's nudge has no why to show: it does not fall back to the plan's draft", () => {
+    // The cap is already spent on the (malformed) handed nudge; nothing else fills in for it.
+    expect(nudgeToShow(day([{ ...handed, why: "" }]), plan, now)).toBeNull();
+  });
 });

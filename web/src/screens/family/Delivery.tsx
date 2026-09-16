@@ -3,10 +3,20 @@ import type { JSX } from "preact";
 import * as family from "../../api/family";
 import type { DeliverySettingsOut } from "../../api/familyTypes";
 import { hhmm, namesOf, wallTime } from "../../family/model";
+import { fill } from "../../strings";
 import { Field, Notice, Pill, Tile } from "../../ui/components";
 import { FamilyPage, NoticeAt, s, useAct, useHere, useRead } from "./common";
 
 const CHANNELS = ["app_push", "whatsapp", "caregiver"] as const;
+
+/** The engine's reasons for a message the check-in and the family notice held (E11-01,
+ *  `backend/app/delivery/triggers/day.py`), to the line the log says instead of the outcome. */
+const HELD_BECAUSE: Record<string, "flagOpen" | "saidToday" | "nudgeAsked" | "questionOpen"> = {
+  "a red flag is open": "flagOpen",
+  "he said how he is today": "saidToday",
+  "the check-in nudge asked it": "nudgeAsked",
+  "a question of his is open": "questionOpen",
+};
 
 /** E00-05: every attempt to reach someone about him — to whom, when, by which channel, what
  *  became of it, and the rule that fired — newest first, from the delivery log (#121). Data,
@@ -21,6 +31,12 @@ export function DeliveriesPart(): JSX.Element | null {
   const names = namesOf(people.value ?? []);
   const who = (personId: string | null, standing: string | null) => (standing === "patient" ? here.papers.display_name : (personId && names.get(personId)) || "");
   const label = <T extends Record<string, string>>(table: T, key: string | null) => (key && (table as Record<string, string>)[key]) || key || "";
+  // A message held for a reason other than a quiet day says why (E11-01): a red flag open, he
+  // already said how he is, the day's small reminder asked it.
+  const outcome = (row: { outcome: string; reason: string | null }) => {
+    const held = row.outcome === "skipped" && row.reason ? HELD_BECAUSE[row.reason] : undefined;
+    return held ? fill(words.skippedBecause[held], { name: here.papers.display_name }) : label(words.outcomes, row.outcome);
+  };
   return (
     <FamilyPage title={words.deliveries} part="deliveries">
       <Notice error={rows.error} />
@@ -32,7 +48,7 @@ export function DeliveriesPart(): JSX.Element | null {
                 {wallTime(row.recorded_at, here.locale)} · {who(row.to_person_id, row.standing)} · {label(words.channels, row.channel)}
               </p>
               <p>
-                {label(words.triggers, row.trigger_type)} · {label(words.outcomes, row.outcome)}
+                {label(words.triggers, row.trigger_type)} · {outcome(row)}
               </p>
               <p class="caption">
                 {words.rule}: {row.rule}

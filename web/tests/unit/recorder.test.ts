@@ -136,3 +136,30 @@ describe("the consult recorder", () => {
     expect(kept!.blob.type).toBe("audio/mp4");
   });
 });
+
+describe("the pieces, as it records (#129)", () => {
+  it("hands each piece to onData as the recorder hands it over, and keeps the whole for Stop", async () => {
+    const f = fake();
+    const recorder = new ConsultRecorder(f.deps);
+    const pieces: Blob[] = [];
+    await recorder.start();
+    recorder.onData = (piece) => pieces.push(piece);
+    f.made[0]!.feed("one");
+    f.made[0]!.feed("two");
+    expect(recorder.mimeType).toBe("audio/webm;codecs=opus");
+    const kept = await recorder.stop();
+    expect(await Promise.all(pieces.map((piece) => piece.text()))).toEqual(["one", "two"]);
+    expect(await kept!.blob.text()).toBe("onetwo");
+  });
+
+  it("gives nothing more once thrown away", async () => {
+    const f = fake();
+    const recorder = new ConsultRecorder(f.deps);
+    const pieces: Blob[] = [];
+    await recorder.start();
+    recorder.onData = (piece) => pieces.push(piece);
+    recorder.discard();
+    f.made[0]!.feed("late");
+    expect(pieces).toEqual([]);
+  });
+});

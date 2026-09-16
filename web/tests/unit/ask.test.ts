@@ -63,7 +63,7 @@ describe("ask", () => {
       answer({
         lines: [
           {
-            text: "Your card from Dr Tan on Monday 14 September is waiting for your yes.",
+            text: "What Dr Tan said on Monday 14 September is waiting for your yes.",
             cites: [
               { kind: "visit_summary", id: "c1" },
               { kind: "appointment", id: "a1" },
@@ -73,6 +73,6 @@ describe("ask", () => {
         ],
       }),
     );
-    expect(view.lines[0]).toEqual({ text: "Your card from Dr Tan on Monday 14 September is waiting for your yes.", source: "sourceVisits", clip: null });
+    expect(view.lines[0]).toEqual({ text: "What Dr Tan said on Monday 14 September is waiting for your yes.", source: "sourceVisits", clip: null });
   });
 });
