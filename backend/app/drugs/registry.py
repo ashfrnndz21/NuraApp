@@ -7,6 +7,22 @@ pair the licensed data flags, with a severity and a text id. `monograph` gives t
 information rules for one generic as ids — which missed-dose rule, which food rule, which
 watch-outs, which things to avoid. Ids, not prose: the model never supplies the pharmacology,
 and the registry never supplies the sentence.
+
+`identify` never returns a bare match: every `DrugMatch` carries a `confidence`, scored on how
+much of the label's own words actually correspond to that product — an exact registration
+number is certain; an exact brand or generic name whose strength and form also line up is
+high; a name match whose strength or form does not belong to that product is low (#206). A
+match is not a guess dressed up as one: the score says how sure the register is, and
+`app.medicines.service` refuses to identify anything below `CONFIDENCE_THRESHOLD`
+(`app.ingestion.models`) — the same floor a document field and a WhatsApp voice transcript are
+already held to, so a person is never told his tablet is named when Nura is only guessing.
+
+Not every caller of `identify` needs that floor: `app.safety.health_words`, `app.reasoning.
+visits.summary` and `app.delivery.feed.compose` ask only "does the register know this name at
+all" or read the generic off the best match, for text detection and feed copy — never to
+write a dose or a line — so a name match's confidence has nothing below-floor to filter for
+them by design. `app.medicines.service._one_product` is the one caller that turns an answer
+into a medicine on the record, and it is the one that checks the score.
 """
 
 from __future__ import annotations
@@ -43,7 +59,10 @@ class LabelFields:
 
 @dataclass(frozen=True, slots=True)
 class DrugMatch:
-    """One product the register knows, and whether it is one of the high-risk kinds."""
+    """One product the register knows, whether it is one of the high-risk kinds, and how sure
+    the register is that this is the product the label meant (#206) — 1.0 for a registration
+    number, or a name whose strength and form the label gave both belong to this product;
+    lower wherever the label named a strength or a form that does not."""
 
     registration_no: str
     brand: str
@@ -52,6 +71,7 @@ class DrugMatch:
     form: str
     drug_class: str
     high_risk: bool
+    confidence: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +108,9 @@ class DrugRegistry(Protocol):
     """Any licensed registry a deployment runs on answers these three."""
 
     def identify(self, label: LabelFields) -> Sequence[DrugMatch]:
-        """The products that match, best first. Empty when nothing does."""
+        """The products that match, best first, each carrying its own confidence. Empty when
+        nothing does; a caller that needs one definite product still checks the confidence
+        against `CONFIDENCE_THRESHOLD` before trusting it (`app.medicines.service`)."""
         ...
 
     def interactions(self, generics: Sequence[str]) -> Sequence[Interaction]:

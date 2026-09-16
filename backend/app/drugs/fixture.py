@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,49 @@ def _norm(text: str | None) -> str:
 
 def _same_strength(a: str | None, b: str) -> bool:
     return _norm(a) == _norm(b)
+
+
+NAME_MATCH = 0.9
+"""An exact brand or generic name, alone: the label said nothing to check it against, so it
+is neither confirmed nor contradicted (module doc, `Monograph` and #206). Never awarded to a
+high-risk product — see `HIGH_RISK_NEEDS_STRENGTH`."""
+EXACT_MATCH = 1.0
+"""A name whose strength — and form, where the label gave one — both belong to this product."""
+WRONG_STRENGTH = 0.4
+"""A name match whose strength does not belong to this product: below `CONFIDENCE_THRESHOLD`,
+so it is not silently taken as the product anyway (#206's own finding — the defect this
+scoring closes)."""
+WRONG_FORM = 0.5
+"""A name and strength match whose form does not belong to this product: also below the
+floor, for the same reason a wrong strength is."""
+HIGH_RISK_NEEDS_STRENGTH = 0.5
+"""A high-risk product matched by name alone, with no strength on the label to check: below
+the floor. The label-photo rule (`app.safety.high_risk`) asks for a photo of a high-risk
+drug's label; a photo does not by itself prove the strength on it was read. Warfarin, an
+insulin, digoxin, methotrexate and an opioid are not identified on a bare name the way an
+ordinary product is — the label must actually say the strength (clinical-safety review on
+#206)."""
+
+
+def _confidence(label: LabelFields, product: DrugMatch) -> float:
+    """How much of the label's own words actually correspond to this product, once a
+    registration number, a brand or a generic has already matched it. A registration number
+    is certain by construction (the caller returns before this runs). Beyond a bare name
+    match, the strength and the form the label gave are checked against this specific
+    product — not the product family the name narrowed to — because a name can be exactly
+    right while the amount on it belongs to a different pack on the same shelf. A high-risk
+    product needs the strength stated at all: a bare name is not enough to call one found."""
+    if label.strength:
+        if not _same_strength(label.strength, product.strength):
+            return WRONG_STRENGTH
+        if label.form and _norm(label.form) != _norm(product.form):
+            return WRONG_FORM
+        return EXACT_MATCH
+    if product.high_risk:
+        return HIGH_RISK_NEEDS_STRENGTH
+    if label.form and _norm(label.form) != _norm(product.form):
+        return WRONG_FORM
+    return NAME_MATCH
 
 
 @fixture
@@ -94,16 +138,18 @@ class FixtureRegistry:
     def identify(self, label: LabelFields) -> Sequence[DrugMatch]:
         """Registration number first, then brand and strength, then the generic name.
 
-        A registration number that is on the register answers alone. Without one, the brand
-        narrows to a product family and the strength picks the product; a generic name does
-        the same. Nothing is guessed from a partial name: a brand the register does not hold
-        matches nothing, and the caller asks the person.
+        A registration number that is on the register answers alone, at full confidence.
+        Without one, the brand narrows to a product family and the generic name does the
+        same; nothing is guessed from a partial name — a brand the register does not hold
+        matches nothing, and the caller asks the person. Every match returned is scored
+        against the label's own strength and form (`_confidence`, #206): a name match is not
+        enough to call a product found, only to call it a candidate, worst matches last.
         """
         if label.registration_no:
             wanted = label.registration_no.strip().upper()
             exact = [p for p in self._products if p.registration_no == wanted]
             if exact:
-                return exact
+                return [replace(p, confidence=1.0) for p in exact]
         candidates = list(self._products)
         if label.brand:
             brand = _norm(label.brand)
@@ -117,11 +163,17 @@ class FixtureRegistry:
             by_strength = [p for p in candidates if _same_strength(label.strength, p.strength)]
             if by_strength:
                 candidates = by_strength
+            # else: the full name-matched set stays candidates — a strength that matches
+            # nothing on file is not silently dropped in favour of some other strength on
+            # the same generic; it stays a candidate, scored low by `_confidence`, so the
+            # caller sees (and refuses) the mismatch instead of being quietly handed an
+            # amount the label never said (#206).
         if label.form:
             by_form = [p for p in candidates if _norm(p.form) == _norm(label.form)]
             if by_form:
                 candidates = by_form
-        return candidates
+        scored = [replace(p, confidence=_confidence(label, p)) for p in candidates]
+        return sorted(scored, key=lambda p: -p.confidence)
 
     def interactions(self, generics: Sequence[str]) -> Sequence[Interaction]:
         """The flagged pairs among these generics, worst first, and the same kind twice."""

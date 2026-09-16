@@ -542,6 +542,7 @@ export interface Strings {
     sureYesOther: string;
     sureRead: string;
     disputed: string;
+    matchByNameOnly: string[];
     twice: string; twiceOther: string;
     aboutIt: string;
     add: string;
