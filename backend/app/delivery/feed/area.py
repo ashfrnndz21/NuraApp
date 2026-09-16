@@ -66,7 +66,22 @@ async def set_area(session: AsyncSession, *, context: KeyContext, area: str | No
         )
         refusal.written_down = True
         raise refusal
-    kept = None if area is None or not area.strip() else check_area(area, context.region)
+    try:
+        kept = None if area is None or not area.strip() else check_area(area, context.region)
+    except Refusal as refused:
+        # A street, a house or a whole postcode: refused, and the refusal is on his trail like
+        # every other. What was asked for is never written down — only that it was not coarse.
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.PROFILE,
+            target=AREA_TARGET,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refused).__name__,
+        )
+        refused.written_down = True
+        raise
     profile = await audited_profile_read(session, context)
     profile.area = kept
     await session.flush()

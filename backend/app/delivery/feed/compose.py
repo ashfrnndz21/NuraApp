@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read, audited_read, person_display_name
 from app.db import as_utc, nested_unit_of_work, utcnow
+from app.delivery.feed.compress import changes_treatment
 from app.delivery.feed.days import Day, plain_day, today_for
 from app.delivery.feed.grammar import Direction
 from app.delivery.feed.items import NotPlainWords, Why, create_item
@@ -65,6 +66,7 @@ from app.delivery.strings import (
     test_name,
 )
 from app.delivery.voice import MAX_SECONDS, seconds_to_say, voiced
+from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
 from app.family.photos import photos_for_his_feed
 from app.family.roster import who_is_on_duty
@@ -1578,6 +1580,12 @@ async def _recap(
         chosen = chosen[1:]
     if seconds_to_say(script_for(lines, head.language).spoken(), head.language) > MAX_SECONDS:
         return
+    # His week is his own story cards read back, so nothing here should ever read as a change
+    # to his treatment — but it is screened like every other card that reaches him rather than
+    # trusted because of where it came from. A line that would change treatment stops the
+    # recap: it belongs in a question for his doctor, never in a card he plays to himself.
+    if changes_treatment(list(lines)):
+        return
     await make(
         type=CardType.RECAP,
         lines=Lines(
@@ -1657,6 +1665,19 @@ def _conditions_of(state: StateView) -> dict[str, str]:
     }
 
 
+def _generic_of(registry: DrugRegistry, written: str) -> str | None:
+    """The generic the licensed register gives a medicine's name as his record wrote it, or
+    nothing where the register knows no such medicine.
+
+    Which written name is which medicine — its salts, its strengths, the other names for it —
+    is the licensed data's to say and no one else's (CLAUDE.md), so this asks the register
+    rather than tidying the string itself. A name it does not know matches no hazard rule,
+    which is the same answer a table of our own would have to give.
+    """
+    matches = registry.identify(LabelFields(generic=written.strip()))
+    return matches[0].generic.strip().lower() if matches else None
+
+
 async def around_for(
     session: AsyncSession,
     *,
@@ -1689,7 +1710,9 @@ async def around_for(
     for subject in ("medicine", "medication"):
         name = clinical.get(subject, {}).get("name")
         if name and isinstance(name.get("value"), str):
-            taken.setdefault(name["value"].strip().lower(), name["fact_id"])
+            generic = _generic_of(engine.registry, name["value"])
+            if generic is not None:
+                taken.setdefault(generic, name["fact_id"])
     return Around(
         day=day,
         area=profile.area,

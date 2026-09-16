@@ -91,30 +91,19 @@ HAZARDS: Mapping[str, Hazard] = {
 
 def relevant_to(hazard: str, conditions: Iterable[str], medicines: Iterable[str]) -> list[str]:
     """What on his record makes this hazard relevant: the conditions and medicines that
-    match, sorted. Empty means it is not for him, and no card is made."""
+    match, sorted. Empty means it is not for him, and no card is made.
+
+    The medicines are generics the licensed register named (`app.drugs`): identification —
+    which written name is which medicine, and its salts, strengths and other names — is the
+    register's work and is done before this is called (`compose.around_for`). Nothing here
+    normalises a name, so no table of our own can disagree with the licensed data.
+    """
     rule = HAZARDS.get(hazard)
     if rule is None:
         raise NotAHazard(f"{hazard!r} is not a hazard a local watch covers")
     held = {code for code in conditions} & rule.conditions
-    taken = {generic for name in medicines if (generic := generic_of(name)) in rule.medicines}
+    taken = {generic for generic in medicines if generic in rule.medicines}
     return sorted(held | taken)
-
-
-SYNONYMS: Mapping[str, str] = {"acetylsalicylic acid": "aspirin", "albuterol": "salbutamol"}
-"""Other names a label gives the same medicine, by the name the table uses."""
-
-_NOT_THE_MEDICINE = re.compile(
-    r"\b(?:sodium|potassium|calcium|hydrochloride|hcl|bisulfate|besylate|besilate|maleate|"
-    r"mesylate|etexilate|tosylate|bromide|sulfate|sulphate|dipropionate|propionate|"
-    r"xinafoate|fumarate|tablets?|capsules?|\d+(?:\.\d+)?\s*(?:mg|mcg|g))\b"
-)
-
-
-def generic_of(name: str) -> str:
-    """A medicine's name as the table knows it: lower case, its salt and strength left off
-    ("Warfarin Sodium 5 mg" is warfarin), another name for it made the table's own."""
-    cleaned = " ".join(_NOT_THE_MEDICINE.sub(" ", name.strip().lower()).split())
-    return SYNONYMS.get(cleaned, cleaned)
 
 
 # --- seasons ------------------------------------------------------------------------------------

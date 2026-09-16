@@ -240,6 +240,12 @@ async def _statuses(
         return {}
     # What became of a card is what *he* did with it: his chief's own taps on her list are
     # not his opening it ("Pa opened this card" is said only when he did).
+    #
+    # On a graph he has not claimed yet there is no owner, and nothing here is his: a claimant
+    # key carries `Scope.PROFILE` alone (`app.keys.context.CLAIMANT_SCOPES`), so he cannot
+    # open a card until he claims it, and every card rightly reads as sent. This is spelled
+    # out rather than left to fall out of a comparison against None, so that widening what a
+    # claimant may read fails here loudly instead of quietly crediting his chief's taps to him.
     owner = (await audited_profile_read(session, context)).owner_person_id
     engaged = [
         one

@@ -264,7 +264,10 @@ async def clip_poster(
     store: ObjectStore,
 ) -> tuple[bytes, str]:
     item = await _clip_item(session, context=context, item_id=item_id)
-    got = await _rendered(item, context=context, renderer=renderer, store=store, part="poster")
+    # A server with no renderer refuses (`NoClipRenderer`), and the refusal is on his trail
+    # like every other: there is no unlogged path off a card of his.
+    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+        got = await _rendered(item, context=context, renderer=renderer, store=store, part="poster")
     assert got is not None
     return got
 
@@ -281,9 +284,12 @@ async def clip_video(
     and the phone shows the still with the narration."""
     item = await _clip_item(session, context=context, item_id=item_id)
     cite = _cite(item)
-    if not cite.get("excerpt") or not may_excerpt(cite.get("licence")):
-        raise NoExcerpt("this clip is the still with the narration")
-    got = await _rendered(item, context=context, renderer=renderer, store=store, part="video")
-    if got is None:
-        raise NoExcerpt("no excerpt was made for this clip")
+    # A licence that forbids reuse is a refusal on the trail, not a silent nothing: the
+    # publisher's terms are the reason he is shown a still, and the reason is recorded.
+    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+        if not cite.get("excerpt") or not may_excerpt(cite.get("licence")):
+            raise NoExcerpt("this clip is the still with the narration")
+        got = await _rendered(item, context=context, renderer=renderer, store=store, part="video")
+        if got is None:
+            raise NoExcerpt("no excerpt was made for this clip")
     return got

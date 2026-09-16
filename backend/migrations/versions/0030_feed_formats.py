@@ -2,7 +2,7 @@
 
 Two tables gain columns. `profile.area`: where he lives, coarsely (a town or district, or the
 first digits of a postcode), set on his own yes and used only to match local alerts on this
-server (E09-07; `app.identity.area`). `feed_engagement.seconds`: how much of a clip or a voice
+server (E09-07; `app.delivery.feed.area`). `feed_engagement.seconds`: how much of a clip or a voice
 note played, on a play or a replay only; and `feed_engagement.client_id`: the id the phone gave
 an event in its queue, unique on the profile, so an event flushed twice is written once (E11-08).
 
