@@ -12,6 +12,9 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
@@ -21,7 +24,7 @@ from app.db import utcnow
 from app.delivery.feed.compose import VOICE_TARGET, _say_ahead, refresh
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.feed.items import Why, create_item
-from app.delivery.feed.models import CardType, DeliverTo
+from app.delivery.feed.models import CardType, DeliverTo, FeedItem
 from app.delivery.feed.search import Engine
 from app.delivery.feed.twin import spoken_twin
 from app.delivery.strings import Lines
@@ -187,6 +190,43 @@ async def test_a_prerender_failure_is_on_the_trail_and_never_costs_him_the_card(
     )
     assert not twin.cached
     assert store.path_of(cache_key(context.profile_id, "fixture", digest)).is_file()
+
+
+async def test_a_trail_line_that_cannot_be_written_still_never_costs_him_the_cards(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The compound failure: the voice is down AND the trail line cannot be written.
+
+    Writing the trail line is itself a write. If it is allowed to fail outwards it leaves
+    `_say_ahead`, leaves `refresh`, and reaches the request's own unit of work, which rolls
+    the whole request back — every card this refresh made, not only the one whose voice
+    failed. A voice provider being down would take his day's cards with it, which is exactly
+    what the per-item savepoints exist to prevent. So the trail line degrades to a log line
+    and the cards stand.
+    """
+    context = await pa(sg, language="en")
+    await reading(sg, context, when=utcnow())
+    store = LocalObjectStore(tmp_path, Region.SG)
+    engine = replace(ENGINE, voice=Breaking("en"), store=store)
+
+    async def cannot_write(*args: object, **kwargs: object) -> None:
+        raise OperationalError("write the trail line", {}, Exception("the connection went"))
+
+    monkeypatch.setattr("app.delivery.feed.compose.record", cannot_write)
+
+    _, made = await refresh(sg, context=context, engine=engine)
+
+    # `refresh` returned rather than raising: that is the whole assertion. An exception
+    # here would leave `refresh` and reach the request's unit of work, whose own contract is
+    # that any failure that is not a refusal rolls the whole request back.
+    assert made
+    reading_card = next(item for item in made if item.type is CardType.READING)
+    kept = list(await sg.scalars(select(FeedItem).where(FeedItem.id == reading_card.id)))
+    assert kept, "the card was unmade by a trail line that could not be written"
+
+    # And nothing was written to the trail for it, which is the cost we accept.
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.READINGS)
+    assert not [entry for entry in trail if entry.target == VOICE_TARGET]
 
 
 async def test_a_corrected_cards_audio_is_never_the_stale_digest(

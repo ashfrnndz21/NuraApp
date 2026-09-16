@@ -388,17 +388,30 @@ async def _say_ahead(
                 )
         except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
             log.warning("voice ahead failed for %s: %s", item.id, type(failed).__name__)
-            async with nested_unit_of_work(session):
-                await record(
-                    session,
-                    context=context,
-                    action=Action.WRITE,
-                    scope=item.scope,
-                    target=VOICE_TARGET,
-                    target_id=item.id,
-                    outcome=Outcome.REFUSED,
-                    refused_because=type(failed).__name__,
-                    channel=Channel.SYSTEM,
+            try:
+                async with nested_unit_of_work(session):
+                    await record(
+                        session,
+                        context=context,
+                        action=Action.WRITE,
+                        scope=item.scope,
+                        target=VOICE_TARGET,
+                        target_id=item.id,
+                        outcome=Outcome.REFUSED,
+                        refused_because=type(failed).__name__,
+                        channel=Channel.SYSTEM,
+                    )
+            except Exception as unwritten:  # noqa: BLE001 — see below
+                # Writing the trail line is itself a write, and the one thing it must never do
+                # is cost him the cards. Without this the failure leaves `_say_ahead`, leaves
+                # `refresh`, and reaches the request's own unit of work, which rolls the whole
+                # request back — every card `create_item` wrote in this refresh, not just the
+                # one whose voice failed, and the trail lines the earlier items in this loop
+                # had already earned. A voice that is down would take his day's cards with it.
+                # So the trail line degrades to a log line, the same way `_sample` below keeps
+                # its own bookkeeping from reaching the caller.
+                log.warning(
+                    "voice ahead failure not written for %s: %s", item.id, type(unwritten).__name__
                 )
             continue
 
