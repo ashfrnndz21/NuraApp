@@ -431,9 +431,10 @@ async def test_pa_completes_a_full_day_on_whatsapp_by_the_scheduler(
     At breakfast the engine sends the morning card and, his visit being tomorrow, the visit
     card; he answers "Taken" and the tablet is written as his tap, so nothing asks him about it
     later; at lunch he sends a voice note, heard in the region and kept as his own note; at his
-    check-in time, from his settings, the check-in goes, and his "OK" back is written down; in
-    the evening his chief gets the family notice, a count and never what was said, and the
-    helper does not. Each goes once. Nothing reaches him through the app."""
+    check-in time, from his settings, his new tablet is still a change the day's smart nudge
+    (W7) asks him about, so the plain check-in stands down for it; in the evening his chief gets
+    the family notice, a count and never what was said, and the helper does not. Each goes once.
+    Nothing reaches him through the app."""
     day = Day(deployment)
     await day.set_up()
 
