@@ -38,3 +38,15 @@ def window_status(
     assert now_local.tzinfo is not None  # a moment on his wall clock, never a bare time
     opens, closes = window_of(day, now_local.date(), Anchor(anchor).value, now_local.tzinfo)
     return opens <= now_local < closes, now_local >= closes
+
+
+def is_late(anchor: Anchor | str, tapped_local: datetime, day: Day) -> bool:
+    """Whether a tap at `tapped_local` came after this anchor's window had already closed on
+    his day (#198) — a plain fact about when the tap's own moment fell, worked out once, the
+    same window the ladder climbs from. Never a judgement, and never "missed": the tap still
+    stands, whatever it says."""
+    from app.routines.service import window_of
+
+    assert tapped_local.tzinfo is not None  # a moment on his wall clock, never a bare time
+    _, closes = window_of(day, tapped_local.date(), Anchor(anchor).value, tapped_local.tzinfo)
+    return tapped_local >= closes

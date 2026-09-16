@@ -106,6 +106,20 @@ RULES: Mapping[TriggerType, Rule] = {
             cap=1,
             quiet=True,
         ),
+        # A Taken tap closes a dose ladder that had already reached someone (#198): they are
+        # told, once, that it stood down. Never an alert — it carries no urgency of its own —
+        # so it waits out the quiet hours and is capped like any other reminder; a ladder's
+        # own dedupe key means it is never asked for twice in practice.
+        Rule(
+            TriggerType.DOSE_RESOLVED,
+            TriggerKind.EVENT,
+            Category.CONTEXT,
+            Scope.MEDICINES,
+            "dose_ladder_stood_down",
+            cap=1,
+            quiet=True,
+            channels=(DeliveryChannel.WHATSAPP, DeliveryChannel.APP_PUSH),
+        ),
         Rule(
             TriggerType.FLAG,
             TriggerKind.EVENT,

@@ -164,7 +164,14 @@ class Supply(ProfileScoped, Base):
 
 
 class DoseTaken(ProfileScoped, Base):
-    """One tap: this line, taken now, by this person. Rests on a DOSE_TAKEN event."""
+    """One tap: this line, taken now, by this person. Rests on a DOSE_TAKEN event.
+
+    `late` is stored, not inferred at read time (#198): whether `taken_at` fell after the
+    anchor's window had closed on his day, worked out once, when the tap is written
+    (`app.medicines.windows.is_late`), from the anchor and the moment the tap itself carries
+    — the reply's own time, never the backend's processing clock. A tap with no anchor is
+    never late; there is no window to be late against. This says nothing about when the
+    tablet left the blister, only when Nura was told: a late "Taken" is still a Taken."""
 
     __tablename__ = "dose_taken"
     __table_args__ = (
@@ -181,6 +188,7 @@ class DoseTaken(ProfileScoped, Base):
     amount: Mapped[float] = mapped_column(Float)
     taken_at: Mapped[datetime] = mapped_column(index=True)
     by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    late: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class InteractionFlag(ProfileScoped, Base):

@@ -314,6 +314,9 @@ async def climb(run: Run, ladder: Ladder, say: Say, type: TriggerType) -> None:
     answered_by = await _answered(run, ladder)
     if answered_by is not None:
         await close(run.session, run.acting, ladder, "answered", by=answered_by)
+        # However it was answered — his own tap, picked up here rather than at the moment it
+        # was written — whoever this ladder reached is told it stood down (#198).
+        await _notify_dose_resolved(run, [ladder], exclude=answered_by)
         return
     started = as_utc(ladder.started_at)
     over = (ladder.subject is Subject.DOSE and ladder.day < run.day) or (
@@ -831,9 +834,12 @@ async def acknowledge_dose(
     line_id: uuid.UUID,
     anchor: str | None,
     day: str,
+    via: Via,
     channel: Channel = Channel.APP,
 ) -> list[Ladder]:
-    """A Taken tap answers the ladder for that tablet at once, whoever tapped."""
+    """A Taken tap answers the ladder for that tablet at once, whoever tapped — however late
+    (#198) — and tells whoever it had reached that it stood down, once, through the normal
+    delivery rules; never the person who just tapped, who already knows."""
     ladders = await audited_read(
         session,
         Ladder,
@@ -847,7 +853,96 @@ async def acknowledge_dose(
         if ladder.line_id == line_id and (anchor is None or ladder.anchor == anchor):
             await close(session, context, ladder, "answered", by=context.person_id, channel=channel)
             closed.append(ladder)
+    if closed:
+        run = await open_run(session, via=via, profile_id=context.profile_id, at=utcnow())
+        await _notify_dose_resolved(run, closed, exclude=context.person_id)
     return closed
+
+
+async def _who_it_reached(run: Run, ladder: Ladder) -> list[Person]:
+    """Everyone this ladder actually reached on their phone, in the order asked (#198) — never
+    everyone with a key, only the people it climbed to before it stopped."""
+    seen: list[uuid.UUID] = []
+    for row in await run.deliveries():
+        if (
+            row.ladder_id == ladder.id
+            and row.outcome is DeliveryOutcome.SENT
+            and row.to_person_id is not None
+            and row.to_person_id not in seen
+        ):
+            seen.append(row.to_person_id)
+    people: list[Person] = []
+    for person_id in seen:
+        person = await run.person(person_id)
+        if person is not None:
+            people.append(person)
+    return people
+
+
+def _stood_down_message(run: Run, generic: str, anchor: str) -> Say:
+    """Him, told nothing (#198): this is for whoever the ladder called about him. "{name} has
+    taken {medicine} {anchor}. You do not need to check again." — the same words `dose_check`
+    already uses to ask, said once more to say it is over."""
+    registry = run.via.providers.drug_registry
+
+    async def notice(person: Person) -> Delivered:
+        lang = run.language_for(person)
+        return await send(
+            run.session,
+            context=run.acting,
+            to_person=person,
+            kind="dose_resolved",
+            params={
+                "name": run.profile.display_name,
+                "medicine": theirs(
+                    medicine_words(registry, generic, lang), run.profile.display_name, lang
+                ),
+                "anchor": ANCHOR_WORDS[lang][anchor],
+            },
+            provider=run.via.providers.whatsapp,
+            number=run.via.number,
+            language=lang,
+            state=await run.state(),
+        )
+
+    return lambda to: Message(whatsapp=notice)
+
+
+async def _notify_dose_resolved(
+    run: Run, ladders: Sequence[Ladder], *, exclude: uuid.UUID
+) -> None:
+    """Whoever a dose ladder reached is told, once, that it stood down (#198): the people it
+    actually called — never everyone with a key, never the patient told about himself, and
+    never the person whose tap just closed it, who already knows. The normal delivery rules
+    hold it (`deliver`): quiet hours, caps, one channel that carries it — no alert, no second
+    path around the ladder."""
+    dosed = [ladder for ladder in ladders if ladder.subject is Subject.DOSE]
+    if not dosed:
+        return
+    taps, generic_of = await run.taps()
+    for ladder in dosed:
+        if ladder.line_id is None or ladder.anchor is None:
+            continue
+        generic = generic_of.get(ladder.line_id)
+        if generic is None:
+            continue
+        people = [
+            person
+            for person in await _who_it_reached(run, ladder)
+            if person.id != exclude
+            and (run.patient is None or person.id != run.patient.id)
+        ]
+        if not people:
+            continue
+        firing = Firing(
+            type=TriggerType.DOSE_RESOLVED,
+            dedupe_key=f"{ladder.dedupe_key}:resolved",
+            why={"ladder_id": str(ladder.id)},
+        )
+        say = _stood_down_message(run, generic, ladder.anchor)
+        for person in people:
+            to = Recipient(person, "resolved")
+            await deliver(run, firing, to, say(to), ladder=ladder)
 
 
 @dataclass(frozen=True, slots=True)

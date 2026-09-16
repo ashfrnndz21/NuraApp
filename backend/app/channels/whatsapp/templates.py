@@ -6,8 +6,8 @@ card, the reorder, the family digest, the feeling check-in, the red-flag notice 
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
 message (E11), the red-flag notice by tier and by the doctor's hours, the neutral urgent
 notice for when a tier's own template is not yet approved (#174), the pre-visit brief (B1),
-and the notices of a voice note Nura could not hear (#158, #173) — is one of these
-twenty-three,
+the notices of a voice note Nura could not hear (#158, #173), and the dose ladder standing
+down for whoever it reached (#198) — is one of these twenty-three,
 submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
@@ -177,6 +177,22 @@ DOSE_CHECK = Template(
     approved=False,
 )
 """The rungs after him: the helper, the one on duty, the chief."""
+
+# @patient
+DOSE_RESOLVED = Template(
+    "dose_resolved",
+    ("name", "medicine", "anchor"),
+    {
+        "en": "{name} has taken {medicine} {anchor}.\nYou do not need to check again.",
+        "ms": "{name} sudah ambil {medicine} {anchor}.\nAnda tidak perlu periksa lagi.",
+        "zh": "{name}{anchor}吃了{medicine}。\n您不用再确认了。",
+    },
+    approved=False,
+)
+"""Whoever the dose ladder reached is told once, plainly, that it stood down (#198): a Taken
+tap — however late — means nobody it called needs to keep checking. Never the person who
+tapped, who already knows; never an alert, so the normal delivery rules (quiet hours, caps,
+the channel list) hold it like any other reminder."""
 
 # @patient
 REORDER_FAMILY = Template(
@@ -502,6 +518,7 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE,
         DOSE_REMINDER,
         DOSE_CHECK,
+        DOSE_RESOLVED,
         REORDER_FAMILY,
         DOSES_COUNT,
         PAPERS_WAITING,
@@ -520,10 +537,10 @@ TEMPLATES: Mapping[str, Template] = {
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All twenty-two, in the order they are submitted: E19's six (approved), then E11's nine, the
-red-flag notice by tier and by the doctor's hours with its neutral fallback (#174), the
-pre-visit brief (B1), and the three for a voice note nobody could hear (#158, #173) — all
-pending Meta's approval (`approved=False`)."""
+"""All twenty-three, in the order they are submitted: E19's six (approved), then E11's ten
+(the dose ladder standing down, #198, among them), the red-flag notice by tier and by the
+doctor's hours with its neutral fallback (#174), the pre-visit brief (B1), and the three for
+a voice note nobody could hear (#158, #173) — all pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

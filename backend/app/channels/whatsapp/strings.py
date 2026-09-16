@@ -455,6 +455,14 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         "ms": ("Tiada ubat untuk diambil sekarang.", "Saya tidak tulis apa-apa."),
         "zh": ("现在没有要吃的药。", "我没有记下任何东西。"),
     },
+    # A Taken that came after the window had already closed (#198): still written down, and
+    # said plainly, once — a fact about when the word reached Nura, never a scold and never
+    # "missed".
+    "written_down_late": {
+        "en": ("This was written down later than usual.",),
+        "ms": ("Ini ditulis lewat daripada biasa.",),
+        "zh": ("这次记得比较晚。",),
+    },
     "flag_seen": {
         "en": ("Thank you, you have it now.", "I will not ask anyone else."),
         "ms": ("Terima kasih, anda uruskan sekarang.", "Saya tidak akan tanya orang lain."),

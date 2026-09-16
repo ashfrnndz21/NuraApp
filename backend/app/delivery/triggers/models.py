@@ -56,6 +56,12 @@ class TriggerType(StrEnum):
     """His voice note that Nura could not hear (#158): a red word in it could not be read, so
     his chief is told to listen. An alert, like a red flag: never capped, never quiet."""
 
+    DOSE_RESOLVED = "dose_resolved"
+    """Whoever a dose ladder reached is told, once, that it stood down (#198): a Taken tap —
+    however late — means nobody the ladder called needs to keep checking. Never the person
+    who tapped, who already knows; never an alert — the normal channels, caps and quiet
+    hours hold it, the way any other reminder does."""
+
     BRIEF = "visit_brief"
     """The pre-visit brief, rendered three days before a visit and its card sent (E05-01)."""
 
