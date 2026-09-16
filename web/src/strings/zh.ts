@@ -1581,9 +1581,9 @@ export const zh = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "暂停：今天先处理关于{name}身体不适的消息。",
+      flagOpen: "暂停：今天先处理{name}身体不适的事。",
       saidToday: "暂停：{name}今天已经说了自己的感觉。",
-      nudgeAsked: "暂停：今天的小提醒已经问过{name}感觉怎么样。",
+      nudgeAsked: "暂停：Nura今天已经问过{name}感觉怎么样。",
       questionOpen: "暂停：{name}还有Nura的一个问题要回答。",
     },
     // @patient phrase
@@ -1822,8 +1822,8 @@ export const zh = {
     NoSuchRecording: "这段录音已经不在这里了。",
     NotAClip: "Nura找不到录音的这一部分。",
     OnlyTheFamilyHears: "只有本人和他让进来的家人可以听。",
-    ChunkTooLarge: "这一段录音太大，Nura收不了。",
-    UploadClosed: "Nura已经不再接收这段录音。",
+    ChunkTooLarge: "这一段录音对Nura来说太大了。",
+    UploadClosed: "Nura已经不再保存这段录音。",
     NotYourUpload: "只有开始录音的手机才能发送。",
     NoYesFromTheDoctor: "医生说可以之后，Nura才会保存录音。",
     NoSuchUpload: "Nura找不到这段录音。",

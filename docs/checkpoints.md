@@ -1083,7 +1083,7 @@ What you will see (the numbers and ids change each run):
     → If you cannot get there safely, call the ambulance now on 995.
     → Mei knows now.
     → Nura does not decide what is wrong.
-✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_self; rule red_flag_raised; Siti (key_holder, rung 4): sent by in_app; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
+✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_hospital; rule red_flag_raised; Siti (key_holder, rung 4): sent by in_app; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
 ✓ the evening family notice (from 20:00, a count of what was written down this week): held for Mei — a red flag is open: on the day of a red flag only its ladder reaches the family
 ✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
     [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.

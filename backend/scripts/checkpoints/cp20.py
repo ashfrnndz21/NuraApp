@@ -416,9 +416,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     nudged = [row for row in _of(at_ten, "nudge") if row["outcome"] == "sent"]
     if len(nudged) != 1 or nudged[0]["at"] != "10:05" or nudged[0]["template_name"] != "nudge":
         raise fail("the day's nudge goes at his check-in time, once", why=f"got {_of(w.seen, 'nudge')}")
-    if _of(at_ten, "check_in"):
-        raise fail("the plain check-in stands down once the nudge asked", why=f"got {_of(at_ten, 'check_in')}")
-    if _of(w.run_due(profile_id, 10, 20), "check_in"):
+    held = [row for row in _of(at_ten, "check_in") if row["outcome"] == "sent"]
+    if held:
+        raise fail("the plain check-in stands down once the nudge asked", why=f"got {held}")
+    if [row for row in _of(w.run_due(profile_id, 10, 20), "check_in") if row["outcome"] == "sent"]:
         raise fail("the check-in never comes back once the nudge asked", why="it went at 10:20")
     handed = check(
         client.post(f"/profiles/{profile_id}/nudges/plan", headers=bearer(pa.token)),

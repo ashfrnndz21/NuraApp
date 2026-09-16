@@ -1582,9 +1582,9 @@ export const ms = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Ditahan: mesej tidak sihat tentang {name} didahulukan hari ini.",
+      flagOpen: "Ditahan: sesuatu tentang {name} tidak sihat didahulukan hari ini.",
       saidToday: "Ditahan: {name} sudah beritahu keadaannya hari ini.",
-      nudgeAsked: "Ditahan: peringatan kecil hari ini sudah bertanya khabar {name}.",
+      nudgeAsked: "Ditahan: Nura sudah bertanya khabar {name} hari ini.",
       questionOpen: "Ditahan: {name} masih ada soalan daripada Nura untuk dijawab.",
     },
     // @patient phrase
@@ -1824,7 +1824,7 @@ export const ms = {
     NotAClip: "Nura tidak dapat mencari bahagian rakaman itu.",
     OnlyTheFamilyHears: "Hanya pemilik dan keluarga yang dia benarkan boleh mendengar ini.",
     ChunkTooLarge: "Bahagian rakaman itu terlalu besar untuk Nura.",
-    UploadClosed: "Nura sudah berhenti menerima rakaman itu.",
+    UploadClosed: "Nura tidak lagi menyimpan rakaman itu.",
     NotYourUpload: "Hanya telefon yang mula merakam boleh menghantarnya.",
     NoYesFromTheDoctor: "Nura hanya simpan rakaman selepas doktor kata boleh.",
     NoSuchUpload: "Nura tidak dapat mencari rakaman itu.",

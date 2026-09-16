@@ -1584,9 +1584,9 @@ export const en = {
     },
     // @patient
     skippedBecause: {
-      flagOpen: "Held: the not-well message about {name} comes first today.",
+      flagOpen: "Held: something about {name} not feeling well comes first today.",
       saidToday: "Held: {name} already told Nura how things are today.",
-      nudgeAsked: "Held: today's small reminder already asked {name} how things are.",
+      nudgeAsked: "Held: Nura already asked {name} how things are today.",
       questionOpen: "Held: {name} still has a question from Nura to answer.",
     },
     // @patient phrase
@@ -1828,7 +1828,7 @@ export const en = {
     NotAClip: "Nura cannot find that part of the recording.",
     OnlyTheFamilyHears: "Only the owner and the family he let in can hear this.",
     ChunkTooLarge: "That part of the recording is too big for Nura.",
-    UploadClosed: "Nura has stopped taking that recording.",
+    UploadClosed: "Nura is not keeping this recording any more.",
     NotYourUpload: "Only the phone that started the recording can send it.",
     NoYesFromTheDoctor: "Nura keeps a recording only after the doctor says yes.",
     NoSuchUpload: "Nura cannot find that recording.",

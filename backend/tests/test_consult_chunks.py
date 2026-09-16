@@ -24,7 +24,13 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from app.clock import FrozenClock
 from app.db import as_utc, utcnow
-from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder, TriggerType
+from app.delivery.triggers.models import (
+    Delivery,
+    DeliveryChannel,
+    DeliveryOutcome,
+    Ladder,
+    TriggerType,
+)
 from app.ingestion import chunks
 from app.ingestion.chunks import ANSWER_WITHIN, FINISH_WITHIN, MAX_CHUNK_BYTES
 from app.ingestion.models import ConsultRecording, ConsultUpload
@@ -430,7 +436,9 @@ async def test_a_stop_and_the_sweep_never_both_end_one_upload(deployment: Deploy
 
 async def _reached_at_once(deployment: Deployment, house: House) -> None:
     """The flag's ladder started, and Mei, his chief, sent the flag's notice, at the very
-    moment the recording was kept: nothing waited for the scheduler."""
+    moment the recording was kept: nothing waited for the scheduler. The rung reaches her on
+    WhatsApp, and, as every rung does (#162), the notice on her family page is always written
+    too — the same two rows a scheduler-run flag leaves."""
     async with deployment.sessions() as session:
         [flag] = (await session.scalars(select(Flag).where(Flag.kind == FlagKind.RED_FLAG))).all()
         [kept] = (await session.scalars(select(ConsultRecording))).all()
@@ -440,9 +448,10 @@ async def _reached_at_once(deployment: Deployment, house: House) -> None:
         ).all()
     at = as_utc(kept.stored_at)
     assert as_utc(ladder.started_at) == at
-    assert [(str(row.to_person_id), row.outcome, as_utc(row.recorded_at)) for row in rungs] == [
-        (house.mei["person_id"], DeliveryOutcome.SENT, at)
-    ]
+    assert {(str(row.to_person_id), row.outcome, row.via, as_utc(row.recorded_at)) for row in rungs} == {
+        (house.mei["person_id"], DeliveryOutcome.SENT, DeliveryChannel.WHATSAPP, at),
+        (house.mei["person_id"], DeliveryOutcome.SENT, DeliveryChannel.IN_APP, at),
+    }
     assert [str(one) for one in flag.told] == [house.mei["person_id"]]
 
 
