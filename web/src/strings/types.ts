@@ -93,6 +93,7 @@ export interface Strings {
     openOwn: string;
     openOther: string;
     onlyThese: string;
+    cannotLook: string;
   };
   today: {
     now: string;

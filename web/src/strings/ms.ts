@@ -224,6 +224,8 @@ export const ms = {
     openOther: "Surat-surat {name}. Tekan untuk lihat surat orang lain.",
     // @patient
     onlyThese: "Ini sahaja surat-surat yang Nura ada untuk anda.",
+    // @patient
+    cannotLook: "Nura tidak dapat mencari surat lain sekarang.",
   },
   today: {
     // @patient headline

@@ -26,7 +26,7 @@ function useOwner(): { own: boolean; name: string } {
 
 /** The visits: each one's day and time, what it is for, and — for the next one — its brief and
  *  its questions, as rows: an icon, the word, the way in. */
-function VisitList({ onNext }: { onNext: (visit: AppointmentOut | null) => void }): JSX.Element | null {
+function VisitList(): JSX.Element | null {
   const s = t();
   const bearer = token.value;
   const papers = profile.value;
@@ -37,13 +37,9 @@ function VisitList({ onNext }: { onNext: (visit: AppointmentOut | null) => void 
   useEffect(() => {
     if (!bearer || !papers) return;
     nura.appointments(bearer, papers.profile_id).then(
-      (found) => {
-        setVisits(found);
-        onNext(found[0] ?? null);
-      },
+      setVisits,
       (failure: unknown) => {
         setVisits([]);
-        onNext(null);
         setError(failure);
       },
     );
@@ -117,11 +113,13 @@ function GettingReady(): JSX.Element {
               <Icon name="chevron" />
             </button>
           )}
-          <button type="button" class="place-row" onClick={() => go({ name: "reading" })} data-testid="plan-reading">
-            <Icon name="records" />
-            <span class="place-word">{s.today.readingTitle}</span>
-            <Icon name="chevron" />
-          </button>
+          {papers?.scopes.includes("readings") && (
+            <button type="button" class="place-row" onClick={() => go({ name: "reading" })} data-testid="plan-reading">
+              <Icon name="records" />
+              <span class="place-word">{s.today.readingTitle}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
         </nav>
         {papers && (
           <PillButton onClick={() => void startOnboarding(papers)} testId="plan-set-up">
@@ -136,11 +134,10 @@ function GettingReady(): JSX.Element {
 export function VisitsScreen(): JSX.Element {
   const s = t();
   const { own, name } = useOwner();
-  const [, setNext] = useState<AppointmentOut | null>(null);
   return (
     <Shell tab="visits" testId="visits-screen">
       <PlaceTitle>{own ? s.places.visitsOwn : fill(s.places.visitsOther, { name })}</PlaceTitle>
-      <VisitList onNext={setNext} />
+      <VisitList />
       <GettingReady />
     </Shell>
   );

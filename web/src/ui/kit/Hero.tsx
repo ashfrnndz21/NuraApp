@@ -23,11 +23,19 @@ interface HeroProps {
  *  or no line: never a count from the phone's kept page, never a reassuring line while a
  *  red-flag card is on the page (`homeHeroWords`). */
 export function Hero({ greeting, sub, label, figure, words, children, testId }: HeroProps): JSX.Element {
+  // The hero carries the screen's heading, because on Today and on Home it is the first thing
+  // on the page and there is no title bar above it: his greeting, or her label over the State's
+  // word. A screen with no heading is a screen a screen reader cannot start at, and Tab would
+  // go on from wherever the last screen's button was (`ui/focus.ts`).
   return (
     <header class="hero-block" data-testid={testId}>
-      {greeting && <p class="hero-greeting">{greeting}</p>}
+      {greeting ? (
+        <h1 class="hero-greeting">{greeting}</h1>
+      ) : (
+        label && <h1 class="hero-label hero-heading">{label}</h1>
+      )}
       {sub && <p class="hero-sub">{sub}</p>}
-      {label && <p class="hero-label">{label}</p>}
+      {greeting && label && <p class="hero-label">{label}</p>}
       {figure !== undefined && figure !== null && figure !== "" && (
         <p class="hero-figure" data-testid="hero-figure">
           {figure}

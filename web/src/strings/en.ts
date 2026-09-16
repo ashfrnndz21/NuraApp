@@ -219,11 +219,13 @@ export const en = {
     // @patient
     roleOther: "You can see these papers.",
     // @patient phrase
-    openOwn: "Your own papers. Tap to look at someone else's.",
+    openOwn: "Your own papers. Tap to look at someone else's papers.",
     // @patient phrase
-    openOther: "{name}'s papers. Tap to look at someone else's.",
+    openOther: "{name}'s papers. Tap to look at someone else's papers.",
     // @patient
     onlyThese: "These are the only papers Nura has for you.",
+    // @patient
+    cannotLook: "Nura cannot look for other papers right now.",
   },
   today: {
     // @patient headline

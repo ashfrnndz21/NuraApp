@@ -5,6 +5,7 @@ import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
+import { forgetKnown } from "./store/profiles";
 import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
 import { todayPage } from "./today/page";
@@ -205,6 +206,9 @@ export async function signOutEverywhere(): Promise<void> {
   todayPage.value = null;
   await clearAllProfileData();
   forgetFeed();
+  // Whose papers this person could open goes with the rest: on a shared phone the next person
+  // must not find the last one's names in the switcher.
+  forgetKnown();
   go({ name: "signin" });
 }
 

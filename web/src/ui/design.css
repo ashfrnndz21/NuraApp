@@ -259,6 +259,10 @@
 .hero-label {
   margin-top: var(--space-1);
 }
+/* The label as the screen's heading (her Home): the same quiet caption, not a heading's size. */
+.hero-heading {
+  font-weight: 400;
+}
 .hero-figure {
   margin-top: var(--space-1);
   font-size: var(--text-display);

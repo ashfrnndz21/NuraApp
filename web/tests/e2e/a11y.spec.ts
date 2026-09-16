@@ -294,7 +294,7 @@ for (const [look, banner] of [
 
     // The Record (W5, #140): its first screen and every screen it opens, each once its reads
     // are in (a Record screen is aria-busy while they are in flight).
-    await page.getByTestId("tab-record").click();
+    await page.getByTestId("tab-records").click();
     await expect(page.getByTestId("record-hub")).toBeVisible();
     await recordSettled(page);
     await audit(page, where("the Record"));
@@ -408,7 +408,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
   // The Record (W5, #140) at twice the text: its first screen and every screen it opens.
-  await page.getByTestId("tab-record").click();
+  await page.getByTestId("tab-records").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
   await recordSettled(page);
   await check("the Record");

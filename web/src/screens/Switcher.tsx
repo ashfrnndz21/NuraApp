@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ProfileOut } from "../api/types";
 import { openProfile } from "../flow";
-import { known, looking, refreshKnown } from "../store/profiles";
+import { known, looking, refreshKnown, unreached } from "../store/profiles";
 import { profile } from "../store/session";
 import { fill, t } from "../strings";
 import { Avatar, Icon, PaperTile, Sheet } from "../ui/kit";
@@ -79,7 +79,12 @@ export function ProfileSwitcher(): JSX.Element | null {
             ))}
           </nav>
         )}
-        {others.length === 0 && !looking.value && (
+        {unreached.value && (
+          <PaperTile role="status" testId="switcher-unreached">
+            <p>{s.switcher.cannotLook}</p>
+          </PaperTile>
+        )}
+        {others.length === 0 && !looking.value && !unreached.value && (
           <PaperTile testId="switcher-only">
             <p>{s.switcher.onlyThese}</p>
           </PaperTile>

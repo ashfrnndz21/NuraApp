@@ -17,6 +17,10 @@ export const known = signal<readonly ProfileOut[] | null>(null);
 /** True while the list is being read again, so the sheet can say it is looking. */
 export const looking = signal(false);
 
+/** True when the last read did not answer: the sheet says so rather than showing a list that
+ *  may no longer be true. */
+export const unreached = signal(false);
+
 export async function refreshKnown(): Promise<void> {
   const bearer = token.value;
   if (!bearer) {
@@ -27,11 +31,21 @@ export async function refreshKnown(): Promise<void> {
   try {
     const doors = await nura.doors(bearer, language.value);
     known.value = [doors.own, ...doors.invited, ...doors.stewarding].filter((each): each is ProfileOut => each !== null);
+    unreached.value = false;
+  } catch (failure) {
+    // What was known may have been closed since. A list that could not be read again is not
+    // shown as though it were current: it goes, and the sheet says Nura could not look.
+    known.value = null;
+    unreached.value = true;
+    throw failure;
   } finally {
     looking.value = false;
   }
 }
 
+/** Forget whose papers this person could open. Called at sign-out and whenever the token
+ *  changes, so the next person on a shared phone never sees the last one's names. */
 export function forgetKnown(): void {
   known.value = null;
+  unreached.value = false;
 }

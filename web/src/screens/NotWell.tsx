@@ -70,7 +70,7 @@ export function NotWellScreen(): JSX.Element {
   }, [stage]);
 
   return (
-    <Shell tab="today" testId="not-well-screen" attrs={{ "data-stage": stage }} ask={false}>
+    <Shell tab="today" testId="not-well-screen" attrs={{ "data-stage": stage }} ask={false} bar={stage === "ask"}>
       <Header title={s.day.notWellTitle} onBack={stage === "ask" ? () => go({ name: "today" }) : undefined} />
       {stage === "ask" && (
         <PaperTile testId="not-well-ask">

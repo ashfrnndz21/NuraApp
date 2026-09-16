@@ -224,6 +224,8 @@ export const zh = {
     openOther: "{name}的文件。点一下可以看别人的。",
     // @patient
     onlyThese: "Nura 只有这些文件给您。",
+    // @patient
+    cannotLook: "Nura 现在找不到其他文件。",
   },
   today: {
     // @patient headline
@@ -630,7 +632,7 @@ export const zh = {
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
     // @patient headline
-    notWellTitleOther: "告诉Nura{patient}的感觉",
+    notWellTitleOther: "告诉 Nura，{patient}的感觉",
     // @patient
     notWellLead: "用您自己的话说出来或打出来。",
     // @patient phrase

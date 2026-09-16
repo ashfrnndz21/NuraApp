@@ -2,7 +2,6 @@ import type { Density } from "./store/session";
 import type { Strings } from "./strings";
 import type { TabItem } from "./ui/kit";
 import type { RecordAt } from "./record/places";
-import { hubEntries } from "./record/model";
 
 /** One app, one account, one tab set (docs/product-reset.md §1 and §6). There is no "his app"
  *  and "her app": the tabs are the same list for everyone, and what changes with the density is
@@ -40,8 +39,10 @@ export function tabsFor(density: Density, s: Strings, scopes: readonly string[] 
   // backend's no — that is the key's scope, not a second kind of app.
   if (owner) return all;
   return all.filter((tab) => {
-    if (tab.id === "today") return true;
-    if (tab.id === "records") return hubEntries(density, scopes).length > 0;
+    // Today and Papers are always there. Papers is not gated on a scope because "what changed"
+    // is readable under any key (`hubEntries`, PART null), so the tab always opens something;
+    // which places are on it is the key's business, not the bar's.
+    if (tab.id === "today" || tab.id === "records") return true;
     const needed = NEEDS[tab.id as Tab];
     return needed === undefined || scopes.includes(needed);
   });
