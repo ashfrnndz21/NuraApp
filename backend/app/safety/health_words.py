@@ -157,15 +157,19 @@ MEDICINE_WORDS: Mapping[str, frozenset[str]] = {
 """The plain words for any medicine or a dose of one. A message to him names none of them."""
 
 _DOSE = re.compile(
-    r"(?:\d+(?:[.,]\d+)?|\b(?:one|two|three|four|five|half|satu|dua|tiga|empat|lima|setengah"
-    r"|separuh)\b|[一二两三四五六七八九十半])"
+    r"(?:\d+(?:[.,]\d+)?|\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+    r"|dozen|half|satu|dua belas|dua|tiga|empat|lima|enam|tujuh|lapan|sembilan|sepuluh|sebelas"
+    r"|setengah|separuh)\b|[一二两三四五六七八九十半])"
     r"\s*(?:mg|mcg|µg|ml|iu|g|units?|tabs?|caps?|puffs?|drops?|biji|sudu"
     r"|粒|片|颗|毫克|毫升|滴|单位)(?![a-z])",
     re.IGNORECASE,
 )
 """An amount with its unit, in digits or in words: "5 mg", "2 biji", "dua biji", "two tabs",
-"两片". A number with no unit ("take two") is not a dose on its own; with a medicine word it
-is caught by `MEDICINE_WORDS`."""
+"两片", "enam biji", "a dozen tabs". English and Malay spell out one through twelve (English
+also "a dozen"), the same words `app.language.voice_script.english_number` and
+`malay_number` say them in; Chinese already covers one through ten and half (`一`…`十`, `半`).
+A number with no unit ("take two") is not a dose on its own; with a medicine word it is
+caught by `MEDICINE_WORDS`."""
 
 _LATIN = re.compile(r"[a-z0-9]+(?:['’][a-z]+)?")
 _CJK = re.compile(r"[㐀-䶿一-鿿]")
