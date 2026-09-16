@@ -38,11 +38,32 @@ class Found:
     batch: str | None = None
     """For a safety notice: the batch number it concerns. Matched against the pack photo's
     batch fact; a notice that does not match his pack is held for the caregiver."""
+    media: str | None = None
+    """"video" for a video page (an allowlisted hospital's or ministry's own channel); None
+    for a page of text. A video becomes a clip card (`app.delivery.feed.clips`)."""
+    licence: str | None = None
+    """Under what terms the publisher lets a video be reused ("cc-by", "permission"), or None
+    when it does not say: then no excerpt is kept, and the card is the still and the
+    narration, with the link to the whole video (docs/health-feed-spec.md §7)."""
+    areas: tuple[str, ...] = ()
+    """For a local bulletin: the districts or postcode prefixes it is about. Empty is the
+    whole region (a haze or heat advisory). Matched on this server against his area; the
+    area is never part of a search."""
+    season: str | None = None
+    """For a seasonal page: the season it is about (`app.delivery.feed.local.SEASONS`)."""
 
 
 class Searcher(Protocol):
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         """Pages for these terms, from these domains only. Never a page from anywhere else."""
+        ...
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        """Pages whose words match, from these domains only — the ask bar's Web and Videos
+        filters (`app.delivery.feed.find`). `media="video"` is videos only. The words are the
+        question as typed and nothing else: no name, no area, no fact of his goes with them."""
         ...
 
 
@@ -67,16 +88,47 @@ class Compressor(Protocol):
 
 
 TREATMENT_CHANGE = re.compile(
-    r"\b(?:stop|start|double|halve|increase|reduce|skip|change)\b[^.]{0,40}\b"
-    r"(?:tablet|tablets|pill|pills|medicine|medicines|dose|doses|warfarin|insulin)\b",
+    r"\b(?:stop|start|double|halve|increase|reduce|skip|change|do\s+not\s+take|don't\s+take)\b"
+    r"[^.]{0,40}\b(?:tablet|tablets|pill|pills|medicine|medicines|dose|doses|warfarin|insulin)\b",
     re.IGNORECASE,
 )
 """Lines that would start, stop or change a medicine. A card never carries one; the finding
 becomes a question for the doctor and goes to the memo (docs/health-feed-spec.md §3.4, §7)."""
 
 
+TREATMENT_CHANGE_MS = re.compile(
+    r"\b(?:berhenti|hentikan|mula(?:kan)?|gandakan|tambah(?:kan)?|kurang(?:kan)?|langkau|"
+    r"tukar|jangan\s+(?:ambil|makan|telan|guna)|tidak\s+perlu\s+(?:ambil|makan|guna))\b"
+    r"[^.]{0,40}\b(?:ubat|pil|tablet|dos|warfarin|insulin)\b",
+    re.IGNORECASE,
+)
+"""The same, in Malay: stop, start, double, add, cut, skip, change or do not take a medicine."""
+
+TREATMENT_CHANGE_ZH = re.compile(
+    r"(?:停|停止|开始|加倍|加大|增加|减少|减半|减量|加量|跳过|漏掉|换|改|不要|别|不吃)[^。]{0,12}"
+    r"(?:药|药片|剂量|华法林|胰岛素)"
+)
+"""The same, in Chinese: stop, start, double, raise, lower, halve, skip, change or do not take."""
+
+TREATMENT_CHANGE_ZH_AFTER = re.compile(
+    r"(?:药|药片|剂量|华法林|胰岛素)[^。，]{0,6}(?:停|停掉|减量|加量|减半|加倍|减少|增加|跳过|不吃|别吃)"
+)
+"""Chinese names the medicine first as often as not ("降压药减量一半"): the same, the other way round."""
+
+
 def changes_treatment(lines: Sequence[str]) -> bool:
-    return any(TREATMENT_CHANGE.search(line) for line in lines)
+    """Whether any line would start, stop or change a medicine, in English, Malay or Chinese:
+    every language a card or a found page is said in is checked, not the English alone."""
+    return any(
+        pattern.search(line)
+        for line in lines
+        for pattern in (
+            TREATMENT_CHANGE,
+            TREATMENT_CHANGE_MS,
+            TREATMENT_CHANGE_ZH,
+            TREATMENT_CHANGE_ZH_AFTER,
+        )
+    )
 
 
 def digest(text: str) -> str:
@@ -92,11 +144,11 @@ class FixtureSearcher:
     def __init__(self, root: Path) -> None:
         self._root = root
 
-    def _table(self) -> dict[str, list[dict[str, str]]]:
+    def _table(self) -> dict[str, list[dict[str, Any]]]:
         path = self._root / "searches.json"
         if not path.exists():
             return {}
-        loaded: dict[str, list[dict[str, str]]] = json.loads(path.read_text(encoding="utf-8"))
+        loaded: dict[str, list[dict[str, Any]]] = json.loads(path.read_text(encoding="utf-8"))
         return loaded
 
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
@@ -106,8 +158,33 @@ class FixtureSearcher:
         for term in terms:
             for page in table.get(f"{kind}:{term.strip().lower()}", []):
                 if page["domain"] in allowed:
-                    found.append(Found(**page))
+                    found.append(_found(page))
         return found
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        """Every page in the table, once, whose title or text holds every word, from the
+        domains asked for only."""
+        wanted = [word.strip().lower() for word in words if word.strip()]
+        allowed = set(domains)
+        seen: set[str] = set()
+        found: list[Found] = []
+        for pages in self._table().values():
+            for page in pages:
+                if page["domain"] not in allowed or page["url"] in seen:
+                    continue
+                if media is not None and page.get("media") != media:
+                    continue
+                haystack = f"{page['title']} {page['text']}".lower()
+                if wanted and all(word in haystack for word in wanted):
+                    seen.add(page["url"])
+                    found.append(_found(page))
+        return found
+
+
+def _found(page: dict[str, Any]) -> Found:
+    return Found(**{**page, "areas": tuple(page.get("areas", ()))})
 
 
 @fixture

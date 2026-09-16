@@ -10,7 +10,7 @@ describe("card variants", () => {
   });
 
   it("show a type this client does not know as its own lines, never dropped", () => {
-    const odd = item("seasonal", "today");
+    const odd = item("a_kind_not_made_yet", "today");
     expect(variantOf(odd)).toBe("text");
     const view = cardView(odd);
     expect(view.headline).toBe(odd.headline);
@@ -55,7 +55,7 @@ describe("a card's words", () => {
 
 describe("a card's buttons", () => {
   it("are the four side actions on every content card", () => {
-    for (const type of ["flag", "now", "reading", "story", "learning", "memo", "reorder", "visit", "notice", "seasonal"]) {
+    for (const type of ["flag", "now", "reading", "story", "learning", "memo", "reorder", "visit", "notice", "clip", "recap", "local", "seasonal", "food"]) {
       expect(cardView(item(type, "today")).actions).toEqual(["hear", "ask", "family", "notForMe"]);
     }
   });
@@ -64,7 +64,8 @@ describe("a card's buttons", () => {
     const gate = cardView(item("gate", "gate"));
     expect(gate.actions).toEqual(["hear"]);
     expect(gate.action).toBe("keepGoing");
-    expect(cardView(item("duty", "gate")).actions).toEqual(["hear"]);
+    // The caregiver's list has no gate: the duty card is a card, with every side action.
+    expect(cardView(item("duty", "today")).actions).toEqual(["hear", "ask", "family", "notForMe"]);
   });
 
   it("send the now card to Today, where Taken is; no other card has an action", () => {

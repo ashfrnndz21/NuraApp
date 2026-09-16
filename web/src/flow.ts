@@ -27,8 +27,9 @@ export type Screen =
   | { name: "card"; item: FeedItemOut }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
-  /** Ask about one card: E03's recall (`POST /profiles/{id}/ask`), shown as the backend wrote it. */
-  | { name: "ask"; item: FeedItemOut }
+  /** Ask about one card, or ask or search from Today: E03's recall (`POST /profiles/{id}/ask`)
+   *  and the ask bar's Web, Providers and Videos filters, shown as the backend wrote them. */
+  | { name: "ask"; item?: FeedItemOut }
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }

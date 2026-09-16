@@ -68,7 +68,12 @@ PRIORITY: dict[CardType, int] = {
     CardType.READING: 50,
     CardType.GATE: 40,
     CardType.DUTY: 40,
+    CardType.LOCAL: 72,
+    CardType.RECAP: 35,
     CardType.STORY: 30,
+    CardType.CLIP: 25,
+    CardType.SEASONAL: 22,
+    CardType.FOOD: 21,
     CardType.LEARNING: 20,
     CardType.QUESTION: 0,
 }
@@ -78,6 +83,12 @@ the number never lifts a story card above the gate."""
 SURFACE_OF: dict[CardType, Surface] = {
     CardType.LEARNING: Surface.LEARNING_CARD,
     CardType.NOTICE: Surface.LEARNING_CARD,
+    # A clip, a local alert, a seasonal card and a food card are each an allowlisted page
+    # compressed to the part chosen for him, the way a learning card is: the same line.
+    CardType.CLIP: Surface.LEARNING_CARD,
+    CardType.LOCAL: Surface.LEARNING_CARD,
+    CardType.SEASONAL: Surface.LEARNING_CARD,
+    CardType.FOOD: Surface.LEARNING_CARD,
 }
 """The feed's inferring surfaces (E16-01, `app.safety.boundary`). A learning card is an
 explanation chosen for him from State and compressed from an allowlisted page; a notice is
@@ -85,7 +96,13 @@ the same compression of a regulator's page, so it carries the same line. Every o
 shows the record back — his reading, his tablets, his papers, the count, the gate, the
 reorder date from the count, a red flag raised on his own word — and infers nothing, so it
 names no surface and carries no line. The question a search reroutes is held for the memo
-and never shown by the feed; it is E05's questions surface when it reaches him."""
+and never shown by the feed; it is E05's questions surface when it reaches him. The weekly
+recap repeats the lines of his own story cards and infers nothing."""
+
+SOURCED: frozenset[CardType] = frozenset(
+    {CardType.LEARNING, CardType.CLIP, CardType.LOCAL, CardType.SEASONAL, CardType.FOOD}
+)
+"""The cards compressed from an allowlisted page: each names a usable source, or is not made."""
 
 
 def _ends_on_its_line(lines: Lines) -> bool:
@@ -180,8 +197,8 @@ async def create_item(
             failing = failures_in(lines)
             if failing:
                 raise NotPlainWords(failing)
-        if type is CardType.LEARNING and (source is None or not usable(source, context.region)):
-            raise SourceNotAllowlisted("a learning card names an allowlisted source")
+        if type in SOURCED and (source is None or not usable(source, context.region)):
+            raise SourceNotAllowlisted(f"a {type.value} card names an allowlisted source")
         # A card whose words come from an inferring surface elsewhere — the visit brief, the
         # memos — names it; otherwise its type decides (`SURFACE_OF`).
         surface = surface if surface is not None else SURFACE_OF.get(type)

@@ -65,21 +65,42 @@ REVIEWED_TYPES: tuple[CardType, ...] = (
     CardType.NOW,
     CardType.READING,
     CardType.VISIT,
+    CardType.VISIT_LOGISTICS,
     CardType.MEMO,
     CardType.REORDER,
     CardType.NOTICE,
     CardType.GATE,
     CardType.STORY,
+    CardType.RECAP,
     CardType.LEARNING,
+    CardType.CLIP,
+    CardType.LOCAL,
+    CardType.SEASONAL,
+    CardType.FOOD,
 )
-"""The card types a patient is shown. The caregiver's duty card and the doctor questions held
-for the memo never reach him, so they are not his cards to review here."""
+"""The card types a patient is shown. The doctor questions held for the memo never reach him,
+so they are not his cards to review here; the caregiver's duty card is hers, not his.
 
-KEPT_AS_WRITTEN: frozenset[CardType] = frozenset({CardType.LEARNING, CardType.NOTICE})
+Every other type that `SUPPLY_OF` puts in a section the patient reads belongs here, the
+feed's richer formats among them (F1): a clip, a local bulletin, a season coming and the
+week's food card all carry lines compressed from an outside page, and the pharmacist's first
+fifty is the only person who reads them before he does. `test_review_queue.py` asserts this
+list against `SUPPLY_OF`, so a type added later cannot quietly skip the queue."""
+
+KEPT_AS_WRITTEN: frozenset[CardType] = frozenset(
+    {
+        CardType.LEARNING,
+        CardType.NOTICE,
+        CardType.CLIP,
+        CardType.LOCAL,
+        CardType.SEASONAL,
+        CardType.FOOD,
+    }
+)
 """Cards whose lines not from the catalogue are compressed from a public, allowlisted page —
 the words the pharmacist most needs to read — and so are kept (with any name still taken
 out). On every other card a line not from the catalogue is his record's own words (a memo,
-a note, a letter) and is not kept at all."""
+a note, a letter, his own week) and is not kept at all."""
 
 NOT_THE_CATALOGUES = "{words from his papers, not kept}"
 """What stands in a sample for a line that is his record's words rather than Nura's."""

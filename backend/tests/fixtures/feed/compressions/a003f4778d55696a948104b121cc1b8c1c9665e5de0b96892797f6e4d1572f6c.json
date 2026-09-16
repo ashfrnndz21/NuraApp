@@ -1,0 +1,29 @@
+{
+  "en": {
+    "headline": "This week: steamed, not fried",
+    "body": [
+      "Pick steamed fish over fried fish this week.",
+      "Fried food raises your cholesterol."
+    ],
+    "why_topic": "your cholesterol",
+    "passage": "Choose steamed, boiled or grilled dishes, such as steamed fish instead of fried fish."
+  },
+  "ms": {
+    "headline": "Minggu ini: kukus, bukan goreng",
+    "body": [
+      "Pilih ikan kukus, bukan ikan goreng minggu ini.",
+      "Makanan bergoreng menaikkan kolesterol anda."
+    ],
+    "why_topic": "kolesterol anda",
+    "passage": "Choose steamed, boiled or grilled dishes, such as steamed fish instead of fried fish."
+  },
+  "zh": {
+    "headline": "这周：蒸的，不要炸的",
+    "body": [
+      "这周选蒸鱼，不选炸鱼。",
+      "油炸食物会让胆固醇升高。"
+    ],
+    "why_topic": "您的胆固醇",
+    "passage": "Choose steamed, boiled or grilled dishes, such as steamed fish instead of fried fish."
+  }
+}

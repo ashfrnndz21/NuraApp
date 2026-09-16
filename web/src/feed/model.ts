@@ -20,6 +20,11 @@ export type Variant =
   | "reorder"
   | "visit"
   | "notice"
+  | "clip"
+  | "recap"
+  | "local"
+  | "seasonal"
+  | "food"
   | "text";
 
 const VARIANTS: Record<string, Variant> = {
@@ -36,6 +41,13 @@ const VARIANTS: Record<string, Variant> = {
   // The logistics card, the day before a visit and on the day (E05-03): a visit card.
   visit_logistics: "visit",
   notice: "notice",
+  // The feed's richer formats (F1): a compressed video, his week in 30 seconds, a local
+  // alert, a season coming, and the week's food choice.
+  clip: "clip",
+  recap: "recap",
+  local: "local",
+  seasonal: "seasonal",
+  food: "food",
 };
 
 /** The card's look, by the backend's type. A type this client does not know yet is shown as
@@ -60,8 +72,9 @@ export function sectionOf(item: Pick<FeedItemOut, "supply">): Section | null {
   }
 }
 
-/** The buttons down the side of every card. The gate (and the caregiver's gate, the duty
- *  card) is not content: it keeps its spoken twin and its one action, Keep going. */
+/** The buttons down the side of every card. The gate is not content: it keeps its spoken twin
+ *  and its one action, Keep going. The duty card is not a gate — the caregiver's list has
+ *  none — so it carries every side action, Not for me and Hear among them. */
 export type SideAction = "hear" | "ask" | "family" | "notForMe";
 const EVERY: readonly SideAction[] = ["hear", "ask", "family", "notForMe"];
 const GATE_ONLY: readonly SideAction[] = ["hear"];
@@ -94,6 +107,8 @@ export interface CardView {
   /** The page a learning card cites (E21-06): who published it, and the link to it, from
    *  the backend's cite. Null on every other card, and on a cite without an https link. */
   source: { publisher: string; url: string } | null;
+  /** A clip (a compressed video, or his week in 30 seconds): what the card plays on a tap. */
+  clip: ClipView | null;
   /** The spoken twin: the backend's voice script; where it wrote none, the lines shown. */
   spoken: string[];
   /** The State the card was rendered from. */
@@ -103,20 +118,45 @@ export interface CardView {
   action: CardAction | null;
 }
 
-/** The cited page of a learning card, as the backend's cite names it: its publisher and an
- *  https link. Nothing for any other card, and nothing the backend did not send. */
+/** The cards made from an allowlisted page: each names its publisher and links it. */
+const SOURCED = new Set(["learning", "clip", "local", "seasonal", "food"]);
+
+/** The cited page of a card made from an allowlisted page, as the backend's cite names it:
+ *  its publisher and an https link. Nothing for any other card, and nothing the backend did
+ *  not send. */
 export function sourceOf(item: Pick<FeedItemOut, "type" | "cite">): CardView["source"] {
-  if (item.type !== "learning" || item.cite === null) return null;
+  if (!SOURCED.has(item.type) || item.cite === null) return null;
   const { publisher, url } = item.cite as { publisher?: unknown; url?: unknown };
   if (typeof publisher !== "string" || publisher.trim() === "") return null;
   if (typeof url !== "string" || !url.startsWith("https://")) return null;
   return { publisher, url };
 }
 
+/** What a clip card plays, from the backend's card and its cite — never guessed:
+ *  the still (always, from Nura's own server), the excerpt only where the publisher's licence
+ *  let the server keep one, and the whole video's page on the publisher's own site, linked for
+ *  him to tap. His week in 30 seconds has no video behind it, so no link. */
+export interface ClipView {
+  /** The server kept an excerpt (the licence allows reuse): it plays under the narration. */
+  excerpt: boolean;
+  /** The whole video on the publisher's site, https only; null for the recap. */
+  fullUrl: string | null;
+  publisher: string | null;
+}
+
+export function clipOf(item: Pick<FeedItemOut, "format" | "cite">): ClipView | null {
+  if (item.format !== "clip") return null;
+  const cite = (item.cite ?? {}) as { excerpt?: unknown; full_url?: unknown; publisher?: unknown; media?: unknown };
+  const video = cite.media === "video";
+  const fullUrl = video && typeof cite.full_url === "string" && cite.full_url.startsWith("https://") ? cite.full_url : null;
+  const publisher = typeof cite.publisher === "string" && cite.publisher.trim() !== "" ? cite.publisher : null;
+  return { excerpt: video && cite.excerpt === true, fullUrl: fullUrl && publisher ? fullUrl : null, publisher };
+}
+
 export function cardView(item: FeedItemOut): CardView {
   const { lines, boundary } = feedLines(item);
   const variant = variantOf(item);
-  const gate = variant === "gate" || variant === "duty";
+  const gate = variant === "gate";
   return {
     itemId: item.item_id,
     variant,
@@ -126,6 +166,7 @@ export function cardView(item: FeedItemOut): CardView {
     boundary,
     why: whyLine(item),
     source: sourceOf(item),
+    clip: clipOf(item),
     spoken: item.voice.length > 0 ? [...item.voice] : [item.headline, ...item.body].filter((line) => line.trim().length > 0),
     stateId: item.rendered_from_state,
     language: item.language,
@@ -135,8 +176,9 @@ export function cardView(item: FeedItemOut): CardView {
 }
 
 /** The caregiver's list says what became of each card on his page, from the backend's own
- *  status; the patient's never does. Her gate — the duty card — is hers, not held from him. */
-export type StatusLine = "statusHeld" | "statusSent" | "statusOpened" | "statusDismissed";
+ *  status; the patient's never does. The duty card is hers, about who is on duty, not something
+ *  sent to him. */
+export type StatusLine = "statusHeld" | "statusSent" | "statusOpened" | "statusPlayed" | "statusDismissed";
 
 export function statusLine(item: Pick<FeedItemOut, "status" | "type">, audience: string): StatusLine | null {
   if (audience !== "caregiver" || item.type === "duty") return null;
@@ -147,6 +189,8 @@ export function statusLine(item: Pick<FeedItemOut, "status" | "type">, audience:
       return "statusSent";
     case "opened":
       return "statusOpened";
+    case "played":
+      return "statusPlayed";
     case "dismissed":
       return "statusDismissed";
     default:

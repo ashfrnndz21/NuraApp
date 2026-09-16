@@ -2514,7 +2514,9 @@ def checkpoint_8(client: httpx.Client) -> None:
         raise fail(
             "Pa opens his feed", why=f"expected now, reorder, reading, gate first; got {types}"
         )
-    if not types[4:] or not set(types[4:]) <= {"story", "learning"}:
+    past = [item["supply"] for item in first["items"][4:]]
+    if not past or not set(past) <= {"story", "learning"}:
+        # His story and learning; his week in 30 seconds and a clip are among them (F1).
         raise fail("Pa opens his feed", why=f"expected story and learning past the gate: {types}")
     if any(item["autoplay"] is not False for item in first["items"]):
         raise fail("Pa opens his feed", why="a card says autoplay")
@@ -2559,7 +2561,7 @@ def checkpoint_8(client: httpx.Client) -> None:
     )
     again = _page(client, pa, profile_id, "Pa asks for the second page again", cursor=cursor)
     for page in (second, third):
-        if not page["items"] or not set(_types(page)) <= {"story", "learning"}:
+        if not page["items"] or not {item["supply"] for item in page["items"]} <= {"story", "learning"}:
             raise fail(
                 "Pa pages on", why=f"expected only story and learning past the gate: {_types(page)}"
             )
@@ -2780,7 +2782,13 @@ def checkpoint_8(client: httpx.Client) -> None:
     if not boundary or learning[0]["body"][-len(boundary) :] != boundary:
         raise fail("Pa reads the learning card", why="it does not end on the boundary line")
     shown = [item for page in (first, second, third) for item in page["items"]]
-    if any(item.get("boundary") for item in shown if item["type"] not in {"learning", "notice"}):
+    # Every card made from an allowlisted page infers, so every one of them ends on the line:
+    # the explainer, the safety notice, and the feed's richer formats (F1) — a clip, a local
+    # bulletin, a season coming, the week's food card. His week in 30 seconds is not among
+    # them: it reads his own record back to him, so it carries no line, like every card that
+    # shows the record.
+    INFERRING = {"learning", "notice", "clip", "local", "seasonal", "food"}
+    if any(item.get("boundary") for item in shown if item["type"] not in INFERRING):
         raise fail("Pa reads the learning card", why="a card that infers nothing carries a line")
     ok(
         f"self-search: the medicine started an explainer job and a daily safety job (GET …/search-jobs, "

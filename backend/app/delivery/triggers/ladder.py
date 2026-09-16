@@ -453,15 +453,25 @@ TIERED_NOTICE: dict[Step, str] = {
 hour, and a same-day flag out of the doctor's hours — the hospital on his insurance, or the
 emergency number."""
 
+URGENT_NOTICE = "red_flag_notice_urgent"
+"""States no action of its own: the one WhatsApp fallback once a tier applies (`TIERED_NOTICE`)
+and its own template cannot go — not approved, and outside the family member's 24-hour window a
+reply cannot go at all. Never "call {doctor} today" or its variants: an urgent alert is never
+told at a lower tier than the one it is (#174). Where this is not approved either, no WhatsApp
+goes at all, and the delivery's own trail says why; the app push and the family page's notice
+reach the family regardless (#162, #169)."""
+
 
 def flag_message(run: Run, flag: Flag) -> Say:
     """The red-flag notice, in the reader's language: "This one we do not wait for. Mei said Pa
     is not well. Call Dr Tan today." When the flag is in the ambulance tier, or it is out of
     the doctor's hours, the notice that says so (`TIERED_NOTICE`: call him now, then the
-    ambulance, the hospital's emergency department or the emergency number). When he raised
+    ambulance, the hospital's emergency department or the emergency number) — and once a tier
+    applies, WhatsApp says only the tier's own words or `URGENT_NOTICE`, never "call {doctor}
+    today", which would tell the family a lower urgency than the tier (#174). When he raised
     it himself, "Pa is not feeling well."; when the person who raised it is on more than one
     family's list and has not said which, "It may be about Pa." — each variant only where the
-    number approves it, the approved notice otherwise, so a flag never waits on Meta."""
+    number approves it, so a flag never waits on Meta."""
 
     async def notice(person: Person) -> Delivered:
         lang = run.language_for(person)
@@ -499,10 +509,13 @@ def flag_message(run: Run, flag: Flag) -> Say:
                 elif step.step in TIERED_NOTICE:
                     tiered = (TIERED_NOTICE[step.step], {"name": name, "emergency_number": number})
         # In order, the first that goes: the ambiguous notice; the tiered one — its template
-        # where Meta approved it, else the same words as free text inside the window; the
-        # notice he raised himself; the approved notice, which always can. When the step is
-        # the ambulance or the hospital now, the tiered notice goes before the ambiguous one,
-        # which names no ambulance and no hospital (B1 clinical-safety review).
+        # where Meta approved it, else the same words as free text inside the window. When the
+        # step is the ambulance or the hospital now, the tiered notice goes before the
+        # ambiguous one, which names no ambulance and no hospital (B1 clinical-safety review).
+        # Once a tier applies, nothing weaker follows: not the notice he raised himself, not
+        # the plain "call {doctor} today" — those are candidates only when no tier applies.
+        # A tier that cannot go either way falls to `URGENT_NOTICE`, which says no action of
+        # its own; where even that is not approved, no WhatsApp goes at all (#174).
         candidates: list[tuple[str, dict[str, str]]] = []
         told_now: tuple[str, dict[str, str]] | None = None
         if tiered is not None:
@@ -513,13 +526,16 @@ def flag_message(run: Run, flag: Flag) -> Say:
             candidates.append(("red_flag_notice_ambiguous", {"who": who, "name": name}))
         if told_now is not None and not go_now:
             candidates.append(told_now)
-        if (
-            raiser is not None
-            and raiser.id == run.profile.owner_person_id
-            and approves("red_flag_notice_self")
-        ):
-            candidates.append(("red_flag_notice_self", {"name": name, "doctor": doctor}))
-        candidates.append(("red_flag_notice", {"name": name, "who": who, "doctor": doctor}))
+        if tiered is None:
+            if (
+                raiser is not None
+                and raiser.id == run.profile.owner_person_id
+                and approves("red_flag_notice_self")
+            ):
+                candidates.append(("red_flag_notice_self", {"name": name, "doctor": doctor}))
+            candidates.append(("red_flag_notice", {"name": name, "who": who, "doctor": doctor}))
+        elif approves(URGENT_NOTICE):
+            candidates.append((URGENT_NOTICE, {"name": name}))
         passed: Refusal | None = None
         for kind, params in candidates:
             try:

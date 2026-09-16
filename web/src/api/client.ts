@@ -26,8 +26,10 @@ export class Unreachable extends Error {
 }
 
 export interface Call {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
+  /** For `apiBlob`: what kind of bytes to ask for (a card's voice by default). */
+  accept?: string;
   token?: string | null;
   query?: Record<string, string | undefined>;
   /** Goes ahead of every call still waiting (see `enqueue`): the red-flag path only. */
@@ -192,7 +194,7 @@ export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
 }
 
 async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<Blob> {
-  const headers: Record<string, string> = { Accept: "audio/*" };
+  const headers: Record<string, string> = { Accept: call.accept ?? "audio/*" };
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {

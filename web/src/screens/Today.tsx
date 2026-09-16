@@ -20,6 +20,7 @@ import { voice } from "../player/voice";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
+import { ChiefPanels } from "./ChiefPanels";
 
 /** Today: the Now card, a reading prompt, today's cards and the proud number — every line the
  *  backend's or the catalogue's, every card with its source line and its spoken twin.
@@ -451,6 +452,14 @@ export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
               <Pill onClick={() => go({ name: "feed" })} testId="open-feed">
                 {s.feed.open}
               </Pill>
+              <Pill onClick={() => go({ name: "ask" })} testId="open-ask">
+                {s.feed.askOrSearch}
+              </Pill>
+              {/* The chief's Home (spec §1): what was sent to him this week, and what Nura is
+                  watching for him. His chief's and his steward's; nobody else's. */}
+              {!fromPhone && bearer && papers && density() === "caregiver" && (papers.role === "chief" || papers.standing === "steward") && (
+                <ChiefPanels bearer={bearer} papers={papers} />
+              )}
               {nextVisit && !fromPhone && (
                 <Pill onClick={() => go({ name: "visit", appointmentId: nextVisit })} testId="open-visit">
                   {s.visit.open}
