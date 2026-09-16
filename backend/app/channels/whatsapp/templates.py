@@ -6,7 +6,8 @@ card, the reorder, the family digest, the feeling check-in, the red-flag notice 
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
 message (E11), the red-flag notice by tier and by the doctor's hours, the neutral urgent
 notice for when a tier's own template is not yet approved (#174), the pre-visit brief (B1),
-and the notice of a voice note Nura could not hear (#158) — is one of these twenty-two,
+and the notices of a voice note Nura could not hear (#158, #173) — is one of these
+twenty-three,
 submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
@@ -466,6 +467,29 @@ UNHEARD_NOTE_NOTICE_CALL = Template(
 """The same notice where there is nothing she can open — the note could not be fetched, or her
 key does not open his notes — so the one thing to do is to call him."""
 
+# @patient
+UNHEARD_NOTE_NOTICE_FROM = Template(
+    "unheard_note_notice_from",
+    ("who", "name"),
+    {
+        "en": (
+            "{who} sent a voice note to Nura about {name}.\n"
+            "Nura could not hear this note.\n"
+            "Call {who} now."
+        ),
+        "ms": (
+            "{who} hantar nota suara kepada Nura tentang {name}.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {who} sekarang."
+        ),
+        "zh": "{who}给 Nura 发了一条关于{name}的语音留言。\nNura 听不清这段录音。\n现在就打电话给{who}。",
+    },
+    approved=False,
+)
+"""A voice note somebody other than the patient sent — the helper, another key holder — that
+Nura could not hear (#173). Nothing of it is kept, so there is nothing to listen to; the one
+thing to do is to call whoever sent it, and the notice never says the patient sent it."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -491,12 +515,14 @@ TEMPLATES: Mapping[str, Template] = {
         VISIT_BRIEF,
         UNHEARD_NOTE_NOTICE,
         UNHEARD_NOTE_NOTICE_CALL,
+        UNHEARD_NOTE_NOTICE_FROM,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
 """All twenty-two, in the order they are submitted: E19's six (approved), then E11's nine, the
-red-flag notice by tier and by the doctor's hours and its neutral fallback (#174), the
-pre-visit brief (B1), and #158's two — all pending Meta's approval (`approved=False`)."""
+red-flag notice by tier and by the doctor's hours with its neutral fallback (#174), the
+pre-visit brief (B1), and the three for a voice note nobody could hear (#158, #173) — all
+pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:
