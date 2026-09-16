@@ -128,9 +128,14 @@ async def test_both_writes_both_and_stops_both_ladders(
     await home.inbound(sg, PA, "Taken")
     answered = await home.inbound(sg, PA, "both")
     assert answered.outcome == "taken"
-    assert _said(answered)[0][1] == (
-        "You took your blood pressure tablet and the water pill with breakfast."
-    )
+    assert _said(answered) == [
+        [
+            "Thank you, I wrote it down.",
+            "You took your blood pressure tablet and the water pill with breakfast.",
+            # Two tablets: "took it" would name only one of them (#173).
+            "Mei can see you took them.",
+        ]
+    ]
     assert {tap.line_id for tap in await _taps(sg)} == {pressure.id, water.id}
     assert all(ladder.closed_because == "answered" for ladder in (await _dose_ladders(sg)).values())
 

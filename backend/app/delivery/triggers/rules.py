@@ -208,8 +208,22 @@ class AlertsGoEveryWay(Refusal):
 
 
 def is_alert(type: TriggerType) -> bool:
-    """An alert — a red flag — is never capped, never quiet and never routed by a setting."""
+    """An alert — a red flag, a voice note nobody could hear — is never capped, never quiet
+    and never routed by a setting."""
     return RULES[type].category is Category.ALERT
+
+
+def told_without_his_agreement(type: TriggerType) -> bool:
+    """Whether his family is told this on WhatsApp after he has stopped WhatsApp (#163).
+
+    Exactly one thing is: a red flag. That is what the words he read when he stopped say, and
+    nothing else may be added to it without new words for him to read
+    (`app.consent.withdrawal.STILL_TOLD`). A voice note nobody could hear is an alert in
+    every other way — never capped, never quiet, every channel tried, the notice on the
+    family page always written — but it is not a red flag, so on a profile with no standing
+    agreement it reaches his family through the app, not on his WhatsApp (#173).
+    """
+    return type is TriggerType.FLAG
 
 
 class NotASetting(Refusal):

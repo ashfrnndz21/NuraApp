@@ -161,7 +161,13 @@ variants, the tiered ones (the ambulance, the hospital now, the number if worse,
 free-text twins outside the window, and any later version of the words (#160). They are the one
 kind of message about him his family is sent on WhatsApp after he stops it (#163), so they are
 matched by that name and not by a list — a notice added later is never held back at the moment
-it matters most."""
+it matters most.
+
+A voice note nobody could hear is not one of them (#173). It is an alert and reaches his
+family every other way — the app push, the notice on their family page — but what he was told
+when he stopped WhatsApp says a red flag, and only a new version of those words could say
+more (`app.consent.withdrawal.STILL_TOLD`, and the same rule in the delivery door,
+`rules.told_without_his_agreement`)."""
 
 
 def is_red_flag_notice(kind: str | None) -> bool:
