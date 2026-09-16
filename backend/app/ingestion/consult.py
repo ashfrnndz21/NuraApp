@@ -36,6 +36,7 @@ import uuid
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,6 +66,9 @@ from app.reasoning.visits.summary import (
 )
 from app.regions import guard_region
 from app.safety.recording import may_record, printed_notice, recording_notice, when_no
+
+if TYPE_CHECKING:
+    from app.delivery.triggers.deliver import Via
 
 CONSULT = ConsultRecording.__tablename__
 
@@ -207,8 +211,12 @@ async def record_consult(
     separator: SpeakerSeparator | None,
     summariser: Summariser,
     registry: DrugRegistry,
+    via: Via | None = None,
 ) -> ConsultOutcome:
-    """Keep one recording of one visit, hear it, say who spoke when, and make the card."""
+    """Keep one recording of one visit, hear it, say who spoke when, and make the card. A
+    red-flag word heard in it writes the flag first and starts the ladder at once, as a typed
+    transcript does (#155): `via` is the process's channels; without it (a service call) the
+    engine's next run starts the ladder."""
     may_change_visits(context)
     check = await may_record(session, context)
     guard_region(held_in=store.region, asked_from=context.region)
@@ -307,6 +315,7 @@ async def record_consult(
                 store=store,
                 summariser=summariser,
                 registry=registry,
+                via=via,
                 clips=ConsultClips(artifact.id, tuple(aligned)),
             )
             outcome.items = await summary_items(

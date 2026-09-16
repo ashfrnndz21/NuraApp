@@ -64,6 +64,7 @@ TARGET = AccountClosure.__tablename__
 
 OBJECT_KINDS = (
     "clips",
+    "consult-uploads",
     "consults",
     "documents",
     "family-photos",

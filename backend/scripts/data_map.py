@@ -614,6 +614,24 @@ CLASSES: dict[str, str] = {
     "consult_segment.end_s": HEALTH,
     "consult_segment.char_start": HEALTH,
     "consult_segment.char_end": HEALTH,
+    # A recording on its way in, in chunks (#129): which visit, the consent it was opened on,
+    # who opened it, how far it came, the doctor's answer, and what became of it. The chunks
+    # are bytes in the region's store; the row holds no words and no audio. The doctor's yes
+    # and why an upload was thrown away (a no, the page left) are the room's consent.
+    "consult_upload.id": HEALTH,
+    "consult_upload.appointment_id": HEALTH,
+    "consult_upload.consent_id": CONSENT,
+    "consult_upload.started_by_person_id": IDENTIFIER,
+    "consult_upload.content_type": OPERATIONAL,
+    "consult_upload.started_at": HEALTH,
+    "consult_upload.opened_at": HEALTH,
+    "consult_upload.chunks": OPERATIONAL,
+    "consult_upload.received_bytes": OPERATIONAL,
+    "consult_upload.doctor_said_yes_at": CONSENT,
+    "consult_upload.discarded_at": CONSENT,
+    "consult_upload.discarded_because": CONSENT,
+    "consult_upload.finished_at": HEALTH,
+    "consult_upload.recording_id": HEALTH,
     # --- the family (E12) ---------------------------------------------------------------------
     # The thread and the tasks are about his care: their words and what they point at are
     # health. The roster says who looks after him and when: an identifier, like the family

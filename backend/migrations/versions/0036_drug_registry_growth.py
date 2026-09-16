@@ -15,8 +15,11 @@ queue the first time it is actually raised for a person (`app.language.review`).
 non-nullable with a default, so an existing row reads as `source=""`, `awaiting_review=False`
 — reviewed, the only state a flag could have been written in before this column existed.
 
-Revision ID: 0035_drug_registry_growth
-Revises: 0034_feed_formats
+Renumbered onto main's head at merge time: main took 0035 for `0035_consult_upload` first, so
+this follows it as 0036, not 0035.
+
+Revision ID: 0036_drug_registry_growth
+Revises: 0035_consult_upload
 Create Date: 2026-09-16
 """
 
@@ -25,8 +28,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0035_drug_registry_growth"
-down_revision = "0034_feed_formats"
+revision = "0036_drug_registry_growth"
+down_revision = "0035_consult_upload"
 branch_labels = None
 depends_on = None
 

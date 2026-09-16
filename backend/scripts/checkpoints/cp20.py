@@ -398,7 +398,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     )
     if not any(slot["taken"] for slot in today):
         raise fail("the Taken tap is on his list", why=f"got {today}")
-    if _of(w.run_due(profile_id, 10, 5), "dose"):
+    at_ten = w.run_due(profile_id, 10, 5)
+    if _of(at_ten, "dose"):
         raise fail("the ladder stops at an answer", why="it asked again")
     ok(
         'Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast '
@@ -410,10 +411,16 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             say(f"→ {line}")
 
     # 4b. His check-in time, 10:00: the schedule handed the day's nudge over at 10:05 and
-    #     delivery sent it; the web handing it over again as he answers is the same nudge.
-    nudged = [row for row in _of(w.seen, "nudge") if row["outcome"] == "sent"]
+    #     delivery sent it; the plain check-in stands down once the day's nudge already asked
+    #     how he is; the web handing it over again as he answers is the same nudge.
+    nudged = [row for row in _of(at_ten, "nudge") if row["outcome"] == "sent"]
     if len(nudged) != 1 or nudged[0]["at"] != "10:05" or nudged[0]["template_name"] != "nudge":
         raise fail("the day's nudge goes at his check-in time, once", why=f"got {_of(w.seen, 'nudge')}")
+    held = [row for row in _of(at_ten, "check_in") if row["outcome"] == "sent"]
+    if held:
+        raise fail("the plain check-in stands down once the nudge asked", why=f"got {held}")
+    if [row for row in _of(w.run_due(profile_id, 10, 20), "check_in") if row["outcome"] == "sent"]:
+        raise fail("the check-in never comes back once the nudge asked", why="it went at 10:20")
     handed = check(
         client.post(f"/profiles/{profile_id}/nudges/plan", headers=bearer(pa.token)),
         201,
@@ -428,9 +435,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         raise fail("the nudge is sent once", why="10:10 sent it again")
     ok(
         "10:05, after his check-in time (10:00): the schedule handed the day's nudge over and "
-        "delivery sent it — " + _line(nudged[0]) + "; the web handing it over again as he answers "
-        "(POST /nudges/plan) gives back the same nudge — one row (GET /nudges) — and 10:10 sends "
-        "it no second time. What he reads:"
+        "delivery sent it, so the plain check-in — held once a nudge already asked how he is — "
+        "sends nothing of its own — " + _line(nudged[0]) + "; the web handing it over again as "
+        "he answers (POST /nudges/plan) gives back the same nudge — one row (GET /nudges) — and "
+        "10:10 sends it no second time. What he reads:"
     )
     for line in (nudged[0].get("text") or "").splitlines():
         say(f"→ {line}")
@@ -526,6 +534,20 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         )
     else:
         ok("22:36, nobody left to ask on the ladder; nothing else went in the quiet hours")
+    notices = _of(w.seen, "family_notice")
+    if any(row["outcome"] == "sent" for row in notices):
+        raise fail("no family notice on the day of a red flag", why=f"got {notices}")
+    if any(row["reason"] != "a red flag is open" for row in notices):
+        raise fail("the family notice is held by the open flag", why=f"got {notices}")
+    ok(
+        "the evening family notice (from 20:00, a count of what was written down this week): "
+        + (
+            f"held for {notices[0]['to_name']} — {notices[0]['reason']}: on the day of a red flag only its "
+            "ladder reaches the family"
+            if notices
+            else "nothing new was written down today, so there is nothing to tell"
+        )
+    )
 
     # 7. Today's top three, with why, the next morning (at 22:37 the quiet hours hold every
     #    card but the flag); one card played as voice.

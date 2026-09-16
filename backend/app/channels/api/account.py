@@ -15,12 +15,14 @@ family's red-flag notices independent of it.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.audit.models import Channel
 from app.channels.api.deps import ClosingContext, Context, Db, providers_of, settings_of
 from app.channels.whatsapp.group import sync_group
 from app.channels.whatsapp.opt_in import answers_of, record_opt_in
@@ -37,6 +39,9 @@ from app.identity.closing import (
     undo_closure,
 )
 from app.identity.closure_models import AccountClosure
+from app.ingestion.chunks import discard_stale
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["account"])
 
@@ -129,6 +134,20 @@ async def closure_close(
     )
     # The family's WhatsApp group is emptied now, and nothing is mirrored while it stands.
     await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    # A visit's recording on its way in (#129) is thrown away now, with every chunk already
+    # sent. A store that fails it never costs him the closing: the engine's next run, which
+    # sweeps a closing profile, tries again.
+    try:
+        async with session.begin_nested():
+            await discard_stale(
+                session,
+                context=context,
+                store=providers_of(request).object_store,
+                channel=Channel.APP,
+                closing=True,
+            )
+    except Exception as failure:  # noqa: BLE001 — the sweep is never worth the closing
+        logger.warning("consult upload discard on closing failed: %s", type(failure).__name__)
     return ClosingOut.of(closure)
 
 
