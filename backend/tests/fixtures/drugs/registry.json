@@ -2673,7 +2673,7 @@
       "severity": "major",
       "text_id": "bleeding_risk",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2683,7 +2683,7 @@
       "severity": "major",
       "text_id": "bleeding_risk",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2693,7 +2693,7 @@
       "severity": "major",
       "text_id": "bleeding_risk",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2703,7 +2703,7 @@
       "severity": "moderate",
       "text_id": "bleeding_check",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2713,7 +2713,7 @@
       "severity": "major",
       "text_id": "bleeding_risk",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2723,7 +2723,7 @@
       "severity": "major",
       "text_id": "bleeding_risk",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2753,7 +2753,7 @@
       "severity": "moderate",
       "text_id": "warfarin_vitamin_k",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2763,7 +2763,7 @@
       "severity": "moderate",
       "text_id": "bleeding_check",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2773,7 +2773,7 @@
       "severity": "major",
       "text_id": "sjw_serotonin_risk",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2783,7 +2783,7 @@
       "severity": "major",
       "text_id": "sjw_weakens_doac",
       "source": "Natural Medicines Database",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2793,7 +2793,7 @@
       "severity": "major",
       "text_id": "high_potassium",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2803,7 +2803,7 @@
       "severity": "major",
       "text_id": "high_potassium",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2813,7 +2813,7 @@
       "severity": "major",
       "text_id": "high_potassium",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2823,7 +2823,7 @@
       "severity": "moderate",
       "text_id": "absorption_apart",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2833,7 +2833,7 @@
       "severity": "moderate",
       "text_id": "absorption_apart",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2843,7 +2843,7 @@
       "severity": "moderate",
       "text_id": "absorption_apart",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     },
     {
       "pair": [
@@ -2853,7 +2853,7 @@
       "severity": "moderate",
       "text_id": "absorption_apart",
       "source": "Lexicomp Drug Interactions",
-      "review_state": "reviewed"
+      "review_state": "awaiting_review"
     }
   ],
   "duplicate_therapy": {

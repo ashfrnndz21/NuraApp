@@ -28,8 +28,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0036_drug_registry_growth"
-down_revision = "0035_consult_upload"
+revision = "0037_drug_registry_growth"
+down_revision = "0036_drug_match_confidence"
 branch_labels = None
 depends_on = None
 
