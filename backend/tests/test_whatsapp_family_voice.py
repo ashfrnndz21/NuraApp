@@ -20,6 +20,7 @@ fixture.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -27,16 +28,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.channels.whatsapp.group import members_of, mirror_to_group, open_group, sync_group
+from app.clock import FrozenClock
 from app.consent.models import Consent, ConsentPurpose
 from app.family.thread import post_message, read_thread
 from app.ingestion.models import EventNote, NoteKind
 from app.ingestion.transcribe import FixtureTranscriber
 from app.keys.grants import revoke_key
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.models import DoseTaken
 from app.memory.models import Artifact, ArtifactKind, Fact, SourceChannel
 from app.regions import OutOfRegion, Region
 from app.safety.red_flags import Flag
 from app.search.ask import Mode, recall
+from tests.medicines_support import add, label
 from tests.medicines_support import let_in as cut_key
 from tests.voice_notes import VOICE
 from tests.whatsapp_support import KIT, MEI, PA, SITI, family
@@ -222,6 +226,72 @@ async def test_a_red_word_in_his_voice_note_is_a_flag_first_and_the_note_is_stil
     assert flagged.note_id is not None
     flag = await sg.get(Flag, flagged.flag_id)
     assert flag is not None and flag.feeling.value == "fall"
+
+
+async def test_sudah_makan_said_aloud_writes_the_taken_tap_the_same_way_as_typed(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A voice note is classified from its transcript exactly as a typed message would be
+    (E11-01): "sudah makan ubat", heard and not guessed at, writes the Taken tap the same
+    door "Taken" typed does — no note is kept alongside it, since it was an answer, not a
+    note to keep."""
+    clock.set(datetime(2026, 9, 13, 23, 40, tzinfo=UTC))  # 07:40 his wall clock, window open
+    home = await family(sg, tmp_path)
+    made = await add(sg, home.owner, label("amlodipine", "5 mg", "1 tab OM"))
+    said = await home.inbound(sg, PA, media_id="pa-voice-taken", content_type=OGG)
+    assert said.outcome == "taken" and said.note_id is None
+    tap = (await sg.scalars(select(DoseTaken))).one()
+    assert (
+        tap.line_id == made.line.id and tap.anchor == "breakfast" and tap.by_person_id == home.pa.id
+    )
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )
+
+
+async def test_a_taken_heard_too_unsurely_is_never_trusted_to_close_the_window(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """"Taken." string-matches the same reply "sudah makan ubat" does, but this note was heard
+    at 0.45 confidence — below the floor a scanned document field is trusted at
+    (`CONFIDENCE_THRESHOLD`, 0.8). A false Taken would close the dose window and stop the
+    escalation ladder with nobody asked and nobody told, so it is never guessed at: the note
+    is kept, unread, exactly as an unmatched voice note is, and the window is still open — a
+    genuine reply straight after still writes the tap."""
+    clock.set(datetime(2026, 9, 13, 23, 40, tzinfo=UTC))  # 07:40 his wall clock, window open
+    home = await family(sg, tmp_path)
+    made = await add(sg, home.owner, label("amlodipine", "5 mg", "1 tab OM"))
+    unsure = await home.inbound(sg, PA, media_id="pa-voice-taken-unsure", content_type=OGG)
+    assert unsure.outcome == "voice_note" and unsure.note_id is not None
+    assert not list(await sg.scalars(select(DoseTaken)))
+    note = await sg.get(EventNote, unsure.note_id)
+    assert note is not None and note.transcript_language == "en"  # heard, just not trusted
+
+    # The ladder is still live: he can still be asked, and a genuine reply still writes it.
+    said = await home.inbound(sg, PA, "Taken")
+    assert said.outcome == "taken"
+    tap = (await sg.scalars(select(DoseTaken))).one()
+    assert tap.line_id == made.line.id and tap.anchor == "breakfast"
+
+
+async def test_his_ok_said_aloud_answers_an_open_check_in_the_same_way_as_typed(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    from app.channels.whatsapp.outbound.level0 import run_feeling_check_in
+
+    home = await family(sg, tmp_path)
+    await run_feeling_check_in(
+        sg,
+        settings=home.settings,
+        providers=home.providers,
+        number=home.number,
+        profile_id=home.profile.id,
+    )
+    answered = await home.inbound(sg, PA, media_id="pa-voice-ok", content_type=OGG)
+    assert answered.outcome == "check_in_answer" and answered.fact_id is not None
+    assert not list(
+        await sg.scalars(select(EventNote).where(EventNote.profile_id == home.profile.id))
+    )
 
 
 async def test_without_his_agreement_to_whatsapp_a_red_word_in_his_voice_is_still_raised(
