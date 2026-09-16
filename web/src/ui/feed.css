@@ -248,6 +248,16 @@
 /* At a large text size the card keeps its lines and gives up its margins instead: the padding
    around and inside it is chrome, and chrome is what should pay for the writing being bigger.
    Never fewer lines — the lines are what he came for. */
+/* And when even that is not enough, the card grows and the pager scrolls to it, rather than the
+   card staying one screen tall and squeezing its own lines to nothing. `height: 100cqh` is what
+   makes one card a screen; at this text size it made `.feed-body` zero pixels high, so the
+   headline and the lines inside it could not be brought into view at all — the tile was clipping
+   its own card's title. The container gives way to the content, never the reverse. Snapping is
+   unchanged: a card still starts at the top of the pager. */
+:root[data-writing="large"] .feed-card {
+  height: auto;
+  min-height: 100cqh;
+}
 :root[data-writing="large"] .feed-card,
 :root[data-writing="large"] .feed-end {
   padding: var(--space-1) var(--space-2);
