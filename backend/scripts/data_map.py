@@ -310,6 +310,9 @@ CLASSES: dict[str, str] = {
     "medication_line.source_event_id": HEALTH,
     "medication_line.confidence": OPERATIONAL,
     "medication_line.confidence_state": OPERATIONAL,
+    # How sure the registry was of its own match (#206): a score, the same standing as the
+    # fact's own confidence above.
+    "medication_line.registry_confidence": OPERATIONAL,
     "medication_line.status": HEALTH,
     "medication_line.change_kind": HEALTH,
     "medication_line.started_at": HEALTH,

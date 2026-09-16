@@ -105,6 +105,10 @@ export interface LineOut {
   strength: string;
   form: string;
   high_risk: boolean;
+  /** How sure the licensed registry was that its match is this product (#206) — never
+   *  below the floor a line had to clear to be written at all. Distinct from `confidence`
+   *  below, which is the person's yes, not the register's own certainty. */
+  registry_confidence?: number | null;
   dose: { amount: number; unit: string; frequency: string; anchors: string[] };
   prescriber: string | null;
   status: string;
@@ -1032,7 +1036,7 @@ export type MedicineOutcome = "new_line" | "refill" | "dose_change" | "duplicate
 /** What a label would do to the list, before anyone says yes: screened for interactions. */
 export interface MedicineDraftOut {
   outcome: MedicineOutcome;
-  match: { registration_no: string; brand: string; generic: string; strength: string; form: string; drug_class: string; high_risk: boolean };
+  match: { registration_no: string; brand: string; generic: string; strength: string; form: string; drug_class: string; high_risk: boolean; confidence: number };
   matched_line_id: string | null;
   flagged: FlaggedOut[];
   needs_label_photo: boolean;

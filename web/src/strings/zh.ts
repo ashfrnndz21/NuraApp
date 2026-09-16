@@ -1053,6 +1053,8 @@ export const zh = {
     // @patient
     disputed: "有人说这一条不对。",
     // @patient
+    matchByNameOnly: "Nura只按名字配对，没有对分量。",
+    // @patient
     twice: "这个药在您的清单上有两次。",
     // @patient phrase
     aboutIt: "关于这个药",

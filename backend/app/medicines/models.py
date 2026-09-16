@@ -103,6 +103,10 @@ class MedicationLine(ProfileScoped, Base):
         CheckConstraint(
             "confidence >= 0 AND confidence <= 1", name="ck_medication_line_confidence"
         ),
+        CheckConstraint(
+            "registry_confidence >= 0 AND registry_confidence <= 1",
+            name="ck_medication_line_registry_confidence",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -114,6 +118,13 @@ class MedicationLine(ProfileScoped, Base):
     registration_no: Mapped[str | None] = mapped_column(String(32), default=None)
     drug_class: Mapped[str] = mapped_column(String(48))
     high_risk: Mapped[bool] = mapped_column(Boolean)
+    registry_confidence: Mapped[float | None] = mapped_column(Float, default=None)
+    """How sure the register was that its match is this product (`DrugMatch.confidence`,
+    #206): 1.0 for a registration number or a name whose strength and form both matched;
+    never below `app.ingestion.models.CONFIDENCE_THRESHOLD`, the floor a line must clear to
+    be written at all. Beside the provenance columns above, not inside `dose` or the fact's
+    own `confidence` (which is the person's yes, not the register's own certainty). Nullable:
+    a line written before this column existed carries none."""
     dose: Mapped[dict[str, Any]] = mapped_column(JSON)
     prescriber: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
     source_kind: Mapped[SourceKind] = mapped_column(enum_column(SourceKind, "medicine_source_kind"))

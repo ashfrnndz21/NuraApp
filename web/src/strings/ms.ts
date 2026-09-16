@@ -1053,6 +1053,8 @@ export const ms = {
     // @patient
     disputed: "Ada yang kata ini tidak betul.",
     // @patient
+    matchByNameOnly: "Nura padankan ini dengan nama sahaja, bukan kekuatannya.",
+    // @patient
     twice: "Ubat ini ada dua kali dalam senarai anda.",
     // @patient phrase
     aboutIt: "Tentang ubat ini",

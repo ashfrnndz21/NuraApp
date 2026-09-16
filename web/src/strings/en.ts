@@ -1055,6 +1055,8 @@ export const en = {
     // @patient
     disputed: "Someone said this is not right.",
     // @patient
+    matchByNameOnly: "Nura matched this by name only, not the strength.",
+    // @patient
     twice: "This medicine is on your list twice.",
     // @patient phrase
     aboutIt: "About this medicine",
