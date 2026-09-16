@@ -40,6 +40,7 @@ from app.delivery.triggers.rules import (
 from app.family.models import PushChannel, ScheduledPush
 from app.ingestion.models import DocumentKind, ReviewCard
 from app.keys.scopes import Scope
+from app.medicines.service import record_dose_taken
 from app.onboarding.gaps import BY_CODE
 from app.onboarding.plan import current_plan, make_plan
 from app.onboarding.settings import SettingsValues, save_settings
@@ -311,6 +312,36 @@ async def test_three_untapped_tablets_in_a_week_are_a_count_for_the_one_on_duty(
     ]
     # Once a week.
     assert _rows(await _run(sg, h, clock, at(10, day=15)), TriggerType.DOSES_UNTAPPED) == []
+
+
+async def test_three_late_doses_in_a_week_are_a_count_for_the_one_on_duty(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A late tap is still a tap (#198): `_pattern` above never counts these three as untapped,
+    so the week would otherwise read as perfect. `_late_pattern` reads the taps' own `late` bit
+    instead, and tells the one on duty the same way `_pattern` does."""
+    clock.set(at(6, day=12))
+    h = await home(sg, tmp_path)
+    # Breakfast's window closes at 08:30; tapped at 11 each day, well after it, on three days.
+    for day in (12, 13, 14):
+        clock.set(at(11, day=day))
+        tap = await record_dose_taken(sg, context=h.owner, line_id=h.line.id, anchor="breakfast")
+        assert tap.late is True
+    # Straight after the third late tap, the clock still at 11 on the 14th.
+    report = await _run(sg, h, clock, at(11, day=14))
+    [counted] = _rows(report, TriggerType.DOSES_LATE)
+    assert counted.trigger_kind is TriggerKind.PATTERN and counted.to_person_id == h.mei.id
+    assert counted.why["count"] == 3 and counted.why["days"] == 7
+    assert counted.rule == "three_late_doses_in_seven_days"
+    # No untapped dose in the same week: the late-but-taken doses never show there.
+    assert _rows(report, TriggerType.DOSES_UNTAPPED) == []
+    assert h.sent_to(h.mei)[-1].splitlines() == [
+        "Pa said Taken 3 times late this week.",
+        "This is only a count.",
+        "You can see which ones in the app.",
+    ]
+    # Once a week.
+    assert _rows(await _run(sg, h, clock, at(11, day=15)), TriggerType.DOSES_LATE) == []
 
 
 async def test_a_paper_waiting_for_a_yes_tells_the_chief_there_are_papers(

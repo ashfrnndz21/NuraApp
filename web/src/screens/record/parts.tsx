@@ -1,12 +1,15 @@
 import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren, JSX } from "preact";
-import { go, openTab } from "../../flow";
-import type { RecordAt } from "../../record/places";
+import { go, screen } from "../../flow";
+import { hubEntries } from "../../record/model";
+import type { HubEntry, RecordAt } from "../../record/places";
+import { recordTab } from "../../nav";
 import { density, profile, token } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
 import { dateLine } from "../../today/model";
-import { Header, Pill, TabBar } from "../../ui/components";
+import { Header, Pill } from "../../ui/components";
+import { Shell } from "../Shell";
 
 /** What every Record screen is made of. */
 
@@ -90,20 +93,63 @@ interface FrameProps {
   children: ComponentChildren;
 }
 
-/** A Record screen: the title, one thing (or the list, in her density), the way back, the nav. */
+/** Where each of the Record's places starts. */
+const PLACE: Record<HubEntry, RecordAt> = {
+  medicines: { name: "medicines" },
+  papers: { name: "papers" },
+  routine: { name: "routine" },
+  timeline: { name: "timeline" },
+  trends: { name: "trends" },
+  providers: { name: "providers" },
+  changes: { name: "changes" },
+};
+
+/** In her density, the Record's places as glass chips under the title: every one of them two
+ *  taps from any tab. His density keeps the Record's own first screen, one big button a part. */
+function Places({ at }: { at: RecordAt }): JSX.Element | null {
+  const s = t();
+  const papers = profile.value;
+  if (density() !== "caregiver" || !papers) return null;
+  // Not on the Record's own first screen: there the places are already the list on the page,
+  // and a chip row above it would be the same navigation twice.
+  if (at.name === "hub") return null;
+  const entries = hubEntries("caregiver", papers.scopes);
+  if (entries.length < 2) return null;
+  return (
+    <nav class="chip-row place-chips" aria-label={s.record.title} data-testid="record-places">
+      {entries.map((entry) => (
+        <button
+          key={entry}
+          type="button"
+          class="glass-chip place-chip"
+          aria-current={PLACE[entry].name === at.name ? "page" : undefined}
+          onClick={() => toRecord(PLACE[entry])}
+          data-testid={`place-${entry}`}
+        >
+          {s.record[entry]}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/** A Record screen: the title, one thing (or the list, in her density), the way back — inside the
+ *  shell (D1), under the tab its place belongs to in this density. */
 export function RecordFrame({ title, back, testId, children }: FrameProps): JSX.Element {
   const s = t();
+  const current = screen.value;
+  const at: RecordAt = current.name === "record" ? (current.at ?? { name: "hub" }) : { name: "hub" };
   return (
-    <main class="screen record" data-density={density()} data-testid={testId} aria-busy={reading.value >= 0 && inFlight.size > 0 ? "true" : "false"}>
+    <Shell tab={recordTab(at, density())} testId={testId} extraClass="record" attrs={{ "aria-busy": reading.value >= 0 && inFlight.size > 0 ? "true" : "false" }}>
       <Header title={title} />
+      <Places at={at} />
       {children}
       {back && (
         <Pill quiet onClick={() => toRecord(back)} testId="record-back">
           {s.record.back}
         </Pill>
       )}
-      <TabBar current="record" onSelect={openTab} />
-    </main>
+    </Shell>
   );
 }
 

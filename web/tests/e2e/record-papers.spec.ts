@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { API, fixClock, seedMedicine } from "./helpers";
-import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, placeholderPng, readable, signInAs, yes } from "./record-helpers";
+import { API, fixClock, openMe, seedMedicine } from "./helpers";
+import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, openRecord, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
  *  E02-08 a blood pressure read off the machine's screen with no typing, and the Record's
@@ -15,20 +15,20 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
   const siti = await letIn(request, pa, "Siti", "helper", ["medicines"]);
 
   await signInAs(page, pa, "Pa");
-  await expect(page.getByTestId("tab-record")).toHaveText("Papers");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Papers", "Family", "Me"]);
-  await page.getByTestId("tab-record").click();
+  await expect(page.getByTestId("tab-records")).toHaveText("Papers");
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Medicines", "Papers", "Visits", "Family"]);
+  await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
   expect(his.slice(0, 3)).toEqual(["record-medicines", "record-papers", "record-routine"]);
   await readable(page, "patient");
 
-  await page.getByTestId("tab-me").click();
+  await openMe(page);
   await page.getByTestId("sign-out").click();
   // Signing out finishes before the next person signs in: nothing of his papers stays behind.
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   await signInAs(page, siti, "Siti", true);
-  await page.getByTestId("tab-record").click();
+  await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Pa's papers");
   const hers = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
   expect(hers).toEqual(["record-changes", "record-medicines", "record-routine"]);
@@ -42,7 +42,7 @@ test("on a demo deployment the banner is on every Record screen, and still nothi
   const pa = await openOwn(request);
   await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 5 });
   await signInAs(page, pa, "Pa");
-  await page.getByTestId("tab-record").click();
+  await openRecord(page);
   await expect(page.getByTestId("demo-banner")).toBeVisible();
   await readable(page, "patient");
   for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
@@ -124,8 +124,15 @@ for (const look of LOOKS) {
     const pa = await openOwn(request);
     await signInAs(page, pa, "Pa");
     await lookAs(page, look);
-    await page.getByTestId("tab-today").click();
-    await page.getByTestId("write-reading").click();
+    // His Today has the blood pressure card; hers is under Visits, with getting ready for the
+    // next visit (D1: one tab set, so the same tab for both).
+    if (look === "patient") {
+      await page.getByTestId("tab-today").click();
+      await page.getByTestId("write-reading").click();
+    } else {
+      await page.getByTestId("tab-visits").click();
+      await page.getByTestId("plan-reading").click();
+    }
     await expect(page.getByTestId("reading-photo")).toBeVisible();
     await readable(page, look);
     await page.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
@@ -134,7 +141,8 @@ for (const look of LOOKS) {
     await expect(page.locator('input[name="field-diastolic"]')).toHaveValue("84");
     await readable(page, look);
     await page.getByTestId("looks-right").click();
-    await expect(page.getByTestId("reading-prompt")).toBeVisible();
+    // Back where the reading was begun from: his Today with its blood pressure card, her Home (D1).
+    await expect(page.getByTestId(look === "patient" ? "reading-prompt" : "home-screen")).toBeVisible();
     const facts = (await (await request.get(`${API}/profiles/${pa.profileId}/facts?subject=blood_pressure`, auth(pa.token))).json()) as { value: { systolic?: number; diastolic?: number } }[];
     expect(facts.some((fact) => fact.value.systolic === 138 && fact.value.diastolic === 84)).toBe(true);
   });

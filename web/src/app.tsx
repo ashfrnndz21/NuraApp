@@ -1,6 +1,6 @@
 import type { JSX } from "preact";
 import { useEffect } from "preact/hooks";
-import { afterSignIn, go, screen } from "./flow";
+import { afterSignIn, go, screen, signOutHere } from "./flow";
 import { focusHeading } from "./ui/focus";
 import { emergencyOnly } from "./offline/emergencyCache";
 import { EmergencyScreen } from "./screens/Emergency";
@@ -10,7 +10,8 @@ import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
-import { MeScreen } from "./screens/Me";
+import { MeSheet } from "./screens/Me";
+import { VisitsScreen } from "./screens/tabs";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
 import { RecordScreen } from "./screens/record/Record";
@@ -29,19 +30,37 @@ import { afterRestoreFailure } from "./restore";
 /** One screen at a time. On start, the page restores the session and goes to Today at once
  *  when a profile is remembered (offline included), checking the doors in the background. */
 export function App(): JSX.Element | null {
+  const shown = Route();
+  // Me is a sheet over whatever screen is open (D1), never a screen of its own.
+  return shown && (
+    <>
+      {shown}
+      <MeSheet />
+    </>
+  );
+}
+
+function Route(): JSX.Element | null {
   const current = screen.value;
   // A new screen: the screen reader and the keyboard start at its heading (E15-04).
   useEffect(() => focusHeading(), [current.name]);
   if (!restored.value) return null;
   if (current.name === "loading") {
-    if (!token.value) go({ name: "signin" });
-    else if (profile.value) {
-      go({ name: "today" });
+    if (!token.value) void signOutHere();
+    else {
+      // Nothing of the remembered papers is drawn until the session is known to be good. The
+      // check is one round trip; with no network it fails at once and Today opens from the page
+      // the phone kept, which is what a kept page is for. Rendering Today first would put the
+      // last person's name in the header on a shared phone whose token has since expired —
+      // the same leak as a sign-out that forgets nothing, through the door people actually use.
       afterSignIn().catch((failure: unknown) => {
-        // A refused session: back to sign-in. Offline, a server error: stay on Today.
-        if (afterRestoreFailure(failure) === "signin") go({ name: "signin" });
+        // A refused session: back to sign-in, with nothing of theirs left on the phone. Offline
+        // or a server error says nothing about the key: Today, from what the phone kept.
+        if (afterRestoreFailure(failure) === "signin") return void signOutHere();
+        if (profile.value) go({ name: "today" });
+        else void signOutHere();
       });
-    } else afterSignIn().catch(() => go({ name: "signin" }));
+    }
     return null;
   }
   switch (current.name) {
@@ -67,13 +86,13 @@ export function App(): JSX.Element | null {
     case "feed":
       return <FeedScreen />;
     case "ask":
-      return <AskScreen item={current.item} />;
+      return <AskScreen item={current.item} question={current.question} />;
     case "reading":
       return <ReadingScreen />;
     case "visit":
       return <VisitScreen appointmentId={current.appointmentId} />;
-    case "me":
-      return <MeScreen />;
+    case "visits":
+      return <VisitsScreen />;
     case "record":
       return <RecordScreen at={current.at ?? { name: "hub" }} />;
     case "onboarding":

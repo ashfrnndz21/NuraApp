@@ -108,10 +108,13 @@ async def test_a_number_writes_that_tablet_alone_and_stops_its_ladder_alone(
             "Thank you, I wrote it down.",
             "You took your blood pressure tablet with breakfast.",
             "Mei can see you took it.",
-        ]
+        ],
+        # The window closed before he answered "1" (#198): said plainly, once.
+        ["This was written down later than usual."],
     ]
     [tap] = await _taps(sg)
     assert tap.line_id == pressure.id and tap.anchor == "breakfast"
+    assert tap.late is True
     ladders = await _dose_ladders(sg)
     assert ladders[pressure.id].closed_because == "answered"
     assert ladders[water.id].closed_at is None
@@ -134,9 +137,13 @@ async def test_both_writes_both_and_stops_both_ladders(
             "You took your blood pressure tablet and the water pill with breakfast.",
             # Two tablets: "took it" would name only one of them (#173).
             "Mei can see you took them.",
-        ]
+        ],
+        # The window closed before he answered (#198): said plainly, once.
+        ["This was written down later than usual."],
     ]
-    assert {tap.line_id for tap in await _taps(sg)} == {pressure.id, water.id}
+    taps = await _taps(sg)
+    assert {tap.line_id for tap in taps} == {pressure.id, water.id}
+    assert all(tap.late for tap in taps)
     assert all(ladder.closed_because == "answered" for ladder in (await _dose_ladders(sg)).values())
 
 
@@ -293,9 +300,14 @@ async def test_the_helpers_sudah_beri_follows_the_same_rule(
     assert await _taps(sg) == []
     given = await home.inbound(sg, SITI, "2")
     assert given.outcome == "taken"
-    assert _said(given) == [["Terima kasih, saya sudah tulis.", "Pa sudah ambil pil air."]]
+    assert _said(given) == [
+        ["Terima kasih, saya sudah tulis.", "Pa sudah ambil pil air."],
+        # The window closed before she answered (#198): said plainly, once.
+        ["Ini ditulis lewat daripada biasa."],
+    ]
     [tap] = await _taps(sg)
     assert tap.line_id == water.id and tap.by_person_id == siti.id
+    assert tap.late is True
     ladders = await _dose_ladders(sg)
     assert ladders[water.id].closed_because == "answered"
     assert ladders[pressure.id].closed_at is None

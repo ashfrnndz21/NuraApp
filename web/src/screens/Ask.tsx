@@ -2,15 +2,20 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { AnswerOut, FeedItemOut, FindOut, FindWhere } from "../api/types";
+import { whatToDoLines } from "../day/model";
+import { askStartedTheRedPath, whenNotReached } from "../day/redPath";
+import { keptCards } from "../day/offline";
+import { bindingOf } from "../offline/todayCache";
 import { answerView, askMode } from "../feed/ask";
 import { feedFor } from "../feed/session";
-import { go, openTab } from "../flow";
+import { go } from "../flow";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
 import { voice } from "../player/voice";
-import { Field, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
 import { HearClip } from "../ui/Player";
+import { Shell } from "./Shell";
 
 /** Where the ask bar looks (spec §0, mockup v2): his records — Ask, E03's recall — or the web,
  *  his providers, or videos. The web and videos are the allowlisted sources only, each page said
@@ -26,9 +31,9 @@ const WHERES: readonly Where[] = ["records", "web", "providers", "videos"];
  *  the boundary last. Hear reads it out on tap, never by itself. A refusal is said in one plain
  *  sentence. In the caregiver's density the ask bar has its filters: Records, Web, Providers,
  *  Videos. The patient's has one thing: his records. */
-export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
+export function AskScreen({ item, question: asked }: { item?: FeedItemOut; question?: string }): JSX.Element {
   const s = t();
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(asked ?? "");
   const [where, setWhere] = useState<Where>("records");
   const [answer, setAnswer] = useState<AnswerOut | null>(null);
   const [found, setFound] = useState<FindOut | null>(null);
@@ -50,7 +55,14 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
     setFound(null);
     try {
       if (where === "records") {
-        setAnswer(await nura.ask(bearer, papers.profile_id, text, mode, language.value));
+        const heard = await nura.ask(bearer, papers.profile_id, text, mode, language.value);
+        // A red flag heard in the question went the red-flag path on the backend first: what to
+        // do now, the backend's card, exactly as after a red word tapped on Today.
+        if (heard.red_flag?.red_flag) {
+          const red = heard.red_flag;
+          return go({ name: "whatToDo", lines: red.card ? whatToDoLines(red.card) : red.lines, offline: null, refusal: null });
+        }
+        setAnswer(heard);
         // He asked more about this card: kept for the next connection (E11-08).
         if (item) {
           const events = feedFor(bearer, papers).events;
@@ -60,18 +72,30 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
         setFound(await nura.find(bearer, papers.profile_id, text, where, language.value));
       }
     } catch (failure) {
+      // A red word the backend heard but this key may not raise: the kept card and the refusal
+      // named, as a refused red tap on the cloud gets — never nothing, never an answer instead.
+      if (askStartedTheRedPath(failure)) {
+        const kept = await keptCards(papers.profile_id, bindingOf(papers));
+        return go({ name: "whatToDo", ...whenNotReached("red_flag", failure, kept?.cards ?? null, papers.region, s, language.value) });
+      }
+      setAnswer(null);
       setError(failure);
     } finally {
       setBusy(false);
     }
   };
 
+  // A question typed into the ask bar is asked at once: the answer is what he came for.
+  useEffect(() => {
+    if (asked && asked.trim()) void send();
+  }, []);
+
   const words: Record<Where, string> = { records: s.feed.filterRecords, web: s.feed.filterWeb, providers: s.feed.filterProviders, videos: s.feed.filterVideos };
   const view = answer ? answerView(answer) : null;
   const locale = LOCALE[language.value];
   return (
-    <main class="screen" data-testid="ask-screen" data-mode={mode}>
-      <Header title={s.feed.askTitle} />
+    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
+      <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
       {item && (
         <Tile paper>
           <p class="caption">{s.feed.askAbout}</p>
@@ -164,10 +188,11 @@ export function AskScreen({ item }: { item?: FeedItemOut }): JSX.Element {
           </Tile>
         );
       })}
-      <Pill onClick={() => go({ name: item ? "feed" : "today" })} testId="back-to-cards">
-        {item ? s.feed.back : s.day.backToday}
-      </Pill>
-      <TabBar current="today" onSelect={openTab} />
-    </main>
+      {item && (
+        <Pill onClick={() => go({ name: "feed" })} testId="back-to-cards">
+          {s.feed.back}
+        </Pill>
+      )}
+    </Shell>
   );
 }

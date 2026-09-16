@@ -51,7 +51,7 @@ export function ConsentsPart(): JSX.Element | null {
         <Tile paper testId="stop-confirm">
           <Lines lines={asking.lines} testId="stop-lines" />
           <Pill plum onClick={() => void stop()} disabled={a.busy} testId={asking.closes ? "close-yes" : "stop-yes"}>
-            {asking.closes ? words.closeAccountYes : words.stopYes}
+            {asking.closes ? whose(here, words.closeAccountYes, words.closeAccountYesOther) : words.stopYes}
           </Pill>
           <Pill quiet onClick={() => (setAsking(null), a.clear())} testId="stop-cancel">
             {words.notNow}
@@ -69,7 +69,7 @@ export function ConsentsPart(): JSX.Element | null {
             <Tile paper key={consent.consent_id} testId="consent">
               <Lines lines={wordingLines(consent)} testId="consent-words" />
               <Pill onClick={() => void ask(consent)} disabled={a.busy} testId={consent.purpose === CLOSES ? "close-account" : "stop"}>
-                {consent.purpose === CLOSES ? words.closeAccount : words.stop}
+                {consent.purpose === CLOSES ? whose(here, words.closeAccount, words.closeAccountOther) : words.stop}
               </Pill>
               <NoticeAt act={a} where={consent.consent_id} />
             </Tile>

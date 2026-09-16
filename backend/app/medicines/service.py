@@ -67,6 +67,7 @@ from app.medicines.story import (
     reorder_lines,
 )
 from app.medicines.strings import (
+    NOW_WORDS,
     PLAIN_NAME,
     REORDER_ACTIONS,
     SOURCE,
@@ -74,7 +75,7 @@ from app.medicines.strings import (
     language_of,
     say_date,
 )
-from app.medicines.windows import window_status
+from app.medicines.windows import is_late, window_status
 from app.memory.episodic import require_artifact
 from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
@@ -637,11 +638,18 @@ async def record_dose_taken(
     with the medicines key she holds, and a row naming the line. Audited like every write,
     on the channel the tap came in on: the app, or a "Taken"/"given" reply on WhatsApp.
 
-    `taken_at` is a tap the phone held while it could not reach Nura (E00-08): written at the
-    moment he made it, which must be today on the region's clock and not later than now
-    (`TapNotToday`), and written once however many times it is sent — the same person, line,
-    moment and anchor is the same tap, and the row already written is the answer. The event
-    is recorded now; it happened when he tapped.
+    `taken_at` is a tap the phone held while it could not reach Nura (E00-08), or a WhatsApp
+    reply's own time (the provider's timestamp, #198): written at the moment it says, which
+    must be today on the region's clock and not later than now (`TapNotToday`), and written
+    once however many times it is sent — the same person, line, moment and anchor is the
+    same tap, and the row already written is the answer. The event is recorded now; it
+    happened when the tap says it did.
+
+    `late` (#198) is worked out here, once, and stored on the row rather than left for a
+    reader to compare `taken_at` against `anchor` itself: whether this tap's own moment came
+    after the anchor's window had already closed on his day — the same window the ladder
+    climbs from. A tap with no anchor is never late; there is no window to be late against.
+    A late "Taken" is still a Taken: nothing here asks a question or holds the tap back.
     """
     line = await _require_line(session, context=context, line_id=line_id)
     dose = Dose.from_json(line.dose)
@@ -664,6 +672,11 @@ async def record_dose_taken(
             same = tap.anchor == anchor and tap.by_person_id == context.person_id
             if same and as_utc(tap.taken_at) == tapped:
                 return tap
+    late = False
+    if anchor is not None:
+        his = await _his_day(session, context)
+        zone = REGION_TZ[context.region]
+        late = is_late(anchor, tapped.astimezone(zone), his)
     event = await audited_write(
         session,
         Event,
@@ -689,6 +702,7 @@ async def record_dose_taken(
         anchor=anchor,
         amount=amount if amount is not None else dose.amount,
         taken_at=tapped,
+        late=late,
         by_person_id=context.person_id,
     )
 
@@ -806,6 +820,19 @@ def _tapped(
 ) -> bool:
     return any(
         generic_of.get(t.line_id) == generic and (t.anchor == anchor or t.anchor is None)
+        for t in today_taps
+    )
+
+
+def _tapped_late(
+    anchor: str, generic: str, today_taps: Sequence[DoseTaken], generic_of: dict[uuid.UUID, str]
+) -> bool:
+    """Whether the tap this anchor shows as taken (#198) was itself a late one — his trends
+    and the card read this instead of comparing `taken_at` to the window again themselves."""
+    return any(
+        generic_of.get(t.line_id) == generic
+        and (t.anchor == anchor or t.anchor is None)
+        and t.late
         for t in today_taps
     )
 
@@ -1031,6 +1058,9 @@ class Slot:
     missed: bool = False
     if_forgotten: list[str] = field(default_factory=list)
     source: str = ""
+    taken_late: bool = False
+    """The tap that took this dose came in after its window had closed (#198): still taken,
+    written down late. False when not taken at all."""
 
 
 @audited(Action.READ, Scope.MEDICINES, LINE)
@@ -1091,9 +1121,53 @@ async def today(
                     missed=missed,
                     if_forgotten=list(forgotten) if missed else [],
                     source=source_line(line, zone, lang),
+                    taken_late=tapped
+                    and _tapped_late(anchor.value, line.generic, today_taps, generic_of),
                 )
             )
     return sorted(slots, key=lambda s: (order.index(s.anchor), s.line.generic))
+
+
+@dataclass(frozen=True, slots=True)
+class DueNow:
+    """The one big number on his Today: how many tablets at the moment of the day that is open
+    now — or, when none is, at the next moment still to come today — and his words for it."""
+
+    count: int
+    anchor: str
+    words: str
+
+
+def due_now(slots: Sequence[Slot], language: str) -> DueNow | None:
+    """Counted from today's cards, never from a clock of its own: the cards the backend marks
+    due now; else the untapped cards at the next moment whose window has not opened yet. None
+    when nothing is left to take today. Nothing here is ranked or judged."""
+    open_now = [slot for slot in slots if slot.due_now and not slot.taken]
+    if open_now:
+        anchor = open_now[0].anchor
+        count = sum(1 for slot in open_now if slot.anchor == anchor)
+    else:
+        ahead = [slot for slot in slots if not slot.taken and not slot.missed]
+        if not ahead:
+            return None
+        anchor = ahead[0].anchor
+        count = sum(1 for slot in ahead if slot.anchor == anchor)
+    one, many = NOW_WORDS[language_of(language)][anchor]
+    return DueNow(count=count, anchor=anchor, words=one if count == 1 else many)
+
+
+async def now_count(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    registry: DrugRegistry,
+    language: str | None = None,
+) -> DueNow | None:
+    """The hero, in `language` or his own: today's cards (`today`, read under the medicines
+    scope) counted by `due_now`."""
+    lang = await language_for(session, context, language)
+    slots = await today(session, context=context, registry=registry, language=lang)
+    return due_now(slots, lang)
 
 
 @dataclass(frozen=True, slots=True)

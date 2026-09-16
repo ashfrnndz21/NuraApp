@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
-import { API, backendClock, codeFromLog, codesSoFar, nothingDrawnOverLines, signInThroughTheApp } from "./helpers";
+import { API, backendClock, codeFromLog, codesSoFar, nothingDrawnOverLines, signInThroughTheApp, openMe } from "./helpers";
 
 /** What the Record's walks (W5) seed over the API, and the two checks every screen gets:
  *  the density it is walked in, and nothing drawn over a line (56px targets in his). */
@@ -150,22 +150,30 @@ export async function daysFromNow(request: APIRequestContext, days: number): Pro
  *  one (a person with one key and no papers of her own is taken straight to them). */
 export async function signInAs(page: Page, person: Pick<Person, "phone">, name: string, door = false): Promise<void> {
   await signInThroughTheApp(page, person.phone, name);
-  const tab = page.getByTestId("tab-record");
+  const bar = page.locator("nav.tabbar");
   if (door) {
     const key = page.getByTestId("door-key");
-    await expect(key.or(tab)).toBeVisible();
+    await expect(key.or(bar)).toBeVisible();
     if (await key.isVisible()) await key.click();
   }
-  await expect(tab).toBeVisible();
+  await expect(bar).toBeVisible();
 }
 
-/** The density chosen under Me, then the Record's first screen. */
+/** The Record's first screen from the tab bar. One tab set for everyone (D1, the reset): the
+ *  Papers tab opens the Record's own first screen in either density. */
+export async function openRecord(page: Page): Promise<void> {
+  await page.getByTestId("tab-records").click();
+  await expect(page.getByTestId("record-hub")).toBeVisible();
+}
+
+/** The density chosen on the Me sheet (D1), then the Record's first screen. */
 export async function lookAs(page: Page, look: Look): Promise<void> {
-  await page.getByTestId("tab-me").click();
+  await openMe(page);
   await page.getByTestId(`density-${look}`).click();
   await expect(page.locator("html")).toHaveAttribute("data-density", look);
-  await page.getByTestId("tab-record").click();
-  await expect(page.getByTestId("record-hub")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("me-sheet")).toHaveCount(0);
+  await openRecord(page);
 }
 
 /** #118's hit test on the screen as it is: every line readable, every control reachable, and

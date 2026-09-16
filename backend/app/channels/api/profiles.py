@@ -29,6 +29,7 @@ from app.audit.access import (
 )
 from app.audit.models import Action
 from app.audit.trail import read_audit
+from app.channels.about_him import reader_of
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import (
     ClosingContext,
@@ -953,4 +954,9 @@ async def state(context: Context, session: Db, language: str | None = Language) 
     view = await current_state(session, context=context)
     if language is None:
         language = (await audited_profile_read(session, context)).language
-    return StateOut.of(view, boundary=boundary_line(Surface.STATE_POSTURE, language))
+    reader = await reader_of(session, context, language)
+    return reader.model(
+        StateOut.of(
+            view, boundary=boundary_line(Surface.STATE_POSTURE, language), language=language
+        )
+    )

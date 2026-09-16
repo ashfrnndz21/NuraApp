@@ -26,6 +26,7 @@ import type {
   EngagementOut,
   EpisodeViewOut,
   EventsOut,
+  FactOut,
   FeedItemOut,
   FeedPageOut,
   FeelingOut,
@@ -44,6 +45,7 @@ import type {
   MemoCardOut,
   MoreOut,
   NoticeOut,
+  NowOut,
   NudgeAnswer,
   NudgePlanOut,
   OfflineCardsOut,
@@ -207,6 +209,18 @@ export const taken = (token: string, profileId: string, lineId: string, anchor: 
     body: takenAt ? { anchor, taken_at: takenAt } : { anchor },
   });
 
+/** The State, its word, line and drivers in `language` (the profile's own when not given). */
+export const state = (token: string, profileId: string, language?: string) =>
+  api<StateOut>(`/profiles/${profileId}/state`, { token, query: { language } });
+
+/** The one big number on his Today and what it counts (D1, `GET …/medicines/now`). */
+export const medicinesNow = (token: string, profileId: string, language: string) =>
+  api<NowOut>(`/profiles/${profileId}/medicines/now`, { token, query: { language } });
+
+/** The facts that hold now about one subject — his blood pressures, for the chief's sparkline. */
+export const facts = (token: string, profileId: string, subject: string) =>
+  api<FactOut[]>(`/profiles/${profileId}/facts`, { token, query: { subject } });
+
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>
   api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
@@ -214,13 +228,6 @@ export const feeling = (token: string, profileId: string, word: string, language
 /** The emergency card, rendered now from State, in his language (E13-01). */
 export const emergencyCard = (token: string, profileId: string, language: string) =>
   api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
-
-/** The same card as the backend's one printable page: self-contained, nothing fetched. */
-export const emergencyCardPage = (token: string, profileId: string, language: string) =>
-  apiText(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } });
-
-export const state = (token: string, profileId: string) =>
-  api<StateOut>(`/profiles/${profileId}/state`, { token });
 
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>
@@ -733,6 +740,11 @@ export const meSummary = (token: string, profileId: string, language: string) =>
 /** One card by its id, under the card's own scope: what a push opens (`?open=<id>`, #143). */
 export const feedItem = (token: string, profileId: string, itemId: string) =>
   api<FeedItemOut>(`/profiles/${profileId}/feed/${itemId}`, { token });
+
+/** The emergency card as the backend prints it (E00, `GET /profiles/{id}/emergency-card.html`):
+ *  one self-contained page, every line the backend's, read with his key and shown as it is. */
+export const emergencyCardPage = (token: string, profileId: string, language: string) =>
+  apiBlob(`/profiles/${profileId}/emergency-card.html`, { token, query: { language } }).then((page) => page.text());
 
 // --- the feed's richer formats (F1) ---------------------------------------------------------
 

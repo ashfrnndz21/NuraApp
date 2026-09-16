@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { freshPhone, keptExpiry, signInThroughTheApp } from "./helpers";
+import { freshPhone, keptExpiry, signInThroughTheApp, todayReady } from "./helpers";
 
 /** Today across midnight in Singapore. The page read at 23:59 is not shown after 00:00: the
  *  app reads the new day's page itself, the date and the greeting turn over, the phone's copy
@@ -15,16 +15,16 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
 
   // Just before midnight.
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
-  await expect(page.locator(".hero .date")).toHaveText("Monday 14 September");
-  await expect(page.locator(".hero .greeting")).toHaveText("Good evening, Pa.");
+  await expect(page.getByTestId("today-hero").locator(".hero-sub")).toHaveText("Monday 14 September");
+  await expect(page.getByTestId("today-hero").locator(".hero-greeting")).toHaveText("Good evening, Pa.");
   await expect.poll(() => keptExpiry(page)).toBe("2026-09-14T16:00:00.000Z");
 
   // Just after it: no reload by hand.
   await page.clock.fastForward("01:30");
-  await expect(page.locator(".hero .date")).toHaveText("Tuesday 15 September");
-  await expect(page.locator(".hero .greeting")).toHaveText("Good morning, Pa.");
+  await expect(page.getByTestId("today-hero").locator(".hero-sub")).toHaveText("Tuesday 15 September");
+  await expect(page.getByTestId("today-hero").locator(".hero-greeting")).toHaveText("Good morning, Pa.");
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("nav.tabbar")).toBeVisible();
   await expect.poll(() => keptExpiry(page)).toBe("2026-09-15T16:00:00.000Z");
 });

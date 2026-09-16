@@ -713,6 +713,16 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ask_to_order": "请家人订。", "i_have_more": "我家里还有。"},
 }
 
+# @patient phrase
+REORDER_ACTIONS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {"i_have_more": "{patient} has more at home."},
+    "ms": {"i_have_more": "{patient} ada lagi di rumah."},
+    "zh": {"i_have_more": "{patient}家里还有。"},
+}
+"""The same two buttons to someone else: "I have more at home." is his own voice, so on her
+screen it names him instead. "Ask the family to order." asks the family for him either way,
+and is left as it is: its words are what the tap does."""
+
 # The family's words, not his: the family's list only (caregiver density), so not tagged.
 ORDER_TASK: Mapping[str, str] = {
     "en": "order more {medicine} for {patient}",
@@ -764,6 +774,30 @@ the family's list names it, and the notice is read wherever a channel delivers i
 # @patient headline
 TAKEN: Mapping[str, str] = {"en": "Taken", "ms": "Sudah ambil", "zh": "吃了"}
 """The one button on a dose card (glossary: adherence is "Taken")."""
+
+# @patient headline
+NOW_WORDS: Mapping[str, Mapping[str, tuple[str, str]]] = {
+    "en": {
+        "breakfast": ("medicine with breakfast", "medicines with breakfast"),
+        "lunch": ("medicine with lunch", "medicines with lunch"),
+        "dinner": ("medicine with dinner", "medicines with dinner"),
+        "bed": ("medicine before bed", "medicines before bed"),
+    },
+    "ms": {
+        "breakfast": ("ubat bersama sarapan", "ubat bersama sarapan"),
+        "lunch": ("ubat bersama makan tengah hari", "ubat bersama makan tengah hari"),
+        "dinner": ("ubat bersama makan malam", "ubat bersama makan malam"),
+        "bed": ("ubat sebelum tidur", "ubat sebelum tidur"),
+    },
+    "zh": {
+        "breakfast": ("早餐时要吃的药", "早餐时要吃的药"),
+        "lunch": ("午餐时要吃的药", "午餐时要吃的药"),
+        "dinner": ("晚餐时要吃的药", "晚餐时要吃的药"),
+        "bed": ("睡前要吃的药", "睡前要吃的药"),
+    },
+}
+"""The words under the one big number on his Today (the hero): what the number counts, for
+one and for more than one. The number is his count; the words are never assembled from it."""
 
 # @patient
 DOSE_CARD: Mapping[str, str] = {
@@ -892,3 +926,150 @@ def catalogue() -> list[str]:
     for sources in SOURCE.values():
         found.extend(sources.values())
     return found
+
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient
+DOSE_CARD_THEIRS: Mapping[str, str] = {
+    "en": "{patient} takes {amount} of {name} {anchor}.",
+    "ms": "{patient} ambil {amount} {name} {anchor}.",
+    "zh": "{patient}{anchor}吃{amount}{name}。",
+}
+"""The dose card about him by name: what he takes, never an order to the reader."""
+
+# @patient phrase
+TAKEN_THEIRS: Mapping[str, str] = {
+    "en": "{patient} took it",
+    "ms": "{patient} sudah ambil",
+    "zh": "{patient}吃了",
+}
+"""The Taken button when someone else taps it for him."""
+
+# @patient
+COUNT_THEIRS: Mapping[str, Lines] = {
+    "en": ("There are {amount} of {name} left.", "That is about {days} days."),
+    "ms": ("Tinggal {amount} {name} lagi.", "Itu lebih kurang {days} hari."),
+    "zh": ("{name}还剩{amount}。", "大概够{days}天。"),
+}
+
+# @patient
+REORDER_THEIRS: Mapping[str, Lines] = {
+    "en": ("{name} runs out on {date}.", "The family can order more for {patient}."),
+    "ms": ("{name} akan habis pada {date}.", "Keluarga boleh pesan lagi untuk {patient}."),
+    "zh": ("{name}到{date}就吃完了。", "家人可以给{patient}再订。"),
+}
+
+# @patient
+SOURCE_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "label": "This comes from the label {patient} kept on {date}.",
+        "typed": "This comes from what was typed in on {date}.",
+    },
+    "ms": {
+        "label": "Ini daripada label yang {patient} simpan pada {date}.",
+        "typed": "Ini daripada apa yang ditaip pada {date}.",
+    },
+    "zh": {"label": "这来自{patient}在{date}保存的标签。", "typed": "这来自{date}输入的内容。"},
+}
+
+# @patient
+IF_FORGOTTEN_THEIRS: Mapping[str, Mapping[str, Lines]] = {
+    "en": {
+        "take_now_unless_next_is_near": (
+            "If {patient} forgot, {patient} can take it now.",
+            "If the next one is soon, wait for the next one.",
+            "Never take 2 at once.",
+        ),
+        "skip_and_take_next": (
+            "If {patient} forgot, leave it.",
+            "Take the next one at the usual time.",
+            "Never take 2 at once.",
+        ),
+        "same_day_or_tell_clinic": (
+            "If {patient} forgot and it is still the same day, {patient} can take it now.",
+            "If the day has passed, leave it and tell {doctor}.",
+            "Never take 2 at once.",
+        ),
+        "ask_before_extra": (
+            "If {patient} forgot the insulin, call {doctor} before {patient} takes any.",
+            "Do not take extra to catch up.",
+        ),
+        "skip_if_late_in_day": (
+            "If {patient} forgot in the morning, {patient} can take it by lunch.",
+            "After lunch, leave it until tomorrow.",
+        ),
+        "weekly_ask_if_late": (
+            "If {patient} forgot the weekly tablet, {patient} can take it within 2 days.",
+            "Later than that, leave it and ask {doctor}.",
+        ),
+        "when_needed_none": (
+            "This one is only when {patient} needs it.",
+            "There is nothing to catch up.",
+        ),
+    },
+    "ms": {
+        "take_now_unless_next_is_near": (
+            "Jika {patient} terlupa, {patient} boleh ambil sekarang.",
+            "Jika yang seterusnya sudah dekat, tunggu yang seterusnya.",
+            "Jangan sekali-kali ambil dua serentak.",
+        ),
+        "skip_and_take_next": (
+            "Jika {patient} terlupa, biarkan.",
+            "Ambil yang seterusnya pada waktu biasa.",
+            "Jangan sekali-kali ambil dua serentak.",
+        ),
+        "same_day_or_tell_clinic": (
+            "Jika {patient} terlupa dan masih hari yang sama, {patient} boleh ambil sekarang.",
+            "Jika hari sudah berlalu, biarkan dan beritahu {doctor}.",
+            "Jangan sekali-kali ambil dua serentak.",
+        ),
+        "ask_before_extra": (
+            "Jika {patient} terlupa insulin, telefon {doctor} sebelum {patient} ambil.",
+            "Jangan ambil lebih untuk ganti.",
+        ),
+        "skip_if_late_in_day": (
+            "Jika {patient} terlupa pada waktu pagi, {patient} boleh ambil sebelum makan tengah hari.",
+            "Selepas itu, biarkan sehingga esok.",
+        ),
+        "weekly_ask_if_late": (
+            "Jika {patient} terlupa ubat mingguan, {patient} boleh ambil dalam masa dua hari.",
+            "Lewat daripada itu, biarkan dan tanya {doctor}.",
+        ),
+        "when_needed_none": (
+            "Ubat ini hanya bila {patient} perlu.",
+            "Tiada apa yang perlu diganti.",
+        ),
+    },
+    "zh": {
+        "take_now_unless_next_is_near": (
+            "如果{patient}忘了，想起来就吃。",
+            "如果下一次快到了，就等下一次。",
+            "千万不要一次吃两份。",
+        ),
+        "skip_and_take_next": (
+            "如果{patient}忘了，就不吃了。",
+            "下一次照平常的时间吃。",
+            "千万不要一次吃两份。",
+        ),
+        "same_day_or_tell_clinic": (
+            "如果{patient}忘了，还是同一天，现在就吃。",
+            "如果已经过了那一天，就不吃了，告诉{doctor}。",
+            "千万不要一次吃两份。",
+        ),
+        "ask_before_extra": (
+            "如果{patient}忘了打胰岛素，先打电话给{doctor}再打。",
+            "不要多打来补。",
+        ),
+        "skip_if_late_in_day": ("如果{patient}早上忘了，午餐前吃。", "午餐后就不吃了，等明天。"),
+        "weekly_ask_if_late": (
+            "如果{patient}忘了每星期的药，两天内吃。",
+            "超过两天就不吃了，问{doctor}。",
+        ),
+        "when_needed_none": ("这个药{patient}需要时才吃。", "不用补。"),
+    },
+}

@@ -29,3 +29,11 @@ export function whenNotReached(
   const offline = refusal !== null ? null : failure instanceof Refused ? "server" : "network";
   return { lines: offlineLines(kind, kept, region, s, language).lines, offline, refusal };
 }
+
+/** Whether a question sent to Ask was refused on the red-flag path itself: the backend heard a
+ *  red word and began the path the not-feeling-well button takes, and this key does not hold
+ *  the emergency scope. Then the question gets what a refused red tap gets — the kept card and
+ *  the refusal named — never an answer looked up in its place. Any other failure is Ask's own. */
+export function askStartedTheRedPath(failure: unknown): boolean {
+  return failure instanceof Refused && failure.status < 500 && failure.scope === "emergency";
+}

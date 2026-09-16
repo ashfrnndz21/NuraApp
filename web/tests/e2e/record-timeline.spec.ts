@@ -120,7 +120,10 @@ for (const look of LOOKS) {
 
     await page.getByLabel("A note about this place").fill("parking at B2");
     await page.getByTestId("save-note").click();
-    await expect(page.getByTestId("note-saved")).toHaveText("Nura kept your note.");
+    // Mei is the reader in both densities here — she holds a key, and the density is only how
+    // much the screen shows her. So his papers are said about him, never to him (D1): "the
+    // note", not "your note". The density does not change whose voice the app speaks in.
+    await expect(page.getByTestId("note-saved")).toHaveText("Nura kept the note.");
     await expect(page.getByTestId("place-note")).toContainText("parking at B2");
     await readable(page, look);
 
@@ -144,7 +147,7 @@ for (const look of LOOKS) {
     await lookAs(page, look);
     await page.getByTestId("record-changes").click();
     const lines = page.getByTestId("changes-lines");
-    await expect(lines).toContainText("This is your first look at what changed.");
+    await expect(lines).toContainText("This is the first look at what changed.");
     await expect(lines).toContainText("Mei was given a key on Monday 14 September.");
     await readable(page, look);
 
@@ -158,7 +161,7 @@ for (const look of LOOKS) {
       await page.getByTestId("record-back").click();
       await page.getByTestId("record-changes").click();
       await expect(lines).toContainText("A new blood pressure was written down on Monday 14 September.");
-      await expect(lines).not.toContainText("This is your first look at what changed.");
+      await expect(lines).not.toContainText("This is the first look at what changed.");
       await expect(lines).not.toContainText("Mei was given a key");
       await readable(page, look);
     } finally {

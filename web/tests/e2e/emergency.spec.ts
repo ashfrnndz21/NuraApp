@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE_URL } from "../../playwright.config";
-import { API, cutKey, expireEveryKeptPage, fixClock, keptKeys, medicinesInIndexedDb, seedOwner, signInThroughTheApp, waitForWorker } from "./helpers";
+import { API, cutKey, expireEveryKeptPage, fixClock, keptKeys, medicinesInIndexedDb, seedOwner, signInThroughTheApp, waitForWorker, todayReady} from "./helpers";
 
 /** The emergency card on the phone (E13-01's web half, ADR 0001's "the card one tap away"; its
  *  offline copy is E00-08's): read from `GET …/emergency-card`, the backend's lines and nothing
@@ -28,7 +28,7 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
   expect(lines).toContain("This is Pa's emergency card.");
 
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await page.getByTestId("open-emergency").click();
   await expect(page.locator("main h1")).toHaveText("Emergency card");
   await expect(page.locator("main h1")).toBeFocused();
@@ -55,7 +55,7 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
   // No network, the next morning: nothing of the day on the phone, and the card still there,
   // dated, printable.
   await page.getByRole("button", { name: "Today", exact: true }).click();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await waitForWorker(page);
   // The printable page is read just after the card: kept on the phone before the network goes.
   await expect.poll(() => printableKept(page, pa.profileId)).toBe(true);
@@ -77,7 +77,7 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
 
   // Sign-out leaves none of it on the phone.
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();

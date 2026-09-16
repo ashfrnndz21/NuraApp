@@ -115,7 +115,7 @@ const item = (artifacts: number, facts: number): TimelineItemOut => ({
   visits: [],
   artifacts: Array.from({ length: artifacts }, (_, n) => ({ artifact_id: `a${n}`, kind: "photo", content_type: "image/png", captured_at: "2026-09-14T00:00:00Z", source_channel: "app" })),
   events: [],
-  facts: Array.from({ length: facts }, (_, n) => ({ fact_id: `f${n}`, subject: "blood_pressure", attribute: "reading", value: {}, unit: null })),
+  facts: Array.from({ length: facts }, (_, n) => ({ fact_id: `f${n}`, subject: "blood_pressure", attribute: "reading", value: {}, unit: null, valid_from: "2026-09-14T00:00:00Z" })),
   notes: [],
 });
 

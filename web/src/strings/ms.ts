@@ -7,6 +7,8 @@ export const ms = {
   demo: {
     // @patient headline
     banner: "Demo — bukan untuk maklumat kesihatan sebenar",
+    // @patient headline
+    bannerShort: "Demo. Jangan letak maklumat kesihatan sebenar.",
     // @patient
     lines: ["Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar.", "Semua di sini dipadam setiap malam."],
   },
@@ -19,6 +21,72 @@ export const ms = {
     me: "Saya",
     // @patient headline
     family: "Keluarga",
+    // @patient headline
+    home: "Utama",
+    // @patient headline
+    medicines: "Ubat",
+    // @patient headline
+    records: "Surat",
+    // @patient headline
+    visits: "Lawatan",
+    // @patient headline
+    timeline: "Surat",
+    // @patient headline
+    plan: "Rancangan",
+  },
+  shell: {
+    // @patient phrase
+    askNura: "Tanya Nura soalan",
+    // @patient phrase
+    askAbout: "Tanya tentang {name}",
+    // @patient phrase
+    voice: "Cakap",
+    // @patient
+    voiceSaid1: "Tekan gambar mikrofon kecil di tepi huruf.",
+    // @patient
+    voiceSaid2: "Kemudian sebut soalan anda.",
+    // @patient phrase
+    close: "Tutup",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "Keadaan hari ini",
+    // @patient headline
+    whatChanged: "Apa yang berubah",
+    // @patient headline
+    nextVisit: "Lawatan seterusnya",
+    // @patient headline
+    buyMore: "Beli lagi",
+    // @patient headline
+    missing: "Belum ada dalam surat",
+    // @patient
+    missingSub: "Nura sudah tambah soalan ini untuk ditanya kepada {doctor} pada {date}.",
+    // @patient
+    missingSubDay: "Nura sudah tambah soalan ini untuk lawatan pada {date}.",
+    // @patient phrase
+    bpLabel: "Tekanan darah, nombor atasnya",
+    // @patient headline
+    fromName: "Daripada {name}",
+    // @patient phrase
+    showAll: "Tunjuk semua {count}",
+    // @patient phrase
+    showFewer: "Tunjuk kurang",
+    // @patient
+    bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
+  },
+  places: {
+    // @patient headline
+    visitsOwn: "Lawatan anda",
+    // @patient headline
+    visitsOwnOther: "Lawatan {patient}",
+    // @patient headline
+    visitsOther: "Lawatan {name}",
+    // @patient
+    visitsNoneOther: "Nura belum catat apa-apa lawatan untuk {name}.",
+    // @patient headline
+    planTitle: "Rancangan untuk lawatan seterusnya",
+    // @patient
+    planLead: "Semua yang perlu untuk lawatan seterusnya ada di sini.",
   },
   signIn: {
     // @patient headline
@@ -85,6 +153,8 @@ export const ms = {
     waiting: "Ada surat-surat menunggu anda",
     // @patient
     waitingLine: "{name} menyediakannya untuk anda.",
+    // @patient phrase
+    lookAgain: "Cuba lihat lagi",
   },
   consent: {
     // @patient headline
@@ -152,6 +222,14 @@ export const ms = {
     roleSteward: "Anda menyediakan surat-surat ini untuk mereka.",
     // @patient
     roleOther: "Anda boleh melihat surat-surat ini.",
+    // @patient phrase
+    openOwn: "Surat-surat anda sendiri. Tekan untuk lihat surat orang lain.",
+    // @patient phrase
+    openOther: "Surat-surat {name}. Tekan untuk lihat surat orang lain.",
+    // @patient
+    onlyThese: "Ini sahaja surat-surat yang Nura ada untuk anda.",
+    // @patient
+    cannotLook: "Nura tidak dapat mencari surat lain sekarang.",
   },
   today: {
     // @patient headline
@@ -188,6 +266,8 @@ export const ms = {
     hear: "Dengar",
     // @patient headline
     readingTitle: "Tekanan darah anda",
+    // @patient headline
+    readingTitleOther: "Tekanan darah {patient}",
     // @patient
     readingLead: "Tulis nombor pagi ini.",
     // @patient
@@ -200,6 +280,28 @@ export const ms = {
     readingButton: "Tulis",
     // @patient
     stateStable: "Hari anda tenang.",
+    // @patient
+    stateStableOther: "Keadaan {patient} stabil hari ini.",
+    // @patient
+    stateWatchOther: "Nura sedang memerhatikan satu perkara untuk {patient}.",
+    // @patient
+    callFamilyOther: "Telefon ahli keluarga yang lain sekarang.",
+    // @patient
+    offlineSubOther: "Ini halaman Hari Ini {patient} dari awal tadi.",
+    // @patient
+    asOfOther: "Nura kali terakhir membaca surat {patient} pada {date} jam {time}.",
+    // @patient
+    cannotReachOther: "Nura tidak dapat membuka surat {patient} sekarang.",
+    // @patient
+    emergencySoonOther: "Nura akan simpan kad kecemasan {patient} di sini.",
+    // @patient headline
+    todayListOther: "Ubat {patient} untuk hari ini",
+    // @patient
+    fromTodayOther: "Ini daripada halaman Hari Ini {patient}.",
+    // @patient
+    tookMorningOther: "{patient} sudah ambil pagi tadi.",
+    // @patient
+    allTakenOther: "{patient} sudah ambil semua ubat untuk hari ini.",
     // @patient
     stateWatch: "Nura sedang memerhatikan satu perkara untuk anda.",
     // @patient
@@ -252,10 +354,16 @@ export const ms = {
     fromDays: "Nura mengira hari anda ambil ubat anda.",
     // @patient phrase
     emergencyOpen: "Kad kecemasan anda",
+    // @patient phrase
+    emergencyOpenOther: "Kad kecemasan {patient}",
   },
   feed: {
     // @patient headline
     title: "Lagi untuk anda",
+    // @patient
+    empty: "Tiada apa-apa yang baru hari ini.",
+    // @patient phrase
+    emptyAction: "Kembali ke Hari Ini",
     // @patient phrase
     open: "Lihat lagi untuk anda",
     // @patient headline
@@ -346,6 +454,8 @@ export const ms = {
   reading: {
     // @patient headline
     title: "Tekanan darah anda",
+    // @patient headline
+    titleOther: "Tekanan darah {patient}",
     // @patient
     lead: "Taip 2 nombor daripada mesin itu.",
     // @patient phrase
@@ -392,6 +502,8 @@ export const ms = {
     signOut: "Daftar keluar",
     // @patient phrase
     remindersGet: "Dapatkan peringatan di telefon ini",
+    // @patient phrase
+    emergencyPrint: "Cetak",
     // @patient
     remindersOn: "Peringatan sudah dihidupkan untuk telefon ini.",
     // @patient phrase
@@ -439,6 +551,8 @@ export const ms = {
     title: "Lawatan anda",
     // @patient phrase
     open: "Lihat lawatan anda yang seterusnya",
+    // @patient phrase
+    openOther: "Lihat lawatan {patient} yang seterusnya",
     // @patient
     none: "Nura tiada lawatan yang ditulis untuk anda.",
     // @patient
@@ -589,10 +703,14 @@ export const ms = {
     notWell: "Saya rasa tidak sihat",
     // @patient headline
     notWellTitle: "Beritahu Nura apa yang anda rasa",
+    // @patient headline
+    notWellTitleOther: "Beritahu Nura apa yang {patient} rasa",
     // @patient
     notWellLead: "Sebut atau taip dengan kata-kata anda sendiri.",
     // @patient phrase
     wordsLabel: "Apa yang anda rasa",
+    // @patient phrase
+    wordsLabelOther: "Apa yang {patient} rasa",
     // @patient phrase
     send: "Beritahu Nura",
     // @patient phrase
@@ -607,12 +725,18 @@ export const ms = {
     backToday: "Kembali ke Hari Ini",
     // @patient phrase
     symptomsOpen: "Catat apa yang anda rasa",
+    // @patient phrase
+    notWellOther: "{patient} rasa tidak sihat",
+    // @patient phrase
+    symptomsOpenOther: "Tulis bagaimana perasaan {patient}",
     // @patient headline
     symptomsTitleSelf: "Bagaimana perasaan anda",
     // @patient headline
     symptomsTitleOther: "Bagaimana perasaan {name}",
     // @patient
     symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
+    // @patient
+    symptomsLeadOther: "Sebut apa yang {patient} rasa, teruk mana dan sejak bila.",
     // @patient phrase
     symptomsKeep: "Simpan ini",
     // @patient phrase
@@ -627,10 +751,14 @@ export const ms = {
     nudgeNotToday: "Bukan hari ini",
     // @patient phrase
     briefOpen: "Baca sebelum lawatan anda",
+    // @patient phrase
+    briefOpenOther: "Baca sebelum lawatan {patient}",
     // @patient headline
     briefTitle: "Sebelum lawatan anda",
     // @patient phrase
     questionsOpen: "Soalan anda untuk doktor",
+    // @patient phrase
+    questionsOpenOther: "Soalan untuk doktor {patient}",
     // @patient headline
     questionsTitle: "Soalan untuk lawatan anda",
     // @patient phrase
@@ -1033,21 +1161,37 @@ export const ms = {
     // @patient headline
     medicines: "Ubat anda",
     // @patient headline
+    medicinesOther: "Ubat {patient}",
+    // @patient headline
     papers: "Surat yang menunggu ya anda",
+    // @patient headline
+    papersOther: "Surat yang menunggu ya",
     // @patient headline
     routine: "Hari anda",
     // @patient headline
+    routineOther: "Hari {patient}",
+    // @patient headline
     timeline: "Lawatan anda",
+    // @patient headline
+    timelineOther: "Lawatan {patient}",
     // @patient headline
     trends: "Ujian darah anda",
     // @patient headline
+    trendsOther: "Ujian darah {patient}",
+    // @patient headline
     providers: "Doktor dan klinik anda",
+    // @patient headline
+    providersOther: "Doktor dan klinik {patient}",
     // @patient headline
     changes: "Apa yang berubah",
     // @patient phrase
     back: "Kembali ke surat anda",
+    // @patient phrase
+    backOther: "Kembali ke surat {patient}",
     // @patient
     sureYes: "Anda sudah kata ya untuk ini.",
+    // @patient
+    sureYesOther: "{patient} sudah kata ya untuk ini.",
     // @patient
     sureRead: "Nura membaca ini dengan jelas.",
     // @patient
@@ -1056,6 +1200,8 @@ export const ms = {
     matchByNameOnly: ["Nura jumpa ubat ini melalui nama pada label.", "Label tidak beritahu berapa kuat ubat ini."],
     // @patient
     twice: "Ubat ini ada dua kali dalam senarai anda.",
+    // @patient
+    twiceOther: "Ubat ini ada dua kali dalam senarai {patient}.",
     // @patient phrase
     aboutIt: "Tentang ubat ini",
     // @patient phrase
@@ -1081,6 +1227,7 @@ export const ms = {
       if_forgotten: "Dengar apa yang perlu dibuat jika anda terlupa",
       doctor_question: "Dengar apa yang perlu ditanya kepada doktor anda",
     },
+    storyAskOther: "Untuk ditanya kepada doktor {patient}",
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient
@@ -1103,12 +1250,17 @@ export const ms = {
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient
     outcomeRefill: "Ini tambahan untuk ubat yang anda ambil sekarang.",
+    outcomeNewOther: "Ini ubat baru untuk senarai {patient}.",
+    // @patient
+    outcomeRefillOther: "Ini tambahan ubat yang sudah ada dalam senarai {patient}.",
     // @patient
     outcomeChange: "Label ini ada jumlah yang lain.",
     // @patient headline
     flaggedTitle: "Sebelum anda tambah",
     // @patient
     flaggedNone: "Nura tidak jumpa ubat dalam senarai anda yang tidak sesuai dengannya.",
+    // @patient
+    flaggedNoneOther: "Nura tidak jumpa apa-apa dalam senarai {patient} yang tidak sesuai dengannya.",
     // @patient
     severity: {
       major: "Yang ini sangat penting.",
@@ -1121,6 +1273,8 @@ export const ms = {
     addIt: "Tambah ke senarai saya",
     // @patient
     added: "Nura sudah tambah ke senarai anda.",
+    // @patient
+    addedOther: "Nura sudah tambah ke senarai {patient}.",
     // @patient headline
     moreTitle: "Ada lagi di rumah",
     // @patient
@@ -1141,6 +1295,8 @@ export const ms = {
     orderNo: "Bukan sekarang",
     // @patient
     papersNone: "Tiada surat yang menunggu ya anda.",
+    // @patient
+    papersNoneOther: "Tiada surat yang menunggu ya.",
     // @patient
     paperFrom: "Ini sampai pada {date}.",
     // @patient phrase
@@ -1242,6 +1398,8 @@ export const ms = {
     // @patient
     noteSaved: "Nura sudah simpan nota anda.",
     // @patient
+    noteSavedOther: "Nura sudah simpan nota ini.",
+    // @patient
     writtenOn: "Ini ditulis pada {date}.",
     // @patient headline
     waiting: "Masih menunggu",
@@ -1262,6 +1420,19 @@ export const ms = {
     },
     // Ayat penuh, bukan frasa: berdiri sendiri sebagai satu perenggan (Day.tsx), yang dibaca
     // sebagai satu unit lengkap oleh pembaca skrin (#166 review).
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "Kolesterol {patient}",
+      ldl: "Kolesterol jahat {patient}",
+      hdl: "Kolesterol baik {patient}",
+      triglycerides: "Lemak darah {patient}",
+      hba1c: "Ujian gula {patient}",
+      creatinine: "Nombor buah pinggang {patient}",
+      egfr: "Penapis buah pinggang {patient}",
+      potassium: "Garam badan {patient}",
+      haemoglobin: "Kiraan darah {patient}",
+      tsh: "Ujian tiroid {patient}",
+    },
     // @patient
     resultOn: "Bacaannya {value} pada {date}.",
     // Her density only (the caregiver's table of results): the unit stays with the number.
@@ -1294,6 +1465,14 @@ export const ms = {
       bed: "Waktu tidur",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "Apabila {patient} bangun",
+      breakfast: "Sarapan",
+      lunch: "Makan tengah hari",
+      dinner: "Makan malam",
+      bed: "Waktu tidur",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "Tekanan darah",
       blood_sugar: "Gula dalam darah",
@@ -1303,8 +1482,12 @@ export const ms = {
     walk: "Berjalan kaki",
     // @patient
     notSet: "Belum ada sesiapa menetapkan hari anda.",
+    // @patient
+    notSetOther: "Belum ada sesiapa menetapkan hari {patient}.",
     // @patient phrase
     setDay: "Tetapkan hari anda",
+    // @patient phrase
+    setDayOther: "Tetapkan hari {patient}",
     // @patient phrase
     timeLabel: "Pukul berapa",
     // @patient phrase
@@ -1315,6 +1498,8 @@ export const ms = {
     checkDay: "Semak hari anda",
     // @patient
     dayAsk: "Beginikah hari anda?",
+    // @patient
+    dayAskOther: "Beginikah hari {patient}?",
     // @patient phrase
     dayYes: "Ya, tetapkan hari anda",
     // @patient
@@ -1360,7 +1545,11 @@ export const ms = {
     // @patient phrase
     closeAccount: "Tutup akaun saya",
     // @patient phrase
+    closeAccountOther: "Tutup akaun {name}",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
+    // @patient phrase
+    closeAccountYesOther: "Ya, tutup akaun {name}",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
     // @patient phrase

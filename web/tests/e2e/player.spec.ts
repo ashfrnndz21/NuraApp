@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { API, captureSpeech, cutKey, fakeRecorder, fixClock, seedOwner, seedVisitDay, signInThroughTheApp, speechRates, stand } from "./helpers";
+import { API, captureSpeech, cutKey, fakeRecorder, fixClock, seedOwner, seedVisitDay, signInThroughTheApp, speechRates, stand, openMe, proudCard, todayReady} from "./helpers";
 
 /** E15-07, the one player: a card's voice on tap and never by itself; a big Play / Pause; his
  *  speed, remembered on the phone; the line being said under it, in his body size; a visit's clip
@@ -18,7 +18,14 @@ const cancels = (page: Page) => page.evaluate(() => (window as unknown as { __ca
 test("Hear opens the one player: nothing before the tap, Play and Pause, his speed kept on the phone, the line being said in his body size", async ({ page, request }) => {
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const proud = page.getByTestId("proud");
+  await todayReady(page);
+  // Which of the two proud cards this walks is pinned, so its words can be checked exactly
+  // rather than against itself: with his summary unreadable, the stand-in counted from the page
+  // Today read is what he sees (Me.tsx), and its lines are the catalogue's.
+  await page.route("**/me-summary*", (route) => route.fulfill({ status: 503, body: "" }));
+  // The proud number, and its Hear, are on the Me sheet (D1).
+  await openMe(page);
+  const proud = proudCard(page);
   await expect(proud).toBeVisible();
   await expect(page.getByTestId("player")).toHaveCount(0);
   expect(await spoken(page)).toEqual([]);
@@ -64,15 +71,22 @@ test("Hear opens the one player: nothing before the tap, Play and Pause, his spe
     );
   await expect.poll(keptSpeed).toBe(0.75);
   await page.reload();
+  // The card the player was on is on the Me sheet: make sure the sheet is up, whether or not
+  // the reload left it so.
+  await todayReady(page);
+  // The card counts from the page Today read, so let that land before opening the sheet.
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => undefined);
+  if ((await page.getByTestId("me-sheet").count()) === 0) await openMe(page);
   await expect(proud).toBeVisible();
   expect(await spoken(page)).toEqual([]); // reopening plays nothing
   await proud.getByTestId("hear").click();
   await expect(proud.getByTestId("speed-0.75")).toHaveAttribute("aria-pressed", "true");
   expect((await speechRates(page)).at(-1)).toBeCloseTo(0.9 * 0.75);
 
-  // Leaving the screen stops it, and the player goes with it.
+  // Leaving the screen stops it, and the player goes with it. The card is on the Me sheet now
+  // (D1), so leaving it is shutting the sheet rather than tapping a Me tab.
   const before = await cancels(page);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("sheet-close").click();
   await expect.poll(() => cancels(page)).toBeGreaterThan(before);
   await expect(page.getByTestId("player")).toHaveCount(0);
 });

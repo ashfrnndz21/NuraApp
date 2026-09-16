@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { API, captureSpeech, fixClock, freshPhone, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, throttleCpu } from "./helpers";
+import { API, captureSpeech, fixClock, freshPhone, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, throttleCpu, todayReady} from "./helpers";
 
 /** E18-01 on the web (ADR 0001: the photo library cannot be scanned from a browser, so the
  *  substitute is the phone's own picker, many at once): a grid he confirms, nothing sent before
@@ -48,7 +48,7 @@ async function photosOnThePhone(page: Page) {
 
 async function openPapers(page: Page, phone: string): Promise<void> {
   await signInThroughTheApp(page, phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("open-papers").click();
   await expect(page.getByTestId("papers-lead")).toContainText("Nura sends nothing until you tap Send.");
@@ -104,7 +104,7 @@ test("papers from his photos: many at once, a grid he confirms, nothing sent bef
   // Nothing of any photo stays on the phone.
   expect(await photosOnThePhone(page)).toEqual({ blobs: 0, cached: [], local: 0, session: 0, paperBytes: 0 });
   await page.getByTestId("papers-finish").click();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   expect(await photosOnThePhone(page)).toEqual({ blobs: 0, cached: [], local: 0, session: 0, paperBytes: 0 });
 });
 

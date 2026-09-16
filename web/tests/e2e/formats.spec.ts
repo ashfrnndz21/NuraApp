@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
 import { auth, seedFamily, type Family, type Person } from "./familySeed";
-import { API, backendClock, captureSpeech, fixClock, seedFeed, shotAs, signInThroughTheApp } from "./helpers";
+import { API, backendClock, captureSpeech, fixClock, seedFeed, shotAs, signInThroughTheApp, openMe, todayReady} from "./helpers";
 
 /** Checkpoint 28: the feed's richer formats (F1) on a phone-sized screen, against `make dev`
  *  serving the build, both clocks at 10:00 in Singapore on Monday 14 September. A clip card's
@@ -63,7 +63,7 @@ async function pageUntil(page: Page, type: string): Promise<void> {
 }
 
 async function openFeed(page: Page): Promise<void> {
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
@@ -249,7 +249,8 @@ test("his town and Ramadan on Me, on his yes; his chief reads his town and canno
   await signIn(page, family.pa, true);
   await page.getByTestId("open-ask").click();
   await expect(page.getByTestId("ask-filters")).toHaveCount(0);
-  await page.getByTestId("tab-me").click();
+  // Me is a sheet the header's avatar opens (D1), on every screen, rather than a tab.
+  await openMe(page);
   const area = page.getByTestId("area");
   await expect(area.locator("h2")).toHaveText("Where you live");
   await expect(area.getByTestId("area-now")).toHaveText("Nura does not know your town.");

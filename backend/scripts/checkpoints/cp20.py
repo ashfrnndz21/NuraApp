@@ -9,7 +9,9 @@ weekdays; Siti, the helper, holds a helper key. The day is Monday 14 September o
 frozen clock (#118): the checkpoint stands it at 06:00 and steps it (`POST /dev/clock`) to each
 hour the scenario needs, running the engine there (`POST /dev/run-triggers`, the dev door onto
 `run_due`): the morning card at his breakfast, as the approved template; the breakfast tablet's window closes with no Taken, and the ladder
-asks Pa, then Siti, then Mei, and stops when Siti replies "sudah beri" on WhatsApp; the reorder
+asks Pa, then Siti, then Mei, and stops when Siti replies "sudah beri" on WhatsApp over an hour
+after the window closed — the tap is recorded late, said so once in her reply, and Mei, who was
+already told he had not taken it, is told the ladder stood down (#198); the reorder
 reaches Mei and is held by the cap the second time that day; at 22:30 Pa writes that he fell,
 and the flag goes straight to the roster, neither quiet nor capped. Then today's top three with
 why, and one card played as voice.
@@ -398,6 +400,16 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     )
     if not any(slot["taken"] for slot in today):
         raise fail("the Taken tap is on his list", why=f"got {today}")
+    # She replied at 09:35, over an hour after the window closed at 08:30 and after the ladder
+    # had already reached Mei: the tap the record keeps is not indistinguishable from an
+    # on-time one (#198).
+    late_slot = next((slot for slot in today if slot["taken"]), None)
+    if late_slot is None or not late_slot["taken_late"]:
+        raise fail("the late tap is marked late on his list", why=f"got {today}")
+    if given["replies"][-1]["text"] != "Ini ditulis lewat daripada biasa.":
+        raise fail(
+            "the late reply says so, plainly, once", why=f"got {given['replies']}"
+        )
     at_ten = w.run_due(profile_id, 10, 5)
     if _of(at_ten, "dose"):
         raise fail("the ladder stops at an answer", why="it asked again")
@@ -591,6 +603,10 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         200,
         "the delivery log",
     )})
+    # Mei was told he had not taken it (09:31) and, once Siti's late tap closed the ladder,
+    # was told it stood down (#198) — on the same log, by its own rule.
+    if "dose_ladder_stood_down" not in rules:
+        raise fail("whoever the ladder reached is told it stood down", why=f"got {rules}")
     ok(f"every attempt is on the delivery log with the rule that fired: {', '.join(rules)}")
 
     # 8. The pre-visit brief at T-3 (E05-01): a visit with Dr Tan on Friday 18 September; at

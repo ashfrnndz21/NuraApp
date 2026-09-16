@@ -1,0 +1,222 @@
+"""The State in words, for the chief's Home hero (docs/design-system.md §4, Hero).
+
+The State arranges what is known and does not judge it (`app/state/dimensions.py`): its
+posture is a code and its reasons are codes and ids. Here those codes are said in plain words
+and nothing more — the posture as one word and one line, and what raised it as short chips
+(a condition a clinician's own word put at watch, an open episode, the week of a visit). A code
+this table has no words for is left out, never turned into text: a line is never assembled
+from a code. Every word is here in English, Malay and Chinese, under the same key, so the
+translation memory (`make language`) holds the three to one another.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from app.state.models import Dimension, Posture
+
+LANGUAGES = ("en", "ms", "zh")
+
+# @patient headline
+POSTURE_WORD: Mapping[str, Mapping[str, str]] = {
+    "en": {"stable": "Steady", "watch": "One thing to watch", "act": "One thing today"},
+    "ms": {"stable": "Stabil", "watch": "Satu perkara dipantau", "act": "Satu perkara hari ini"},
+    "zh": {"stable": "平稳", "watch": "留意一件事", "act": "今天有一件事"},
+}
+"""The posture as one word, large on the wash."""
+
+# @patient
+POSTURE_LINE: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "stable": "Nothing needs you today.",
+        "watch": "Nura is keeping an eye on one thing for you.",
+        "act": "There is one thing for you to do today.",
+    },
+    "ms": {
+        "stable": "Tiada apa yang perlu anda buat hari ini.",
+        "watch": "Nura sedang memerhatikan satu perkara untuk anda.",
+        "act": "Ada satu perkara untuk anda buat hari ini.",
+    },
+    "zh": {
+        "stable": "今天没有需要您处理的事。",
+        "watch": "Nura 在替您留意一件事。",
+        "act": "今天有一件事要您处理。",
+    },
+}
+"""The one line under the word."""
+
+# @patient phrase
+SUBJECT_CHIP: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "blood_pressure": "Blood pressure",
+        "hypertension": "Blood pressure",
+        "blood_sugar": "Sugar",
+        "diabetes": "Sugar",
+        "kidney": "Kidneys",
+        "heart": "Heart",
+        "lipid_panel": "Cholesterol",
+        "weight": "Weight",
+        "mobility": "Walking",
+        "falls": "Falls",
+    },
+    "ms": {
+        "blood_pressure": "Tekanan darah",
+        "hypertension": "Tekanan darah",
+        "blood_sugar": "Gula",
+        "diabetes": "Gula",
+        "kidney": "Buah pinggang",
+        "heart": "Jantung",
+        "lipid_panel": "Kolesterol",
+        "weight": "Berat badan",
+        "mobility": "Berjalan",
+        "falls": "Jatuh",
+    },
+    "zh": {
+        "blood_pressure": "血压",
+        "hypertension": "血压",
+        "blood_sugar": "血糖",
+        "diabetes": "血糖",
+        "kidney": "肾",
+        "heart": "心脏",
+        "lipid_panel": "胆固醇",
+        "weight": "体重",
+        "mobility": "走路",
+        "falls": "跌倒",
+    },
+}
+"""A subject a clinician's word put at watch or act, as a chip."""
+
+# @patient phrase
+EPISODE_CHIP: Mapping[str, Mapping[str, str]] = {
+    "en": {"illness": "Not well", "recovery": "Getting better", "admission": "In hospital"},
+    "ms": {"illness": "Tidak sihat", "recovery": "Semakin pulih", "admission": "Di hospital"},
+    "zh": {"illness": "身体不舒服", "recovery": "正在好转", "admission": "在住院"},
+}
+"""An open episode that raised the State, as a chip."""
+
+# @patient phrase
+PHASE_CHIP: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "before_visit": "A visit this week",
+        "in_visit": "At a visit now",
+        "after_visit": "Back from a visit",
+        "after_discharge": "Home from hospital",
+    },
+    "ms": {
+        "before_visit": "Lawatan minggu ini",
+        "in_visit": "Sedang dalam lawatan",
+        "after_visit": "Baru balik dari lawatan",
+        "after_discharge": "Baru keluar hospital",
+    },
+    "zh": {
+        "before_visit": "这周要看诊",
+        "in_visit": "正在看诊",
+        "after_visit": "刚看完诊",
+        "after_discharge": "刚出院",
+    },
+}
+"""Where he is in the rhythm of visits and discharges, when it is not a steady week."""
+
+
+@dataclass(frozen=True, slots=True)
+class Driver:
+    key: str
+    text: str
+    tone: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Said:
+    word: str
+    line: str
+    drivers: tuple[Driver, ...]
+
+
+def _language(asked: str | None) -> str:
+    code = (asked or "").lower()[:2]
+    return code if code in LANGUAGES else "en"
+
+
+def _tone(value: Any) -> str | None:
+    return value if value in (Posture.WATCH.value, Posture.ACT.value) else None
+
+
+def drivers(
+    dimensions: Mapping[Dimension, Mapping[str, Any] | None], language: str
+) -> list[Driver]:
+    """What raised the posture, from the dimensions this key reads: every reason a dimension
+    gives (`because`) that this table has words for, then the phase of the visit rhythm. Once
+    each, in the order the State gives them."""
+    lang = _language(language)
+    found: list[Driver] = []
+    seen: set[str] = set()
+
+    def add(key: str, text: str | None, tone: str | None) -> None:
+        if text is None or key in seen:
+            return
+        seen.add(key)
+        found.append(Driver(key=key, text=text, tone=tone))
+
+    for dimension in Dimension:
+        held = dimensions.get(dimension)
+        if not held:
+            continue
+        because: Sequence[Mapping[str, Any]] = held.get("because") or ()
+        for reason in because:
+            tone = _tone(reason.get("posture"))
+            subject = reason.get("subject")
+            kind = reason.get("episode_kind")
+            phase = reason.get("phase")
+            if isinstance(subject, str):
+                add(f"subject:{subject}", SUBJECT_CHIP[lang].get(subject), tone)
+            elif isinstance(kind, str):
+                add(f"episode:{kind}", EPISODE_CHIP[lang].get(kind), tone)
+            elif isinstance(phase, str):
+                add(f"phase:{phase}", PHASE_CHIP[lang].get(phase), tone)
+    situational = dimensions.get(Dimension.SITUATIONAL) or {}
+    phase = situational.get("phase")
+    if isinstance(phase, str):
+        add(f"phase:{phase}", PHASE_CHIP[lang].get(phase), None)
+    return found
+
+
+def said(
+    posture: Posture, dimensions: Mapping[Dimension, Mapping[str, Any] | None], language: str | None
+) -> Said:
+    """The posture's word and line, and its drivers, in `language` (English when Nura does not
+    speak it)."""
+    lang = _language(language)
+    return Said(
+        word=POSTURE_WORD[lang][posture.value],
+        line=POSTURE_LINE[lang][posture.value],
+        drivers=tuple(drivers(dimensions, lang)),
+    )
+
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient
+POSTURE_LINE_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "stable": "Nothing needs doing for {patient} today.",
+        "watch": "Nura is keeping an eye on one thing for {patient}.",
+        "act": "There is one thing to do for {patient} today.",
+    },
+    "ms": {
+        "stable": "Tiada apa yang perlu dibuat untuk {patient} hari ini.",
+        "watch": "Nura sedang memerhatikan satu perkara untuk {patient}.",
+        "act": "Ada satu perkara untuk dibuat bagi {patient} hari ini.",
+    },
+    "zh": {
+        "stable": "今天没有需要为{patient}做的事。",
+        "watch": "Nura 在替{patient}留意一件事。",
+        "act": "今天有一件事要为{patient}做。",
+    },
+}
+"""The posture's line about him by name, for a key that is not his."""

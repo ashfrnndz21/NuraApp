@@ -11,6 +11,9 @@ import {
   freshPhone,
   keptKeys,
   nothingDrawnOverLines,
+  openMe,
+  proudCard,
+  todayReady,
   paperPhoto,
   seedFeed,
   seedOwner,
@@ -252,13 +255,23 @@ for (const [look, banner] of [
     await request.post(`${API}/profiles/${me.profile_id}/readings`, { ...auth(token), data: { systolic: 138, diastolic: 84 } });
     await seedVisit(request, token, me.profile_id);
     await page.getByTestId("open-nura").click();
-    await expect(page.getByTestId("proud")).toBeVisible();
+    await todayReady(page);
     await audit(page, where("today"));
-    await page.getByTestId("proud").getByTestId("hear").click();
+    // His proud number is on the Me sheet (D1): Hear it where it lives, and audit the sheet
+    // with the player open over it.
+    await openMe(page);
+    await proudCard(page).getByTestId("hear").click();
     await expect(page.getByTestId("player")).toBeVisible();
-    await audit(page, where("today, the player open"));
+    await audit(page, where("the Me sheet, the player open"));
+    await page.getByTestId("sheet-close").click();
 
-    await page.getByTestId("write-reading").click();
+    // His Today carries the blood pressure card; hers is under Visits, with getting ready for
+    // the next visit (D1) — the design gives her Home the State, not the prompt.
+    if ((await page.getByTestId("write-reading").count()) > 0) await page.getByTestId("write-reading").click();
+    else {
+      await page.getByTestId("tab-visits").click();
+      await page.getByTestId("plan-reading").click();
+    }
     await audit(page, where("your blood pressure"));
     await page.getByRole("button", { name: "Not now" }).click();
 
@@ -287,7 +300,7 @@ for (const [look, banner] of [
 
     // The Record (W5, #140): its first screen and every screen it opens, each once its reads
     // are in (a Record screen is aria-busy while they are in flight).
-    await page.getByTestId("tab-record").click();
+    await page.getByTestId("tab-records").click();
     await expect(page.getByTestId("record-hub")).toBeVisible();
     await recordSettled(page);
     await audit(page, where("the Record"));
@@ -343,13 +356,19 @@ async function recordEntries(page: Page): Promise<string[]> {
 }
 
 /** Each label of the tab bar on one line, never broken inside a word: the problems, or []. */
+/** Every tab's word is one whole line. The word is what this is about, so the word is what is
+ *  measured: the button also holds the icon above it, which is a line of its own by the design,
+ *  and its span and text boxes sit a pixel or two apart — measuring the button counts those as
+ *  wrapping when nothing has wrapped. A word that really wraps still shows here, because its
+ *  own text boxes then sit a line apart. */
 async function tabLabelsWhole(page: Page): Promise<string[]> {
   return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>("nav.tabbar button")].flatMap((button) => {
+    [...document.querySelectorAll<HTMLElement>("nav.tabbar button .tab-word")].flatMap((word) => {
       const range = document.createRange();
-      range.selectNodeContents(button);
-      const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
-      return lines.size > 1 ? [`${(button.textContent ?? "").trim()}: ${lines.size} lines`] : [];
+      range.selectNodeContents(word);
+      const tops = [...range.getClientRects()].map((rect) => rect.top).sort((a, b) => a - b);
+      const lines = tops.filter((top, at) => at === 0 || top - tops[at - 1]! > 4).length;
+      return lines > 1 ? [`${(word.textContent ?? "").trim()}: ${lines} lines`] : [];
     }),
   );
 }
@@ -371,20 +390,25 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   await page.goto("./");
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   expect(await page.locator("main p").first().evaluate((el) => getComputedStyle(el).fontSize)).toBe("40px");
-  const check = async (where: string, scope: Locator = page.locator("main")) => {
+  // `bar` is false for a screen shown under a sheet: a sheet is modal, so the page beneath it
+  // is covered on purpose and its tab bar is behind the scrim. The sheet's own lines are what
+  // must be readable then, and `scope` says so.
+  const check = async (where: string, scope: Locator = page.locator("main"), bar = true) => {
     // The screen as he sees it once it has come in: nothing still loading, nothing still moving.
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))));
     expect.soft(await sideways(page), `${where}: sideways`).toEqual([]);
     expect.soft(await nothingDrawnOverLines(scope, { minTarget: 56 }), `${where}: drawn over`).toEqual([]);
-    expect.soft(await underTheTabBar(page.locator("main").first()), `${where}: under the tab bar`).toEqual([]);
+    if (bar) expect.soft(await underTheTabBar(page.locator("main").first()), `${where}: under the tab bar`).toEqual([]);
   };
   await check("sign in");
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await check("today");
-  await page.getByTestId("proud").getByTestId("hear").click();
-  await check("today, the player open");
+  await openMe(page);
+  await proudCard(page).getByTestId("hear").click();
+  await check("the Me sheet, the player open", page.getByTestId("me-sheet"), false);
+  await page.getByTestId("sheet-close").click();
   await page.getByTestId("open-emergency").click();
   await check("the emergency card");
   await page.getByRole("button", { name: "Go back" }).click();
@@ -396,7 +420,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
   // The Record (W5, #140) at twice the text: its first screen and every screen it opens.
-  await page.getByTestId("tab-record").click();
+  await page.getByTestId("tab-records").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
   await recordSettled(page);
   await check("the Record");
@@ -410,7 +434,9 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   }
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("sign-out")).toBeVisible();
-  await check("me");
+  // Me is a sheet (D1): the page under it is covered on purpose and its tab bar is behind the
+  // scrim, so the sheet's own lines are what must be readable here.
+  await check("me", page.getByTestId("me-sheet"), false);
   await page.getByTestId("open-papers").click();
   await page.getByTestId("photos-input").setInputFiles([paperPhoto("lipid-panel-2023-09-07"), paperPhoto("receipt-2026-09-01")]);
   await check("papers from photos: the grid");
@@ -422,7 +448,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
 test("Tab goes through what can be pressed in the order the eye reads, each with a ring; a new screen starts at its heading", async ({ page, request }) => {
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("main h1")).toBeFocused();
   const stops: { top: number; name: string; ring: boolean; bar: boolean }[] = [];
   for (let n = 0; n < 40; n++) {
@@ -434,7 +460,11 @@ test("Tab goes through what can be pressed in the order the eye reads, each with
       const style = getComputedStyle(holder);
       const ring = (style.outlineStyle !== "none" && style.outlineWidth !== "0px") || style.boxShadow !== "none";
       const box = holder.getBoundingClientRect();
-      return { top: Math.round(box.top + window.scrollY), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar: Boolean(element.closest("nav.tabbar")) };
+      // The page scrolls inside its own region now (D1: the shell docks the tab bar under it),
+      // so where a control sits on the page is its box plus that region's scroll, not the
+      // window's — the window does not scroll at all.
+      const scroller = holder.closest("[data-testid=shell-scroll]") as HTMLElement | null;
+      return { top: Math.round(box.top + window.scrollY + (scroller?.scrollTop ?? 0)), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar: Boolean(element.closest("nav.tabbar")) };
     });
     if (!stop || stops.some((each) => each.name === stop.name && each.top === stop.top)) break;
     stops.push(stop);
@@ -458,7 +488,7 @@ test("Reduce Motion: nothing moves that he did not ask for, and what answers a t
   await page.emulateMedia({ reducedMotion: "reduce" });
   const pa = await seedOwner(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   const moving = () =>
     page.evaluate(
       () =>
@@ -468,7 +498,9 @@ test("Reduce Motion: nothing moves that he did not ask for, and what answers a t
         }).length,
     );
   expect(await moving()).toBe(0);
-  await page.getByTestId("proud").getByTestId("hear").click();
+  await openMe(page);
+  expect(await moving()).toBe(0);
+  await proudCard(page).getByTestId("hear").click();
   await expect(page.getByTestId("player")).toBeVisible();
   expect(await moving()).toBe(0);
 });
@@ -499,11 +531,18 @@ test("his large-text setting, from his State, makes the writing one step bigger 
     });
     expect(saved.ok(), await saved.text()).toBe(true);
   };
-  const body = () => page.getByTestId("proud").locator("p").first().evaluate((el) => getComputedStyle(el).fontSize);
+  // The proud card is on the Me sheet (D1): open it to measure a line of his body text, then
+  // shut it again so the next step is back on Today.
+  const body = async () => {
+    await openMe(page);
+    const size = await proudCard(page).locator("p").first().evaluate((el) => getComputedStyle(el).fontSize);
+    await page.getByTestId("sheet-close").click();
+    return size;
+  };
 
   await put(true);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("html")).toHaveAttribute("data-text", "large");
   expect(await body()).toBe("25px"); // his 20px body, one step bigger
   expect(await sideways(page)).toEqual([]);
@@ -511,7 +550,7 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   await expect(page.locator("html")).toHaveAttribute("data-text", "large"); // kept on the phone
   await put(false);
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");
   expect(await body()).toBe("20px");
 
@@ -519,7 +558,7 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   // phone keeps her own writing size — Mei, reading his papers, on her own phone too.
   await put(true);
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("html")).toHaveAttribute("data-text", "large");
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("sign-out").click();
@@ -528,7 +567,7 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   expect(await keptKeys(page)).not.toContain("device.text");
   await signInThroughTheApp(page, mei.phone, "Mei");
   await page.getByTestId("door-key").click();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");
 });
 
@@ -544,7 +583,7 @@ test("every card the feed pages through — his story, learning with its source,
   const lines = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as { line_id: string }[];
   await request.post(`${API}/profiles/${pa.profileId}/medicines/${lines[0]!.line_id}/taken`, { ...auth(pa.token), data: { anchor: "breakfast" } });
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("feed-card").first()).toBeVisible();
 
@@ -565,25 +604,21 @@ test("every card the feed pages through — his story, learning with its source,
   expect(seen.some((kind) => kind.startsWith("learning:"))).toBe(true);
 });
 
-/** The floating tab bar at rest, on Today. By the design the bar floats over the page, so with
- *  Today at rest — opened and not yet scrolled — it is drawn over whatever is at the bottom of
- *  the screen: a card's lines, its Hear, a feeling word (the user saw this). Nothing is stuck
- *  under it (`underTheTabBar`, above, on every screen): each can be scrolled clear. The rule the
- *  patient mode asks — nothing drawn over a line or a control — needs the page to scroll above a
- *  docked bar, which is the restyle's (D1) to make. Until then this is expected to fail and says
- *  what the bar covers; when the restyle lands it turns red, and `test.fail` comes off. */
+/** The tab bar at rest, on Today. The shell (D1) docks the bar under the page, which scrolls in
+ *  its own region above it: with Today at rest — opened and not yet scrolled — the bar is drawn
+ *  over no card's lines, no Hear, no feeling word. The rule the patient mode asks, nothing drawn
+ *  over a line or a control, holds at rest as it does at the page's end (`underTheTabBar`). */
 for (const [label, viewport, look] of [
   ["Pixel 5", null, "patient"],
   ["a small phone, 360 by 640", { width: 360, height: 640 }, "patient"],
   ["Pixel 5", null, "caregiver"],
 ] as const) {
-  test(`at rest on Today, the tab bar is drawn over no line and no control — ${label}, ${look} density (expected to fail until the restyle, D1)`, async ({ page, request }) => {
-    test.fail(true, "the tab bar floats over the page by the design; the restyle (D1) docks it — take test.fail off then");
+  test(`at rest on Today, the tab bar is drawn over no line and no control — ${label}, ${look} density`, async ({ page, request }) => {
     if (viewport) await page.setViewportSize(viewport);
     const pa = await seedOwner(request);
     await lookOnThePhone(page, look);
     await signInThroughTheApp(page, pa.phone, "Pa");
-    await expect(page.getByTestId("proud")).toBeVisible();
+    await todayReady(page);
     await page.waitForLoadState("networkidle");
     const covered = await coveredByTheTabBar(page, 0);
     test.info().annotations.push({ type: "covered by the tab bar at rest", description: covered.join(" | ") || "nothing" });

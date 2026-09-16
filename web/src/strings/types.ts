@@ -18,8 +18,20 @@ export const LANGUAGES: readonly Language[] = ["en", "ms", "zh"];
 export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
-  demo: { banner: string; lines: readonly string[] };
-  tabs: { today: string; record: string; family: string; me: string };
+  demo: { banner: string; bannerShort: string; lines: readonly string[] };
+  tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string };
+  /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close. */
+  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string };
+  /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
+  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  /** The tabs' own titles (D1). */
+  places: {
+    visitsOwn: string; visitsOwnOther: string;
+    visitsOther: string;
+    visitsNoneOther: string;
+    planTitle: string;
+    planLead: string;
+  };
   signIn: {
     title: string;
     phoneLead: string;
@@ -54,6 +66,7 @@ export interface Strings {
     invitedLine: string;
     waiting: string;
     waitingLine: string;
+    lookAgain: string;
   };
   consent: { title: string; lead: string; agree: string; language: string };
   claim: { title: string; setUpBy: string; keepsSeeing: string; mine: string };
@@ -78,6 +91,10 @@ export interface Strings {
     roleCaregiver: string;
     roleSteward: string;
     roleOther: string;
+    openOwn: string;
+    openOther: string;
+    onlyThese: string;
+    cannotLook: string;
   };
   today: {
     now: string;
@@ -97,12 +114,13 @@ export interface Strings {
     noMedicinesSub: string;
     hear: string;
     readingTitle: string;
+    readingTitleOther: string;
     readingLead: string;
     readingButton: string;
     readingLeadEvening: string;
     aTablet: string;
     earlierTitle: string;
-    stateStable: string;
+    stateStable: string; stateStableOther: string; stateWatchOther: string; callFamilyOther: string; offlineSubOther: string; asOfOther: string; cannotReachOther: string; emergencySoonOther: string; todayListOther: string; fromTodayOther: string; tookMorningOther: string; allTakenOther: string;
     stateWatch: string;
     stateWatchSub: string;
     stateAct: string;
@@ -129,11 +147,12 @@ export interface Strings {
     fromState: string;
     fromDays: string;
     emergencyOpen: string;
+    emergencyOpenOther: string;
   };
   /** The vertical feed (E21): the pager's name, its section labels, its buttons, and the few
    *  lines it says itself. Every card's own words are the backend's. */
   feed: {
-    title: string;
+    title: string; empty: string; emptyAction: string;
     open: string;
     story: string;
     learning: string;
@@ -180,6 +199,7 @@ export interface Strings {
   };
   reading: {
     title: string;
+    titleOther: string;
     lead: string;
     top: string;
     bottom: string;
@@ -204,6 +224,7 @@ export interface Strings {
     setUp: string;
     signOut: string;
     remindersGet: string;
+    emergencyPrint: string;
     remindersOn: string;
     remindersStop: string;
     remindersDenied1: string;
@@ -230,6 +251,7 @@ export interface Strings {
   visit: {
     title: string;
     open: string;
+    openOther: string;
     none: string;
     fromVisit: string;
     onDuty: string;
@@ -305,18 +327,21 @@ export interface Strings {
     topThree: string;
     notWell: string;
     notWellTitle: string;
+    notWellTitleOther: string;
     notWellLead: string;
     wordsLabel: string;
+    wordsLabelOther: string;
     send: string;
     sayIt: string;
     stopAndSend: string;
     sending: string;
     whatToDo: string;
     backToday: string;
-    symptomsOpen: string;
+    symptomsOpen: string; notWellOther: string; symptomsOpenOther: string;
     symptomsTitleSelf: string;
     symptomsTitleOther: string;
     symptomsLead: string;
+    symptomsLeadOther: string;
     symptomsKeep: string;
     sendAgain: string;
     symptomsSaved: string;
@@ -324,8 +349,10 @@ export interface Strings {
     nudgeWentWell: string;
     nudgeNotToday: string;
     briefOpen: string;
+    briefOpenOther: string;
     briefTitle: string;
     questionsOpen: string;
+    questionsOpenOther: string;
     questionsTitle: string;
     questionLabel: string;
     questionAdd: string;
@@ -503,19 +530,20 @@ export interface Strings {
   record: {
     title: string;
     titleOther: string;
-    medicines: string;
-    papers: string;
-    routine: string;
-    timeline: string;
-    trends: string;
-    providers: string;
+    medicines: string; medicinesOther: string;
+    papers: string; papersOther: string;
+    routine: string; routineOther: string;
+    timeline: string; timelineOther: string;
+    trends: string; trendsOther: string;
+    providers: string; providersOther: string;
     changes: string;
-    back: string;
+    back: string; backOther: string;
     sureYes: string;
+    sureYesOther: string;
     sureRead: string;
     disputed: string;
     matchByNameOnly: string[];
-    twice: string;
+    twice: string; twiceOther: string;
     aboutIt: string;
     add: string;
     storyPurpose: string;
@@ -524,6 +552,7 @@ export interface Strings {
     storyAvoid: string;
     storyForgot: string;
     storyAsk: string;
+    storyAskOther: string;
     hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
     addLead: string;
     addLead2: string;
@@ -534,15 +563,15 @@ export interface Strings {
     countLabel: string;
     doctorLabel: string;
     checkIt: string;
-    outcomeNew: string;
-    outcomeRefill: string;
+    outcomeNew: string; outcomeNewOther: string;
+    outcomeRefill: string; outcomeRefillOther: string;
     outcomeChange: string;
     flaggedTitle: string;
-    flaggedNone: string;
+    flaggedNone: string; flaggedNoneOther: string;
     severity: Record<"major" | "moderate" | "minor", string>;
     pair: string;
     addIt: string;
-    added: string;
+    added: string; addedOther: string;
     moreTitle: string;
     moreLead: string;
     moreLabel: string;
@@ -553,6 +582,7 @@ export interface Strings {
     orderYes: string;
     orderNo: string;
     papersNone: string;
+    papersNoneOther: string;
     paperFrom: string;
     paperOpen: string;
     older: string;
@@ -592,11 +622,12 @@ export interface Strings {
     notesOnly: string;
     noteLabel: string;
     noteSave: string;
-    noteSaved: string;
+    noteSaved: string; noteSavedOther: string;
     writtenOn: string;
     waiting: string;
     trendsLead: string;
     analytes: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
+    analytesOther: Record<"total_cholesterol" | "ldl" | "hdl" | "triglycerides" | "hba1c" | "creatinine" | "egfr" | "potassium" | "haemoglobin" | "tsh", string>;
     resultOn: string;
     resultOnUnit: string;
     rangeUnder: string;
@@ -607,15 +638,19 @@ export interface Strings {
     guideRange: string;
     noRangeBecause: Record<"needs_age" | "needs_sex" | "none_on_file", string>;
     anchors: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
+    anchorsOther: Record<"wake" | "breakfast" | "lunch" | "dinner" | "bed", string>;
     readings: Record<"blood_pressure" | "blood_sugar" | "weight", string>;
     walk: string;
     notSet: string;
+    notSetOther: string;
     setDay: string;
+    setDayOther: string;
     timeLabel: string;
     morningCard: string;
     walkAfter: string;
     checkDay: string;
     dayAsk: string;
+    dayAskOther: string;
     dayYes: string;
     daySaved: string;
     tableMoment: string;
@@ -640,7 +675,9 @@ export interface Strings {
     stop: string;
     stopYes: string;
     closeAccount: string;
+    closeAccountOther: string;
     closeAccountYes: string;
+    closeAccountYesOther: string;
     keepCopy: string;
     savePage: string;
     thread: string;

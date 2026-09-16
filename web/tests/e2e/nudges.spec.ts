@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Request } from "@playwright/test";
 import { FROZEN_CLOCK } from "../../playwright.config";
-import { API, backendClock, captureSpeech, fixClock, nothingDrawnOverLines, seedOwner, setBackendClock, signInThroughTheApp } from "./helpers";
+import { API, backendClock, captureSpeech, fixClock, nothingDrawnOverLines, seedOwner, setBackendClock, signInThroughTheApp, todayReady} from "./helpers";
 
 /** E17-03's web half: the day's nudge on Today (E11-07 put it there, PR #138; this closes what
  *  was left — the dismiss round trip, the quiet day it leaves behind, both densities, and axe).
@@ -77,7 +77,7 @@ test("one a day, honoured on the client too: once the day's nudge is handled, th
   // Reloading reads the backend fresh, which is the strongest version of "nothing to show":
   // not a client that merely forgot, but the same answer read again.
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.getByTestId("nudge")).toHaveCount(0);
 });
 
@@ -152,7 +152,9 @@ test("both densities show the day's nudge with nothing drawn over a line", async
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("density-caregiver").click();
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  // Me is a sheet over the screen (D1): shut it, and Today is the screen it was opened from.
+  await page.getByTestId("sheet-close").click();
+  await todayReady(page);
   await expect(nudge).toBeVisible();
   expect(await nothingDrawnOverLines(nudge, { lines: "p", controls: "button", minTarget: 48 })).toEqual([]);
 });
@@ -179,6 +181,6 @@ test("a nudge with no why does not render", async ({ page, request }) => {
     await route.fulfill({ response: original, json: body });
   });
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect(page.getByTestId("nudge")).toHaveCount(0);
 });

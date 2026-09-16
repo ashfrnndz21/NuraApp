@@ -1,4 +1,4 @@
-"""E19-01, E11, B1: the twenty-two templates, their slots, which are approved, and the business number."""
+"""E19-01, E11, B1: the twenty-four templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 
@@ -27,8 +27,10 @@ EVERY_TEMPLATE = (
     "red_flag_notice",
     "dose_reminder",
     "dose_check",
+    "dose_resolved",
     "reorder_family",
     "doses_count",
+    "doses_late_count",
     "papers_waiting",
     "family_note",
     "red_flag_notice_self",
@@ -43,12 +45,13 @@ EVERY_TEMPLATE = (
     "unheard_note_notice_call",
     "unheard_note_notice_from",
 )
-"""E19's six, then E11's nine (the ladder's two asks, the reorder to the family, the count,
-the papers waiting, a family message, the red-flag notice's two variants, and the day's smart
-nudge), then B1's five (the red-flag notice for the ambulance tier, out of the doctor's hours
-with the hospital on his insurance or without, its neutral fallback for when a tier's own
-template is not yet approved (#174), and the pre-visit brief at T-3), then the three for a
-voice note nobody could hear, in the order they are submitted for approval."""
+"""E19's six, then E11's eleven (the ladder's two asks, the ladder standing down for whoever it
+reached (#198), the reorder to the family, the count, the count's late twin (#198), the papers
+waiting, a family message, the red-flag notice's two variants, and the day's smart nudge), then
+B1's five (the red-flag notice for the ambulance tier, out of the doctor's hours with the
+hospital on his insurance or without, its neutral fallback for when a tier's own template is
+not yet approved (#174), and the pre-visit brief at T-3), then the three for a voice note
+nobody could hear, in the order they are submitted for approval."""
 
 E19_SIX = EVERY_TEMPLATE[:6]
 """Approved: the only templates a deployment's number carries until Meta approves the rest."""
@@ -115,7 +118,7 @@ FILL = {
 }
 
 
-def test_there_are_twenty_three_and_each_has_every_language() -> None:
+def test_there_are_twenty_four_and_each_has_every_language() -> None:
     assert TEMPLATE_NAMES == EVERY_TEMPLATE
     for template in TEMPLATES.values():
         assert set(template.text) == set(LANGUAGES)

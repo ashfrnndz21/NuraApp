@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { APIRequestContext, Locator, Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 /** The same three things `backend/scripts/checkpoint.py` does: a fresh number every run, the
  *  login code read from the `make dev` log (never from the API), and a medicine seeded by
@@ -702,6 +702,36 @@ export async function nothingDrawnOverLines(
   }, settings);
 }
 
+/** Today has its page, fresh or kept (D1: the proud number that used to say so is on Me now). */
+export async function todayReady(page: Page): Promise<void> {
+  await expect(page.getByTestId("today-ready")).toBeAttached();
+}
+
+/** Open the Me sheet from the header's avatar. */
+export async function openMe(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await expect(page.getByTestId("me-sheet")).toBeVisible();
+}
+
+/** The proud number's card, inside the Me sheet (D1): the backend's summary when it can be
+ *  read, and the stand-in counted from Today when it cannot. The sheet must already be open. */
+export function proudCard(page: Page): Locator {
+  return page.locator("[data-testid=me-proud], [data-testid=proud]").first();
+}
+
+/** The proud number, read on the Me sheet (D1): the sheet opened, read, and closed again. */
+export async function expectProud(page: Page, value: string): Promise<void> {
+  await openMe(page);
+  await expect(page.locator("[data-testid=me-proud-number], [data-testid=proud-number]").first()).toHaveText(value);
+  await page.getByTestId("sheet-close").click();
+  await expect(page.getByTestId("me-sheet")).toHaveCount(0);
+}
+
+/** The page's own region scrolled to its end (D1: the page scrolls inside the shell). */
+export async function scrollPageToEnd(page: Page): Promise<void> {
+  await page.getByTestId("shell-scroll").evaluate((region) => (region.scrollTop = region.scrollHeight));
+}
+
 /** Nothing is stuck under the floating tab bar. The bar floats over the page, so a line may pass
  *  under it while the page scrolls — but with the page scrolled as far down as it goes, no line
  *  and no control of the screen may still be under it, or it could never be read or pressed
@@ -719,23 +749,28 @@ export async function underTheTabBar(scope: Locator, options: { lines?: string; 
     // To the bottom, and again until the page stops growing there: a screen still reading (the
     // visit's logistics card comes in after the screen opens) grows under a check that
     // scrolled once, and would name lines that the page's own room clears.
+    // The shell's page scrolls in its own region (D1); a screen outside the shell, the window.
+    const region = document.querySelector<HTMLElement>("[data-testid=shell-scroll]");
+    const scroller = region ?? document.scrollingElement ?? document.documentElement;
     let settled = 0;
     for (let tries = 0; tries < 40 && settled < 3; tries++) {
-      const height = document.documentElement.scrollHeight;
-      window.scrollTo(0, height);
+      const height = scroller.scrollHeight;
+      scroller.scrollTop = height;
       await frame();
-      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
-      settled = atBottom && document.documentElement.scrollHeight === height ? settled + 1 : 0;
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1;
+      settled = atBottom && scroller.scrollHeight === height ? settled + 1 : 0;
     }
     const top = bar.getBoundingClientRect().top;
+    // What the region clips below its own edge is hidden, not under the bar.
+    const shown = region ? region.getBoundingClientRect().bottom : window.innerHeight;
     const problems: string[] = [];
     for (const element of root.querySelectorAll<HTMLElement>(`${lines}, ${controls}`)) {
       if (element.offsetParent === null || element.closest("nav.tabbar") || element.closest(".feed-pager")) continue;
       const box = element.getBoundingClientRect();
-      if (box.height === 0 || box.top >= window.innerHeight) continue;
-      if (box.bottom > top + 0.5) problems.push(`under the tab bar: ${(element.textContent || element.getAttribute("aria-label") || element.tagName).trim().slice(0, 60)}`);
+      if (box.height === 0 || box.top >= Math.min(shown, window.innerHeight)) continue;
+      if (Math.min(box.bottom, shown) > top + 0.5) problems.push(`under the tab bar: ${(element.textContent || element.getAttribute("aria-label") || element.tagName).trim().slice(0, 60)}`);
     }
-    window.scrollTo(0, 0);
+    scroller.scrollTop = 0;
     await frame();
     return problems;
   }, settings);
@@ -750,18 +785,22 @@ export async function coveredByTheTabBar(page: Page, scrollY = 0): Promise<strin
     const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
     const bar = document.querySelector("nav.tabbar");
     if (!bar) return [];
-    window.scrollTo(0, at);
+    const region = document.querySelector<HTMLElement>("[data-testid=shell-scroll]");
+    const scroller = region ?? document.scrollingElement ?? document.documentElement;
+    scroller.scrollTop = at;
     await frame();
     const top = bar.getBoundingClientRect().top;
+    // What the shell's region clips below its own edge is hidden, not covered by the bar.
+    const shown = region ? region.getBoundingClientRect().bottom : window.innerHeight;
     const covered: string[] = [];
     for (const element of document.querySelectorAll<HTMLElement>("main h1, main h2, main p, main .label, main button, main a.pill, main label.pill")) {
       if (element.closest("nav.tabbar") || element.closest(".feed-pager") || element.offsetParent === null) continue;
       const box = element.getBoundingClientRect();
-      if (box.height > 0 && box.bottom > top + 0.5 && box.top < window.innerHeight) {
+      if (box.height > 0 && Math.min(box.bottom, shown) > top + 0.5 && box.top < Math.min(shown, window.innerHeight)) {
         covered.push(`${element.tagName.toLowerCase()}: ${(element.textContent || element.getAttribute("aria-label") || "").trim().slice(0, 50)}`);
       }
     }
-    window.scrollTo(0, 0);
+    scroller.scrollTop = 0;
     await frame();
     return covered;
   }, scrollY);

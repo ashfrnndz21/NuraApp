@@ -1,11 +1,14 @@
 import { signal } from "@preact/signals";
+import type { Tab } from "./nav";
 import { Refused } from "./api/client";
 import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
 import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
+import { forgetKnown } from "./store/profiles";
 import type { RecordAt } from "./record/places";
 import { clearAllProfileData, clearProfileData } from "./offline/todayCache";
+import { todayPage } from "./today/page";
 import { voice } from "./player/voice";
 import { language } from "./strings";
 import { chooseProfile, me, profile, setLargeText, setToken, token } from "./store/session";
@@ -25,17 +28,22 @@ export type Screen =
   | { name: "forSomeone" }
   | { name: "today"; saved?: boolean }
   | { name: "card"; item: FeedItemOut }
+  /** The emergency card, as the backend prints it: from the Me sheet, one tap. */
+  | { name: "emergency" }
   /** The vertical feed (E21): one card a screen, from Today's "See more for you". */
   | { name: "feed" }
   /** Ask about one card, or ask or search from Today: E03's recall (`POST /profiles/{id}/ask`)
-   *  and the ask bar's Web, Providers and Videos filters, shown as the backend wrote them. */
-  | { name: "ask"; item?: FeedItemOut }
+   *  and the ask bar's Web, Providers and Videos filters, shown as the backend wrote them.
+   *  `question` is what was typed into the ask bar the shell puts on every screen (D1). */
+  | { name: "ask"; item?: FeedItemOut; question?: string }
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
-  | { name: "me" }
+  /** The visits tab: his visits, and getting ready for the next one. */
+  | { name: "visits" }
   /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
-   *  and the family's papers; `at` is the one screen under it. */
+   *  and the family's papers; `at` is the one screen under it. Each persona's tabs open into
+   *  it (nav.ts, `recordTab`). */
   | { name: "record"; at?: RecordAt }
   | { name: "onboarding" }
   /** His emergency card, one tap from Today, readable with no network (E00-08, E13-01). */
@@ -71,17 +79,39 @@ export type FamilyPart =
   | "settings"
   | "documents";
 
-export type Tab = "today" | "record" | "family" | "me";
+export type { Tab };
 
-/** The tab bar's places: Today, the Record (*Papers*), Family, Me. */
+/** Each tab's first screen — one tab set for everyone (nav.ts). Medicines and Records are
+ *  places in the Record (W5); Visits is his visits and getting ready for the next one. */
 export function openTab(tab: Tab): void {
-  if (tab === "record") return go({ name: "record", at: { name: "hub" } });
-  go(tab === "family" ? { name: "family", part: "home" } : { name: tab });
+  switch (tab) {
+    case "medicines":
+      return go({ name: "record", at: { name: "medicines" } });
+    case "records":
+      return go({ name: "record", at: { name: "hub" } });
+    case "family":
+      return go({ name: "family", part: "home" });
+    default:
+      return go({ name: tab });
+  }
 }
 
 export const screen = signal<Screen>({ name: "loading" });
 
+/** Me (D1): a sheet over whatever screen is open, from the header's avatar — never a tab. */
+export const meOpen = signal(false);
+
+export function openMe(): void {
+  meOpen.value = true;
+}
+
+export function closeMe(): void {
+  meOpen.value = false;
+}
+
+/** A new screen closes the Me sheet: whatever was tapped in it has somewhere to go. */
 export function go(next: Screen): void {
+  meOpen.value = false;
   screen.value = next;
 }
 
@@ -155,6 +185,32 @@ export async function openProfile(chosen: ProfileOut): Promise<void> {
   go({ name: "today" });
 }
 
+/** Nothing of anyone's papers stays on the phone: the token, the chosen profile, every cached
+ *  Today page, what the player fetched, whose papers this person could open, and his large-text
+ *  setting (read from his State). Whose papers were open is forgotten first, then the token — so
+ *  a wipe cut short never leaves the next person on the last one's papers, and a page still
+ *  being read is not kept (useToday checks the token) — and the cache goes after both.
+ *
+ *  Every way the app can land on sign-in runs this. A session that expired is the same leak as
+ *  a sign-out, through a door people walk through far more often. */
+export async function forgetEverything(): Promise<void> {
+  voice.forget();
+  await setLargeText(false);
+  await chooseProfile(null);
+  await setToken(null);
+  me.value = null;
+  todayPage.value = null;
+  await clearAllProfileData();
+  forgetFeed();
+  forgetKnown();
+}
+
+/** Back to sign-in with nothing of the last person left behind. */
+export async function signOutHere(): Promise<void> {
+  await forgetEverything();
+  go({ name: "signin" });
+}
+
 export async function signOutEverywhere(): Promise<void> {
   const bearer = token.value;
   if (bearer) {
@@ -164,18 +220,7 @@ export async function signOutEverywhere(): Promise<void> {
       /* the token is forgotten here whatever the server said */
     }
   }
-  // Nothing of anyone's papers stays on the phone after sign-out: the token, the chosen
-  // profile, every cached Today page and his large-text setting (read from his State) go.
-  await clearAllProfileData();
-  forgetFeed();
-  voice.forget();
-  await setLargeText(false);
-  // Whose papers were open is forgotten before the token: a sign-out cut short (the app closed
-  // half-way) never leaves the next person to sign in on this phone on the last one's papers.
-  await chooseProfile(null);
-  await setToken(null);
-  me.value = null;
-  go({ name: "signin" });
+  await signOutHere();
 }
 
 export async function reloadDoors(): Promise<void> {

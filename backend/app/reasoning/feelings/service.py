@@ -151,6 +151,7 @@ async def _red_path(
     transcriber: Transcriber,
     registry: DrugRegistry,
     via: Via,
+    said: str | None = None,
 ) -> tuple[uuid.UUID, RedPath]:
     """The not-feeling-well button, pressed with his word: E13's whole flow, server-side.
 
@@ -166,7 +167,7 @@ async def _red_path(
         transcriber=transcriber,
         registry=registry,
         via=via,
-        words=WORDS[code][feeling],
+        words=said if said and said.strip() else WORDS[code][feeling],
         language=code,
         feeling=feeling,
     )
@@ -197,8 +198,11 @@ async def record_tap(
     transcriber: Transcriber,
     via: Via,
     language: str | None = None,
+    said: str | None = None,
 ) -> Tapped:
-    """His tap on the cloud. A red word takes the red-flag path first and asks nothing."""
+    """His tap on the cloud. A red word takes the red-flag path first and asks nothing. `said`
+    is the words the red word was heard in when it was typed rather than tapped (Ask or search):
+    they are the moment's words, kept as his, instead of the cloud's word for it."""
     moment = utcnow()
     if is_red(word):
         code = await _language(session, context, language)
@@ -211,6 +215,7 @@ async def record_tap(
             transcriber=transcriber,
             registry=registry,
             via=via,
+            said=said,
         )
         tap = await audited_write(
             session,

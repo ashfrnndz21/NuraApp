@@ -1,6 +1,6 @@
 import { effect, signal } from "@preact/signals";
 import type { MeOut, Posture, ProfileOut } from "../api/types";
-import { deviceLanguage, isLanguage, language, type Language } from "../strings";
+import { aboutWhom, deviceLanguage, isLanguage, language, type Language } from "../strings";
 import { kvDel, kvGet, kvSet } from "./kv";
 
 /** Who is signed in, whose papers are open, and how the app looks — as signals, persisted
@@ -52,6 +52,12 @@ effect(() => {
   const html = root();
   if (!html) return;
   html.dataset.density = densityFor(profile.value?.standing, densityChosen.value);
+  // How big the phone's own writing is, against the 16px a browser starts from. A media query
+  // cannot answer this — `em` and `rem` there are the browser's initial size, not the root's —
+  // so the layout reads it here, and the chrome gives way rather than his lines.
+  const rootSize = parseFloat(getComputedStyle(html).fontSize);
+  if (Number.isFinite(rootSize) && rootSize >= 24) html.dataset.writing = "large";
+  else delete html.dataset.writing;
   html.dataset.posture = posture.value;
   html.lang = language.value;
   if (largeText.value) html.dataset.text = "large";
@@ -106,8 +112,9 @@ export async function setDensity(value: Density | null): Promise<void> {
   densityChosen.value = value;
 }
 
-/** Forget who was signed in and whose papers were open; keep the device's language and look. */
-export async function clearSession(): Promise<void> {
-  me.value = null;
-  await Promise.all([setToken(null), chooseProfile(null)]);
-}
+/** Whose papers these are, when not the reader's own: the chrome that speaks to him is said about
+ *  him by name on every screen of hers (strings `aboutWhom`). */
+effect(() => {
+  const papers = profile.value;
+  aboutWhom.value = papers && papers.standing !== "owner" ? papers.display_name || null : null;
+});

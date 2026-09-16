@@ -74,6 +74,12 @@ export interface ThreadEntryOut {
   card_kind: string | null;
 }
 
+/** A page of the thread, newest first, and the cursor for the page before it. */
+export interface ThreadPageOut {
+  entries: ThreadEntryOut[];
+  next_cursor: string | null;
+}
+
 export interface RosterSlotOut {
   slot_id: string;
   person_id: string;

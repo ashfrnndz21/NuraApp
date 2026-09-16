@@ -623,6 +623,9 @@ test("the post-visit card on the web: each line with where it was said, one left
   await fresh;
   await expect(page.getByTestId("pager")).toBeVisible();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
+  // The pager may open on the backend's cached page, from before his yes; the fresh page takes
+  // the screen only while he is on the first card, so it is waited for before he reads on.
+  await expect(page.locator("article.feed-card[data-type=memo]").first()).toBeAttached();
   await pageUntil(page, "memo");
   const memo = page.locator("article.feed-card[data-type=memo]").first();
   const withClip = memo.getByTestId("card-line").filter({ has: page.getByTestId("hear-clip") }).first();
@@ -643,6 +646,9 @@ test("the post-visit card on the web: each line with where it was said, one left
   await page.getByRole("button", { name: "Today", exact: true }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
+  // The pager may open on the backend's cached page, from before his yes; the fresh page takes
+  // the screen only while he is on the first card, so it is waited for before he reads on.
+  await expect(page.locator("article.feed-card[data-type=memo]").first()).toBeAttached();
   await pageUntil(page, "memo");
   // The same line, by its words: once refused, it has no button to be found by.
   const again = page.locator("article.feed-card[data-type=memo]").first().getByTestId("card-line").filter({ hasText: caption }).first();
@@ -698,7 +704,7 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
   await shotAs(page, "cp27-me", true);
 });
 
-test("today's top three: one card a screen with Next, in the backend's order, each under its why", async ({ page, request }) => {
+test("today's top three: stacked under For you today, in the backend's order, each under its why", async ({ page, request }) => {
   const pa = await seedFeed(request);
   const top = ((await (await request.get(`${API}/profiles/${pa.profileId}/feed/today`, auth(pa.token))).json()) as { items: { headline: string; status: string; why: { plain?: string } }[] }).items.filter(
     (item) => item.status !== "dismissed",
@@ -707,15 +713,13 @@ test("today's top three: one card a screen with Next, in the backend's order, ea
   await signInThroughTheApp(page, pa.phone, "Pa");
   const three = page.getByTestId("top-three");
   await expect(three).toHaveAttribute("data-count", String(top.length));
+  const cards = three.getByTestId("top-three-card");
+  await expect(cards).toHaveCount(top.length);
   for (const [at, item] of top.entries()) {
-    await expect(three).toHaveAttribute("data-at", String(at));
-    await expect(three.getByTestId("top-three-card")).toHaveCount(1);
-    await expect(three.getByTestId("top-three-card")).toContainText(item.headline);
-    if (item.why.plain) await expect(three.getByTestId("top-three-card").locator(".provenance")).toHaveText(item.why.plain);
-    expect(await nothingDrawnOverLines(three, { lines: "h2, p", controls: "button", minTarget: 56 })).toEqual([]);
-    if (at < top.length - 1) await three.getByTestId("top-three-next").click();
+    await expect(cards.nth(at)).toContainText(item.headline);
+    if (item.why.plain) await expect(cards.nth(at).locator(".provenance")).toHaveText(item.why.plain);
   }
-  await expect(three.getByTestId("top-three-next")).toHaveCount(0);
+  expect(await nothingDrawnOverLines(three, { lines: "h2, p", controls: "button", minTarget: 56 })).toEqual([]);
   await shotAs(page, "cp27-top-three", true);
 });
 

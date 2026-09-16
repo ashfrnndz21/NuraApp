@@ -6,6 +6,7 @@
     GET  /profiles/{id}/medicines/history          every line ever written, the change log
     GET  /profiles/{id}/medicines/interactions     every flag on the list, as questions
     GET  /profiles/{id}/medicines/today            today's dose cards at his anchors, due or missed
+    GET  /profiles/{id}/medicines/now              the one big number on his Today, and its words
     GET  /profiles/{id}/proud                      the proud number: days with a tablet taken
     POST /profiles/{id}/medicines/{line}/taken     his tap
     GET  /profiles/{id}/medicines/{line}/story     the story, in his language
@@ -30,6 +31,7 @@ from typing import Literal
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
     AskedOut,
@@ -41,6 +43,7 @@ from app.channels.api.schemas import (
     MedicineIn,
     MoreIn,
     MoreOut,
+    NowOut,
     OrderPreviewOut,
     ProudOut,
     ReconciledOut,
@@ -59,6 +62,7 @@ from app.medicines.service import (
     history,
     interaction_flags,
     language_for,
+    now_count,
     plan,
     proud_days,
     reconcile,
@@ -101,7 +105,8 @@ async def medicines(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
     withheld = await _sources_withheld(session, context, [view.line for view in views])
-    return [LineOut.of(view, withheld.get(view.line.id, ())) for view in views]
+    reader = await reader_of(session, context, language)
+    return [reader.model(LineOut.of(view, withheld.get(view.line.id, ()))) for view in views]
 
 
 @router.post("/{profile_id}/medicines/draft")
@@ -203,7 +208,23 @@ async def doses_today(
     slots = await today(
         session, context=context, registry=providers_of(request).drug_registry, language=language
     )
-    return [SlotOut.of(slot) for slot in slots]
+    reader = await reader_of(session, context, language)
+    return [reader.model(SlotOut.of(slot)) for slot in slots]
+
+
+@router.get("/{profile_id}/medicines/now")
+async def medicines_now(
+    request: Request, context: Context, session: Db, language: str | None = Language
+) -> NowOut:
+    """The one big number on his Today (the hero, docs/design-system.md §4): how many tablets
+    at the moment of the day that is open now, or the next one still to come today, and his
+    words for what it counts — counted from today's cards, under the medicines scope."""
+    found = await now_count(
+        session, context=context, registry=providers_of(request).drug_registry, language=language
+    )
+    if found is None:
+        return NowOut(count=None, anchor=None, words=None)
+    return NowOut(count=found.count, anchor=found.anchor, words=found.words)
 
 
 @router.get("/{profile_id}/proud")

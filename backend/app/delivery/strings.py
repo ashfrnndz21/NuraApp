@@ -17,6 +17,7 @@ words (docs/plain-words.md §3).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -725,15 +726,14 @@ servers; the app opens and reads the card from the region."""
 
 def theirs(medicine: str, name: str, language: str | None) -> str:
     """His words for a medicine, said about him to someone else: "your blood pressure tablet"
-    to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes."""
+    to him is "Pa's blood pressure tablet" to Siti. Only the possessive changes, wherever it
+    sits ("ubat tekanan darah anda (amlodipine)" is "ubat tekanan darah Pa (amlodipine)")."""
     code = language_for(language)
-    if code == "en" and medicine.startswith("your "):
-        return f"{name}'s {medicine[len('your ') :]}"
-    if code == "ms" and medicine.endswith(" anda"):
-        return f"{medicine[: -len(' anda')]} {name}"
-    if code == "zh" and medicine.startswith("您的"):
-        return f"{name}的{medicine[len('您的') :]}"
-    return medicine
+    if code == "en":
+        return re.sub(r"\byour\b", f"{name}'s", medicine, flags=re.IGNORECASE)
+    if code == "ms":
+        return re.sub(r"\banda\b", name, medicine, flags=re.IGNORECASE)
+    return medicine.replace("您的", f"{name}的").replace("您", name)
 
 
 # --- the caregiver's lines -----------------------------------------------------------------
@@ -757,3 +757,260 @@ CAREGIVER_SUPPRESSED_LINE = (
     "{name} said {feeling}. This flag depends on a fact that is not on the record ({reason}), "
     "so it was not raised to him. Add the fact, or ask the doctor."
 )
+
+# --- about him, to someone else (D1) ------------------------------------------------------------
+# The same cards, said about him by name to a family member reading his papers with her own key:
+# each twin mirrors its original's keys and places, "{patient}" his name as the family writes it.
+# Chosen on the backend for a key that is not his (`app.channels.about_him`); a line with no twin
+# that speaks to him is not shown to anyone else.
+
+# @patient headline
+HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "recap": "{patient}'s week, in 30 seconds",
+        "now_tablets": "{patient}'s tablets today",
+        "now_visit": "{patient} sees {doctor} today",
+        "reading": "{patient}'s blood pressure today",
+        "story_reading": "From {patient}'s blood pressure book",
+        "story_paper": "From {patient}'s papers",
+        "story_note": "{patient}'s own words",
+        "story_change": "How {patient}'s blood pressure moved",
+        "story_trend": "{patient}'s blood test over time",
+    },
+    "ms": {
+        "recap": "Minggu {patient}, dalam 30 saat",
+        "now_tablets": "Ubat {patient} hari ini",
+        "now_visit": "{patient} berjumpa {doctor} hari ini",
+        "reading": "Tekanan darah {patient} hari ini",
+        "story_reading": "Dari buku tekanan darah {patient}",
+        "story_paper": "Dari surat-surat {patient}",
+        "story_note": "Kata-kata {patient} sendiri",
+        "story_change": "Bagaimana tekanan darah {patient} berubah",
+        "story_trend": "Ujian darah {patient} dari masa ke masa",
+    },
+    "zh": {
+        "recap": "30秒看{patient}的这一周",
+        "now_tablets": "{patient}今天的药",
+        "now_visit": "{patient}今天看{doctor}",
+        "reading": "{patient}今天的血压",
+        "story_reading": "来自{patient}的血压本",
+        "story_paper": "来自{patient}的文件",
+        "story_note": "{patient}自己的话",
+        "story_change": "{patient}的血压有什么变化",
+        "story_trend": "{patient}的验血结果",
+    },
+}
+"""A card's headline said about him by name."""
+
+# @patient
+LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
+    "en": {
+        "now_quiet": ("Nothing new is waiting for {patient} today.", "Swipe up to hear more."),
+        "gate": ("That is all that is new today.", "Do you want to keep going?", "Swipe up to hear more about {patient}."),
+        "learning_keep_taking": ("Ask {doctor} before {patient} stops this medicine.",),
+        "recap_intro": ("This is {patient}'s week, from {patient}'s blood pressure book.",),
+        "now_tablets": (
+            "{patient}'s tablets for today are on the list.",
+            "{patient} takes them the way the label says.",
+            "Tap when {patient} has had them.",
+        ),
+        "now_visit": (
+            "{patient} sees {doctor} today.",
+            "Bring {patient}'s blood pressure book and tablets.",
+        ),
+        "reading": (
+            "{patient}'s blood pressure today was {top_number} over {bottom_number}.",
+            "It is in {patient}'s blood pressure book.",
+        ),
+        "visit": (
+            "{patient} sees {doctor} on {day}.",
+            "Bring {patient}'s blood pressure book and tablets.",
+        ),
+        "memo": ("At {patient}'s last visit {doctor} said this:",),
+        "story_reading": (
+            "On {day} {patient}'s blood pressure was {top_number} over {bottom_number}.",
+            "It is in {patient}'s blood pressure book.",
+        ),
+        "story_paper": (
+            "{patient}'s {test_name} from {day} is in the papers.",
+            "{patient} can show it to {doctor} any time.",
+        ),
+        "story_note": ("On {day} {patient} wrote this down:",),
+        "story_count": (
+            "{patient} has taken the tablets on {count} days.",
+            "This number only goes up.",
+        ),
+        "story_count_one": (
+            "{patient} has taken the tablets on 1 day.",
+            "This number only goes up.",
+        ),
+        "story_change": (
+            "On {day} {patient}'s blood pressure was {top_number} over {bottom_number}.",
+        ),
+        "story_doctor": ("At {patient}'s visit on {day}, {doctor} said this:",),
+        "flag_family": (
+            "{patient} told Nura about {feeling}.",
+            "This one we do not wait for.",
+            "{who} knows now.",
+            "Call {who}, or call {emergency_number}.",
+        ),
+        "flag_alone": (
+            "{patient} told Nura about {feeling}.",
+            "This one we do not wait for.",
+            "Call {emergency_number} now.",
+        ),
+    },
+    "ms": {
+        "now_quiet": ("Tiada yang baru menunggu {patient} hari ini.", "Leret ke atas untuk dengar lagi."),
+        "gate": ("Itu sahaja yang baru hari ini.", "Mahu terus?", "Leret ke atas untuk dengar lagi tentang {patient}."),
+        "learning_keep_taking": ("Tanya {doctor} sebelum {patient} berhenti makan ubat ini.",),
+        "recap_intro": ("Ini minggu {patient}, dari buku tekanan darah {patient}.",),
+        "now_tablets": (
+            "Ubat {patient} untuk hari ini ada dalam senarai.",
+            "{patient} ambil ikut apa yang tertulis pada label.",
+            "Tekan apabila {patient} sudah makan ubat.",
+        ),
+        "now_visit": (
+            "{patient} berjumpa {doctor} hari ini.",
+            "Bawa buku tekanan darah dan ubat {patient}.",
+        ),
+        "reading": (
+            "Tekanan darah {patient} hari ini {top_number} atas {bottom_number}.",
+            "Ia ada dalam buku tekanan darah {patient}.",
+        ),
+        "visit": (
+            "{patient} berjumpa {doctor} pada {day}.",
+            "Bawa buku tekanan darah dan ubat {patient}.",
+        ),
+        "memo": ("Pada lawatan terakhir {patient}, {doctor} berkata begini:",),
+        "story_reading": (
+            "Pada {day} tekanan darah {patient} {top_number} atas {bottom_number}.",
+            "Ia ada dalam buku tekanan darah {patient}.",
+        ),
+        "story_paper": (
+            "{test_name} {patient} dari {day} ada dalam surat-surat.",
+            "{patient} boleh tunjukkan kepada {doctor} bila-bila masa.",
+        ),
+        "story_note": ("Pada {day} {patient} menulis begini:",),
+        "story_count": ("{patient} sudah ambil ubat pada {count} hari.", "Nombor ini hanya naik."),
+        "story_count_one": ("{patient} sudah ambil ubat pada 1 hari.", "Nombor ini hanya naik."),
+        "story_change": ("Pada {day} tekanan darah {patient} {top_number} atas {bottom_number}.",),
+        "story_doctor": ("Semasa lawatan {patient} pada {day}, {doctor} kata begini:",),
+        "flag_family": (
+            "{patient} beritahu Nura tentang {feeling}.",
+            "Yang ini kita tidak tunggu.",
+            "{who} sudah tahu.",
+            "Telefon {who}, atau telefon {emergency_number}.",
+        ),
+        "flag_alone": (
+            "{patient} beritahu Nura tentang {feeling}.",
+            "Yang ini kita tidak tunggu.",
+            "Telefon {emergency_number} sekarang.",
+        ),
+    },
+    "zh": {
+        "now_quiet": ("今天没有新的事情等着{patient}。", "想多看的时候，请向上滑。"),
+        "gate": ("今天新的就这些了。", "您想继续吗？", "向上滑，多看看关于{patient}的事。"),
+        "learning_keep_taking": ("{patient}停这个药以前，先问一问{doctor}。",),
+        "recap_intro": ("这些是{patient}这一周的血压，来自{patient}的血压本。",),
+        "now_tablets": (
+            "{patient}今天的药在清单上。",
+            "{patient}按照药盒上写的吃。",
+            "{patient}吃了以后，请按一下。",
+        ),
+        "now_visit": ("{patient}今天看{doctor}。", "请带上{patient}的血压本和药。"),
+        "reading": (
+            "{patient}今天的血压是{top_number}比{bottom_number}。",
+            "它记在{patient}的血压本里。",
+        ),
+        "visit": ("{patient}{day}看{doctor}。", "请带上{patient}的血压本和药。"),
+        "memo": ("{patient}上次看病时{doctor}这样说：",),
+        "story_reading": (
+            "{day}{patient}的血压是{top_number}比{bottom_number}。",
+            "它记在{patient}的血压本里。",
+        ),
+        "story_paper": (
+            "{patient}{day}的{test_name}在文件里。",
+            "{patient}随时可以拿给{doctor}看。",
+        ),
+        "story_note": ("{day}{patient}写下了这句话：",),
+        "story_count": ("{patient}已经有 {count} 天吃了药。", "这个数字只会往上走。"),
+        "story_count_one": ("{patient}已经有 1 天吃了药。", "这个数字只会往上走。"),
+        "story_change": ("{day}{patient}的血压是{top_number}比{bottom_number}。",),
+        "story_doctor": ("{patient}{day}看病时{doctor}这样说：",),
+        "flag_family": (
+            "{patient}告诉Nura自己{feeling}。",
+            "这个我们不等。",
+            "{who}已经知道了。",
+            "请打给{who}，或者打{emergency_number}。",
+        ),
+        "flag_alone": (
+            "{patient}告诉Nura自己{feeling}。",
+            "这个我们不等。",
+            "请现在打{emergency_number}。",
+        ),
+    },
+}
+"""A card's lines said about him by name, place for place with `LINES`."""
+
+# @patient
+WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "gate": "Everything new for today has been seen.",
+        "local": "This is here because it is near {patient}'s home.",
+        "now_tablets": "{patient} has medicines on the list.",
+        "now_visit": "{patient}'s visit to {doctor} is today.",
+        "reading": "{patient} took a blood pressure today.",
+        "visit": "{patient}'s visit to {doctor} is on {day}.",
+        "visit_logistics": "{patient}'s visit to {doctor} is on {day}.",
+        "memo": "{patient} saw {doctor} on {day}.",
+        "reorder": "There are about {days} days of {medicine} left.",
+        "reorder_one": "There is about 1 day of {medicine} left.",
+        "story_reading": "This is from {patient}'s own blood pressure book.",
+        "story_paper": "This is one of {patient}'s own papers.",
+        "story_note": "These are {patient}'s own words, from private notes.",
+        "story_count": "Nura counted the days {patient} took the tablets.",
+        "story_trend": "This is from {patient}'s own blood tests.",
+        "story_photo": "{who} chose to share this photo with {patient}.",
+        "learning": "This is about {topic}, which is on {patient}'s papers.",
+    },
+    "ms": {
+        "gate": "Semua yang baru hari ini sudah dilihat.",
+        "local": "Ini ada di sini kerana ia dekat rumah {patient}.",
+        "now_tablets": "{patient} ada ubat dalam senarai.",
+        "now_visit": "Lawatan {patient} kepada {doctor} hari ini.",
+        "reading": "{patient} ambil tekanan darah hari ini.",
+        "visit": "Lawatan {patient} kepada {doctor} pada {day}.",
+        "visit_logistics": "Lawatan {patient} kepada {doctor} pada {day}.",
+        "memo": "{patient} berjumpa {doctor} pada {day}.",
+        "reorder": "{medicine} tinggal lebih kurang {days} hari lagi.",
+        "reorder_one": "{medicine} tinggal lebih kurang 1 hari lagi.",
+        "story_reading": "Ini dari buku tekanan darah {patient} sendiri.",
+        "story_paper": "Ini salah satu surat {patient} sendiri.",
+        "story_note": "Ini kata-kata {patient} sendiri, dari nota peribadi.",
+        "story_count": "Nura mengira hari {patient} ambil ubat.",
+        "story_trend": "Ini dari ujian darah {patient} sendiri.",
+        "story_photo": "{who} memilih untuk berkongsi gambar ini dengan {patient}.",
+        "learning": "Ini tentang {topic}, yang ada dalam surat-surat {patient}.",
+    },
+    "zh": {
+        "gate": "今天新的都看过了。",
+        "local": "这个在这里，是因为它在{patient}家附近。",
+        "now_tablets": "{patient}的清单上有药。",
+        "now_visit": "{patient}今天要看{doctor}。",
+        "reading": "{patient}今天量了血压。",
+        "visit": "{patient}{day}要看{doctor}。",
+        "visit_logistics": "{patient}{day}要看{doctor}。",
+        "memo": "{patient}{day}看了{doctor}。",
+        "reorder": "{medicine}大概还够{days}天。",
+        "reorder_one": "{medicine}大概还够1天。",
+        "story_reading": "这来自{patient}自己的血压本。",
+        "story_paper": "这是{patient}自己的一份文件。",
+        "story_note": "这是{patient}自己的话，来自私人笔记。",
+        "story_count": "Nura 数了{patient}吃药的天数。",
+        "story_trend": "这来自{patient}自己的验血结果。",
+        "story_photo": "{who}选择了和{patient}分享这张照片。",
+        "learning": "这是关于{topic}的，它在{patient}的文件里。",
+    },
+}
+"""Why a card is there, said about him by name."""

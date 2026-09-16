@@ -1,4 +1,4 @@
-import type { FeedItemOut, LineOut, Posture, SlotOut, StateOut } from "../api/types";
+import type { FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut, StateOut } from "../api/types";
 import { fill, type Language, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
@@ -22,6 +22,11 @@ export interface TodayModel {
   /** The State's own boundary lines (E16-01): what Nura did, not a doctor's advice, whom to ask. */
   boundary: string[];
   fetchedAt: string;
+  /** D1: the hero's number and words (`…/medicines/now`); the State's word, line and drivers. */
+  hero?: NowOut | null;
+  word?: string | null;
+  line?: string | null;
+  drivers?: StateDriverOut[];
 }
 
 export type NowCard =
@@ -199,9 +204,87 @@ export function dateLine(date: Date, locale: string): string {
   return `${part("weekday")} ${part("day")} ${part("month")}`;
 }
 
+/** "14 September" — the day and the month, for under a weekday already said (the visit tile). */
+export function dayMonthLine(date: Date, locale: string): string {
+  const format = new Intl.DateTimeFormat(locale, { day: "numeric", month: "long" });
+  if (locale.startsWith("zh")) return format.format(date);
+  const parts = format.formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? "";
+  return `${part("day")} ${part("month")}`;
+}
+
 /** "8:05 pm" in English; "20:05" in Malay and Chinese, with no abbreviation to decode. */
 export function timeLine(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", hour12: locale.startsWith("en") }).format(date);
+}
+
+/** One dose tile under "Now" (D1): each dose the backend marks due and not yet tapped, in its
+ *  order, with its own sentence and source — as many tiles as the hero's number counts. */
+export interface DueCard {
+  /** The backend's word on the button: "Taken" to him, "Pa took it" to anyone else. */
+  takenLabel: string;
+  lineId: string;
+  anchor: string;
+  title: string;
+  sentence: string;
+  provenance: string;
+}
+
+export function dueCards(slots: readonly SlotOut[], lines: readonly LineOut[], s: Strings): DueCard[] {
+  return slots
+    .filter((slot) => slot.due_now && !slot.taken)
+    .map((slot) => ({
+      lineId: slot.line_id,
+      anchor: slot.anchor,
+      title: lineTitle(lines.find((each) => each.line_id === slot.line_id), s),
+      sentence: slot.card,
+      provenance: slot.source,
+      takenLabel: slot.taken_label,
+    }));
+}
+
+/** The proud number's line: the catalogue's, for none, one, or the backend's count. */
+export function proudLine(proud: number | null, s: Strings): string {
+  return proud === null || proud === 0 ? s.today.proudNone : proud === 1 ? s.today.proudOne : fill(s.today.proud, { count: proud });
+}
+
+/** The line under the State's word on her Home: nothing that reassures while a red-flag card is
+ *  on the page (the flag goes first; the State does not count it), the stale line when the State
+ *  is behind or the page is the phone's kept copy, else the backend's own line. */
+export function homeHeroWords(page: Pick<TodayModel, "stale" | "line">, on: { flagged: boolean; kept: boolean }, s: Strings): string | null {
+  if (on.flagged) return null;
+  if (page.stale || on.kept) return s.today.staleState;
+  return page.line ?? null;
+}
+
+/** What her Home's hero shows. While a red-flag card is on the page, nothing of the State: no
+ *  word ("Steady" in large type over a flag reassures), no line, no chips — the flag goes first
+ *  and the State does not count it. On the phone's kept page, the word with the stale line and no
+ *  chips (they read as now). Otherwise the State's word, its line, and its chips. */
+export function homeHero(
+  page: Pick<TodayModel, "stale" | "line" | "word">,
+  on: { flagged: boolean; kept: boolean },
+  s: Strings,
+): { word: string | null; line: string | null; drivers: boolean } {
+  if (on.flagged) return { word: null, line: null, drivers: false };
+  return { word: page.word ?? null, line: homeHeroWords(page, on, s), drivers: !on.kept };
+}
+
+/** The day of the week in full, in his language: "Thursday", never "Thu" (plain words, rule 5). */
+export function weekdayOf(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
+}
+
+/** His blood pressures' top numbers, oldest first, the last ten — the backend's readings as it
+ *  holds them (subject `blood_pressure`, attribute `reading`), never a number worked out here. */
+export function systolics(facts: readonly FactOut[]): number[] {
+  return facts
+    .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading")
+    .map((fact) => ({ at: Date.parse(fact.valid_from), top: (fact.value as { systolic?: unknown } | null)?.systolic }))
+    .filter((each): each is { at: number; top: number } => typeof each.top === "number" && Number.isFinite(each.at))
+    .sort((a, b) => a.at - b.at)
+    .slice(-10)
+    .map((each) => each.top);
 }
 
 /** The hour the way he says it (plain words, rule 5; the backend's `when_words.say_clock`):

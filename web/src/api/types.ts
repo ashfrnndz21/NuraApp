@@ -233,7 +233,8 @@ export interface ClipOut {
 }
 
 export interface AnswerOut {
-  question_artifact_id: string;
+  /** The question as it was kept; null when a red word in it took the red-flag path instead. */
+  question_artifact_id: string | null;
   mode: AskMode;
   language: string;
   answered: boolean;
@@ -246,6 +247,10 @@ export interface AnswerOut {
   spoken: string[];
   /** Parts of the record this key does not reach, so not read. */
   withheld: string[];
+  /** A red flag heard in the question: the red-flag path it took first, as the same word
+   *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
+   *  Null when the question carries none. */
+  red_flag?: FeelingOut | null;
 }
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
@@ -294,9 +299,42 @@ export interface StateOut {
   stale_after: string | null;
   /** The line the posture is shown under (E16-01), one idea per line, joined by newlines. */
   boundary: string;
+  /** The posture as one word and one line, in the language asked for (D1: the chief's hero). */
+  word?: string;
+  line?: string;
+  /** What raised the posture, as chips, each with its tone. */
+  drivers?: StateDriverOut[];
   /** Each dimension as the snapshot keeps it, or null where the key does not cover it. The
    *  client reads one thing here: his large-text setting (`functional.facts.vision`). */
   dimensions?: Record<string, { facts?: Record<string, Record<string, { value?: unknown }>> } | null>;
+}
+
+export interface StateDriverOut {
+  key: string;
+  text: string;
+  tone: string | null;
+}
+
+/** The one big number on his Today (`GET …/medicines/now`): null when nothing is left today. */
+export interface NowOut {
+  count: number | null;
+  anchor: string | null;
+  words: string | null;
+}
+
+/** One line of what changed, in his words, with the tone of its dot (null: no tone). */
+export interface ChangeLineOut {
+  section: string;
+  key: string;
+  text: string;
+  tone?: string | null;
+}
+
+export interface ChangesOut {
+  language: string;
+  first_look: boolean;
+  lines: ChangeLineOut[];
+  waiting: ChangeLineOut[];
 }
 
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
@@ -376,6 +414,9 @@ export interface AppointmentOut {
   scheduled_at: string;
   status: string;
   purpose: string;
+  /** The doctor's or clinic's name as the family wrote it (the provider's); absent where the
+   *  route does not read it. */
+  doctor?: string | null;
 }
 
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
@@ -575,6 +616,8 @@ export interface FactOut {
   attribute: string;
   value: unknown;
   unit: string | null;
+  /** When it holds from: a reading's moment. */
+  valid_from: string;
 }
 
 export interface ReviewConfirmedOut {

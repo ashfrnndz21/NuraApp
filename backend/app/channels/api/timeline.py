@@ -26,7 +26,10 @@ import uuid
 from fastapi import APIRouter, Query, Request, status
 from pydantic import AwareDatetime
 
+from app.channels.about_him import reader_of
+from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.timeline_schemas import (
     AnswerOut,
     AppointmentIn,
@@ -53,6 +56,8 @@ from app.memory.providers import directory, provider_history, write_chief_note
 from app.memory.spine import add_provider, book_appointment, change_appointment_status
 from app.memory.timeline import MAX_PAGE, PAGE_SIZE, episode_view, timeline
 from app.memory.working import open_episode
+from app.reasoning.feelings.service import record_tap
+from app.safety.red_flags import detect
 from app.search.ask import recall
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
@@ -86,7 +91,7 @@ async def get_timeline(
         limit=limit,
         language=language,
     )
-    return TimelineOut.of(page)
+    return (await reader_of(session, context, language)).model(TimelineOut.of(page))
 
 
 @router.post("/{profile_id}/episodes", status_code=status.HTTP_201_CREATED)
@@ -229,7 +234,7 @@ async def changes(
         language=language,
     )
     look = await mark_looked(session, context=context)
-    return ChangesOut.of(found, look.looked_at)
+    return (await reader_of(session, context, language)).model(ChangesOut.of(found, look.looked_at))
 
 
 @router.post("/{profile_id}/ask")
@@ -238,6 +243,26 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     they cite, each naming its ids; "Nura does not have that written down" when nothing
     answers; the boundary last. The question is kept as a MESSAGE artefact, by reference."""
     outside = providers_of(request)
+    # A red flag in the question takes the red-flag path, exactly as the same word tapped on the
+    # feeling cloud: the moment written in his own typed words, the flag raised and kept, the
+    # family told, the urgent card said back (red flags escalate first; .claude/rules/safety.md).
+    # Nothing is looked up after it, so nothing after it can take the card away: not a key that
+    # holds the emergency card but not ask (a helper's), not a lookup that fails. A key without
+    # the emergency card is refused as its tap on the button is.
+    heard = detect(body.question)
+    if heard is not None:
+        tapped = await record_tap(
+            session,
+            context=context,
+            word=heard,
+            registry=outside.drug_registry,
+            store=outside.object_store,
+            transcriber=outside.transcriber,
+            via=via_of(request),
+            language=body.language,
+            said=body.question,
+        )
+        return AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
     answer = await recall(
         session,
         context=context,

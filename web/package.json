@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "e2e": "playwright test",
+    "shots": "playwright test -c playwright.visual.config.ts",
     "plain-words": "cd ../backend && python3 -m app.safety.plain_words --only ../web/src/strings/en.ts ../web/src/strings/ms.ts ../web/src/strings/zh.ts"
   },
   "dependencies": {
