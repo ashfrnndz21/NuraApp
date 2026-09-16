@@ -137,18 +137,22 @@ const ANSWERED: ReadonlySet<string> = new Set(["accepted", "dismissed"]);
 
 /** The day's nudge, where and when the backend plans it: the one handed over for today that
  *  he has not answered, from its time until it expires; else, with none handed over, the
- *  plan's one draft once its time has come. Never before its time, never after it expires. */
+ *  plan's one draft once its time has come. Never before its time, never after it expires,
+ *  and never with no why (E17-03): a nudge is only ever shown with the reason under it, so
+ *  one the backend sent with nothing to say for itself does not render. Cap and quiet hours
+ *  are the backend's alone to enforce here — this only lays out what it already decided. */
 export function nudgeToShow(day: DayNudgesOut | null, plan: NudgePlanOut | null, now: Date): NudgeShown | null {
   const within = (from: string, until: string) => Date.parse(from) <= now.getTime() && now.getTime() < Date.parse(until);
   for (const nudge of day?.nudges ?? []) {
     if (nudge.responses.some((kind) => ANSWERED.has(kind))) continue;
     if (!within(nudge.send_after, nudge.expires_at)) continue;
+    if (!nudge.why.trim()) continue;
     const spoken = nudge.voice.length > 0 ? nudge.voice : nudge.lines;
     return { from: "handed", nudgeId: nudge.nudge_id, kind: nudge.kind, lines: [...nudge.lines], why: nudge.why, spoken: [...spoken] };
   }
   if ((day?.nudges.length ?? 0) > 0) return null;
   const draft = plan?.drafts[0];
-  if (!draft || !within(draft.send_after, draft.expires_at)) return null;
+  if (!draft || !within(draft.send_after, draft.expires_at) || !draft.why.trim()) return null;
   const spoken = draft.voice.length > 0 ? draft.voice : draft.lines;
   return { from: "planned", kind: draft.kind, lines: [...draft.lines], why: draft.why, spoken: [...spoken] };
 }
