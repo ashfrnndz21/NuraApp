@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from sqlalchemy import select
@@ -29,38 +30,64 @@ from app.audit.models import Action, AuditEntry, Channel
 from app.channels.whatsapp import inbound
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.group import open_group
-from app.channels.whatsapp.inbound import handle_inbound
+from app.channels.whatsapp.inbound import Handled, handle_inbound
 from app.channels.whatsapp.models import WhatsAppReceipt
 from app.channels.whatsapp.proposals import Proposal
 from app.channels.whatsapp.provider import DevInbound
+from app.channels.whatsapp import receipts
 from app.channels.whatsapp.receipts import Received, receive
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.push import FixturePush
+from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.engine import run_due
+from app.delivery.triggers.ladder import acknowledge_flag
 from app.delivery.triggers.models import (
     Category,
     Delivery,
     DeliveryChannel,
     DeliveryOutcome,
     Ladder,
+    Subject,
     TriggerType,
 )
-from app.delivery.triggers.preferences import change
-from app.delivery.triggers.rules import AlertsAreNeverHeld, check_settings
+from app.delivery.triggers.rules import AlertsAreNeverHeld, AlertsGoEveryWay, check_settings
+from app.identity.models import Person
+from app.identity.service import register_person
 from app.ingestion.models import EventNote
-from app.keys.scopes import Scope
+from app.keys.grants import grant_key
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.memory.models import Artifact
+from app.regions import Region
 from app.safety.red_flags import Flag
 from tests.conftest import Deployment
+from tests.support import agree_to_family_sharing
 from tests.test_whatsapp_api import MEI as API_MEI
 from tests.test_whatsapp_api import _cloud_api_text, _pa_on_whatsapp
 from tests.test_whatsapp_red_flag_first import _kit_on_the_emergency_card
-from tests.whatsapp_support import KIT, MEI, PA, Family, family
+from tests.whatsapp_support import KIT, MEI, PA, SITI, Family, family
 
 OGG = "audio/ogg; codecs=opus"
 HIS_REPLY = [
     "Nura kept your voice note.",
     "Nura could not hear this note.",
+    "Mei knows now.",
     "If you feel unwell, call your family now.",
+]
+HIS_REPLY_ALONE = [
+    "Nura kept your voice note.",
+    "Nura could not hear this note.",
+    "If you feel unwell, call your family now.",
+]
+NOT_FETCHED = [
+    "Nura could not hear your voice note.",
+    "Mei knows now.",
+    "If you feel unwell, call your family now.",
+]
+HER_REPLY = [
+    "Nura could not hear your voice note.",
+    "Mei knows now.",
+    "Please write what you said.",
 ]
 LISTEN = [
     "Pa sent a voice note to Nura.",
@@ -74,6 +101,10 @@ def _told(home: Family, number: str) -> list[list[str]]:
     return [one.text.splitlines() for one in home.whatsapp.sent if one.to_e164 == number]
 
 
+def _said(handled: Handled) -> list[list[str]]:
+    return [reply.text.splitlines() for reply in handled.replies]
+
+
 async def _notices(sg: AsyncSession) -> list[Delivery]:
     return list(
         (
@@ -82,6 +113,19 @@ async def _notices(sg: AsyncSession) -> list[Delivery]:
             )
         ).all()
     )
+
+
+async def _by_channel(sg: AsyncSession, channel: DeliveryChannel) -> list[Delivery]:
+    return [row for row in await _notices(sg) if row.via is channel]
+
+
+async def _siti_the_helper(sg: AsyncSession, home: Family) -> Person:
+    """The domestic helper, with the emergency card and the medicines, as her key is set."""
+    siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164=SITI)
+    scopes = ROLE_SCOPES[KeyRole.HELPER]
+    await agree_to_family_sharing(sg, home.owner, siti, scopes=scopes, relationship="helper")
+    await grant_key(sg, context=home.owner, holder=siti, role=KeyRole.HELPER, scopes=scopes)
+    return siti
 
 
 # --- a voice note nobody heard --------------------------------------------------------------------
@@ -93,14 +137,19 @@ async def test_a_note_nobody_heard_tells_him_what_to_do_and_his_chief_to_listen(
     home = await family(sg, tmp_path)
     kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert kept.outcome == "voice_note" and kept.note_id is not None
-    assert [reply.text.splitlines() for reply in kept.replies] == [HIS_REPLY]
+    # His reply names who the notice actually reached, and only once it has gone (#173).
+    assert _said(kept) == [HIS_REPLY]
     assert _told(home, MEI) == [LISTEN]
-    [notice] = await _notices(sg)
+    [notice] = await _by_channel(sg, DeliveryChannel.WHATSAPP)
     assert notice.to_person_id == home.mei.id and notice.standing == "chief"
-    assert notice.outcome is DeliveryOutcome.SENT and notice.via is DeliveryChannel.WHATSAPP
+    assert notice.outcome is DeliveryOutcome.SENT
     assert notice.template_name == "unheard_note_notice"
     assert notice.category is Category.ALERT and notice.scope is Scope.EMERGENCY
-    assert notice.why == {"event_note_id": str(kept.note_id)}
+    assert notice.why == {"ladder_id": ANY, "rung": 3, "action": ANY}
+    # An alert is written on her family page too, whatever else carried it (#169).
+    assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
+        DeliveryOutcome.SENT
+    ]
     # The audio stays under its scope: his private note, with no words, never widened.
     note = await sg.get(EventNote, kept.note_id)
     assert note is not None and note.private is True and note.transcript_key is None
@@ -117,7 +166,7 @@ async def test_a_transcriber_outage_is_a_note_not_heard_and_a_person_still_liste
     monkeypatch.setattr(home.providers.transcriber, "transcribe", down)
     kept = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
     assert kept.outcome == "voice_note" and kept.note_id is not None
-    assert [reply.text.splitlines() for reply in kept.replies] == [HIS_REPLY]
+    assert _said(kept) == [HIS_REPLY]
     assert _told(home, MEI) == [LISTEN]
 
 
@@ -128,8 +177,9 @@ async def test_a_note_that_could_not_be_fetched_tells_his_chief_to_call_him(
     monkeypatch.setattr(inbound, "VOICE_DOWNLOAD_BYTES", 10)
     told = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
     assert told.outcome == "voice_note_not_heard"
+    assert _said(told) == [NOT_FETCHED]
     assert _told(home, MEI) == [CALL]
-    [notice] = await _notices(sg)
+    [notice] = await _by_channel(sg, DeliveryChannel.WHATSAPP)
     assert notice.template_name == "unheard_note_notice_call"
 
 
@@ -147,16 +197,9 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     home = await family(sg, tmp_path)
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {TriggerType.VOICE_NOTE_UNHEARD.value: 1})
-    # A setting that would send it only to the caregiver changes nothing for an alert.
-    await change(
-        sg,
-        context=home.owner,
-        skip_quiet_days=False,
-        quiet_from=None,
-        quiet_until=None,
-        channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
-        caps={},
-    )
+    # Nor are its channels a setting: a list of one channel would leave it reaching nobody.
+    with pytest.raises(AlertsGoEveryWay):
+        check_settings({TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]}, {})
 
     async def down(*args: object, **kwargs: object) -> object:
         raise ConnectionError("the transcriber is down, for the test")
@@ -165,13 +208,173 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     clock.set(datetime(2026, 9, 3, 15, 30, tzinfo=UTC))  # 23:30 his wall clock: quiet hours
     for media in ("pa-voice-mumbled", "pa-voice-market", "pa-voice-fell"):
         await home.inbound(sg, PA, media_id=media, content_type=OGG)
-    notices = await _notices(sg)
+    notices = await _by_channel(sg, DeliveryChannel.WHATSAPP)
     assert len(notices) == 3
-    assert all(
-        row.outcome is DeliveryOutcome.SENT and row.via is DeliveryChannel.WHATSAPP
-        for row in notices
-    )
+    assert all(row.outcome is DeliveryOutcome.SENT for row in notices)
     assert _told(home, MEI) == [LISTEN, LISTEN, LISTEN]
+
+
+# --- anyone's unheard note, and one on a profile with no WhatsApp agreement (#173) ---------------
+
+
+async def test_the_helpers_unheard_note_tells_his_chief_and_never_says_his_line(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path)
+    await _siti_the_helper(sg, home)
+    told = await home.inbound(sg, SITI, media_id="pa-voice-mumbled", content_type=OGG)
+    assert told.outcome == "voice_note_not_heard"
+    # Her note is not kept — it may carry other people's voices — and there is nothing to
+    # listen to, so the chief is told to call him.
+    assert (await sg.scalars(select(EventNote))).all() == []
+    assert _told(home, MEI) == [CALL]
+    # What to do if *he* feels unwell is his line, and is said to nobody else.
+    assert _said(told) == [HER_REPLY]
+    [notice] = await _by_channel(sg, DeliveryChannel.WHATSAPP)
+    assert notice.to_person_id == home.mei.id and notice.category is Category.ALERT
+
+
+async def test_a_red_word_in_the_helpers_voice_note_is_still_read_first(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path)
+    await _siti_the_helper(sg, home)
+    flagged = await home.inbound(sg, SITI, media_id="pa-voice-fell", content_type=OGG)
+    assert flagged.outcome == "red_flag" and flagged.flag_id is not None
+    # A note whose words were heard is a flag, not an unheard note: nobody is told twice.
+    assert await _notices(sg) == []
+
+
+async def test_an_unheard_note_without_his_whatsapp_agreement_still_tells_a_person(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path, whatsapp_consent=False)
+    told = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert told.outcome == "voice_note_unheard_unagreed"
+    # Nothing of the note is kept, and the sender gets one fixed line with who to call.
+    assert (await sg.scalars(select(EventNote))).all() == []
+    assert (await sg.scalars(select(Artifact))).all() == []
+    assert _told(home, PA) == [
+        [
+            "Nura could not hear your voice note.",
+            "Nura did not keep this note.",
+            "If it cannot wait, call 995 now.",
+        ]
+    ]
+    # A person is still told, and the notice is on her family page whatever carried it.
+    assert _told(home, MEI) == [CALL]
+    assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
+        DeliveryOutcome.SENT
+    ]
+
+
+async def test_telling_the_family_failing_never_takes_his_reply_or_his_note_back(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+
+    async def down(*args: object, **kwargs: object) -> object:
+        raise ConnectionError("the ladder's database went away, for the test")
+
+    # Not a refusal: any failure in the telling leaves his note and his reply standing (#173).
+    monkeypatch.setattr(inbound, "unheard_ladder", down)
+    kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert kept.outcome == "voice_note" and kept.note_id is not None
+    # One reply, and it says nothing about who knows: nobody was told.
+    assert _said(kept) == [HIS_REPLY_ALONE]
+    assert await _notices(sg) == []
+
+
+# --- the notice climbs, and one person's word stops it (#173) ------------------------------------
+
+
+async def test_the_unheard_notice_climbs_when_the_chief_does_not_say_she_has_it(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    home = await family(sg, tmp_path)
+    kit = await _kit_on_the_emergency_card(sg, home)
+    clock.set(datetime(2026, 9, 3, 2, 0, tzinfo=UTC))
+    await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert _told(home, MEI) == [LISTEN] and _told(home, KIT) == []
+    [ladder] = (await sg.scalars(select(Ladder))).all()
+    assert ladder.subject is Subject.UNHEARD_NOTE and ladder.is_open
+    assert ladder.note_id is not None
+    # Nobody has said they have it six minutes on: the next rung is asked.
+    clock.set(datetime(2026, 9, 3, 2, 6, tzinfo=UTC))
+    await run_due(sg, via=Via(home.settings, home.providers, home.number), profile_id=home.profile.id)
+    assert _told(home, KIT) == [CALL]
+
+
+async def test_saying_i_have_it_stops_the_unheard_notice(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    home = await family(sg, tmp_path)
+    await _kit_on_the_emergency_card(sg, home)
+    clock.set(datetime(2026, 9, 3, 2, 0, tzinfo=UTC))
+    await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    stopped = await acknowledge_flag(sg, context=home.chief)
+    assert stopped is not None and stopped.subject is Subject.UNHEARD_NOTE
+    assert stopped.acknowledged_by_person_id == home.mei.id
+    clock.set(datetime(2026, 9, 3, 2, 6, tzinfo=UTC))
+    await run_due(sg, via=Via(home.settings, home.providers, home.number), profile_id=home.profile.id)
+    assert _told(home, KIT) == []
+
+
+# --- a channel that failed falls through to the next one (#173) ----------------------------------
+
+
+async def test_a_whatsapp_send_that_fails_falls_through_to_push_and_the_notice(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    push = FixturePush()
+    push.register(home.mei.id)
+    object.__setattr__(home.providers, "push", push)
+
+    async def down(*args: object, **kwargs: object) -> str:
+        raise ConnectionError("the provider went away, for the test")
+
+    # The notice to her goes as a template: she has written nothing, so no window is open.
+    monkeypatch.setattr(home.whatsapp, "send_template", down)
+    kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert kept.outcome == "voice_note" and kept.note_id is not None
+    # WhatsApp did not carry it, so the next channel did — and the notice on her family page
+    # is written whatever carried it (#169), on a send error as much as on a refusal.
+    assert _told(home, MEI) == []
+    assert [one.person_id for one in push.sent] == [home.mei.id]
+    [pushed] = await _by_channel(sg, DeliveryChannel.APP_PUSH)
+    assert pushed.outcome is DeliveryOutcome.SENT and pushed.to_person_id == home.mei.id
+    # What went wrong is on the row by the name of its class, never by its words.
+    assert pushed.passed_over == ["whatsapp: ConnectionError"]
+    assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
+        DeliveryOutcome.SENT
+    ]
+
+
+async def test_a_red_flag_whose_every_channel_failed_still_writes_the_notice(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+
+    async def down(*args: object, **kwargs: object) -> str:
+        raise ConnectionError("the provider went away, for the test")
+
+    monkeypatch.setattr(home.whatsapp, "send_template", down)
+    flagged = await home.inbound(sg, PA, "I fell in the bathroom")
+    assert flagged.outcome == "red_flag" and flagged.flag_id is not None
+    rows = [
+        row
+        for row in (await sg.scalars(select(Delivery))).all()
+        if row.trigger_type is TriggerType.FLAG and row.to_person_id == home.mei.id
+    ]
+    # Nothing reached her phone, and that is written down beside the notice on her page.
+    assert {(row.via, row.outcome) for row in rows} == {
+        (None, DeliveryOutcome.NO_CHANNEL),
+        (DeliveryChannel.IN_APP, DeliveryOutcome.SENT),
+    }
+    # The flag stands whatever the provider did, and so does its ladder.
+    assert len((await sg.scalars(select(Flag))).all()) == 1
+    assert len((await sg.scalars(select(Ladder))).all()) == 1
 
 
 # --- the webhook: each message once, and none dropped ------------------------------------------
@@ -246,6 +449,76 @@ async def test_a_duplicate_redelivery_does_nothing_twice(deployment: Deployment)
     assert len([one for one in deployment.whatsapp.sent if one.to_e164 == API_MEI]) == 1
     async with deployment.sessions() as session:
         assert len((await session.scalars(select(Proposal))).all()) == 1
+
+
+async def test_two_copies_of_one_delivery_at_the_same_instant_are_one_handling(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The receipt row is claimed before the handler runs (#173), so of two copies of one
+    delivery arriving at the same instant exactly one runs it. The other loses the race on
+    the unique constraint and is answered as the duplicate it is, not with a 500."""
+    home = await family(sg, tmp_path)
+    message = DevInbound(from_e164=MEI, text="BP 150/90 this morning").as_message(utcnow())
+    ran: list[str] = []
+
+    async def handle() -> object:
+        ran.append("once")
+        return await handle_inbound(
+            sg,
+            settings=home.settings,
+            providers=home.providers,
+            number=home.number,
+            classifier=RuleClassifier(),
+            message=message,
+        )
+
+    assert await receive(sg, message, handle) is Received.HANDLED
+
+    async def nothing_yet(*args: object, **kwargs: object) -> None:
+        # The copy that lost the race has not seen the other's row: its insert is what decides.
+        return None
+
+    monkeypatch.setattr(receipts, "_receipt", nothing_yet)
+    assert await receive(sg, message, handle) is Received.ALREADY
+    assert ran == ["once"]
+    assert len((await sg.scalars(select(Proposal))).all()) == 1
+    [receipt] = (await sg.scalars(select(WhatsAppReceipt))).all()
+    assert receipt.handled_at is not None and receipt.failures == 0
+
+
+async def test_a_message_that_failed_keeps_its_claimed_row_and_is_tried_again(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    message = DevInbound(from_e164=MEI, text="BP 150/90 this morning").as_message(utcnow())
+    real = inbound.propose
+    failed: list[str] = []
+
+    async def flaky(*args: Any, **kwargs: Any) -> Any:
+        if not failed:
+            failed.append("once")
+            raise ConnectionError("the database went away, for the test")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(inbound, "propose", flaky)
+
+    async def handle() -> object:
+        return await handle_inbound(
+            sg,
+            settings=home.settings,
+            providers=home.providers,
+            number=home.number,
+            classifier=RuleClassifier(),
+            message=message,
+        )
+
+    assert await receive(sg, message, handle) is Received.FAILED
+    [receipt] = (await sg.scalars(select(WhatsAppReceipt))).all()
+    assert receipt.handled_at is None and receipt.failures == 1
+    # The claim stands and says nothing was done: the provider's next delivery tries it again.
+    assert await receive(sg, message, handle) is Received.HANDLED
+    assert len((await sg.scalars(select(Proposal))).all()) == 1
+
 
 
 async def test_a_red_word_in_a_failed_then_retried_message_escalates_exactly_once(

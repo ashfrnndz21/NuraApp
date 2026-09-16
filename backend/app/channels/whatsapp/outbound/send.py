@@ -146,7 +146,19 @@ class SaidNoToWhatsApp(Refusal):
 RED_FLAG_NOTICES: frozenset[str] = frozenset(
     {"red_flag_notice", "red_flag_notice_self", "red_flag_notice_ambiguous"}
 )
-"""The one kind of message about him his family is sent on WhatsApp after he stops it (#163)."""
+"""A red flag's notice, in each of its wordings."""
+
+UNHEARD_NOTE_NOTICES: frozenset[str] = frozenset(
+    {"unheard_note_notice", "unheard_note_notice_call"}
+)
+"""A voice note Nura could not hear, in each of its wordings (#173)."""
+
+TOLD_ANYWAY: frozenset[str] = RED_FLAG_NOTICES | UNHEARD_NOTE_NOTICES
+"""The messages about him his family is sent on WhatsApp after he stops it (#163, #173): a
+red flag, and a voice note nobody could hear — a red word in it could not be read, so it is
+treated as the flag it may be, here and in the delivery door (`deliver._no_whatsapp`, which
+lets every alert through). Both say he may be unwell, which is what his stop lines say his
+family still hears about (`app.consent.withdrawal.STILL_TOLD`)."""
 
 
 async def _may_message(
@@ -158,7 +170,8 @@ async def _may_message(
     The patient's WhatsApp agreement is for messages to him. Anyone else must hold a key his
     agreement to let them in rests on. A message Nura starts with them — a template or a voice
     note — needs two things more: that they did not answer no to WhatsApp (`SaidNoToWhatsApp`),
-    and, unless it is a red-flag notice, that his WhatsApp agreement stands. So after he stops
+    and, unless it is one of the notices that say he may be unwell (`TOLD_ANYWAY`: a red flag,
+    or a voice note nobody could hear), that his WhatsApp agreement stands. So after he stops
     WhatsApp his family hears about him there only when he is unwell, which is what his stop
     lines say (`app.consent.withdrawal.STILL_TOLD`). A reply answers something they wrote, and
     the inbound door has asked his agreement before it (or it is a red flag's fixed line)."""
@@ -188,7 +201,7 @@ async def _may_message(
             session, context=context, person_id=person.id, channel=Channel.WHATSAPP
         ):
             raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
-    if starts and kind not in RED_FLAG_NOTICES:
+    if starts and kind not in TOLD_ANYWAY:
         await require_consent(
             session,
             context=context,
