@@ -239,31 +239,103 @@ async def test_the_thread_and_the_roster_are_told_what_to_do_now(
     assert h.sent_to(h.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[step]]
 
 
-async def test_where_meta_has_not_approved_the_new_notices_the_approved_one_goes(
+BASE_APPROVED = (
+    "morning_card",
+    "visit_reminder",
+    "reorder",
+    "family_digest",
+    "feeling_check_in",
+    "red_flag_notice",
+)
+"""E19's six: the only templates a number has approved until the tiered notices, and their
+neutral fallback, are submitted and approved too (#174)."""
+
+
+async def test_outside_her_window_an_unapproved_tier_never_falls_to_call_the_doctor_today(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:
-    """A flag never waits on Meta: on a number that carries only the approved templates the
-    approved notice goes at night too, and the thread's reply — free text, inside the window —
-    already says the night's step."""
+    """A tier's own template not approved, and outside her window a reply cannot go at all: no
+    WhatsApp goes to her rather than the wrong, lower-urgency words — an urgent alert is never
+    downgraded (#174). The thread's reply to him — free text, inside his own window — still
+    says the night's step; her family page's notice is written besides; and why WhatsApp did
+    not go is on the trail."""
     h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
-    approved = tuple(
-        name
-        for name in h.via.number.templates
-        if name in ("morning_card", "visit_reminder", "reorder", "family_digest", "feeling_check_in", "red_flag_notice")
-    )
-    number = dataclasses.replace(h.via.number, templates=approved)
+    number = dataclasses.replace(h.via.number, templates=BASE_APPROVED)
     live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
     clock.set(at(22, 30))
     handled = await live.inbound(sg, PA, "I fell in the bathroom")
     assert handled.replies[0].text.splitlines()[1] == "Go to the emergency department at Gleneagles now."
-    assert live.sent_to(live.mei)[-1].splitlines()[0] == "This one we do not wait for."
+    assert live.sent_to(live.mei) == []
+    sent = [
+        row
+        for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
+        if row.trigger_type.value == "flag"
+    ]
+    phone = [
+        row
+        for row in sent
+        if row.outcome is DeliveryOutcome.SENT and row.via is not DeliveryChannel.IN_APP
+    ]
+    assert phone == []
+    no_channel = [row for row in sent if row.outcome is DeliveryOutcome.NO_CHANNEL]
+    assert no_channel and any(
+        any("whatsapp:" in reason for reason in row.passed_over) for row in no_channel
+    )
+    assert any(
+        row.via is DeliveryChannel.IN_APP and row.outcome is DeliveryOutcome.SENT for row in sent
+    )
+
+
+async def test_outside_her_window_with_the_neutral_notice_approved_it_goes_not_the_tier(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The tier's own template still not approved, but its neutral fallback is: that goes,
+    states no action, and never says "call the doctor today" either."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    number = dataclasses.replace(h.via.number, templates=(*BASE_APPROVED, "red_flag_notice_urgent"))
+    live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
+    clock.set(at(22, 30))
+    await live.inbound(sg, PA, "I fell in the bathroom")
+    assert live.sent_to(live.mei)[-1].splitlines() == [
+        "This one we do not wait for.",
+        "Pa is not feeling well.",
+        "Open Nura now.",
+    ]
     sent = (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
     phone = [
         row
         for row in sent
         if row.outcome is DeliveryOutcome.SENT and row.via is not DeliveryChannel.IN_APP
     ]
-    assert [row.template_name for row in phone] == ["red_flag_notice"]
+    assert [row.template_name for row in phone] == ["red_flag_notice_urgent"]
+    assert any(
+        row.via is DeliveryChannel.IN_APP and row.outcome is DeliveryOutcome.SENT for row in sent
+    )
+
+
+@pytest.mark.parametrize("language", ("en", "ms", "zh"))
+async def test_outside_her_window_the_ambulance_tier_never_falls_to_call_the_doctor_today(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, language: str
+) -> None:
+    """The ambulance tier is the one that must never be lowered at all: outside her window,
+    with neither its own template nor the neutral one approved, nothing goes to her on
+    WhatsApp — in English, Malay and Chinese alike, since the words never render at all."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    h.mei.language = language
+    await sg.flush()
+    number = dataclasses.replace(h.via.number, templates=BASE_APPROVED)
+    live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
+    clock.set(at(15, 0))
+    await live.inbound(sg, PA, "my chest is tight")
+    assert live.sent_to(live.mei) == []
+    sent = [
+        row
+        for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
+        if row.trigger_type.value == "flag"
+    ]
+    assert not any(
+        row.outcome is DeliveryOutcome.SENT and row.via is DeliveryChannel.WHATSAPP for row in sent
+    )
     assert any(
         row.via is DeliveryChannel.IN_APP and row.outcome is DeliveryOutcome.SENT for row in sent
     )
@@ -755,7 +827,9 @@ async def test_inside_her_window_the_ambulance_notice_goes_as_free_text_until_me
 ) -> None:
     """A number carrying only the approved templates, as a deployment's does until Meta
     approves the tiered notices: Mei wrote an hour ago, so the ambulance notice goes to her as
-    free text. (Outside her window the approved notice goes — ADR 0010, the open question.)"""
+    free text. (Outside her window, with neither the tier's template nor its neutral fallback
+    approved, no WhatsApp goes at all rather than a lower-urgency notice — #174, resolving
+    ADR 0010's open question.)"""
     from app.channels.whatsapp.templates import TEMPLATES
 
     h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
