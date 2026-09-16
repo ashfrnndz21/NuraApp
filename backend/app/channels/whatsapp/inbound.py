@@ -19,6 +19,12 @@ never fetched — may carry a red word nobody could read, so a person is always 
 chief on her own channels, as an alert that climbs a ladder of its own (#173). That holds for
 the helper's note as much as his, and on a profile whose patient has not agreed to WhatsApp,
 where nothing of the note is kept and the sender gets one fixed line.
+
+Past the red-flag check, a heard voice note's transcript is classified through the same door
+the classifier reads a typed message through (E11-01): "Taken" said aloud writes the tap "Taken"
+typed does, and his own word answers an open check-in or proposal exactly as typing it would.
+An unintelligible note is never guessed into one of those — it stays what it always was, kept
+as his own note, with the family told when nothing could be heard in it at all.
 """
 
 from __future__ import annotations
@@ -1833,6 +1839,17 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
     if work.voice_missing:
         return await _voice_not_heard(session, work)
     if work.voice is not None:
+        # Heard, and classified from its transcript exactly as a typed message would be
+        # (E11-01): "Taken" or "sudah makan ubat" writes the tap, and his own word to an open
+        # check-in or proposal is his yes, the same door the app's own button uses. Anything
+        # else a voice note might carry — a document, a health reading, family coordination —
+        # is not guessed at from a transcript: it is kept as his own note, unread past the
+        # red-flag check already made above, and he is asked to say it again if it mattered.
+        if what.kind is Kind.TAKEN:
+            return await _taken(session, work)
+        if what.kind is Kind.ANSWER:
+            assert what.answer is not None
+            return await _answer(session, work, what.answer)
         return await _voice_note(session, work)
     if work.message.group_id is not None:
         if work.message.media_id is None and work.message.text:
