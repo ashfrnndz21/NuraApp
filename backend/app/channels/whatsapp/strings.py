@@ -224,10 +224,24 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
     # A voice note from the helper or another key holder that Nura could not hear (#173). It
     # is not kept — it may carry other people's voices — and the line telling him to call his
     # family is his, so this asks the sender to write instead. The chief is told either way.
+    # The notice reached nobody, so this one says who to call: every other line for a note
+    # nobody could hear ends on a way through, and this one must too.
     "note_unheard_other": {
-        "en": ("Nura could not hear your voice note.", "Please write what you said."),
-        "ms": ("Nura tidak dapat dengar nota suara anda.", "Sila tulis apa yang anda kata."),
-        "zh": ("Nura 听不到您的语音留言。", "请把您说的话写下来。"),
+        "en": (
+            "Nura could not hear your voice note.",
+            "Please write what you said.",
+            "If it cannot wait, call the family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Sila tulis apa yang anda kata.",
+            "Kalau tidak boleh tunggu, telefon keluarga sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "请把您说的话写下来。",
+            "如果不能等，现在就打电话给家人。",
+        ),
     },
     "note_unheard_other_told": {
         "en": (

@@ -27,8 +27,10 @@ reached, and the ladder moves on at once (`ladder.climb`).
 
 Who may be sent WhatsApp (#163): the patient on his own agreement; anyone else on the key his
 agreement to let them in rests on, and — for anything but a red flag — only while his WhatsApp
-agreement stands. Someone who answered no to WhatsApp at the key-accept step is sent none,
-red flags included: those reach them by app push and on their family page.
+agreement stands (`told_without_his_agreement`; a voice note nobody could hear is an alert but
+not a red flag, so without his agreement it reaches them through the app). Someone who
+answered no to WhatsApp at the key-accept step is sent none, red flags included: those reach
+them by app push and on their family page.
 
 Everything here runs as Nura itself with the reach of the profile's owner (the steward before a
 claim): the patient's graph, sent about the patient on his agreement, and every line on the
@@ -58,7 +60,7 @@ from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import active_consents
 from app.consent.texts import current_version
-from app.db import as_utc
+from app.db import as_utc, session_keepers
 from app.delivery.push import NoDevice
 from app.delivery.strings import PUSH_LINE
 from app.delivery.triggers.models import (
@@ -69,7 +71,13 @@ from app.delivery.triggers.models import (
     Ladder,
     TriggerType,
 )
-from app.delivery.triggers.rules import RULES, Config, config_of, is_alert
+from app.delivery.triggers.rules import (
+    RULES,
+    Config,
+    config_of,
+    is_alert,
+    told_without_his_agreement,
+)
 from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile, Stewardship
@@ -415,7 +423,7 @@ async def _no_whatsapp(run: Run, person: Person, type: TriggerType) -> str | Non
         return None if await run.whatsapp_agreed() else "not agreed"
     if await run.said_no_to_whatsapp(person):
         return "said no"
-    if not is_alert(type) and not await run.whatsapp_agreed():
+    if not told_without_his_agreement(type) and not await run.whatsapp_agreed():
         return "not agreed"
     return None
 
@@ -589,15 +597,20 @@ async def _attempt(
     rolled back, so nothing half-written stands and the session is whole for the channel
     after it, and what went wrong is kept by the name of its class, never its message.
     """
+    kept = len(session_keepers(run.session))
     savepoint = await run.session.begin_nested()
     try:
         sent = await say(person)
     except Refusal as refusal:
+        # The refusal's own lines stand, the way they did before any of this had a savepoint.
         await savepoint.commit()
         passed.append(f"{channel}: {type(refusal).__name__}")
         return None
     except Exception as failed:  # noqa: BLE001 — the next channel is tried; logged by name
         await savepoint.rollback()
+        # Nothing written inside it survives, so neither may a keeper registered inside it:
+        # replayed at the request's boundary it would write against rows that are gone.
+        del session_keepers(run.session)[kept:]
         log.warning(
             "delivery: %s did not carry one message: %s", channel, type(failed).__name__
         )

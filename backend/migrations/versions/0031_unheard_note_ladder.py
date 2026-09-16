@@ -5,6 +5,9 @@ what decides, for each person the ladder asks, whether she is told to listen in 
 to call him. NULL where the audio never arrived, and on every other ladder. It carries the
 profile with it, like every other reference here, so it can only land on the same profile.
 
+`delivery_ladder.note_from_person_id` is who sent that note, so the notice can name them: a
+note the helper sent is never said to be the patient's. NULL on every other ladder.
+
 This goes on main's head at the time it is pushed, and the operator repoints `down_revision`
 if another story lands first.
 
@@ -27,6 +30,10 @@ depends_on = None
 def upgrade() -> None:
     with op.batch_alter_table("delivery_ladder") as batch:
         batch.add_column(sa.Column("note_id", sa.Uuid(), nullable=True))
+        batch.add_column(sa.Column("note_from_person_id", sa.Uuid(), nullable=True))
+        batch.create_foreign_key(
+            "fk_delivery_ladder_note_from_person", "person", ["note_from_person_id"], ["id"]
+        )
         batch.create_foreign_key(
             "fk_delivery_ladder_note", "event_note", ["note_id"], ["id"]
         )
@@ -42,4 +49,6 @@ def downgrade() -> None:
     with op.batch_alter_table("delivery_ladder") as batch:
         batch.drop_constraint("fk_delivery_ladder_note_profile", type_="foreignkey")
         batch.drop_constraint("fk_delivery_ladder_note", type_="foreignkey")
+        batch.drop_constraint("fk_delivery_ladder_note_from_person", type_="foreignkey")
+        batch.drop_column("note_from_person_id")
         batch.drop_column("note_id")

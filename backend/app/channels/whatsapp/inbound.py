@@ -1619,10 +1619,17 @@ async def _tell_unheard(
 
     It carries no word of the note and none of its audio: the note stays private to him and a
     chief preset to his notes. Her key opens them: she is told to listen in the app, or to
-    call him; it does not, or there is no note at all: she is told to call him. It runs in a
-    savepoint of its own, and any failure in it — not only a refusal (#173) — leaves his note
-    and the reply already sent to him standing, so he is never told twice that Nura could not
-    hear him. Whose phone it reached.
+    call him; it does not, or there is no note at all: she is told to call him. Somebody
+    else's note is never said to be his: the notice names whoever sent it.
+
+    It runs in a savepoint of its own, so a door's no here leaves his note standing. Anything
+    else — a lock, the database gone — is a failure and goes on up: the message is not
+    handled, the webhook answers 5xx and the provider sends it again, so a note nobody could
+    hear never ends in a 200 with nobody told. Nothing has been said to the sender at this
+    point — his reply is the last thing, and says who this reached — so a retry never tells
+    him twice that Nura could not hear him (#173).
+
+    Whose phone it reached.
     """
     handle = hashlib.sha256(provider_message_id.encode()).hexdigest()[:16]
     try:
@@ -1637,11 +1644,13 @@ async def _tell_unheard(
                 run,
                 dedupe_key=f"{UNHEARD.value}:{note_id or handle}",
                 note_id=note_id,
-                exclude=(from_person_id,),
+                from_person_id=from_person_id,
             )
             await climb_unheard(run, ladder)
-    except Exception as failed:  # noqa: BLE001 — his note and his reply stand; logged by name
-        log.warning("whatsapp: an unheard voice note not told: %s", type(failed).__name__)
+    except Refusal as refusal:
+        # A door said no: a decision, not a failure, and on the trail already. His note and
+        # his reply stand, and nothing is sent again.
+        log.warning("whatsapp: an unheard voice note not told: %s", type(refusal).__name__)
         return ()
     return tuple(
         dict.fromkeys(
@@ -1770,6 +1779,12 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
                 return flagged
             return replace(flagged, note_id=kept.note.id)
         return flagged
+    if work.message.group_id is not None and (work.voice is not None or work.voice_missing):
+        # A voice note in the family's group is the family's, the way a photo there is: not
+        # kept, and never an alert. The group is where they talk to each other, and a note
+        # Nura could not hear in it would page everyone (#173). A red word in one was read
+        # above, before this, and is a flag like any other.
+        return Handled(outcome="ignored", profile_id=work.profile.id)
     if work.voice_missing:
         return await _voice_not_heard(session, work)
     if work.voice is not None:

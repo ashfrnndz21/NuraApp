@@ -1,16 +1,28 @@
-"""#158: a voice note Nura could not hear reaches a person, and the webhook retries a failed
-message, once per message.
+"""#158 and #173: a voice note Nura could not hear reaches a person, whoever sent it; a
+channel that failed falls through to the next; and the webhook retries a failed message,
+once per message.
 
 A note with no words heard in it — a mumble, or the transcriber down — may hold a red word
-nobody could read. So he is told what to do if he feels unwell, and his chief is told on her
-own channels that he sent a note Nura could not hear, as an alert: never capped, never held
-by the quiet hours. Where her key opens his notes she is told to listen in the app; where it
-does not, or the note could not be fetched, to call him. The note itself stays his.
+nobody could read. So the sender is told, and the chief is told on her own channels, as an
+alert: never capped, never held by the quiet hours, and climbing a ladder if nobody says they
+have it. Where her key opens his notes she is told to listen in the app; where it does not,
+or the note could not be fetched, to call him. The note itself stays his.
 
-The webhook handles each message by the provider's id, in a savepoint of its own. A message
-that fails is rolled back and counted, and the delivery is answered 503 so the provider sends
-it again; a redelivery handles only what failed, and a message handled once is never handled
-twice. A red word in a message that failed once is raised once, on the try that holds.
+That holds for anyone who holds a key, not only for him (#173). The helper's note is not
+kept — it may carry other people's voices — and the notice names who actually sent it, never
+saying it was his; his line, what to do if he feels unwell, is said to him alone. On a
+profile whose patient has not agreed to WhatsApp nothing of the note is kept and the sender
+gets one fixed line, and his family is still told, through the app.
+
+A WhatsApp send that fails with a network error falls through to the app push, and for an
+alert the notice on the family page is written whatever carried it.
+
+The webhook handles each message by the provider's id, in a savepoint of its own, and claims
+its receipt row before the handler runs, so two copies of one delivery at the same instant
+are one handling and the second is a clean duplicate. A message that fails is rolled back and
+counted, and the delivery is answered 503 so the provider sends it again; a redelivery
+handles only what failed, and a message handled once is never handled twice. A red word in a
+message that failed once is raised once, on the try that holds.
 """
 
 from __future__ import annotations
@@ -38,9 +50,10 @@ from app.channels.whatsapp.receipts import Received, receive
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.delivery.push import FixturePush
+from app.delivery.triggers import ladder as ladder_module
 from app.delivery.triggers.deliver import Via
 from app.delivery.triggers.engine import run_due
-from app.delivery.triggers.ladder import acknowledge_flag
+from app.delivery.triggers.ladder import NotOnTheLadder, acknowledge_flag
 from app.delivery.triggers.models import (
     Category,
     Delivery,
@@ -87,6 +100,11 @@ HER_REPLY = [
     "Nura could not hear your voice note.",
     "Mei knows now.",
     "Please write what you said.",
+]
+FROM_SITI = [
+    "Siti sent a voice note to Nura about Pa.",
+    "Nura could not hear this note.",
+    "Call Siti now.",
 ]
 LISTEN = [
     "Pa sent a voice note to Nura.",
@@ -224,13 +242,16 @@ async def test_the_helpers_unheard_note_tells_his_chief_and_never_says_his_line(
     told = await home.inbound(sg, SITI, media_id="pa-voice-mumbled", content_type=OGG)
     assert told.outcome == "voice_note_not_heard"
     # Her note is not kept — it may carry other people's voices — and there is nothing to
-    # listen to, so the chief is told to call him.
+    # listen to. The notice names who actually sent it: it is never said to be his.
     assert (await sg.scalars(select(EventNote))).all() == []
-    assert _told(home, MEI) == [CALL]
+    assert _told(home, MEI) == [FROM_SITI]
     # What to do if *he* feels unwell is his line, and is said to nobody else.
     assert _said(told) == [HER_REPLY]
     [notice] = await _by_channel(sg, DeliveryChannel.WHATSAPP)
     assert notice.to_person_id == home.mei.id and notice.category is Category.ALERT
+    assert notice.template_name == "unheard_note_notice_from"
+    [ladder] = (await sg.scalars(select(Ladder))).all()
+    assert ladder.note_id is None and ladder.note_from_person_id is not None
 
 
 async def test_a_red_word_in_the_helpers_voice_note_is_still_read_first(
@@ -244,10 +265,37 @@ async def test_a_red_word_in_the_helpers_voice_note_is_still_read_first(
     assert await _notices(sg) == []
 
 
+async def test_a_voice_note_in_the_familys_group_is_the_familys_and_pages_nobody(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path)
+    group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
+    posted = await home.inbound(
+        sg,
+        MEI,
+        media_id="pa-voice-mumbled",
+        content_type=OGG,
+        group_id=group.provider_group_id,
+    )
+    # The group is where the family talk to each other: a note nobody could hear there is
+    # not kept and never an alert, the way a photo posted there is not one of his papers.
+    assert posted.outcome == "ignored"
+    assert await _notices(sg) == []
+    assert (await sg.scalars(select(EventNote))).all() == []
+    # A red word said in the group is still a flag, read before any of that.
+    flagged = await home.inbound(
+        sg, MEI, media_id="pa-voice-fell", content_type=OGG, group_id=group.provider_group_id
+    )
+    assert flagged.outcome == "red_flag"
+
+
 async def test_an_unheard_note_without_his_whatsapp_agreement_still_tells_a_person(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     home = await family(sg, tmp_path, whatsapp_consent=False)
+    push = FixturePush()
+    push.register(home.mei.id)
+    object.__setattr__(home.providers, "push", push)
     told = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert told.outcome == "voice_note_unheard_unagreed"
     # Nothing of the note is kept, and the sender gets one fixed line with who to call.
@@ -260,30 +308,55 @@ async def test_an_unheard_note_without_his_whatsapp_agreement_still_tells_a_pers
             "If it cannot wait, call 995 now.",
         ]
     ]
-    # A person is still told, and the notice is on her family page whatever carried it.
-    assert _told(home, MEI) == [CALL]
+    # A person is still told — but through the app, not on the WhatsApp he never agreed to:
+    # a red flag is the one thing his family is sent there without his agreement (#163).
+    assert _told(home, MEI) == []
+    assert [one.person_id for one in push.sent] == [home.mei.id]
     assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
         DeliveryOutcome.SENT
     ]
+    assert [row.passed_over for row in await _by_channel(sg, DeliveryChannel.APP_PUSH)] == [
+        ["whatsapp: not agreed"]
+    ]
 
 
-async def test_telling_the_family_failing_never_takes_his_reply_or_his_note_back(
+async def test_a_door_that_says_no_to_the_telling_leaves_his_note_and_his_reply(
     sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     home = await family(sg, tmp_path)
 
-    async def down(*args: object, **kwargs: object) -> object:
-        raise ConnectionError("the ladder's database went away, for the test")
+    async def refused(*args: object, **kwargs: object) -> object:
+        raise NotOnTheLadder("no ladder here, for the test")
 
-    # Not a refusal: any failure in the telling leaves his note and his reply standing (#173).
-    monkeypatch.setattr(inbound, "unheard_ladder", down)
+    # A refusal is a decision, not a failure: nothing is sent again, and his note stands.
+    monkeypatch.setattr(inbound, "unheard_ladder", refused)
+    kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert kept.outcome == "voice_note" and kept.note_id is not None
+    assert await sg.get(EventNote, kept.note_id) is not None
+    # One reply, and it says nothing about who knows: nobody was told.
+    assert _said(kept) == [HIS_REPLY_ALONE]
+    assert await _notices(sg) == []
+
+
+async def test_a_telling_that_failed_is_not_a_200_and_the_message_comes_again(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = await family(sg, tmp_path)
+    down: list[str] = []
+
+    async def flaky(*args: Any, **kwargs: Any) -> Any:
+        if not down:
+            down.append("once")
+            raise ConnectionError("the ladder's database went away, for the test")
+        return await ladder_module.unheard_ladder(*args, **kwargs)
+
+    monkeypatch.setattr(inbound, "unheard_ladder", flaky)
     message = DevInbound(from_e164=PA, media_id="pa-voice-mumbled", content_type=OGG).as_message(
         utcnow()
     )
-    kept: list[Handled] = []
 
     async def handle() -> object:
-        handled = await handle_inbound(
+        return await handle_inbound(
             sg,
             settings=home.settings,
             providers=home.providers,
@@ -291,20 +364,17 @@ async def test_telling_the_family_failing_never_takes_his_reply_or_his_note_back
             classifier=RuleClassifier(),
             message=message,
         )
-        kept.append(handled)
-        return handled
 
-    # The message is handled, so the provider never sends it again and he is never told
-    # twice that Nura could not hear him.
+    # Not a refusal: a note nobody could hear never ends in a 200 with nobody told. Nothing
+    # of the message is kept and nothing was said, so the retry tells him once, not twice.
+    assert await receive(sg, message, handle) is Received.FAILED
+    assert (await sg.scalars(select(EventNote))).all() == []
+    assert _told(home, PA) == [] and _told(home, MEI) == []
     assert await receive(sg, message, handle) is Received.HANDLED
+    assert _told(home, PA) == [HIS_REPLY]
+    assert _told(home, MEI) == [LISTEN]
     assert await receive(sg, message, handle) is Received.ALREADY
-    [handled] = kept
-    assert handled.outcome == "voice_note" and handled.note_id is not None
-    assert await sg.get(EventNote, handled.note_id) is not None
-    # One reply, and it says nothing about who knows: nobody was told.
-    assert _said(handled) == [HIS_REPLY_ALONE]
-    assert _told(home, PA) == [HIS_REPLY_ALONE]
-    assert await _notices(sg) == []
+    assert len(_told(home, PA)) == 1 and len(_told(home, MEI)) == 1
 
 
 # --- the notice climbs, and one person's word stops it (#173) ------------------------------------

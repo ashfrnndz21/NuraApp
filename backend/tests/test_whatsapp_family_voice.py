@@ -395,8 +395,10 @@ async def test_a_voice_note_that_could_not_be_fetched_is_told_to_him(
     told = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
     assert told.outcome == "voice_note_not_heard" and told.note_id is None
     assert [r.text for r in told.replies] == [
-        "Nura could not hear your voice note.\n"
-        "Mei knows now.\nIf you feel unwell, call your family now."
+        (
+            "Nura could not hear your voice note.\n"
+            "Mei knows now.\nIf you feel unwell, call your family now."
+        )
     ]
 
 

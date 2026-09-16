@@ -161,6 +161,11 @@ class Ladder(ProfileScoped, Base):
     """The note an unheard-note ladder is about, when there is one to listen to (#173): what
     decides, for each person it asks, whether she is told to listen or to call him. None
     where the audio never arrived, and on every other ladder."""
+    note_from_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
+    """Who sent that voice note (#173). The notice never says the patient sent it when he did
+    not: a note from the helper names her and says to call her. None on every other ladder."""
     rungs: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     started_at: Mapped[datetime] = mapped_column()
     next_rung: Mapped[int] = mapped_column(Integer, default=0)

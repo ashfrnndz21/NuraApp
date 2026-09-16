@@ -185,6 +185,7 @@ async def start(
     anchor: str | None = None,
     flag_id: uuid.UUID | None = None,
     note_id: uuid.UUID | None = None,
+    note_from_person_id: uuid.UUID | None = None,
 ) -> Ladder:
     """The ladder for this action, started now — or the one it already has."""
     for ladder in await run.ladders():
@@ -205,6 +206,7 @@ async def start(
         anchor=anchor,
         flag_id=flag_id,
         note_id=note_id,
+        note_from_person_id=note_from_person_id,
         rungs=rungs,
         started_at=as_utc(started_at),
         next_rung=0,
@@ -477,37 +479,62 @@ card, the same as a flag's — a helper's key holds it, and a key without it is 
 
 
 async def unheard_ladder(
-    run: Run, *, dedupe_key: str, note_id: uuid.UUID | None, exclude: Sequence[uuid.UUID]
+    run: Run,
+    *,
+    dedupe_key: str,
+    note_id: uuid.UUID | None,
+    from_person_id: uuid.UUID,
 ) -> Ladder:
     """The ladder for one voice note nobody could hear: the chief, then the roster, then
-    everyone else whose key holds the emergency card. Whoever sent it is left out."""
+    everyone else whose key holds the emergency card. Whoever sent it is left off it — they
+    know already — and the ladder remembers who that was, so the notice can name them."""
     return await start(
         run,
         subject=Subject.UNHEARD_NOTE,
         scope=UNHEARD_SCOPE,
         dedupe_key=dedupe_key,
         spec=UNHEARD_RUNGS,
-        exclude=exclude,
+        exclude=(from_person_id,),
         started_at=run.at,
         note_id=note_id,
+        note_from_person_id=from_person_id,
     )
 
 
 def unheard_message(run: Run, ladder: Ladder) -> Say:
     """The unheard-note notice, in the reader's language. It carries no word of the note and
-    none of its audio: whose note it was, that Nura could not hear it, and the one thing to
-    do. Where this person's key opens his notes and there is a note to open, she is told to
-    listen in the app or to call him; where it does not, or the audio never arrived, to call
-    him — the one thing she can actually do."""
+    none of its audio: who sent it, that Nura could not hear it, and the one thing to do.
+
+    His own note: where this person's key opens his notes and there is a note to open, she is
+    told to listen in the app or to call him; where it does not, or the audio never arrived,
+    to call him — the one thing she can actually do. Somebody else's note is never said to be
+    his (#173): it names whoever sent it, and the thing to do is to call them, since they are
+    the one who knows what they said. Nothing of theirs is kept, so there is never anything
+    to listen to.
+    """
+    from_patient = (
+        ladder.note_from_person_id is None
+        or run.patient is None
+        or ladder.note_from_person_id == run.patient.id
+    )
 
     async def notice(person: Person) -> Delivered:
-        opens = ladder.note_id is not None and Scope.NOTES in await run.scopes_of(person)
+        name = run.profile.display_name
+        if not from_patient:
+            assert ladder.note_from_person_id is not None
+            sender = await run.person(ladder.note_from_person_id)
+            who = sender.display_name if sender is not None else name
+            kind, params = "unheard_note_notice_from", {"who": who, "name": name}
+        else:
+            opens = ladder.note_id is not None and Scope.NOTES in await run.scopes_of(person)
+            kind = "unheard_note_notice" if opens else "unheard_note_notice_call"
+            params = {"name": name}
         return await send(
             run.session,
             context=run.acting,
             to_person=person,
-            kind="unheard_note_notice" if opens else "unheard_note_notice_call",
-            params={"name": run.profile.display_name},
+            kind=kind,
+            params=params,
             provider=run.via.providers.whatsapp,
             number=run.via.number,
             language=run.language_for(person),
