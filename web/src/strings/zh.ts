@@ -218,6 +218,12 @@ export const zh = {
     roleSteward: "这是您替他们设好的文件。",
     // @patient
     roleOther: "您可以看这份文件。",
+    // @patient phrase
+    openOwn: "您自己的文件。点一下可以看别人的。",
+    // @patient phrase
+    openOther: "{name}的文件。点一下可以看别人的。",
+    // @patient
+    onlyThese: "Nura 只有这些文件给您。",
   },
   today: {
     // @patient headline

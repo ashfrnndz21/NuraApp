@@ -11,7 +11,7 @@ import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./scr
 import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
 import { MeSheet } from "./screens/Me";
-import { PlanScreen, VisitsScreen } from "./screens/tabs";
+import { VisitsScreen } from "./screens/tabs";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
 import { RecordScreen } from "./screens/record/Record";
@@ -86,8 +86,6 @@ function Route(): JSX.Element | null {
       return <VisitScreen appointmentId={current.appointmentId} />;
     case "visits":
       return <VisitsScreen />;
-    case "plan":
-      return <PlanScreen />;
     case "record":
       return <RecordScreen at={current.at ?? { name: "hub" }} />;
     case "onboarding":

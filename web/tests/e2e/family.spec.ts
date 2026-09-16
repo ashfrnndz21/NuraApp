@@ -36,15 +36,22 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-test("the nav (D1): his four tabs, Family and the rest on Me; her five tabs", async ({ page, browser, request }) => {
+/** One tab set, the same for everyone (docs/product-reset.md §6). */
+const TAB_SET = ["Today", "Medicines", "Papers", "Visits", "Family"];
+
+test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Medicines", "Papers", "Visits"]);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
-  await expect(page.getByTestId("me-family")).toBeVisible();
+  await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  // Whose papers are open is on every screen, in the header, by name.
+  await expect(page.getByTestId("whose-name")).toHaveText("Your own papers");
   const hers = await secondPhone(browser);
   await signIn(hers, family.mei, false);
-  await expect(hers.locator("nav.tabbar button")).toHaveText(["Home", "Papers", "Medicines", "Plan", "Family"]);
+  // The same list for her: one app, one account. What differs is the density and whose papers
+  // the switcher says she is in.
+  await expect(hers.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
+  await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
 });
 
 test("Pa's Family, one thing a screen: his circle, his trail, a part kept to himself, and Mei refused on his trail", async ({ page, request }) => {

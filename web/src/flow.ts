@@ -37,9 +37,8 @@ export type Screen =
   | { name: "reading" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
-  /** The tabs that are not Today or the Record (D1): his visits; her plan. */
+  /** The visits tab: his visits, and getting ready for the next one. */
   | { name: "visits" }
-  | { name: "plan" }
   /** The Record (W5): his medicines, papers, day, visits, blood tests, doctors, what changed
    *  and the family's papers; `at` is the one screen under it. Each persona's tabs open into
    *  it (nav.ts, `recordTab`). */
@@ -80,17 +79,14 @@ export type FamilyPart =
 
 export type { Tab };
 
-/** Each tab's first screen (nav.ts has which tabs each persona has). His Medicines and hers,
- *  his Records and her Timeline are places in the Record (W5). */
+/** Each tab's first screen — one tab set for everyone (nav.ts). Medicines and Records are
+ *  places in the Record (W5); Visits is his visits and getting ready for the next one. */
 export function openTab(tab: Tab): void {
   switch (tab) {
     case "medicines":
       return go({ name: "record", at: { name: "medicines" } });
     case "records":
       return go({ name: "record", at: { name: "hub" } });
-    case "timeline":
-      // A key without the visits part (a helper's) has no timeline to read: its papers' first screen.
-      return go({ name: "record", at: profile.value?.scopes.includes("visits") ? { name: "timeline" } : { name: "hub" } });
     case "family":
       return go({ name: "family", part: "home" });
     default:

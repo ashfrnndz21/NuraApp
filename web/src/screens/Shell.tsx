@@ -6,6 +6,7 @@ import { speak } from "../speech/speak";
 import { density, me, profile } from "../store/session";
 import { fill, language, t } from "../strings";
 import { AskBar, Avatar, BrandMark, TabBar } from "../ui/kit";
+import { ProfileSwitcher } from "./Switcher";
 
 /** Ask or search (docs/ui-mockup-v2.html), wired: Enter or Ask opens the answer, E03's recall
  *  over his own papers. The voice button speaks two lines — "Press the microphone on your
@@ -36,21 +37,20 @@ export function AskField({ placeholder, testId }: { placeholder: string; testId?
   );
 }
 
-/** The header on every screen with the tab bar: the mark; in the caregiver's density, whose
- *  papers these are; and the signed-in person's avatar, which opens Me. */
+/** The header on every screen with the tab bar: the mark; the switcher, which names whose
+ *  papers are open and opens every other set this person can; and the signed-in person's own
+ *  avatar, which opens Me.
+ *
+ *  The switcher is on every screen in both densities, not only the caregiver's: one app and one
+ *  account (docs/product-reset.md §6), so whose record the app is in is always on screen and
+ *  never inferred from how the screen looks. */
 export function ShellHeader(): JSX.Element {
   const s = t();
   const papers = profile.value;
-  const caregiver = density() === "caregiver";
   return (
     <header class="shell-head">
       <BrandMark />
-      {caregiver && papers && (
-        <span class="whose" data-testid="whose">
-          <Avatar name={papers.display_name} soft />
-          <span class="whose-name">{papers.display_name}</span>
-        </span>
-      )}
+      {papers && <ProfileSwitcher />}
       <button type="button" class="me-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
         <Avatar name={me.value?.display_name || papers?.display_name || ""} />
         <span class="me-word" aria-hidden="true">
@@ -96,7 +96,7 @@ export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, b
       <div class="screen shell-scroll" data-testid="shell-scroll">
         {children}
       </div>
-      {bar && <TabBar tabs={tabsFor(d, s)} current={tab} onSelect={(id) => openTab(id as Tab)} label={s.appName} />}
+      {bar && <TabBar tabs={tabsFor(d, s, papers?.scopes ?? [], papers?.standing === "owner")} current={tab} onSelect={(id) => openTab(id as Tab)} label={s.appName} />}
     </main>
   );
 }

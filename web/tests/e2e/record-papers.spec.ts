@@ -16,7 +16,7 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
 
   await signInAs(page, pa, "Pa");
   await expect(page.getByTestId("tab-records")).toHaveText("Papers");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Medicines", "Papers", "Visits"]);
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Medicines", "Papers", "Visits", "Family"]);
   await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
@@ -124,12 +124,13 @@ for (const look of LOOKS) {
     const pa = await openOwn(request);
     await signInAs(page, pa, "Pa");
     await lookAs(page, look);
-    // His Today has the blood pressure card; her way to it is the Plan tab (D1).
+    // His Today has the blood pressure card; hers is under Visits, with getting ready for the
+    // next visit (D1: one tab set, so the same tab for both).
     if (look === "patient") {
       await page.getByTestId("tab-today").click();
       await page.getByTestId("write-reading").click();
     } else {
-      await page.getByTestId("tab-plan").click();
+      await page.getByTestId("tab-visits").click();
       await page.getByTestId("plan-reading").click();
     }
     await expect(page.getByTestId("reading-photo")).toBeVisible();

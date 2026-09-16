@@ -218,6 +218,12 @@ export const ms = {
     roleSteward: "Anda menyediakan surat-surat ini untuk mereka.",
     // @patient
     roleOther: "Anda boleh melihat surat-surat ini.",
+    // @patient phrase
+    openOwn: "Surat-surat anda sendiri. Tekan untuk lihat surat orang lain.",
+    // @patient phrase
+    openOther: "Surat-surat {name}. Tekan untuk lihat surat orang lain.",
+    // @patient
+    onlyThese: "Ini sahaja surat-surat yang Nura ada untuk anda.",
   },
   today: {
     // @patient headline

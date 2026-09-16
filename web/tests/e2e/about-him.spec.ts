@@ -50,7 +50,7 @@ test("her Home, her Medicines and her Papers say his papers about him by name, n
   const home = await linesOn(page);
   expect(home.filter(aboutHim)).toEqual([]);
 
-  for (const tab of ["tab-medicines", "tab-timeline"]) {
+  for (const tab of ["tab-medicines", "tab-records"]) {
     await page.getByTestId(tab).click();
     await expect(page.getByTestId(tab)).toHaveAttribute("aria-current", "page");
     await page.waitForLoadState("networkidle");
@@ -123,18 +123,18 @@ test("no caregiver-density screen says a second-person line about his record", a
     await expect(page.getByTestId(id)).toHaveAttribute("aria-current", "page");
   };
 
-  for (const id of ["tab-today", "tab-timeline", "tab-medicines", "tab-plan", "tab-family"]) {
+  for (const id of ["tab-today", "tab-medicines", "tab-records", "tab-visits", "tab-family"]) {
     await tab(id);
     await check(id);
   }
 
-  // Every place in his Record her key opens. In her density they are the chips under the title
-  // (`record-places`), so each is one tap from whichever Record screen is open.
-  await tab("tab-timeline");
+  // Every place in his Record her key opens: the Papers tab, then the place — two taps, which
+  // is the most any feature is allowed to be.
   for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
-    const chip = page.getByTestId(`place-${entry}`);
-    if (!(await chip.isVisible().catch(() => false))) continue;
-    await chip.click();
+    await tab("tab-records");
+    const row = page.getByTestId(`record-${entry}`);
+    if (!(await row.isVisible().catch(() => false))) continue;
+    await row.click();
     await check(`record-${entry}`);
   }
 

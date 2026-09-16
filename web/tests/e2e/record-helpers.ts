@@ -159,18 +159,11 @@ export async function signInAs(page: Page, person: Pick<Person, "phone">, name: 
   await expect(bar).toBeVisible();
 }
 
-/** The Record's first screen from the tab bar (D1): his Papers tab; in her density the Timeline
- *  tab, then back to the papers' first screen (a key without the timeline lands there at once). */
+/** The Record's first screen from the tab bar. One tab set for everyone (D1, the reset): the
+ *  Papers tab opens the Record's own first screen in either density. */
 export async function openRecord(page: Page): Promise<void> {
-  const hub = page.getByTestId("record-hub");
-  if ((await page.locator("html").getAttribute("data-density")) === "patient") await page.getByTestId("tab-records").click();
-  else {
-    await page.getByTestId("tab-timeline").click();
-    const back = page.getByTestId("record-back");
-    await expect(hub.or(back)).toBeVisible();
-    if (!(await hub.isVisible())) await back.click();
-  }
-  await expect(hub).toBeVisible();
+  await page.getByTestId("tab-records").click();
+  await expect(page.getByTestId("record-hub")).toBeVisible();
 }
 
 /** The density chosen on the Me sheet (D1), then the Record's first screen. */

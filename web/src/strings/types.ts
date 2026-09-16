@@ -90,6 +90,9 @@ export interface Strings {
     roleCaregiver: string;
     roleSteward: string;
     roleOther: string;
+    openOwn: string;
+    openOther: string;
+    onlyThese: string;
   };
   today: {
     now: string;

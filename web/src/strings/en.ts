@@ -218,6 +218,12 @@ export const en = {
     roleSteward: "You made these papers for them.",
     // @patient
     roleOther: "You can see these papers.",
+    // @patient phrase
+    openOwn: "Your own papers. Tap to look at someone else's.",
+    // @patient phrase
+    openOther: "{name}'s papers. Tap to look at someone else's.",
+    // @patient
+    onlyThese: "These are the only papers Nura has for you.",
   },
   today: {
     // @patient headline

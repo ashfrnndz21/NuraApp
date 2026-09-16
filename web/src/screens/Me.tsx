@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
 import type { MeSummaryOut } from "../api/types";
-import { closeMe, go, meOpen, openTab, reloadDoors, signOutEverywhere } from "../flow";
+import { closeMe, go, meOpen, reloadDoors, signOutEverywhere } from "../flow";
 import { emergencyOnly } from "../offline/emergencyCache";
 import { wantsHomeScreenHint } from "../offline/register";
 import { startOnboarding } from "../onboarding/state";
@@ -114,11 +114,6 @@ export function MeSheet(): JSX.Element | null {
         )}
       </Tile>
       <Tile paper>
-        {patient && papers && (
-          <Pill onClick={() => openTab("family")} testId="me-family">
-            {s.tabs.family}
-          </Pill>
-        )}
         <Pill onClick={() => void reloadDoors()} testId="switch-profile">
           {s.me.switchProfile}
         </Pill>

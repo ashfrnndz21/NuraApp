@@ -110,6 +110,9 @@ function Places({ at }: { at: RecordAt }): JSX.Element | null {
   const s = t();
   const papers = profile.value;
   if (density() !== "caregiver" || !papers) return null;
+  // Not on the Record's own first screen: there the places are already the list on the page,
+  // and a chip row above it would be the same navigation twice.
+  if (at.name === "hub") return null;
   const entries = hubEntries("caregiver", papers.scopes);
   if (entries.length < 2) return null;
   return (

@@ -59,18 +59,50 @@
   height: 32px;
   flex: none;
 }
-.whose {
-  display: flex;
+/* The switcher: whose papers are open, on every screen, and the way to every other set this
+   person can open. A glass pill like Me, so the header reads as one row of chrome, and never
+   under the density's target height — it is a control, and the biggest one a caregiver taps
+   before acting on someone else's record. */
+.switcher {
+  display: inline-flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  min-height: var(--target);
+  padding: 4px 10px 4px 4px;
+  border-radius: var(--radius-pill);
+  border: var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+  font: inherit;
   font-size: var(--text-title);
   font-weight: var(--weight-title);
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.switcher:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.switcher .icon {
+  flex: none;
+  opacity: 0.7;
 }
 .whose-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The rows in the switcher's sheet carry a second line (what this key is), so the word stacks. */
+.switcher-row .place-word {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: start;
 }
 .me-button {
   margin-left: auto;
