@@ -633,6 +633,43 @@ async def test_an_area_is_coarse_and_his_to_set(deployment: Deployment) -> None:
     assert check_area("toa  payoh", Region.SG) == "Toa Payoh"
 
 
+async def test_his_trail_says_who_set_his_area_and_when_it_was_refused(
+    deployment: Deployment,
+) -> None:
+    """Where he lives is location data about him, so the trail carries every write of it.
+
+    Two things are asserted. A street or a whole postcode is refused *and written down* — that
+    it was refused, never what was offered, so a rejected address does not land on the trail by
+    the back door. And his own write is his: the owner reads and writes his own graph with no
+    key, so his line carries no key and no role, which is how a reader tells his yes from the
+    steward's before he claimed the graph (`app/delivery/feed/area.py`).
+    """
+    pa, profile_id = await _pa(deployment)
+    refused = await deployment.client.put(
+        f"/profiles/{profile_id}/area",
+        json={"area": "12 Ang Mo Kio Avenue 3"},
+        headers=bearer(pa["token"]),
+    )
+    assert refused.status_code == 400 and refused.json()["refusal"] == "NotACoarseArea"
+    kept = await deployment.client.put(
+        f"/profiles/{profile_id}/area", json={"area": "Bedok"}, headers=bearer(pa["token"])
+    )
+    assert kept.status_code == 200, kept.text
+    async with deployment.sessions() as session:
+        trail = await read_audit(
+            session, context=await _context(deployment, pa["person_id"], profile_id)
+        )
+    area_lines = [e for e in trail if e.target == "profile.area"]
+    [turned_down] = [e for e in area_lines if e.outcome is Outcome.REFUSED]
+    assert turned_down.refused_because == "NotACoarseArea"
+    # The street he typed is nowhere on the trail: the line says it was refused, not what for.
+    assert not any("Ang Mo Kio Avenue" in (e.target or "") for e in trail)
+    written = [e for e in area_lines if e.outcome is not Outcome.REFUSED]
+    assert written and all(e.key_id is None and e.actor_role is None for e in written), (
+        "his own write carries no key: that is how the trail says it was him, not his steward"
+    )
+
+
 # --- seasons -------------------------------------------------------------------------------
 
 

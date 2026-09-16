@@ -1,12 +1,28 @@
 """His area (E09-07): where he lives, coarsely, so a dengue bulletin near him reaches him.
 
 A town or district from the region's list, or the first digits of a postcode — never a
-street, a house or a whole postcode (`app.delivery.feed.local.check_area`). It is set on his
-own yes: his own key, or the steward's who holds the graph for him until he claims it; a chief
-reads it, so she can see why a local card came, and asks him to change it. It is kept on the
+street, a house or a whole postcode (`app.delivery.feed.local.check_area`). It is kept on the
 profile, classed as an identifier (docs/trust/pdpa-data-map.md), and used only here, to match
 bulletins fetched for the whole region: it is never sent to a searcher, never written into a
 search job and never on the trail's words — the trail says that it was set, not what to.
+
+**Who may set it.** Where he lives is location data about him, so it is his to say:
+
+* Once he has claimed his profile, only his own key. `Standing.STEWARD` is granted only while
+  `profile.owner_person_id is None` (`app.keys.context`), so the moment he claims the graph
+  the steward's key becomes a `HOLDER` and this refuses it — the chief who manages his feed
+  reads his area, so she can see why a local card came, and asks him to change it.
+* Before the claim, the steward may set it on the declared basis the proxy model rests on
+  (`stewardship.consent_id`), as he cannot yet be asked.
+
+The trail says which of the two it was without anything extra being written: the owner reads
+and writes his own graph with no key, so his line carries no `key_id` and no `actor_role`,
+while the steward's carries both (`app.audit.trail`). `test_feed_formats.py` holds that.
+
+**Still owed** (operator's decision, 2026-09-16): after the claim this should take his *yes* —
+a `Confirmation` spent here, the way a dose change or a key change is — not merely his key.
+That needs a new `ConfirmSubject` and `Draft`, a `confirmation_id` on the route and the two
+steps in the Me screen, so it is filed on its own rather than folded in here.
 """
 
 from __future__ import annotations
