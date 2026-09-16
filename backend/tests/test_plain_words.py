@@ -704,3 +704,75 @@ def test_rule_14_the_exemption_is_a_question_put_to_the_doctor() -> None:
     assert not rule_14("Tanya doktor anda tentang berhenti makan pil air.", "ms")
     assert rule_14("告诉阿明停吃去水药。", "zh")
     assert not rule_14("问一问陈医生，去水药要不要停。", "zh")
+
+
+def test_rule_14_keep_taking_is_a_whitelist_not_a_blacklist() -> None:
+    """The reviewer's three probes on PR #170: `_KEEP_TAKING` was a blacklist inside a loosely
+    anchored shape, not the one sentence its docstring claimed. `till`/`while`/`during`/
+    `every`/`instead` were never on the English blacklist; Chinese numerals (一二三四五六七八
+    九十百半两) are not ASCII digits, so a "no digit" check that only looked for 0-9 missed
+    them; and Malay's `dua` ("two") is a plain word, not a digit, so a word-only blacklist
+    never caught it either. `_keep_taking_pattern` closes all three by whitelisting the exact
+    `DO_NOT_STOP` template with its slots filled, instead of blacklisting words in a shape."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Do not stop the water pill till Friday yourself.", "en")
+    assert rule_14("不要自己停药明天吃两片。", "zh")
+    assert rule_14("不要自己停药每天吃两次。", "zh")
+    assert rule_14("Jangan berhenti makan ubat makan dua pil sendiri.", "ms")
+
+
+def test_a_composed_note_verifies_clean_in_ms_and_zh_with_a_real_medicine() -> None:
+    """The reviewer: nothing exercised `verify()` on the filled ms/zh `DO_NOT_STOP` lines —
+    only the templates and the whitelist regex were tested in isolation. A failure here
+    raises `NotPlainWords` (`app.reasoning.feelings.service._render_note`) and withholds his
+    note, so render one for real, with a real medicine (amlodipine, his blood pressure
+    tablet) and a real doctor, in both languages, and check every line it produces."""
+    import uuid
+    from datetime import timedelta
+
+    from app.db import utcnow
+    from app.keys.context import KeyContext
+    from app.medicines.strings import PLAIN_NAME
+    from app.reasoning.feelings.inference import compose_note
+    from app.reasoning.feelings.record import Line, Situation
+    from app.reasoning.feelings.strings import DO_NOT_STOP
+    from app.reasoning.feelings.words import Answer
+    from app.regions import Region
+    from app.safety.red_flags import Feeling
+
+    now = utcnow()
+    context = KeyContext(
+        profile_id=uuid.uuid4(), region=Region.SG, person_id=uuid.uuid4(), scopes=frozenset()
+    )
+    line = Line(
+        line_id=uuid.uuid4(),
+        generic="amlodipine",
+        plain_name_id="blood_pressure_tablet",
+        started_at=now - timedelta(days=1),
+        watch_out_ids=("dizzy_standing",),
+        prescriber="Dr Tan",
+        drug_class="calcium_channel_blocker",
+    )
+    situation = Situation(
+        now=now,
+        state=None,
+        lines=(line,),
+        readings=(),
+        episodes=(),
+        discharged_at=None,
+        said=(),
+        last_tap_at=None,
+        next_visit=None,
+        recent_visit=None,
+    )
+    for code in ("ms", "zh"):
+        composed = compose_note(Feeling.DIZZY, Answer.TODAY, situation, context, code)
+        assert composed.failures() == [], (code, composed.lines)
+        assert composed.lines[-2:] == (
+            DO_NOT_STOP[code][0].format(medicine=PLAIN_NAME[code]["blood_pressure_tablet"]),
+            DO_NOT_STOP[code][1].format(doctor="Dr Tan"),
+        )

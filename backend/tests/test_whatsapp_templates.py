@@ -1,4 +1,4 @@
-"""E19-01, E11: the sixteen templates, their slots, which are approved, and the business number."""
+"""E19-01, E11: the eighteen templates, their slots, which are approved, and the business number."""
 
 from __future__ import annotations
 

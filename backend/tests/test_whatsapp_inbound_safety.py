@@ -45,7 +45,7 @@ from app.delivery.triggers.models import (
     TriggerType,
 )
 from app.delivery.triggers.preferences import change
-from app.delivery.triggers.rules import AlertsAreNeverHeld, check_settings
+from app.delivery.triggers.rules import AlertsAreNeverHeld, AlertsGoEveryWay, check_settings
 from app.ingestion.models import EventNote
 from app.keys.scopes import Scope
 from app.memory.models import Artifact
@@ -75,6 +75,17 @@ def _told(home: Family, number: str) -> list[list[str]]:
 
 
 async def _notices(sg: AsyncSession) -> list[Delivery]:
+    """The unheard-note alert's own delivery rows — not the in-app notice always written
+    beside whatever carried it (#162)."""
+    return [row for row in await _all_notice_rows(sg) if row.via is not DeliveryChannel.IN_APP]
+
+
+async def _in_app_notices(sg: AsyncSession) -> list[Delivery]:
+    """The in-app notice #162 writes beside the unheard-note alert, on the person's own row."""
+    return [row for row in await _all_notice_rows(sg) if row.via is DeliveryChannel.IN_APP]
+
+
+async def _all_notice_rows(sg: AsyncSession) -> list[Delivery]:
     return list(
         (
             await sg.scalars(
@@ -147,16 +158,17 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     home = await family(sg, tmp_path)
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {TriggerType.VOICE_NOTE_UNHEARD.value: 1})
-    # A setting that would send it only to the caregiver changes nothing for an alert.
-    await change(
-        sg,
-        context=home.owner,
-        skip_quiet_days=False,
-        quiet_from=None,
-        quiet_until=None,
-        channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
-        caps={},
-    )
+    # An alert's channels are not a setting: choosing one is refused outright, not honoured.
+    with pytest.raises(AlertsGoEveryWay):
+        await change(
+            sg,
+            context=home.owner,
+            skip_quiet_days=False,
+            quiet_from=None,
+            quiet_until=None,
+            channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
+            caps={},
+        )
 
     async def down(*args: object, **kwargs: object) -> object:
         raise ConnectionError("the transcriber is down, for the test")

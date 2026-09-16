@@ -63,7 +63,7 @@ class Line:
     started_at: datetime
     watch_out_ids: tuple[str, ...]
     prescriber: str | None
-    drug_class: str | None = None
+    drug_class: str
     """The register's class, as the line carries it: what tells a medicine that can drop his
     sugar (`app.safety.red_flags.HYPOGLYCAEMIC_CLASSES`)."""
 

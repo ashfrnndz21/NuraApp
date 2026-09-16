@@ -91,6 +91,7 @@ import sys
 import tokenize
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import Literal
 
@@ -1246,29 +1247,54 @@ the doctor (or the pharmacist) — it begins by asking or telling *them*: "Ask D
 tight the other way too: a verb alone ("You can tell Nura to stop at any time.") or a noun
 alone passes."""
 
-_KEEP_TAKING: dict[str, re.Pattern[str]] = {
-    "en": re.compile(
-        r"^do not stop (?!.*\b(?:until|unless|before|after|for|when|if|and|or|but|then)\b)"
-        r"[a-z' ()-]+ yourself\.?$",
-        re.IGNORECASE,
-    ),
-    "ms": re.compile(
-        r"^jangan berhenti (?:makan|ambil) "
-        r"(?!.*\b(?:sehingga|sampai|kecuali|sebelum|selepas|jika|kalau|dan|atau|tetapi|lalu)\b)"
-        r"[a-z' ()-]+ sendiri\.?$",
-        re.IGNORECASE,
-    ),
-    "zh": re.compile(
-        r"^不要自己停(?!.*(?:直到|除非|再|但|改|加|减|和|或|以后|之后|之前|先|然后))"
-        r"[\u4e00-\u9fffA-Za-z ()（）]+。?$"
-    ),
-}
-"""The one line that puts a treatment verb beside a medicine to keep it as it is: "Do not stop
-{medicine} yourself." (#157, `app.reasoning.feelings.strings.DO_NOT_STOP`). It is the opposite
-of a change: he keeps taking it, and the doctor decides. Held to that shape and nothing more:
-one treatment verb in the line, no digit, no punctuation but the full stop, and no word that
-adds a condition or a second thing ("until Friday", "and take less", "再多吃") — those fail
-as before."""
+_ZH_NUMERALS = "一二三四五六七八九十百半两"
+
+
+def _name_shaped(language: str) -> str:
+    """A name-shaped run: letters (or, in `zh`, CJK characters), spaces, apostrophes, hyphens
+    and parentheses — no digit in any script, the CJK numerals (`_ZH_NUMERALS`) included, since
+    those are ordinary characters in the CJK block and would otherwise pass as "letters"."""
+    if language == "zh":
+        return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z ()（）'-])+"
+    return r"[A-Za-z][A-Za-z' ()-]*"
+
+
+def _medicine_token(language: str) -> str:
+    """A bare technical name — "furosemide", "药" — the same no-digit-in-any-script rule as
+    `_name_shaped`, but no space: a real drug name is one word (or, in `zh`, one run of
+    characters); a space is how a clause hides inside the slot ("the water pill till Friday",
+    "ubat makan dua pil"). The app's own friendly phrases (`app.medicines.strings.PLAIN_NAME`,
+    which do have spaces) are matched separately, in full, by `_keep_taking_pattern`."""
+    if language == "zh":
+        return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z()（）'-])+"
+    return r"[A-Za-z][A-Za-z'()-]*"
+
+
+@cache
+def _keep_taking_pattern(language: str) -> re.Pattern[str]:
+    """The whitelist for rule 14's one allowance (#157): the line passes only if it is exactly
+    one of `DO_NOT_STOP`'s templates (`app.reasoning.feelings.strings`) with its slots filled —
+    the medicine slot a name the app itself uses (`app.medicines.strings.PLAIN_NAME`) or a bare
+    technical name (`_medicine_token`), the doctor slot a name (`_name_shaped`). Built from the
+    templates themselves, not typed out again, so the two cannot drift apart.
+
+    Imports lazily: `app.medicines` imports `app.safety.high_risk` at package level, so an
+    import of `app.medicines.strings` at this module's top level would cycle back here."""
+    from app.medicines.strings import PLAIN_NAME
+    from app.reasoning.feelings.strings import DO_NOT_STOP
+
+    known = sorted(PLAIN_NAME[language].values(), key=len, reverse=True)
+    medicine = "(?:{}|{})".format(
+        "|".join(re.escape(name) for name in known), _medicine_token(language)
+    )
+    doctor = _name_shaped(language)
+    alternatives = []
+    for template in DO_NOT_STOP[language]:
+        slotted = re.escape(template)
+        slotted = slotted.replace(re.escape("{medicine}"), medicine)
+        slotted = slotted.replace(re.escape("{doctor}"), doctor)
+        alternatives.append(slotted)
+    return re.compile("^(?:{})$".format("|".join(alternatives)))
 
 
 def _check_boundary(line: _Line) -> None:
@@ -1279,7 +1305,9 @@ def _check_boundary(line: _Line) -> None:
         return
     if _ASKING.search(line.text):
         return
-    if len(verbs.findall(line.text)) == 1 and _KEEP_TAKING[language].search(line.text.strip()):
+    if len(verbs.findall(line.text)) == 1 and _keep_taking_pattern(language).search(
+        line.text.strip()
+    ):
         return
     line.add(
         14,
