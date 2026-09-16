@@ -96,6 +96,7 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         region=region,
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
+        red_flag_tiers=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
     )
     providers = Providers(

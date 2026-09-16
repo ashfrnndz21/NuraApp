@@ -53,11 +53,12 @@ the same for the notices and the ladder written beside a flag.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
 
@@ -70,7 +71,16 @@ from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
-from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, keep_on_refusal, utcnow
+from app.db import (
+    Base,
+    ProfileScoped,
+    as_utc,
+    enum_column,
+    frozen,
+    keep_on_refusal,
+    nested_unit_of_work,
+    utcnow,
+)
 from app.errors import Refusal
 from app.identity.models import Profile
 from app.keys.context import KeyContext
@@ -84,10 +94,13 @@ from app.memory.models import (
     Event,
     EventKind,
     Fact,
+    Provider,
+    ProviderKind,
     SourceChannel,
     _row_of_profile,
     _tied_to_profile,
 )
+from app.safety.high_risk import high_risk_class
 from app.state.dimensions import AFTER_DISCHARGE_WINDOW, CONTROL
 
 # --- the feeling cloud -----------------------------------------------------------------------
@@ -129,6 +142,8 @@ class Feeling(StrEnum):
     FINE = "fine"
 
 
+log = logging.getLogger(__name__)
+
 RED_FLAGS: frozenset[Feeling] = frozenset(
     {
         Feeling.FALL,
@@ -154,6 +169,15 @@ HYPOGLYCAEMIC_CLASSES = frozenset({"insulin", "sulfonylurea"})
 register) whose medicines can drop his sugar: insulin, and the sulfonylureas — gliclazide,
 glibenclamide. On one of them shaky-and-sweaty escalates whether or not a sugar condition is
 written down. A class, never a list of names; widening it (meglitinides) is the pharmacist's."""
+
+ANTICOAGULANT_CLASSES = frozenset({"anticoagulant"})
+"""The licensed register's classes (`drug_class`, carried on the medication line from the
+register) whose medicines thin his blood: warfarin, and the newer tablets the register classes
+with it — apixaban, rivaroxaban, dabigatran, edoxaban. On one of them a fall can bleed inside
+his head hours later, so a fall is the ambulance at any hour (`AMBULANCE_ON_A_THINNER`). The
+same class the label-photo rule guards (`app.safety.high_risk.HIGH_RISK_CLASSES`). A class,
+never a list of names; widening it (heparin injections, the antiplatelets) is the
+pharmacist's. Awaiting the clinician's sign-off (docs/trust/clinical-sign-off.md)."""
 
 FLAG_TARGET = "red_flag"
 
@@ -208,9 +232,10 @@ RED_FLAG_WORDS: Mapping[Feeling, tuple[str, ...]] = {
         r"kabur tiba-tiba",
     ),
     Feeling.FALL: (
-        r"\bfell\b",
-        r"\bfall(?:en|s)?\b",
-        r"\bfalling\b",
+        # Never "fall asleep": on a blood thinner a fall is the ambulance (B1 re-check).
+        r"\bfell\b(?!\s+asleep)",
+        r"\bfall(?:en|s)?\b(?!\s+asleep)",
+        r"\bfalling\b(?!\s+asleep)",
         r"\bjatuh\b",
         r"terjatuh",
         r"(?:跌倒|摔倒|摔了|跌了|摔跤)",
@@ -247,15 +272,51 @@ _PATTERNS: tuple[tuple[Feeling, re.Pattern[str]], ...] = tuple(
 
 
 def detect(text: str | None) -> Feeling | None:
-    """The first red flag the words of a message match, or None: the same `Feeling` a tap on
-    the cloud raises, heard in free text on WhatsApp (E19-05). The weight rule is a fact, not a
-    word, so it is not in the table."""
+    """The most urgent red flag the words of a message match, or None: the same `Feeling` a
+    tap on the cloud raises, heard in free text on WhatsApp (E19-05). Every flag the words
+    match is found, and one in the ambulance tier (`AMBULANCE_FLAGS`) wins over the table's
+    order — "I fell and now I am confused" is confusion, the ambulance, never a fall's "call
+    the doctor today" (B1 review). Among the same-day flags a fall wins: on a blood thinner it
+    is the ambulance (`AMBULANCE_ON_A_THINNER`), and off one both are the same day — "I fell
+    and my leg is swollen on one side" is a fall, so the thinner is never missed. The weight
+    rule is a fact, not a word, so it is not in the table."""
+    found = detect_all(text)
+    return found[0] if found else None
+
+
+def detect_all(text: str | None) -> list[Feeling]:
+    """Every red flag the words match, most urgent first: the ambulance tier, then a fall,
+    then the rest, each in the table's order (`detect` is the first)."""
     if not text:
-        return None
-    for rule, pattern in _PATTERNS:
-        if pattern.search(text):
-            return rule
-    return None
+        return []
+    found = list(dict.fromkeys(rule for rule, pattern in _PATTERNS if pattern.search(text)))
+    urgent = [rule for rule in found if rule in AMBULANCE_FLAGS]
+    raised = [rule for rule in found if rule in AMBULANCE_ON_A_THINNER and rule not in urgent]
+    return urgent + raised + [rule for rule in found if rule not in urgent and rule not in raised]
+
+
+RESTS_ON_THE_RECORD: frozenset[Feeling] = frozenset({Feeling.SHAKY_SWEATY, Feeling.WEIGHT_GAIN})
+"""The two flags that depend on a fact on the record (`_missing_fact`) and are written held back
+without it."""
+
+
+async def flag_to_raise(
+    session: AsyncSession, *, context: KeyContext, text: str | None
+) -> Feeling | None:
+    """The flag free text raises: `detect`'s, unless that one rests on a fact the record does not
+    hold and another flag was said too — then the most urgent one that will not be held back.
+    "I fell and I am shaky and sweaty", with no sugar condition or sugar medicine on the record,
+    is the fall, never a held-back flag that tells nobody (B1 re-check). A single flag, or one
+    that would be held back whatever else was said, is `detect`'s, as before."""
+    found = detect_all(text)
+    if len(found) < 2 or found[0] not in RESTS_ON_THE_RECORD:
+        return found[0] if found else None
+    for feeling in found:
+        if feeling not in RESTS_ON_THE_RECORD:
+            return feeling
+        if await _missing_fact(session, context=context, feeling=feeling) is None:
+            return feeling
+    return found[0]
 
 
 # --- the words heard at a visit (E05) --------------------------------------------------------
@@ -566,6 +627,218 @@ def is_red(feeling: Feeling) -> bool:
     return feeling in RED_FLAGS
 
 
+# --- how soon, and where to (E19-05) ----------------------------------------------------------
+
+
+class Urgency(StrEnum):
+    """How soon a red flag is acted on. Two tiers, and the hour never moves a flag down one."""
+
+    AMBULANCE = "ambulance"
+    """The ambulance now, at any hour."""
+    SAME_DAY = "same_day"
+    """The doctor today; out of the doctor's hours, the hospital or the emergency number."""
+
+
+AMBULANCE_FLAGS: frozenset[Feeling] = frozenset(
+    {
+        Feeling.CHEST_TIGHTNESS,
+        Feeling.BREATHLESS_AT_REST,
+        Feeling.WORST_HEADACHE,
+        Feeling.SUDDEN_BLURRING,
+        Feeling.CONFUSION,
+        Feeling.SHAKY_SWEATY,
+    }
+)
+"""The red flags that are the ambulance at any hour: chest pain, breathless at rest, the signs
+of a stroke — the worst headache ever, sudden blurring, confusion — and shaky and sweaty on a
+medicine that drops his sugar (it acts in minutes). The rest of `RED_FLAGS` (a fall, one-sided
+swelling, the weight after a heart discharge) are the same-day tier — but a fall on a blood
+thinner is the ambulance too (`AMBULANCE_ON_A_THINNER`). A subset of `RED_FLAGS`, never a
+second list of words: the words are `RED_FLAG_WORDS`, above. Awaiting a clinician's sign-off
+(docs/adr/0010-red-flag-tiers.md)."""
+
+AMBULANCE_ON_A_THINNER: frozenset[Feeling] = frozenset({Feeling.FALL})
+"""The same-day flags that are the ambulance at any hour while an active medicine on his list
+is one the register classes as an anticoagulant (`ANTICOAGULANT_CLASSES`): a fall, because a
+bleed inside the head can come hours after it and needs seeing tonight, not in the morning.
+Read from his list as the system (`on_a_blood_thinner`), whoever raised the flag. Awaiting
+the clinician's sign-off (docs/trust/clinical-sign-off.md)."""
+
+NIGHT_FROM = time(20, 0)
+NIGHT_UNTIL = time(8, 0)
+"""Out of the doctor's hours when the directory does not say them: 20:00 to 08:00 on his
+wall clock."""
+
+LAST_HOUR = timedelta(hours=1)
+"""The last hour before the doctor closes counts as out of hours: a clinic closing at 20:00
+cannot see him at 19:45 "today"."""
+
+
+class Step(StrEnum):
+    """What a red flag's escalation tells the person to do now: one row of `step_for`."""
+
+    AMBULANCE = "ambulance"
+    """Call the ambulance now on 995."""
+    DOCTOR_TODAY = "doctor_today"
+    """Call Dr Tan today."""
+    DOCTOR_TODAY_HOSPITAL = "doctor_today_hospital"
+    """Call Dr Tan today; if it gets worse, go to the hospital on his insurance now."""
+    HOSPITAL_NOW = "hospital_now"
+    """Out of hours: go to the emergency department at the hospital on his insurance now."""
+    NUMBER_IF_WORSE = "number_if_worse"
+    """Out of hours, no hospital marked: if it gets worse, call 995 now."""
+
+
+@dataclass(frozen=True, slots=True)
+class EscalationStep:
+    """The step for one red flag at one moment, and the names it says."""
+
+    step: Step
+    urgency: Urgency
+    after_hours: bool
+    doctor: str | None
+    """The doctor or clinic the directory names first, or None: "your doctor" is said."""
+    hospital: str | None
+    """The hospital marked as on his insurance, or None."""
+    emergency_number: str
+    anticoagulated: bool
+    tiered: bool
+    """Whether the tiers are signed off (`Settings.red_flag_tiers`). When not, the step is the
+    ambulance for every red flag."""
+    """Whether a medicine the register classes as an anticoagulant is on his list: a fall is
+    then the ambulance (`AMBULANCE_ON_A_THINNER`)."""
+
+
+def urgency_of(feeling: Feeling, *, anticoagulated: bool = False) -> Urgency:
+    """The flag's tier: `AMBULANCE_FLAGS` at any hour, and a fall too when he is on a blood
+    thinner (`anticoagulated`, read from his list by `on_a_blood_thinner`); the rest same-day."""
+    if not is_red(feeling):
+        raise NotAFeeling(f"{feeling} is not a red flag")
+    if feeling in AMBULANCE_FLAGS or (anticoagulated and feeling in AMBULANCE_ON_A_THINNER):
+        return Urgency.AMBULANCE
+    return Urgency.SAME_DAY
+
+
+def is_after_hours(local: time, opens: time | None, closes: time | None) -> bool:
+    """Whether this moment on his wall clock is outside the doctor's hours, the last hour
+    before closing included (`LAST_HOUR`): the directory's hours when it says both ends,
+    08:00 to 20:00 otherwise (equal ends are read as "not said", on the side of the
+    emergency department). Hours that cross midnight are read as such. Days of the week are
+    not in the directory yet: a Sunday is read like a weekday."""
+    if opens is None or closes is None or opens == closes:
+        opens, closes = NIGHT_UNTIL, NIGHT_FROM
+    last = (datetime.combine(date(2000, 1, 1), closes) - LAST_HOUR).time()
+    at = local.replace(tzinfo=None)
+    if opens < last:
+        return not opens <= at < last
+    return last <= at < opens
+
+
+def step_for(urgency: Urgency, *, after_hours: bool, hospital: bool) -> Step:
+    """The decision table, top row wins: the ambulance tier is the ambulance whatever the hour
+    or the list; the same-day tier is the doctor today in his hours — with the hospital on his
+    insurance named for if it gets worse — and out of them the hospital's emergency department
+    now, or the emergency number if it gets worse."""
+    if urgency is Urgency.AMBULANCE:
+        return Step.AMBULANCE
+    if after_hours:
+        return Step.HOSPITAL_NOW if hospital else Step.NUMBER_IF_WORSE
+    return Step.DOCTOR_TODAY_HOSPITAL if hospital else Step.DOCTOR_TODAY
+
+
+DOCTOR_FIRST = (ProviderKind.DOCTOR, ProviderKind.CLINIC, ProviderKind.HOSPITAL)
+"""Whose name "call … today" says: the doctor, else the clinic, else the hospital — the order
+every red-flag line has named them in."""
+
+
+def escalation_for(
+    feeling: Feeling,
+    *,
+    providers: Sequence[Provider],
+    local: datetime,
+    emergency_number: str,
+    anticoagulated: bool,
+    tiered: bool,
+) -> EscalationStep:
+    """The step for this flag at this moment on his wall clock, from his directory: the doctor
+    it names, the hours that doctor or clinic keeps, and the hospital marked as on his
+    insurance — and from his list, whether he is on a blood thinner (`anticoagulated`, never
+    defaulted: a fall on one is the ambulance whatever the hour or the directory). Until the
+    tiers are signed off (`tiered`, from `Settings.red_flag_tiers`), every red flag is the
+    ambulance: no level-of-care step of Nura's own reaches a family before a clinician signs
+    the table (docs/trust/samd-boundary-review.md §6, ADR 0010)."""
+    listed = sorted(providers, key=lambda one: (as_utc(one.added_at), one.name))
+    doctor = next((p for kind in DOCTOR_FIRST for p in listed if p.kind is kind), None)
+    # The hours of the doctor the line names, and no one else's: a clinic's hours never make
+    # another doctor's "call … today" (B1 review).
+    hours = doctor if doctor is not None and doctor.kind is not ProviderKind.HOSPITAL else None
+    hospital = next(
+        (p for p in reversed(listed) if p.kind is ProviderKind.HOSPITAL and p.panel), None
+    )
+    urgency = urgency_of(feeling, anticoagulated=anticoagulated)
+    late = is_after_hours(
+        local.timetz(),
+        None if hours is None else hours.opens_at,
+        None if hours is None else hours.closes_at,
+    )
+    return EscalationStep(
+        step=(
+            step_for(urgency, after_hours=late, hospital=hospital is not None)
+            if tiered
+            else Step.AMBULANCE
+        ),
+        urgency=urgency,
+        after_hours=late,
+        doctor=None if doctor is None else doctor.name,
+        hospital=None if hospital is None else hospital.name,
+        emergency_number=emergency_number,
+        anticoagulated=anticoagulated,
+        tiered=tiered,
+    )
+
+
+async def escalation_now(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    feeling: Feeling,
+    local: datetime,
+    emergency_number: str,
+    channel: Channel,
+    tiered: bool,
+) -> EscalationStep:
+    """`escalation_for`, with the directory read under the emergency scope — the part of the
+    graph every role holds, and the one the emergency card names his doctor from (ADR 0002) —
+    so a helper's word is answered with the same doctor and the same hospital as a chief's.
+    For a flag a blood thinner raises (`AMBULANCE_ON_A_THINNER`), his list is read as the
+    system (`on_a_blood_thinner`): a helper who saw him fall gets the ambulance though her key
+    does not open his medicines. Every path a flag is told by comes here — the WhatsApp reply
+    and the ladder's notice to the family, whether the flag came from WhatsApp, the
+    not-feeling-well button, the symptom log or the feeling cloud."""
+    providers = await audited_read(session, Provider, context, Scope.EMERGENCY, channel=channel)
+    anticoagulated = False
+    if tiered and feeling in AMBULANCE_ON_A_THINNER:
+        # In its own savepoint: nothing about reading his list may weaken the step or leave the
+        # request's transaction unusable. If it cannot be read, he is taken to be on one — the
+        # ambulance (B1 re-check).
+        try:
+            async with nested_unit_of_work(session):
+                anticoagulated = await on_a_blood_thinner(session, context=context)
+        except Exception as failed:  # noqa: BLE001 — any failure errs towards the ambulance
+            log.warning(
+                "red flag: his list could not be read (%s); the ambulance", type(failed).__name__
+            )
+            anticoagulated = True
+    return escalation_for(
+        feeling,
+        providers=providers,
+        local=local,
+        emergency_number=emergency_number,
+        anticoagulated=anticoagulated,
+        tiered=tiered,
+    )
+
+
 async def _system_read(
     session: AsyncSession,
     *,
@@ -593,6 +866,31 @@ async def _system_read(
         channel=Channel.SYSTEM,
     )
     return rows
+
+
+async def on_a_blood_thinner(session: AsyncSession, *, context: KeyContext) -> bool:
+    """Whether a blood thinner is on his list now: a line in force, active or held — a thinner
+    held for a few days still thins his blood — whose register class is in
+    `ANTICOAGULANT_CLASSES` (any case), or whose generic name the label-photo rule's own matcher
+    reads as one of that class (`app.safety.high_risk.high_risk_class`, whole words: "warfarin
+    sodium" too), so a register that files a thinner under another class code still raises a
+    fall. Read as the system (`_system_read`), whoever raised the flag; only the answer
+    leaves, never a medicine's name."""
+    lines = await _system_read(
+        session,
+        context=context,
+        model=MedicationLine,
+        scope=Scope.MEDICINES,
+        where=(
+            MedicationLine.superseded_at.is_(None),
+            MedicationLine.status.in_((LineStatus.ACTIVE, LineStatus.HELD)),
+        ),
+    )
+    return any(
+        (line.drug_class or "").lower() in ANTICOAGULANT_CLASSES
+        or high_risk_class(line.generic) in ANTICOAGULANT_CLASSES
+        for line in lines
+    )
 
 
 async def _missing_fact(
@@ -1029,6 +1327,8 @@ def keep_row(session: AsyncSession, context: KeyContext, row: Any, *, scope: Sco
 
 
 __all__ = [
+    "AMBULANCE_ON_A_THINNER",
+    "ANTICOAGULANT_CLASSES",
     "FEELING_CODE",
     "FLAG_SCOPE",
     "FLAG_TARGET",
@@ -1036,6 +1336,7 @@ __all__ = [
     "RED_FLAGS",
     "RED_FLAG_TERMS",
     "RED_FLAG_WORDS",
+    "RESTS_ON_THE_RECORD",
     "Escalation",
     "Feeling",
     "Flag",
@@ -1045,10 +1346,13 @@ __all__ = [
     "RedFlagHit",
     "SourceChannel",
     "detect",
+    "detect_all",
     "escalate",
     "find_red_flags",
+    "flag_to_raise",
     "is_red",
     "keep_row",
+    "on_a_blood_thinner",
     "open_flags",
     "raise_flag",
     "record_the_moment",

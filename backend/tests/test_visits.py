@@ -261,7 +261,8 @@ async def test_the_brief_is_in_malay_verified_and_names_its_state(sg: AsyncSessi
     assert "changed" in sections and "questions" in sections and "bring" in sections
     changed = [line for line in brief.lines if line["section"] == "changed"]
     # The reading and the medicine lines' facts arrived since the record began.
-    assert {line["key"] for line in changed} == {"changed_readings", "changed_medicines"}
+    # One reading: "1 new number is", said in its own singular line.
+    assert {line["key"] for line in changed} == {"changed_readings_one", "changed_medicines"}
     assert all(line["sources"] for line in changed)
     asked = [line for line in brief.lines if line["section"] == "questions"]
     # The interaction E04's licensed data flagged, as a question, in his words for the two.

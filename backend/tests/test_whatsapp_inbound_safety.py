@@ -45,7 +45,7 @@ from app.delivery.triggers.models import (
     TriggerType,
 )
 from app.delivery.triggers.preferences import change
-from app.delivery.triggers.rules import AlertsAreNeverHeld, check_settings
+from app.delivery.triggers.rules import AlertsAreNeverHeld, AlertsGoEveryWay, check_settings
 from app.ingestion.models import EventNote
 from app.keys.scopes import Scope
 from app.memory.models import Artifact
@@ -75,13 +75,24 @@ def _told(home: Family, number: str) -> list[list[str]]:
 
 
 async def _notices(sg: AsyncSession) -> list[Delivery]:
-    return list(
-        (
-            await sg.scalars(
-                select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
-            )
-        ).all()
-    )
+    """What carried the notice to her phone. An alert also writes the notice on her family
+    page beside whatever carried it (#162), which is not what these tests are about."""
+    rows = (
+        await sg.scalars(
+            select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
+        )
+    ).all()
+    return [row for row in rows if row.via is not DeliveryChannel.IN_APP]
+
+
+async def _page_notices(sg: AsyncSession) -> list[Delivery]:
+    """The notice on her family page, written whatever carried it (#162)."""
+    rows = (
+        await sg.scalars(
+            select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
+        )
+    ).all()
+    return [row for row in rows if row.via is DeliveryChannel.IN_APP]
 
 
 # --- a voice note nobody heard --------------------------------------------------------------------
@@ -147,16 +158,18 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     home = await family(sg, tmp_path)
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {TriggerType.VOICE_NOTE_UNHEARD.value: 1})
-    # A setting that would send it only to the caregiver changes nothing for an alert.
-    await change(
-        sg,
-        context=home.owner,
-        skip_quiet_days=False,
-        quiet_from=None,
-        quiet_until=None,
-        channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
-        caps={},
-    )
+    # A setting that would send it only to the caregiver is refused for an alert (#162), so
+    # there is no way to leave this notice with nowhere to go.
+    with pytest.raises(AlertsGoEveryWay):
+        await change(
+            sg,
+            context=home.owner,
+            skip_quiet_days=False,
+            quiet_from=None,
+            quiet_until=None,
+            channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
+            caps={},
+        )
 
     async def down(*args: object, **kwargs: object) -> object:
         raise ConnectionError("the transcriber is down, for the test")
