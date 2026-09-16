@@ -509,23 +509,60 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         say(line)
     say(f"and on a no: {' / '.join(notice['when_no'])}")
 
-    # 7. The recording, once, on Stop.
+    # 7. The recording, as the Visit screen sends it (#129): in chunks while it listens, kept only
+    #    after the doctor's yes. A first try Dr Tan says no to keeps nothing: nothing leaves the
+    #    phone before his yes.
+    uploads = f"{route}/recording/uploads"
+    octets = {**hers, "Content-Type": "application/octet-stream"}
+    opening = {"content_type": CONSULT_TYPE, "started_at": datetime.now(SINGAPORE).isoformat()}
+    first = check(client.post(uploads, headers=hers, json=opening), 201, "Mei's phone opens an upload")
+    # Before Dr Tan's answer nothing leaves the phone: a chunk sent now is refused.
+    check(
+        client.put(f"{uploads}/{first['upload_id']}/chunks/0", headers=octets, content=audio[:16]),
+        409,
+        "a chunk before Dr Tan's answer",
+    )
+    thrown = client.delete(f"{uploads}/{first['upload_id']}", headers=hers, params={"because": "no"})
+    if thrown.status_code != 204:
+        raise fail("Dr Tan says no: the upload is thrown away", thrown)
+    closed = check(client.get(f"{uploads}/{first['upload_id']}", headers=hers), 200, "the upload after the no")
+    nothing = check(client.get(f"{route}/recordings", headers=hers), 200, "the recordings after the no")
+    if closed["open"] or nothing:
+        raise fail("Dr Tan says no: nothing is kept", why=f"upload {closed}, recordings {nothing}")
+    ok(
+        "a first try, as the Visit screen sends it (#129): the upload opened as the microphone opened; a chunk "
+        "sent before Dr Tan answered was refused (409 NoYesFromTheDoctor), so nothing left the phone; Dr Tan said "
+        "no — DELETE …/uploads/{upload}?because=no closed the upload, and no recording was kept (GET …/recordings is [])"
+    )
+
+    upload = check(client.post(uploads, headers=hers, json=opening), 201, "Mei's phone opens an upload")
+    at = f"{uploads}/{upload['upload_id']}"
+    parts = [audio[start : start + 16] for start in range(0, len(audio), 16)]
+    check(client.post(f"{at}/yes", headers=hers), 200, "Dr Tan said yes")
+    check(client.put(f"{at}/chunks/0", headers=octets, content=parts[0]), 200, "chunk 0")
+    check(client.put(f"{at}/chunks/1", headers=octets, content=parts[1]), 200, "chunk 1")
+    # Chunk 1's answer was lost: sent again, the same, it changes nothing; the phone asks how far
+    # the server got and goes on from there.
+    again = check(client.put(f"{at}/chunks/1", headers=octets, content=parts[1]), 200, "chunk 1 sent again")
+    where = check(client.get(at, headers=hers), 200, "how far the upload got")
+    if again["chunks"] != 2 or where["chunks"] != 2 or where["received_bytes"] != 32:
+        raise fail("a chunk sent again changes nothing", why=f"{again} {where}")
+    for number, piece in enumerate(parts[2:], start=2):
+        check(client.put(f"{at}/chunks/{number}", headers=octets, content=piece), 200, f"chunk {number}")
     kept = check(
-        client.post(
-            f"{route}/recording",
-            headers={**hers, "Content-Type": CONSULT_TYPE},
-            params={"duration_s": DURATION_S},
-            content=audio,
-        ),
+        client.post(f"{at}/finish", headers=hers, params={"duration_s": DURATION_S}),
         201,
-        "Mei's phone sends the recording",
+        "Mei's phone taps Stop",
     )
     recording = kept["recording"]
     segments = recording["segments"]
     if not recording["heard"] or len(segments) != 11 or segments[1]["speaker"] != "doctor":
         raise fail("Mei's phone sends the recording", why=f"{recording}")
     ok(
-        f"Mei's recording, sent once on Stop (POST …/recording, {CONSULT_TYPE}, {DURATION_S:g} s): a consult voice "
+        f"Mei's recording, in {len(parts)} chunks as it was made (POST …/recording/uploads, {CONSULT_TYPE}), Dr Tan's yes "
+        f"before the first (POST …/yes); chunk 1 sent again after its answer was lost changed nothing, and GET "
+        f"…/uploads/{{upload}} said where to go on from ({where['chunks']} chunks, {where['received_bytes']} bytes). On "
+        f"Stop (POST …/finish, {DURATION_S:g} s) the chunks were put together in the region into one consult voice "
         f"artefact {recording['artifact_id'][:8]}… on the RECORDING consent {recording['consent_id'][:8]}…, heard at "
         f"{recording['heard_confidence']}, and who spoke when — {len(segments)} stretches, no words in any row:"
     )

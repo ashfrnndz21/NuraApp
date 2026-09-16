@@ -1,8 +1,10 @@
 """The patient's Level 0: a whole day on WhatsApp, with no app (E19-03).
 
-Four things go to him, each one of the six approved templates, each composed from the
-current State and the record it folds, each a function a scheduler (E11) will call at its
-hour — nothing here is scheduled yet, and the dev-only route calls `run_morning` by hand:
+Four things go to him and his family, each one of the six approved templates, each composed
+from the current State and the record it folds, each sent at its hour by the trigger engine
+(`app.delivery.triggers`: the morning card and the visit card from `engine`, the check-in and
+the family notice from `day`); the dev-only routes call `run_morning` and
+`run_feeling_check_in` by hand:
 
 - the morning card: the now and today cards his feed leads with (`rank.morning_supply`) —
   the tablets card said as today's doses the way the medicines module renders them — and one
@@ -10,9 +12,11 @@ hour — nothing here is scheduled yet, and the dev-only route calls `run_mornin
 - the feeling check-in: three words, one tap; his answer is his own and is written down
   without a second yes (`inbound._check_in_answer` says why);
 - the visit card: the next visit on the spine, with who takes him;
-- the family notice: to each chief, how many things were written down this week — only
+- the family notice: to each chief, in the evening, how many things were written down this
+  week, counted over what her key opens (`app.delivery.triggers.day.family_notice`) — only
   while his WhatsApp agreement stands, and never to a chief who said no to WhatsApp (#163);
-  the digest is read in the app either way.
+  the digest is read in the app either way. `run_family_notice` below is the same message
+  sent by hand, for the dev route and the checkpoints, unscoped by chief.
 
 Every one goes through `send`: the profile's WHATSAPP consent, a template outside the
 window, plain words, a SHARE line. All of it runs in the owner's own key context — the
