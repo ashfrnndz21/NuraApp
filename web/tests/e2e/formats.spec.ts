@@ -118,7 +118,7 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   await expect(card.getByTestId("clip-caption")).toHaveCount(0);
   // The whole video is on the heart centre's own site: a link he taps, in a tab of its own.
   const link = card.getByTestId("watch-whole");
-  await expect(link).toHaveText("Watch the whole video on National Heart Centre Singapore");
+  await expect(link).toHaveText("Watch the whole video at National Heart Centre Singapore");
   await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/understanding-high-blood-pressure");
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
@@ -222,7 +222,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     await signIn(page, family.mei, false);
     await page.getByTestId("open-ask").click();
     const filters = page.getByTestId("ask-filters");
-    await expect(filters.locator("button")).toHaveText(["Your papers", "Web", "Doctors and clinics", "Videos"]);
+    await expect(filters.locator("button")).toHaveText(["Your papers", "Online", "Doctors and clinics", "Videos"]);
     await page.getByTestId("filter-web").click();
     await expect(page.getByTestId("filter-web")).toHaveAttribute("aria-pressed", "true");
     await page.getByLabel("Your question").fill("blood pressure");
@@ -236,7 +236,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     await shotAs(page, "cp28-find-web");
     await page.getByTestId("filter-videos").click();
     await page.getByTestId("ask-send").click();
-    await expect(page.getByTestId("found-link").first()).toHaveText("Watch the whole video on National Heart Centre Singapore");
+    await expect(page.getByTestId("found-link").first()).toHaveText("Watch the whole video at National Heart Centre Singapore");
     await page.getByTestId("filter-providers").click();
     await page.getByLabel("Your question").fill("tan");
     await page.getByTestId("ask-send").click();
@@ -258,11 +258,11 @@ test("his town and Ramadan on Me, on his yes; his chief reads his town and canno
   await expect(area.getByTestId("area-ask")).toHaveText("Do you live in Bedok?");
   await area.getByTestId("area-yes").click();
   await expect(area.getByTestId("area-now")).toHaveText("Nura knows your town is Bedok.");
-  await expect(area).toContainText("The family member who looks after your papers can see your town.");
+  await expect(area).toContainText("The one who looks after your papers can see your town.");
   await shotAs(page, "cp28-area");
   // Ramadan, on his own yes; the screen says his chief will see it too.
   const ramadan = page.getByTestId("ramadan");
-  await expect(ramadan).toContainText("The family member who looks after your papers will see this too.");
+  await expect(ramadan).toContainText("The one who looks after your papers will see this too.");
   await ramadan.getByTestId("ramadan-yes").click();
   await expect(ramadan.getByTestId("ramadan-on")).toHaveText("Nura will tell you before Ramadan.");
   const theirs = await request.post(`${API}/profiles/${family.profileId}/search-jobs`, { headers: auth(family.mei.token), data: { kind: "seasonal", terms: ["fasting month"] } });
