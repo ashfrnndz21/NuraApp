@@ -1,5 +1,5 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useId, useRef } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
@@ -227,19 +227,48 @@ export function Header({ title, onBack }: { title: string; onBack?: () => void }
 /** The demo banner (ADR 0008). Its headline is pinned to the top of every screen; the lines
  *  under it sit above the screen and scroll away with it, so that at a large text size the part
  *  that never moves stays one headline tall and is never drawn over his lines (E15-04). */
+/** How big the writing is on this phone, against the 16px a browser starts from. The banner is
+ *  the only thing that asks: it is scaffolding, and it has to know when it is costing the app
+ *  too much room. Not a media query — `em` and `rem` there are the browser's initial size and
+ *  do not see a root font-size, which is what the OS and browser text settings change. */
+function writingScale(): number {
+  if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return 1;
+  const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(root) && root > 0 ? root / 16 : 1;
+}
+
+/** On a demo deployment (ADR 0008), first on every screen: what this is, in the person's
+ *  language, and that real health information does not belong in it.
+ *
+ *  At a large text size the banner gives way, and the app does not. It is demo scaffolding —
+ *  it will not exist in a real deployment at all — so it must never push the product off the
+ *  phone: at 200% its three sentences were 254px of a 640px screen, which left the page's
+ *  scrolling region at nothing and the tab bar under the fold. From 150% up it is the headline
+ *  alone, in a shorter form. The warning is not softened, only said in fewer words: it still
+ *  says this is a demo and that real health information does not belong in it. */
 export function DemoBanner(): JSX.Element | null {
+  const [scale, setScale] = useState(writingScale);
+  useEffect(() => {
+    const measure = () => setScale(writingScale());
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
   if (!demo.value) return null;
   const s = t().demo;
+  const big = scale >= 1.5;
   return (
     <>
-      <aside class="demo-banner" role="note" data-testid="demo-banner">
-        <strong>{s.banner}</strong>
+      <aside class="demo-banner" role="note" data-testid="demo-banner" data-short={big ? "true" : undefined}>
+        <strong>{big ? s.bannerShort : s.banner}</strong>
       </aside>
-      <div class="demo-lines" data-testid="demo-lines">
-        {s.lines.map((line, index) => (
-          <span key={index}>{line}</span>
-        ))}
-      </div>
+      {!big && (
+        <div class="demo-lines" data-testid="demo-lines">
+          {s.lines.map((line, index) => (
+            <span key={index}>{line}</span>
+          ))}
+        </div>
+      )}
     </>
   );
 }

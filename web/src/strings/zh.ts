@@ -7,6 +7,8 @@ export const zh = {
   demo: {
     // @patient headline
     banner: "演示版 — 不用于真实的健康信息",
+    // @patient headline
+    bannerShort: "演示版。请勿输入真实健康信息。",
     // @patient
     lines: ["这是演示版。", "请不要输入真实的健康信息。", "这里的一切每晚都会清除。"],
   },

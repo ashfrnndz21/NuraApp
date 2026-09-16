@@ -52,6 +52,12 @@ effect(() => {
   const html = root();
   if (!html) return;
   html.dataset.density = densityFor(profile.value?.standing, densityChosen.value);
+  // How big the phone's own writing is, against the 16px a browser starts from. A media query
+  // cannot answer this — `em` and `rem` there are the browser's initial size, not the root's —
+  // so the layout reads it here, and the chrome gives way rather than his lines.
+  const rootSize = parseFloat(getComputedStyle(html).fontSize);
+  if (Number.isFinite(rootSize) && rootSize >= 24) html.dataset.writing = "large";
+  else delete html.dataset.writing;
   html.dataset.posture = posture.value;
   html.lang = language.value;
   if (largeText.value) html.dataset.text = "large";

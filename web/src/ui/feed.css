@@ -244,3 +244,14 @@
 #app:has(> .feed-screen) > .demo-banner strong {
   font-size: var(--text-caption);
 }
+
+/* At a large text size the card keeps its lines and gives up its margins instead: the padding
+   around and inside it is chrome, and chrome is what should pay for the writing being bigger.
+   Never fewer lines — the lines are what he came for. */
+:root[data-writing="large"] .feed-card,
+:root[data-writing="large"] .feed-end {
+  padding: var(--space-1) var(--space-2);
+}
+:root[data-writing="large"] .feed-strip {
+  padding: var(--space-1) var(--space-2) 0;
+}

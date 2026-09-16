@@ -447,6 +447,15 @@ label.pill input {
   font-size: var(--text-body);
   font-weight: 500;
 }
+/* At a large text size the banner says its short form, and says it at a fixed size rather than
+   his body scale. Every size in the app is rem so that his own content grows with the phone's
+   text setting — but this is not his content. It is demo scaffolding (ADR 0008) that will not
+   exist in a real deployment, and at 200% his body scale made this notice 200px of a 640px
+   screen. It does not grow; the app does. The words are unchanged and unsoftened, only fewer. */
+.demo-banner[data-short] strong {
+  font-size: 16px;
+  line-height: 1.35;
+}
 
 /* The visit day (E05-04): the one big button, the red dot and its timer, the chief's note,
    the notes by hand, and a card line with the clip under it. Everything in normal flow:

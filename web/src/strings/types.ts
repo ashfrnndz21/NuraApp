@@ -18,7 +18,7 @@ export const LANGUAGES: readonly Language[] = ["en", "ms", "zh"];
 export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
-  demo: { banner: string; lines: readonly string[] };
+  demo: { banner: string; bannerShort: string; lines: readonly string[] };
   tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string };
   /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close. */
   shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string };

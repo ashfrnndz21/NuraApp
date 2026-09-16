@@ -7,6 +7,8 @@ export const ms = {
   demo: {
     // @patient headline
     banner: "Demo — bukan untuk maklumat kesihatan sebenar",
+    // @patient headline
+    bannerShort: "Demo. Jangan letak maklumat kesihatan sebenar.",
     // @patient
     lines: ["Ini ialah demo.", "Jangan masukkan maklumat kesihatan sebenar.", "Semua di sini dipadam setiap malam."],
   },
