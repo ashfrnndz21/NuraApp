@@ -603,7 +603,7 @@ SOURCE: Mapping[str, Mapping[str, str]] = {
     },
     "ms": {
         "label": "Ini daripada label yang anda simpan pada {date}.",
-        "typed": "Seseorang taip ini pada {date}.",
+        "typed": "Seseorang menaip ini pada {date}.",
     },
     "zh": {
         "label": "这来自您在{date}保存的标签。",

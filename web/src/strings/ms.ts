@@ -1012,8 +1012,8 @@ export const ms = {
       how_to_take: "Dengar cara mengambilnya",
       watch_out: "Dengar apa yang perlu diperhatikan",
       avoid: "Dengar apa yang perlu dielakkan",
-      if_forgotten: "Dengar apa perlu buat jika anda terlupa",
-      doctor_question: "Dengar apa perlu ditanya kepada doktor anda",
+      if_forgotten: "Dengar apa yang perlu dibuat jika anda terlupa",
+      doctor_question: "Dengar apa yang perlu ditanya kepada doktor anda",
     },
     // @patient
     addLead: "Ambil gambar label dahulu.",
@@ -1036,7 +1036,7 @@ export const ms = {
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient
-    outcomeRefill: "Ini tambahan ubat yang anda sudah ambil.",
+    outcomeRefill: "Ini tambahan untuk ubat yang anda ambil sekarang.",
     // @patient
     outcomeChange: "Label ini ada jumlah yang lain.",
     // @patient headline
@@ -1070,7 +1070,7 @@ export const ms = {
     // @patient
     morePhotoKept: "Nura sudah ada gambar label ubat itu.",
     // @patient phrase
-    orderYes: "Ya, minta keluarga",
+    orderYes: "Ya, minta keluarga pesan",
     // @patient phrase
     orderNo: "Bukan sekarang",
     // @patient
@@ -1168,7 +1168,7 @@ export const ms = {
     // @patient headline
     notesTitle: "Nota tentang tempat ini",
     // @patient
-    notesOnly: "Hanya pemilik dan orang yang menjaga surat-surat ini boleh baca nota ini.",
+    notesOnly: "Hanya anda dan orang yang menjaga surat-surat ini boleh baca nota ini.",
     // @patient phrase
     noteLabel: "Satu nota tentang tempat ini",
     // @patient phrase
@@ -1194,15 +1194,17 @@ export const ms = {
       haemoglobin: "Kiraan darah anda",
       tsh: "Ujian tiroid anda",
     },
-    // @patient phrase
-    resultOn: "{value} pada {date}",
+    // Ayat penuh, bukan frasa: berdiri sendiri sebagai satu perenggan (Day.tsx), yang dibaca
+    // sebagai satu unit lengkap oleh pembaca skrin (#166 review).
+    // @patient
+    resultOn: "Bacaannya {value} pada {date}.",
     // Her density only (the caregiver's table of results): the unit stays with the number.
     // Never shown to him, so not a patient string; `resultOn` is his.
     resultOnUnit: "{value} {unit} pada {date}",
     // @patient
-    rangeUnder: "Bagi kebanyakan orang, nombor ini bawah {upper}.",
+    rangeUnder: "Bagi kebanyakan orang, nombor ini di bawah {upper}.",
     // @patient
-    rangeOver: "Bagi kebanyakan orang, nombor ini atas {lower}.",
+    rangeOver: "Bagi kebanyakan orang, nombor ini di atas {lower}.",
     // @patient
     rangeBetween: "Bagi kebanyakan orang, nombor ini {lower} hingga {upper}.",
     // @patient

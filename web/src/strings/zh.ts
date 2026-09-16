@@ -983,7 +983,7 @@ export const zh = {
     // @patient phrase
     back: "回到您的文件",
     // @patient
-    sureYes: "这一条您说过好。",
+    sureYes: "这一条您说好了。",
     // @patient
     sureRead: "这一条 Nura 看得很清楚。",
     // @patient
@@ -1168,7 +1168,7 @@ export const zh = {
     // @patient headline
     notesTitle: "关于这个地方的笔记",
     // @patient
-    notesOnly: "只有文件的主人和负责这些文件的家人能看这些笔记。",
+    notesOnly: "只有您和负责这些文件的人能看这些笔记。",
     // @patient phrase
     noteLabel: "一条关于这个地方的笔记",
     // @patient phrase
@@ -1194,8 +1194,9 @@ export const zh = {
       haemoglobin: "您的血色素",
       tsh: "您的甲状腺检查",
     },
-    // @patient phrase
-    resultOn: "{date}的数字是{value}",
+    // 整句，不是短语：它单独成一段（Day.tsx），屏幕阅读器会当作一个完整的单位读出来（#166 审查）。
+    // @patient
+    resultOn: "{date}的数字是{value}。",
     // Her density only (the caregiver's table of results): the unit stays with the number.
     // Never shown to him, so not a patient string; `resultOn` is his.
     resultOnUnit: "{date}的数字是{value} {unit}",

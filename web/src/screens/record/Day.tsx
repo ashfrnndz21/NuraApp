@@ -18,7 +18,7 @@ import {
   withWalk,
   type Analyte,
 } from "../../record/model";
-import { density } from "../../store/session";
+import { density, profile } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
 import { RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
@@ -50,7 +50,10 @@ export function TrendsScreen({ analyte }: { analyte: string | null }): JSX.Eleme
 
 function TrendScreen({ analyte }: { analyte: Analyte }): JSX.Element {
   const s = t();
-  const patient = density() === "patient";
+  // Who he is, not how dense his screen reads: the unit and the range are hers to see, and
+  // an owner who switches to the caregiver density for the bigger-print layout must not
+  // thereby read them too (#166 review, same root as the roster gate in Family.tsx).
+  const patient = profile.value?.standing === "owner";
   const dateOf = useDateOf();
   const { data: trend, error } = useRead(() => {
     const { bearer, profileId } = session();

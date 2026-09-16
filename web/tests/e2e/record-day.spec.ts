@@ -35,9 +35,10 @@ for (const look of LOOKS) {
     await expect(points).toHaveCount(2);
     for (const point of await points.all()) {
       await expect(point).toContainText("For most people this number is");
-      // The unit is hers: never in his density (plain words, rule 12).
-      if (look === "patient") await expect(point).not.toContainText(trend.unit);
-      else await expect(point.locator(".label")).toContainText(trend.unit);
+      // The unit is hers, not his: never shown to the owner, whatever density he reads in —
+      // "caregiver" here is still Pa's own toggle from Me.tsx, not a second person (#166
+      // review; plain words rule 12).
+      await expect(point).not.toContainText(trend.unit);
     }
     await expect(tile.locator(":scope > .lines").last()).toHaveAttribute("data-testid", "boundary");
     for (const line of boundary) await expect(tile.getByTestId("boundary")).toContainText(line);

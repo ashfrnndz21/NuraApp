@@ -1170,7 +1170,7 @@ export const en = {
     // @patient headline
     notesTitle: "Notes about this place",
     // @patient
-    notesOnly: "Only the owner and the one who looks after these papers can read these notes.",
+    notesOnly: "Only you and the one who looks after these papers can read them.",
     // @patient phrase
     noteLabel: "A note about this place",
     // @patient phrase
@@ -1196,8 +1196,10 @@ export const en = {
       haemoglobin: "Your blood count",
       tsh: "Your thyroid test",
     },
-    // @patient phrase
-    resultOn: "{value} on {date}",
+    // A whole sentence, not a phrase: it stands alone as its own paragraph (Day.tsx), which
+    // a screen reader reads as a complete unit (#166 review).
+    // @patient
+    resultOn: "It was {value} on {date}.",
     // Her density only (the caregiver's table of results): the unit stays with the number.
     // Never shown to him, so not a patient string; `resultOn` is his.
     resultOnUnit: "{value} {unit} on {date}",
