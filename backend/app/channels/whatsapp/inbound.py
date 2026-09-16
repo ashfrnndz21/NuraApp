@@ -12,6 +12,13 @@ a yes or a no against the poster's own open proposal, coordination kept for the 
 everything else not kept at all. Every step runs inside the sender's key context through
 the same doors as the app, so an out-of-scope caregiver gets the same refusal, on the trail.
 A stranger's message gets one fixed reply and leaves nothing behind.
+
+A voice note is heard in the region before any of that, whoever sent it, so its words are
+read like a message's. One with no words in it — a mumble, the transcriber down, the audio
+never fetched — may carry a red word nobody could read, so a person is always told: the
+chief on her own channels, as an alert that climbs a ladder of its own (#173). That holds for
+the helper's note as much as his, and on a profile whose patient has not agreed to WhatsApp,
+where nothing of the note is kept and the sender gets one fixed line.
 """
 
 from __future__ import annotations
@@ -73,26 +80,19 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
 from app.db import as_utc, nested_unit_of_work, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
-from app.delivery.triggers.deliver import (
-    Firing,
-    Message,
-    Recipient,
-    Via,
-    deliver,
-    open_run,
-    stand_in_for,
-)
+from app.delivery.triggers.deliver import Via, open_run
 from app.delivery.triggers.ladder import (
     DoseAsked,
     acknowledge_dose,
     acknowledge_flag,
+    climb_unheard,
     close,
     doses_for_reply,
     escalate_flag,
     medicine_words,
+    unheard_ladder,
 )
-from app.delivery.triggers.models import DeliveryOutcome, Ladder, TriggerType
-from app.delivery.triggers.rules import RULES
+from app.delivery.triggers.models import PHONE, DeliveryOutcome, Ladder, TriggerType
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
@@ -114,7 +114,7 @@ from app.keys.context import (
 )
 from app.keys.handles import profile_for_group
 from app.keys.models import Key
-from app.keys.scopes import KeyRole, Scope, scope_for_subject
+from app.keys.scopes import Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
 from app.medicines.service import today as doses_today
 from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME, say_date
@@ -1021,7 +1021,9 @@ async def _write_taken(
             )
         who = await _who_checks(session, work)
         if who != YOU[work.language]:
-            await _say(session, work, "taken_patient", who=who, took="\n".join(took))
+            # "took it" names one tablet; more than one is "took them" (#173).
+            key = "taken_patient" if len(doses) == 1 else "taken_patient_many"
+            await _say(session, work, key, who=who, took="\n".join(took))
         else:
             await _say(session, work, "taken_alone", took="\n".join(took))
     else:
@@ -1506,8 +1508,11 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
     his own words, so on the agreement to hold the record and never the recording consent
     (ADR 0003) — with the words heard in it by reference, private to him and a chief preset
     to his notes, and findable by recall. Anyone else's voice note is not kept: it may carry
-    other people's voices, which only a consult keeps, on the consent to record."""
+    other people's voices, which only a consult keeps, on the consent to record. One of
+    theirs that Nura could not hear still reaches a person, all the same (#173)."""
     if not work.context.is_owner:
+        if _nothing_heard(work):
+            return await _note_unheard_from_someone_else(session, work)
         return await _other(session, work)
     view = await _keep_voice(session, work)
     row = await _keep_row(session, work=work, kind=MessageKind.VOICE_NOTE, artifact=view.artifact)
@@ -1515,9 +1520,10 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
         await _say(session, work, "voice_note_kept")
     else:
         # Nothing heard in it — a mumble, or the transcriber down: a red word in it could not
-        # be read (#158). He is told what to do if he feels unwell, and his chief to listen.
-        await _say(session, work, "voice_note_unheard")
-        await _tell_family_unheard(session, work, note_id=view.note.id)
+        # be read (#158). His chief is told to listen, and he is told what to do if he feels
+        # unwell — and who knows now, once the notice has actually gone (#173).
+        reached = await _tell_family_unheard(session, work, note_id=view.note.id)
+        await _say_unheard(session, work, "voice_note_unheard", reached)
     return Handled(
         outcome="voice_note",
         replies=tuple(work.replies),
@@ -1528,26 +1534,85 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
     )
 
 
+def _nothing_heard(work: _Work) -> bool:
+    """Whether this voice note reached Nura with no words in it: the audio never arrived, ran
+    past its cap, or the transcriber heard nothing in what did arrive."""
+    return work.voice_missing or work.heard is None or not work.heard.heard
+
+
+async def _say_unheard(
+    session: AsyncSession, work: _Work, key: str, reached: Sequence[uuid.UUID]
+) -> None:
+    """The reply to a note Nura could not hear, with who the notice reached — and nobody named
+    who was not told (#173): the plain line where it reached nobody, "Mei knows now." where it
+    reached one, "Mei and Kit know now." where it reached more.
+
+    The notice goes first, so this can say who knows; and this runs in a savepoint of its own,
+    so a reply that fails is logged by name and never rolls the note or the notice back —
+    which would have the family told again on the provider's retry, and him told twice that
+    Nura could not hear him. It is the same rule the red flag's reply follows.
+    """
+    names: list[str] = []
+    for person_id in reached:
+        person = await session.get(Person, person_id)
+        if person is not None and person.display_name and person.display_name not in names:
+            names.append(person.display_name)
+    told = key if not names else f"{key}_told" if len(names) == 1 else f"{key}_told_many"
+    params = {} if not names else {"names": join_names(names, work.language)}
+    try:
+        async with nested_unit_of_work(session):
+            await _say(session, work, told, **params)
+    except Exception as failed:  # noqa: BLE001 — the notice stands; the reply is logged by name
+        log.warning(
+            "whatsapp: the reply to an unheard voice note not sent: %s", type(failed).__name__
+        )
+
+
 async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
-    """His voice note that could not be fetched, or ran past its cap: nothing of it is kept,
-    the refusal is on his trail by name, and he is told plainly — with what to do if he feels
-    unwell, since a red word in it could not be read. Anyone else's gets the usual line."""
+    """A voice note that could not be fetched, or ran past its cap: nothing of it is kept, the
+    refusal is on the trail by name, and the sender is told plainly. His reply carries what to
+    do if he feels unwell, since a red word in it could not be read; anyone else's asks them to
+    write what they said instead. Either way a person is told, so someone can call him."""
     if not work.context.is_owner:
-        return await _other(session, work)
+        return await _note_unheard_from_someone_else(session, work)
+    await _refused_the_note(session, work.context)
+    reached = await _tell_family_unheard(session, work, note_id=None)
+    await _say_unheard(session, work, "voice_note_not_fetched", reached)
+    return Handled(
+        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+async def _note_unheard_from_someone_else(session: AsyncSession, work: _Work) -> Handled:
+    """A voice note from the helper, or any other key holder, that Nura could not hear (#173).
+
+    Hers is not kept — it may carry other people's voices, which only a consult keeps, on the
+    consent to record — and the refusal is on the trail by name. But a red word she spoke could
+    not be read either, so it is treated exactly as one of his: the chief is told on her own
+    channels, as an alert. The notice names whoever sent it and never says the patient did,
+    and what it asks is to call them: there is nothing of theirs to listen to, and they are
+    the one who knows what they said. The sender is told plainly and asked to write it; the
+    line telling him to call his family is his, and is said to nobody else.
+    """
+    await _refused_the_note(session, work.context)
+    reached = await _tell_family_unheard(session, work, note_id=None)
+    await _say_unheard(session, work, "note_unheard_other", reached)
+    return Handled(
+        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+async def _refused_the_note(session: AsyncSession, context: KeyContext) -> None:
+    """A voice note nothing was kept of, on the trail by name and never by its words."""
     await record(
         session,
-        context=work.context,
+        context=context,
         action=Action.WRITE,
         scope=Scope.RECORDS,
         target="event_note",
         outcome=Outcome.REFUSED,
         refused_because="VoiceNoteNotHeard",
         channel=Channel.WHATSAPP,
-    )
-    await _say(session, work, "voice_note_not_fetched")
-    await _tell_family_unheard(session, work, note_id=None)
-    return Handled(
-        outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
     )
 
 
@@ -1557,76 +1622,141 @@ UNHEARD = TriggerType.VOICE_NOTE_UNHEARD
 async def _tell_family_unheard(
     session: AsyncSession, work: _Work, *, note_id: uuid.UUID | None
 ) -> tuple[uuid.UUID, ...]:
-    """His voice note that Nura could not hear, told to his chief (#158), so a person listens.
+    """The same, for a message the thread is handling: `_tell_unheard` for its work."""
+    return await _tell_unheard(
+        session,
+        settings=work.settings,
+        providers=work.providers,
+        number=work.number,
+        profile_id=work.profile.id,
+        at=work.message.at,
+        provider_message_id=work.message.provider_message_id,
+        from_person_id=work.person.id,
+        note_id=note_id,
+    )
+
+
+async def _tell_unheard(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    profile_id: uuid.UUID,
+    at: datetime,
+    provider_message_id: str,
+    from_person_id: uuid.UUID,
+    note_id: uuid.UUID | None,
+) -> tuple[uuid.UUID, ...]:
+    """A voice note Nura could not hear, told to a person (#158, #173), so a person listens.
 
     A red word in it could not be read, so it goes the way a red flag's notice goes: an alert
     under the emergency card (`RULES[VOICE_NOTE_UNHEARD]`), never capped and never held by
     the quiet hours, on the rule's own channels whatever a setting says — WhatsApp, then the
-    app's content-free push — and every attempt a `Delivery` row. It goes to every chief of
-    his, or, with none, to whoever stands in for him now. It carries no word of the note and
-    none of its audio: the note stays private to him and a chief preset to his notes. Her
-    key opens them: she is told to listen in the app, or to call him; it does not, or the note
-    could not be fetched at all: she is told to call him. It runs in a savepoint of its own,
-    so a refusal here never takes his note or his reply with it. Who it reached."""
-    rule = RULES[UNHEARD]
-    handle = hashlib.sha256(work.message.provider_message_id.encode()).hexdigest()[:16]
-    firing = Firing(
-        type=UNHEARD,
-        dedupe_key=f"{UNHEARD.value}:{note_id or handle}",
-        why={"event_note_id": str(note_id)} if note_id is not None else {"note": "not_fetched"},
-    )
+    app's content-free push — and every attempt a `Delivery` row. Whose note it was does not
+    change any of that: the helper's unheard note tells a person exactly as his does.
+
+    It climbs a ladder of its own (`unheard_ladder`), so a chief who does not say she has it
+    is followed by whoever is on duty and then by everyone else whose key holds the emergency
+    card; one person's "I'm on it" stops it for the rest (`acknowledge_flag`). Whoever sent it
+    is left off the ladder — they know already. With nobody on any rung, there is nobody to
+    tell and the reply says nothing about who knows.
+
+    It carries no word of the note and none of its audio: the note stays private to him and a
+    chief preset to his notes. Her key opens them: she is told to listen in the app, or to
+    call him; it does not, or there is no note at all: she is told to call him. Somebody
+    else's note is never said to be his: the notice names whoever sent it.
+
+    It runs in a savepoint of its own, so a door's no here leaves his note standing. Anything
+    else — a lock, the database gone — is a failure and goes on up: the message is not
+    handled, the webhook answers 5xx and the provider sends it again, so a note nobody could
+    hear never ends in a 200 with nobody told. Nothing has been said to the sender at this
+    point — his reply is the last thing, and says who this reached — so a retry never tells
+    him twice that Nura could not hear him (#173).
+
+    Whose phone it reached.
+    """
+    handle = hashlib.sha256(provider_message_id.encode()).hexdigest()[:16]
     try:
         async with nested_unit_of_work(session):
             run = await open_run(
                 session,
-                via=Via(settings=work.settings, providers=work.providers, number=work.number),
-                profile_id=work.profile.id,
-                at=work.message.at,
+                via=Via(settings=settings, providers=providers, number=number),
+                profile_id=profile_id,
+                at=at,
             )
-            chiefs: list[Recipient] = []
-            for key in await run.live_keys():
-                person = await run.person(key.holder_person_id)
-                if key.role is KeyRole.CHIEF and person is not None:
-                    chiefs.append(Recipient(person, "chief"))
-            if not chiefs:
-                stand_in = await stand_in_for(run, rule.scope)
-                chiefs = [] if stand_in is None else [stand_in]
-            for to in chiefs:
-                opens = note_id is not None and Scope.NOTES in await run.scopes_of(to.person)
-                kind = "unheard_note_notice" if opens else "unheard_note_notice_call"
-
-                async def say(person: Person, kind: str = kind) -> Delivered:
-                    return await send(
-                        run.session,
-                        context=run.acting,
-                        to_person=person,
-                        kind=kind,
-                        params={"name": run.profile.display_name},
-                        provider=run.via.providers.whatsapp,
-                        number=run.via.number,
-                        language=run.language_for(person),
-                        state=await run.state(),
-                    )
-
-                # Each chief on her own: one that fails never takes back another's notice.
-                try:
-                    async with nested_unit_of_work(session):
-                        await deliver(
-                            run, firing, to, Message(whatsapp=say, channels=rule.channels)
-                        )
-                except Exception as failed:  # noqa: BLE001 — logged by name; the others stand
-                    log.warning(
-                        "whatsapp: an unheard voice note not told to one: %s",
-                        type(failed).__name__,
-                    )
+            ladder = await unheard_ladder(
+                run,
+                dedupe_key=f"{UNHEARD.value}:{note_id or handle}",
+                note_id=note_id,
+                from_person_id=from_person_id,
+            )
+            await climb_unheard(run, ladder)
     except Refusal as refusal:
+        # A door said no: a decision, not a failure, and on the trail already. His note and
+        # his reply stand, and nothing is sent again.
         log.warning("whatsapp: an unheard voice note not told: %s", type(refusal).__name__)
         return ()
     return tuple(
-        sent.delivery.to_person_id
-        for sent in run.report
-        if sent.delivery.outcome is DeliveryOutcome.SENT and sent.delivery.to_person_id is not None
+        dict.fromkeys(
+            sent.delivery.to_person_id
+            for sent in run.report
+            if sent.delivery.outcome is DeliveryOutcome.SENT
+            and sent.delivery.via in PHONE
+            and sent.delivery.to_person_id is not None
+        )
     )
+
+
+async def _unheard_unagreed(
+    session: AsyncSession,
+    *,
+    settings: Settings,
+    providers: Providers,
+    number: BusinessNumber,
+    person: Person,
+    context: KeyContext,
+    profile: Profile,
+    message: InboundMessage,
+) -> Handled:
+    """A voice note Nura could not hear on a profile whose patient has not agreed to WhatsApp.
+
+    Nothing of it is kept — no artefact, no thread, no message row — the way a red-flag word
+    on such a profile is raised on the word alone. A person is still told all the same: the
+    notice is an alert, so it goes every way each person can be reached (#163) and the notice
+    on their family page is written whatever else carried it. The sender gets one fixed line
+    straight from the provider, written down as a share of a notice, content-free.
+    """
+    await _refused_the_note(session, context)
+    await _tell_unheard(
+        session,
+        settings=settings,
+        providers=providers,
+        number=number,
+        profile_id=profile.id,
+        at=message.at,
+        provider_message_id=message.provider_message_id,
+        from_person_id=person.id,
+        note_id=None,
+    )
+    text = reply(
+        "note_unheard_fixed",
+        person.language,
+        emergency_number=EMERGENCY_NUMBER[settings.region.value],
+    )
+    await providers.whatsapp.send_text(message.from_e164, text)
+    await record(
+        session,
+        context=context,
+        action=Action.SHARE,
+        scope=Scope.EMERGENCY,
+        target="unheard_note_notice",
+        channel=Channel.WHATSAPP,
+        rows=1,
+        shared_with_person_id=person.id,
+        shared_with_label="note_unheard_fixed",
+    )
+    return Handled(outcome="voice_note_unheard_unagreed", profile_id=profile.id)
 
 
 async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
@@ -1694,6 +1824,12 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
                 return flagged
             return replace(flagged, note_id=kept.note.id)
         return flagged
+    if work.message.group_id is not None and (work.voice is not None or work.voice_missing):
+        # A voice note in the family's group is the family's, the way a photo there is: not
+        # kept, and never an alert. The group is where they talk to each other, and a note
+        # Nura could not hear in it would page everyone (#173). A red word in one was read
+        # above, before this, and is a flag like any other.
+        return Handled(outcome="ignored", profile_id=work.profile.id)
     if work.voice_missing:
         return await _voice_not_heard(session, work)
     if work.voice is not None:
@@ -1917,6 +2053,27 @@ async def handle_inbound(
     profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
     if flagged and not await _whatsapp_agreed(session, context=context):
         return await _red_flag_unagreed(
+            session,
+            settings=settings,
+            providers=providers,
+            number=number,
+            person=person,
+            context=context,
+            profile=profile,
+            message=message,
+        )
+    if (
+        not flagged
+        and group is None
+        and _is_voice(message)
+        and not (heard is not None and heard.heard)
+        and not await _whatsapp_agreed(session, context=context)
+    ):
+        # A voice note with no words in it, on a profile whose patient has not agreed to
+        # WhatsApp (#173). The consent refusal below would answer the sender and tell nobody;
+        # a red word nobody could read must still reach a person, so it goes first. One
+        # posted in the family's group is the family's, here as in `_dispatch`.
+        return await _unheard_unagreed(
             session,
             settings=settings,
             providers=providers,

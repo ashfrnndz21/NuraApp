@@ -551,10 +551,10 @@ export const ms = {
     symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
     // @patient phrase
     symptomsKeep: "Simpan ini",
-    // @patient
     // @patient phrase
     sendAgain: "Hantar sekali lagi",
-    symptomsSaved: "Nura sudah mencatat ini.",
+    // @patient
+    symptomsSaved: "Nura sudah tulis ini.",
     // @patient phrase
     nudgeOk: "OK",
     // @patient phrase
@@ -726,7 +726,7 @@ export const ms = {
       // @patient
       lead3: "Nura guna ini hanya untuk tahu di mana hendak melihat.",
       // @patient
-      noted: "Nura sudah catat itu.",
+      noted: "Nura sudah tulis itu.",
       // @patient
       removed: "Nura sudah buang itu.",
       // @patient phrase
@@ -907,8 +907,8 @@ export const ms = {
       cadence1: "Nura akan minta satu perkara sehari, tidak lebih.",
       // @patient
       cadence2: "Tekan Nanti dan Nura akan tanya sekali lagi.",
-      // @patient phrase
-      missing: "Belum ada",
+      // @patient
+      missing: "Nura belum ada yang ini.",
       // @patient
       onDay: "Nura akan minta ini pada {date}.",
       // @patient phrase
@@ -920,7 +920,7 @@ export const ms = {
       // @patient
       more: "Ada {count} lagi selepas itu.",
       // @patient
-      nothing: "Tiada apa yang tertinggal buat masa ini.",
+      nothing: "Nura sudah ada semua yang perlu buat masa ini.",
       // @patient phrase
       open: "Buka Nura",
     },

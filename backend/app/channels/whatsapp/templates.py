@@ -6,8 +6,7 @@ card, the reorder, the family digest, the feeling check-in, the red-flag notice 
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
 message (E11), the red-flag notice by tier and by the doctor's hours, the pre-visit brief
 (B1), and the notice of a voice note Nura could not hear (#158) — is one of these twenty-one,
-submitted
-once and named here: its slots, and the words a patient reads in each
+submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -122,9 +121,26 @@ RED_FLAG_NOTICE = Template(
     },
 )
 
-# The Chinese red-flag notice above is the wording submitted for approval: "这个不能等。". The card
-# and the replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02); `make language` notes
-# the difference as a follow-up, and the template changes only when it is submitted again.
+# The Chinese red-flag notice above is the wording Meta approved: "这个不能等。". The card and the
+# replies now say "这个我们不等。" (docs/plain-words.md §6, E22-02), and an approved template is
+# not edited in place. So the same notice in today's words is submitted again as its own
+# template, `RED_FLAG_NOTICE_V2`, below; the ladder sends it wherever the number approves it and
+# this one otherwise, so a flag never waits on Meta. `make language` notes the old words until
+# this one is retired.
+
+# @patient
+RED_FLAG_NOTICE_V2 = Template(
+    "red_flag_notice_v2",
+    ("name", "who", "doctor"),
+    {
+        "en": "This one we do not wait for.\n{who} said {name} is not well.\nCall {doctor} today.",
+        "ms": "Yang ini kita tidak tunggu.\n{who} kata {name} tidak sihat.\nTelefon {doctor} hari ini.",
+        "zh": "这个我们不等。\n{who}说{name}不舒服。\n今天就打电话给{doctor}。",
+    },
+    approved=False,
+)
+"""The red-flag notice in the glossary's words (#160): the English and the Malay as approved, the
+Chinese as the card says it. Pending Meta's approval, then it replaces `RED_FLAG_NOTICE`."""
 
 # @patient
 DOSE_REMINDER = Template(
@@ -180,15 +196,15 @@ DOSES_COUNT = Template(
     {
         "en": (
             "{name} did not say Taken {count} times this week.\n"
-            "This is a count, not a worry.\n"
+            "This is only a count.\n"
             "You can see which ones in the app."
         ),
         "ms": (
             "Minggu ini {name} tidak kata Sudah ambil sebanyak {count} kali.\n"
-            "Ini kiraan sahaja, bukan sesuatu yang merisaukan.\n"
+            "Ini hanya kiraan.\n"
             "Anda boleh lihat yang mana dalam aplikasi."
         ),
-        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数，不用担心。\n您可以在应用里看是哪几次。",
+        "zh": "这个星期，{name}有 {count} 次没有说“吃了”。\n这只是次数。\n您可以在应用里看是哪几次。",
     },
     approved=False,
 )
@@ -227,7 +243,7 @@ RED_FLAG_NOTICE_SELF = Template(
     {
         "en": "This one we do not wait for.\n{name} is not feeling well.\nCall {doctor} today.",
         "ms": "Yang ini kita tidak tunggu.\n{name} rasa tidak sihat.\nTelefon {doctor} hari ini.",
-        "zh": "这个不能等。\n{name}不舒服。\n今天就打电话给{doctor}。",
+        "zh": "这个我们不等。\n{name}不舒服。\n今天就打电话给{doctor}。",
     },
     approved=False,
 )
@@ -250,7 +266,7 @@ RED_FLAG_NOTICE_AMBIGUOUS = Template(
             "Mungkin tentang {name}.\n"
             "Telefon {who} sekarang."
         ),
-        "zh": "这个不能等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
+        "zh": "这个我们不等。\n{who}说家里有人不舒服。\n可能是{name}。\n现在就打电话给{who}。",
     },
     approved=False,
 )
@@ -430,6 +446,29 @@ UNHEARD_NOTE_NOTICE_CALL = Template(
 """The same notice where there is nothing she can open — the note could not be fetched, or her
 key does not open his notes — so the one thing to do is to call him."""
 
+# @patient
+UNHEARD_NOTE_NOTICE_FROM = Template(
+    "unheard_note_notice_from",
+    ("who", "name"),
+    {
+        "en": (
+            "{who} sent a voice note to Nura about {name}.\n"
+            "Nura could not hear this note.\n"
+            "Call {who} now."
+        ),
+        "ms": (
+            "{who} hantar nota suara kepada Nura tentang {name}.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {who} sekarang."
+        ),
+        "zh": "{who}给 Nura 发了一条关于{name}的语音留言。\nNura 听不清这段录音。\n现在就打电话给{who}。",
+    },
+    approved=False,
+)
+"""A voice note somebody other than the patient sent — the helper, another key holder — that
+Nura could not hear (#173). Nothing of it is kept, so there is nothing to listen to; the one
+thing to do is to call whoever sent it, and the notice never says the patient sent it."""
+
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
     for template in (
@@ -454,12 +493,13 @@ TEMPLATES: Mapping[str, Template] = {
         VISIT_BRIEF,
         UNHEARD_NOTE_NOTICE,
         UNHEARD_NOTE_NOTICE_CALL,
+        UNHEARD_NOTE_NOTICE_FROM,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All twenty-one, in the order they are submitted: E19's six (approved), then E11's nine, the
-red-flag notice by tier and by the doctor's hours with the pre-visit brief (B1), and #158's two
-— all pending Meta's approval (`approved=False`)."""
+"""All twenty-two, in the order they are submitted: E19's six (approved), then E11's nine, the
+red-flag notice by tier and by the doctor's hours with the pre-visit brief (B1), #158's two and
+#173's one — all pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

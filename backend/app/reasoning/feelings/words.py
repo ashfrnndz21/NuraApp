@@ -120,6 +120,10 @@ class ReasonCode(StrEnum):
     EPISODE = "episode"
     READING_TREND = "reading_trend"
     SAID_BEFORE = "said_before"
+    SUGAR_MEDICINE = "sugar_medicine"
+    """He takes a medicine that can drop his sugar: shaky-and-sweaty, the red word for a low
+    sugar, stays on his cloud for as long as he does (#157). Not a change: it does not bring
+    the strip forward by itself."""
 
 
 CHANGES: frozenset[ReasonCode] = frozenset(

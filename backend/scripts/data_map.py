@@ -458,6 +458,8 @@ CLASSES: dict[str, str] = {
     "delivery_ladder.line_id": HEALTH,
     "delivery_ladder.anchor": HEALTH,
     "delivery_ladder.flag_id": HEALTH,
+    "delivery_ladder.note_id": HEALTH,
+    "delivery_ladder.note_from_person_id": IDENTIFIER,
     "delivery_ladder.rungs": IDENTIFIER,
     "delivery_ladder.started_at": HEALTH,
     "delivery_ladder.next_rung": OPERATIONAL,

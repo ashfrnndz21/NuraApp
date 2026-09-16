@@ -33,8 +33,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0032_order_task"
-down_revision = "0031_brief_safety"
+revision = "0033_order_task"
+down_revision = "0032_unheard_note_ladder"
 branch_labels = None
 depends_on = None
 

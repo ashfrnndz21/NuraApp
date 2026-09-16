@@ -11,8 +11,9 @@ A red flag does not wait for it: it is escalated the moment it is raised (`escal
 from the WhatsApp thread and the feeling cloud); the five-minute run is the net under that —
 the rungs after the first, and a flag whose first word could not go.
 
-The order is the safety order: flags first, before anything is ranked or capped; then the
-ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
+The order is the safety order: flags first, before anything is ranked or capped, and beside
+them the ladders of voice notes Nura could not hear (#173), which climb the way a flag's
+does; then the ladders of untapped tablets; then the morning card, the reorder, the pattern, and the events.
 Every trigger that fires writes its rule on every `Delivery` row it makes.
 """
 
@@ -52,6 +53,7 @@ from app.delivery.triggers.ladder import (
     DOSE_RUNGS,
     PATIENT,
     climb,
+    climb_unheard,
     dose_message,
     flag_ladder,
     flag_message,
@@ -116,6 +118,7 @@ async def run_due(
         await _flags(run, raised_before=closing)
         return Report(at=run.at, day=run.day, sent=tuple(run.report))
     await _flags(run)
+    await _unheard_notes(run)
     if run.patient is not None and run.acting.allows(Scope.MEDICINES):
         lines = await active_lines(
             session,
@@ -150,6 +153,16 @@ async def _flags(run: Run, *, raised_before: datetime | None = None) -> None:
             continue
         ladder = await flag_ladder(run, flag, exclude=())
         await climb(run, ladder, flag_message(run, flag), TriggerType.FLAG)
+
+
+async def _unheard_notes(run: Run) -> None:
+    """Every open ladder for a voice note Nura could not hear (#173): asked as far as it is
+    due. The first rung went the moment the note arrived (`whatsapp.inbound`); this is the net
+    under it — the chief who has not said she has it is followed by the next rung."""
+    for ladder in list(await run.ladders()):
+        if ladder.subject is not Subject.UNHEARD_NOTE or not ladder.is_open:
+            continue
+        await climb_unheard(run, ladder)
 
 
 # --- tablets ---------------------------------------------------------------------------------------
