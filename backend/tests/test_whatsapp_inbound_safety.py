@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -438,6 +439,32 @@ async def test_a_whatsapp_send_that_fails_falls_through_to_push_and_the_notice(
     assert pushed.outcome is DeliveryOutcome.SENT and pushed.to_person_id == home.mei.id
     # What went wrong is on the row by the name of its class, never by its words.
     assert pushed.passed_over == ["whatsapp: ConnectionError"]
+    assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
+        DeliveryOutcome.SENT
+    ]
+
+
+async def test_a_notice_meta_has_not_approved_yet_falls_through_to_push_and_the_page(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    home = await family(sg, tmp_path)
+    push = FixturePush()
+    push.register(home.mei.id)
+    object.__setattr__(home.providers, "push", push)
+    # The unheard-note notices are pending Meta's approval: until a deployment's number
+    # carries them, the send door refuses them and the notice goes by the app instead.
+    home.number = replace(
+        home.number,
+        templates=tuple(
+            name for name in home.number.templates if not name.startswith("unheard_note_notice")
+        ),
+    )
+    kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
+    assert kept.outcome == "voice_note" and kept.note_id is not None
+    assert _told(home, MEI) == []
+    assert [one.person_id for one in push.sent] == [home.mei.id]
+    [pushed] = await _by_channel(sg, DeliveryChannel.APP_PUSH)
+    assert pushed.passed_over == ["whatsapp: TemplateNotApproved"]
     assert [row.outcome for row in await _by_channel(sg, DeliveryChannel.IN_APP)] == [
         DeliveryOutcome.SENT
     ]

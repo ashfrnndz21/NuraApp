@@ -1545,9 +1545,10 @@ async def _note_unheard_from_someone_else(session: AsyncSession, work: _Work) ->
     Hers is not kept — it may carry other people's voices, which only a consult keeps, on the
     consent to record — and the refusal is on the trail by name. But a red word she spoke could
     not be read either, so it is treated exactly as one of his: the chief is told on her own
-    channels, as an alert, and is asked to call him, since there is no note to listen to. The
-    sender is told plainly and asked to write what she said; the line telling him to call his
-    family is his, and is said to nobody else.
+    channels, as an alert. The notice names whoever sent it and never says the patient did,
+    and what it asks is to call them: there is nothing of theirs to listen to, and they are
+    the one who knows what they said. The sender is told plainly and asked to write it; the
+    line telling him to call his family is his, and is said to nobody else.
     """
     await _refused_the_note(session, work.context)
     reached = await _tell_family_unheard(session, work, note_id=None)
