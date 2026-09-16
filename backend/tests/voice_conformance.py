@@ -31,7 +31,7 @@ from app.regions import Region
 LINES: dict[str, list[str]] = {
     "en": ["Your blood pressure today was 138 over 84.", "It is in your blood pressure book."],
     "ms": ["Tekanan darah anda hari ini ialah 138 atas 84.", "Ia ada dalam buku tekanan darah anda."],
-    "zh": ["您今天的血压是138比84。", "它记录在您的血压手册里。"],
+    "zh": ["您今天的血压是138比84。", "它在您的血压本里。"],
 }
 """One line pair per T1 language: enough for a script with more than one segment, short
 enough to stay well under the length bound."""
