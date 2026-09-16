@@ -1463,6 +1463,14 @@ export const ms = {
       bed: "Waktu tidur",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "Apabila {patient} bangun",
+      breakfast: "Sarapan",
+      lunch: "Makan tengah hari",
+      dinner: "Makan malam",
+      bed: "Waktu tidur",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "Tekanan darah",
       blood_sugar: "Gula dalam darah",
@@ -1472,8 +1480,12 @@ export const ms = {
     walk: "Berjalan kaki",
     // @patient
     notSet: "Belum ada sesiapa menetapkan hari anda.",
+    // @patient
+    notSetOther: "Belum ada sesiapa menetapkan hari {patient}.",
     // @patient phrase
     setDay: "Tetapkan hari anda",
+    // @patient phrase
+    setDayOther: "Tetapkan hari {patient}",
     // @patient phrase
     timeLabel: "Pukul berapa",
     // @patient phrase
@@ -1484,6 +1496,8 @@ export const ms = {
     checkDay: "Semak hari anda",
     // @patient
     dayAsk: "Beginikah hari anda?",
+    // @patient
+    dayAskOther: "Beginikah hari {patient}?",
     // @patient phrase
     dayYes: "Ya, tetapkan hari anda",
     // @patient

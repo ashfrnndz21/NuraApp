@@ -55,7 +55,8 @@ test("the day: the chief sets it once on her yes; it reads to him as one line pe
   await signInAs(page, mei, "Mei", true);
   await openRecord(page);
   await page.getByTestId("record-routine").click();
-  await expect(page.getByTestId("routine-not-set")).toHaveText("Nobody has set your day yet.");
+  // Mei is reading his papers here, so his day is said about him by name (D1).
+  await expect(page.getByTestId("routine-not-set")).toHaveText("Nobody has set Pa's day yet.");
   await expect(page.getByTestId("routine-table")).toBeVisible();
   await readable(page, "caregiver");
 
@@ -65,7 +66,7 @@ test("the day: the chief sets it once on her yes; it reads to him as one line pe
   await page.getByTestId("reading-blood_pressure-wake").click();
   await page.getByTestId("walk-dinner").click();
   await page.getByTestId("check-day").click();
-  await expect(page.getByTestId("day-ask")).toContainText("Is this how your day goes?");
+  await expect(page.getByTestId("day-ask")).toContainText("Is this how Pa's day goes?");
   // Each time read back the way every time in the app is said ("7:00 am"), never a bare code.
   await expect(page.getByTestId("day-ask")).toContainText(/\b\d{1,2}:\d{2}\sam/);
   await expect(page.getByTestId("day-ask")).not.toContainText(/\b\d{2}:\d{2}\b(?!\s[ap]m)/);

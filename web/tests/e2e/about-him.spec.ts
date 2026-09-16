@@ -38,15 +38,16 @@ const HERS = [
 
 const aboutHim = (line: string): boolean => TO_HIM.test(line) && !HERS.some((hers) => hers.test(line));
 
-/** The screen's own lines — its chrome and its cards — minus the feed's cards and the "Sent to
- *  Pa this week" panel that lists their headlines, which are the subject of the fixme below:
+/** The screen's own lines — its chrome and its cards — minus two sets that have fixmes of their
+ *  own below: the feed's cards with the "Sent to Pa this week" panel that lists their headlines,
+ *  and the family's grant lines. Both are backend lines on paths that do not pass the reader:
  *  #177's new formats (the recap, the clips, the local alerts) reach her Home still speaking to
  *  him, because that path does not pass the reader that says his lines about him
  *  (`app/channels/about_him.py`). Everything else on the screen is held to the rule here. */
 async function linesOn(page: Page): Promise<string[]> {
   const { all, cards } = await page.getByTestId("shell-scroll").evaluate((root) => ({
     all: (root as HTMLElement).innerText,
-    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=sent]")].map((card) => card.innerText),
+    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=sent], [data-testid=grant-lines], [data-testid=reach-lines]")].map((card) => card.innerText),
   }));
   const inACard = new Set(cards.flatMap((card) => card.split("\n").map((line) => line.trim())).filter(Boolean));
   return all
@@ -118,9 +119,15 @@ test("no caregiver-density screen says a second-person line about his record", a
       return;
     }
     // Let the screen's own reads finish where they do. A screen that keeps a request open (the
-    // family thread polls) never goes idle, so this is bounded and the settle below is what
-    // the check really waits on.
+    // family thread polls) never goes idle, so this is bounded; a Record screen says it is busy
+    // while its reads are in flight, and the lines this sweep is about often arrive with them.
+    // Without both, a screen can be read before it has said anything and pass by saying nothing
+    // (which is how the family's grant lines slipped past locally and were caught in CI).
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+    await page
+      .locator("main[aria-busy=true]")
+      .waitFor({ state: "detached", timeout: 8_000 })
+      .catch(() => undefined);
     // Settle on what the screen finally drew, not on its first frame: a screen whose cards
     // arrive in a second read would otherwise be swept before its lines are there (the
     // medicines list, whose cards carry the lines this test is looking for).
@@ -215,5 +222,23 @@ test.fixme("her Home's feed cards say his papers about him by name", async ({ pa
   await page.getByTestId("door-key").click();
   await todayReady(page);
   const lines = await everyLineOn(page);
+  expect(lines.filter(aboutHim)).toEqual([]);
+});
+
+/** The same defect on a second path, named so it is not forgotten: the family's grant lines say
+ *  what a key opens in his voice — "Mei is the person who runs your care.", "- your medicines",
+ *  "Mei can see them until you say stop." — and they are drawn on her Family screen, where they
+ *  are about him. `GET /profiles/{id}/grants` (`app/channels/api/family.py`) does not pass its
+ *  lines through the reader that says his lines about him, and `app/family/strings.py` has no
+ *  `*_THEIRS` twins for them to be said with. Both are backend changes and are not this
+ *  branch's; the fix is the same shape as the twins this branch added elsewhere. */
+test.fixme("her Family screen says what a key opens about him by name", async ({ page, request }) => {
+  const family = await seedHome(request);
+  await signInThroughTheApp(page, family.meiPhone, "Mei");
+  await page.getByTestId("door-key").click();
+  await todayReady(page);
+  await page.getByTestId("tab-family").click();
+  await expect(page.getByTestId("grant-lines").first()).toBeVisible();
+  const lines = (await page.getByTestId("grant-lines").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
   expect(lines.filter(aboutHim)).toEqual([]);
 });

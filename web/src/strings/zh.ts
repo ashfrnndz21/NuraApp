@@ -1462,6 +1462,14 @@ export const zh = {
       bed: "睡觉的时候",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "{patient}起床的时候",
+      breakfast: "早餐",
+      lunch: "午餐",
+      dinner: "晚餐",
+      bed: "睡觉的时候",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "血压",
       blood_sugar: "血糖",
@@ -1471,8 +1479,12 @@ export const zh = {
     walk: "散步",
     // @patient
     notSet: "还没有人设定您的一天。",
+    // @patient
+    notSetOther: "还没有人设定{patient}的一天。",
     // @patient phrase
     setDay: "设定您的一天",
+    // @patient phrase
+    setDayOther: "设定{patient}的一天",
     // @patient phrase
     timeLabel: "几点",
     // @patient phrase
@@ -1483,6 +1495,8 @@ export const zh = {
     checkDay: "检查您的一天",
     // @patient
     dayAsk: "您的一天是这样吗？",
+    // @patient
+    dayAskOther: "{patient}的一天是这样吗？",
     // @patient phrase
     dayYes: "对，设定您的一天",
     // @patient

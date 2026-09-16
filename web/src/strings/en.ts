@@ -1465,6 +1465,14 @@ export const en = {
       bed: "Bedtime",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "When {patient} wakes up",
+      breakfast: "Breakfast",
+      lunch: "Lunch",
+      dinner: "Dinner",
+      bed: "Bedtime",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "Blood pressure",
       blood_sugar: "Blood sugar",
@@ -1474,8 +1482,12 @@ export const en = {
     walk: "A walk",
     // @patient
     notSet: "Nobody has set your day yet.",
+    // @patient
+    notSetOther: "Nobody has set {patient}'s day yet.",
     // @patient phrase
     setDay: "Set your day",
+    // @patient phrase
+    setDayOther: "Set {patient}'s day",
     // @patient phrase
     timeLabel: "What time",
     // @patient phrase
@@ -1486,6 +1498,8 @@ export const en = {
     checkDay: "Check your day",
     // @patient
     dayAsk: "Is this how your day goes?",
+    // @patient
+    dayAskOther: "Is this how {patient}'s day goes?",
     // @patient phrase
     dayYes: "Yes, set your day",
     // @patient
