@@ -138,16 +138,15 @@ function FamilyHome(): JSX.Element | null {
             <Lines key={one.person_id} lines={one.lines} testId="reach-lines" />
           ))}
         <Notice error={circle.error} />
-        {/* Letting someone in at all is his own yes (`may_invite`), so this is the owner's and
-            never his chief's (#166 review). It is the one Plum button on the screen and it sits
-            with the circle it changes, rather than a row in a list of settings: the moment the
-            key is cut, that person's app reaches these papers and can ask about them, within
-            what the key opens. */}
-        {here.owner && (
-          <PillButton variant="primary" onClick={open("keys")} testId="open-keys">
-            {words.newKey}
-          </PillButton>
-        )}
+        {/* Letting someone in is what this screen is for, so it is the one Plum button on it and
+            it sits with the circle it changes, rather than a row in a list of settings. Both the
+            owner and his chief reach it; what differs is inside, where `KeysPart` shows the
+            owner the sharing words to agree to first, because that yes is his alone
+            (`may_invite`, #166 review). The moment a key is cut, that person's app reaches these
+            papers and can ask about them, within what the key opens. */}
+        <PillButton variant="primary" onClick={open("keys")} testId="open-keys">
+          {words.newKey}
+        </PillButton>
       </PaperTile>
       <nav class="place-rows" aria-label={words.title}>
         {parts}

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
 import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp, todayReady } from "./helpers";
-import { auth, caregiverScreenOk, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
+import { auth, caregiverScreenOk, cutKey, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
  *  the morning in Singapore on Monday 14 September. Pa reads it in the patient density on a
@@ -520,33 +520,23 @@ export type { Family };
 /** The reset's promise (docs/product-reset.md §4, §6): the moment a chief lets someone in,
  *  that person's own app has these papers in its switcher and can ask about them — no sign-out,
  *  no re-login, no second Ask. What they may read is the key's, and the backend says so. */
-test("already at the doors when the key is cut: one tap looks again, and his papers are there", async ({ page, browser, request }) => {
-  // Main's Priya registers after she is named, so the doors list Pa on her very first look.
-  // This is the other half: someone who signed in *before* anyone let them in is sitting at
-  // the doors with nothing on them, and nothing there re-reads itself. One tap now does.
+test("already at the doors when the key is cut: one tap looks again, and his papers are there", async ({ page, request }) => {
+  // #179 proves the whole path for someone named before they register: their very first look
+  // at the doors already lists him. This is the other half, and the reason `doors-look-again`
+  // exists — someone who signed in *before* anyone let them in is sitting at the doors with
+  // nothing on them, and nothing there re-read itself.
   const family = await seedFamily(request);
+  await signInThroughTheApp(page, family.siti.phone, "Siti");
+  await expect(page.getByTestId("door-for-me")).toBeVisible();
+  await expect(page.getByTestId("door-key")).toHaveCount(0);
 
-  const hers = await secondPhone(browser);
-  await signInThroughTheApp(hers, family.siti.phone, "Siti");
-  await expect(hers.getByTestId("door-for-me")).toBeVisible();
-  await expect(hers.getByTestId("door-key")).toHaveCount(0);
-
-  // Pa lets her in himself: letting someone in at all is his own yes, never his chief's.
-  await signIn(page, family.pa, true);
-  await page.getByTestId("tab-family").click();
-  await page.getByTestId("open-keys").click();
-  await page.getByLabel("Their name").fill("Siti");
-  await page.getByLabel("Their phone number").fill(family.siti.phone);
-  await page.getByTestId("role-caregiver").click();
-  await page.getByTestId("see-words").click();
-  await page.getByTestId("agree-key").click();
-  await expect(page.getByTestId("grant").filter({ hasText: "Siti" })).toBeVisible();
+  // Pa lets her in while she waits. Whether a key may be cut at all is the backend's to say.
+  await cutKey(request, family, family.siti, "helper", ["medicines", "emergency"]);
 
   // Her phone has not been touched since, and she has not signed out.
-  await hers.getByTestId("doors-look-again").click();
-  await hers.getByTestId("door-key").click();
-  // Whose papers she is in is on the screen, by name, before anything of them has come in.
-  await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
-  await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
-  await hers.close();
+  await page.getByTestId("doors-look-again").click();
+  await page.getByTestId("door-key").click();
+  // Whose papers she is in is on the screen, by name, on every screen of them.
+  await expect(page.getByTestId("whose-name")).toHaveText("Pa");
+  await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 });

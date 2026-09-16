@@ -11,7 +11,10 @@ import { Shell } from "./Shell";
 export function WhatToDoScreen({ lines, offline, refusal }: { lines: string[]; offline: "network" | "server" | null; refusal: string | null }): JSX.Element {
   const s = t();
   return (
-    <Shell tab="today" testId="what-to-do-screen" attrs={{ "data-offline": offline ?? "no" }} ask={false}>
+    // No tab bar: this is the red path's card, and what it says to do — the calls, in the
+    // backend's order — is the only thing on the screen. Its own "Back to Today" is the way
+    // out, so nothing competes with the card and nothing is drawn over its lines.
+    <Shell tab={null} testId="what-to-do-screen" attrs={{ "data-offline": offline ?? "no" }} ask={false} bar={false}>
       <Header title={s.day.whatToDo} />
       {offline && (
         <PaperTile role="status" testId="offline-note">
