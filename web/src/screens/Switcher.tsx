@@ -48,7 +48,7 @@ export function ProfileSwitcher(): JSX.Element | null {
       >
         <Avatar name={papers.display_name} soft />
         <span class="whose-name" data-testid="whose-name">
-          {own ? s.switcher.own : papers.display_name}
+          {papers.display_name}
         </span>
         <Icon name="chevron" />
       </button>

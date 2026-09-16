@@ -43,8 +43,10 @@ test("the nav (D1, the reset): one tab set, the same for the owner and for a key
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
   await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
-  // Whose papers are open is on every screen, in the header, by name.
-  await expect(page.getByTestId("whose-name")).toHaveText("Your own papers");
+  // Whose papers are open is on every screen, in the header, by name — his own name on his own
+  // phone; "Your own papers" is what the switcher's own label and its sheet say.
+  await expect(page.getByTestId("whose-name")).toHaveText("Pa");
+  await expect(page.getByTestId("whose")).toHaveAttribute("aria-label", /Your own papers/);
   const hers = await secondPhone(browser);
   await signIn(hers, family.mei, false);
   // The same list for her: one app, one account. What differs is the density and whose papers

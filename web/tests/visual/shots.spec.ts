@@ -90,6 +90,12 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
   const off = { on: false };
   const settle = async (page: Page) => {
     await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+    // A Record screen says it is busy while its reads are in flight: a picture taken before
+    // they land shows an empty screen, which is not what the screen looks like.
+    await page
+      .locator("main[aria-busy=true]")
+      .waitFor({ state: "detached", timeout: 10_000 })
+      .catch(() => undefined);
     await page.evaluate(() => document.fonts.ready);
   };
 

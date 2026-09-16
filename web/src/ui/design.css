@@ -486,6 +486,9 @@
 .askbar-field input::placeholder {
   color: var(--ink-quiet);
   opacity: 1;
+  /* The hint is a whole phrase or it is nothing: cut short with an ellipsis rather than
+     stopped mid-word against the Speak button. */
+  text-overflow: ellipsis;
 }
 .askbar-field input::-webkit-search-cancel-button {
   display: none;
@@ -929,4 +932,22 @@ html.shot-full .shell > .shell-scroll {
 /* The word on a tab is one line and one whole word, at any text size. */
 .tabbar button .tab-word {
   white-space: nowrap;
+}
+
+/* Five tabs on a narrow phone: a touch smaller, so every word is whole rather than clipped.
+   The target size is untouched — only the writing on it. */
+.tabbar[data-count="5"] button {
+  font-size: calc(var(--text-tab) - 1px);
+  padding-left: 0;
+  padding-right: 0;
+}
+.tabbar[data-count="5"] .tab-word {
+  letter-spacing: -0.01em;
+}
+
+/* His density sets a 20px body, which the ask bar's hint shares; on a 390px phone beside the
+   Speak button that is a few characters too many, so the hint alone steps down to the caption
+   size. What he types stays his body size. */
+:root[data-density="patient"] .askbar-field input::placeholder {
+  font-size: var(--text-caption);
 }
