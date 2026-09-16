@@ -1252,13 +1252,18 @@ _ZH_NUMERALS = "一二三四五六七八九十百半两"
 
 def _generic_token(language: str) -> str:
     """The fallback shape for a slot with no closed vocabulary to check against: one word in
-    `en`/`ms` (no space — a space is how a whole extra clause hid inside the slot: "the water
-    pill till Friday" as {medicine}, "Ash to stop the water pill" as {doctor}, both letters and
-    spaces and nothing else, so a char class alone never caught them); one character in `zh`,
-    which has no space to bound a run on at all ("不要自己停药改用胰岛素。" passed with
-    medicine="药改用胰岛素", every character in it a plain CJK letter). No digit in any script
-    either way, the CJK numerals (`_ZH_NUMERALS`) included, since those are ordinary characters
-    in the CJK block and would otherwise pass as "letters" too.
+    `en`/`ms`, letters only and nothing else — one character in `zh`, which has no space to
+    bound a run on at all ("不要自己停药改用胰岛素。" passed with medicine="药改用胰岛素",
+    every character in it a plain CJK letter). No digit in any script either way, the CJK
+    numerals (`_ZH_NUMERALS`) included, since those are ordinary characters in the CJK block
+    and would otherwise pass as "letters" too.
+
+    Letters only in `en`/`ms`, nothing else: a space is how a whole extra clause hid inside the
+    slot ("the water pill till Friday" as {medicine}, "Ash to stop the water pill" as
+    {doctor}) — but `\b` is a boundary against a hyphen or an apostrophe too, just as it is
+    against a space, so "Ash-stop-the-pill" still let `stop` and `pill` match as whole words
+    inside what was meant to be one. A solid run of only `[A-Za-z]` has no such boundary
+    anywhere but its own two ends, so nothing inside it can be found as a separate word.
 
     `app.medicines.strings.PLAIN_NAME` is the closed vocabulary for the medicine slot's own
     friendly, multi-word phrases ("the water pill"); this is only the fallback for a bare
@@ -1266,7 +1271,7 @@ def _generic_token(language: str) -> str:
     name — so it is always this fallback, single word or single character."""
     if language == "zh":
         return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z])"
-    return r"[A-Za-z][A-Za-z'()-]*"
+    return r"[A-Za-z]+"
 
 
 @cache

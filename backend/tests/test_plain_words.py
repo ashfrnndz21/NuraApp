@@ -747,6 +747,22 @@ def test_rule_14_keep_taking_does_not_let_a_whole_clause_hide_in_an_open_slot() 
     assert rule_14("Tell Ash to stop the water pill how you feel.", "en")
 
 
+def test_rule_14_keep_taking_does_not_let_punctuation_stand_in_for_a_space() -> None:
+    """The reviewer's third pass on PR #170: `\\b` is a word boundary against a hyphen or an
+    apostrophe or a parenthesis just as it is against a space, so a doctor slot that merely
+    forbade spaces still let "Ash-stop-the-pill" reconstruct "stop" and "pill" as whole words —
+    the CI reviewer's own probe. `_generic_token` now allows letters only in `en`/`ms`, nothing
+    else, so nothing inside a solid run of them can be found as a separate word."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("Tell Ash-stop-the-pill how you feel.", "en")
+    assert rule_14("Tell Ash'stop'the'pill how you feel.", "en")
+    assert rule_14("Tell Ash(stop the pill) how you feel.", "en")
+
+
 def test_a_composed_note_verifies_clean_in_ms_and_zh_with_a_real_medicine() -> None:
     """The reviewer: nothing exercised `verify()` on the filled ms/zh `DO_NOT_STOP` lines —
     only the templates and the whitelist regex were tested in isolation. A failure here
