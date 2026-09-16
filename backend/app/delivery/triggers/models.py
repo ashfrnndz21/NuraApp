@@ -40,6 +40,11 @@ class TriggerType(StrEnum):
     DOSE = "dose"
     REORDER = "reorder"
     DOSES_UNTAPPED = "doses_untapped"
+    DOSES_LATE = "doses_late"
+    """Three or more tablets said Taken late in seven days (#198): a real finding about his
+    day that a plain untapped count would miss, since a late tap still counts as taken. A
+    count for the one on duty, never a diagnosis — the same shape as `DOSES_UNTAPPED`, read
+    off the taps' own stored `late` bit rather than re-derived."""
     FLAG = "flag"
     VISIT_TOMORROW = "visit_tomorrow"
     PAPERS = "papers"
@@ -55,6 +60,12 @@ class TriggerType(StrEnum):
     VOICE_NOTE_UNHEARD = "voice_note_unheard"
     """His voice note that Nura could not hear (#158): a red word in it could not be read, so
     his chief is told to listen. An alert, like a red flag: never capped, never quiet."""
+
+    DOSE_RESOLVED = "dose_resolved"
+    """Whoever a dose ladder reached is told, once, that it stood down (#198): a Taken tap —
+    however late — means nobody the ladder called needs to keep checking. Never the person
+    who tapped, who already knows; never an alert — the normal channels, caps and quiet
+    hours hold it, the way any other reminder does."""
 
     BRIEF = "visit_brief"
     """The pre-visit brief, rendered three days before a visit and its card sent (E05-01)."""

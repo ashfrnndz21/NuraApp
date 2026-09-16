@@ -1002,23 +1002,30 @@ async def _write_taken(
     artifact = await _keep_text(session, work=work, scope=Scope.MEDICINES)
     row = await _keep_row(session, work=work, kind=MessageKind.TAKEN, artifact=artifact)
     day = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]).date().isoformat()
+    via = Via(settings=work.settings, providers=work.providers, number=work.number)
+    late = False
     for dose in doses:
         if (dose.line_id, dose.anchor) in already:
             continue
-        await record_dose_taken(
+        tap = await record_dose_taken(
             session,
             context=work.context,
             line_id=dose.line_id,
             anchor=dose.anchor,
+            # The reply's own time (#198), as the provider stamped it — never the moment
+            # this runs, which a queued or retried webhook could push later than he sent it.
+            taken_at=work.message.at,
             source_channel=SourceChannel.WHATSAPP,
             channel=Channel.WHATSAPP,
         )
+        late = late or tap.late
         await acknowledge_dose(
             session,
             context=work.context,
             line_id=dose.line_id,
             anchor=dose.anchor,
             day=day,
+            via=via,
             channel=Channel.WHATSAPP,
         )
     if work.thread.is_patient:
@@ -1041,6 +1048,10 @@ async def _write_taken(
     else:
         medicine = join_names([_named(work, dose, listed) for dose in doses], work.language)
         await _say(session, work, "given", name=work.profile.display_name, medicine=medicine)
+    if late:
+        # Plainly, and never a second time it might read as a scold (#198): the tap still
+        # stands: only when it came in after the window had already closed.
+        await _say(session, work, "written_down_late")
     return Handled(
         outcome="taken",
         replies=tuple(work.replies),

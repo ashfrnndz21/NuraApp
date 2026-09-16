@@ -336,6 +336,10 @@ CLASSES: dict[str, str] = {
     "dose_taken.anchor": HEALTH,
     "dose_taken.amount": HEALTH,
     "dose_taken.taken_at": HEALTH,
+    # Whether the reply landed after the dose's window had closed (#198) is a fact about his
+    # day, the same standing as taken_at and anchor above — not an operational detail of how
+    # the tap was processed.
+    "dose_taken.late": HEALTH,
     "dose_taken.by_person_id": IDENTIFIER,
     "interaction_flag.line_id": HEALTH,
     "interaction_flag.other_line_id": HEALTH,

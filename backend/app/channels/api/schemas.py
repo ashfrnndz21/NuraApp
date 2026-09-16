@@ -1394,6 +1394,9 @@ class TakenOut(BaseModel):
     amount: float
     taken_at: datetime
     by_person_id: uuid.UUID
+    late: bool
+    """Whether this tap's own moment came after the anchor's window had closed (#198): still
+    taken, written down late."""
 
     @classmethod
     def of(cls, taken: DoseTaken) -> TakenOut:
@@ -1405,6 +1408,7 @@ class TakenOut(BaseModel):
             amount=taken.amount,
             taken_at=as_utc(taken.taken_at),
             by_person_id=taken.by_person_id,
+            late=taken.late,
         )
 
 
@@ -1465,6 +1469,9 @@ class SlotOut(BaseModel):
     if_forgotten: list[str]
     source: str
     """Where the medicine came from and on which day: the card's source line."""
+    taken_late: bool
+    """Taken, but the tap came in after the window had closed (#198): still taken, written
+    down late. False when not taken at all."""
 
     @classmethod
     def of(cls, slot: Slot) -> SlotOut:
@@ -1479,6 +1486,7 @@ class SlotOut(BaseModel):
             missed=slot.missed,
             if_forgotten=slot.if_forgotten,
             source=slot.source,
+            taken_late=slot.taken_late,
         )
 
 
