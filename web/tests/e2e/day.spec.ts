@@ -222,6 +222,48 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
     .toBe("rgb(240, 214, 210)");
 });
 
+/** A feed refresh queued and already sending before a red word is said still does not reach
+ *  the backend ahead of it: whichever request Today happened to have on the wire when he
+ *  spoke, the flag is the next thing sent (`api/client.ts`'s urgent queue). Regression for the
+ *  race behind CI run 35065730744, where the fresh-first-page feed read (#165) sometimes won
+ *  that race and the flag arrived second. */
+test("a feed refresh already on the wire before he speaks still cannot overtake the red word", async ({ page, request }) => {
+  await fakeRecorder(page, voice("chest-pain"));
+  await showDemoBanner(page);
+  const pa = await seedVisitDay(request);
+  const trail = apiTrail(page);
+  const feedPath = `/api/profiles/${pa.profileId}/feed`;
+  // Today's own fresh-first-page read (E21-01) is held open here — not refused, not slow by
+  // accident, but deliberately made to still be on the wire the moment he speaks, the way the
+  // real race in CI happened to land. The urgent queue must still put the flag first.
+  let releaseFeed = () => {};
+  const feedHeld = new Promise<void>((resolve) => {
+    releaseFeed = resolve;
+  });
+  await page.route(`**${feedPath}`, async (route) => {
+    await feedHeld;
+    await route.continue().catch(() => undefined);
+  });
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await expect(page.getByTestId("not-well")).toBeVisible();
+  // The feed read is genuinely sending, not merely queued: this is the request the urgent
+  // call has to reach past, not one still waiting behind it.
+  await expect.poll(() => trail.log.some((entry) => entry.kind === "start" && entry.method === "GET" && entry.path === feedPath)).toBe(true);
+  await page.getByTestId("not-well").click();
+  await page.getByTestId("not-well-say").click();
+  await expect(page.getByTestId("red-dot")).toBeVisible();
+  const mark = trail.log.length;
+  const answered = page.waitForResponse(posted(/\/not-feeling-well$/));
+  await page.getByTestId("not-well-stop").click();
+  const card = (await (await answered).json()) as WhatToDo;
+  // The held feed read never gets to go first: the next request sent is his, whatever was
+  // already on the wire when he spoke.
+  expect(trail.log.slice(mark).find((entry) => entry.kind === "start")).toMatchObject({ method: "POST", path: `/api/profiles/${pa.profileId}/not-feeling-well` });
+  expect(card.kind).toBe("red_flag");
+  expect(card.by_voice).toBe(true);
+  releaseFeed();
+});
+
 // --- E17-01, E17-02: the feeling cloud ------------------------------------------------------------
 
 test("a red word on the cloud reaches the flag before any other request, the ladder is written, and the strip goes", async ({ page, request }) => {

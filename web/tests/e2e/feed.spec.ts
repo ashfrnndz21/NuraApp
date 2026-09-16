@@ -74,6 +74,22 @@ function recordPages(page: Page): { cursor: string | null; body: FeedPage }[] {
   return seen;
 }
 
+/** How long a card must rest before it counts as opened (`OPENED_AFTER_MS`,
+ *  `src/screens/Feed.tsx`, #189). Not imported: that module pulls in `ui/feed.css`, which the
+ *  test runner's plain Node loader cannot parse. */
+const OPENED_AFTER_MS = 400;
+
+/** Every "opened", "played", … event the app sent from here on (E11-08, `POST …/feed/events`). */
+function recordEvents(page: Page): { item_id: string; event: string }[] {
+  const seen: { item_id: string; event: string }[] = [];
+  page.on("request", (req) => {
+    if (req.method() !== "POST" || !/\/feed\/events$/.test(new URL(req.url()).pathname)) return;
+    const body = req.postDataJSON() as { events: { item_id: string; event: string }[] };
+    seen.push(...body.events.map((one) => ({ item_id: one.item_id, event: one.event })));
+  });
+  return seen;
+}
+
 async function openPager(page: Page): Promise<void> {
   await page.getByTestId("open-feed").click();
   await expect(page.getByTestId("pager")).toBeVisible();
@@ -216,6 +232,35 @@ test("the pager: one card a screen, in the backend's order, the gate, endless pa
   expect(await page.evaluate(() => [...document.querySelectorAll("audio")].filter((el) => !el.paused).length)).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth));
   expect(await pager.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
+test("a card scrolled past fast is never opened; one rested on is opened exactly once (#189)", async ({ page, request }) => {
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  const events = recordEvents(page);
+  await openPager(page);
+  await settled(page);
+  // The first card's own settle, from opening the pager, is not what this test is about.
+  await page.waitForTimeout(OPENED_AFTER_MS + 100);
+  events.length = 0;
+
+  const pager = page.getByTestId("pager");
+  const cards = await pager.evaluate((root) => [...root.querySelectorAll<HTMLElement>("article.feed-card")].map((el) => ({ itemId: el.dataset.itemId!, top: el.offsetTop })));
+  const [, passedOver, restedOn] = cards;
+
+  // Fast: straight past the second card to the third, with no dwell on the one passed —
+  // every settle in between restarts the wait, so it is cleared before it can fire.
+  await pager.evaluate((el, top) => (el.scrollTop = top), passedOver!.top);
+  await pager.evaluate((el, top) => (el.scrollTop = top), restedOn!.top);
+  await expect.poll(() => onScreen(page).then((s) => s.itemId)).toBe(restedOn!.itemId);
+
+  // Now it rests: opened once, for the card it rests on — polled generously rather than
+  // timed, so this holds under load, not just on a quiet machine.
+  await expect
+    .poll(() => events.filter((one) => one.item_id === restedOn!.itemId && one.event === "opened").length, { timeout: 15_000 })
+    .toBe(1);
+  // Never for the card scrolled past on the way here.
+  expect(events.filter((one) => one.item_id === passedOver!.itemId && one.event === "opened")).toEqual([]);
 });
 
 test("a learning card: its lines, its boundary, its why, four side actions; Hear on tap only, stopped when it leaves; Not for me holds the kind", async ({ page, request }) => {

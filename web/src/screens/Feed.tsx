@@ -21,6 +21,11 @@ import { voice } from "../player/voice";
 import { Shell } from "./Shell";
 import "../ui/feed.css";
 
+/** How long a card must rest at the centre of the pager, untouched by another scroll, before
+ *  it counts as opened (E11-08, #189): long enough that a fast scroll past it on the way to
+ *  another card never counts, short enough that an ordinary pause to read it does. */
+export const OPENED_AFTER_MS = 400;
+
 /** The vertical feed (E21-01): one card fills the screen; up for the next. The backend's
  *  order, its lines, its why and its boundary; four buttons on every card; nothing plays or
  *  moves by itself. See `feed/store.ts` for the pages and `feed/playback.ts` for the voice. */
@@ -35,6 +40,7 @@ export function FeedScreen(): JSX.Element | null {
 function FeedPager({ store, playback, name }: { store: FeedStore; playback: Playback; name: string }): JSX.Element {
   const s = t();
   const pager = useRef<HTMLDivElement>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const entries = store.entries.value;
   const notes = store.notes.value;
   const audience = store.audience.value;
@@ -118,9 +124,17 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
       if (gone) playback.leave(playingKey);
     }
     const list = store.entries.peek();
-    // The card at rest on screen was opened: said once, never for how long (E11-08).
+    // The card at rest on screen was opened: said once, never for how long (E11-08) — but
+    // only once it has actually come to rest. Every settle restarts the wait, so a card
+    // passed on the way to another one, however slowly, is never marked opened (#189).
     const resting = list[index];
-    if (resting) store.seen(resting.item);
+    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    settleTimer.current = resting
+      ? setTimeout(() => {
+          settleTimer.current = null;
+          if (store.entries.peek()[index]?.item.item_id === resting.item.item_id) store.seen(resting.item);
+        }, OPENED_AFTER_MS)
+      : null;
     playback.warm(list.slice(index, index + 3).map((entry) => ({ itemId: entry.item.item_id, language: entry.item.language })));
     if (index !== store.current || index >= list.length - 1 - 2) void store.visible(index);
   };
@@ -156,6 +170,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
     return () => {
       root.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
     };
   }, [entries.length]);
 

@@ -286,21 +286,57 @@ async def test_outside_her_window_an_unapproved_tier_never_falls_to_call_the_doc
     )
 
 
-async def test_outside_her_window_with_the_neutral_notice_approved_it_goes_not_the_tier(
+async def test_outside_her_window_the_night_tier_never_falls_to_call_the_doctor_today(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:
+    """The night tier (`Step.NUMBER_IF_WORSE`) guards the same way as the hospital-now tier
+    above: no hospital marked, so a fall out of hours is the emergency-number step rather than
+    a named emergency department — its own template not approved, and outside her window a
+    reply cannot go at all, so no WhatsApp goes to her rather than "call Dr Tan today"."""
+    h = await _home_with_a_directory(sg, tmp_path, clock, hospital=False)
+    number = dataclasses.replace(h.via.number, templates=BASE_APPROVED)
+    live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
+    clock.set(at(22, 30))
+    handled = await live.inbound(sg, PA, "I fell in the bathroom")
+    assert handled.replies[0].text.splitlines()[1] == "Sit down and rest now."
+    assert live.sent_to(live.mei) == []
+    sent = [
+        row
+        for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
+        if row.trigger_type.value == "flag"
+    ]
+    phone = [
+        row
+        for row in sent
+        if row.outcome is DeliveryOutcome.SENT and row.via is not DeliveryChannel.IN_APP
+    ]
+    assert phone == []
+    no_channel = [row for row in sent if row.outcome is DeliveryOutcome.NO_CHANNEL]
+    assert no_channel and any(
+        any("whatsapp:" in reason for reason in row.passed_over) for row in no_channel
+    )
+    assert any(
+        row.via is DeliveryChannel.IN_APP and row.outcome is DeliveryOutcome.SENT for row in sent
+    )
+
+
+@pytest.mark.parametrize("language", ("en", "ms", "zh"))
+async def test_outside_her_window_with_the_neutral_notice_approved_it_goes_not_the_tier(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock, language: str
+) -> None:
     """The tier's own template still not approved, but its neutral fallback is: that goes,
-    states no action, and never says "call the doctor today" either."""
+    states no action, and never says "call the doctor today" either — in her own language,
+    English, Malay or Chinese alike."""
+    from app.channels.whatsapp.templates import RED_FLAG_NOTICE_URGENT
+
     h = await _home_with_a_directory(sg, tmp_path, clock, hospital=True)
+    h.mei.language = language
+    await sg.flush()
     number = dataclasses.replace(h.via.number, templates=(*BASE_APPROVED, "red_flag_notice_urgent"))
     live = dataclasses.replace(h, via=dataclasses.replace(h.via, number=number))
     clock.set(at(22, 30))
     await live.inbound(sg, PA, "I fell in the bathroom")
-    assert live.sent_to(live.mei)[-1].splitlines() == [
-        "This one we do not wait for.",
-        "Pa is not feeling well.",
-        "Open Nura now.",
-    ]
+    assert live.sent_to(live.mei)[-1].splitlines() == RED_FLAG_NOTICE_URGENT.text[language].format(name="Pa").splitlines()
     sent = (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
     phone = [
         row
