@@ -78,11 +78,12 @@ def test_every_inferring_surface_has_its_words_in_every_language() -> None:
         assert len(NOT_ADVICE[language]) == 2
         for surface in INFERRING_SURFACES:
             lines = boundary_lines(surface, language, doctor="Dr Tan")
-            assert len(lines) == (4 if surface is Surface.NOT_FEELING_WELL else 3), (
-                surface,
-                language,
-            )
-            assert all(lines) and "Dr Tan" in lines[-1], (surface, language)
+            feeling = surface is Surface.NOT_FEELING_WELL
+            assert len(lines) == (5 if feeling else 3), (surface, language)
+            ask = lines[-2] if feeling else lines[-1]
+            assert all(lines) and "Dr Tan" in ask, (surface, language)
+            if feeling:
+                assert lines[-1] == URGENT_CLOSING[language], language
 
 
 def test_every_line_passes_plain_words_in_its_language() -> None:
@@ -101,16 +102,27 @@ def test_every_line_passes_plain_words_in_its_language() -> None:
 def test_the_last_two_lines_are_the_same_words_on_every_surface() -> None:
     """Rule 13: once it is "This is not a doctor's advice. Ask Dr Tan.", it is never anything
     else, whichever surface he is on, whatever else the card carries."""
+    def closing(lines: tuple[str, ...], language: str) -> tuple[str, ...]:
+        # The not-feeling-well card says one line after them: Nura does not decide (E13-02).
+        kept = lines[:-1] if lines[-1] == URGENT_CLOSING[language] else lines
+        return kept[-2:]
+
     for language in LANGUAGES:
-        endings = {boundary_lines(s, language, doctor="Dr Tan")[-2:] for s in INFERRING_SURFACES}
+        endings = {
+            closing(boundary_lines(s, language, doctor="Dr Tan"), language)
+            for s in INFERRING_SURFACES
+        }
         endings.add(
-            boundary_lines(
-                Surface.NOT_FEELING_WELL,
+            closing(
+                boundary_lines(
+                    Surface.NOT_FEELING_WELL,
+                    language,
+                    doctor="Dr Tan",
+                    letter="Come back today.",
+                    told="Ash",
+                ),
                 language,
-                doctor="Dr Tan",
-                letter="Come back today.",
-                told="Ash",
-            )[-2:]
+            )
         )
         assert len(endings) == 1, language
     assert boundary_lines(Surface.STATE_POSTURE, "en", doctor="Dr Tan")[-2:] == (
@@ -150,6 +162,7 @@ def test_the_not_feeling_well_card_reassures_first_and_may_carry_the_letters_own
         "Nura wrote down how you feel.",
         "This is not a doctor's advice.",
         "Ask Dr Tan.",
+        "Nura does not decide what is wrong.",
     )
     with_letter = boundary_lines(
         Surface.NOT_FEELING_WELL,
@@ -165,6 +178,7 @@ def test_the_not_feeling_well_card_reassures_first_and_may_carry_the_letters_own
         "Dr Tan wrote this in your hospital letter.",
         "This is not a doctor's advice.",
         "Ask Dr Tan.",
+        "Nura does not decide what is wrong.",
     )
     assert boundary_lines(Surface.NOT_FEELING_WELL, "ms", told="Mei")[0] == "Mei sudah tahu."
     assert boundary_lines(Surface.NOT_FEELING_WELL, "zh")[0] == "您说出来是对的。"
@@ -284,9 +298,13 @@ def test_an_urgent_card_closes_on_one_line_and_never_sends_him_to_his_doctor() -
         assert NOT_ADVICE[language][0] not in urgent
         assert is_boundary_line(Surface.NOT_FEELING_WELL, "\n".join(urgent))
         assert not [f for f in verify(urgent[-1], language) if f.severity == "fail"]
-        # The ordinary card keeps the standard closing.
+        # The ordinary card keeps the standard closing, then ends on the same last line.
         ordinary = boundary_lines(Surface.NOT_FEELING_WELL, language, told="Mei")
-        assert ordinary[-2] == NOT_ADVICE[language][0] and URGENT_CLOSING[language] not in ordinary
+        assert ordinary[-3] == NOT_ADVICE[language][0]
+        assert ordinary[-1] == URGENT_CLOSING[language]
+        assert is_boundary_line(Surface.NOT_FEELING_WELL, "\n".join(ordinary))
+        # Without that last line an ordinary not-feeling-well card is not the boundary.
+        assert not is_boundary_line(Surface.NOT_FEELING_WELL, "\n".join(ordinary[:-1]))
     lettered = boundary_line(
         Surface.NOT_FEELING_WELL, "en", told="Ash", letter="Come back today.", urgent=True
     )

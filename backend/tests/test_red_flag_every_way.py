@@ -130,7 +130,10 @@ async def test_a_rung_no_phone_reaches_moves_on_at_once_and_the_chief_sees_who(
     await _said_no(sg, h)
     handled = await h.inbound(sg, PA, "I fell in the bathroom")
     assert handled.outcome == "red_flag"
-    assert handled.replies[0].text.splitlines()[-1] == "Mei knows now."
+    # She knows, and the card ends on the boundary line (B1: every urgent card does).
+    said = handled.replies[0].text.splitlines()
+    assert "Mei knows now." in said
+    assert said[-1] == "Nura does not decide what is wrong."
     ladder = (await sg.scalars(select(Ladder).where(Ladder.flag_id.is_not(None)))).one()
     assert [(step["standing"], step["after_minutes"]) for step in ladder.rungs] == [
         ("on_duty", 0),

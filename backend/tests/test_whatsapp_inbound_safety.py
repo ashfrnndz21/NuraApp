@@ -75,24 +75,24 @@ def _told(home: Family, number: str) -> list[list[str]]:
 
 
 async def _notices(sg: AsyncSession) -> list[Delivery]:
-    """The unheard-note alert's own delivery rows — not the in-app notice always written
-    beside whatever carried it (#162)."""
-    return [row for row in await _all_notice_rows(sg) if row.via is not DeliveryChannel.IN_APP]
+    """What carried the notice to her phone. An alert also writes the notice on her family
+    page beside whatever carried it (#162), which is not what these tests are about."""
+    rows = (
+        await sg.scalars(
+            select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
+        )
+    ).all()
+    return [row for row in rows if row.via is not DeliveryChannel.IN_APP]
 
 
-async def _in_app_notices(sg: AsyncSession) -> list[Delivery]:
-    """The in-app notice #162 writes beside the unheard-note alert, on the person's own row."""
-    return [row for row in await _all_notice_rows(sg) if row.via is DeliveryChannel.IN_APP]
-
-
-async def _all_notice_rows(sg: AsyncSession) -> list[Delivery]:
-    return list(
-        (
-            await sg.scalars(
-                select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
-            )
-        ).all()
-    )
+async def _page_notices(sg: AsyncSession) -> list[Delivery]:
+    """The notice on her family page, written whatever carried it (#162)."""
+    rows = (
+        await sg.scalars(
+            select(Delivery).where(Delivery.trigger_type == TriggerType.VOICE_NOTE_UNHEARD)
+        )
+    ).all()
+    return [row for row in rows if row.via is DeliveryChannel.IN_APP]
 
 
 # --- a voice note nobody heard --------------------------------------------------------------------
@@ -158,7 +158,8 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     home = await family(sg, tmp_path)
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {TriggerType.VOICE_NOTE_UNHEARD.value: 1})
-    # An alert's channels are not a setting: choosing one is refused outright, not honoured.
+    # A setting that would send it only to the caregiver is refused for an alert (#162), so
+    # there is no way to leave this notice with nowhere to go.
     with pytest.raises(AlertsGoEveryWay):
         await change(
             sg,

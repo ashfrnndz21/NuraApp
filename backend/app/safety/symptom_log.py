@@ -53,15 +53,19 @@ from app.memory.models import ConfidenceState, Fact
 from app.regions import REGION_TZ, Region
 from app.safety.models import Notice
 from app.safety.not_feeling_well import (
+    A_DAY_OR_MORE,
     BUTTON_SCOPE,
     REPORTED,
     SYMPTOM,
+    ClinicCard,
     Escalated,
     Family,
     Heard,
     Line,
     Situation,
+    call_clinic_card,
     capture,
+    cloud_words_of,
     compose,
     decide,
     escalate,
@@ -70,7 +74,7 @@ from app.safety.not_feeling_well import (
     write_the_moment,
 )
 from app.safety.people import key_holder
-from app.safety.red_flags import Feeling, detect
+from app.safety.red_flags import Feeling, flag_to_raise
 from app.safety.symptoms import Duration, Symptom, parse_symptoms
 from app.state.models import Posture
 
@@ -122,6 +126,13 @@ class Logged:
     card: tuple[Line, ...] | None = None
     """When a red flag was raised: the not-feeling-well button's urgent card, the lines he is
     shown next (W7). None otherwise."""
+    clinic_card: tuple[Line, ...] = ()
+    """When what he said is the not-feeling-well table's middle row — "quite a lot", a day or
+    more, or a new medicine's watch-out: its call-the-clinic card (E13-02), the same rule as the
+    button. Empty otherwise, never beside a red flag's card, and never for a key that cannot
+    bring State up to the record."""
+    clinic_card_id: uuid.UUID | None = None
+    """The `WhatToDoCard` row the call-the-clinic card was rendered as, with its State."""
 
 
 def _lines(
@@ -243,7 +254,7 @@ async def log_symptom(
         audio=audio,
         content_type=content_type,
     )
-    feeling = detect(captured.text)
+    feeling = await flag_to_raise(session, context=context, text=captured.text)
     parsed = parse_symptoms(captured.text)
 
     flag_id: uuid.UUID | None = None
@@ -265,8 +276,7 @@ async def log_symptom(
                 session, context=context, family=family, asked=escalated.asked, language=lang
             )
     heard = Heard(feeling, held_back=escalated is not None and escalated.suppressed)
-
-    _event, written = await write_the_moment(
+    event, written = await write_the_moment(
         session,
         context=context,
         captured=captured,
@@ -276,6 +286,20 @@ async def log_symptom(
         posture=posture,
         event=None if escalated is None else escalated.event,
     )
+    clinic: ClinicCard | None = None
+    if card is None and not heard.any:
+        # Not a red flag: the table's middle row, the same rule as the button (E13-02), rendered
+        # from the State the moment just written produced, on that moment.
+        clinic = await call_clinic_card(
+            session,
+            context=context,
+            registry=registry,
+            language=lang,
+            severity=parsed.severity,
+            lasting=parsed.duration in A_DAY_OR_MORE,
+            feelings=cloud_words_of(parsed),
+            event_id=event.id,
+        )
     # The entry said back is read back through the door, under the fact's own scope and with
     # a READ line, like every other read of the record — never a raw `session.get`.
     found = await audited_read(
@@ -300,6 +324,8 @@ async def log_symptom(
         notices=notices,
         suppressed=list(heard.suppressed),
         card=card,
+        clinic_card=() if clinic is None else clinic.lines,
+        clinic_card_id=None if clinic is None else clinic.card_id,
     )
 
 

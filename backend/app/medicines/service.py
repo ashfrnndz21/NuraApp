@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +71,9 @@ from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, S
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
 from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto
+
+if TYPE_CHECKING:
+    from app.routines.service import Day
 
 LINE = MedicationLine.__tablename__
 
@@ -723,6 +726,14 @@ class LineView:
     """Where the line came from and on which day, in his words: the card's source line."""
 
 
+async def _his_day(session: AsyncSession, context: KeyContext) -> Day:
+    """His day for the dose windows: his settings' breakfast, his routine's other anchors."""
+    # Imported here: the routine module reads the medicines, and the medicines read it.
+    from app.routines.service import his_day
+
+    return await his_day(session, context=context)
+
+
 def today_in(context: KeyContext) -> date:
     return utcnow().astimezone(REGION_TZ[context.region]).date()
 
@@ -853,6 +864,7 @@ async def active_lines(
     names = _names(registry, sorted({line.generic for line in lines}), lang)
     today = today_in(context)
     now = now_in(context)
+    day = await _his_day(session, context)
     generic_of, every_tap = await _taps_by_generic(session, context=context)
     zone = REGION_TZ[context.region]
     today_taps = [t for t in every_tap if as_utc(t.taken_at).astimezone(zone).date() == today]
@@ -905,11 +917,11 @@ async def active_lines(
                 taken_label=TAKEN[lang],
                 source=source_line(line, zone, lang),
                 due_now=any(
-                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[0]
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[0]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
                 missed=any(
-                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of))[1]
+                    window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[1]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
             )
@@ -996,6 +1008,7 @@ async def today(
         return []
     day = today_in(context)
     now = now_in(context)
+    his = await _his_day(session, context)
     zone = REGION_TZ[context.region]
     # A tap belongs to the medicine, not to the version of the line: a dose change this
     # afternoon does not undo the tablet he took this morning. So taps are gathered over
@@ -1024,7 +1037,7 @@ async def today(
         ).if_forgotten
         for anchor in dose.scheduled_anchors:
             tapped = _tapped(anchor.value, line.generic, today_taps, generic_of)
-            due_now, missed = window_status(anchor, now, tapped)
+            due_now, missed = window_status(anchor, now, tapped, his)
             slots.append(
                 Slot(
                     line=line,

@@ -264,6 +264,12 @@ def visit_subject_words(code: str, language: str) -> str:
 
 
 # @patient phrase
+YOUR_HEALTH: Mapping[str, str] = {"en": "your health", "ms": "kesihatan anda", "zh": "您的健康"}
+"""What a visit is about when its booking names no subject: the brief's T-3 message says "This
+visit is about your health." (`visit_about_health` on the brief itself)."""
+
+
+# @patient phrase
 MEDICINE_WORDS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "furosemide": "the water pill",
@@ -408,6 +414,26 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Lawatan ini untuk kesihatan anda.",
         "zh": "这次看医生是为了您的健康。",
     },
+    "changed_readings_one": {
+        "en": "Since {day}, 1 new number is in your blood pressure book.",
+        "ms": "Sejak {day}, ada 1 nombor baru dalam buku tekanan darah anda.",
+        "zh": "自{day}以来，您的血压本多了1个新数字。",
+    },
+    "changed_medicines_one": {
+        "en": "Since {day}, 1 thing changed about your medicines.",
+        "ms": "Sejak {day}, 1 perkara berubah tentang ubat anda.",
+        "zh": "自{day}以来，您的药有1处变化。",
+    },
+    "changed_papers_one": {
+        "en": "Since {day}, 1 new thing is in your papers.",
+        "ms": "Sejak {day}, ada 1 perkara baru dalam surat-surat anda.",
+        "zh": "自{day}以来，您的病历文件多了1项新内容。",
+    },
+    "changed_how_you_are_one": {
+        "en": "Since {day}, 1 thing changed about how you feel.",
+        "ms": "Sejak {day}, 1 perkara berubah tentang apa yang anda rasa.",
+        "zh": "自{day}以来，您的感觉有1处变化。",
+    },
     "changed_readings": {
         "en": "Since {day}, {count} new numbers are in your blood pressure book.",
         "ms": "Sejak {day}, ada {count} nombor baru dalam buku tekanan darah anda.",
@@ -432,6 +458,22 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "en": "Nothing has changed since {day}.",
         "ms": "Tiada apa yang berubah sejak {day}.",
         "zh": "自{day}以来没有变化。",
+    },
+    # What does not fit on the one page (E05-01), said as a count.
+    "symptoms_more": {
+        "en": "Nura has more notes about how you feel.",
+        "ms": "Nura ada lagi nota tentang apa yang anda rasa.",
+        "zh": "Nura还记下了更多您的感觉。",
+    },
+    "questions_more": {
+        "en": "Nura has {count} more questions for {doctor}.",
+        "ms": "Nura ada {count} lagi soalan untuk {doctor}.",
+        "zh": "Nura还有{count}个问题要问{doctor}。",
+    },
+    "bring_more": {
+        "en": "Nura has {count} more things for you to bring on {day}.",
+        "ms": "Nura ada {count} lagi barang untuk anda bawa pada {day}.",
+        "zh": "Nura还有{count}样东西要您在{day}带去。",
     },
     # Questions, from gaps.
     "ask_fact_expired": {
