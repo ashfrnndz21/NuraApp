@@ -644,3 +644,47 @@ async def test_a_brief_that_is_refused_leaves_the_visit_card_to_its_template(
         and e["target"] == "brief"
         for e in trail
     )
+
+
+WEI = "+6591110007"
+CLINIC = "+6591110008"
+
+
+async def test_a_read_only_visits_key_reads_the_brief_over_http_after_his_state_moves(
+    deployment: Deployment,
+) -> None:
+    """B1 review: `GET …/brief` rebuilds whenever State has moved past the newest brief, and a
+    viewer and a clinic key hold the visits scope without being among `CHANGERS` — so the read
+    turned into a 403 the moment the record moved, against `reasoning/visits/guard.py`. They
+    read the brief as it stands instead; only a key that may render one rebuilds it."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _reading(deployment, his, profile_id)
+    appointment_id = await _visit(deployment, his, profile_id)
+    first = await deployment.client.get(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
+    )
+    assert first.status_code == 200, first.text
+    stood = first.json()
+
+    for phone, name, role in ((WEI, "Wei", "viewer"), (CLINIC, "Clinic", "clinic")):
+        holder = await register_by_phone(deployment, phone, name)
+        await _key(deployment, pa, profile_id, phone, role, ["visits"])
+        # His State moves: a new reading after the brief was rendered.
+        await _reading(deployment, his, profile_id)
+        read = await deployment.client.get(
+            f"/profiles/{profile_id}/appointments/{appointment_id}/brief",
+            headers=bearer(holder["token"]),
+        )
+        assert read.status_code == 200, read.text
+        # The brief that stands, not a new one rendered under a key that may not render it.
+        assert read.json()["brief_id"] == stood["brief_id"]
+        assert read.json()["state_id"] == stood["state_id"]
+
+    # The owner still gets the record as it is now: a newer brief, from the State it moved to.
+    his_now = await deployment.client.get(
+        f"/profiles/{profile_id}/appointments/{appointment_id}/brief", headers=his
+    )
+    assert his_now.status_code == 200, his_now.text
+    assert his_now.json()["brief_id"] != stood["brief_id"]

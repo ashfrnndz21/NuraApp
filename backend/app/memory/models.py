@@ -13,17 +13,19 @@ artefact in the object store is the thing.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Float,
     ForeignKey,
     ForeignKeyConstraint,
     String,
+    Time,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -320,6 +322,13 @@ class Provider(ProfileScoped, Base):
     address: Mapped[str | None] = mapped_column(String(300), default=None)
     region: Mapped[Region] = mapped_column(enum_column(Region, "region"))
     added_at: Mapped[datetime] = mapped_column(default=utcnow)
+    panel: Mapped[bool] = mapped_column(Boolean, default=False)
+    """A hospital on his insurance (what a family here calls the panel hospital), marked in the
+    directory. A red flag's escalation names it (E19-05)."""
+    opens_at: Mapped[time | None] = mapped_column(Time, default=None)
+    closes_at: Mapped[time | None] = mapped_column(Time, default=None)
+    """When the doctor or clinic answers, on his wall clock, where the directory says it. Out
+    of these hours a red flag does not say "call the doctor today" (`app.safety.red_flags`)."""
 
 
 class AppointmentStatus(StrEnum):

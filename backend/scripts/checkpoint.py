@@ -1986,6 +1986,30 @@ def checkpoint_7(client: httpx.Client) -> None:
         "the morning, on a yes minted for exactly that booking (subject appointment): status planned"
     )
 
+    # 2b. He writes down how he feels (E14-01), typed in Malay: dizzy, quite a lot, since this
+    #     morning. On the brief it is a line of its own, never a count under his papers.
+    logged = check(
+        client.post(
+            f"/profiles/{profile_id}/symptoms",
+            headers=bearer(pa.token),
+            json={"words": "pening, agak banyak, sejak pagi"},
+        ),
+        201,
+        "Pa writes down how he feels",
+    )
+    entry = logged["entry"]
+    if (
+        entry["symptoms"] != ["dizzy"]
+        or entry["severity"] != 2
+        or entry["duration"] != "this_morning"
+    ):
+        raise fail("Pa writes down how he feels", why=f"got {logged}")
+    ok(
+        'Pa wrote down how he feels (POST /profiles/{id}/symptoms, typed: "pening, agak banyak, '
+        'sejak pagi"): heard as dizzy, quite a lot, since this morning — his words kept as an '
+        "artefact, a symptom fact resting on them"
+    )
+
     # 3. The pre-visit brief, in Malay; every line through the verifier.
     brief = check(
         client.get(
@@ -2000,10 +2024,20 @@ def checkpoint_7(client: httpx.Client) -> None:
         raise fail("Pa reads the pre-visit brief", why=f"got {brief}")
     if not {"purpose", "changed", "questions", "bring"} <= sections:
         raise fail("Pa reads the pre-visit brief", why=f"sections {sections}")
+    felt = [line["key"] for line in brief["lines"] if line["key"].startswith("symptom")]
+    if felt != ["symptom", "symptom_detail", "symptom_detail"] or any(
+        line["key"] == "changed_papers" for line in brief["lines"]
+    ):
+        raise fail(
+            "Pa reads the pre-visit brief",
+            why=f"expected his symptom on a line of its own, not under his papers: {brief['lines']}",
+        )
     verifier_clean(lines, language, "Pa reads the pre-visit brief")
     ok(
         f"the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot "
-        f"{brief['state_id'][:8]}…: purpose, what changed, the open questions, what to bring — "
+        f"{brief['state_id'][:8]}…: purpose, what changed — his symptom on a line of its own, in "
+        "the symptom log's words with how much and since when, never a count under his papers — "
+        "the open questions, what to bring — "
         f"{len(lines)} lines, every one passed the plain-words verifier (checked here again, one by "
         "one, with `python3 -m app.safety.plain_words --text … --lang ms`):"
     )

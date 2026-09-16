@@ -87,6 +87,30 @@ class ClinicOut(BaseModel):
     phone_e164: str | None
 
 
+class InsurerOut(BaseModel):
+    """His insurer: the name, said in a line of the card, and the policy reference, as data."""
+
+    name: str
+    policy_reference: str | None
+
+
+class InsurerIn(BaseModel):
+    """The insurer as typed, on the typer's yes for exactly these words
+    (`POST /confirmations`, subject `insurer`). No name takes the insurer off the card."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
+    confirmation_id: uuid.UUID
+
+
+class InsurerSetOut(BaseModel):
+    insurer_id: uuid.UUID
+    name: str | None
+    policy_reference: str | None
+    set_by_person_id: uuid.UUID
+    set_at: datetime
+
+
 class NamedOut(BaseModel):
     code: str
     words: str
@@ -115,6 +139,10 @@ class EmergencyCardOut(BaseModel):
     last_reading_at: datetime | None
     emergency_number: str
     lines: list[LineOut]
+    insurer: InsurerOut | None = None
+    english_lines: list[LineOut] = []
+    """The same lines in English when `language` is not English (E13-01): one card in two
+    languages, so the ambulance crew reads what he reads. Empty when the card is English."""
 
     @classmethod
     def of(cls, card: Card) -> EmergencyCardOut:
@@ -165,6 +193,10 @@ class EmergencyCardOut(BaseModel):
             last_reading_at=card.last_reading_at,
             emergency_number=card.emergency_number,
             lines=[LineOut(id=line.id, text=line.text) for line in card.lines],
+            insurer=None
+            if card.insurer is None
+            else InsurerOut(name=card.insurer.name, policy_reference=card.insurer.policy_reference),
+            english_lines=[LineOut(id=line.id, text=line.text) for line in card.english_lines],
         )
 
 
@@ -262,6 +294,10 @@ class SymptomLoggedOut(BaseModel):
     suppressed: list[str]
     card: list[LineOut] | None = None
     """A red flag in what he said: the button's urgent card, in order — what he is shown next."""
+    clinic_card: list[LineOut] = []
+    """What he said is the not-feeling-well table's middle row — "quite a lot", a day or more,
+    or a new medicine's watch-out: the call-the-clinic card, in order (E13-02). Empty otherwise,
+    and never beside `card`."""
 
     @classmethod
     def of(cls, logged: Logged, severity_words: str | None) -> SymptomLoggedOut:
@@ -274,6 +310,7 @@ class SymptomLoggedOut(BaseModel):
             card=None
             if logged.card is None
             else [LineOut(id=line.id, text=line.text) for line in logged.card],
+            clinic_card=[LineOut(id=line.id, text=line.text) for line in logged.clinic_card],
         )
 
 

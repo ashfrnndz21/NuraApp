@@ -367,11 +367,15 @@ What you will see (the numbers, ids, dates and times change each run; the visit 
 ✓ Pa agreed to Nura listening at the visit and keeping what is said (POST /profiles/{id}/consents/recording, the words in Malay): no transcript is kept on a profile without this; without it POST …/transcript is refused, ConsentWithheld (403)
 ✓ Pa opened his profile in Malay, added a blood pressure reading (138/84, taken twenty days ago) and three medicines through E04 (POST /profiles/{id}/medicines, each from a label photo with his yes): amlodipine, warfarin and aspirin — the licensed data flagged aspirin against the warfarin already there, and every monograph says what its medicine is for
 ✓ Pa booked a visit with Dr Tan (POST /profiles/{id}/appointments) for 2026-09-17 at 10 in the morning, on a yes minted for exactly that booking (subject appointment): status planned
-✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed, the open questions, what to bring — 11 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
+✓ Pa wrote down how he feels (POST /profiles/{id}/symptoms, typed: "pening, agak banyak, sejak pagi"): heard as dizzy, quite a lot, since this morning — his words kept as an artefact, a symptom fact resting on them
+✓ the pre-visit brief (GET …/brief), in Malay, rendered from State snapshot 530d3d4b…: purpose, what changed — his symptom on a line of its own, in the symptom log's words said to him, with how much and since when anchored to that day ("pagi itu", that morning), never a count under his papers — the open questions, what to bring — 14 lines, every one passed the plain-words verifier (checked here again, one by one, with `python3 -m app.safety.plain_words --text … --lang ms`):
     [purpose  ] Anda berjumpa Dr Tan pada Khamis 17 September pukul 10 pagi.
     [purpose  ] Lawatan ini untuk memeriksa tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, ada 1 nombor baru dalam buku tekanan darah anda.
     [changed  ] Sejak Isnin 14 September, 3 perkara berubah tentang ubat anda.
+    [changed  ] Anda rasa pening pada Isnin 14 September.
+    [changed  ] Rasanya agak teruk.
+    [changed  ] Ia bermula pagi itu.
     [questions] Tanya Dr Tan sama ada aspirin dan ubat cair darah boleh dimakan bersama.
     [questions] Tanya Dr Tan berapa kerap perlu ambil tekanan darah.
     [bring    ] Bawa buku tekanan darah anda pada Khamis 17 September.
@@ -457,7 +461,7 @@ What you will see (the numbers, ids, dates and times change each run; the visit 
 checkpoint 7 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 7 passed`. The criteria: a visit is written down only on a yes minted for exactly that booking; the pre-visit brief is rendered from State in the profile's language — purpose, what changed since the record began (or since the last visit), the open questions from the gaps in the record, what to bring — and every line passes the plain-words verifier, a brief that would not being refused whole (`NotPlainEnough`) rather than shown; the questions carry their source (a gap and the facts and lines it rests on — an interaction the licensed data flagged, a reading with nothing recent — or the person who typed one, with his yes), and his card is one screen — three lines and a reassurance, then the boundary line the questions carry; the brief, the summary card and the memo card end on their boundary lines too (E16-01), and every row carries it; inside the week before the visit the visit card on his feed is the brief's own words, ending on the brief's line, and after the visit the memo card on his feed repeats the memos in his words until the follow-up they are filed against has passed; a line that is not plain is refused by name and written to the trail; the transcript is an artefact in the region's store, never a column; the summary card renders a medicine change as a question for the doctor and never as an amount, and names a medicine only when the licensed register knows it; one OK saves the card — actions become memos filed against the next visit, the follow-up becomes a planned visit that still needs its own confirm, facts heard become facts with the transcript as provenance and the person as confirmer, and the medicine change becomes a flag for E04's reconcile — the generic, the kind of change, the line it is about, never an amount — while every medication line stays exactly as it was; the memo card is the current memos, one line each, verified again on the way out; a red-flag word — in the raw transcript, not only in what the summariser reported — writes a flag before the card is composed and puts the same-day lines first: call the doctor, and what he should hear about, a person and a day and never a diagnosis; a key that holds the visits to read — a viewer's, a clinic's — cannot write a transcript, confirm a summary or change a question (`NotTheirsToChangeVisits`, 403); and a key without the visits is refused and written down. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 7 passed`. The criteria: a visit is written down only on a yes minted for exactly that booking; the pre-visit brief is rendered from State in the profile's language — purpose, what changed since the record began (or since the last visit), every symptom written down since then on a line of its own in the symptom log's words with how much and since when and never counted under his papers (E14-01), the open questions from the gaps in the record, what to bring — on one page (at most 21 lines, a section that would run over folded into one line saying how many more), and every line passes the plain-words verifier, a brief that would not being refused whole (`NotPlainEnough`) rather than shown; the questions carry their source (a gap and the facts and lines it rests on — an interaction the licensed data flagged, a reading with nothing recent — or the person who typed one, with his yes), and his card is one screen — three lines and a reassurance, then the boundary line the questions carry; the brief, the summary card and the memo card end on their boundary lines too (E16-01), and every row carries it; inside the week before the visit the visit card on his feed is the brief's own words, ending on the brief's line, and after the visit the memo card on his feed repeats the memos in his words until the follow-up they are filed against has passed; a line that is not plain is refused by name and written to the trail; the transcript is an artefact in the region's store, never a column; the summary card renders a medicine change as a question for the doctor and never as an amount, and names a medicine only when the licensed register knows it; one OK saves the card — actions become memos filed against the next visit, the follow-up becomes a planned visit that still needs its own confirm, facts heard become facts with the transcript as provenance and the person as confirmer, and the medicine change becomes a flag for E04's reconcile — the generic, the kind of change, the line it is about, never an amount — while every medication line stays exactly as it was; the memo card is the current memos, one line each, verified again on the way out; a red-flag word — in the raw transcript, not only in what the summariser reported — writes a flag before the card is composed and puts the same-day lines first: call the doctor, and what he should hear about, a person and a day and never a diagnosis; a key that holds the visits to read — a viewer's, a clinic's — cannot write a transcript, confirm a summary or change a question (`NotTheirsToChangeVisits`, 403); and a key without the visits is refused and written down. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with Pa's token (press *Authorize* and paste it), the profile id and the appointment id from it:
 
@@ -1059,26 +1063,42 @@ What you will see (the numbers and ids change each run):
 ✓ Siti replied "sudah beri" on WhatsApp: the Taken tap was written for the breakfast tablet — on the medicines key she holds, on the WhatsApp channel — and the ladder stopped; 10:05 asks nobody. Her reply in the thread:
     → Terima kasih, saya sudah tulis.
     → Pa sudah ambil ubat tekanan darah Pa.
+✓ 10:05, after his check-in time (10:00): the schedule handed the day's nudge over and delivery sent it — Pa (patient): sent by whatsapp, template nudge; rule nudge_handed_over; the web handing it over again as he answers (POST /nudges/plan) gives back the same nudge — one row (GET /nudges) — and 10:10 sends it no second time. What he reads:
+    → Nura has a note for you.
+    → Your blood pressure tablet is new since Monday 14 September.
+    → How are you feeling today?
 ✓ 07:20, the first run of the day, the reorder date reached: Mei (on_duty): sent by whatsapp, template reorder_family; rule reorder_date_reached:
     → Pa's tablets are running low.
     → Pa's blood pressure tablet runs out on Wednesday 16 September.
     → Can you order more for Pa?
 ✓ 07:31, the same rule the second time that day: capped (once a day) — no second message, and no row at all on the runs after it
-✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice_self), category alert, never capped and never quiet; not to him. His reply:
+✓ Mei added Dr Tan and Gleneagles to his directory (POST /profiles/{id}/providers), Gleneagles marked as the hospital on his insurance (panel: true); Dr Tan's hours are not set, so his clinic answers 08:00 to 20:00
+✓ 22:30, inside the quiet hours: a red flag, written first, went straight to the roster — on_duty, sent by whatsapp (red_flag_notice_hospital), category alert, never capped and never quiet; not to him. A fall is the same-day tier, and Dr Tan's clinic is closed at 22:30: never "call your doctor today" — the emergency department of the hospital on his insurance, named (E19-05). His reply:
     → This one we do not wait for.
-    → Call your doctor today.
+    → Go to the emergency department at Gleneagles now.
+    → Gleneagles is on your insurance.
+    → If you cannot get there safely, call the ambulance now on 995.
     → Mei knows now.
+    → Nura does not decide what is wrong.
 ✓ 22:36, nobody had answered: the next rung, still at night — Siti (key_holder, rung 4): sent by whatsapp, template red_flag_notice_self; rule red_flag_raised; Siti (key_holder, rung 4): sent by in_app; rule red_flag_raised; nothing else went: a reminder waits out the quiet hours
 ✓ 07:30 the next morning, the flag still inside its day: today's top three (GET /profiles/{id}/feed/today) — alerts first, then reminders, then insights:
     [alert   ] This one we do not wait for — one action: call, on the stable wash. Why: This is one of the things we never wait for.
     [reminder] Your tablets today — one action: taken, on the stable wash. Why: You have medicines on your list.
     [reminder] Your blood pressure tablet is running low — one action: ask_to_order, on the stable wash. Why: You have about 1 day of your blood pressure tablet left.
 ✓ "Your tablets today" played as its spoken twin (GET …/feed/{item}/voice): audio/wav, 92044 bytes, 11.5 seconds, cache hit — the fixture voice is silence as long as the words take to say
-✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
+✓ every attempt is on the delivery log with the rule that fired: breakfast_anchor_reached, dose_window_closed_untapped, nudge_handed_over, paper_waiting_for_a_yes, red_flag_raised, reorder_date_reached
+✓ 07:40 on Tuesday 15 September, three days before his visit with Dr Tan on Friday 18 September: the pre-visit brief was rendered then and its card sent — Pa (patient): sent by whatsapp, template visit_brief; rule brief_three_days_before; 08:10 sends it no second time. What he reads:
+    → Your next visit is on Friday 18 September.
+    → You see Dr Tan at 10 in the morning.
+    → This visit is about your blood pressure.
+    → Bring your blood pressure book on Friday 18 September.
+    → Nura prepared this from your papers.
+    → This is not a doctor's advice.
+    → Ask Dr Tan.
 checkpoint 20 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at his breakfast — the one breakfast time his settings (E01), his routine's anchors (E10) and his first week's prompts all read, 07:30 until the family sets it — as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him — every way each person can be reached, with the notice on their family page (`in_app`) always written, whatever the settings (#162); today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds. Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 20 passed`. That is the whole of the criteria: the morning card goes at his breakfast — the one breakfast time his settings (E01), his routine's anchors (E10) and his first week's prompts all read, 07:30 until the family sets it — as the approved template, once a day; a tablet with no Taken by the end of its window asks him, then the helper, then whoever the roster puts on duty — the third ask goes to the roster, not to him — and a "sudah beri" on WhatsApp writes the Taken tap and stops the ladder; at his check-in time the schedule hands the day's planned nudge over — never in the quiet hours, never on a red-flag day — and delivery sends it once, the web's own handover giving back the same nudge (W7); a rule true all day (the reorder date) is said once, held for the quiet hours before 7 and by the cap after it, the hold written down once; a red flag goes straight to the roster at 22:30, never quiet and never capped, and not to him — every way each person can be reached, with the notice on their family page (`in_app`) always written, whatever the settings (#162) — and out of his doctor's hours (the directory's, else 08:00 to 20:00) a same-day flag never says "call your doctor today": it names the emergency department of the hospital marked as on his insurance (and the ambulance if he cannot get there safely), or the ambulance if it gets worse, while chest pain, the signs of a stroke and shaky-and-sweaty on a sugar medicine are the ambulance at any hour, and every reply ends "Nura does not decide what is wrong." (E19-05, ADR 0010); today's top three lead with the alert and every card says why; one card is played as its spoken twin, under thirty seconds; three days before a visit, after his breakfast, the pre-visit brief is rendered and its card sent once, under the cap on briefs a day (E05-01). Every attempt is a `Delivery` row naming the rule that fired (`GET /profiles/{id}/deliveries`, the owner's and his chief's). If you see a ✗, the line says what was asked, what came back and what was expected; tell the operator and paste the line.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
 
@@ -1244,7 +1264,7 @@ make dev                # terminal 1
 make checkpoint N=14    # terminal 2, about three seconds
 ```
 
-It registers Pa, Mei (chief), Lin (a neighbour with an emergency-only key) and Kit (no key) on fresh numbers, adds the water pill from a label photo and a blood pressure, then walks the three stories: the emergency card as JSON and as the printable page (open the URL it prints in a browser with Pa's token, or print it); the not-feeling-well button with "tired today" typed and "chest pain" said by voice (a placeholder voice note the fixture transcriber knows by digest, `backend/tests/fixtures/voice/`; his own note, kept like typed text, ADR 0003); the symptom log by voice; and Kit refused. Every what-to-do card opens with the boundary's reassurance and ends with its closing lines (E16, `app/safety/boundary.py`). The voice notes and the typed words are kept as artefacts in `backend/var/objects/SG/voice/` and `words/`; no row holds his words.
+It registers Pa, Mei (chief), Lin (a neighbour with an emergency-only key) and Kit (no key) on fresh numbers, adds the water pill from a label photo and a blood pressure, puts his insurer on the card on his yes, then walks the three stories: the emergency card as JSON and as the printable page — in his language and, when that is not English, with every line's English twin for the ambulance crew — (open the URL it prints in a browser with Pa's token, or print it); the not-feeling-well button with "tired today" typed and "chest pain" said by voice (a placeholder voice note the fixture transcriber knows by digest, `backend/tests/fixtures/voice/`; his own note, kept like typed text, ADR 0003); the symptom log by voice; and Kit refused. Every what-to-do card opens with the boundary's reassurance and ends on "Nura does not decide what is wrong." (E13-02, E16, `app/safety/boundary.py`). The voice notes and the typed words are kept as artefacts in `backend/var/objects/SG/voice/` and `words/`; no row holds his words.
 
 What you will see (the phone numbers, ids and dates change each run):
 
@@ -1259,7 +1279,8 @@ What you will see (the phone numbers, ids and dates change each run):
 ✓ Pa let Lin, a neighbour, in to the emergency card only and cut her an emergency key (scopes: emergency, profile)
 ✓ Pa added the water pill (frusemide 40 mg, 1 tablet every morning) from a label photo, with his OK, and tapped Taken
 ✓ Pa typed in a blood pressure (138 over 84): a reading event and a fact resting on it
-✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, the last blood pressure's date, 995 for Singapore, rendered from State 96032bf8… and written down as render ed18fadb…; the lines, every one verified:
+✓ Pa typed his insurer (Great Eastern, policy GE-4471-0932) on his yes (subject insurer, PUT /profiles/{id}/emergency-card/insurer); Lin, with the emergency card only, cannot set it (NotTheirsToSetInsurer, 403), and an identity-card number is refused as a policy reference (NotAPolicyReference, 400)
+✓ Pa read his emergency card (GET /profiles/{id}/emergency-card): the water pill with its strength and how much, Mei's name and number, his insurer (the policy reference as data, never in a sentence), the last blood pressure's date, 995 for Singapore, rendered from State 96032bf8… and written down as render ed18fadb…; the lines, every one verified:
     This is Pa's emergency card.
     Show this card to the doctor or the ambulance crew.
     Pa speaks English.
@@ -1269,6 +1290,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Pa has no allergy that Nura knows of.
     Mei looks after Pa.
     Call Mei first.
+    Pa's insurance is with Great Eastern.
     The ambulance number is 995.
     Pa's blood pressure was last written down on Tuesday 15 September.
     This card is not a doctor's advice.
@@ -1280,7 +1302,11 @@ What you will see (the phone numbers, ids and dates change each run):
     Nura has no note of a condition for Pa.
     Pa takes the water pill (frusemide).
     Pa takes 1 tablet every morning.
-✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card
+✓ Mei read the card with her chief key (render 6788fd95…), and Lin read it with her emergency-only key — the same lines, the insurer included, stamped with the same State: an emergency key opens the card's fixed projection and nothing else, and is refused a stale card; the policy reference is his and his chief's in full, and the last four for Lin (••••0932)
+✓ Lin read the card in Chinese (GET …/emergency-card?language=zh): every line with its English twin under the same id (13 lines), on the JSON and on the printable page (`<p class="twin" lang="en">`), so the ambulance crew reads what he reads; the first three:
+    这是Pa的紧急卡。  /  This is Pa's emergency card.
+    请把这张卡给医生或救护人员看。  /  Show this card to the doctor or the ambulance crew.
+    Pa说英语。  /  Pa speaks English.
 ✓ Pa pressed the button and typed "tired today" (POST /profiles/{id}/not-feeling-well): his words kept as an artefact, a SYMPTOM event and a symptom fact resting on it, no red flag, the water pill already taken — so the card says rest, Mei is told (notice to 2 people), and a check-in is written for 2026-09-14T18:10:36.748662Z:
     Mei knows now.
     Sit down and rest now.
@@ -1289,6 +1315,7 @@ What you will see (the phone numbers, ids and dates change each run):
     Nura wrote down how you feel.
     This is not a doctor's advice.
     Ask your doctor.
+    Nura does not decide what is wrong.
 ✓ Pa pressed the button and said "chest pain" (a voice note through the fixture transcriber, heard at 0.94, kept as his own note): the flag was written first (85280904…), the posture is ACT, the ladder asked Mei first (E11-06, the one record of who is told; Lin five minutes on if nobody answers); the card, read aloud — who knows, the calls, and one closing line, never "Ask your doctor." after 995:
     Mei knows now.
     Call the ambulance now on 995.

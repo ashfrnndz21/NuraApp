@@ -138,6 +138,18 @@ async def gliclazide(session: AsyncSession, context: KeyContext):
     return await add(session, context, label("gliclazide", "30 mg", "1 tab OD morning"), photo)
 
 
+async def warfarin(session: AsyncSession, context: KeyContext):
+    """Warfarin 3 mg from a label photo: the register's class for it is an anticoagulant."""
+    photo = await label_photo(session, context)
+    return await add(session, context, label("warfarin", "3 mg", "1 tab ON"), photo)
+
+
+async def apixaban(session: AsyncSession, context: KeyContext):
+    """Apixaban 5 mg from a label photo: the register classes it as an anticoagulant too."""
+    photo = await label_photo(session, context)
+    return await add(session, context, label("apixaban", "5 mg", "1 tab BD"), photo)
+
+
 async def sugar_tablet(session: AsyncSession, context: KeyContext):
     photo = await label_photo(session, context)
     return await add(session, context, label("metformin", "500 mg", "1 tab BD"), photo)

@@ -52,6 +52,9 @@ class TriggerType(StrEnum):
     """His voice note that Nura could not hear (#158): a red word in it could not be read, so
     his chief is told to listen. An alert, like a red flag: never capped, never quiet."""
 
+    BRIEF = "visit_brief"
+    """The pre-visit brief, rendered three days before a visit and its card sent (E05-01)."""
+
 
 class Category(StrEnum):
     """How a type is routed and held: an alert is never capped and never quiet."""
