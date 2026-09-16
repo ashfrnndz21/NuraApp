@@ -1250,23 +1250,22 @@ alone passes."""
 _ZH_NUMERALS = "一二三四五六七八九十百半两"
 
 
-def _name_shaped(language: str) -> str:
-    """A name-shaped run: letters (or, in `zh`, CJK characters), spaces, apostrophes, hyphens
-    and parentheses — no digit in any script, the CJK numerals (`_ZH_NUMERALS`) included, since
-    those are ordinary characters in the CJK block and would otherwise pass as "letters"."""
-    if language == "zh":
-        return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z ()（）'-])+"
-    return r"[A-Za-z][A-Za-z' ()-]*"
+def _generic_token(language: str) -> str:
+    """The fallback shape for a slot with no closed vocabulary to check against: one word in
+    `en`/`ms` (no space — a space is how a whole extra clause hid inside the slot: "the water
+    pill till Friday" as {medicine}, "Ash to stop the water pill" as {doctor}, both letters and
+    spaces and nothing else, so a char class alone never caught them); one character in `zh`,
+    which has no space to bound a run on at all ("不要自己停药改用胰岛素。" passed with
+    medicine="药改用胰岛素", every character in it a plain CJK letter). No digit in any script
+    either way, the CJK numerals (`_ZH_NUMERALS`) included, since those are ordinary characters
+    in the CJK block and would otherwise pass as "letters" too.
 
-
-def _medicine_token(language: str) -> str:
-    """A bare technical name — "furosemide", "药" — the same no-digit-in-any-script rule as
-    `_name_shaped`, but no space: a real drug name is one word (or, in `zh`, one run of
-    characters); a space is how a clause hides inside the slot ("the water pill till Friday",
-    "ubat makan dua pil"). The app's own friendly phrases (`app.medicines.strings.PLAIN_NAME`,
-    which do have spaces) are matched separately, in full, by `_keep_taking_pattern`."""
+    `app.medicines.strings.PLAIN_NAME` is the closed vocabulary for the medicine slot's own
+    friendly, multi-word phrases ("the water pill"); this is only the fallback for a bare
+    technical name beside them ("furosemide", "药"). Nothing closes the doctor slot — a real
+    name — so it is always this fallback, single word or single character."""
     if language == "zh":
-        return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z()（）'-])+"
+        return rf"(?:(?![{_ZH_NUMERALS}0-9])[\u4e00-\u9fffA-Za-z])"
     return r"[A-Za-z][A-Za-z'()-]*"
 
 
@@ -1275,8 +1274,8 @@ def _keep_taking_pattern(language: str) -> re.Pattern[str]:
     """The whitelist for rule 14's one allowance (#157): the line passes only if it is exactly
     one of `DO_NOT_STOP`'s templates (`app.reasoning.feelings.strings`) with its slots filled —
     the medicine slot a name the app itself uses (`app.medicines.strings.PLAIN_NAME`) or a bare
-    technical name (`_medicine_token`), the doctor slot a name (`_name_shaped`). Built from the
-    templates themselves, not typed out again, so the two cannot drift apart.
+    technical name, the doctor slot a name (both `_generic_token`). Built from the templates
+    themselves, not typed out again, so the two cannot drift apart.
 
     Imports lazily: `app.medicines` imports `app.safety.high_risk` at package level, so an
     import of `app.medicines.strings` at this module's top level would cycle back here."""
@@ -1284,10 +1283,9 @@ def _keep_taking_pattern(language: str) -> re.Pattern[str]:
     from app.reasoning.feelings.strings import DO_NOT_STOP
 
     known = sorted(PLAIN_NAME[language].values(), key=len, reverse=True)
-    medicine = "(?:{}|{})".format(
-        "|".join(re.escape(name) for name in known), _medicine_token(language)
-    )
-    doctor = _name_shaped(language)
+    token = _generic_token(language)
+    medicine = "(?:{}|{})".format("|".join(re.escape(name) for name in known), token)
+    doctor = token
     alternatives = []
     for template in DO_NOT_STOP[language]:
         slotted = re.escape(template)

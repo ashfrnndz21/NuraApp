@@ -725,6 +725,28 @@ def test_rule_14_keep_taking_is_a_whitelist_not_a_blacklist() -> None:
     assert rule_14("Jangan berhenti makan ubat makan dua pil sendiri.", "ms")
 
 
+def test_rule_14_keep_taking_does_not_let_a_whole_clause_hide_in_an_open_slot() -> None:
+    """The reviewer's second pass on PR #170: a slot pattern that is merely "no digit" still
+    lets a whole extra clause hide inside it, because a clause needs no digit to say something.
+    In `zh` there is no space to catch it, so an unbounded CJK run for the medicine slot let
+    "改用胰岛素" ("switch to using insulin") and "改吃别种"/"先吃别的药" ride along as part of
+    "the medicine's name"; the same unbounded run on the doctor slot let a whole second
+    sentence hide as "the doctor's name". In `en`, the doctor slot allowed spaces, so
+    "Ash to stop the water pill" filled it and reconstructed a line naming a stop. Closed by
+    making the fallback for a slot with no closed vocabulary one word (`en`/`ms`, no space) or
+    one character (`zh`, which has no space to bound a run on) — `_generic_token`."""
+    from app.safety.plain_words import verify
+
+    def rule_14(text: str, language: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, language))
+
+    assert rule_14("不要自己停药改用胰岛素。", "zh")
+    assert rule_14("不要自己停药改吃别种。", "zh")
+    assert rule_14("不要自己停药先吃别的药。", "zh")
+    assert rule_14("告诉阿明停药吃别的您的感觉。", "zh")
+    assert rule_14("Tell Ash to stop the water pill how you feel.", "en")
+
+
 def test_a_composed_note_verifies_clean_in_ms_and_zh_with_a_real_medicine() -> None:
     """The reviewer: nothing exercised `verify()` on the filled ms/zh `DO_NOT_STOP` lines —
     only the templates and the whitelist regex were tested in isolation. A failure here
