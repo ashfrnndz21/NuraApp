@@ -31,7 +31,7 @@ from app.channels.whatsapp.models import Direction, WhatsAppMessage
 from app.channels.whatsapp.strings import RED_FLAG_STEPS
 from app.clock import FrozenClock
 from app.db import as_utc, utcnow
-from app.delivery.triggers.models import Delivery, DeliveryOutcome, Ladder
+from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.drugs.registry import LabelFields
 from app.errors import Refusal
 from app.keys.scopes import KeyRole
@@ -258,7 +258,15 @@ async def test_where_meta_has_not_approved_the_new_notices_the_approved_one_goes
     assert handled.replies[0].text.splitlines()[1] == "Go to the emergency department at Gleneagles now."
     assert live.sent_to(live.mei)[-1].splitlines()[0] == "This one we do not wait for."
     sent = (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
-    assert [row.template_name for row in sent if row.outcome is DeliveryOutcome.SENT] == ["red_flag_notice"]
+    phone = [
+        row
+        for row in sent
+        if row.outcome is DeliveryOutcome.SENT and row.via is not DeliveryChannel.IN_APP
+    ]
+    assert [row.template_name for row in phone] == ["red_flag_notice"]
+    assert any(
+        row.via is DeliveryChannel.IN_APP and row.outcome is DeliveryOutcome.SENT for row in sent
+    )
 
 
 async def test_the_escalation_goes_within_one_minute_of_the_red_word(
@@ -276,7 +284,10 @@ async def test_the_escalation_goes_within_one_minute_of_the_red_word(
     assert [step["standing"] for step in first] == ["on_duty"]
     rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
     went = [row for row in rows if row.outcome is DeliveryOutcome.SENT and row.rung == first[0]["rung"]]
-    assert [row.to_person_id for row in went] == [h.mei.id]
+    phone = [row for row in went if row.via is not DeliveryChannel.IN_APP]
+    assert [row.to_person_id for row in phone] == [h.mei.id]
+    # Whatever carried it, the notice on her family page is written besides (#162).
+    assert [row.to_person_id for row in went if row.via is DeliveryChannel.IN_APP] == [h.mei.id]
     for row in went:
         assert as_utc(row.due_at) == said_at
         assert timedelta(0) <= as_utc(row.recorded_at) - said_at <= timedelta(minutes=1)
@@ -374,7 +385,9 @@ async def test_inside_her_window_the_tiered_notice_goes_as_free_text_until_meta_
         for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
         if row.outcome is DeliveryOutcome.SENT and row.trigger_type.value == "flag"
     ]
-    assert [row.template_name for row in sent] == [None]
+    # The free text carried it; the notice on her family page is written besides (#162).
+    assert [row.template_name for row in sent if row.via is not DeliveryChannel.IN_APP] == [None]
+    assert any(row.via is DeliveryChannel.IN_APP for row in sent)
     assert live.sent_to(live.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.HOSPITAL_NOW]]
 
 
@@ -761,7 +774,9 @@ async def test_inside_her_window_the_ambulance_notice_goes_as_free_text_until_me
         for row in (await sg.scalars(select(Delivery).where(Delivery.to_person_id == h.mei.id))).all()
         if row.outcome is DeliveryOutcome.SENT and row.trigger_type.value == "flag"
     ]
-    assert [row.template_name for row in sent] == [None]
+    # The free text carried it; the notice on her family page is written besides (#162).
+    assert [row.template_name for row in sent if row.via is not DeliveryChannel.IN_APP] == [None]
+    assert any(row.via is DeliveryChannel.IN_APP for row in sent)
     assert live.sent_to(live.mei)[-1].splitlines() == ["This one we do not wait for.", *NOTICE[Step.AMBULANCE]]
 
 

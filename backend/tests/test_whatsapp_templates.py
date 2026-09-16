@@ -182,3 +182,21 @@ def test_no_template_parameter_carries_a_line_break_for_the_brief() -> None:
     """A Meta template parameter holds no line break: the brief's slots are a name, a day, a
     time and a subject, and the lines are the template's own."""
     assert TEMPLATES["visit_brief"].slots == ("doctor", "day", "time", "subject")
+
+
+def test_every_red_flag_notice_is_exempt_from_his_whatsapp_consent() -> None:
+    """After he stops WhatsApp his family still hears when he is unwell (#163). The exemption
+    is matched by the notice's name, so a notice added later — the tiered ones (#147), a new
+    version of the words (#160), the free-text twin outside the window — is never held back at
+    the moment it matters most, and nothing else is let through."""
+    from app.channels.whatsapp.outbound.send import is_red_flag_notice
+
+    notices = [name for name in TEMPLATE_NAMES if name.startswith("red_flag_notice")]
+    assert len(notices) >= 3
+    for name in notices:
+        assert is_red_flag_notice(name), name
+        assert is_red_flag_notice(f"{name}_text"), name
+    for name in TEMPLATE_NAMES:
+        if not name.startswith("red_flag_notice"):
+            assert not is_red_flag_notice(name), name
+    assert not is_red_flag_notice(None)

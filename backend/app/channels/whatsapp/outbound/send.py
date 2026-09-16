@@ -155,10 +155,17 @@ class SaidNoToWhatsApp(Refusal):
     on their family page. A reply to a message they wrote themselves still goes."""
 
 
-RED_FLAG_NOTICES: frozenset[str] = frozenset(
-    {"red_flag_notice", "red_flag_notice_self", "red_flag_notice_ambiguous"}
-)
-"""The one kind of message about him his family is sent on WhatsApp after he stops it (#163)."""
+RED_FLAG_NOTICE = "red_flag_notice"
+"""Every notice a red flag sends is named for it: the approved one, the self and ambiguous
+variants, the tiered ones (the ambulance, the hospital now, the number if worse, #147), their
+free-text twins outside the window, and any later version of the words (#160). They are the one
+kind of message about him his family is sent on WhatsApp after he stops it (#163), so they are
+matched by that name and not by a list — a notice added later is never held back at the moment
+it matters most."""
+
+
+def is_red_flag_notice(kind: str | None) -> bool:
+    return kind is not None and kind.startswith(RED_FLAG_NOTICE)
 
 
 async def _may_message(
@@ -200,7 +207,7 @@ async def _may_message(
             session, context=context, person_id=person.id, channel=Channel.WHATSAPP
         ):
             raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
-    if starts and kind not in RED_FLAG_NOTICES:
+    if starts and not is_red_flag_notice(kind):
         await require_consent(
             session,
             context=context,
