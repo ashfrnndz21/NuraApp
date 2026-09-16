@@ -75,7 +75,7 @@ export function EmergencyScreen(): JSX.Element {
       const found = await loadCard(id, binding);
       setKept(found);
       try {
-        setKept(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date()));
+        setKept(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date(), found));
       } catch (failure) {
         // No network, or a State behind the record: the card the phone kept stands, dated.
         if (keepsCard(failure)) return;

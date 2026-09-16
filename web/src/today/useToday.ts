@@ -93,7 +93,7 @@ export function useToday() {
       return;
     }
     try {
-      setCard(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date()));
+      setCard(await saveCard(id, await readCard(bearer, id, language.value), binding, new Date(), had));
     } catch (failure) {
       if (keepsCard(failure)) setCard(had);
       else {
