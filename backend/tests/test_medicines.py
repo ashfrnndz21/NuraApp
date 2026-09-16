@@ -101,8 +101,10 @@ async def test_a_label_becomes_a_line_with_source_confidence_and_the_persons_yes
 async def test_a_label_the_register_does_not_know_is_not_guessed(sg: AsyncSession) -> None:
     owner = await pa(sg)
     photo = await artefact(sg, owner)
+    # digoxin is a high-risk generic no licensed feed has sent this register yet
+    # (tests/test_drugs.py::test_a_monograph_is_rule_ids_not_prose relies on the same gap).
     with pytest.raises(NotIdentified):
-        await planned(sg, owner, label("ibuprofen", "200 mg"), photo)
+        await planned(sg, owner, label("digoxin", "0.125 mg"), photo)
     # Two strengths and no strength on the label: the strength decides, nothing is picked.
     with pytest.raises(NotIdentified):
         await planned(sg, owner, label("warfarin", None), photo)  # type: ignore[arg-type]

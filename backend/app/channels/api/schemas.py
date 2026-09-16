@@ -27,6 +27,7 @@ from app.consent.models import (
 from app.consent.service import RecordConsent
 from app.db import as_utc
 from app.drafts import ConfirmSubject
+from app.drugs.registry import ProductKind, ReviewState
 from app.family.documents import Backing, DocumentView
 from app.family.grants import Grant, Helper, RolePreset
 from app.family.models import (
@@ -1038,18 +1039,30 @@ class DrugMatchOut(BaseModel):
     form: str
     drug_class: str
     high_risk: bool
+    product_kind: ProductKind
+    product_name: str
+    licence_status: str
+    active_ingredients: tuple[str, ...]
     confidence: float
 
 
 class FlaggedOut(BaseModel):
     """One pair the licensed data flagged: which other line, how much it matters, and the
-    question for the doctor in the patient's words."""
+    question for the doctor in the patient's words.
+
+    `awaiting_review` is true when a pharmacist has not yet checked this pair (E04-03):
+    `question` then asks him to check with a pharmacist too, never a severity or a mechanism
+    nobody has verified — the pair is still shown, never silent, `source` names what a
+    pharmacist would check it against.
+    """
 
     other_line_id: uuid.UUID
     other_generic: str
     severity: str
     text_id: str
     question: list[str]
+    source: str = ""
+    awaiting_review: bool = False
 
     @classmethod
     def of(cls, view: FlagView) -> FlaggedOut:
@@ -1059,6 +1072,8 @@ class FlaggedOut(BaseModel):
             severity=view.flag.severity.value,
             text_id=view.flag.text_id,
             question=view.question,
+            source=view.flag.source,
+            awaiting_review=view.flag.awaiting_review,
         )
 
 
@@ -1090,6 +1105,8 @@ class MedicineDraftOut(BaseModel):
                     severity=each.interaction.severity.value,
                     text_id=each.interaction.text_id,
                     question=question,
+                    source=each.interaction.source,
+                    awaiting_review=each.interaction.review_state is ReviewState.AWAITING_REVIEW,
                 )
                 for each, question in zip(plan.flagged, questions, strict=True)
             ],
@@ -1136,6 +1153,7 @@ class LineOut(BaseModel):
     registration_no: str | None
     drug_class: str
     high_risk: bool
+    product_kind: ProductKind
     registry_confidence: float | None
     """How sure the licensed registry was that its match is this product (#206), beside
     `confidence` below, which is the person's yes, not the register's own certainty."""
@@ -1207,6 +1225,7 @@ class LineOut(BaseModel):
             "registration_no": line.registration_no,
             "drug_class": line.drug_class,
             "high_risk": line.high_risk,
+            "product_kind": line.product_kind or ProductKind.PRESCRIPTION,
             "registry_confidence": line.registry_confidence,
             "dose": DoseIn(
                 amount=dose.amount,
@@ -1257,6 +1276,8 @@ class FlagOut(BaseModel):
     other_line_id: uuid.UUID
     severity: str
     text_id: str
+    source: str = ""
+    awaiting_review: bool = False
 
     @classmethod
     def of(cls, flag: InteractionFlag) -> FlagOut:
@@ -1266,6 +1287,8 @@ class FlagOut(BaseModel):
             other_line_id=flag.other_line_id,
             severity=flag.severity.value,
             text_id=flag.text_id,
+            source=flag.source,
+            awaiting_review=flag.awaiting_review,
         )
 
 

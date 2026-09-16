@@ -32,11 +32,19 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
-from app.drugs.registry import DrugMatch, DrugRegistry, Interaction, LabelFields, NotIdentified
+from app.drugs.registry import (
+    DrugMatch,
+    DrugRegistry,
+    Interaction,
+    LabelFields,
+    NotIdentified,
+    ReviewState,
+)
 from app.errors import Refusal
 from app.ingestion.models import CONFIDENCE_THRESHOLD
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
+from app.language.review import queue_pending_interaction
 from app.medicines import dose as arithmetic
 from app.medicines.dose import Dose
 from app.medicines.models import (
@@ -322,7 +330,13 @@ async def plan(
         # The pair is told with the new medicine first, however the data orders it.
         flagged = [
             Flagged(
-                Interaction((match.generic, other), interaction.severity, interaction.text_id),
+                Interaction(
+                    (match.generic, other),
+                    interaction.severity,
+                    interaction.text_id,
+                    source=interaction.source,
+                    review_state=interaction.review_state,
+                ),
                 by_generic[other],
             )
             for interaction in registry.interactions([match.generic, *by_generic])
@@ -421,6 +435,7 @@ async def _write_line(
         registration_no=plan.match.registration_no,
         drug_class=plan.match.drug_class,
         high_risk=plan.match.high_risk,
+        product_kind=plan.match.product_kind,
         registry_confidence=plan.match.confidence,
         dose=label.dose.as_json(),
         prescriber=label.prescriber,
@@ -570,10 +585,15 @@ async def reconcile(
             other_line_id=each.other_line.id,
             severity=each.interaction.severity,
             text_id=each.interaction.text_id,
+            source=each.interaction.source,
+            awaiting_review=each.interaction.review_state is ReviewState.AWAITING_REVIEW,
             flagged_at=moment,
         )
         for each in what.flagged
     ]
+    for each in what.flagged:
+        if each.interaction.review_state is ReviewState.AWAITING_REVIEW:
+            await queue_pending_interaction(session, each.interaction)
     return Reconciled(what.outcome, line, supply, flags)
 
 
@@ -835,7 +855,7 @@ def count_for(
     )
 
 
-async def _language(session: AsyncSession, context: KeyContext, asked: str | None) -> str:
+async def language_for(session: AsyncSession, context: KeyContext, asked: str | None) -> str:
     if asked is not None:
         return language_of(asked)
     profile = await audited_profile_read(session, context)
@@ -857,7 +877,7 @@ async def active_lines(
     """The reconciled list: each active line with its source, its count, its flags rendered
     as questions for the doctor, and the other active lines of the same generic (two
     strengths in the cupboard) named as duplicates."""
-    lang = await _language(session, context, language)
+    lang = await language_for(session, context, language)
     lines = await _active_lines(session, context=context)
     if not lines:
         return []
@@ -895,6 +915,12 @@ async def active_lines(
                         (line.generic, by_id[flag.other_line_id].generic),
                         flag.severity,
                         flag.text_id,
+                        source=flag.source,
+                        review_state=(
+                            ReviewState.AWAITING_REVIEW
+                            if flag.awaiting_review
+                            else ReviewState.REVIEWED
+                        ),
                     ),
                     names=names,
                     prescriber=line.prescriber,
@@ -979,7 +1005,7 @@ async def story(
 ) -> Story:
     """The story of one active line, in the language asked for or the profile's own."""
     line = await _require_line(session, context=context, line_id=line_id)
-    lang = await _language(session, context, language)
+    lang = await language_for(session, context, language)
     return medication_story(
         generic=line.generic,
         strength=line.strength,
@@ -1017,7 +1043,7 @@ async def today(
     language: str | None = None,
 ) -> list[Slot]:
     """Today's doses as cards at breakfast, lunch, dinner and bed, with what was tapped."""
-    lang = await _language(session, context, language)
+    lang = await language_for(session, context, language)
     lines = await _active_lines(session, context=context)
     if not lines:
         return []
@@ -1153,6 +1179,7 @@ __all__ = [
     "draft_for",
     "history",
     "interaction_flags",
+    "language_for",
     "may_change_medicines",
     "plan",
     "reconcile",
