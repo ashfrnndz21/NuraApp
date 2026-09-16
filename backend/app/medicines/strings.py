@@ -33,6 +33,26 @@ PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
         "stomach_tablet": "the stomach tablet",
         "joint_tablet": "the joint tablet",
         "pain_tablet": "the pain tablet",
+        "heart_tablet": "your heart tablet",
+        "strong_pain_tablet": "the strong pain tablet",
+        "reliever_inhaler": "your reliever inhaler",
+        "preventer_inhaler": "your preventer inhaler",
+        "breathing_tablet": "the breathing tablet",
+        "allergy_tablet": "the allergy tablet",
+        "thyroid_tablet": "your thyroid tablet",
+        "antibiotic_tablet": "the infection tablet",
+        "mood_tablet": "the mood tablet",
+        "ginkgo": "ginkgo",
+        "st_johns_wort": "St John's wort",
+        "fish_oil": "the fish oil",
+        "vitamin_k": "vitamin K",
+        "potassium": "the body salt tablet",
+        "calcium": "the calcium tablet",
+        "iron": "the iron tablet",
+        "glucosamine": "the joint supplement",
+        "danshen": "danshen",
+        "dong_quai": "dong quai",
+        "ginseng": "ginseng",
     },
     "ms": {
         "blood_pressure_tablet": "ubat tekanan darah anda",
@@ -45,6 +65,26 @@ PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
         "stomach_tablet": "ubat perut",
         "joint_tablet": "ubat sendi",
         "pain_tablet": "ubat sakit",
+        "heart_tablet": "ubat jantung anda",
+        "strong_pain_tablet": "ubat sakit yang kuat",
+        "reliever_inhaler": "penyedut pelega anda",
+        "preventer_inhaler": "penyedut pencegah anda",
+        "breathing_tablet": "ubat pernafasan",
+        "allergy_tablet": "ubat alahan",
+        "thyroid_tablet": "ubat tiroid anda",
+        "antibiotic_tablet": "ubat jangkitan",
+        "mood_tablet": "ubat perasaan",
+        "ginkgo": "ginkgo",
+        "st_johns_wort": "St John's wort",
+        "fish_oil": "minyak ikan",
+        "vitamin_k": "vitamin K",
+        "potassium": "ubat garam badan",
+        "calcium": "ubat kalsium",
+        "iron": "ubat zat besi",
+        "glucosamine": "suplemen sendi",
+        "danshen": "danshen",
+        "dong_quai": "dong quai",
+        "ginseng": "ginseng",
     },
     "zh": {
         "blood_pressure_tablet": "您的血压药",
@@ -57,6 +97,26 @@ PLAIN_NAME: Mapping[str, Mapping[str, str]] = {
         "stomach_tablet": "胃药",
         "joint_tablet": "关节药",
         "pain_tablet": "止痛药",
+        "heart_tablet": "您的心脏药",
+        "strong_pain_tablet": "强效止痛药",
+        "reliever_inhaler": "您的缓解吸入器",
+        "preventer_inhaler": "您的预防吸入器",
+        "breathing_tablet": "呼吸药",
+        "allergy_tablet": "过敏药",
+        "thyroid_tablet": "您的甲状腺药",
+        "antibiotic_tablet": "感染药",
+        "mood_tablet": "情绪药",
+        "ginkgo": "银杏",
+        "st_johns_wort": "圣约翰草",
+        "fish_oil": "鱼油",
+        "vitamin_k": "维生素K",
+        "potassium": "身体的盐片",
+        "calcium": "钙片",
+        "iron": "铁剂",
+        "glucosamine": "关节补充剂",
+        "danshen": "丹参",
+        "dong_quai": "当归",
+        "ginseng": "人参",
     },
 }
 """His name for each medicine, by the monograph's `plain_name_id`."""
@@ -73,6 +133,14 @@ PURPOSE: Mapping[str, Mapping[str, Lines]] = {
         "stomach": ("This is {name}.", "It calms the acid in your stomach."),
         "joints": ("This is {name}.", "It calms your joints."),
         "pain": ("This is {name}.", "It eases pain."),
+        "heart_rhythm": ("This is {name}.", "It helps your heart beat steadily."),
+        "breathing": ("This is {name}.", "It helps you breathe more easily."),
+        "allergy": ("This is {name}.", "It helps with itching and a runny nose."),
+        "thyroid": ("This is {name}.", "It helps your thyroid work properly."),
+        "infection": ("This is {name}.", "It treats an infection in your body."),
+        "mood": ("This is {name}.", "It helps with low mood or worry."),
+        "supplement_general": ("This is {name}.", "Some people take it as a supplement."),
+        "tcm_general": ("This is {name}.", "Some people take it as a Chinese herbal remedy."),
     },
     "ms": {
         "blood_pressure": ("Ini {name}.", "Ia menjaga tekanan darah anda supaya tidak tinggi."),
@@ -84,6 +152,14 @@ PURPOSE: Mapping[str, Mapping[str, Lines]] = {
         "stomach": ("Ini {name}.", "Ia menenangkan asid dalam perut anda."),
         "joints": ("Ini {name}.", "Ia menenangkan sendi anda."),
         "pain": ("Ini {name}.", "Ia melegakan sakit."),
+        "heart_rhythm": ("Ini {name}.", "Ia membantu jantung anda berdegup dengan tetap."),
+        "breathing": ("Ini {name}.", "Ia membantu anda bernafas dengan lebih mudah."),
+        "allergy": ("Ini {name}.", "Ia membantu gatal dan hidung berair."),
+        "thyroid": ("Ini {name}.", "Ia membantu tiroid anda berfungsi dengan baik."),
+        "infection": ("Ini {name}.", "Ia merawat jangkitan dalam badan anda."),
+        "mood": ("Ini {name}.", "Ia membantu perasaan sedih atau risau."),
+        "supplement_general": ("Ini {name}.", "Sesetengah orang ambil ia sebagai suplemen."),
+        "tcm_general": ("Ini {name}.", "Sesetengah orang ambil ia sebagai ubat herba Cina."),
     },
     "zh": {
         "blood_pressure": ("这是{name}。", "它让您的血压不会太高。"),
@@ -95,6 +171,14 @@ PURPOSE: Mapping[str, Mapping[str, Lines]] = {
         "stomach": ("这是{name}。", "它让您胃里的酸少一点。"),
         "joints": ("这是{name}。", "它让您的关节舒服一点。"),
         "pain": ("这是{name}。", "它减轻疼痛。"),
+        "heart_rhythm": ("这是{name}。", "它帮助您的心脏跳得平稳。"),
+        "breathing": ("这是{name}。", "它帮助您呼吸得更顺畅。"),
+        "allergy": ("这是{name}。", "它帮助止痒和流鼻水。"),
+        "thyroid": ("这是{name}。", "它帮助您的甲状腺正常运作。"),
+        "infection": ("这是{name}。", "它治疗您身体里的感染。"),
+        "mood": ("这是{name}。", "它帮助心情不好或担心。"),
+        "supplement_general": ("这是{name}。", "有些人把它当补充剂吃。"),
+        "tcm_general": ("这是{name}。", "有些人把它当中药吃。"),
     },
 }
 """What it is for, tied to the thing he has a word for, by the monograph's `purpose_id`."""
@@ -253,6 +337,10 @@ WATCH_OUT: Mapping[str, Mapping[str, Lines]] = {
         ),
         "mouth_sores_fever": ("If you get mouth sores or a fever, call {doctor} today.",),
         "cramps": ("If you get leg cramps, tell {doctor}.",),
+        "digoxin_toxicity_signs": (
+            "If you feel sick or your eyesight changes, this one we do not wait for.",
+            "Call {doctor} today.",
+        ),
     },
     "ms": {
         "swollen_ankles": ("Jika buku lali anda bengkak, beritahu {doctor}.",),
@@ -276,6 +364,10 @@ WATCH_OUT: Mapping[str, Mapping[str, Lines]] = {
         ),
         "mouth_sores_fever": ("Jika mulut anda luka atau anda demam, telefon {doctor} hari ini.",),
         "cramps": ("Jika kaki anda kejang, beritahu {doctor}.",),
+        "digoxin_toxicity_signs": (
+            "Jika anda rasa loya atau penglihatan berubah, yang ini kita tidak tunggu.",
+            "Telefon {doctor} hari ini.",
+        ),
     },
     "zh": {
         "swollen_ankles": ("如果脚踝肿了，告诉{doctor}。",),
@@ -287,6 +379,7 @@ WATCH_OUT: Mapping[str, Mapping[str, Lines]] = {
         "shaky_sweaty": ("如果发抖又出汗，马上吃点甜的。", "然后告诉{doctor}。"),
         "mouth_sores_fever": ("如果口腔溃疡或发烧，今天就打电话给{doctor}。",),
         "cramps": ("如果小腿抽筋，告诉{doctor}。",),
+        "digoxin_toxicity_signs": ("如果觉得恶心或视力改变，这个我们不等。", "今天就打电话给{doctor}。"),
     },
 }
 
@@ -305,6 +398,9 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
             "Too much in one day is not safe.",
         ),
         "folic_acid_ask": ("Ask {doctor} which day to take your folic acid.",),
+        "calcium_iron_separate_timing": (
+            "Take this at least 2 hours away from calcium or iron tablets.",
+        ),
     },
     "ms": {
         "grapefruit": ("Limau gedang tidak sesuai dengan {name}.",),
@@ -319,6 +415,9 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
             "Terlalu banyak dalam satu hari tidak selamat.",
         ),
         "folic_acid_ask": ("Tanya {doctor} hari mana untuk ambil asid folik anda.",),
+        "calcium_iron_separate_timing": (
+            "Ambil ubat ini sekurang-kurangnya 2 jam dari ubat kalsium atau zat besi.",
+        ),
     },
     "zh": {
         "grapefruit": ("西柚和{name}不能一起吃。",),
@@ -330,6 +429,7 @@ AVOID: Mapping[str, Mapping[str, Lines]] = {
         "salt_substitutes": ("用代盐之前，先问药剂师。",),
         "other_paracetamol": ("吃别的止痛药之前，先问药剂师。", "一天吃太多不安全。"),
         "folic_acid_ask": ("问{doctor}哪一天吃叶酸。",),
+        "calcium_iron_separate_timing": ("这个药要和钙片或铁剂隔开至少2小时吃。",),
     },
 }
 
@@ -364,6 +464,12 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
             "Later than that, leave it and ask {doctor}.",
         ),
         "when_needed_none": ("This one is only when you need it.", "There is nothing to catch up."),
+        "finish_the_course": (
+            "If you forgot, take it when you remember.",
+            "Then finish every tablet until the course ends.",
+            "Never take 2 at once.",
+        ),
+        "follow_the_products_own_instructions": ("Take it the way the label says.",),
     },
     "ms": {
         "take_now_unless_next_is_near": (
@@ -394,6 +500,12 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
             "Lewat daripada itu, biarkan dan tanya {doctor}.",
         ),
         "when_needed_none": ("Ubat ini hanya bila anda perlu.", "Tiada apa yang perlu diganti."),
+        "finish_the_course": (
+            "Jika anda terlupa, ambil apabila anda teringat.",
+            "Kemudian habiskan semua biji sehingga tamat.",
+            "Jangan sekali-kali ambil dua serentak.",
+        ),
+        "follow_the_products_own_instructions": ("Ambil mengikut label ubat ini.",),
     },
     "zh": {
         "take_now_unless_next_is_near": (
@@ -415,6 +527,8 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
         "skip_if_late_in_day": ("如果早上忘了，午餐前吃。", "午餐后就不吃了，等明天。"),
         "weekly_ask_if_late": ("如果忘了每星期的药，两天内吃。", "超过两天就不吃了，问{doctor}。"),
         "when_needed_none": ("这个药需要时才吃。", "不用补。"),
+        "finish_the_course": ("如果忘了，想起来就吃。", "然后把整个疗程吃完。", "千万不要一次吃两份。"),
+        "follow_the_products_own_instructions": ("按标签吃。",),
     },
 }
 
@@ -473,6 +587,26 @@ INTERACTION: Mapping[str, Mapping[str, Lines]] = {
             "Ask {doctor} whether you need both {a} and {b}.",
             "They are the same kind of medicine.",
         ),
+        "sjw_weakens_doac": (
+            "Ask {doctor} about taking {a} and {b} together.",
+            "Together they can make your blood thinner weaker.",
+        ),
+        "sjw_serotonin_risk": (
+            "Ask {doctor} about taking {a} and {b} together.",
+            "Together they can make you shaky, sweaty or confused.",
+        ),
+        "high_potassium": (
+            "Ask {doctor} about taking {a} and {b} together.",
+            "Together they can send your body salt too high.",
+        ),
+        "absorption_apart": (
+            "Ask {doctor} about taking {a} and {b} together.",
+            "Together, your body takes in less of each one.",
+        ),
+        "warfarin_vitamin_k": (
+            "Ask {doctor} about taking {a} and {b} together.",
+            "Together they can change how well your blood thinner works.",
+        ),
     },
     "ms": {
         "bleeding_risk": (
@@ -499,6 +633,26 @@ INTERACTION: Mapping[str, Mapping[str, Lines]] = {
             "Tanya {doctor} sama ada anda perlukan kedua-dua {a} dan {b}.",
             "Ia ubat jenis yang sama.",
         ),
+        "sjw_weakens_doac": (
+            "Tanya {doctor} tentang mengambil {a} dan {b} bersama.",
+            "Bersama, ia boleh melemahkan ubat cair darah anda.",
+        ),
+        "sjw_serotonin_risk": (
+            "Tanya {doctor} tentang mengambil {a} dan {b} bersama.",
+            "Bersama, ia boleh buat anda menggigil, berpeluh atau keliru.",
+        ),
+        "high_potassium": (
+            "Tanya {doctor} tentang mengambil {a} dan {b} bersama.",
+            "Bersama, ia boleh menaikkan garam badan anda terlalu tinggi.",
+        ),
+        "absorption_apart": (
+            "Tanya {doctor} tentang mengambil {a} dan {b} bersama.",
+            "Bersama, badan anda menyerap kurang daripada kedua-dua ubat.",
+        ),
+        "warfarin_vitamin_k": (
+            "Tanya {doctor} tentang mengambil {a} dan {b} bersama.",
+            "Bersama, ia boleh mengubah kesan ubat cair darah anda.",
+        ),
     },
     "zh": {
         "bleeding_risk": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会更容易流血。"),
@@ -507,10 +661,34 @@ INTERACTION: Mapping[str, Mapping[str, Lines]] = {
         "low_pressure_kidney": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃站起来会头晕。"),
         "low_sugar": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃血糖会太低。"),
         "same_kind_twice": ("问{doctor}，{a}和{b}两个都需要吗。", "它们是同一类的药。"),
+        "sjw_weakens_doac": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会让薄血药效果变弱。"),
+        "sjw_serotonin_risk": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会让您发抖、出汗或糊涂。"),
+        "high_potassium": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会让身体的盐太高。"),
+        "absorption_apart": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃身体吸收会变少。"),
+        "warfarin_vitamin_k": ("问{doctor}，{a}和{b}可以一起吃吗。", "一起吃会影响薄血药的效果。"),
     },
 }
 """Every interaction the licensed data flags, as a question for the doctor with the two
 medicines named in his words and one line on why."""
+
+# @patient
+AWAITING_REVIEW: Mapping[str, Lines] = {
+    "en": (
+        "Ask {doctor} or the pharmacist about taking {a} and {b} together.",
+        "A pharmacist has not checked this pair yet.",
+    ),
+    "ms": (
+        "Tanya {doctor} atau ahli farmasi tentang mengambil {a} dan {b} bersama.",
+        "Ahli farmasi belum menyemak pasangan ubat ini.",
+    ),
+    "zh": (
+        "问{doctor}或药剂师，{a}和{b}可以一起吃吗。",
+        "药剂师还没有检查这一对药。",
+    ),
+}
+"""A pair the licensed data flags but a pharmacist has not yet checked (`ReviewState.
+AWAITING_REVIEW`, E04-03): still a question for the doctor, never silent, but never asserting
+a severity or a mechanism nobody has verified yet. Used in place of `INTERACTION[text_id]`."""
 
 # @patient
 COUNT: Mapping[str, Lines] = {
@@ -704,7 +882,7 @@ def catalogue() -> list[str]:
         for by_id in table.values():
             for lines in by_id.values():
                 found.extend(lines)
-    for lines_by_language in (BOUNDARY, DOSE_CHANGE, COUNT, REORDER):
+    for lines_by_language in (BOUNDARY, DOSE_CHANGE, COUNT, REORDER, AWAITING_REVIEW):
         for lines in lines_by_language.values():
             found.extend(lines)
     for words in (TAKEN, DOSE_CARD):
