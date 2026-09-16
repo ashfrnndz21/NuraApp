@@ -2020,13 +2020,15 @@ async def handle_inbound(
         )
     if (
         not flagged
+        and group is None
         and _is_voice(message)
         and not (heard is not None and heard.heard)
         and not await _whatsapp_agreed(session, context=context)
     ):
         # A voice note with no words in it, on a profile whose patient has not agreed to
         # WhatsApp (#173). The consent refusal below would answer the sender and tell nobody;
-        # a red word nobody could read must still reach a person, so it goes first.
+        # a red word nobody could read must still reach a person, so it goes first. One
+        # posted in the family's group is the family's, here as in `_dispatch`.
         return await _unheard_unagreed(
             session,
             settings=settings,
