@@ -1134,7 +1134,7 @@ async def now_count(
 ) -> DueNow | None:
     """The hero, in `language` or his own: today's cards (`today`, read under the medicines
     scope) counted by `due_now`."""
-    lang = await _language(session, context, language)
+    lang = await language_for(session, context, language)
     slots = await today(session, context=context, registry=registry, language=lang)
     return due_now(slots, lang)
 
