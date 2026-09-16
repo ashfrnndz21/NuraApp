@@ -20,12 +20,12 @@ must say differently from what an eye reads is changed, and only where it is on 
 
 Nothing else changes: no word is added that the line does not imply, none is dropped.
 
-The seam for audio (E11, PR #121, not on main when this was written): `VoiceScript.digest` is
-the sha256 of the language and the segments, the same digest for the same words and pauses
-wherever they appear. E11's `Voice.speak(text, language)` is given `script.spoken()` — the
-segments' words, one per line, which is how that port reads a pause — and its cache keys on
-the digest, so a card's audio is rendered once, when the card is made, and read back from the
-region's store every time after. No audio provider is named here.
+The seam for audio (E11, E22-03): `VoiceScript.digest` is the sha256 of the language and the
+segments, the same digest for the same words and pauses wherever they appear. E11's
+`Voice.speak(script)` is given the script itself — its segments, each one's own pause after
+it, the boundary's longer than the rest — which is how that port reads a pause — and its
+cache keys on the digest, so a card's audio is rendered once, when the card is made, and
+read back from the region's store every time after. No audio provider is named here.
 """
 
 from __future__ import annotations
