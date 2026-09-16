@@ -214,6 +214,7 @@ async def add_task(
     appointment_id: uuid.UUID | None = None,
     errand: Errand | None = None,
     medication_line_id: uuid.UUID | None = None,
+    opened_on: date | None = None,
 ) -> Task:
     """Give one person one thing to do. `what` is a label in plain words — it reaches him
     in the digest and the trail — so it passes the verifier as a phrase before it is kept.
@@ -226,9 +227,11 @@ async def add_task(
 
     A task that is part of a visit's logistics names the visit and the errand (E05-03); the
     only caller that does is `app.reasoning.visits.logistics.assign_driver`, on the chief's
-    yes. An order task names the medicine line (E04-05); the only caller that does is
-    `app.medicines.reorder.ask_to_order`, on his yes. The visit and the line are on this
-    profile, or the table refuses them."""
+    yes. An order task names the medicine line and `opened_on`, his wall-clock day (E04-05;
+    `#166 review`) — what the table's partial unique index keys on, so one open order task a
+    line a day is enforced there, not only by the check-then-act above it; the only caller
+    that sets either is `app.medicines.reorder.ask_to_order`, on his yes. The visit and the
+    line are on this profile, or the table refuses them."""
     a_chief(context)
     label = short_label(what)
     if errand is not Errand.ORDER:
@@ -249,6 +252,7 @@ async def add_task(
         appointment_id=appointment_id,
         errand=errand,
         medication_line_id=medication_line_id,
+        opened_on=opened_on,
     )
 
 

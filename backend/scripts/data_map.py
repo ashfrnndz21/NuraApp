@@ -621,6 +621,9 @@ CLASSES: dict[str, str] = {
     "task.errand": HEALTH,
     # An order for more of a medicine (E04-05): which of his medicine lines.
     "task.medication_line_id": HEALTH,
+    # An order task's wall-clock day (E04-05; #166 review): timing metadata the once-a-day
+    # rule keys on, no different from `created_at`.
+    "task.opened_on": OPERATIONAL,
     "roster_slot.person_id": IDENTIFIER,
     "roster_slot.role": IDENTIFIER,
     "roster_slot.weekdays": OPERATIONAL,

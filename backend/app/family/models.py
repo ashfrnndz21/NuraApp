@@ -188,10 +188,17 @@ class Task(ProfileScoped, Base):
         # not just the check-then-act in `ask_to_order`, so two yeses at the same moment
         # cannot both write one. `ask_to_order` catches the racing insert's `IntegrityError`
         # and answers with the task this index let win, same as a second yes does today.
+        #
+        # A day, not forever: `opened_on` is his wall-clock day (`_his_day`) at the moment
+        # the task was made, so the index reads "one open order task a line a *day*" — two
+        # yeses on the same day cannot both write one, but a task still open from yesterday
+        # does not block a fresh yes today (a partial index cannot test "today" itself; the
+        # column is what makes the day part of the key, not a computed date at query time).
         Index(
-            "uq_task_open_order_per_line",
+            "uq_task_open_order_per_line_per_day",
             "profile_id",
             "medication_line_id",
+            "opened_on",
             unique=True,
             sqlite_where=text("errand = 'order' AND done_at IS NULL"),
             postgresql_where=text("errand = 'order' AND done_at IS NULL"),
@@ -216,6 +223,10 @@ class Task(ProfileScoped, Base):
         ForeignKey("medication_line.id"), default=None, index=True
     )
     """The medicine line an order task is for (`Errand.ORDER`); else none."""
+    opened_on: Mapped[date | None] = mapped_column(default=None)
+    """His wall-clock day (`app.medicines.reorder._his_day`) when an order task was made
+    (`Errand.ORDER`); else none. What the partial unique index keys on, so a line's task
+    resets every day instead of blocking forever while yesterday's is still open."""
 
     @property
     def is_done(self) -> bool:

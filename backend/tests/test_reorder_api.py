@@ -383,7 +383,8 @@ async def test_two_concurrent_yeses_give_exactly_one_task(
     Simulated deterministically, as the review asks, by inserting between the check and the
     insert: `_open_order_today` is patched so that the moment `ask_to_order`'s own check
     returns "no open task", a rival task is committed — in its own savepoint, on the same
-    session — before `ask_to_order` goes on to make its own insert."""
+    session, with the same `opened_on` a real race would share (both would be reading his
+    wall clock at the same moment) — before `ask_to_order` goes on to make its own insert."""
     pa, profile_id, line_id = await _pa_with_tablets(deployment)
     mei = await _key(deployment, pa, profile_id, MEI, "Mei", "chief", EVERY_PART)
 
@@ -393,11 +394,14 @@ async def test_two_concurrent_yeses_give_exactly_one_task(
     rival: dict[str, Task] = {}
 
     async def racing_open_order_today(session: Any, context: Any, checked_line_id: Any) -> Any:
-        # Called once from `order_draft_for` (his yes is minted) and once more from
-        # `ask_to_order` itself: the second call is the one this test races.
+        # Called once from `order_draft_for` (his yes is minted), once more from
+        # `ask_to_order`'s own check (the second call is the one this test races), and once
+        # more again when `ask_to_order` catches the losing insert's `IntegrityError` and
+        # looks up the task the index let win.
         calls["n"] += 1
         found = await real_open_order_today(session, context, checked_line_id)
         if found is None and calls["n"] == 2:
+            today, _ = reorder_module._his_day(context)
             savepoint = await session.begin_nested()
             rival["task"] = await real_add_task(
                 session,
@@ -407,6 +411,7 @@ async def test_two_concurrent_yeses_give_exactly_one_task(
                 language="en",
                 errand=Errand.ORDER,
                 medication_line_id=checked_line_id,
+                opened_on=today.date(),
             )
             await savepoint.commit()
         return found
@@ -417,7 +422,7 @@ async def test_two_concurrent_yeses_give_exactly_one_task(
     assert minted.status_code == 201, minted.text
     asked = await _ask(deployment, pa, profile_id, line_id, minted.json()["confirmation_id"])
 
-    assert calls["n"] == 2
+    assert calls["n"] == 3
     assert asked.status_code == 200, asked.text
     body = asked.json()
     assert body["already_asked"] is True

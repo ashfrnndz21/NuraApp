@@ -227,8 +227,11 @@ def _his_day(context: KeyContext) -> tuple[datetime, datetime]:
 async def _open_order_today(
     session: AsyncSession, context: KeyContext, line_id: uuid.UUID
 ) -> Task | None:
-    """The order task for this line made today on his wall clock and not yet done, if any."""
-    start, end = _his_day(context)
+    """The order task for this line opened today on his wall clock and not yet done, if
+    any. Read by `opened_on`, not a range on `created_at`: `opened_on` is what the table's
+    partial unique index keys on (`0030_order_task`), so this reads the same day the index
+    enforces."""
+    start, _ = _his_day(context)
     found = await audited_read(
         session,
         Task,
@@ -238,8 +241,7 @@ async def _open_order_today(
             Task.medication_line_id == line_id,
             Task.errand == Errand.ORDER,
             Task.done_at.is_(None),
-            Task.created_at >= start,
-            Task.created_at < end,
+            Task.opened_on == start.date(),
         ),
     )
     return min(found, key=lambda task: as_utc(task.created_at)) if found else None
@@ -408,6 +410,7 @@ async def ask_to_order(
     # `IntegrityError` be caught without poisoning the rest of the transaction, and this
     # yes then answers with the task the race committed — exactly as a second yes does
     # today — instead of failing outright (#166 review).
+    today, _ = _his_day(context)
     savepoint = await session.begin_nested()
     try:
         task = await add_task(
@@ -418,15 +421,14 @@ async def ask_to_order(
             language=theirs,
             errand=Errand.ORDER,
             medication_line_id=line.id,
+            opened_on=today.date(),
         )
     except IntegrityError:
         await savepoint.rollback()
         existing = await _open_order_today(session, context, line.id)
-        found = (
-            await _already_asked(session, context, existing, lang, medicine)
-            if existing is not None
-            else None
-        )
+        if existing is None:
+            raise
+        found = await _already_asked(session, context, existing, lang, medicine)
         if found is None:
             raise
         already, said = found
