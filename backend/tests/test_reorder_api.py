@@ -20,12 +20,14 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
+import pytest
 from httpx import Response
 from sqlalchemy import select
 
 from app.clock import FrozenClock
-from app.family.models import Task
+from app.family.models import Errand, Task
 from app.family.strings import DIGEST
+from app.medicines import reorder as reorder_module
 from app.medicines.strings import LANGUAGES, ORDER_TASK
 from app.memory.models import ArtifactKind
 from app.safety.models import Notice, NoticeKind
@@ -366,6 +368,68 @@ async def test_two_yeses_the_same_day_give_one_task(
     assert tomorrow.status_code == 201, tomorrow.text
     assert tomorrow.json()["task_id"] != task_id
     assert len(await _tasks(deployment, mei, profile_id)) == 2
+
+
+async def test_two_concurrent_yeses_give_exactly_one_task(
+    deployment: Deployment, clock: FrozenClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two yeses at the same moment — Pa's and Mei's, or a retried request — can each pass
+    `ask_to_order`'s check ("no open task yet") before either writes: the check and the
+    insert are not one atomic step. The table's partial unique index (`0030_order_task`) is
+    what actually stops a second task landing; `ask_to_order` catches the racing insert's
+    `IntegrityError` and answers with the task the race committed, exactly as a second yes
+    does today (#166 review).
+
+    Simulated deterministically, as the review asks, by inserting between the check and the
+    insert: `_open_order_today` is patched so that the moment `ask_to_order`'s own check
+    returns "no open task", a rival task is committed — in its own savepoint, on the same
+    session — before `ask_to_order` goes on to make its own insert."""
+    pa, profile_id, line_id = await _pa_with_tablets(deployment)
+    mei = await _key(deployment, pa, profile_id, MEI, "Mei", "chief", EVERY_PART)
+
+    real_open_order_today = reorder_module._open_order_today
+    real_add_task = reorder_module.add_task
+    calls = {"n": 0}
+    rival: dict[str, Task] = {}
+
+    async def racing_open_order_today(session: Any, context: Any, checked_line_id: Any) -> Any:
+        # Called once from `order_draft_for` (his yes is minted) and once more from
+        # `ask_to_order` itself: the second call is the one this test races.
+        calls["n"] += 1
+        found = await real_open_order_today(session, context, checked_line_id)
+        if found is None and calls["n"] == 2:
+            savepoint = await session.begin_nested()
+            rival["task"] = await real_add_task(
+                session,
+                context=context,
+                what="order more amlodipine 5 mg for Pa",
+                assigned_person_id=uuid.UUID(mei["person_id"]),
+                language="en",
+                errand=Errand.ORDER,
+                medication_line_id=checked_line_id,
+            )
+            await savepoint.commit()
+        return found
+
+    monkeypatch.setattr(reorder_module, "_open_order_today", racing_open_order_today)
+
+    minted = await _order_yes(deployment, pa, profile_id, line_id, mei["person_id"])
+    assert minted.status_code == 201, minted.text
+    asked = await _ask(deployment, pa, profile_id, line_id, minted.json()["confirmation_id"])
+
+    assert calls["n"] == 2
+    assert asked.status_code == 200, asked.text
+    body = asked.json()
+    assert body["already_asked"] is True
+    assert body["task_id"] == str(rival["task"].id)
+    assert body["asked_person_id"] == mei["person_id"]
+    assert body["told_person_ids"] == []
+    assert body["lines"] == ["Nura asked Mei to order more of your blood pressure tablet."]
+
+    # The race left exactly one task, and no second notice.
+    rows = await _task_rows(deployment, profile_id)
+    assert [str(t.id) for t in rows] == [str(rival["task"].id)]
+    assert await _notices(deployment, profile_id) == []
 
 
 async def test_with_nobody_on_duty_the_chief_is_asked_and_with_no_chief_nobody_is(

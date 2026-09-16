@@ -19,7 +19,17 @@ from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, ForeignKey, String, Time, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    String,
+    Time,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
@@ -174,6 +184,18 @@ class Task(ProfileScoped, Base):
         _row_of_profile("task"),
         _tied_to_profile("task", "appointment_id", "appointment"),
         _tied_to_profile("task", "medication_line_id", "medication_line"),
+        # One open order task a line a day (E04-05; #166 review): a partial unique index,
+        # not just the check-then-act in `ask_to_order`, so two yeses at the same moment
+        # cannot both write one. `ask_to_order` catches the racing insert's `IntegrityError`
+        # and answers with the task this index let win, same as a second yes does today.
+        Index(
+            "uq_task_open_order_per_line",
+            "profile_id",
+            "medication_line_id",
+            unique=True,
+            sqlite_where=text("errand = 'order' AND done_at IS NULL"),
+            postgresql_where=text("errand = 'order' AND done_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

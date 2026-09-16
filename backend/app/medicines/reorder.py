@@ -28,6 +28,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read, audited_write
@@ -269,6 +270,24 @@ async def _who_to_ask(
     return asked, chief
 
 
+async def _already_asked(
+    session: AsyncSession,
+    context: KeyContext,
+    open_task: Task,
+    lang: str,
+    medicine: str,
+) -> tuple[Person, str] | None:
+    """Who an open order task already names, and the line he reads for it. The one answer
+    for both callers: `_preview`, when the task is found before a yes is spent, and
+    `ask_to_order`, when a yes loses the race to add one — the table's unique index
+    (`0030_order_task`) is what actually enforces one open order task a line a day; this is
+    just how either path reads the task that won (#166 review)."""
+    already = await key_holder(session, context, open_task.assigned_person_id, scope=Scope.FAMILY)
+    if already is None:
+        return None
+    return already, ASKED_TO_ORDER[lang].format(who=already.display_name, medicine=medicine)
+
+
 async def _preview(
     session: AsyncSession,
     context: KeyContext,
@@ -283,11 +302,9 @@ async def _preview(
     medicine = PLAIN_NAME[lang][registry.monograph(line.generic).plain_name_id]
     open_task = await _open_order_today(session, context, line.id)
     if open_task is not None:
-        already = await key_holder(
-            session, context, open_task.assigned_person_id, scope=Scope.FAMILY
-        )
-        if already is not None:
-            said = ASKED_TO_ORDER[lang].format(who=already.display_name, medicine=medicine)
+        found = await _already_asked(session, context, open_task, lang, medicine)
+        if found is not None:
+            already, said = found
             return OrderPreview(line, already, open_task, lang, (said,))
     asked, _ = await _who_to_ask(session, context)
     if asked is None:
@@ -380,18 +397,51 @@ async def ask_to_order(
     profile = await audited_profile_read(session, context)
     theirs = language_of(asked.language)
     name_id = registry.monograph(line.generic).plain_name_id
+    medicine = PLAIN_NAME[lang][name_id]
     # The medicine as its box names it — the line's chemical name and strength — so the one
     # who buys it buys this one, and him by name (review #140, item 11).
     label = " ".join(part for part in (line.generic, line.strength) if part)
-    task = await add_task(
-        session,
-        context=context,
-        what=ORDER_TASK[theirs].format(patient=profile.display_name, medicine=label),
-        assigned_person_id=asked.id,
-        language=theirs,
-        errand=Errand.ORDER,
-        medication_line_id=line.id,
-    )
+    # The check above and this insert are not one atomic step: two yeses at the same
+    # moment (Pa's and Mei's, or a retried request) can each see no open task before
+    # either writes. The table's unique index (`0030_order_task`) is what actually
+    # enforces one open order task a line a day; a savepoint lets this attempt's own
+    # `IntegrityError` be caught without poisoning the rest of the transaction, and this
+    # yes then answers with the task the race committed — exactly as a second yes does
+    # today — instead of failing outright (#166 review).
+    savepoint = await session.begin_nested()
+    try:
+        task = await add_task(
+            session,
+            context=context,
+            what=ORDER_TASK[theirs].format(patient=profile.display_name, medicine=label),
+            assigned_person_id=asked.id,
+            language=theirs,
+            errand=Errand.ORDER,
+            medication_line_id=line.id,
+        )
+    except IntegrityError:
+        await savepoint.rollback()
+        existing = await _open_order_today(session, context, line.id)
+        found = (
+            await _already_asked(session, context, existing, lang, medicine)
+            if existing is not None
+            else None
+        )
+        if found is None:
+            raise
+        already, said = found
+        return Asked(
+            line=line,
+            task=existing,
+            asked=already,
+            told=(),
+            notices=(),
+            language=lang,
+            lines=(said,),
+            already=True,
+        )
+    else:
+        await savepoint.commit()
     chief = await _chief(session, context)
     told: list[Person] = []
     notices: list[Notice] = []
@@ -415,7 +465,6 @@ async def ask_to_order(
             )
         )
         told.append(chief)
-    medicine = PLAIN_NAME[lang][name_id]
     lines = [ASKED_TO_ORDER[lang].format(who=asked.display_name, medicine=medicine)]
     if chief is not None and told and chief.id != asked.id:
         lines.append(KNOWS_NOW[lang].format(who=chief.display_name))

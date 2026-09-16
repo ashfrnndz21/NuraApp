@@ -26,7 +26,7 @@ from app.audit.models import Action
 from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.family.common import NotPlainWords
-from app.family.models import MESSAGE_LENGTH, CardKind, Task, ThreadMessage
+from app.family.models import MESSAGE_LENGTH, CardKind, Errand, Task, ThreadMessage
 from app.family.roster import who_is_on_duty
 from app.family.strings import DIGEST, DIGEST_HEAD, language_of
 from app.identity.models import Person
@@ -325,7 +325,7 @@ async def _task_lines(
     doer = names.get(task.assigned_person_id)
     if doer is None:
         doer = (await _names(session, context, {task.assigned_person_id}))[task.assigned_person_id]
-    order = task.medication_line_id is not None
+    order = task.errand is Errand.ORDER
     if task.done_at is not None:
         day = say_date(as_utc(task.done_at).astimezone(zone).date(), words)
         if order:

@@ -4,6 +4,12 @@
 order." is for, tied to the line on the same profile. It is how one open order task a line a
 day is found again, so a second yes that day answers with the task already on the list.
 
+A partial unique index on `(profile_id, medication_line_id)`, where `errand = 'order'` and
+`done_at IS NULL`, is what actually enforces one open order task a line a day (#166 review):
+`ask_to_order` checks then acts, and two yeses at the same moment can each pass the check
+before either writes. The index is what stops the second insert; `ask_to_order` catches the
+`IntegrityError` and answers with the task the index let win.
+
 `task_errand` gains `order` and `confirm_subject` gains `order`: non-native enums with no
 database constraint, so no schema change for them.
 
@@ -42,9 +48,18 @@ def upgrade() -> None:
             ["profile_id", "id"],
         )
     op.create_index("ix_task_medication_line_id", "task", ["medication_line_id"])
+    op.create_index(
+        "uq_task_open_order_per_line",
+        "task",
+        ["profile_id", "medication_line_id"],
+        unique=True,
+        sqlite_where=sa.text("errand = 'order' AND done_at IS NULL"),
+        postgresql_where=sa.text("errand = 'order' AND done_at IS NULL"),
+    )
 
 
 def downgrade() -> None:
+    op.drop_index("uq_task_open_order_per_line", table_name="task")
     op.drop_index("ix_task_medication_line_id", table_name="task")
     with op.batch_alter_table("task") as task:
         task.drop_constraint("fk_task_medication_line_profile", type_="foreignkey")
