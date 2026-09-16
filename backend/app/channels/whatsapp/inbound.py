@@ -22,7 +22,12 @@ where nothing of the note is kept and the sender gets one fixed line.
 
 Past the red-flag check, a heard voice note's transcript is classified through the same door
 the classifier reads a typed message through (E11-01): "Taken" said aloud writes the tap "Taken"
-typed does, and his own word answers an open check-in or proposal exactly as typing it would.
+typed does, and his own word answers an open check-in or proposal exactly as typing it would —
+but only at or above `CONFIDENCE_THRESHOLD` (`app/ingestion/models.py`), the same floor a
+scanned document field is held to before it is trusted undotted. A Taken tap stops the
+escalation ladder, so a transcript too unsure to trust is never let close it on a guess: below
+the floor, or on anything the classifier did not read as TAKEN or an answer, the note is kept
+as his own, unread, and he is asked again — nothing is lost, and nothing is silently assumed.
 An unintelligible note is never guessed into one of those — it stays what it always was, kept
 as his own note, with the family told when nothing could be heard in it at all.
 """
@@ -105,6 +110,7 @@ from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
+from app.ingestion.models import CONFIDENCE_THRESHOLD
 from app.ingestion.notes import MAX_VOICE_BYTES, NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
 from app.ingestion.photos import store_photo
@@ -1845,9 +1851,20 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
         # else a voice note might carry — a document, a health reading, family coordination —
         # is not guessed at from a transcript: it is kept as his own note, unread past the
         # red-flag check already made above, and he is asked to say it again if it mattered.
-        if what.kind is Kind.TAKEN:
+        #
+        # A Taken tap closes the dose window and stops the escalation ladder — nobody asks
+        # him again, nobody asks the helper, nobody tells his chief. Missing that ladder costs
+        # more than asking him twice, so the transcript is trusted for TAKEN/ANSWER only at
+        # the same confidence floor a scanned document field is trusted at before it is shown
+        # undotted (`CONFIDENCE_THRESHOLD`, `app/ingestion/models.py`): TAKEN_REPLY, YES and NO
+        # are a short closed list, and a recogniser hallucinating one of those exact words on
+        # noise is the documented failure mode for short common utterances, not a hypothetical
+        # one. Below the floor he keeps his note, unread, and is asked again — nothing closes
+        # on a guess.
+        confident = work.heard is not None and work.heard.confidence >= CONFIDENCE_THRESHOLD
+        if confident and what.kind is Kind.TAKEN:
             return await _taken(session, work)
-        if what.kind is Kind.ANSWER:
+        if confident and what.kind is Kind.ANSWER:
             assert what.answer is not None
             return await _answer(session, work, what.answer)
         return await _voice_note(session, work)

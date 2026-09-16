@@ -249,6 +249,31 @@ async def test_sudah_makan_said_aloud_writes_the_taken_tap_the_same_way_as_typed
     )
 
 
+async def test_a_taken_heard_too_unsurely_is_never_trusted_to_close_the_window(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """"Taken." string-matches the same reply "sudah makan ubat" does, but this note was heard
+    at 0.45 confidence — below the floor a scanned document field is trusted at
+    (`CONFIDENCE_THRESHOLD`, 0.8). A false Taken would close the dose window and stop the
+    escalation ladder with nobody asked and nobody told, so it is never guessed at: the note
+    is kept, unread, exactly as an unmatched voice note is, and the window is still open — a
+    genuine reply straight after still writes the tap."""
+    clock.set(datetime(2026, 9, 13, 23, 40, tzinfo=UTC))  # 07:40 his wall clock, window open
+    home = await family(sg, tmp_path)
+    made = await add(sg, home.owner, label("amlodipine", "5 mg", "1 tab OM"))
+    unsure = await home.inbound(sg, PA, media_id="pa-voice-taken-unsure", content_type=OGG)
+    assert unsure.outcome == "voice_note" and unsure.note_id is not None
+    assert not list(await sg.scalars(select(DoseTaken)))
+    note = await sg.get(EventNote, unsure.note_id)
+    assert note is not None and note.transcript_language == "en"  # heard, just not trusted
+
+    # The ladder is still live: he can still be asked, and a genuine reply still writes it.
+    said = await home.inbound(sg, PA, "Taken")
+    assert said.outcome == "taken"
+    tap = (await sg.scalars(select(DoseTaken))).one()
+    assert tap.line_id == made.line.id and tap.anchor == "breakfast"
+
+
 async def test_his_ok_said_aloud_answers_an_open_check_in_the_same_way_as_typed(
     sg: AsyncSession, tmp_path: Path
 ) -> None:

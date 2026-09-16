@@ -212,3 +212,28 @@ async def test_pa_completes_a_full_day_on_whatsapp_without_opening_the_app(
     assert fact.value == "ok" or fact.value == "OK" or fact.value.lower() == "ok"
     flag = await sg.get(Flag, flagged.flag_id)
     assert flag is not None and flag.feeling.value == "fall"
+
+
+async def test_a_taken_heard_too_unsurely_never_stops_the_ladder_from_asking(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """A false Taken closes the dose window and stops the escalation ladder before it ever
+    runs — nobody asks him, nobody asks the helper, nobody tells his chief; a missed dose
+    becomes invisible. So a voice note heard at 0.45 confidence that string-matches Taken
+    ("Taken.", below `CONFIDENCE_THRESHOLD`) is never trusted to write the tap: the window
+    stays open, and the ladder asks him at rung 0 exactly as it would with no reply at all."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+
+    # 07:35, the window open: he is heard, but not surely enough — nothing is written.
+    clock.set(at(7, 35))
+    unsure = await _voice(sg, h, "pa-voice-taken-unsure")
+    assert unsure.outcome == "voice_note" and unsure.note_id is not None
+    assert not list(await sg.scalars(select(DoseTaken)))
+
+    # 08:31, the window closed: the ladder asks him at rung 0, exactly as an untapped dose
+    # always does — nothing about the low-confidence note held it back or answered for him.
+    dose_ask = _to_him(await _run(sg, h, clock, at(8, 31)), h)[TriggerType.DOSE]
+    assert dose_ask.outcome is DeliveryOutcome.SENT and dose_ask.rung == 0
+    assert dose_ask.rule == "dose_window_closed_untapped"
+    assert not list(await sg.scalars(select(DoseTaken)))

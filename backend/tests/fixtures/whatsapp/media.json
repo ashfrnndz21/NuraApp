@@ -7,5 +7,6 @@
   "pa-voice-fell": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-fell"},
   "pa-voice-mumbled": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-mumbled"},
   "pa-voice-taken": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-taken"},
-  "pa-voice-ok": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-ok"}
+  "pa-voice-ok": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-ok"},
+  "pa-voice-taken-unsure": {"content_type": "audio/ogg; codecs=opus", "label": "pa-whatsapp-taken-unsure"}
 }
