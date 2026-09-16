@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from app.drugs.registry import Interaction, Monograph
+from app.drugs.registry import Interaction, Monograph, ReviewState
 from app.errors import Refusal
 from app.medicines import strings
 from app.medicines.dose import Dose, Frequency
@@ -158,11 +158,22 @@ def interaction_question(
     language: str | None,
 ) -> list[str]:
     """One flagged pair as a question for the doctor, the two medicines named in his words.
-    `names` maps each generic in the pair to its plain name (from the monographs)."""
+    `names` maps each generic in the pair to its plain name (from the monographs).
+
+    A pair a pharmacist has not yet checked (`interaction.review_state` is `AWAITING_REVIEW`,
+    E04-03) is still a question — never silent — but it asks him to check with a pharmacist
+    too rather than repeating a severity or a mechanism nobody has verified yet
+    (`strings.AWAITING_REVIEW`, in place of `strings.INTERACTION[text_id]`).
+    """
     lang = strings.language_of(language)
     a, b = interaction.pair
+    lines = (
+        strings.AWAITING_REVIEW[lang]
+        if interaction.review_state is ReviewState.AWAITING_REVIEW
+        else strings.INTERACTION[lang][interaction.text_id]
+    )
     return strings.fill(
-        strings.INTERACTION[lang][interaction.text_id],
+        lines,
         a=names.get(a, a),
         b=names.get(b, b),
         doctor=strings.say_doctor(prescriber, lang),
