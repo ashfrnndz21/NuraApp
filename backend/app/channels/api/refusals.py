@@ -82,6 +82,7 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
+from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
 from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
@@ -114,6 +115,7 @@ from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
 from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.reasoning.trends import NoSuchAnalyte
+from app.reasoning.visits.brief import NoBriefYet
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
 from app.reasoning.visits.guard import NotTheirsToChangeVisits
 from app.reasoning.visits.logistics import NotOnThisVisit
@@ -150,6 +152,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchHolder, 403),
     # A key that reads the visits does not write them; same footing as the medicines.
     (NotTheirsToChangeVisits, 403),
+    # A read-only visits key asked for a brief nobody has rendered yet: it reads the one that
+    # stands and never renders one, so there is nothing to give it (B1 review).
+    (NoBriefYet, 404),
     # A webhook body not signed by the provider, or a verify token that is not ours.
     (NotAWebhook, 403),
     # No consent in force for the act: withheld, withdrawn or out of date, by name.
@@ -165,6 +170,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToChange, 403),
     # The day, and a calendar's proposals (E10-01, E18-02): reading them is not setting them.
     (NotTheirsToSet, 403),
+    # His insurer (E13-01): typed by him or his chief; an identity card is not a policy.
+    (NotTheirsToSetInsurer, 403),
+    (NotAnInsurer, 400),
+    (NotAPolicyReference, 400),
     (NotTheirsToConnect, 403),
     (NotTheirsToDecide, 403),
     # The family's arrangements (E12): the owner's and his chief's; a key is never widened

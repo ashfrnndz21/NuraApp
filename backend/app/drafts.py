@@ -40,6 +40,7 @@ class ConfirmSubject(StrEnum):
     PROPOSAL = "appointment_proposal"
     ATTACH = "attach"
     DRIVE = "drive"
+    INSURER = "insurer"
     COUNT_CORRECTION = "count_correction"
     CLOSE_ACCOUNT = "close_account"
     ORDER = "order"
@@ -503,6 +504,27 @@ class AttachDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class InsurerDraft:
+    """His insurer about to go on the emergency card (E13-01): the name and the policy
+    reference exactly as typed, or neither, to take it off. Typed by him or his chief, on the
+    typer's own yes (`app.insurance.insurer`)."""
+
+    name: str | None
+    policy_reference: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.INSURER
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"name": self.name, "policy_reference": self.policy_reference}
+
+
+@dataclass(frozen=True, slots=True)
 class CountCorrectionDraft:
     """More of one medicine found at home, about to be added to its count (E04-05, "I have
     more at home"): which line, and how many. The yes binds to the number, so a yes for 20
@@ -567,6 +589,7 @@ Draft = (
     | ProposalDraft
     | AttachDraft
     | DriveDraft
+    | InsurerDraft
     | CountCorrectionDraft
     | CloseDraft
     | OrderDraft

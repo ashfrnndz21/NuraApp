@@ -48,6 +48,7 @@ from app.channels.api.schemas import (
     ConsentOut,
     CountCorrectionConfirmIn,
     DriveConfirmIn,
+    InsurerConfirmIn,
     KeyChangeConfirmIn,
     KeyGrant,
     KeyOut,
@@ -112,6 +113,7 @@ from app.identity.models import Person, Stewardship
 from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
+from app.insurance.insurer import insurer_draft, may_set_insurer
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
@@ -392,6 +394,12 @@ async def mint_confirmation(
             appointment_id=body.appointment_id,
         )
         return ConfirmationOut.of(await confirm(session, context, hang))
+    if isinstance(body, InsurerConfirmIn):
+        # His insurer on the emergency card (E13-01): checked as it will be kept, so the yes
+        # binds to exactly what `PUT …/emergency-card/insurer` writes; his, or his chief's.
+        may_set_insurer(context)
+        typed = insurer_draft(body.name, body.policy_reference)
+        return ConfirmationOut.of(await confirm(session, context, typed))
     review = await review_draft_for(
         session,
         context=context,

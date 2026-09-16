@@ -928,6 +928,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/plan/later"): "moves the first-week plan to later",
     ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
+    ("PUT", f"{P}/emergency-card/insurer"): "sets his insurer on the typer's yes; returns it",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
     ("POST", f"{P}/push-subscriptions"): "keeps this phone for his reminders; returns its id",
     ("POST", f"{P}/closure/preview"): "renders the words of closing his account; returns no rows",
@@ -1047,6 +1048,10 @@ CARD_FIELDS = frozenset(
         "contacts",
         "clinic",
         "last_reading_at",
+        # E13-01: his insurer as he or his chief typed it on a yes (the policy reference as
+        # data, never in a sentence), and the same lines in English for the ambulance crew.
+        "insurer",
+        "english_lines",
     }
 )
 NOT_ON_THE_CARD = (

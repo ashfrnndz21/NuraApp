@@ -133,6 +133,18 @@ async def thread_for(
     )
 
 
+NAME_SLOTS: frozenset[str] = frozenset(
+    {"name", "names", "who", "doctor", "hospital", "patient", "chief", "insurer", "clinic", "both", "either"}
+)
+"""Slots that hold a name: a person's, a doctor's, a hospital's, an insurer's. The standard
+leaves names alone — a name is said as it is written — so the words are verified with each name
+slot standing in as a plain name (`NAME_STAND_IN`) and sent with the real one: "SGH" is a
+hospital's name, not an abbreviation in his sentence, and a red flag's reply is never refused
+for it (B1 review)."""
+
+NAME_STAND_IN = "Ash"
+
+
 class NotLetInHere(Refusal):
     """This person holds no key to the profile, so Nura says nothing to them about it."""
 
@@ -143,10 +155,17 @@ class SaidNoToWhatsApp(Refusal):
     on their family page. A reply to a message they wrote themselves still goes."""
 
 
-RED_FLAG_NOTICES: frozenset[str] = frozenset(
-    {"red_flag_notice", "red_flag_notice_self", "red_flag_notice_ambiguous"}
-)
-"""The one kind of message about him his family is sent on WhatsApp after he stops it (#163)."""
+RED_FLAG_NOTICE = "red_flag_notice"
+"""Every notice a red flag sends is named for it: the approved one, the self and ambiguous
+variants, the tiered ones (the ambulance, the hospital now, the number if worse, #147), their
+free-text twins outside the window, and any later version of the words (#160). They are the one
+kind of message about him his family is sent on WhatsApp after he stops it (#163), so they are
+matched by that name and not by a list — a notice added later is never held back at the moment
+it matters most."""
+
+
+def is_red_flag_notice(kind: str | None) -> bool:
+    return kind is not None and kind.startswith(RED_FLAG_NOTICE)
 
 
 async def _may_message(
@@ -188,7 +207,7 @@ async def _may_message(
             session, context=context, person_id=person.id, channel=Channel.WHATSAPP
         ):
             raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
-    if starts and kind not in RED_FLAG_NOTICES:
+    if starts and not is_red_flag_notice(kind):
         await require_consent(
             session,
             context=context,
@@ -200,12 +219,14 @@ async def _may_message(
 
 def _render(
     kind: str, language: str, params: Mapping[str, str]
-) -> tuple[str, str | None, str | None]:
-    """The words, and which of a template or a catalogue key they came from."""
+) -> tuple[str, str | None, str | None, str]:
+    """The words, which of a template or a catalogue key they came from, and the words as the
+    verifier reads them — every name slot standing in as a plain name."""
+    stand_in = {key: NAME_STAND_IN if key in NAME_SLOTS else value for key, value in params.items()}
     if kind in TEMPLATES:
-        return render(kind, language, params), kind, None
+        return render(kind, language, params), kind, None, render(kind, language, stand_in)
     if kind in REPLIES:
-        return reply(kind, language, **params), None, kind
+        return reply(kind, language, **params), None, kind, reply(kind, language, **stand_in)
     raise NotAMessage(f"{kind!r} is neither an approved template nor a catalogue reply")
 
 
@@ -234,8 +255,8 @@ async def send(
     moment = utcnow()
     lang = language_of(language or to_person.language)
     thread = await thread_for(session, context=context, person=to_person)
-    text, template_name, catalogue_key = _render(kind, lang, params)
-    failures = [finding for finding in verify(text, lang) if finding.severity == "fail"]
+    text, template_name, catalogue_key, checked = _render(kind, lang, params)
+    failures = [finding for finding in verify(checked, lang) if finding.severity == "fail"]
     if failures:
         raise NotPlainWords(f"{kind} in {lang}: {failures[0].problem}")
 

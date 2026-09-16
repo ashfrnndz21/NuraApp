@@ -224,7 +224,8 @@ async def test_the_button_and_the_symptom_log_over_http(deployment: Deployment) 
     assert body["lines"][0]["text"] == "Mei knows now."
     assert body["lines"][1]["text"] == "Nura has no note that you took the water pill today."
     assert body["lines"][2]["text"] == "Ask Dr Tan before you take the water pill."
-    assert body["lines"][-1]["text"] == "Ask Dr Tan."
+    assert body["lines"][-2]["text"] == "Ask Dr Tan."
+    assert body["lines"][-1]["text"] == "Nura does not decide what is wrong."
     assert body["check_in_at"] is not None and body["notified_person_ids"] == [mei["person_id"]]
     assert body["symptoms"] == ["tired"] and body["red_flags"] == []
 
@@ -415,7 +416,8 @@ async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(
     deployment: Deployment,
 ) -> None:
     """W7: a red flag said in the log escalates exactly as the button does, and the answer carries
-    the button's urgent card — what he is shown next — while an everyday symptom carries none."""
+    the button's urgent card — what he is shown next. "Quite a lot" is the table's middle row
+    (E13-02) and carries the call-the-clinic card; an everyday symptom carries none."""
     pa, profile_id = await _pa_with_the_water_pill(deployment)
     mei = await register_by_phone(deployment, MEI, "Mei")
     await _key(deployment, pa, profile_id, MEI, "chief")
@@ -444,4 +446,18 @@ async def test_a_red_flag_in_the_symptom_log_answers_with_the_urgent_card(
         headers=his,
     )
     assert calm.status_code == 201, calm.text
+    # The red flag's card stays the red flag's alone (the app acts on it); the middle row is its
+    # own field.
     assert calm.json()["card"] is None and calm.json()["flag_id"] is None
+    clinic = [line["text"] for line in calm.json()["clinic_card"]]
+    assert clinic[0] == "You did right to say so." and "clinic today." in clinic[1]
+    assert "If it gets worse, call the ambulance now on 995." in clinic
+    assert clinic[-1] == "Nura does not decide what is wrong."
+    everyday = await deployment.client.post(
+        f"/profiles/{profile_id}/symptoms",
+        json={"words": "a little tired this morning"},
+        headers=his,
+    )
+    assert everyday.status_code == 201, everyday.text
+    assert everyday.json()["card"] is None and everyday.json()["flag_id"] is None
+    assert everyday.json()["clinic_card"] == []

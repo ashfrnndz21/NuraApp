@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable, Sequence
-from datetime import datetime
+from datetime import datetime, time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,8 +84,12 @@ async def add_provider(
     region: Region,
     phone_e164: str | None = None,
     address: str | None = None,
+    panel: bool = False,
+    opens_at: time | None = None,
+    closes_at: time | None = None,
 ) -> Provider:
-    """Add a doctor, clinic, hospital or pharmacy to this profile's directory."""
+    """Add a doctor, clinic, hospital or pharmacy to this profile's directory — a hospital
+    marked as on his insurance (`panel`), a doctor or clinic with the hours it answers."""
     # The directory is kept on the same footing as the rest of the record (E00-02).
     await require_consent(
         session,
@@ -105,6 +109,9 @@ async def add_provider(
         region=region,
         phone_e164=phone_e164,
         address=address,
+        panel=panel and kind is ProviderKind.HOSPITAL,
+        opens_at=None if opens_at is None else opens_at.replace(tzinfo=None),
+        closes_at=None if closes_at is None else closes_at.replace(tzinfo=None),
         added_at=utcnow(),
     )
 

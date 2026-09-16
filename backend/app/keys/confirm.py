@@ -39,6 +39,7 @@ from app.drafts import (
     Draft,
     DriveDraft,
     FactDraft,
+    InsurerDraft,
     KeyChangeDraft,
     OnlyMeDraft,
     OrderDraft,
@@ -91,6 +92,9 @@ def scope_of(draft: Draft) -> Scope:
     if isinstance(draft, RoutineDraft):
         # The day is read where the helper reads today's tablets (E10).
         return Scope.MEDICINES
+    if isinstance(draft, InsurerDraft):
+        # The insurer is on the emergency card, the part every role holds (E13-01).
+        return Scope.EMERGENCY
     if isinstance(draft, ProposalDraft):
         # A calendar proposal becomes a visit on the spine (E18-02).
         return Scope.VISITS

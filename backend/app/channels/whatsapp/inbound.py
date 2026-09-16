@@ -65,6 +65,7 @@ from app.channels.whatsapp.strings import (
     YOU,
     YOUR_DOCTOR,
     join_names,
+    red_flag_reply_key,
     reply,
 )
 from app.channels.whatsapp.templates import language_of
@@ -116,7 +117,7 @@ from app.keys.models import Key
 from app.keys.scopes import KeyRole, Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
 from app.medicines.service import today as doses_today
-from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME
+from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME, say_date
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Artifact,
@@ -130,7 +131,16 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact, current_facts
 from app.regions import REGION_TZ, OutOfRegion, Region, guard_region
-from app.safety.red_flags import FLAG_WINDOW, Flag, detect, raise_flag, record_the_moment
+from app.safety.red_flags import (
+    FLAG_WINDOW,
+    NIGHT_UNTIL,
+    Flag,
+    detect,
+    escalation_now,
+    flag_to_raise,
+    raise_flag,
+    record_the_moment,
+)
 from app.settings import Settings
 
 log = logging.getLogger("nura.channels.whatsapp")
@@ -447,7 +457,7 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
     sweaty with no sugar condition on the record) is kept for the caregiver to see and is not
     escalated in the thread.
     """
-    feeling = detect(work.message.text)
+    feeling = await flag_to_raise(session, context=work.context, text=work.message.text)
     assert feeling is not None
     said = await record_the_moment(
         session,
@@ -479,7 +489,6 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             artifact_id=artifact.id,
             flag_id=flag.id,
         )
-    doctor = await _doctor(session, work)
     # The ladder at once (E11-06): straight to the roster, whatever the hour, whatever the
     # caps. The reply names exactly who it reached — nobody is said to know who was not told.
     reached = await _escalate(
@@ -492,25 +501,60 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
         told=(work.person.id,),
         at=work.message.at,
     )
-    # Once the ladder has run, nothing after it takes the flag back (#158): a reply that fails
-    # is logged by name and never rolls the flag, its ladder and their trail lines back — which
-    # would have the family told again on the provider's retry, and the flag never kept.
+    names: list[str] = []
+    for person_id in reached:
+        person = await session.get(Person, person_id)
+        if person is not None and person.display_name and person.display_name not in names:
+            names.append(person.display_name)
+    # What to do now (E19-05): the flag's tier, the doctor's hours and the hospital marked as
+    # on his insurance, at the moment the words were written — the ambulance at any hour for
+    # chest pain and the signs of a stroke; out of the doctor's hours, never "call the doctor
+    # today". Read under the emergency scope, so a helper's word names the same doctor. If
+    # the directory cannot be read, the ambulance: nothing about it may weaken the step.
     try:
-        async with nested_unit_of_work(session):
-            names: list[str] = []
-            for person_id in reached:
-                person = await session.get(Person, person_id)
-                if person is not None and person.display_name and person.display_name not in names:
-                    names.append(person.display_name)
-            if names:
-                key = "red_flag_one" if len(names) == 1 else "red_flag"
-                await _say(
-                    session, work, key, doctor=doctor, names=join_names(names, work.language)
-                )
-            else:
-                await _say(session, work, "red_flag_alone", doctor=doctor)
-    except Exception as failed:  # noqa: BLE001 — the flag stands; the reply is logged by name
-        log.warning("whatsapp: the reply to a red flag not sent: %s", type(failed).__name__)
+        step = await escalation_now(
+            session,
+            context=work.context,
+            feeling=feeling,
+            local=as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]),
+            emergency_number=EMERGENCY_NUMBER[work.context.region.value],
+            channel=Channel.WHATSAPP,
+            tiered=work.settings.red_flag_tiers,
+        )
+        step_name, doctor, hospital = step.step.value, step.doctor, step.hospital
+    except Refusal as refusal:
+        log.warning(
+            "whatsapp: the directory refused %s; the ambulance step", type(refusal).__name__
+        )
+        step_name, doctor, hospital = "ambulance", None, None
+    # "Call Dr Tan on Tuesday 15 September in the morning.": the morning he can call, by its
+    # day and date (rule 5) — this one's before the clinic's hours begin, else tomorrow's.
+    local = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region])
+    morning = local.date() + timedelta(days=0 if local.time() < NIGHT_UNTIL else 1)
+    params = {
+        "doctor": doctor or YOUR_DOCTOR[work.language],
+        "day": say_date(morning, work.language),
+        "name": work.profile.display_name,
+        "hospital": hospital or "",
+        "emergency_number": EMERGENCY_NUMBER[work.context.region.value],
+        "names": join_names(names, work.language),
+    }
+    # The reply is its own savepoint: the flag and the ladder are written already, and a reply
+    # that cannot go never takes them back. Failing that, the ambulance line, which names
+    # nobody but who knows.
+    # Written by someone who is not him (his chief, his helper): the words say who does the
+    # next thing — "Help Pa sit down and rest now." — and whose insurance it is (rule 7).
+    about = not work.thread.is_patient
+    for key in (
+        red_flag_reply_key(step_name, len(names), about=about),
+        red_flag_reply_key("ambulance", len(names), about=about),
+    ):
+        try:
+            async with nested_unit_of_work(session):
+                await _say(session, work, key, **params)
+            break
+        except Exception as failed:  # noqa: BLE001 — the flag stands; the reply is logged
+            log.warning("whatsapp: the red-flag reply %s not sent: %s", key, type(failed).__name__)
     # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
     # and who is still to be asked; nothing else is written beside it.
     return Handled(
@@ -587,7 +631,7 @@ async def _red_flag_unagreed(
     card leads the family's feed. The poster gets one fixed line straight from the provider,
     written down as a share of a notice, the way the consent refusal's line is.
     """
-    feeling = detect(message.text)
+    feeling = await flag_to_raise(session, context=context, text=message.text)
     assert feeling is not None
     try:
         async with unit_of_work(session):
@@ -661,8 +705,7 @@ async def _red_flag_everywhere(
     The sender is asked which one, in one fixed line, written down as a share on each. None
     when the sender holds the emergency card on none of them.
     """
-    feeling = detect(message.text)
-    assert feeling is not None
+    assert detect(message.text) is not None
     raised: list[tuple[Profile, KeyContext, Flag]] = []
     for profile_id in profiles:
         context = await resolve_key_context(
@@ -670,6 +713,10 @@ async def _red_flag_everywhere(
         )
         if not context.allows(Scope.EMERGENCY):
             continue
+        # Each family's own record chooses the flag: a fall said with shaky-and-sweaty is the
+        # fall where no sugar condition or sugar medicine is on it (B1 re-check).
+        feeling = await flag_to_raise(session, context=context, text=message.text)
+        assert feeling is not None
         profile = await audited_profile_read(session, context, channel=Channel.WHATSAPP)
         try:
             async with unit_of_work(session):
@@ -867,9 +914,7 @@ def _named(work: _Work, dose: DoseAsked, listed: Sequence[DoseAsked]) -> str:
     tablet on the list goes by the same words, so the read-back says which one it was."""
     words = _medicine(work, dose)
     strength = _box_number(dose.strength)
-    clashes = any(
-        other != dose and _medicine(work, other) == words for other in listed
-    )
+    clashes = any(other != dose and _medicine(work, other) == words for other in listed)
     if not clashes or strength is None:
         return words
     return BOXED[work.language].format(medicine=words, strength=strength)
@@ -925,9 +970,7 @@ async def _ask_which(session: AsyncSession, work: _Work, doses: Sequence[DoseAsk
         doses=_dose_lines(work, doses),
         name=work.profile.display_name,
     )
-    return Handled(
-        outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id
-    )
+    return Handled(outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id)
 
 
 async def _write_taken(
@@ -1116,7 +1159,8 @@ async def _answer_which(
     chosen = _chosen(work.message.text or "", doses, work.providers.drug_registry)
     if chosen is None:
         if what.kind is not Kind.OTHER and not (
-            what.kind is Kind.HEALTH_EVENT and what.event is not None
+            what.kind is Kind.HEALTH_EVENT
+            and what.event is not None
             and what.event.subject == "medication"
         ):
             return None

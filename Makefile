@@ -22,6 +22,8 @@ dev: export NURA_SPEAKER_FIXTURES ?= tests/fixtures/speakers
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
+# A dev run shows the red-flag tiers (ADR 0010); a deployment sets it only once a clinician signs them.
+dev: export NURA_RED_FLAG_TIERS ?= 1
 # NURA_FROZEN_CLOCK=2026-09-14T10:00:00+08:00 stands the dev run's clock still (end-to-end runs:
 # web/playwright.config.ts sets it); POST /dev/clock moves it. Refused outside a dev run.
 # The built web client (`make build-web`), served by the API at http://127.0.0.1:8000/app when
