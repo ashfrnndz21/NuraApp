@@ -221,6 +221,10 @@ class AnsweredOut(BaseModel):
     lines: list[str]
     note: NoteOut | None
     note_withheld_because: str | None
+    clinic_card: list[str] = []
+    """The not-feeling-well table's middle row, when his answer is it (E13-02): call the clinic
+    today, rest, the ambulance if it gets worse, and the boundary — in order, verified. Empty
+    otherwise; never beside a red flag's card."""
 
     @classmethod
     def of(cls, answered: Answered) -> AnsweredOut:
@@ -231,6 +235,7 @@ class AnsweredOut(BaseModel):
             lines=[] if answered.red is None else list(answered.red.lines),
             note=None if answered.note is None else NoteOut.of(answered.note),
             note_withheld_because=answered.note_withheld_because,
+            clinic_card=[line.text for line in answered.clinic_card],
             **_red(answered.red),
         )
 

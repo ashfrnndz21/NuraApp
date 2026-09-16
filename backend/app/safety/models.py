@@ -88,6 +88,7 @@ class WhatToDoKind(StrEnum):
     """Which row of the decision table the card came from."""
 
     RED_FLAG = "red_flag"
+    CALL_CLINIC = "call_clinic"
     MISSED_DOSE = "missed_dose"
     REST = "rest"
 

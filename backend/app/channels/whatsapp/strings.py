@@ -375,21 +375,6 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("{name}文件里的这部分没有开放给您。", "{name}可以在应用里更改。"),
     },
-    "red_flag": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} know now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_one": {
-        "en": ("This one we do not wait for.", "Call {doctor} today.", "{names} knows now."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini.", "{names} sudah tahu."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。", "{names}已经知道了。"),
-    },
-    "red_flag_alone": {
-        "en": ("This one we do not wait for.", "Call {doctor} today."),
-        "ms": ("Yang ini kita tidak tunggu.", "Telefon {doctor} hari ini."),
-        "zh": ("这个我们不等。", "今天就打电话给{doctor}。"),
-    },
     # A flag written but held back (it depends on a fact not on his papers): no alarm, and
     # still the next step for a worried family member.
     "red_flag_held": {
@@ -592,6 +577,288 @@ AND: Mapping[str, str] = {"en": " and ", "ms": " dan ", "zh": "和"}
 
 # @patient phrase
 OR: Mapping[str, str] = {"en": " or ", "ms": " atau ", "zh": "还是"}
+
+
+# --- a red flag, answered in the thread (E19-05) ------------------------------------------------
+#
+# Every reply to a red flag is three parts, each a whole line: that we do not wait for this
+# one, what to do now — the one step `app.safety.red_flags.step_for` chose from the flag's
+# tier, the doctor's hours and the hospital marked as on his insurance — and who knows now.
+# The replies are the parts joined, one key per step and per how many were told
+# (`red_flag_reply_key`); the send path verifies the whole reply again before it goes.
+
+# @patient
+RED_FLAG_OPENING: Mapping[str, str] = {
+    "en": "This one we do not wait for.",
+    "ms": "Yang ini kita tidak tunggu.",
+    "zh": "这个我们不等。",
+}
+
+# @patient action
+RED_FLAG_STEPS: Mapping[str, Mapping[str, Lines]] = {
+    "ambulance": {
+        "en": ("Call the ambulance now on {emergency_number}.",),
+        "ms": ("Hubungi ambulans sekarang di talian {emergency_number}.",),
+        "zh": ("现在就打{emergency_number}叫救护车。",),
+    },
+    "doctor_today": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": ("今天就打电话给{doctor}。", "如果变得更严重，现在就打{emergency_number}叫救护车。"),
+    },
+    "doctor_today_hospital": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, go to {hospital} now.",
+            "{hospital} is on your insurance.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, pergi ke {hospital} sekarang.",
+            "{hospital} dilindungi insurans anda.",
+        ),
+        "zh": (
+            "今天就打电话给{doctor}。",
+            "如果变得更严重，现在就去{hospital}。",
+            "{hospital}在您的保险范围内。",
+        ),
+    },
+    "hospital_now": {
+        "en": (
+            "Go to the emergency department at {hospital} now.",
+            "{hospital} is on your insurance.",
+            "If you cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "{hospital} dilindungi insurans anda.",
+            "Kalau anda tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "现在就去{hospital}的急诊部。",
+            "{hospital}在您的保险范围内。",
+            "如果您不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "number_if_worse": {
+        "en": (
+            "Sit down and rest now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+            "Call {doctor} on {day} in the morning.",
+        ),
+        "ms": (
+            "Duduk dan berehat sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+            "Telefon {doctor} pada pagi {day}.",
+        ),
+        "zh": (
+            "现在请坐下休息。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+            "{day}早上再打电话给{doctor}。",
+        ),
+    },
+}
+"""What to do now, by `app.safety.red_flags.Step`. The ambulance line is the same at any hour;
+out of the doctor's hours "call the doctor today" is never said; every step that is not the
+ambulance carries what to do if it gets worse (B1 review)."""
+
+# @patient action
+RED_FLAG_STEPS_ABOUT: Mapping[str, Mapping[str, Lines]] = {
+    "ambulance": RED_FLAG_STEPS["ambulance"],
+    "doctor_today": RED_FLAG_STEPS["doctor_today"],
+    "doctor_today_hospital": {
+        "en": (
+            "Call {doctor} today.",
+            "If it gets worse, take {name} to {hospital} now.",
+            "{hospital} is on {name}'s insurance.",
+        ),
+        "ms": (
+            "Telefon {doctor} hari ini.",
+            "Kalau jadi lebih teruk, bawa {name} ke {hospital} sekarang.",
+            "{hospital} dilindungi insurans {name}.",
+        ),
+        "zh": (
+            "今天就打电话给{doctor}。",
+            "如果变得更严重，现在就带{name}去{hospital}。",
+            "{hospital}在{name}的保险范围内。",
+        ),
+    },
+    "hospital_now": {
+        "en": (
+            "Help {name} get to the emergency department at {hospital} now.",
+            "{hospital} is on {name}'s insurance.",
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "{hospital} dilindungi insurans {name}.",
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "现在就帮{name}去{hospital}的急诊部。",
+            "{hospital}在{name}的保险范围内。",
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "number_if_worse": {
+        "en": (
+            "Help {name} sit down and rest now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+            "Call {doctor} on {day} in the morning.",
+        ),
+        "ms": (
+            "Bantu {name} duduk dan berehat sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+            "Telefon {doctor} pada pagi {day}.",
+        ),
+        "zh": (
+            "现在就帮{name}坐下休息。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+            "{day}早上再打电话给{doctor}。",
+        ),
+    },
+}
+"""The same steps for a sender who is not him — his chief, his helper — writing that he is
+unwell: who does the next thing is them, and the hospital is on his insurance, not theirs
+(plain words, rule 7; B1 plain-words review). The same keys, `_about`."""
+
+# @patient
+RED_FLAG_KNOWS: Mapping[str, Mapping[str, str]] = {
+    "many": {"en": "{names} know now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+    "one": {"en": "{names} knows now.", "ms": "{names} sudah tahu.", "zh": "{names}已经知道了。"},
+}
+
+# @patient
+RED_FLAG_CLOSING: Mapping[str, str] = {
+    "en": "Nura does not decide what is wrong.",
+    "ms": "Nura tidak menentukan apa masalahnya.",
+    "zh": "Nura 不判断您出了什么问题。",
+}
+
+# @patient
+RED_FLAG_CLOSING_ABOUT: Mapping[str, str] = {
+    "en": "Nura does not decide what is wrong with {name}.",
+    "ms": "Nura tidak menentukan apa masalah {name}.",
+    "zh": "Nura 不判断{name}出了什么问题。",
+}
+"""The closing line for a sender who is not him: it names him, so it never reads as if she
+were the one unwell (in Chinese the plain closing says "you")."""
+"""The last line of every reply to a red flag: the step is Nura's to say, and what is wrong is
+not (the not-feeling-well card's own closing line, `app.safety.boundary.URGENT_CLOSING`)."""
+
+# @patient action
+RED_FLAG_NOTICE_TEXT: Mapping[str, Mapping[str, Lines]] = {
+    "red_flag_notice_ambulance_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "Ask {name} now if an ambulance is coming.",
+            "If not, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Tanya {name} sekarang sama ada ambulans sedang datang.",
+            "Kalau tidak, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "现在就问{name}救护车是不是在路上。",
+            "如果没有，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "red_flag_notice_hospital_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "Help {name} get to the emergency department at {hospital} now.",
+            "If {name} cannot get there safely, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Bantu {name} pergi ke jabatan kecemasan di {hospital} sekarang.",
+            "Kalau {name} tidak boleh pergi dengan selamat, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "现在就帮{name}去{hospital}的急诊部。",
+            "如果{name}不能安全地去那里，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+    "red_flag_notice_night_text": {
+        "en": (
+            "This one we do not wait for.",
+            "{name} is not feeling well.",
+            "Call {name} now.",
+            "If it gets worse, call the ambulance now on {emergency_number}.",
+        ),
+        "ms": (
+            "Yang ini kita tidak tunggu.",
+            "{name} rasa tidak sihat.",
+            "Telefon {name} sekarang.",
+            "Kalau jadi lebih teruk, hubungi ambulans sekarang di talian {emergency_number}.",
+        ),
+        "zh": (
+            "这个我们不等。",
+            "{name}不舒服。",
+            "现在就打电话给{name}。",
+            "如果变得更严重，现在就打{emergency_number}叫救护车。",
+        ),
+    },
+}
+"""The family's red-flag notice for a step that is not "call the doctor today", as free text:
+the same words as the pending templates (`red_flag_notice_ambulance`, `_hospital`, `_night`),
+sent inside the family member's 24-hour window while Meta has not approved them — the in-app
+wording until the template is approved (B1). Outside the window the approved notice goes."""
+
+_TOLD: tuple[tuple[str, str | None], ...] = (("", "many"), ("_one", "one"), ("_alone", None))
+
+
+def _red_flag_replies() -> dict[str, Mapping[str, Lines]]:
+    made: dict[str, Mapping[str, Lines]] = {}
+    for about, steps, closing in (
+        ("", RED_FLAG_STEPS, RED_FLAG_CLOSING),
+        ("_about", RED_FLAG_STEPS_ABOUT, RED_FLAG_CLOSING_ABOUT),
+    ):
+        for step, said in steps.items():
+            for suffix, knows in _TOLD:
+                made[f"red_flag_{step}{suffix}{about}"] = {
+                    lang: (
+                        RED_FLAG_OPENING[lang],
+                        *said[lang],
+                        *(() if knows is None else (RED_FLAG_KNOWS[knows][lang],)),
+                        closing[lang],
+                    )
+                    for lang in RED_FLAG_OPENING
+                }
+    return made
+
+
+REPLIES = {**REPLIES, **_red_flag_replies(), **RED_FLAG_NOTICE_TEXT}
+
+
+def red_flag_reply_key(step: str, told: int, *, about: bool = False) -> str:
+    """The reply for this step, naming nobody, one person or several as knowing now; with
+    `about`, the words for a sender who is not him (`RED_FLAG_STEPS_ABOUT`)."""
+    if step not in RED_FLAG_STEPS:
+        raise NotACatalogueKey(f"no red-flag step named {step!r}")
+    suffix = "_alone" if told == 0 else "_one" if told == 1 else ""
+    return f"red_flag_{step}{suffix}{'_about' if about else ''}"
 
 
 def reply(key: str, language: str | None, **params: str) -> str:

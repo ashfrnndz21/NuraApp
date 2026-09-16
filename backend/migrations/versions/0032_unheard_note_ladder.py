@@ -8,11 +8,12 @@ profile with it, like every other reference here, so it can only land on the sam
 `delivery_ladder.note_from_person_id` is who sent that note, so the notice can name them: a
 note the helper sent is never said to be the patient's. NULL on every other ladder.
 
-This goes on main's head at the time it is pushed, and the operator repoints `down_revision`
-if another story lands first.
+This goes on main's head at the time it is pushed: B1 (#147) landed first and took 0031, so
+this is 0032 on top of it. The operator repoints `down_revision` if another story lands
+before it again.
 
-Revision ID: 0031_unheard_note_ladder
-Revises: 0030_whatsapp_receipts
+Revision ID: 0032_unheard_note_ladder
+Revises: 0031_brief_safety
 Create Date: 2026-09-16
 """
 
@@ -21,8 +22,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0031_unheard_note_ladder"
-down_revision = "0030_whatsapp_receipts"
+revision = "0032_unheard_note_ladder"
+down_revision = "0031_brief_safety"
 branch_labels = None
 depends_on = None
 

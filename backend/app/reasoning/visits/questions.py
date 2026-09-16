@@ -35,7 +35,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
-from app.reasoning.visits.guard import may_change_visits
+from app.reasoning.visits.guard import may_change_visits, may_render_brief
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import (
     LINE_LENGTH,
@@ -372,9 +372,10 @@ async def questions_for(
     A generated question already on the list stands; a new one is written, rendered through
     its template and the verifier; one whose source has gone is superseded. One a person
     removed is not proposed again. The person's own questions stand as he wrote them. A
-    write: only a key that may change the visits refreshes the list.
+    write: only a key that may change the visits refreshes the list — or Nura itself, when it
+    renders the brief at T-3 (`guard.may_render_brief`).
     """
-    may_change_visits(context)
+    may_render_brief(context)
     visit = await require_visit(
         session, context=context, appointment_id=appointment_id, registry=registry
     )

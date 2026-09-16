@@ -63,6 +63,7 @@ def via_for(region: Region = Region.SG, root: Path | None = None) -> Via:
         region=region,
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
+        red_flag_tiers=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
     )
     store_root = root or Path(tempfile.mkdtemp(prefix="nura-delivery-"))

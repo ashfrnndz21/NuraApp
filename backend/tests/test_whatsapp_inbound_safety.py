@@ -64,6 +64,7 @@ from app.delivery.triggers.models import (
     Subject,
     TriggerType,
 )
+from app.delivery.triggers.preferences import change
 from app.delivery.triggers.rules import AlertsAreNeverHeld, AlertsGoEveryWay, check_settings
 from app.identity.models import Person
 from app.identity.service import register_person
@@ -123,7 +124,8 @@ def _said(handled: Handled) -> list[list[str]]:
     return [reply.text.splitlines() for reply in handled.replies]
 
 
-async def _notices(sg: AsyncSession) -> list[Delivery]:
+async def _every_notice(sg: AsyncSession) -> list[Delivery]:
+    """Every row this trigger wrote, by any channel and none: nothing at all means this."""
     return list(
         (
             await sg.scalars(
@@ -133,8 +135,19 @@ async def _notices(sg: AsyncSession) -> list[Delivery]:
     )
 
 
+async def _notices(sg: AsyncSession) -> list[Delivery]:
+    """What carried the notice to her phone. An alert also writes the notice on her family
+    page beside whatever carried it (#162), which is not what these tests are about."""
+    return [row for row in await _every_notice(sg) if row.via is not DeliveryChannel.IN_APP]
+
+
+async def _page_notices(sg: AsyncSession) -> list[Delivery]:
+    """The notice on her family page, written whatever carried it (#162)."""
+    return [row for row in await _every_notice(sg) if row.via is DeliveryChannel.IN_APP]
+
+
 async def _by_channel(sg: AsyncSession, channel: DeliveryChannel) -> list[Delivery]:
-    return [row for row in await _notices(sg) if row.via is channel]
+    return [row for row in await _every_notice(sg) if row.via is channel]
 
 
 async def _siti_the_helper(sg: AsyncSession, home: Family) -> Person:
@@ -215,9 +228,18 @@ async def test_the_notice_is_never_held_by_the_quiet_hours_a_cap_or_a_channel_se
     home = await family(sg, tmp_path)
     with pytest.raises(AlertsAreNeverHeld):
         check_settings({}, {TriggerType.VOICE_NOTE_UNHEARD.value: 1})
-    # Nor are its channels a setting: a list of one channel would leave it reaching nobody.
+    # A setting that would send it only to the caregiver is refused for an alert (#162), so
+    # there is no way to leave this notice with nowhere to go.
     with pytest.raises(AlertsGoEveryWay):
-        check_settings({TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]}, {})
+        await change(
+            sg,
+            context=home.owner,
+            skip_quiet_days=False,
+            quiet_from=None,
+            quiet_until=None,
+            channels={TriggerType.VOICE_NOTE_UNHEARD.value: ["caregiver"]},
+            caps={},
+        )
 
     async def down(*args: object, **kwargs: object) -> object:
         raise ConnectionError("the transcriber is down, for the test")
@@ -263,7 +285,7 @@ async def test_a_red_word_in_the_helpers_voice_note_is_still_read_first(
     flagged = await home.inbound(sg, SITI, media_id="pa-voice-fell", content_type=OGG)
     assert flagged.outcome == "red_flag" and flagged.flag_id is not None
     # A note whose words were heard is a flag, not an unheard note: nobody is told twice.
-    assert await _notices(sg) == []
+    assert await _every_notice(sg) == []
 
 
 async def test_a_voice_note_in_the_familys_group_is_the_familys_and_pages_nobody(
@@ -281,7 +303,7 @@ async def test_a_voice_note_in_the_familys_group_is_the_familys_and_pages_nobody
     # The group is where the family talk to each other: a note nobody could hear there is
     # not kept and never an alert, the way a photo posted there is not one of his papers.
     assert posted.outcome == "ignored"
-    assert await _notices(sg) == []
+    assert await _every_notice(sg) == []
     assert (await sg.scalars(select(EventNote))).all() == []
     # A red word said in the group is still a flag, read before any of that.
     flagged = await home.inbound(
@@ -310,7 +332,7 @@ async def test_a_group_note_without_his_whatsapp_agreement_pages_nobody_either(
         group_id=group.provider_group_id,
     )
     assert posted.outcome == "ignored"
-    assert await _notices(sg) == []
+    assert await _every_notice(sg) == []
     assert (await sg.scalars(select(Ladder))).all() == []
 
 
@@ -386,7 +408,7 @@ async def test_a_door_that_says_no_to_the_telling_leaves_his_note_and_his_reply(
     assert await sg.get(EventNote, kept.note_id) is not None
     # One reply, and it says nothing about who knows: nobody was told.
     assert _said(kept) == [HIS_REPLY_ALONE]
-    assert await _notices(sg) == []
+    assert await _every_notice(sg) == []
 
 
 async def test_a_telling_that_failed_is_not_a_200_and_the_message_comes_again(

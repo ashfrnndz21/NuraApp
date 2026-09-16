@@ -222,6 +222,11 @@ CLASSES: dict[str, str] = {
     "provider.phone_e164": HEALTH,
     "provider.address": HEALTH,
     "provider.added_at": OPERATIONAL,
+    # Whether a hospital is on his insurance says something about his cover and where he is
+    # treated (E19-05): health, like the provider itself. A doctor's hours are the doctor's.
+    "provider.panel": HEALTH,
+    "provider.opens_at": OPERATIONAL,
+    "provider.closes_at": OPERATIONAL,
     "appointment.provider_id": HEALTH,
     "appointment.scheduled_at": HEALTH,
     "appointment.status": HEALTH,
@@ -667,6 +672,15 @@ CLASSES: dict[str, str] = {
     "what_to_do_card.rendered_for_person_id": IDENTIFIER,
     "what_to_do_card.state_id": HEALTH,
     "what_to_do_card.boundary": HEALTH,
+    # His insurer on the emergency card (E13-01), typed on a yes: the insurer's name and the
+    # policy reference point at him at the insurer, so both are identifiers, and so is who
+    # typed it; the yes is the consent record; when, operational.
+    "insurer.id": IDENTIFIER,
+    "insurer.name": IDENTIFIER,
+    "insurer.policy_reference": IDENTIFIER,
+    "insurer.set_by_person_id": IDENTIFIER,
+    "insurer.confirmation_id": CONSENT,
+    "insurer.set_at": OPERATIONAL,
     "emergency_card.id": HEALTH,
     "emergency_card.format": OPERATIONAL,
     "emergency_card.language": OPERATIONAL,
