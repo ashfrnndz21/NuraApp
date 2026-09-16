@@ -16,6 +16,13 @@ match is not a guess dressed up as one: the score says how sure the register is,
 `app.medicines.service` refuses to identify anything below `CONFIDENCE_THRESHOLD`
 (`app.ingestion.models`) — the same floor a document field and a WhatsApp voice transcript are
 already held to, so a person is never told his tablet is named when Nura is only guessing.
+
+Not every caller of `identify` needs that floor: `app.safety.health_words`, `app.reasoning.
+visits.summary` and `app.delivery.feed.compose` ask only "does the register know this name at
+all" or read the generic off the best match, for text detection and feed copy — never to
+write a dose or a line — so a name match's confidence has nothing below-floor to filter for
+them by design. `app.medicines.service._one_product` is the one caller that turns an answer
+into a medicine on the record, and it is the one that checks the score.
 """
 
 from __future__ import annotations

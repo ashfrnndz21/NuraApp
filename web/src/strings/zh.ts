@@ -1053,7 +1053,7 @@ export const zh = {
     // @patient
     disputed: "有人说这一条不对。",
     // @patient
-    matchByNameOnly: "Nura只按名字配对，没有对分量。",
+    matchByNameOnly: ["Nura只靠标签上的名字找到这个药。", "标签没有写这个药有多强。"],
     // @patient
     twice: "这个药在您的清单上有两次。",
     // @patient phrase

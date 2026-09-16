@@ -70,6 +70,18 @@ def test_a_name_match_with_no_strength_given_scores_above_the_floor_but_below_ex
     assert 0.8 <= amlong.confidence < 1.0
 
 
+async def test_a_high_risk_drug_by_name_alone_scores_below_the_floor(sg: AsyncSession) -> None:
+    """A photo of the label proves a photo exists; it does not prove the strength on it was
+    read. Warfarin, an insulin, digoxin, methotrexate and an opioid are not identified on a
+    bare name the way an ordinary product is — the clinical-safety review on #206."""
+    found = REGISTRY.identify(LabelFields(brand="Marevan"))
+    assert found and all(m.high_risk and m.confidence < 0.8 for m in found)
+    owner = await pa(sg)
+    photo = await artefact(sg, owner)
+    with pytest.raises(NotIdentified):
+        await planned(sg, owner, Label(dose=label("warfarin", "3 mg").dose, brand="Marevan"), photo)
+
+
 def test_a_strength_that_does_not_belong_to_the_matched_product_scores_low() -> None:
     """paracetamol is one product on file, Panadol 500 mg: a label naming a strength it does
     not have is not silently handed that product anyway."""

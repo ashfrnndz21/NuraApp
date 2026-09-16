@@ -41,7 +41,8 @@ def _same_strength(a: str | None, b: str) -> bool:
 
 NAME_MATCH = 0.9
 """An exact brand or generic name, alone: the label said nothing to check it against, so it
-is neither confirmed nor contradicted (module doc, `Monograph` and #206)."""
+is neither confirmed nor contradicted (module doc, `Monograph` and #206). Never awarded to a
+high-risk product — see `HIGH_RISK_NEEDS_STRENGTH`."""
 EXACT_MATCH = 1.0
 """A name whose strength — and form, where the label gave one — both belong to this product."""
 WRONG_STRENGTH = 0.4
@@ -51,6 +52,13 @@ scoring closes)."""
 WRONG_FORM = 0.5
 """A name and strength match whose form does not belong to this product: also below the
 floor, for the same reason a wrong strength is."""
+HIGH_RISK_NEEDS_STRENGTH = 0.5
+"""A high-risk product matched by name alone, with no strength on the label to check: below
+the floor. The label-photo rule (`app.safety.high_risk`) asks for a photo of a high-risk
+drug's label; a photo does not by itself prove the strength on it was read. Warfarin, an
+insulin, digoxin, methotrexate and an opioid are not identified on a bare name the way an
+ordinary product is — the label must actually say the strength (clinical-safety review on
+#206)."""
 
 
 def _confidence(label: LabelFields, product: DrugMatch) -> float:
@@ -59,13 +67,16 @@ def _confidence(label: LabelFields, product: DrugMatch) -> float:
     is certain by construction (the caller returns before this runs). Beyond a bare name
     match, the strength and the form the label gave are checked against this specific
     product — not the product family the name narrowed to — because a name can be exactly
-    right while the amount on it belongs to a different pack on the same shelf."""
+    right while the amount on it belongs to a different pack on the same shelf. A high-risk
+    product needs the strength stated at all: a bare name is not enough to call one found."""
     if label.strength:
         if not _same_strength(label.strength, product.strength):
             return WRONG_STRENGTH
         if label.form and _norm(label.form) != _norm(product.form):
             return WRONG_FORM
         return EXACT_MATCH
+    if product.high_risk:
+        return HIGH_RISK_NEEDS_STRENGTH
     if label.form and _norm(label.form) != _norm(product.form):
         return WRONG_FORM
     return NAME_MATCH
