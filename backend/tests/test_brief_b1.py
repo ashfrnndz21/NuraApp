@@ -120,7 +120,9 @@ async def test_a_key_without_the_record_reads_the_brief_without_how_he_feels(
     sg: AsyncSession,
 ) -> None:
     """A symptom is the record's: a viewer who holds the visits and not the record reads the
-    brief without the lines about how he feels, and is told the record was withheld."""
+    brief without the lines about how he feels, and is told the record was withheld. It keeps
+    the words of the lines it does read and loses their provenance: a source is a row id, and
+    this key may not read those rows (B1 review)."""
     context = await pa(sg, language="en", phone="+6591110084")
     await _log(sg, context, "dizzy, quite a lot, since this morning")
     _provider, appointment = await visit(sg, context)
@@ -129,10 +131,13 @@ async def test_a_key_without_the_record_reads_the_brief_without_how_he_feels(
         sg, context, phone="+6593330084", name="Kit", role=KeyRole.VIEWER, scopes={Scope.VISITS}
     )
     shown, withheld = lines_for(brief, viewer)
-    assert withheld == [Scope.RECORDS]
+    # This key holds the visits alone, so every scope a fact can sit under is named.
+    assert withheld == [Scope.READINGS, Scope.MEDICINES, Scope.RECORDS]
     assert not any(line["key"].startswith("symptom") for line in shown)
+    assert all(line["sources"] == [] for line in shown)
     mine, none = lines_for(brief, context)
     assert none == [] and any(line["key"] == "symptom" for line in mine)
+    assert any(line["sources"] for line in mine), "the owner reads the brief's provenance"
 
 
 async def test_a_red_flag_symptom_comes_first_and_a_long_entry_is_cut_never_dropped(

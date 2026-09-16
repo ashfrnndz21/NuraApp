@@ -41,7 +41,7 @@ from app.db import as_utc, utcnow
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope, scope_for_subject
+from app.keys.scopes import FACT_SCOPES, Scope, scope_for_subject
 from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
 from app.reasoning.visits.guard import can_render_brief, may_render_brief
@@ -285,14 +285,25 @@ log is read under), not the visits'."""
 
 
 def lines_for(brief: Brief, context: KeyContext) -> tuple[list[dict[str, Any]], list[Scope]]:
-    """The brief's lines as this key may read them, and what was withheld. A symptom is the
-    record's: a key that holds the visits and not the record — a viewer's, a clinic's — reads
-    the brief without the lines about how he feels, and is told the record was withheld
-    (B1 review)."""
-    if context.allows(Scope.RECORDS):
+    """The brief's lines as this key may read them, and what was withheld.
+
+    A brief is rendered once, by a key that opens the whole record, and read by every key that
+    holds the visits — so what it carries is narrowed here, to the reader, not at render time.
+
+    A symptom is the record's: a key that holds the visits and not the record — a viewer's —
+    reads the brief without the lines about how he feels, and is told the record was withheld
+    (B1 review). A line also names the rows it rests on, and a row id is a row: a key missing
+    any scope a fact can sit under (`FACT_SCOPES`) keeps the words and loses the provenance,
+    rather than being handed the id of a fact it may not read. Nothing is narrowed for a key
+    that holds all three, which is every key that may render a brief.
+    """
+    missing = [one for one in FACT_SCOPES if not context.allows(one)]
+    if not missing:
         return list(brief.lines), []
-    kept = [line for line in brief.lines if line["key"] not in SYMPTOM_KEYS]
-    return kept, ([Scope.RECORDS] if len(kept) != len(brief.lines) else [])
+    kept = list(brief.lines)
+    if Scope.RECORDS in missing:
+        kept = [line for line in kept if line["key"] not in SYMPTOM_KEYS]
+    return [{**line, "sources": []} for line in kept], missing
 
 
 def _dimension_of(state: StateView, fact_id: str) -> Dimension | None:

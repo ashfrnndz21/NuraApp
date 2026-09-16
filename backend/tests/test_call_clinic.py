@@ -406,10 +406,10 @@ async def test_no_call_clinic_card_where_the_note_is_withheld_for_want_of_state(
 
     from app.keys.scopes import ROLE_SCOPES, Scope
     from app.reasoning.feelings import service
-    from app.safety.not_feeling_well import ClinicCard, Line
     from app.reasoning.feelings.service import answer_tap, record_tap
     from app.reasoning.feelings.words import Answer
     from app.safety.models import WhatToDoCard
+    from app.safety.not_feeling_well import ClinicCard, Line
     from app.safety.red_flags import Feeling
     from app.state.service import RECOMPUTE_SCOPES, current_state
     from tests.family_support import household
