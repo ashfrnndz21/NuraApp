@@ -38,16 +38,20 @@ const HERS = [
 
 const aboutHim = (line: string): boolean => TO_HIM.test(line) && !HERS.some((hers) => hers.test(line));
 
-/** The screen's own lines — its chrome and its cards — minus two sets that have fixmes of their
- *  own below: the feed's cards with the "Sent to Pa this week" panel that lists their headlines,
- *  and the family's grant lines. Both are backend lines on paths that do not pass the reader:
- *  #177's new formats (the recap, the clips, the local alerts) reach her Home still speaking to
- *  him, because that path does not pass the reader that says his lines about him
- *  (`app/channels/about_him.py`). Everything else on the screen is held to the rule here. */
+/** The screen's own lines — its chrome and its cards — minus three sets that have fixmes of
+ *  their own below: the feed's cards with the "Sent to Pa this week" panel that lists their
+ *  headlines, the family's grant lines, and the consent wording. The first two are backend lines
+ *  on paths that do not pass the reader: #177's new formats (the recap, the clips, the local
+ *  alerts) reach her Home still speaking to him, because that path does not pass the reader that
+ *  says his lines about him (`app/channels/about_him.py`). The consent wording is a different
+ *  kind of finding (#214): it is a verbatim quotation of the words *he* read, shown on *her*
+ *  screen with nothing marking it as a quotation, so "your medicines" reads as hers. That is a
+ *  design change (attribute it, or rewrite it for a caregiver), not a wrapper this sweep can
+ *  apply — see #214, not #210. Everything else on the screen is held to the rule here. */
 async function linesOn(page: Page): Promise<string[]> {
   const { all, cards } = await page.getByTestId("shell-scroll").evaluate((root) => ({
     all: (root as HTMLElement).innerText,
-    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=sent], [data-testid=grant-lines], [data-testid=reach-lines]")].map((card) => card.innerText),
+    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=sent], [data-testid=grant-lines], [data-testid=reach-lines], [data-testid=consent-words]")].map((card) => card.innerText),
   }));
   const inACard = new Set(cards.flatMap((card) => card.split("\n").map((line) => line.trim())).filter(Boolean));
   return all
@@ -240,5 +244,28 @@ test.fixme("her Family screen says what a key opens about him by name", async ({
   await page.getByTestId("tab-family").click();
   await expect(page.getByTestId("grant-lines").first()).toBeVisible();
   const lines = (await page.getByTestId("grant-lines").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
+  expect(lines.filter(aboutHim)).toEqual([]);
+});
+
+/** A different kind of finding from the two above (#214, not #210): not a missing reader on a
+ *  backend path, but a verbatim quotation with nothing marking it as one. Her Family consents
+ *  screen (`ConsentsPart`, `web/src/screens/family/Consents.tsx`) shows the words *he* read and
+ *  agreed to — `consent.wording`, from `app/consent/texts.py`'s `SHARE_WITH_PERSON` template —
+ *  exactly as he read them, on *her* phone: "You are letting Mei, your daughter, see some of
+ *  your record. — your medicines — …". Nothing on the screen says these are his words rather
+ *  than a description of what is happening to her, so "your medicines" reads as hers. It matters
+ *  more here than an ordinary copy slip: this is the consent record, the one screen whose whole
+ *  job is being unambiguous about who agreed to what. The fix is a design change, not a
+ *  wrapper — attribute the quote to him, or give the caregiver a rewritten, third-person version
+ *  — so it is tracked rather than fixed here. */
+test.fixme("her Family consents screen names whose words the quote is", async ({ page, request }) => {
+  const family = await seedHome(request);
+  await signInThroughTheApp(page, family.meiPhone, "Mei");
+  await page.getByTestId("door-key").click();
+  await todayReady(page);
+  await page.getByTestId("tab-family").click();
+  await page.getByTestId("open-consents").click();
+  await expect(page.getByTestId("consent-words").first()).toBeVisible();
+  const lines = (await page.getByTestId("consent-words").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
   expect(lines.filter(aboutHim)).toEqual([]);
 });
