@@ -358,9 +358,11 @@ async def _say_ahead(
     through the one voice port, into the region's store, under the digest of the card's voice
     script — the same lines, language and boundary the twin route says (`twin.spoken_twin`),
     so the same key, and the first play is a read. A card with no voice in its language yet,
-    or too long to say, is not said ahead; the route answers for it exactly as it always has —
-    on main this whole function is a no-op (`engine.voice`/`engine.store` are None) until a
-    deployment names both.
+    or too long to say, is not said ahead; the route answers for it exactly as it always has.
+    Both `engine.voice` and `engine.store` are optional on the Engine, so a test may build one
+    without them and get the old behaviour; the running app never does — `_engine` in
+    `app.channels.api.feed` always passes `providers.voice` (the fixture voice by default) and
+    `providers.object_store` (required), so this runs on every refresh, including in dev.
 
     A render that fails — the language is not one there is a voice for, the lines run past
     thirty seconds, the store or the voice itself throws — never costs him the card: each
