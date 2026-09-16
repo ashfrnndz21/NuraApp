@@ -21,7 +21,11 @@ jobs:
     # this job is the only place one runs. tests/conftest.py gives each test its own schema
     # on this server through NURA_TEST_DATABASE_URL, and drops it after.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The suite on Postgres has grown past 27 minutes (#190 took 27m20s) and started tipping
+    # over a 30-minute limit at random — a cancelled job, not a failing test, which reads as a
+    # red check and costs a re-run each time. 60 gives it room. The real fix is a faster suite
+    # (see the issue this note points at); until then a slow honest job beats a flaky one.
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16

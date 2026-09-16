@@ -17,7 +17,7 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 **Behind a switch.** The table reaches a family only with `NURA_RED_FLAG_TIERS=1`. Unset, every red flag's step is the ambulance; that is the not-feeling-well card's own step. A dev run sets it. Before it is set in a deployment:
 
 - **Blocking question.** Out of the doctor's hours, with no hospital marked, a same-day flag is told "Sit down and rest now. / If it gets worse, call the ambulance now on 995. / Call Dr Tan on Tuesday 15 September in the morning." The clinical-safety review asks that out of hours every same-day flag say "go to the nearest emergency department now" instead, whether or not a hospital is marked. Which is it?
-- The three tiered family notices must be approved by Meta. Until they are, outside the family member's 24-hour window the approved notice goes, and it says "Call Dr Tan today."
+- The three tiered family notices, and the neutral `red_flag_notice_urgent` fallback, must be approved by Meta. Until they are, outside the family member's 24-hour window no WhatsApp goes for a tiered flag rather than the approved notice, which says "Call Dr Tan today." (#174) — the app push and the family page's notice still reach the family.
 - Question 10 of the SaMD review must be answered by the regulatory adviser.
 
 ## 3. A fall on a blood thinner
@@ -37,7 +37,7 @@ Salt substitutes are potassium chloride. So someone told to watch his potassium 
 **Where it applies.** The WhatsApp reply, and the family's notice from the ladder, including its later rungs. That covers a fall from WhatsApp (typed, or a voice note), the not-feeling-well button, the symptom log and the feeling cloud. The button's own card, and the log's, already say the ambulance for every red flag.
 
 **Where it does not, yet.**
-- *Outside the family member's 24-hour WhatsApp window, until Meta approves `red_flag_notice_ambulance`,* the only approved notice goes, and it says "Call Dr Tan today." This is the same for chest pain; it is the PR's open question. The tiered notices must be approved, or a notice that never says "today" must be, before real profiles.
+- *Outside the family member's 24-hour WhatsApp window, until Meta approves `red_flag_notice_ambulance` and the neutral `red_flag_notice_urgent`,* no WhatsApp goes for the ambulance tier — never the approved notice, which says "Call Dr Tan today." (#174 resolved the open question this way: a notice that never says "today" is the fallback, not the approved one.) The app push and the family page's notice still reach the family; the tiered notices, and the neutral one, must still be approved before real profiles.
 - *A fall heard in a visit transcript* raises a flag with no feeling on it. That family notice is the approved one ("Call Dr Tan today."), because he was with the doctor. ADR 0010 asks whether that is right.
 
 **Tests.** `backend/tests/test_red_flag_escalation.py`:
