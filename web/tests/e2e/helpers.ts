@@ -252,6 +252,20 @@ export async function seedOwner(
   return { phone, token, profileId };
 }
 
+/** Move his breakfast, so that a tablet hanging on it is due at the hour the run is frozen at.
+ *  A dose window opens an hour before its anchor and closes an hour after, or at the next
+ *  anchor (`app.routines.service.window_of`, E04-02), and the default day puts breakfast at
+ *  07:30 — so at the frozen 10:00 the breakfast dose is already missed and nothing is due.
+ *  Breakfast at 10:00 opens the window 09:00 to 11:00, which is the plain Taken path: a test
+ *  that needs a Taken to tap asks for it here rather than assuming the default day has one. */
+export async function breakfastAt(request: APIRequestContext, token: string, profileId: string, at = "10:00"): Promise<void> {
+  const set = await request.put(`${API}/profiles/${profileId}/settings`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { language: "en", breakfast_time: at },
+  });
+  if (!set.ok()) throw new Error(`breakfast: ${set.status()} ${await set.text()}`);
+}
+
 /** Let one person in on the owner's own yes (E12) and cut them a key with this role and these
  *  parts: their phone, their token and the key's id. */
 export async function cutKey(

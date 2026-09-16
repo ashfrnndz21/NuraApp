@@ -3,6 +3,7 @@ import { BASE_URL } from "../../playwright.config";
 import {
   API,
   apiToken,
+  breakfastAt,
   cutKey,
   expireKeptPages,
   fixClock,
@@ -109,6 +110,9 @@ test("Taken with no network: held with the moment he tapped, then sent once each
     { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 },
     { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab QDS", quantity: 120 },
   ]);
+  // Two tablets on the same anchor, so that tapping the first leaves a second to tap: this
+  // test is about the order they are sent in, so it needs both due at once.
+  await breakfastAt(request, pa.token, pa.profileId);
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, pa.phone, "Pa");
   const now = page.getByTestId("now-card");
@@ -165,6 +169,7 @@ test("Taken with no network: held with the moment he tapped, then sent once each
  *  the backend finds the row it already wrote — the tablet is counted once, not twice. */
 test("Taken whose answer is lost on the way back: held, sent again with the same moment, and counted once", async ({ page, request }) => {
   const pa = await seedOwner(request, "Pa", [{ generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 }]);
+  await breakfastAt(request, pa.token, pa.profileId);
   const sent: { taken_at?: string }[] = [];
   page.on("request", (call) => {
     if (call.method() === "POST" && /\/medicines\/[^/]+\/taken$/.test(new URL(call.url()).pathname)) sent.push(call.postDataJSON() as { taken_at?: string });
@@ -202,6 +207,7 @@ test("Taken whose answer is lost on the way back: held, sent again with the same
  *  is said in the backend's words for that no, and nothing of Pa's papers stays on her phone. */
 test("a no to a held tap is said in the backend's words, and nothing of the papers stays", async ({ page, context, request }) => {
   const pa = await seedOwner(request);
+  await breakfastAt(request, pa.token, pa.profileId);
   const mei = await cutKey(request, pa, { name: "Mei", prefix: "+659557" }, "caregiver", ["medicines", "records", "emergency"]);
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, mei.phone, "Mei");
