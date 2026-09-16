@@ -265,7 +265,13 @@ for (const [look, banner] of [
     await audit(page, where("the Me sheet, the player open"));
     await page.getByTestId("sheet-close").click();
 
-    await page.getByTestId("write-reading").click();
+    // His Today carries the blood pressure card; hers is under Visits, with getting ready for
+    // the next visit (D1) — the design gives her Home the State, not the prompt.
+    if ((await page.getByTestId("write-reading").count()) > 0) await page.getByTestId("write-reading").click();
+    else {
+      await page.getByTestId("tab-visits").click();
+      await page.getByTestId("plan-reading").click();
+    }
     await audit(page, where("your blood pressure"));
     await page.getByRole("button", { name: "Not now" }).click();
 
@@ -350,13 +356,19 @@ async function recordEntries(page: Page): Promise<string[]> {
 }
 
 /** Each label of the tab bar on one line, never broken inside a word: the problems, or []. */
+/** Every tab's word is one whole line. The word is what this is about, so the word is what is
+ *  measured: the button also holds the icon above it, which is a line of its own by the design,
+ *  and its span and text boxes sit a pixel or two apart — measuring the button counts those as
+ *  wrapping when nothing has wrapped. A word that really wraps still shows here, because its
+ *  own text boxes then sit a line apart. */
 async function tabLabelsWhole(page: Page): Promise<string[]> {
   return page.evaluate(() =>
-    [...document.querySelectorAll<HTMLElement>("nav.tabbar button")].flatMap((button) => {
+    [...document.querySelectorAll<HTMLElement>("nav.tabbar button .tab-word")].flatMap((word) => {
       const range = document.createRange();
-      range.selectNodeContents(button);
-      const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
-      return lines.size > 1 ? [`${(button.textContent ?? "").trim()}: ${lines.size} lines`] : [];
+      range.selectNodeContents(word);
+      const tops = [...range.getClientRects()].map((rect) => rect.top).sort((a, b) => a - b);
+      const lines = tops.filter((top, at) => at === 0 || top - tops[at - 1]! > 4).length;
+      return lines > 1 ? [`${(word.textContent ?? "").trim()}: ${lines} lines`] : [];
     }),
   );
 }
@@ -422,7 +434,9 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   }
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("sign-out")).toBeVisible();
-  await check("me");
+  // Me is a sheet (D1): the page under it is covered on purpose and its tab bar is behind the
+  // scrim, so the sheet's own lines are what must be readable here.
+  await check("me", page.getByTestId("me-sheet"), false);
   await page.getByTestId("open-papers").click();
   await page.getByTestId("photos-input").setInputFiles([paperPhoto("lipid-panel-2023-09-07"), paperPhoto("receipt-2026-09-01")]);
   await check("papers from photos: the grid");

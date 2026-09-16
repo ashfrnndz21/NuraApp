@@ -35,6 +35,19 @@
   position: relative;
   flex: none;
 }
+/* The banner's headline is pinned (above); the lines under it are not. They are a flex child of
+   the app column too, and unless they give way they take the whole phone at a large text size —
+   at 200% they were 254px of a 640px screen, which left the shell 186px, collapsed the page's
+   scrolling region to nothing and pushed the tab bar off the bottom. They yield instead, so what
+   never moves stays one headline tall (E15-04). */
+#app:has(> .shell) > .demo-lines {
+  flex: 0 1 auto;
+  min-height: 0;
+  /* Never more than a fifth of the phone, whatever the text size: the app under it must keep a
+     page to scroll and a bar to stand on. */
+  max-height: 20vh;
+  overflow: hidden;
+}
 .shell {
   position: relative;
   /* The shell fills whatever the app column leaves it — never a viewport height of its own.
@@ -189,7 +202,10 @@
   margin: 0;
   max-width: none;
   padding-top: 0;
-  padding-bottom: 0;
+  /* The bar sits below this region with a margin of its own; a card ends flush with the region,
+     so its buttons would reach into that margin and touch the bar. Give the card that much
+     back, and nothing of it is under the bar at any text size. */
+  padding-bottom: var(--space-1);
 }
 
 /* --- The tab bar: glass, an icon above each word, in the flow under the page --------------- */
