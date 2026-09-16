@@ -11,6 +11,14 @@ could not be reached. Whatever the answer, one `Delivery` row records the attemp
 rule, and a delivery that reached a person is a SHARE on the trail, under the scope of what
 it spoke of.
 
+A channel that failed falls through to the next one (#173). A door's no is a refusal and
+stands with the trail line it wrote; anything else — the provider unreachable, the push
+service down — is this channel not carrying it, and the message goes on to the channel after
+it with the failure written on the row (`passed_over`), never by name of a person and never
+its words. Its savepoint is rolled back, so nothing half-written stands and the session is
+whole for the next channel. An alert then still writes the notice on the family page, so a
+send that failed never leaves a red flag reaching nobody.
+
 An alert — a red flag — is not "the first that works" and follows no setting (#162): it goes
 by every channel the person can be reached on, a row for each, and the notice on their family
 page (`DeliveryChannel.IN_APP`) is written whatever else carried it. When nothing reached
@@ -19,8 +27,10 @@ reached, and the ladder moves on at once (`ladder.climb`).
 
 Who may be sent WhatsApp (#163): the patient on his own agreement; anyone else on the key his
 agreement to let them in rests on, and — for anything but a red flag — only while his WhatsApp
-agreement stands. Someone who answered no to WhatsApp at the key-accept step is sent none,
-red flags included: those reach them by app push and on their family page.
+agreement stands (`told_without_his_agreement`; a voice note nobody could hear is an alert but
+not a red flag, so without his agreement it reaches them through the app). Someone who
+answered no to WhatsApp at the key-accept step is sent none, red flags included: those reach
+them by app push and on their family page.
 
 Everything here runs as Nura itself with the reach of the profile's owner (the steward before a
 claim): the patient's graph, sent about the patient on his agreement, and every line on the
@@ -30,6 +40,7 @@ day. A `Run` is one evaluation at one moment: it reads what it needs once and re
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -49,7 +60,7 @@ from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import active_consents
 from app.consent.texts import current_version
-from app.db import as_utc
+from app.db import as_utc, session_keepers
 from app.delivery.push import NoDevice
 from app.delivery.strings import PUSH_LINE
 from app.delivery.triggers.models import (
@@ -60,7 +71,13 @@ from app.delivery.triggers.models import (
     Ladder,
     TriggerType,
 )
-from app.delivery.triggers.rules import RULES, Config, config_of, is_alert
+from app.delivery.triggers.rules import (
+    RULES,
+    Config,
+    config_of,
+    is_alert,
+    told_without_his_agreement,
+)
 from app.errors import Refusal
 from app.family.roster import who_is_on_duty
 from app.identity.models import Person, Profile, Stewardship
@@ -79,6 +96,8 @@ from app.routines.breakfast import breakfast_time
 from app.routines.service import current_routine
 from app.settings import Settings
 from app.state.service import StateView, current_state
+
+log = logging.getLogger("nura.delivery")
 
 LOOK_BACK = timedelta(days=8)
 """How far back a run reads its own deliveries: the longest dedupe (a week's pattern) and a
@@ -404,7 +423,7 @@ async def _no_whatsapp(run: Run, person: Person, type: TriggerType) -> str | Non
         return None if await run.whatsapp_agreed() else "not agreed"
     if await run.said_no_to_whatsapp(person):
         return "said no"
-    if not is_alert(type) and not await run.whatsapp_agreed():
+    if not told_without_his_agreement(type) and not await run.whatsapp_agreed():
         return "not agreed"
     return None
 
@@ -542,10 +561,8 @@ async def deliver(
         if why_not is not None:
             passed.append(f"caregiver: {why_not}")
             continue
-        try:
-            sent = await message.stand_in(stand_in.person)
-        except Refusal as refusal:
-            passed.append(f"caregiver: {type(refusal).__name__}")
+        sent = await _attempt(run, message.stand_in, stand_in.person, passed, "caregiver")
+        if sent is None:
             continue
         return await write(
             run,
@@ -569,6 +586,40 @@ async def deliver(
     )
 
 
+async def _attempt(
+    run: Run, say: Say, person: Person, passed: list[str], channel: str
+) -> Delivered | None:
+    """One channel's try at one message: what went out, or None with `passed` saying why not.
+
+    A door's no is a refusal: it stands with the line it wrote on the trail, which is the
+    point of it. Anything else is this channel failing — the provider unreachable, a socket
+    closed — and a channel that failed falls through to the next one (#173): its savepoint is
+    rolled back, so nothing half-written stands and the session is whole for the channel
+    after it, and what went wrong is kept by the name of its class, never its message.
+    """
+    kept = len(session_keepers(run.session))
+    savepoint = await run.session.begin_nested()
+    try:
+        sent = await say(person)
+    except Refusal as refusal:
+        # The refusal's own lines stand, the way they did before any of this had a savepoint.
+        await savepoint.commit()
+        passed.append(f"{channel}: {type(refusal).__name__}")
+        return None
+    except Exception as failed:  # noqa: BLE001 — the next channel is tried; logged by name
+        await savepoint.rollback()
+        # Nothing written inside it survives, so neither may a keeper registered inside it:
+        # replayed at the request's boundary it would write against rows that are gone.
+        del session_keepers(run.session)[kept:]
+        log.warning(
+            "delivery: %s did not carry one message: %s", channel, type(failed).__name__
+        )
+        passed.append(f"{channel}: {type(failed).__name__}")
+        return None
+    await savepoint.commit()
+    return sent
+
+
 async def _by_push(
     run: Run,
     firing: Firing,
@@ -589,12 +640,20 @@ async def _by_push(
     # delivery's own row. No health word rides it.
     row_id = uuid.uuid4()
     ref = str(firing.why.get("feed_item_id") or firing.why.get("nudge_id") or row_id)
+    savepoint = await run.session.begin_nested()
     try:
         await push.push(run.session, run.acting, to.person.id, line, ref=ref)
     except NoDevice:
         # Every device the push service knew of has gone (404, 410): the next channel.
+        await savepoint.commit()
         passed.append("app_push: gone")
         return None
+    except Exception as failed:  # noqa: BLE001 — a channel that failed falls through (#173)
+        await savepoint.rollback()
+        log.warning("delivery: the push did not carry one message: %s", type(failed).__name__)
+        passed.append(f"app_push: {type(failed).__name__}")
+        return None
+    await savepoint.commit()
     return await write(
         run,
         firing,
@@ -625,10 +684,8 @@ async def _by_whatsapp(
     if why_not is not None:
         passed.append(f"whatsapp: {why_not}")
         return None
-    try:
-        sent = await message.whatsapp(to.person)
-    except Refusal as refusal:
-        passed.append(f"whatsapp: {type(refusal).__name__}")
+    sent = await _attempt(run, message.whatsapp, to.person, passed, "whatsapp")
+    if sent is None:
         return None
     return await write(
         run,

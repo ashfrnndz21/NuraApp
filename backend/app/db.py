@@ -171,6 +171,15 @@ def take_keepers(session: AsyncSession) -> list[Keeper]:
     return session.info.pop(_KEPT, [])
 
 
+def session_keepers(session: AsyncSession) -> list[Keeper]:
+    """The keepers registered on this session, as the list they are held in — so a caller
+    that rolls a savepoint back itself can drop the ones registered inside it, the way
+    `nested_unit_of_work` does. Replaying a keeper for rows that were rolled back would write
+    a line for work that did not happen."""
+    kept: list[Keeper] = session.info.setdefault(_KEPT, [])
+    return kept
+
+
 class KeepersNotReplayed(RuntimeError):
     """A session closed with refused audit lines nobody replayed: a request ran outside
     `unit_of_work`, and the refusal it carried would have been lost with the rollback."""

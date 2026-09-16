@@ -13,8 +13,10 @@ Three things are read, and only these (the story's own list):
 What comes out is a note: a headline, at most two things to tell the doctor — what he said
 and when, then the first thing it was read against — who does the next thing, and the
 boundary line last (`Surface.FEELING_INFERENCE`). It names no condition and never says to
-start, stop or change a medicine; the templates are fixed and the tests read every one of them
-for it. A red word never reaches this module: the caller sends it to the red-flag path, and
+start, stop or change a medicine. Where the thing it was read against is a medicine, the two
+lines after it say not to stop that medicine himself and to tell the doctor how he feels
+(`DO_NOT_STOP`, #157): a medicine is never named on the note without them. The templates are
+fixed and the tests read every one of them for it. A red word never reaches this module: the caller sends it to the red-flag path, and
 there is no note.
 """
 
@@ -28,7 +30,7 @@ from app.keys.context import KeyContext
 from app.medicines.strings import PLAIN_NAME, say_date
 from app.reasoning.feelings.models import NoteOutcome
 from app.reasoning.feelings.record import Situation, local_date, rising
-from app.reasoning.feelings.strings import NOTE_HEADLINE, REASON, TELL, THEN, WHEN
+from app.reasoning.feelings.strings import DO_NOT_STOP, NOTE_HEADLINE, REASON, TELL, THEN, WHEN
 from app.reasoning.feelings.words import (
     NEW_MEDICINE_WINDOW,
     TIMELINE_WINDOW,
@@ -57,6 +59,8 @@ class Found:
     line: str
     doctor: str | None = None
     """For a medicine: the doctor named on its label, if the spine names no visit."""
+    medicine: str | None = None
+    """For a medicine: his name for it, for the `DO_NOT_STOP` lines said after this one."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,8 +100,9 @@ def read_against(
         rules = [rule for rule in line.watch_out_ids if WATCH_OUT_WORDS.get(rule) is word]
         if not rules:
             continue
+        medicine = PLAIN_NAME[code][line.plain_name_id]
         text = REASON[code]["new_medicine"].format(
-            medicine=PLAIN_NAME[code][line.plain_name_id],
+            medicine=medicine,
             date=say_date(local_date(line.started_at, context), code),
         )
         ids: dict[str, Any] = {
@@ -105,7 +110,15 @@ def read_against(
             "generic": line.generic,
             "watch_out": rules[0],
         }
-        found.append(Found("new_medicine", ids, _sentence(text), doctor=line.prescriber))
+        found.append(
+            Found(
+                "new_medicine",
+                ids,
+                _sentence(text),
+                doctor=line.prescriber,
+                medicine=medicine,
+            )
+        )
         break
     if word in TREND_WORDS:
         trend = rising(situation.readings, now)
@@ -139,7 +152,16 @@ def compose_note(
     said = _sentence(
         TELL[code][word].format(doctor=who, when=WHEN[code].get(answer, WHEN[code][Answer.TODAY]))
     )
-    lines = (said, *(f.line for f in found))[:MAX_LINES]
+    shown: list[str] = [said]
+    for f in found[: MAX_LINES - 1]:
+        shown.append(f.line)
+        if f.medicine is not None:
+            # A medicine named on his note is never without these two (#157).
+            shown.extend(
+                _sentence(line.format(medicine=f.medicine, doctor=who))
+                for line in DO_NOT_STOP[code]
+            )
+    lines = tuple(shown)
     if found:
         outcome = NoteOutcome.FOR_THE_DOCTOR
         then = (

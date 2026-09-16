@@ -43,6 +43,7 @@ class ConfirmSubject(StrEnum):
     INSURER = "insurer"
     COUNT_CORRECTION = "count_correction"
     CLOSE_ACCOUNT = "close_account"
+    ORDER = "order"
 
 
 @dataclass(frozen=True, slots=True)
@@ -532,6 +533,11 @@ class CountCorrectionDraft:
 
     line_id: uuid.UUID
     quantity: int
+    artifact_id: uuid.UUID | None = None
+    """The photo of the box or the label the count rests on. A high-risk medicine's count is
+    corrected from a photo, the same rule as its dose (`app.safety.high_risk`); any other
+    medicine's may rest on his word alone. Part of the yes, so a yes for a typed count cannot
+    be spent on a photo, nor one photo's yes on another."""
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -542,7 +548,29 @@ class CountCorrectionDraft:
         return self.line_id
 
     def confirmed_content(self) -> dict[str, Any]:
-        return {"line_id": self.line_id, "quantity": self.quantity}
+        return {"line_id": self.line_id, "quantity": self.quantity, "artifact_id": self.artifact_id}
+
+
+@dataclass(frozen=True, slots=True)
+class OrderDraft:
+    """"Ask the family to order." (E04-05): which medicine line, and the one person the
+    family's task will name. The preview says both in his words ("Nura will ask Mei to order
+    more of your blood pressure tablet."), and the yes binds to both: if the roster moves on
+    before he says yes, it is a different yes, and nobody else is given the task on it."""
+
+    line_id: uuid.UUID
+    person_id: uuid.UUID
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.ORDER
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.line_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"line_id": self.line_id, "person_id": self.person_id}
 
 
 Draft = (
@@ -564,6 +592,7 @@ Draft = (
     | InsurerDraft
     | CountCorrectionDraft
     | CloseDraft
+    | OrderDraft
 )
 
 

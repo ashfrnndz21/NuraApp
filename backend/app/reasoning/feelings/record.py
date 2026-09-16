@@ -54,8 +54,8 @@ READING = "reading"
 
 @dataclass(frozen=True, slots=True)
 class Line:
-    """An active medicine line as the cloud reads it: which, since when, and what its licensed
-    monograph says to watch out for, by rule id."""
+    """An active medicine line as the cloud reads it: which, since when, what its licensed
+    monograph says to watch out for, by rule id, and the licensed register's class for it."""
 
     line_id: uuid.UUID
     generic: str
@@ -63,6 +63,9 @@ class Line:
     started_at: datetime
     watch_out_ids: tuple[str, ...]
     prescriber: str | None
+    drug_class: str
+    """The register's class, as the line carries it: what tells a medicine that can drop his
+    sugar (`app.safety.red_flags.HYPOGLYCAEMIC_CLASSES`)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +162,7 @@ async def _lines(
                 started_at=as_utc(line.started_at),
                 watch_out_ids=tuple(watch),
                 prescriber=line.prescriber,
+                drug_class=line.drug_class,
             )
         )
     return tuple(lines)

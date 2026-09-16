@@ -93,6 +93,15 @@ class DeliveryOutcome(StrEnum):
 class Subject(StrEnum):
     DOSE = "dose"
     FLAG = "flag"
+    UNHEARD_NOTE = "unheard_note"
+    """A voice note Nura could not hear (#173). It climbs the way a flag's ladder climbs —
+    the chief, then whoever is on duty, then everyone else whose key holds the emergency
+    card — and one person saying they have it stops it for the rest."""
+
+
+ANSWERED_BY_A_PERSON: frozenset[Subject] = frozenset({Subject.FLAG, Subject.UNHEARD_NOTE})
+"""The ladders someone stops by saying they have it, rather than by doing the thing (a dose's
+ladder stops on the Taken tap). Both are alerts, and both lapse after `FLAG_WINDOW`."""
 
 
 class DeliverySettings(ProfileScoped, Base):
@@ -138,6 +147,7 @@ class Ladder(ProfileScoped, Base):
         UniqueConstraint("profile_id", "dedupe_key", name="uq_delivery_ladder_dedupe"),
         _tied_to_profile("delivery_ladder", "line_id", "medication_line"),
         _tied_to_profile("delivery_ladder", "flag_id", "red_flag"),
+        _tied_to_profile("delivery_ladder", "note_id", "event_note"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -150,6 +160,15 @@ class Ladder(ProfileScoped, Base):
     )
     anchor: Mapped[str | None] = mapped_column(String(16), default=None)
     flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("red_flag.id"), default=None)
+    note_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("event_note.id"), default=None)
+    """The note an unheard-note ladder is about, when there is one to listen to (#173): what
+    decides, for each person it asks, whether she is told to listen or to call him. None
+    where the audio never arrived, and on every other ladder."""
+    note_from_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
+    """Who sent that voice note (#173). The notice never says the patient sent it when he did
+    not: a note from the helper names her and says to call her. None on every other ladder."""
     rungs: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     started_at: Mapped[datetime] = mapped_column()
     next_rung: Mapped[int] = mapped_column(Integer, default=0)

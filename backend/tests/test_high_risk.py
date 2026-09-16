@@ -246,3 +246,108 @@ def test_a_code_is_read_as_words_before_the_drug_is_looked_for() -> None:
     assert high_risk_class("digoxin-level") == "cardiac_glycoside"
     assert names_high_risk({"code": "methotrexate_weekly"}) == "antimetabolite"
     assert high_risk_class("paracetamol_level") is None
+
+
+async def test_a_count_of_a_high_risk_medicine_rests_on_a_photo_under_the_store(
+    sg: AsyncSession,
+) -> None:
+    """Review #140, note 3: `count:<generic>` (tablets found at home) is not a dose, but a
+    typed count that is too high puts off a warfarin reorder. The rule under the store holds
+    it to a photo as the medicines' door does, whoever writes it; any other count is free."""
+    context = await _pa(sg)
+    told = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.MESSAGE,
+        occurred_at=SEPT_3,
+        label="more at home",
+        source_channel=SourceChannel.APP,
+    )
+    for value in (
+        {"generic": "warfarin", "quantity": 14},
+        {"generic": "rx-0001", "quantity": 14, "drug_class": "anticoagulant"},
+        {"generic": "rx-0002", "quantity": 14, "high_risk": True},
+    ):
+        async with refused_unit(sg, HighRiskNeedsLabelPhoto):
+            await assert_fact(
+                sg,
+                context=context,
+                subject="medication",
+                attribute=f"count:{value['generic']}",
+                value=value,
+                confidence=0.9,
+                event_id=told.id,
+            )
+    pdf = await _artifact(sg, context, ArtifactKind.PDF)
+    async with refused_unit(sg, HighRiskNeedsLabelPhoto):
+        await assert_fact(
+            sg,
+            context=context,
+            subject="medication",
+            attribute="count:warfarin",
+            value={"generic": "warfarin", "quantity": 14},
+            confidence=0.9,
+            artifact_id=pdf.id,
+        )
+    assert await current_facts(sg, context=context) == []
+
+    photo = await _artifact(sg, context, ArtifactKind.PHOTO)
+    await assert_fact(
+        sg,
+        context=context,
+        subject="medication",
+        attribute="count:warfarin",
+        value={"generic": "warfarin", "quantity": 14},
+        confidence=0.9,
+        artifact_id=photo.id,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject="medication",
+        attribute="count:amlodipine",
+        value={"generic": "amlodipine", "quantity": 20, "high_risk": False},
+        confidence=0.9,
+        event_id=told.id,
+    )
+    assert len(await current_facts(sg, context=context)) == 2
+
+
+async def test_a_counts_own_attribute_names_the_drug_too(sg: AsyncSession) -> None:
+    """#166 review: `count:<generic>` is where a count correction's drug name lives by
+    construction — `app.medicines.reorder.found_more` also echoes `drug_class`/`high_risk`
+    into the value, but the rule must not depend on a writer remembering to. A bare value
+    with no `generic`, `drug_class` or `high_risk` key is still held to the photo, read off
+    the attribute alone."""
+    context = await _pa(sg)
+    told = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.MESSAGE,
+        occurred_at=SEPT_3,
+        label="more at home",
+        source_channel=SourceChannel.APP,
+    )
+    async with refused_unit(sg, HighRiskNeedsLabelPhoto):
+        await assert_fact(
+            sg,
+            context=context,
+            subject="medication",
+            attribute="count:warfarin",
+            value={"quantity": 14},
+            confidence=0.9,
+            event_id=told.id,
+        )
+    assert await current_facts(sg, context=context) == []
+
+    photo = await _artifact(sg, context, ArtifactKind.PHOTO)
+    await assert_fact(
+        sg,
+        context=context,
+        subject="medication",
+        attribute="count:warfarin",
+        value={"quantity": 14},
+        confidence=0.9,
+        artifact_id=photo.id,
+    )
+    assert len(await current_facts(sg, context=context)) == 1

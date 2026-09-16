@@ -421,7 +421,7 @@ IF_FORGOTTEN: Mapping[str, Mapping[str, Lines]] = {
 # @patient
 BOUNDARY: Mapping[str, Lines] = {
     "en": (
-        "This helps you take what {doctor} prescribed.",
+        "This helps you take what {doctor} gave you.",
         "Ask {doctor} or the pharmacist before you change anything.",
     ),
     "ms": (
@@ -535,14 +535,28 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
     "zh": {"ask_to_order": "请家人订。", "i_have_more": "我家里还有。"},
 }
 
-# @patient phrase
+# The family's words, not his: the family's list only (caregiver density), so not tagged.
 ORDER_TASK: Mapping[str, str] = {
-    "en": "order more of {medicine}",
-    "ms": "pesan lagi {medicine}",
-    "zh": "再订{medicine}",
+    "en": "order more {medicine} for {patient}",
+    "ms": "pesan lagi {medicine} untuk {patient}",
+    "zh": "为{patient}再订{medicine}",
 }
-"""The task on the family's list when he taps "Ask the family to order." (E04-05): a label in
-his words, since it reaches him in the digest and on his trail."""
+"""The task on the family's list when he says yes to "Ask the family to order." (E04-05), in
+the language of the one it is given to: "order more amlodipine 5 mg for Pa". The medicine is
+named as its box names it — the line's chemical name and strength, licensed drug data that
+`ask_to_order` fills in — so the one who buys it cannot buy the wrong one where two of his
+tablets share his name for them; and he is named, never "your", which on Kit's list would be
+hers. It is the family's label and never reaches him: the digest, which he reads too, says
+an order task in its own words and names no medicine (`app.family.strings.DIGEST`)."""
+
+# @patient
+ORDER_PREVIEW: Mapping[str, Lines] = {
+    "en": ("Nura will ask {who} to order more of {medicine}.", "Is that OK?"),
+    "ms": ("Nura akan minta {who} pesan lagi {medicine}.", "Boleh begitu?"),
+    "zh": ("Nura会请{who}再订{medicine}。", "这样可以吗？"),
+}
+"""What he reads before his yes to "Ask the family to order.": who will be asked, and for
+which medicine. His yes binds to that person and that line (`app.drafts.OrderDraft`)."""
 
 # @patient
 ASKED_TO_ORDER: Mapping[str, str] = {
@@ -585,15 +599,15 @@ DOSE_CARD: Mapping[str, str] = {
 SOURCE: Mapping[str, Mapping[str, str]] = {
     "en": {
         "label": "This comes from the label you kept on {date}.",
-        "typed": "This comes from what was typed in on {date}.",
+        "typed": "Someone typed this in on {date}.",
     },
     "ms": {
         "label": "Ini daripada label yang anda simpan pada {date}.",
-        "typed": "Ini daripada apa yang ditaip pada {date}.",
+        "typed": "Seseorang menaip ini pada {date}.",
     },
     "zh": {
         "label": "这来自您在{date}保存的标签。",
-        "typed": "这来自{date}输入的内容。",
+        "typed": "这是{date}有人输入的。",
     },
 }
 """Where a medicine line came from, and on which day: the source line under every card that

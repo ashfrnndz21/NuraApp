@@ -461,6 +461,8 @@ CLASSES: dict[str, str] = {
     "delivery_ladder.line_id": HEALTH,
     "delivery_ladder.anchor": HEALTH,
     "delivery_ladder.flag_id": HEALTH,
+    "delivery_ladder.note_id": HEALTH,
+    "delivery_ladder.note_from_person_id": IDENTIFIER,
     "delivery_ladder.rungs": IDENTIFIER,
     "delivery_ladder.started_at": HEALTH,
     "delivery_ladder.next_rung": OPERATIONAL,
@@ -631,6 +633,11 @@ CLASSES: dict[str, str] = {
     # A drive to a visit (E05-03): which visit, and that it is the drive.
     "task.appointment_id": HEALTH,
     "task.errand": HEALTH,
+    # An order for more of a medicine (E04-05): which of his medicine lines.
+    "task.medication_line_id": HEALTH,
+    # An order task's wall-clock day (E04-05; #166 review): timing metadata the once-a-day
+    # rule keys on, no different from `created_at`.
+    "task.opened_on": OPERATIONAL,
     "roster_slot.person_id": IDENTIFIER,
     "roster_slot.role": IDENTIFIER,
     "roster_slot.weekdays": OPERATIONAL,

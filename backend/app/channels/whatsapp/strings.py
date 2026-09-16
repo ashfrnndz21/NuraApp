@@ -145,6 +145,159 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
         ),
         "zh": ("Nura 听不到您的语音留言。", "如果您不舒服，现在就打电话给家人。"),
     },
+    # The same two, with who the notice actually reached (#173): nobody is said to know who
+    # was not told, so these are said only once a notice went out, and never before it.
+    "voice_note_unheard_told": {
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "{names} knows now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_unheard_told_many": {
+        "en": (
+            "Nura kept your voice note.",
+            "Nura could not hear this note.",
+            "{names} know now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura sudah simpan nota suara anda.",
+            "Nura tidak dapat mendengar nota ini.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 保存了您的语音留言。",
+            "Nura 听不清这段录音。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_not_fetched_told": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} knows now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    "voice_note_not_fetched_told_many": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} know now.",
+            "If you feel unwell, call your family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Jika anda rasa tidak sihat, telefon keluarga anda sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "如果您不舒服，现在就打电话给家人。",
+        ),
+    },
+    # A voice note from the helper or another key holder that Nura could not hear (#173). It
+    # is not kept — it may carry other people's voices — and the line telling him to call his
+    # family is his, so this asks the sender to write instead. The chief is told either way.
+    # The notice reached nobody, so this one says who to call: every other line for a note
+    # nobody could hear ends on a way through, and this one must too.
+    "note_unheard_other": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "Please write what you said.",
+            "If it cannot wait, call the family now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Sila tulis apa yang anda kata.",
+            "Kalau tidak boleh tunggu, telefon keluarga sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "请把您说的话写下来。",
+            "如果不能等，现在就打电话给家人。",
+        ),
+    },
+    "note_unheard_other_told": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} knows now.",
+            "Please write what you said.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Sila tulis apa yang anda kata.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "请把您说的话写下来。",
+        ),
+    },
+    "note_unheard_other_told_many": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "{names} know now.",
+            "Please write what you said.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "{names} sudah tahu.",
+            "Sila tulis apa yang anda kata.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "{names}已经知道了。",
+            "请把您说的话写下来。",
+        ),
+    },
+    # A voice note Nura could not hear on a profile whose patient has not agreed to WhatsApp
+    # (#173): nothing of it is kept and the thread is not opened, so this one fixed line goes
+    # straight from the provider, the way the red flag's fixed line does. His family is told
+    # through the app all the same.
+    "note_unheard_fixed": {
+        "en": (
+            "Nura could not hear your voice note.",
+            "Nura did not keep this note.",
+            "If it cannot wait, call {emergency_number} now.",
+        ),
+        "ms": (
+            "Nura tidak dapat dengar nota suara anda.",
+            "Nura tidak menyimpan nota ini.",
+            "Kalau tidak boleh tunggu, telefon {emergency_number} sekarang.",
+        ),
+        "zh": (
+            "Nura 听不到您的语音留言。",
+            "Nura 没有保存这段录音。",
+            "如果不能等，现在就打{emergency_number}。",
+        ),
+    },
     # Said in the family's WhatsApp group, which he reads, above a message written in the app
     # (#158): his words for where it was written, the same in every language, and a subject
     # always — `mirror_to_group` fills an unnamed poster as Someone.
@@ -233,6 +386,12 @@ REPLIES: Mapping[str, Mapping[str, Lines]] = {
     # can be caught (#162). `{took}` is one `TOOK` line per moment of his day.
     "taken_patient": {
         "en": ("Thank you, I wrote it down.", "{took}", "{who} can see you took it."),
+        "ms": ("Terima kasih, saya sudah tulis.", "{took}", "{who} boleh lihat anda sudah ambil."),
+        "zh": ("谢谢，我记下了。", "{took}", "{who}能看到您吃了。"),
+    },
+    # More than one tablet written down at once: "it" would name only one of them (#173).
+    "taken_patient_many": {
+        "en": ("Thank you, I wrote it down.", "{took}", "{who} can see you took them."),
         "ms": ("Terima kasih, saya sudah tulis.", "{took}", "{who} boleh lihat anda sudah ambil."),
         "zh": ("谢谢，我记下了。", "{took}", "{who}能看到您吃了。"),
     },

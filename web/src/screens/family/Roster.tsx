@@ -19,24 +19,28 @@ export function RosterPart(): JSX.Element | null {
   const a = useAct();
   const [noVisit, setNoVisit] = useState(false);
   const pid = here?.papers.profile_id;
-  const people = useRead(here ? () => family.grants(here.bearer, here.papers.profile_id, here.lang) : null, [pid, here?.lang]);
-  const slots = useRead(here ? () => family.roster(here.bearer, here.papers.profile_id) : null, [pid]);
-  const duty = useRead(here ? () => family.onDuty(here.bearer, here.papers.profile_id) : null, [pid]);
+  // Not just the roster pill hidden from him (Family.tsx): the fetch itself never runs for
+  // the owner, so a task naming a medicine by its box never reaches his browser even by a
+  // stale or crafted route — the backend lets the owner read every task (#166 review).
+  const forHim = here && !here.owner ? here : null;
+  const people = useRead(forHim ? () => family.grants(forHim.bearer, forHim.papers.profile_id, forHim.lang) : null, [pid, forHim?.lang]);
+  const slots = useRead(forHim ? () => family.roster(forHim.bearer, forHim.papers.profile_id) : null, [pid]);
+  const duty = useRead(forHim ? () => family.onDuty(forHim.bearer, forHim.papers.profile_id) : null, [pid]);
   const jobs = useRead(
-    here
+    forHim
       ? async () => {
           try {
-            return await family.tasks(here.bearer, here.papers.profile_id, false);
+            return await family.tasks(forHim.bearer, forHim.papers.profile_id, false);
           } catch (failure) {
             // Every task is the owner's and his chief's to read; the ones that name you, anyone's.
-            if (failure instanceof Refused && failure.status === 403) return family.tasks(here.bearer, here.papers.profile_id, true);
+            if (failure instanceof Refused && failure.status === 403) return family.tasks(forHim.bearer, forHim.papers.profile_id, true);
             throw failure;
           }
         }
       : null,
     [pid],
   );
-  if (!here) return null;
+  if (!here || here.owner) return null;
   const names = namesOf(people.value ?? []);
   if (here.papers.standing === "owner") names.set(here.papers.key_id ?? "", here.papers.display_name);
   const nameOf = (personId: string) => names.get(personId) ?? "";

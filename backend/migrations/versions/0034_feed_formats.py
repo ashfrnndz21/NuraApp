@@ -12,8 +12,8 @@ no database constraint, so no schema change for them. The duty card's supply is 
 now on (the caregiver's list has no gate); rows written before keep the `gate` they were
 written with, and the caregiver's list, which shows no gate card, shows them as before.
 
-Revision ID: 0030_feed_formats
-Revises: 0028_whatsapp_opt_in
+Revision ID: 0034_feed_formats
+Revises: 0033_order_task
 Create Date: 2026-09-15
 """
 
@@ -22,8 +22,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0032_feed_formats"
-down_revision = "0031_brief_safety"
+revision = "0034_feed_formats"
+down_revision = "0033_order_task"
 branch_labels = None
 depends_on = None
 

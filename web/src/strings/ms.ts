@@ -609,10 +609,10 @@ export const ms = {
     symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
     // @patient phrase
     symptomsKeep: "Simpan ini",
-    // @patient
     // @patient phrase
     sendAgain: "Hantar sekali lagi",
-    symptomsSaved: "Nura sudah mencatat ini.",
+    // @patient
+    symptomsSaved: "Nura sudah tulis ini.",
     // @patient phrase
     nudgeOk: "OK",
     // @patient phrase
@@ -784,7 +784,7 @@ export const ms = {
       // @patient
       lead3: "Nura guna ini hanya untuk tahu di mana hendak melihat.",
       // @patient
-      noted: "Nura sudah catat itu.",
+      noted: "Nura sudah tulis itu.",
       // @patient
       removed: "Nura sudah buang itu.",
       // @patient phrase
@@ -948,11 +948,11 @@ export const ms = {
         records: "Surat-surat anda",
       },
       // @patient phrase
-      seeWords: "Lihat kata-kata itu",
+      seeWords: "Lihat kata-kata ini",
       // @patient
       wordsLead: "Sila baca kata-kata ini.",
       // @patient phrase
-      agree: "Saya setuju, benarkan mereka",
+      agree: "Saya setuju, beri mereka kunci",
       // @patient
       done: "Mereka boleh melihat bahagian itu sekarang.",
     },
@@ -965,8 +965,8 @@ export const ms = {
       cadence1: "Nura akan minta satu perkara sehari, tidak lebih.",
       // @patient
       cadence2: "Tekan Nanti dan Nura akan tanya sekali lagi.",
-      // @patient phrase
-      missing: "Belum ada",
+      // @patient
+      missing: "Nura belum ada yang ini.",
       // @patient
       onDay: "Nura akan minta ini pada {date}.",
       // @patient phrase
@@ -978,7 +978,7 @@ export const ms = {
       // @patient
       more: "Ada {count} lagi selepas itu.",
       // @patient
-      nothing: "Tiada apa yang tertinggal buat masa ini.",
+      nothing: "Nura sudah ada semua yang perlu buat masa ini.",
       // @patient phrase
       open: "Buka Nura",
     },
@@ -1064,6 +1064,15 @@ export const ms = {
     storyForgot: "Jika anda terlupa",
     // @patient headline
     storyAsk: "Untuk ditanya kepada doktor anda",
+    // @patient phrase
+    hearParts: {
+      purpose: "Dengar untuk apa ubat ini",
+      how_to_take: "Dengar cara mengambilnya",
+      watch_out: "Dengar apa yang perlu diperhatikan",
+      avoid: "Dengar apa yang perlu dielakkan",
+      if_forgotten: "Dengar apa yang perlu dibuat jika anda terlupa",
+      doctor_question: "Dengar apa yang perlu ditanya kepada doktor anda",
+    },
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient
@@ -1071,7 +1080,7 @@ export const ms = {
     // @patient phrase
     nameLabel: "Nama pada label",
     // @patient phrase
-    strengthLabel: "Kekuatannya",
+    strengthLabel: "Berapa kuat ubat ini",
     // @patient phrase
     howLabel: "Cara mengambilnya",
     // @patient
@@ -1085,7 +1094,7 @@ export const ms = {
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient
-    outcomeRefill: "Ini tambahan ubat yang sudah ada dalam senarai anda.",
+    outcomeRefill: "Ini tambahan untuk ubat yang anda ambil sekarang.",
     // @patient
     outcomeChange: "Label ini ada jumlah yang lain.",
     // @patient headline
@@ -1112,6 +1121,16 @@ export const ms = {
     moreLabel: "Berapa banyak lagi",
     // @patient phrase
     moreYes: "Ya, tambah",
+    // @patient
+    morePhoto: "Ambil gambar label ubat dahulu.",
+    // @patient
+    morePhotoWhy: "Untuk ubat ini, Nura perlu lihat label ubat.",
+    // @patient
+    morePhotoKept: "Nura sudah ada gambar label ubat itu.",
+    // @patient phrase
+    orderYes: "Ya, minta keluarga pesan",
+    // @patient phrase
+    orderNo: "Bukan sekarang",
     // @patient
     papersNone: "Tiada surat yang menunggu ya anda.",
     // @patient
@@ -1207,7 +1226,7 @@ export const ms = {
     // @patient headline
     notesTitle: "Nota tentang tempat ini",
     // @patient
-    notesOnly: "Hanya pemilik dan ketua keluarga boleh baca nota ini.",
+    notesOnly: "Hanya anda dan orang yang menjaga surat-surat ini boleh baca nota ini.",
     // @patient phrase
     noteLabel: "Satu nota tentang tempat ini",
     // @patient phrase
@@ -1233,20 +1252,31 @@ export const ms = {
       haemoglobin: "Kiraan darah anda",
       tsh: "Ujian tiroid anda",
     },
-    // @patient phrase
-    resultOn: "{value} {unit} pada {date}",
+    // Ayat penuh, bukan frasa: berdiri sendiri sebagai satu perenggan (Day.tsx), yang dibaca
+    // sebagai satu unit lengkap oleh pembaca skrin (#166 review).
     // @patient
-    rangeUnder: "Julatnya bawah {upper}.",
+    resultOn: "Bacaannya {value} pada {date}.",
+    // Her density only (the caregiver's table of results): the unit stays with the number.
+    // Never shown to him, so not a patient string; `resultOn` is his.
+    resultOnUnit: "{value} {unit} pada {date}",
     // @patient
-    rangeOver: "Julatnya atas {lower}.",
+    rangeUnder: "Bagi kebanyakan orang, nombor ini di bawah {upper}.",
     // @patient
-    rangeBetween: "Julatnya {lower} hingga {upper}.",
+    rangeOver: "Bagi kebanyakan orang, nombor ini di atas {lower}.",
     // @patient
-    noRange: "Nura tiada julat untuk yang ini.",
+    rangeBetween: "Bagi kebanyakan orang, nombor ini {lower} hingga {upper}.",
     // @patient
-    labRange: "Julat ini tercetak pada ujian darah anda.",
+    noRange: "Nura tiada nombor biasa untuk yang ini.",
     // @patient
-    guideRange: "Julat ini dari panduan untuk umur anda.",
+    labRange: "Nombor biasa itu tercetak pada ujian darah anda.",
+    // @patient
+    guideRange: "Nombor biasa itu dari panduan untuk umur anda.",
+    // @patient
+    noRangeBecause: {
+      needs_age: "Nura perlukan umur anda untuk cari nombor biasa.",
+      needs_sex: "Nura perlu tahu sama ada anda lelaki atau perempuan.",
+      none_on_file: "Nura tiada nombor biasa untuk yang ini.",
+    },
     // @patient phrase
     anchors: {
       wake: "Apabila anda bangun",
@@ -1264,9 +1294,9 @@ export const ms = {
     // @patient phrase
     walk: "Berjalan kaki",
     // @patient
-    notSet: "Hari anda belum ditetapkan lagi.",
+    notSet: "Belum ada sesiapa menetapkan hari anda.",
     // @patient phrase
-    setDay: "Tetapkan hari",
+    setDay: "Tetapkan hari anda",
     // @patient phrase
     timeLabel: "Pukul berapa",
     // @patient phrase
@@ -1274,13 +1304,13 @@ export const ms = {
     // @patient phrase
     walkAfter: "Berjalan kaki selepas ini",
     // @patient phrase
-    checkDay: "Semak hari",
+    checkDay: "Semak hari anda",
     // @patient
-    dayAsk: "Adakah ini harinya?",
+    dayAsk: "Beginikah hari anda?",
     // @patient phrase
-    dayYes: "Ya, tetapkan hari",
+    dayYes: "Ya, tetapkan hari anda",
     // @patient
-    daySaved: "Nura sudah tulis hari itu.",
+    daySaved: "Nura sudah tulis hari anda.",
     // @patient headline
     tableMoment: "Bila",
     // @patient headline
@@ -1351,6 +1381,12 @@ export const ms = {
     windowLabel: "Untuk berapa lama",
     // @patient phrase
     makeKey: "Buat kunci",
+    // @patient phrase
+    seeWords: "Lihat kata-kata ini",
+    // @patient
+    wordsLead: "Sila baca kata-kata ini.",
+    // @patient phrase
+    agreeKey: "Saya setuju, beri mereka kunci",
     // @patient phrase
     narrow: "Kecilkan",
     // @patient phrase

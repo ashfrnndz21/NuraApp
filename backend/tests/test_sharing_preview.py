@@ -68,6 +68,20 @@ async def _agree(deployment: Deployment, token: str, profile_id: str, **override
     )
 
 
+async def _refused(deployment: Deployment, profile_id: str) -> list[str]:
+    """The refusals on his trail, by name, oldest first."""
+    async with deployment.sessions() as db:
+        found = await db.scalars(
+            select(AuditEntry.refused_because)
+            .where(
+                AuditEntry.profile_id == uuid.UUID(profile_id),
+                AuditEntry.outcome == Outcome.REFUSED,
+            )
+            .order_by(AuditEntry.at)
+        )
+        return [name for name in found if name is not None]
+
+
 async def _person(deployment: Deployment, phone: str) -> Person | None:
     async with deployment.sessions() as db:
         found: Person | None = await db.scalar(select(Person).where(Person.phone_e164 == phone))
@@ -150,6 +164,24 @@ async def test_a_person_let_in_by_phone_needs_a_name(
     assert agreed.status_code == 400
     assert agreed.json() == {"refusal": "HolderNeedsAName"}
     assert await _person(deployment, NEW_NUMBER) is None
+    # Both refusals are on his trail (#156): the preview's, and the agreement's past its door.
+    assert await _refused(deployment, profile_id) == ["HolderNeedsAName", "HolderNeedsAName"]
+
+
+async def test_a_person_who_is_nobody_here_is_refused_on_his_trail(
+    deployment: Deployment,
+) -> None:
+    """#156: an id that names nobody in this region is refused, by the preview and by the
+    agreement alike, and each refusal is written on the owner's trail."""
+    pa, profile_id = await _pa(deployment)
+    nobody = {"holder_phone_e164": None, "holder_person_id": str(uuid.uuid4())}
+    shown = await _preview(deployment, pa["token"], profile_id, **nobody)
+    assert shown.status_code == 403
+    assert shown.json() == {"refusal": "NoSuchHolder"}
+    agreed = await _agree(deployment, pa["token"], profile_id, **nobody)
+    assert agreed.status_code == 403
+    assert agreed.json() == {"refusal": "NoSuchHolder"}
+    assert await _refused(deployment, profile_id) == ["NoSuchHolder", "NoSuchHolder"]
 
 
 async def test_the_words_use_the_name_he_typed_never_the_accounts(deployment: Deployment) -> None:

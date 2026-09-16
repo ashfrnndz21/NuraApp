@@ -19,7 +19,17 @@ from datetime import date, datetime, time
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, ForeignKey, String, Time, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    String,
+    Time,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
@@ -142,10 +152,13 @@ class RosterSlot(ProfileScoped, Base):
 
 
 class Errand(StrEnum):
-    """A task that is part of a visit's logistics (E05-03). Only one kind for now: driving
-    him there. Any other task names no errand."""
+    """A task with a purpose Nura knows: driving him to a visit (E05-03), or ordering more of
+    a medicine (E04-05). Any other task names no errand."""
 
     DRIVE = "drive"
+    ORDER = "order"
+    """More of one medicine, on his yes to "Ask the family to order." (E04-05); the task
+    names the medicine line, so one open task a line a day is the most there ever is."""
 
 
 TASK_DONE_IN_PROGRESS = "task_done"
@@ -170,6 +183,26 @@ class Task(ProfileScoped, Base):
     __table_args__ = (
         _row_of_profile("task"),
         _tied_to_profile("task", "appointment_id", "appointment"),
+        _tied_to_profile("task", "medication_line_id", "medication_line"),
+        # One open order task a line a day (E04-05; #166 review): a partial unique index,
+        # not just the check-then-act in `ask_to_order`, so two yeses at the same moment
+        # cannot both write one. `ask_to_order` catches the racing insert's `IntegrityError`
+        # and answers with the task this index let win, same as a second yes does today.
+        #
+        # A day, not forever: `opened_on` is his wall-clock day (`_his_day`) at the moment
+        # the task was made, so the index reads "one open order task a line a *day*" — two
+        # yeses on the same day cannot both write one, but a task still open from yesterday
+        # does not block a fresh yes today (a partial index cannot test "today" itself; the
+        # column is what makes the day part of the key, not a computed date at query time).
+        Index(
+            "uq_task_open_order_per_line_per_day",
+            "profile_id",
+            "medication_line_id",
+            "opened_on",
+            unique=True,
+            sqlite_where=text("errand = 'order' AND done_at IS NULL"),
+            postgresql_where=text("errand = 'order' AND done_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -186,6 +219,14 @@ class Task(ProfileScoped, Base):
         ForeignKey("appointment.id"), default=None
     )
     errand: Mapped[Errand | None] = mapped_column(enum_column(Errand, "task_errand"), default=None)
+    medication_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("medication_line.id"), default=None, index=True
+    )
+    """The medicine line an order task is for (`Errand.ORDER`); else none."""
+    opened_on: Mapped[date | None] = mapped_column(default=None)
+    """His wall-clock day (`app.medicines.reorder._his_day`) when an order task was made
+    (`Errand.ORDER`); else none. What the partial unique index keys on, so a line's task
+    resets every day instead of blocking forever while yesterday's is still open."""
 
     @property
     def is_done(self) -> bool:

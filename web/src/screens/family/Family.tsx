@@ -81,9 +81,16 @@ function FamilyHome(): JSX.Element | null {
       {label}
     </Pill>
   );
-  const parts = here.patient
+  // Gated on who he is (standing), not how dense his screen reads (density, his own toggle,
+  // Me.tsx): the roster names his medicines by their box, so an owner who switches to the
+  // caregiver density for the bigger-print layout must not thereby unlock it (#166 review).
+  const parts = here.owner
     ? [
         pill("trail", whose(here, words.trailSelf, words.trailOther)),
+        // The owner's own selection to add and grant access to someone (E12): letting
+        // someone in at all is his own yes (`may_invite`), so only he — never his chief —
+        // sees it here; `KeysPart` reads `here.owner` to show him the words first.
+        pill("keys", words.keys),
         pill("onlyMe", words.onlyMe),
         pill("consents", whose(here, words.consentsSelf, words.consentsOther)),
         pill("thread", words.thread),

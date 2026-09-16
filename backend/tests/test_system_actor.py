@@ -57,7 +57,7 @@ async def test_the_engines_reach_is_the_systems_and_his_trail_folds_it(
     [today] = [day for day in days if day.day == date(2026, 9, 14)]
     folded = [line for line in today.lines if line.sentences[0].startswith("On Monday")]
     assert [line.sentences for line in folded] == [
-        ["On Monday 14 September, Nura checked your papers 4 times to remind you on time."]
+        ["On Monday 14 September, Nura checked your papers to remind you on time."]
     ]
     assert folded[0].who == "Nura" and folded[0].outcome is Outcome.ALLOWED
     assert folded[0].detail == []
