@@ -1545,7 +1545,11 @@ export const ms = {
     // @patient phrase
     closeAccount: "Tutup akaun saya",
     // @patient phrase
+    closeAccountOther: "Tutup akaun {name}",
+    // @patient phrase
     closeAccountYes: "Ya, tutup akaun saya",
+    // @patient phrase
+    closeAccountYesOther: "Ya, tutup akaun {name}",
     // @patient phrase
     keepCopy: "Simpan salinan untuk dicetak",
     // @patient phrase

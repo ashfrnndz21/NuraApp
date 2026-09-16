@@ -1544,7 +1544,11 @@ export const zh = {
     // @patient phrase
     closeAccount: "关闭我的账户",
     // @patient phrase
+    closeAccountOther: "关闭{name}的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
+    // @patient phrase
+    closeAccountYesOther: "是的，关闭{name}的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
     // @patient phrase

@@ -1547,7 +1547,11 @@ export const en = {
     // @patient phrase
     closeAccount: "Close my account",
     // @patient phrase
+    closeAccountOther: "Close {name}'s account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
+    // @patient phrase
+    closeAccountYesOther: "Yes, close {name}'s account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
     // @patient phrase

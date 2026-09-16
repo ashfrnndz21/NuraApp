@@ -675,7 +675,9 @@ export interface Strings {
     stop: string;
     stopYes: string;
     closeAccount: string;
+    closeAccountOther: string;
     closeAccountYes: string;
+    closeAccountYesOther: string;
     keepCopy: string;
     savePage: string;
     thread: string;
