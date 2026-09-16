@@ -1772,8 +1772,14 @@ async def _unheard_unagreed(
 
 
 async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
-    """Whether a feeling check-in went to him in this thread today and no feeling of his has
-    been written down since: then his "OK" is its answer, and at no other time."""
+    """Whether a feeling question went to him in this thread today and no feeling of his has
+    been written down since: then his "OK" is its answer, and at no other time.
+
+    This reads what he was actually sent (`WhatsAppMessage.asks_feeling`, set once, at
+    `send`, from the words themselves), never a template's name (#205): the plain check-in
+    and the day's check-in nudge both ask this, on days the nudge is what asks it because the
+    plain check-in deliberately stood down — and anything later that asks the same question
+    the same way is covered without a change here."""
     zone = REGION_TZ[work.context.region]
     local_day = as_utc(work.message.at).astimezone(zone).date()
     start = datetime.combine(local_day, time(0), zone).astimezone(UTC)
@@ -1785,7 +1791,7 @@ async def _check_in_open(session: AsyncSession, work: _Work) -> bool:
         where=(
             WhatsAppMessage.thread_id == work.thread.id,
             WhatsAppMessage.direction == Direction.OUTBOUND,
-            WhatsAppMessage.template_name == "feeling_check_in",
+            WhatsAppMessage.asks_feeling.is_(True),
             WhatsAppMessage.at >= start,
         ),
         channel=Channel.WHATSAPP,

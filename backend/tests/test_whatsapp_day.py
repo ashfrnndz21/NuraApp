@@ -499,13 +499,12 @@ async def test_pa_completes_a_full_day_on_whatsapp_by_the_scheduler(
     assert nudged["text"].splitlines()[-1] == "How are you feeling today?"
     assert not _of(await day.run(18, 5), "check_in")
 
-    # 18:10, his one word back: `_check_in_open` (inbound.py) recognises an "OK" only as the
-    # answer to the plain feeling_check_in template, pre-dating the day's smart nudge (W7),
-    # which used a different template to ask the same question here — a known gap on main
-    # itself (see the PR), not something this merge introduces or is the place to fix. His
-    # "OK" falls through to the general reply rather than being read as his feeling.
+    # 18:10, his one word back: the nudge asked the same feeling question the plain check-in
+    # would have (#205, fixed) — `_check_in_open` (inbound.py) now reads what he was actually
+    # sent (`WhatsAppMessage.asks_feeling`), not which template's name carried it — so his
+    # "OK" is read as his answer, the same as it would be to the plain check-in.
     await day.says(SCHED_PA, 18, 10, {"type": "text", "text": {"body": "ok"}})
-    assert day.said_to(SCHED_PA)[-1] == ["I have no question open for you."]
+    assert day.said_to(SCHED_PA)[-1] == ["Thank you for telling me.", "I wrote it down."]
     felt = await _ok(
         await deployment.client.get(
             f"/profiles/{day.profile_id}/facts",
@@ -513,7 +512,8 @@ async def test_pa_completes_a_full_day_on_whatsapp_by_the_scheduler(
             headers=bearer(day.pa["token"]),
         )
     )
-    assert felt == []
+    [feeling] = felt
+    assert feeling["attribute"] == "reported" and feeling["value"] == "ok"
 
     # 20:00, the family notice to his chief: a count, never what was said. Not to the helper,
     # and not to him.
