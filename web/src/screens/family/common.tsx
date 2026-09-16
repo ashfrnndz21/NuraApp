@@ -1,10 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import type { ComponentChildren, JSX } from "preact";
 import type { ProfileOut } from "../../api/types";
-import { go, openTab, type FamilyPart } from "../../flow";
+import { go, type FamilyPart } from "../../flow";
 import { density, profile, token } from "../../store/session";
 import { fill, LOCALE, language, t } from "../../strings";
-import { Header, Notice, TabBar } from "../../ui/components";
+import { Header, Notice } from "../../ui/components";
+import { Shell } from "../Shell";
 
 /** What every Family part needs: whose papers, as whom, how dense, in which language. */
 export interface Here {
@@ -40,11 +41,10 @@ export function whose(here: Here, self: string, other: string): string {
 /** One Family part: the header with its way back, the part, the tab bar. */
 export function FamilyPage({ title, part, children }: { title: string; part: FamilyPart; children: ComponentChildren }): JSX.Element {
   return (
-    <main class="screen family" data-density={density()} data-testid={`family-${part}`}>
+    <Shell tab="family" extraClass="family" testId={`family-${part}`}>
       <Header title={title} onBack={part === "home" ? undefined : () => go({ name: "family", part: "home" })} />
       {children}
-      <TabBar current="family" onSelect={openTab} />
-    </main>
+    </Shell>
   );
 }
 

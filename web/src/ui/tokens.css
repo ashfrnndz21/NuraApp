@@ -2,6 +2,25 @@
    `data-density` on <html> only moves the type scale, the touch target and the surface a
    decision sits on. The wash is the State posture, set as `data-posture` on <html>. */
 
+/* Outfit (SIL Open Font License 1.1, public/fonts/OFL.txt), self-hosted: no font CDN is ever
+   asked for anything. One variable file per script, weights 300 to 500 — the persona dial. */
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 300 500;
+  font-display: swap;
+  src: url("/fonts/outfit-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 300 500;
+  font-display: swap;
+  src: url("/fonts/outfit-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   /* Colour */
   --mist: #f5f1f4;
@@ -26,6 +45,14 @@
   --no-bg: #f7e4e1;
   --no-ink: #7a2e24;
 
+  /* The one coral: "I'm not feeling well", a soft coral-tinted paper pill, never a red button.
+     Its ink on its ground is 7:1 or better (tests/unit/contrast.test.ts). */
+  --coral-pill-bg: #f7e4e1;
+  --coral-pill-border: #efcfca;
+  --coral-pill-ink: #7a2e24;
+  /* The range band behind a sparkline: Plum at 8%. */
+  --band: rgba(78, 58, 120, 0.08);
+
   /* Surfaces: glass carries chrome and context, paper carries any decision */
   --glass-bg: rgba(255, 255, 255, 0.55);
   --glass-blur: blur(18px) saturate(1.2);
@@ -33,6 +60,13 @@
   --glass-highlight: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
   --tile-shadow: 0 8px 24px rgba(60, 40, 80, 0.06);
   --paper-bg: rgba(255, 255, 255, 0.92);
+  --paper-border: 1px solid rgba(255, 255, 255, 0.9);
+  /* A chip: glass at a smaller blur, 12px radius, Ink text — never white on a colour. */
+  --chip-bg: rgba(255, 255, 255, 0.55);
+  --chip-blur: blur(12px);
+  --chip-border: 1px solid rgba(255, 255, 255, 0.75);
+  /* A hairline between rows and above a why line. */
+  --hairline: 1px solid rgba(43, 39, 51, 0.08);
 
   /* Shape */
   --radius-sheet: 28px;
@@ -45,10 +79,16 @@
   --space-2: 12px; /* gap between tiles */
   --space-3: 20px; /* tile padding, screen gutter */
   --space-4: 32px;
+  --space-half: 4px; /* inside a line group only */
+  --gutter: var(--space-3); /* screen gutter */
+  --tile-pad: var(--space-3); /* tile padding */
+  --tile-gap: var(--space-2); /* gap between tiles */
 
   /* Type: one family, weight is the persona dial. `rem` so the system text size scales it. */
   --font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --line-height: 1.5;
+  /* Numbers use tabular figures everywhere. */
+  --numeric: tabular-nums;
 
   /* Washes: 160° linear, plus one soft white radial light at top-left */
   --wash-light: radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.65), transparent 55%);
@@ -77,8 +117,11 @@
   --text-caption: 0.8125rem; /* 13px */
   --text-button: 1rem; /* 16px */
   --weight-button: 500;
+  --text-tab: 0.8125rem; /* 13px: five words under five icons */
   --target: 48px;
   --icon-size: 24px;
+  /* Secondary text: Ink soft in the caregiver's density. */
+  --ink-quiet: var(--ink-soft);
   --card-bg: var(--glass-bg);
   --card-blur: var(--glass-blur);
   /* The word cloud's three sizes: how common a word is, plus what his taps point at. */
@@ -99,8 +142,12 @@
   --text-caption: 1rem; /* 16px */
   --text-button: 1.25rem; /* 20px */
   --weight-button: 500;
+  --text-tab: 1rem; /* 16px: four words under four icons */
   --target: 56px;
   --icon-size: 28px;
+  /* Secondary text holds 7:1 on paper in his density (docs/design-system.md §5), so it is a
+     deeper Ink soft than the caregiver's — the one token the patient density darkens. */
+  --ink-quiet: #57505f;
   --card-bg: var(--paper-bg);
   --card-blur: none;
   /* Never below the 20px body, however light the word. */

@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
+from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.schemas import FactOut, utc
 from app.channels.api.voice_schemas import VoiceScriptOut
 from app.ingestion.models import EventNote
@@ -471,11 +472,25 @@ class ProviderHistoryOut(BaseModel):
         )
 
 
+CHANGE_TONE: dict[str, str] = {
+    "flags": "act",
+    "waiting": "watch",
+    "medicines": "watch",
+    "family": "good",
+    "notes": "good",
+}
+"""The dot beside a line of what changed on the chief's Home (docs/design-system.md, card
+grammar: Good / Watch / Act on the figure only), by the part it is in: a red flag is Act, a
+changed medicine or something still waiting is Watch, the family's own notes are Good. Visits,
+papers and new facts carry no tone. A presentation of the part, never a judgement of a value."""
+
+
 class ChangeLineOut(BaseModel):
     section: str
     key: str
     text: str
     refs: dict[str, list[str]]
+    tone: str | None = None
 
     @classmethod
     def of(cls, line: ChangeLine) -> ChangeLineOut:
@@ -483,6 +498,7 @@ class ChangeLineOut(BaseModel):
             section=line.section,
             key=line.key,
             text=line.text,
+            tone=CHANGE_TONE.get(line.section),
             refs={name: list(ids) for name, ids in line.refs.items() if ids},
         )
 
@@ -596,9 +612,10 @@ class AnswerLineOut(BaseModel):
 class AnswerOut(BaseModel):
     """An answer: the cited lines, the honest line when the record does not answer, the
     boundary last, and the whole as he hears it (`spoken`). The question is named by the
-    artefact it was kept as, never repeated."""
+    artefact it was kept as, never repeated — or, a red word heard in it, the red-flag path's
+    card and nothing looked up (`red_only`)."""
 
-    question_artifact_id: uuid.UUID
+    question_artifact_id: uuid.UUID | None
     mode: Mode
     language: str
     answered: bool
@@ -609,6 +626,28 @@ class AnswerOut(BaseModel):
     voice_script: VoiceScriptOut
     """`spoken` as it is said (E22-03), the longer pause before the boundary."""
     withheld: list[Scope]
+    red_flag: FeelingOut | None = None
+    """A red flag heard in the question: the red-flag path it took, as the same word tapped on
+    the feeling cloud (the moment written in his words, the flag raised, the family told), and
+    nothing looked up after it. None when the question carries none."""
+
+    @classmethod
+    def red_only(cls, red_flag: FeelingOut, mode: Mode) -> AnswerOut:
+        """A red word in the question: the urgent card, said as it is heard, and no answer — the
+        question is kept as the moment's words on the red-flag path, not as a MESSAGE."""
+        return cls(
+            question_artifact_id=None,
+            mode=mode,
+            language=red_flag.language,
+            answered=False,
+            lines=[],
+            honest=[],
+            boundary=[],
+            spoken=list(red_flag.lines),
+            voice_script=VoiceScriptOut.of(red_flag.lines, red_flag.language),
+            withheld=[],
+            red_flag=red_flag,
+        )
 
     @classmethod
     def of(cls, answer: Answer) -> AnswerOut:

@@ -7,7 +7,8 @@ import { bindingOf } from "../offline/todayCache";
 import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
-import { Card, Header, Hear, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { Card, Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { Shell } from "./Shell";
 
 /** Open the backend's printable page for this card in a new tab, from the copy the phone
  *  kept — so it opens with no network too — for the phone's own Print (E13-01's page: paper,
@@ -91,7 +92,7 @@ export function EmergencyScreen(): JSX.Element {
   // An emergency-only key (a neighbour's) has the card and nothing else: no way back to a Today.
   const only = papers ? emergencyOnly(papers) : false;
   return (
-    <main class="screen" data-testid="emergency-screen">
+    <Shell tab={only ? "today" : null} testId="emergency-screen">
       <Header title={s.today.emergencyTitle} onBack={only ? undefined : () => go({ name: "today" })} />
       <Notice error={error} />
       {kept ? (
@@ -106,7 +107,6 @@ export function EmergencyScreen(): JSX.Element {
           <p>{s.today.homeScreen3}</p>
         </Tile>
       )}
-      <TabBar current="today" onSelect={(tab) => go(tab === "me" ? { name: "me" } : { name: "today" })} />
-    </main>
+    </Shell>
   );
 }

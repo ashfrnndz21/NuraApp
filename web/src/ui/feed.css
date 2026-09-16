@@ -244,3 +244,25 @@
 #app:has(> .feed-screen) > .demo-banner strong {
   font-size: var(--text-caption);
 }
+
+/* At a large text size the card keeps its lines and gives up its margins instead: the padding
+   around and inside it is chrome, and chrome is what should pay for the writing being bigger.
+   Never fewer lines — the lines are what he came for. */
+:root[data-writing="large"] .feed-card,
+:root[data-writing="large"] .feed-end {
+  padding: var(--space-1) var(--space-2);
+}
+:root[data-writing="large"] .feed-strip {
+  padding: var(--space-1) var(--space-2) 0;
+}
+
+/* The tile's own padding is chrome too — "around and inside it" above means both — but it
+   was left at the resting size, so on a card with several buttons (the four side actions
+   plus a reorder pill) it alone could eat almost everything `100cqh` gives the tile, leaving
+   `.feed-body` at zero: not scrolled past, just never given a pixel of height to scroll
+   *in*, so its lines — even its own headline — could never be brought into view at all.
+   Shrinking this padding first is what "the container gives way to the content" means here:
+   pay the chrome before the lines pay anything. */
+:root[data-writing="large"] .feed-card > .tile {
+  padding: var(--space-1) var(--space-2);
+}

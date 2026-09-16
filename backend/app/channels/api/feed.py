@@ -36,6 +36,7 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
+from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
@@ -111,13 +112,14 @@ async def feed(
     page = await feed_page(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
-    return FeedPageOut.of(page)
+    return (await reader_of(session, context, None)).page(FeedPageOut.of(page))
 
 
 @router.get("/{profile_id}/feed/today")
 async def feed_today(request: Request, context: Context, session: Db) -> FeedPageOut:
     """Today's top three (E11-02): alerts, then reminders, then insights, each with its why."""
-    return FeedPageOut.of(await top_three(session, context=context, engine=_engine(request)))
+    top = FeedPageOut.of(await top_three(session, context=context, engine=_engine(request)))
+    return (await reader_of(session, context, None)).page(top)
 
 
 @router.get("/{profile_id}/feed/{item_id}/voice")
@@ -216,7 +218,8 @@ async def feed_clip_video(
 @router.get("/{profile_id}/feed/cached")
 async def cached(context: Context, session: Db) -> FeedPageOut:
     """The last first page rendered for this person, as it was: the offline page."""
-    return FeedPageOut.of(await cached_page(session, context=context))
+    kept = FeedPageOut.of(await cached_page(session, context=context))
+    return (await reader_of(session, context, None)).page(kept)
 
 
 @router.post("/{profile_id}/feed/{item_id}/engagement", status_code=status.HTTP_201_CREATED)

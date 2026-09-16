@@ -32,7 +32,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
-from app.audit.access import audited_guard
+from app.audit.access import audited_guard, audited_read
 from app.audit.models import Action
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
@@ -69,6 +69,7 @@ from app.ingestion.consult import (
     recordings_for,
 )
 from app.keys.scopes import Scope
+from app.memory.models import Provider
 from app.memory.spine import upcoming_appointments
 from app.reasoning.visits.brief import brief_for, lines_for
 from app.reasoning.visits.guard import can_change_visits
@@ -96,8 +97,15 @@ router = APIRouter(prefix="/profiles", tags=["visits"])
 
 @router.get("/{profile_id}/appointments")
 async def appointments(context: Context, session: Db) -> list[AppointmentOut]:
-    """The visits still to come, soonest first."""
-    return [AppointmentOut.of(one) for one in await upcoming_appointments(session, context=context)]
+    """The visits still to come, soonest first, each with its doctor's name as the family wrote
+    it — read under the visits scope, as the visits are."""
+    upcoming = await upcoming_appointments(session, context=context)
+    if not upcoming:
+        return []
+    names = {
+        one.id: one.name for one in await audited_read(session, Provider, context, Scope.VISITS)
+    }
+    return [AppointmentOut.of(one, doctor=names.get(one.provider_id)) for one in upcoming]
 
 
 @router.get("/{profile_id}/appointments/{appointment_id}/brief")

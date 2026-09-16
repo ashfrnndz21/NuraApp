@@ -14,9 +14,11 @@ import type { Entry, FeedStore, Note } from "../feed/store";
 import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
-import { Card, Notice, Pill, TabBar, Tile } from "../ui/components";
+import { Card, Notice, Pill, Tile } from "../ui/components";
+import { PillButton } from "../ui/kit";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
+import { Shell } from "./Shell";
 import "../ui/feed.css";
 
 /** How long a card must rest at the centre of the pager, untouched by another scroll, before
@@ -116,7 +118,9 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
     const playingKey = playback.playing.peek();
     if (playingKey) {
       const card = root.querySelector<HTMLElement>(`article.feed-card[data-key="${playingKey}"]`);
-      const gone = !card || card.offsetTop + card.offsetHeight <= root.scrollTop || card.offsetTop >= root.scrollTop + root.clientHeight;
+      // Offsets are whole pixels and the pager's height need not be (it flexes in the shell):
+      // a card within a pixel of the edge has left.
+      const gone = !card || card.offsetTop + card.offsetHeight <= root.scrollTop + 1 || card.offsetTop >= root.scrollTop + root.clientHeight - 1;
       if (gone) playback.leave(playingKey);
     }
     const list = store.entries.peek();
@@ -208,7 +212,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const keptAt = store.keptAt.value;
 
   return (
-    <main class="feed-screen" data-density={density()} data-testid="feed-screen">
+    <Shell tab="today" fill>
+      <div class="feed-screen" data-density={density()} data-testid="feed-screen">
       {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
       <h1 class="sr-only">{s.feed.title}</h1>
       <div class="feed-strip">
@@ -227,6 +232,18 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
             <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
             <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
           </>
+        )}
+        {!blank && store.origin.value !== "none" && !store.busy.value && !store.error.value && shown.length === 0 && (
+          <Card
+            lines={[s.feed.empty]}
+            hear={false}
+            testId="feed-empty"
+            action={
+              <PillButton onClick={() => go({ name: "today" })} testId="feed-empty-back">
+                {s.feed.emptyAction}
+              </PillButton>
+            }
+          />
         )}
       </div>
 
@@ -293,8 +310,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         </div>
       )}
 
-      <TabBar current="today" onSelect={openTab} />
-    </main>
+      </div>
+    </Shell>
   );
 }
 

@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 from app.audit.models import Action, AuditEntry, Channel, Outcome
+from app.channels import state_words
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.voice_schemas import VoiceScriptOut
 from app.channels.strings import lines
@@ -1490,6 +1491,17 @@ class SlotOut(BaseModel):
         )
 
 
+class NowOut(BaseModel):
+    """The one big number on his Today (`GET /profiles/{id}/medicines/now`): how many tablets
+    at the moment of the day that is open now, or the next one today, and his words for what
+    it counts. All three are null when nothing is left to take today. The client shows this
+    number and these words, and never counts for itself."""
+
+    count: int | None
+    anchor: str | None
+    words: str | None
+
+
 class ProudOut(BaseModel):
     """The proud number (`GET /profiles/{id}/proud`): days with a tablet taken, and when it
     was counted. The client shows this number and nothing it worked out itself."""
@@ -1543,6 +1555,14 @@ class WithheldOut(BaseModel):
     scopes: list[Scope]
 
 
+class StateDriverOut(BaseModel):
+    """One thing that raised the State, as a chip: its code, his words, its tone."""
+
+    key: str
+    text: str
+    tone: str | None
+
+
 class StateOut(BaseModel):
     """The current State as the caller's key reads it.
 
@@ -1566,10 +1586,23 @@ class StateOut(BaseModel):
     dimensions: dict[Dimension, dict[str, Any] | None]
     withheld: WithheldOut
     boundary: str
+    word: str
+    """The posture as one word, in the language asked for: the chief's Home hero."""
+    line: str
+    """One whole line under the word."""
+    drivers: list[StateDriverOut]
+    """What raised the posture, as short chips in plain words, from the dimensions this key
+    reads; each with the tone its own posture gives it (`watch`, `act`) or none."""
 
     @classmethod
-    def of(cls, view: StateView, *, boundary: str) -> StateOut:
+    def of(cls, view: StateView, *, boundary: str, language: str | None = None) -> StateOut:
+        said = state_words.said(view.posture, view.dimensions, language)
         return cls(
+            word=said.word,
+            line=said.line,
+            drivers=[
+                StateDriverOut(key=one.key, text=one.text, tone=one.tone) for one in said.drivers
+            ],
             boundary=boundary,
             state_id=view.id,
             profile_id=view.profile_id,
@@ -1912,9 +1945,13 @@ class AppointmentOut(BaseModel):
     status: AppointmentStatus
     purpose: str
     confirmed_by_person_id: uuid.UUID
+    doctor: str | None = None
+    """The doctor's or clinic's name as the family wrote it (the provider's), for "the questions
+    for Dr Tan on Wednesday 16 September" — read under the visits scope, like the visit itself.
+    None where the route does not read it."""
 
     @classmethod
-    def of(cls, appointment: Appointment) -> AppointmentOut:
+    def of(cls, appointment: Appointment, doctor: str | None = None) -> AppointmentOut:
         return cls(
             appointment_id=appointment.id,
             provider_id=appointment.provider_id,
@@ -1922,6 +1959,7 @@ class AppointmentOut(BaseModel):
             status=appointment.status,
             purpose=appointment.purpose,
             confirmed_by_person_id=appointment.confirmed_by_person_id,
+            doctor=doctor,
         )
 
 

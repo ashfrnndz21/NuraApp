@@ -264,8 +264,10 @@ async def test_state_carries_the_boundary_in_the_profiles_language(deployment: D
     )
     assert asked.json()["boundary"] == boundary_line(Surface.STATE_POSTURE, "zh")
 
-    # A caregiver reading State through her key sees the same line: the boundary is on the
-    # surface, not on the person.
+    # A caregiver reading State through her key gets the same surface's boundary — the boundary
+    # is on the surface, not on the person — said about him by name rather than to him (D1).
+    # "Tanya doktor anda" on her screen would mean her own doctor, which is not what the line
+    # is for; on his screen it is unchanged.
     mei = await register_by_phone(deployment, MEI, "Mei")
     await let_in(deployment, pa, profile_id, MEI, ["records"], "daughter")
     granted = await deployment.client.post(
@@ -278,7 +280,14 @@ async def test_state_carries_the_boundary_in_the_profiles_language(deployment: D
         f"/profiles/{profile_id}/state", headers=bearer(mei["token"])
     )
     assert hers.status_code == 200, hers.text
-    assert hers.json()["boundary"] == seen.json()["boundary"]
+    assert hers.json()["boundary"].splitlines() == [
+        "Nura menyusun hari Pa.",
+        "Ini bukan nasihat doktor.",
+        "Tanya doktor Pa.",
+    ]
+    # The same surface, line for line: what differs is only whose day and whose doctor.
+    assert len(hers.json()["boundary"].splitlines()) == len(seen.json()["boundary"].splitlines())
+    assert "anda" not in hers.json()["boundary"]
 
 
 def test_an_urgent_card_closes_on_one_line_and_never_sends_him_to_his_doctor() -> None:

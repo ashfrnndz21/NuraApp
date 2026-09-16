@@ -1,10 +1,11 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useId, useRef } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { voice } from "../player/voice";
 import { language, refusalLines, t } from "../strings";
 import { Refused, Unreachable } from "../api/client";
 import type { Tab } from "../flow";
 import { demo } from "../store/deployment";
+import { BrandMark, PillButton } from "./kit";
 import { PlayerControls } from "./Player";
 
 /** The few pieces every screen is made of. Decisions sit on paper; the rest may be glass. */
@@ -12,17 +13,7 @@ import { PlayerControls } from "./Player";
 export function Brand(): JSX.Element {
   return (
     <div class="brand" aria-hidden="true">
-      <svg viewBox="0 0 200 200">
-        <defs>
-          <linearGradient id="nuraAura" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#B9A6E0" />
-            <stop offset="1" stop-color="#F0C9DA" />
-          </linearGradient>
-        </defs>
-        <path d="M86 166C44 138 22 102 36 74c12-24 48-22 64 4" fill="none" stroke="#4E3A78" stroke-width="20" stroke-linecap="round" />
-        <path d="M114 166c42-28 64-64 50-92-12-24-48-22-64 4" fill="none" stroke="url(#nuraAura)" stroke-width="20" stroke-linecap="round" />
-        <circle cx="100" cy="112" r="12" fill="#4E3A78" />
-      </svg>
+      <BrandMark />
       {t().appName}
     </div>
   );
@@ -94,19 +85,16 @@ export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
   useEffect(() => () => voice.leave(key), [key]);
   return (
     <>
-      <Pill
-        quiet
+      <PillButton
+        variant="quiet"
+        compact
+        icon="speaker"
         onClick={() => void voice.play({ kind: "speech", key, lines, language: language.value }).catch(() => undefined)}
         label={`${t().today.hear}: ${lines[0] ?? ""}`}
         testId="hear"
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 10v4h3l4 4V6L7 10H4z" />
-          <path d="M15 9a4 4 0 0 1 0 6" />
-          <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-        </svg>
         {t().today.hear}
-      </Pill>
+      </PillButton>
       {open && <PlayerControls />}
     </>
   );
@@ -145,9 +133,13 @@ export function Card({ title, lines, provenance, paper = true, action, hear = tr
           ))}
         </div>
       )}
-      {provenance && <p class="provenance">{provenance}</p>}
       {action}
-      {hear && <Hear lines={spoken} />}
+      {(provenance || hear) && (
+        <div class="card-foot">
+          {provenance && <p class="provenance">{provenance}</p>}
+          {hear && <Hear lines={spoken} />}
+        </div>
+      )}
     </Tile>
   );
 }
@@ -214,50 +206,19 @@ export function Field({ label, value, onInput, type = "text", inputMode, autoCom
   );
 }
 
+/** A screen's head (D1): the way back first, at the top left, its chevron beside its word; then
+ *  the title. The mark shows only on a screen outside the shell, which has its own header. */
 export function Header({ title, onBack }: { title: string; onBack?: () => void }): JSX.Element {
   return (
-    <header style="display:flex;flex-direction:column;gap:12px">
+    <header class="screen-head">
       <Brand />
-      <h1 class="title">{title}</h1>
       {onBack && (
-        <Pill quiet onClick={onBack}>
+        <PillButton variant="quiet" compact icon="back" onClick={onBack}>
           {t().signIn.back}
-        </Pill>
+        </PillButton>
       )}
+      <h1 class="title screen-title">{title}</h1>
     </header>
-  );
-}
-
-/** The nav entries, in the order Today · Feed · Record · Family · Me; each one screen away
- *  (the Feed opens from Today's "See more for you"). The Record's entry reads *Papers*. */
-export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Tab) => void }): JSX.Element {
-  const s = t();
-  const tabs = [
-    ["today", s.tabs.today],
-    ["record", s.tabs.record],
-    ["family", s.tabs.family],
-    ["me", s.tabs.me],
-  ] as const;
-  // The screen keeps room under its last line for the bar as tall as it is: at a large text
-  // size a label can take two lines, and a fixed allowance would leave a line under the bar.
-  const bar = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const element = bar.current;
-    if (!element || typeof ResizeObserver === "undefined") return;
-    const measure = () => document.documentElement.style.setProperty("--tabbar-h", `${Math.ceil(element.getBoundingClientRect().height)}px`);
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(element);
-    return () => watch.disconnect();
-  }, []);
-  return (
-    <nav class="tabbar" aria-label={s.appName} ref={bar}>
-      {tabs.map(([tab, label]) => (
-        <button key={tab} type="button" aria-current={current === tab ? "page" : undefined} onClick={() => onSelect(tab)} data-testid={`tab-${tab}`}>
-          {label}
-        </button>
-      ))}
-    </nav>
   );
 }
 
@@ -266,19 +227,48 @@ export function TabBar({ current, onSelect }: { current: Tab; onSelect: (tab: Ta
 /** The demo banner (ADR 0008). Its headline is pinned to the top of every screen; the lines
  *  under it sit above the screen and scroll away with it, so that at a large text size the part
  *  that never moves stays one headline tall and is never drawn over his lines (E15-04). */
+/** How big the writing is on this phone, against the 16px a browser starts from. The banner is
+ *  the only thing that asks: it is scaffolding, and it has to know when it is costing the app
+ *  too much room. Not a media query — `em` and `rem` there are the browser's initial size and
+ *  do not see a root font-size, which is what the OS and browser text settings change. */
+function writingScale(): number {
+  if (typeof document === "undefined" || typeof getComputedStyle === "undefined") return 1;
+  const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(root) && root > 0 ? root / 16 : 1;
+}
+
+/** On a demo deployment (ADR 0008), first on every screen: what this is, in the person's
+ *  language, and that real health information does not belong in it.
+ *
+ *  At a large text size the banner gives way, and the app does not. It is demo scaffolding —
+ *  it will not exist in a real deployment at all — so it must never push the product off the
+ *  phone: at 200% its three sentences were 254px of a 640px screen, which left the page's
+ *  scrolling region at nothing and the tab bar under the fold. From 150% up it is the headline
+ *  alone, in a shorter form. The warning is not softened, only said in fewer words: it still
+ *  says this is a demo and that real health information does not belong in it. */
 export function DemoBanner(): JSX.Element | null {
+  const [scale, setScale] = useState(writingScale);
+  useEffect(() => {
+    const measure = () => setScale(writingScale());
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
   if (!demo.value) return null;
   const s = t().demo;
+  const big = scale >= 1.5;
   return (
     <>
-      <aside class="demo-banner" role="note" data-testid="demo-banner">
-        <strong>{s.banner}</strong>
+      <aside class="demo-banner" role="note" data-testid="demo-banner" data-short={big ? "true" : undefined}>
+        <strong>{big ? s.bannerShort : s.banner}</strong>
       </aside>
-      <div class="demo-lines" data-testid="demo-lines">
-        {s.lines.map((line, index) => (
-          <span key={index}>{line}</span>
-        ))}
-      </div>
+      {!big && (
+        <div class="demo-lines" data-testid="demo-lines">
+          {s.lines.map((line, index) => (
+            <span key={index}>{line}</span>
+          ))}
+        </div>
+      )}
     </>
   );
 }

@@ -7,6 +7,8 @@ export const zh = {
   demo: {
     // @patient headline
     banner: "演示版 — 不用于真实的健康信息",
+    // @patient headline
+    bannerShort: "演示版。请勿输入真实健康信息。",
     // @patient
     lines: ["这是演示版。", "请不要输入真实的健康信息。", "这里的一切每晚都会清除。"],
   },
@@ -19,6 +21,72 @@ export const zh = {
     me: "我",
     // @patient headline
     family: "家人",
+    // @patient headline
+    home: "首页",
+    // @patient headline
+    medicines: "药",
+    // @patient headline
+    records: "文件",
+    // @patient headline
+    visits: "看诊",
+    // @patient headline
+    timeline: "文件",
+    // @patient headline
+    plan: "计划",
+  },
+  shell: {
+    // @patient phrase
+    askNura: "问 Nura 一个问题",
+    // @patient phrase
+    askAbout: "问关于{name}的事",
+    // @patient phrase
+    voice: "说话",
+    // @patient
+    voiceSaid1: "请按字母旁边的小麦克风。",
+    // @patient
+    voiceSaid2: "然后说出您的问题。",
+    // @patient phrase
+    close: "关闭",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "今天的情况",
+    // @patient headline
+    whatChanged: "有什么变化",
+    // @patient headline
+    nextVisit: "下次看诊",
+    // @patient headline
+    buyMore: "再买一些",
+    // @patient headline
+    missing: "文件里还没有",
+    // @patient
+    missingSub: "Nura 已经把这些放进 {date} 要问{doctor}的问题里。",
+    // @patient
+    missingSubDay: "Nura 已经把这些放进 {date} 看诊要问的问题里。",
+    // @patient phrase
+    bpLabel: "血压，上面的数字",
+    // @patient headline
+    fromName: "{name}的留言",
+    // @patient phrase
+    showAll: "看全部 {count} 项",
+    // @patient phrase
+    showFewer: "收起来",
+    // @patient
+    bpLast: "最近一次量血压，上面的数字是{number}。",
+  },
+  places: {
+    // @patient headline
+    visitsOwn: "您的看诊",
+    // @patient headline
+    visitsOwnOther: "{patient}的看诊",
+    // @patient headline
+    visitsOther: "{name}的看诊",
+    // @patient
+    visitsNoneOther: "Nura还没有记下{name}的看诊。",
+    // @patient headline
+    planTitle: "下次看诊的计划",
+    // @patient
+    planLead: "下次看诊需要的东西都在这里。",
   },
   signIn: {
     // @patient headline
@@ -85,6 +153,8 @@ export const zh = {
     waiting: "有一份文件在等您",
     // @patient
     waitingLine: "{name} 为您准备好了这些文件。",
+    // @patient phrase
+    lookAgain: "再看一次",
   },
   consent: {
     // @patient headline
@@ -152,6 +222,14 @@ export const zh = {
     roleSteward: "这是您替他们设好的文件。",
     // @patient
     roleOther: "您可以看这份文件。",
+    // @patient phrase
+    openOwn: "您自己的文件。点一下可以看别人的。",
+    // @patient phrase
+    openOther: "{name}的文件。点一下可以看别人的。",
+    // @patient
+    onlyThese: "Nura 只有这些文件给您。",
+    // @patient
+    cannotLook: "Nura 现在找不到其他文件。",
   },
   today: {
     // @patient headline
@@ -188,6 +266,8 @@ export const zh = {
     hear: "听",
     // @patient headline
     readingTitle: "您的血压",
+    // @patient headline
+    readingTitleOther: "{patient}的血压",
     // @patient
     readingLead: "把今天早上的数字记下来。",
     // @patient
@@ -200,6 +280,28 @@ export const zh = {
     readingButton: "记下来",
     // @patient
     stateStable: "您今天很平稳。",
+    // @patient
+    stateStableOther: "{patient}今天很平稳。",
+    // @patient
+    stateWatchOther: "Nura 在替{patient}留意一件事。",
+    // @patient
+    callFamilyOther: "现在打电话给其他家人。",
+    // @patient
+    offlineSubOther: "这是{patient}早些时候的“今天”页面。",
+    // @patient
+    asOfOther: "Nura 上次读{patient}的文件是{date} {time}。",
+    // @patient
+    cannotReachOther: "Nura 现在打不开{patient}的文件。",
+    // @patient
+    emergencySoonOther: "Nura 会把{patient}的紧急卡放在这里。",
+    // @patient headline
+    todayListOther: "{patient}今天的药",
+    // @patient
+    fromTodayOther: "这来自{patient}的“今天”页面。",
+    // @patient
+    tookMorningOther: "{patient}早上吃了。",
+    // @patient
+    allTakenOther: "{patient}今天的药都吃了。",
     // @patient
     stateWatch: "Nura 在替您留意一件事。",
     // @patient
@@ -252,10 +354,16 @@ export const zh = {
     fromDays: "Nura 数了您吃药的天数。",
     // @patient phrase
     emergencyOpen: "您的紧急卡",
+    // @patient phrase
+    emergencyOpenOther: "{patient}的紧急卡",
   },
   feed: {
     // @patient headline
     title: "更多给您的",
+    // @patient
+    empty: "今天没有新的东西。",
+    // @patient phrase
+    emptyAction: "回到“今天”",
     // @patient phrase
     open: "看更多给您的",
     // @patient headline
@@ -346,6 +454,8 @@ export const zh = {
   reading: {
     // @patient headline
     title: "您的血压",
+    // @patient headline
+    titleOther: "{patient}的血压",
     // @patient
     lead: "请输入血压机上的两个数字。",
     // @patient phrase
@@ -392,6 +502,8 @@ export const zh = {
     signOut: "退出登录",
     // @patient phrase
     remindersGet: "在这部手机上接收提醒",
+    // @patient phrase
+    emergencyPrint: "打印出来",
     // @patient
     remindersOn: "这部手机的提醒已经打开了。",
     // @patient phrase
@@ -439,6 +551,8 @@ export const zh = {
     title: "您的看诊",
     // @patient phrase
     open: "看您下一次看诊",
+    // @patient phrase
+    openOther: "看{patient}下一次看诊",
     // @patient
     none: "Nura还没有记下您的看诊。",
     // @patient
@@ -589,10 +703,14 @@ export const zh = {
     notWell: "我觉得不舒服",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
+    // @patient headline
+    notWellTitleOther: "告诉 Nura，{patient}的感觉",
     // @patient
     notWellLead: "用您自己的话说出来或打出来。",
     // @patient phrase
     wordsLabel: "您的感觉",
+    // @patient phrase
+    wordsLabelOther: "{patient}的感觉",
     // @patient phrase
     send: "告诉Nura",
     // @patient phrase
@@ -607,12 +725,18 @@ export const zh = {
     backToday: "回到今天",
     // @patient phrase
     symptomsOpen: "记下您的感觉",
+    // @patient phrase
+    notWellOther: "{patient}不舒服",
+    // @patient phrase
+    symptomsOpenOther: "写下{patient}的感觉",
     // @patient headline
     symptomsTitleSelf: "您最近的感觉",
     // @patient headline
     symptomsTitleOther: "{name}最近的感觉",
     // @patient
     symptomsLead: "说说您哪里不舒服、有多难受、从什么时候开始。",
+    // @patient
+    symptomsLeadOther: "说说{patient}哪里不舒服、有多难受、从什么时候开始。",
     // @patient phrase
     symptomsKeep: "保存",
     // @patient phrase
@@ -627,10 +751,14 @@ export const zh = {
     nudgeNotToday: "今天不要",
     // @patient phrase
     briefOpen: "看诊前先看看",
+    // @patient phrase
+    briefOpenOther: "{patient}看诊前先看看",
     // @patient headline
     briefTitle: "看诊之前",
     // @patient phrase
     questionsOpen: "您要问医生的问题",
+    // @patient phrase
+    questionsOpenOther: "要问{patient}医生的问题",
     // @patient headline
     questionsTitle: "看诊时要问的问题",
     // @patient phrase
@@ -1033,21 +1161,37 @@ export const zh = {
     // @patient headline
     medicines: "您的药",
     // @patient headline
+    medicinesOther: "{patient}的药",
+    // @patient headline
     papers: "等您说好的文件",
+    // @patient headline
+    papersOther: "等确认的文件",
     // @patient headline
     routine: "您的一天",
     // @patient headline
+    routineOther: "{patient}的一天",
+    // @patient headline
     timeline: "您的看诊",
+    // @patient headline
+    timelineOther: "{patient}的看诊",
     // @patient headline
     trends: "您的验血",
     // @patient headline
+    trendsOther: "{patient}的验血",
+    // @patient headline
     providers: "您的医生和诊所",
+    // @patient headline
+    providersOther: "{patient}的医生和诊所",
     // @patient headline
     changes: "有什么变化",
     // @patient phrase
     back: "回到您的文件",
+    // @patient phrase
+    backOther: "回到{patient}的文件",
     // @patient
     sureYes: "这一条您说好了。",
+    // @patient
+    sureYesOther: "{patient}已经确认了这一条。",
     // @patient
     sureRead: "这一条 Nura 看得很清楚。",
     // @patient
@@ -1056,6 +1200,8 @@ export const zh = {
     matchByNameOnly: ["Nura只靠标签上的名字找到这个药。", "标签没有写这个药有多强。"],
     // @patient
     twice: "这个药在您的清单上有两次。",
+    // @patient
+    twiceOther: "这种药在{patient}的清单上出现了两次。",
     // @patient phrase
     aboutIt: "关于这个药",
     // @patient phrase
@@ -1081,6 +1227,7 @@ export const zh = {
       if_forgotten: "听忘了吃怎么办",
       doctor_question: "听要问医生什么",
     },
+    storyAskOther: "要问{patient}的医生",
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient
@@ -1103,12 +1250,17 @@ export const zh = {
     outcomeNew: "这是您清单上的新药。",
     // @patient
     outcomeRefill: "这是您已经在吃的药，又多了一些。",
+    outcomeNewOther: "这是{patient}清单上的新药。",
+    // @patient
+    outcomeRefillOther: "这是{patient}清单上已有的药，又买了一些。",
     // @patient
     outcomeChange: "这张标签上的分量不一样。",
     // @patient headline
     flaggedTitle: "加之前",
     // @patient
     flaggedNone: "Nura 在您的清单上没有找到和它相冲的药。",
+    // @patient
+    flaggedNoneOther: "Nura 没有在{patient}的清单上找到和它相冲的药。",
     // @patient
     severity: {
       major: "这一点很重要。",
@@ -1121,6 +1273,8 @@ export const zh = {
     addIt: "加到我的清单上",
     // @patient
     added: "Nura 已经加到您的清单上了。",
+    // @patient
+    addedOther: "Nura 已经把它加到{patient}的清单上了。",
     // @patient headline
     moreTitle: "家里还有",
     // @patient
@@ -1141,6 +1295,8 @@ export const zh = {
     orderNo: "现在不用",
     // @patient
     papersNone: "没有文件在等您说好。",
+    // @patient
+    papersNoneOther: "没有等确认的文件。",
     // @patient
     paperFrom: "这是{date}收到的。",
     // @patient phrase
@@ -1242,6 +1398,8 @@ export const zh = {
     // @patient
     noteSaved: "Nura 保存了您的笔记。",
     // @patient
+    noteSavedOther: "Nura 保存了这段录音。",
+    // @patient
     writtenOn: "这是{date}写的。",
     // @patient headline
     waiting: "还在等",
@@ -1261,6 +1419,19 @@ export const zh = {
       tsh: "您的甲状腺检查",
     },
     // 整句，不是短语：它单独成一段（Day.tsx），屏幕阅读器会当作一个完整的单位读出来（#166 审查）。
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "{patient}的胆固醇",
+      ldl: "{patient}的坏胆固醇",
+      hdl: "{patient}的好胆固醇",
+      triglycerides: "{patient}的血脂",
+      hba1c: "{patient}的血糖检查",
+      creatinine: "{patient}的肾指数",
+      egfr: "{patient}的肾过滤",
+      potassium: "{patient}身体的盐",
+      haemoglobin: "{patient}的血色素",
+      tsh: "{patient}的甲状腺检查",
+    },
     // @patient
     resultOn: "{date}的数字是{value}。",
     // Her density only (the caregiver's table of results): the unit stays with the number.
@@ -1293,6 +1464,14 @@ export const zh = {
       bed: "睡觉的时候",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "{patient}起床的时候",
+      breakfast: "早餐",
+      lunch: "午餐",
+      dinner: "晚餐",
+      bed: "睡觉的时候",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "血压",
       blood_sugar: "血糖",
@@ -1302,8 +1481,12 @@ export const zh = {
     walk: "散步",
     // @patient
     notSet: "还没有人设定您的一天。",
+    // @patient
+    notSetOther: "还没有人设定{patient}的一天。",
     // @patient phrase
     setDay: "设定您的一天",
+    // @patient phrase
+    setDayOther: "设定{patient}的一天",
     // @patient phrase
     timeLabel: "几点",
     // @patient phrase
@@ -1314,6 +1497,8 @@ export const zh = {
     checkDay: "检查您的一天",
     // @patient
     dayAsk: "您的一天是这样吗？",
+    // @patient
+    dayAskOther: "{patient}的一天是这样吗？",
     // @patient phrase
     dayYes: "对，设定您的一天",
     // @patient
@@ -1359,7 +1544,11 @@ export const zh = {
     // @patient phrase
     closeAccount: "关闭我的账户",
     // @patient phrase
+    closeAccountOther: "关闭{name}的账户",
+    // @patient phrase
     closeAccountYes: "是的，关闭我的账户",
+    // @patient phrase
+    closeAccountYesOther: "是的，关闭{name}的账户",
     // @patient phrase
     keepCopy: "留一份可以打印",
     // @patient phrase

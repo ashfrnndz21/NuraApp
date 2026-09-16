@@ -4,18 +4,19 @@ import {
   API,
   apiToken,
   breakfastAt,
-  cutKey,
   expireKeptPages,
   fixClock,
   freshPhone,
-  keptKeys,
   medicinesInIndexedDb,
   seedMedicine,
-  seedOwner,
   shot,
   signInThroughTheApp,
-  waitForWorker,
-} from "./helpers";
+  todayReady,
+  openMe,
+  cutKey,
+  keptKeys,
+  seedOwner,
+  waitForWorker, expectProud} from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -40,7 +41,7 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await seedMedicine(request, token, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
 
   await signInThroughTheApp(page, phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
   // Today reads the emergency card after it has kept its page: wait for both before the network goes.
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
@@ -68,7 +69,10 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   // the feed's cards for today, and they stand in "For you today" in place of the State card.
   await expect(page.getByTestId("feed-card").first()).toContainText("Your tablets today");
   await expect(page.getByTestId("state-card")).toHaveCount(0);
+  // The proud number on Me is the kept page's own count (D1).
+  await openMe(page);
   await expect(page.getByTestId("proud-number")).toBeVisible();
+  await page.getByTestId("sheet-close").click();
   expect(await page.locator("[role=progressbar], .spinner").count()).toBe(0);
   await shot(page, "offline-kept");
 
@@ -79,7 +83,7 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
   await expect(page.getByTestId("emergency-card")).toContainText("Emergency card");
   await expect(page.getByTestId("emergency-card")).toContainText("This is Pa's emergency card.");
   await expect(page.getByTestId("emergency-read")).toContainText("Nura last read this card on Monday 14 September.");
-  for (const gone of ["today-list", "now-card", "taken", "state-card", "medicines-card", "proud", "offline", "reading-prompt", "emergency-placeholder"]) {
+  for (const gone of ["today-list", "now-card", "taken", "state-card", "medicines-card", "proud", "offline", "reading-prompt", "emergency-placeholder", "hero-figure"]) {
     await expect(page.getByTestId(gone)).toHaveCount(0);
   }
   expect(await medicinesInIndexedDb(page)).toEqual([]);
@@ -115,7 +119,8 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   await breakfastAt(request, pa.token, pa.profileId);
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
   const first = (await now.locator("h2").textContent())!;
   await waitForWorker(page);
@@ -152,14 +157,14 @@ test("Taken with no network: held with the moment he tapped, then sent once each
   const nameOf = (id: string) => lines.find((line) => line.line_id === id)!.name.toLowerCase();
   expect(taps.map((tap) => nameOf(tap.line))).toEqual([first.toLowerCase(), second.toLowerCase()]);
   expect(lines.map((line) => line.count?.taken)).toEqual([1, 1]);
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
   await expect(page.getByTestId("held-card")).toHaveCount(0);
 
   // Offline and back again, and a reload: nothing is sent twice, nothing is left held.
   await context.setOffline(true);
   await context.setOffline(false);
   await page.reload();
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
   expect(taps).toHaveLength(2);
   expect((await keptKeys(page)).some((key) => key.startsWith("queue."))).toBe(false);
 });
@@ -175,7 +180,8 @@ test("Taken whose answer is lost on the way back: held, sent again with the same
     if (call.method() === "POST" && /\/medicines\/[^/]+\/taken$/.test(new URL(call.url()).pathname)) sent.push(call.postDataJSON() as { taken_at?: string });
   });
   await signInThroughTheApp(page, pa.phone, "Pa");
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
 
   // The first Taken reaches the backend and is written; its answer is lost before the phone.
@@ -200,7 +206,7 @@ test("Taken whose answer is lost on the way back: held, sent again with the same
   expect(sent[0]!.taken_at).toMatch(/^2026-09-14T/);
   expect(sent[1]!.taken_at).toBe(sent[0]!.taken_at);
   expect(await count()).toBe(1);
-  await expect(page.getByTestId("proud-number")).toHaveText("1");
+  await expectProud(page, "1"); // the proud number is on the Me sheet (D1)
 });
 
 /** A held tap the backend says no to — here, Mei's key was closed while her phone was offline —
@@ -212,7 +218,8 @@ test("a no to a held tap is said in the backend's words, and nothing of the pape
   const taps = answeredTaps(page);
   await signInThroughTheApp(page, mei.phone, "Mei");
   await page.getByTestId("door-key").click();
-  const now = page.getByTestId("now-card");
+  // A tile per dose due (D1, the design's card grammar), so this walks the first of them.
+  const now = page.getByTestId("now-card").first();
   await expect(now.getByTestId("taken")).toBeVisible();
 
   await context.setOffline(true);
@@ -306,7 +313,7 @@ test("the not-feeling-well cards on the phone: served with no network after a re
 
   // Back online Today reads them again; sign-out leaves none of it on the phone.
   await page.reload();
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(true);
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await page.getByTestId("sign-out").click();
@@ -322,7 +329,7 @@ test("an account closing: nothing of its papers stays on the phone, and the door
   const pa = await seedOwner(request);
   const kept = async () => (await keptKeys(page)).filter((key) => key.endsWith(pa.profileId));
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await expect(page.getByTestId("proud")).toBeVisible();
+  await todayReady(page);
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("emergency."))).toBe(true);
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("nfw."))).toBe(true);
   expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);

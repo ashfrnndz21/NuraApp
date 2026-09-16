@@ -8,6 +8,9 @@ import {
   feedCards,
   feedLines,
   greeting,
+  dayMonthLine,
+  homeHero,
+  homeHeroWords,
   lineTitle,
   medicinesCard,
   nowCard,
@@ -269,6 +272,42 @@ describe("the words around them", () => {
 
   it("key a day in the phone's own time zone", () => {
     expect(dayKey(new Date(2026, 8, 14, 23, 59))).toBe("2026-09-14");
+  });
+});
+
+describe("her Home's hero line", () => {
+  const line = "Nothing needs you today.";
+  it("is the backend's own line when the State is current and nothing is flagged", () => {
+    expect(homeHeroWords({ stale: false, line }, { flagged: false, kept: false }, en)).toBe(line);
+  });
+  it("says the State is from earlier when it is behind, or when the page is the phone's kept copy", () => {
+    expect(homeHeroWords({ stale: true, line }, { flagged: false, kept: false }, en)).toBe(en.today.staleState);
+    expect(homeHeroWords({ stale: false, line }, { flagged: false, kept: true }, en)).toBe(en.today.staleState);
+  });
+  it("reassures nobody while a red-flag card is on the page: the flag goes first", () => {
+    expect(homeHeroWords({ stale: false, line }, { flagged: true, kept: false }, en)).toBeNull();
+    expect(homeHeroWords({ stale: true, line }, { flagged: true, kept: true }, en)).toBeNull();
+  });
+});
+
+describe("her Home's hero", () => {
+  const page = { stale: false, line: "Nothing needs you today.", word: "Steady" };
+  it("shows the State's word, its line and its chips when the page is current and nothing is flagged", () => {
+    expect(homeHero(page, { flagged: false, kept: false }, en)).toEqual({ word: "Steady", line: page.line, drivers: true });
+  });
+  it("shows nothing of the State over a red-flag card: no word, no line, no chips", () => {
+    expect(homeHero(page, { flagged: true, kept: false }, en)).toEqual({ word: null, line: null, drivers: false });
+    expect(homeHero(page, { flagged: true, kept: true }, en)).toEqual({ word: null, line: null, drivers: false });
+  });
+  it("on the phone's kept page says it is from earlier, and shows no chips", () => {
+    expect(homeHero(page, { flagged: false, kept: true }, en)).toEqual({ word: "Steady", line: en.today.staleState, drivers: false });
+  });
+});
+
+describe("the day and month under a weekday", () => {
+  it("says the day and the month with no weekday, so the visit tile says Monday once", () => {
+    expect(dayMonthLine(new Date(2026, 8, 14), "en-SG")).toBe("14 September");
+    expect(dayMonthLine(new Date(2026, 8, 14), "en-SG")).not.toContain("Monday");
   });
 });
 

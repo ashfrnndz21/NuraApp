@@ -7,6 +7,8 @@ export const en = {
   demo: {
     // @patient headline
     banner: "Demo — not for real health information",
+    // @patient headline
+    bannerShort: "Demo. No real health information.",
     // @patient
     lines: ["This is a demo.", "Do not put real health information in it.", "Everything here is wiped each night."],
   },
@@ -19,6 +21,72 @@ export const en = {
     me: "Me",
     // @patient headline
     family: "Family",
+    // @patient headline
+    home: "Home",
+    // @patient headline
+    medicines: "Medicines",
+    // @patient headline
+    records: "Papers",
+    // @patient headline
+    visits: "Visits",
+    // @patient headline
+    timeline: "Papers",
+    // @patient headline
+    plan: "Plan",
+  },
+  shell: {
+    // @patient phrase
+    askNura: "Ask Nura a question",
+    // @patient phrase
+    askAbout: "Ask about {name}",
+    // @patient phrase
+    voice: "Speak",
+    // @patient
+    voiceSaid1: "Press the small microphone beside the letters.",
+    // @patient
+    voiceSaid2: "Then say your question.",
+    // @patient phrase
+    close: "Close",
+  },
+  home: {
+    // @patient headline
+    mostLikely: "How things are today",
+    // @patient headline
+    whatChanged: "What changed",
+    // @patient headline
+    nextVisit: "Next visit",
+    // @patient headline
+    buyMore: "Buy more",
+    // @patient headline
+    missing: "Not in the papers yet",
+    // @patient
+    missingSub: "Nura added these to the questions for {doctor} on {date}.",
+    // @patient
+    missingSubDay: "Nura added these to the questions for the visit on {date}.",
+    // @patient phrase
+    bpLabel: "Blood pressure, the top number",
+    // @patient headline
+    fromName: "From {name}",
+    // @patient phrase
+    showAll: "See all {count}",
+    // @patient phrase
+    showFewer: "See fewer",
+    // @patient
+    bpLast: "The last blood pressure had a top number of {number}.",
+  },
+  places: {
+    // @patient headline
+    visitsOwn: "Your visits",
+    // @patient headline
+    visitsOwnOther: "{patient}'s visits",
+    // @patient headline
+    visitsOther: "{name}'s visits",
+    // @patient
+    visitsNoneOther: "Nura has no visit written down for {name}.",
+    // @patient headline
+    planTitle: "Plan for the next visit",
+    // @patient
+    planLead: "Everything for the next visit is here.",
   },
   signIn: {
     // @patient headline
@@ -85,6 +153,8 @@ export const en = {
     waiting: "Papers are waiting for you",
     // @patient
     waitingLine: "{name} made this for you.",
+    // @patient phrase
+    lookAgain: "Look again",
   },
   consent: {
     // @patient headline
@@ -152,6 +222,14 @@ export const en = {
     roleSteward: "You made these papers for them.",
     // @patient
     roleOther: "You can see these papers.",
+    // @patient phrase
+    openOwn: "Your own papers. Tap to look at someone else's papers.",
+    // @patient phrase
+    openOther: "{name}'s papers. Tap to look at someone else's papers.",
+    // @patient
+    onlyThese: "These are the only papers Nura has for you.",
+    // @patient
+    cannotLook: "Nura cannot look for other papers right now.",
   },
   today: {
     // @patient headline
@@ -188,6 +266,8 @@ export const en = {
     hear: "Hear",
     // @patient headline
     readingTitle: "Your blood pressure",
+    // @patient headline
+    readingTitleOther: "{patient}'s blood pressure",
     // @patient
     readingLead: "Write down this morning's number.",
     // @patient
@@ -200,6 +280,28 @@ export const en = {
     readingButton: "Write it down",
     // @patient
     stateStable: "Your day is steady.",
+    // @patient
+    stateStableOther: "{patient}'s day is steady.",
+    // @patient
+    stateWatchOther: "Nura is keeping an eye on one thing for {patient}.",
+    // @patient
+    callFamilyOther: "Call the rest of the family now.",
+    // @patient
+    offlineSubOther: "This is {patient}'s Today page from earlier.",
+    // @patient
+    asOfOther: "Nura last read {patient}'s papers on {date} at {time}.",
+    // @patient
+    cannotReachOther: "Nura cannot reach {patient}'s papers right now.",
+    // @patient
+    emergencySoonOther: "Nura will keep {patient}'s emergency card here.",
+    // @patient headline
+    todayListOther: "{patient}'s tablets for today",
+    // @patient
+    fromTodayOther: "This comes from {patient}'s Today page.",
+    // @patient
+    tookMorningOther: "{patient} took it this morning.",
+    // @patient
+    allTakenOther: "{patient} has taken every tablet for today.",
     // @patient
     stateWatch: "Nura is keeping an eye on one thing for you.",
     // @patient
@@ -252,10 +354,16 @@ export const en = {
     fromDays: "Nura counted the days you took your tablets.",
     // @patient phrase
     emergencyOpen: "Your emergency card",
+    // @patient phrase
+    emergencyOpenOther: "{patient}'s emergency card",
   },
   feed: {
     // @patient headline
     title: "More for you",
+    // @patient
+    empty: "Nothing new is waiting today.",
+    // @patient phrase
+    emptyAction: "Back to Today",
     // @patient phrase
     open: "See more for you",
     // @patient headline
@@ -346,6 +454,8 @@ export const en = {
   reading: {
     // @patient headline
     title: "Your blood pressure",
+    // @patient headline
+    titleOther: "{patient}'s blood pressure",
     // @patient
     lead: "Type the 2 numbers from the machine.",
     // @patient phrase
@@ -392,6 +502,8 @@ export const en = {
     signOut: "Sign out",
     // @patient phrase
     remindersGet: "Get reminders on this phone",
+    // @patient phrase
+    emergencyPrint: "Print it",
     // @patient
     remindersOn: "Reminders are on for this phone.",
     // @patient phrase
@@ -439,6 +551,8 @@ export const en = {
     title: "Your visit",
     // @patient phrase
     open: "See your next visit",
+    // @patient phrase
+    openOther: "See {patient}'s next visit",
     // @patient
     none: "Nura has no visit written down for you.",
     // @patient
@@ -589,10 +703,14 @@ export const en = {
     notWell: "I am not feeling well",
     // @patient headline
     notWellTitle: "Tell Nura how you feel",
+    // @patient headline
+    notWellTitleOther: "Tell Nura how {patient} feels",
     // @patient
     notWellLead: "Say it or type it in your own words.",
     // @patient phrase
     wordsLabel: "What you feel",
+    // @patient phrase
+    wordsLabelOther: "What {patient} feels",
     // @patient phrase
     send: "Tell Nura",
     // @patient phrase
@@ -607,12 +725,18 @@ export const en = {
     backToday: "Back to Today",
     // @patient phrase
     symptomsOpen: "Write down how you feel",
+    // @patient phrase
+    notWellOther: "{patient} is not feeling well",
+    // @patient phrase
+    symptomsOpenOther: "Write down how {patient} feels",
     // @patient headline
     symptomsTitleSelf: "How you have felt",
     // @patient headline
     symptomsTitleOther: "How {name} has felt",
     // @patient
     symptomsLead: "Say what you feel, how bad it is and since when.",
+    // @patient
+    symptomsLeadOther: "Say what {patient} feels, how bad it is and since when.",
     // @patient phrase
     symptomsKeep: "Keep this",
     // @patient phrase
@@ -627,10 +751,14 @@ export const en = {
     nudgeNotToday: "Not today",
     // @patient phrase
     briefOpen: "Read before your visit",
+    // @patient phrase
+    briefOpenOther: "Read before {patient}'s visit",
     // @patient headline
     briefTitle: "Before your visit",
     // @patient phrase
     questionsOpen: "Your questions for the doctor",
+    // @patient phrase
+    questionsOpenOther: "Questions for {patient}'s doctor",
     // @patient headline
     questionsTitle: "Questions for your visit",
     // @patient phrase
@@ -1035,21 +1163,37 @@ export const en = {
     // @patient headline
     medicines: "Your medicines",
     // @patient headline
+    medicinesOther: "{patient}'s medicines",
+    // @patient headline
     papers: "Papers waiting for your yes",
+    // @patient headline
+    papersOther: "Papers waiting for a yes",
     // @patient headline
     routine: "Your day",
     // @patient headline
+    routineOther: "{patient}'s day",
+    // @patient headline
     timeline: "Your visits",
+    // @patient headline
+    timelineOther: "{patient}'s visits",
     // @patient headline
     trends: "Your blood tests",
     // @patient headline
+    trendsOther: "{patient}'s blood tests",
+    // @patient headline
     providers: "Your doctors and clinics",
+    // @patient headline
+    providersOther: "{patient}'s doctors and clinics",
     // @patient headline
     changes: "What changed",
     // @patient phrase
     back: "Back to your papers",
+    // @patient phrase
+    backOther: "Back to {patient}'s papers",
     // @patient
     sureYes: "You said yes to this.",
+    // @patient
+    sureYesOther: "{patient} said yes to this.",
     // @patient
     sureRead: "Nura read this clearly.",
     // @patient
@@ -1058,6 +1202,8 @@ export const en = {
     matchByNameOnly: ["Nura found this by the name on the label.", "It did not say how strong it is."],
     // @patient
     twice: "This medicine is on your list twice.",
+    // @patient
+    twiceOther: "This medicine is on {patient}'s list twice.",
     // @patient phrase
     aboutIt: "About this medicine",
     // @patient phrase
@@ -1083,6 +1229,7 @@ export const en = {
       if_forgotten: "Hear what to do if you forget it",
       doctor_question: "Hear what to ask your doctor",
     },
+    storyAskOther: "To ask {patient}'s doctor",
     // @patient
     addLead: "Take a photo of the label first.",
     // @patient
@@ -1105,12 +1252,17 @@ export const en = {
     outcomeNew: "This is a new medicine for your list.",
     // @patient
     outcomeRefill: "This is more of a medicine you already take.",
+    outcomeNewOther: "This is a new medicine for {patient}'s list.",
+    // @patient
+    outcomeRefillOther: "This is more of a medicine on {patient}'s list.",
     // @patient
     outcomeChange: "This label has a different amount.",
     // @patient headline
     flaggedTitle: "Before you add it",
     // @patient
     flaggedNone: "Nura found nothing on your list that goes badly with it.",
+    // @patient
+    flaggedNoneOther: "Nura found nothing on {patient}'s list that goes badly with it.",
     // @patient
     severity: {
       major: "This one matters a lot.",
@@ -1123,6 +1275,8 @@ export const en = {
     addIt: "Add it to my list",
     // @patient
     added: "Nura added it to your list.",
+    // @patient
+    addedOther: "Nura added it to {patient}'s list.",
     // @patient headline
     moreTitle: "More at home",
     // @patient
@@ -1143,6 +1297,8 @@ export const en = {
     orderNo: "Not now",
     // @patient
     papersNone: "No paper is waiting for your yes.",
+    // @patient
+    papersNoneOther: "No paper is waiting for a yes.",
     // @patient
     paperFrom: "This came in on {date}.",
     // @patient phrase
@@ -1244,6 +1400,8 @@ export const en = {
     // @patient
     noteSaved: "Nura kept your note.",
     // @patient
+    noteSavedOther: "Nura kept the note.",
+    // @patient
     writtenOn: "This was written on {date}.",
     // @patient headline
     waiting: "Still waiting",
@@ -1261,6 +1419,19 @@ export const en = {
       potassium: "Your body salt",
       haemoglobin: "Your blood count",
       tsh: "Your thyroid test",
+    },
+    // @patient phrase
+    analytesOther: {
+      total_cholesterol: "{patient}'s cholesterol",
+      ldl: "{patient}'s bad cholesterol",
+      hdl: "{patient}'s good cholesterol",
+      triglycerides: "{patient}'s blood fat",
+      hba1c: "{patient}'s sugar test",
+      creatinine: "{patient}'s kidney number",
+      egfr: "{patient}'s kidney filter",
+      potassium: "{patient}'s body salt",
+      haemoglobin: "{patient}'s blood count",
+      tsh: "{patient}'s thyroid test",
     },
     // A whole sentence, not a phrase: it stands alone as its own paragraph (Day.tsx), which
     // a screen reader reads as a complete unit (#166 review).
@@ -1296,6 +1467,14 @@ export const en = {
       bed: "Bedtime",
     },
     // @patient phrase
+    anchorsOther: {
+      wake: "When {patient} wakes up",
+      breakfast: "Breakfast",
+      lunch: "Lunch",
+      dinner: "Dinner",
+      bed: "Bedtime",
+    },
+    // @patient phrase
     readings: {
       blood_pressure: "Blood pressure",
       blood_sugar: "Blood sugar",
@@ -1305,8 +1484,12 @@ export const en = {
     walk: "A walk",
     // @patient
     notSet: "Nobody has set your day yet.",
+    // @patient
+    notSetOther: "Nobody has set {patient}'s day yet.",
     // @patient phrase
     setDay: "Set your day",
+    // @patient phrase
+    setDayOther: "Set {patient}'s day",
     // @patient phrase
     timeLabel: "What time",
     // @patient phrase
@@ -1317,6 +1500,8 @@ export const en = {
     checkDay: "Check your day",
     // @patient
     dayAsk: "Is this how your day goes?",
+    // @patient
+    dayAskOther: "Is this how {patient}'s day goes?",
     // @patient phrase
     dayYes: "Yes, set your day",
     // @patient
@@ -1362,7 +1547,11 @@ export const en = {
     // @patient phrase
     closeAccount: "Close my account",
     // @patient phrase
+    closeAccountOther: "Close {name}'s account",
+    // @patient phrase
     closeAccountYes: "Yes, close my account",
+    // @patient phrase
+    closeAccountYesOther: "Yes, close {name}'s account",
     // @patient phrase
     keepCopy: "Keep a copy to print",
     // @patient phrase
