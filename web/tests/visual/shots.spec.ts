@@ -80,16 +80,20 @@ test("his Today, her Home, sign-in, the tab bars and Me, at two sizes, banner of
   }
 });
 
-/** Stage 2 (D1): every other screen in both densities — each tab, the feed, not feeling well,
- *  the symptom log, the emergency card, the review card and the start of setting up — at both
- *  sizes with the banner off, each as the phone shows it first and as a whole page. */
-test("every other screen: the tabs, the feed, not feeling well, symptoms, the emergency and review cards, setting up", async ({ browser, request }) => {
-  test.setTimeout(900_000);
+/** Stage 2 (D1): every restyled screen, in both densities, at both sizes, with the banner off.
+ *  One tab set now (the reset), so the walk is the same for him and for her: each tab, each
+ *  place in his Record, each part of Family, the switcher, the feed, the day's four screens,
+ *  the emergency card and the review card. Each is taken twice — what the phone shows first,
+ *  and the whole page with its tab bar at the end ("-full"). */
+test("every restyled screen: the tabs, the Record's places, Family's parts, the switcher, the day, the cards", async ({ browser, request }) => {
+  test.setTimeout(1_800_000);
   const off = { on: false };
   const settle = async (page: Page) => {
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
     await page.evaluate(() => document.fonts.ready);
   };
+
+  /** Every tab in the bar, by the word on it, back to the first when it is done. */
   const eachTab = async (page: Page, who: string, tag: string) => {
     const tabs = page.locator("nav.tabbar button");
     const count = await tabs.count();
@@ -97,61 +101,122 @@ test("every other screen: the tabs, the feed, not feeling well, symptoms, the em
       const name = ((await tabs.nth(index).innerText()).trim().toLowerCase() || `tab${index}`).replace(/\W+/g, "-");
       await tabs.nth(index).click();
       await settle(page);
-      await snap(page, `${who}-${name}-${tag}`);
+      await snap(page, `${who}-tab-${name}-${tag}`);
     }
     await tabs.nth(0).click();
     await todayReady(page);
   };
+
+  /** Each place in his Record: the Papers tab, then the place — the two taps the design allows. */
+  const eachPlace = async (page: Page, who: string, tag: string) => {
+    for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
+      await page.getByTestId("tab-records").click();
+      const row = page.getByTestId(`record-${entry}`);
+      if (!(await row.isVisible().catch(() => false))) continue;
+      await row.click();
+      await settle(page);
+      await snap(page, `${who}-record-${entry}-${tag}`);
+    }
+  };
+
+  /** Each part of Family the key opens. */
+  const eachPart = async (page: Page, who: string, tag: string) => {
+    const parts = ["keys", "trail", "roster", "thread", "messages", "metrics", "calendar", "deliveries", "settings", "documents", "consents", "onlyMe"];
+    for (const part of parts) {
+      await page.getByTestId("tab-family").click();
+      const way = page.getByTestId(`open-${part}`);
+      if (!(await way.isVisible().catch(() => false))) continue;
+      await way.click();
+      await settle(page);
+      await snap(page, `${who}-family-${part}-${tag}`);
+    }
+  };
+
   for (const size of SIZES) {
     const family = await seedHome(request);
     const tag = size.name;
 
+    // --- his phone -------------------------------------------------------------------------
     const his = await phone(browser, size, off);
     await signInThroughTheApp(his, family.phone, "Pa");
     await todayReady(his);
     await eachTab(his, "dad", tag);
+    await eachPlace(his, "dad", tag);
+    await eachPart(his, "dad", tag);
+
+    // The switcher: whose papers are open, and the way to every other set.
+    await his.getByTestId("tab-today").click();
+    await todayReady(his);
+    await his.getByTestId("whose").click();
+    await settle(his);
+    await his.screenshot({ path: `${OUT}/dad-switcher-${tag}.png`, animations: "disabled" });
+    await his.getByTestId("sheet-close").click();
+
     await his.getByTestId("open-feed").click();
     await settle(his);
     await snap(his, `dad-feed-${tag}`);
-    await his.goto("./");
+
+    // The day's four screens: the pill, what to do now, the symptom log, a feeling.
+    await his.getByTestId("tab-today").click();
     await todayReady(his);
     await his.getByTestId("open-symptoms").click();
     await settle(his);
     await snap(his, `dad-symptoms-${tag}`);
-    await his.goto("./");
-    await todayReady(his);
-    await his.getByTestId("write-reading").click();
-    await expect(his.getByTestId("reading-photo")).toBeVisible();
-    await his.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
-    await expect(his.getByTestId("review-card")).toBeVisible();
-    await settle(his);
-    await snap(his, `dad-review-card-${tag}`);
-    await his.goto("./");
-    await todayReady(his);
-    await openMe(his);
-    await his.getByTestId("me-emergency").click();
-    await expect(his.getByTestId("emergency-screen")).toBeVisible();
-    await settle(his);
-    await snap(his, `dad-emergency-${tag}`);
-    await his.goto("./");
+    await his.getByTestId("tab-today").click();
     await todayReady(his);
     await his.getByTestId("not-well").click();
     await settle(his);
     await snap(his, `dad-not-well-${tag}`);
+
+    // The blood pressure typed or photographed, and its review card.
+    await his.getByTestId("tab-today").click();
+    await todayReady(his);
+    await his.getByTestId("write-reading").click();
+    await expect(his.getByTestId("reading-photo")).toBeVisible();
+    await settle(his);
+    await snap(his, `dad-reading-${tag}`);
+    await his.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
+    await expect(his.getByTestId("review-card")).toBeVisible();
+    await settle(his);
+    await snap(his, `dad-review-card-${tag}`);
+
+    // The emergency card, from Me.
+    await his.goto("./");
+    await todayReady(his);
+    await openMe(his);
+    await his.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+    await his.getByTestId("me-emergency").click();
+    await expect(his.getByTestId("emergency-screen")).toBeVisible();
+    await settle(his);
+    await snap(his, `dad-emergency-${tag}`);
     await his.context().close();
 
+    // --- her phone -------------------------------------------------------------------------
     const hers = await phone(browser, size, off);
     await signInThroughTheApp(hers, family.meiPhone, "Mei");
     await hers.getByTestId("door-key").click();
     await todayReady(hers);
     await eachTab(hers, "chief", tag);
+    await eachPlace(hers, "chief", tag);
+    await eachPart(hers, "chief", tag);
+
+    await hers.getByTestId("tab-today").click();
+    await todayReady(hers);
+    await hers.getByTestId("whose").click();
+    await settle(hers);
+    await hers.screenshot({ path: `${OUT}/chief-switcher-${tag}.png`, animations: "disabled" });
+    await hers.getByTestId("sheet-close").click();
+
     await hers.getByTestId("open-feed").click();
     await settle(hers);
     await snap(hers, `chief-feed-${tag}`);
     await hers.context().close();
 
+    // --- onboarding and the doors, on a phone that has never been used ----------------------
     const fresh = await phone(browser, size, off);
     await signInThroughTheApp(fresh, freshPhone("+659881"), "Pa");
+    await settle(fresh);
+    await snap(fresh, `doors-${tag}`);
     await fresh.getByTestId("door-for-me").click();
     await settle(fresh);
     await snap(fresh, `onboarding-agree-${tag}`);

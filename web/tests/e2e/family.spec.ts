@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import { API, apiToken, backendClock, fixClock, freshPhone, seedVisit, signInThroughTheApp } from "./helpers";
+import { API, apiToken, backendClock, fixClock, freshPhone, seedVisit, signInThroughTheApp, todayReady} from "./helpers";
 import { auth, caregiverScreenOk, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
@@ -401,3 +401,42 @@ test("the for-someone door: who you are to them is a choice, and the number can 
 });
 
 export type { Family };
+
+/** The reset's promise (docs/product-reset.md §4, §6): the moment a chief lets someone in,
+ *  that person's own app has these papers in its switcher and can ask about them — no sign-out,
+ *  no re-login, no second Ask. What they may read is the key's, and the backend says so. */
+test("a key cut now: the person it was cut for switches to his papers and asks, without signing out", async ({ page, browser, request }) => {
+  const family = await seedFamily(request);
+
+  // Siti is signed in on her own phone first, before she has any key at all.
+  const hers = await secondPhone(browser);
+  await signInThroughTheApp(hers, family.siti.phone, "Siti");
+  await expect(hers.getByTestId("open-me")).toBeVisible();
+
+  // The chief lets her in, from the circle where letting someone in is the one Plum button.
+  await signIn(page, family.mei, false);
+  await openFamily(page);
+  await page.getByTestId("open-keys").click();
+  await page.getByLabel("Their name").fill("Siti");
+  await page.getByLabel("Their phone number").fill(family.siti.phone);
+  await page.getByTestId("role-caregiver").click();
+  await page.getByTestId("make-key").click();
+  await expect(page.getByTestId("grant").filter({ hasText: "Siti" })).toBeVisible();
+
+  // Her phone has not been touched since. The switcher in her header reads the doors again
+  // when it opens, so his papers are there to pick.
+  await hers.getByTestId("whose").click();
+  const toHis = hers.getByTestId("switch-to-key");
+  await expect(toHis).toBeVisible();
+  await expect(toHis).toContainText("Pa");
+  await toHis.click();
+  await todayReady(hers);
+  await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
+  await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
+
+  // And Ask answers from his papers, in the backend's words, with where each line came from.
+  await hers.getByTestId("askbar").getByRole("searchbox").fill("what are his medicines");
+  await hers.getByTestId("ask-go").click();
+  await expect(hers.getByTestId("answer-lines")).toBeVisible();
+  await hers.close();
+});

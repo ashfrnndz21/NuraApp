@@ -5,6 +5,7 @@ import type { FamilyPart } from "../../flow";
 import { go } from "../../flow";
 import { fill } from "../../strings";
 import { Notice, Pill, Tile } from "../../ui/components";
+import { Icon, type IconName, PaperTile, PillButton } from "../../ui/kit";
 import { CalendarPart } from "./Calendar";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, whose } from "./common";
 import { ConsentsPart, RecordPart } from "./Consents";
@@ -73,32 +74,35 @@ function FamilyHome(): JSX.Element | null {
       await asks.reload();
     });
   const open = (part: FamilyPart) => () => go({ name: "family", part });
-  const pill = (part: FamilyPart, label: string) => (
-    <Pill key={part} onClick={open(part)} testId={`open-${part}`}>
-      {label}
-    </Pill>
+  // Each part as a row: an icon, the word, the way in. One tap from the Family tab, which is
+  // two from anywhere — the most any feature is allowed to be.
+  const row = (part: FamilyPart, label: string, icon: IconName) => (
+    <button key={part} type="button" class="place-row" onClick={open(part)} data-testid={`open-${part}`}>
+      <Icon name={icon} />
+      <span class="place-word">{label}</span>
+      <Icon name="chevron" />
+    </button>
   );
   const parts = here.patient
     ? [
-        pill("trail", whose(here, words.trailSelf, words.trailOther)),
-        pill("onlyMe", words.onlyMe),
-        pill("consents", whose(here, words.consentsSelf, words.consentsOther)),
-        pill("thread", words.thread),
-        pill("calendar", words.calendar),
+        row("trail", whose(here, words.trailSelf, words.trailOther), "note"),
+        row("onlyMe", words.onlyMe, "records"),
+        row("consents", whose(here, words.consentsSelf, words.consentsOther), "note"),
+        row("thread", words.thread, "family"),
+        row("calendar", words.calendar, "visits"),
       ]
     : [
-        pill("trail", whose(here, words.trailSelf, words.trailOther)),
-        pill("keys", words.keys),
-        pill("roster", words.roster),
-        pill("thread", words.thread),
-        pill("messages", fill(words.messagesTitle, { name: here.papers.display_name })),
-        pill("metrics", words.metrics),
-        pill("calendar", words.calendar),
-        pill("deliveries", words.deliveries),
-        pill("settings", words.settings),
-        pill("documents", words.documents),
-        pill("consents", whose(here, words.consentsSelf, words.consentsOther)),
-        pill("onlyMe", words.onlyMe),
+        row("trail", whose(here, words.trailSelf, words.trailOther), "note"),
+        row("roster", words.roster, "family"),
+        row("thread", words.thread, "family"),
+        row("messages", fill(words.messagesTitle, { name: here.papers.display_name }), "speaker"),
+        row("metrics", words.metrics, "records"),
+        row("calendar", words.calendar, "visits"),
+        row("deliveries", words.deliveries, "note"),
+        row("settings", words.settings, "plan"),
+        row("documents", words.documents, "records"),
+        row("consents", whose(here, words.consentsSelf, words.consentsOther), "note"),
+        row("onlyMe", words.onlyMe, "records"),
       ];
   return (
     <FamilyPage title={words.title} part="home">
@@ -116,14 +120,25 @@ function FamilyHome(): JSX.Element | null {
           <Lines lines={answered} />
         </Tile>
       )}
-      <Tile paper testId="circle">
+      <PaperTile testId="circle">
         <h2 class="title">{whose(here, words.circleSelf, words.circleOther)}</h2>
         {circle.value?.map((grant) => (
           <Lines key={grant.key_id} lines={grant.lines} testId="grant-lines" />
         ))}
         <Notice error={circle.error} />
-      </Tile>
-      {parts}
+        {/* Letting someone in is what this screen is for, so it is the one Plum button on it
+            and it sits with the circle it changes — not a row in a list of settings. The
+            moment the key is cut, that person's app has these papers in its switcher and can
+            ask about them, within what the key opens. */}
+        {!here.patient && (
+          <PillButton variant="primary" onClick={open("keys")} testId="open-keys">
+            {words.newKey}
+          </PillButton>
+        )}
+      </PaperTile>
+      <nav class="place-rows" aria-label={words.title}>
+        {parts}
+      </nav>
     </FamilyPage>
   );
 }
