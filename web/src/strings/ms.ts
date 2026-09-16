@@ -890,11 +890,11 @@ export const ms = {
         records: "Surat-surat anda",
       },
       // @patient phrase
-      seeWords: "Lihat kata-kata itu",
+      seeWords: "Lihat kata-kata ini",
       // @patient
       wordsLead: "Sila baca kata-kata ini.",
       // @patient phrase
-      agree: "Saya setuju, benarkan mereka",
+      agree: "Saya setuju, beri mereka kunci",
       // @patient
       done: "Mereka boleh melihat bahagian itu sekarang.",
     },
@@ -1293,6 +1293,12 @@ export const ms = {
     windowLabel: "Untuk berapa lama",
     // @patient phrase
     makeKey: "Buat kunci",
+    // @patient phrase
+    seeWords: "Lihat kata-kata ini",
+    // @patient
+    wordsLead: "Sila baca kata-kata ini.",
+    // @patient phrase
+    agreeKey: "Saya setuju, beri mereka kunci",
     // @patient phrase
     narrow: "Kecilkan",
     // @patient phrase

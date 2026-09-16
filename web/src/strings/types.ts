@@ -614,6 +614,9 @@ export interface Strings {
     partsLabel: string;
     windowLabel: string;
     makeKey: string;
+    seeWords: string;
+    wordsLead: string;
+    agreeKey: string;
     narrow: string;
     narrowYes: string;
     closeKey: string;

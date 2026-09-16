@@ -1162,10 +1162,27 @@ What you will see (the numbers, ids and days change each run; the trail is in Pa
       Mei melihat rekod anda pada Isnin 14 September.
 ✓ no sentence on it carries a class name, a table name or an id
 ✓ Mei uploaded the LPA PDF placeholder: found by its digest to be the paper the graph was set up on — one artefact, now with its bytes — tagged lpa, and listed under documents backing the stewardship and the agreement Mei gave for Pa on that basis
+✓ Priya (+6597771059) registered by phone code and signed in (the code read from the server log)
+✓ Pa adds Priya by phone himself, chooses caregiver, these parts and the words for them:
+    Anda membenarkan Priya, ahli keluarga anda, melihat sebahagian daripada rekod anda.
+    Priya boleh melihat bahagian ini:
+    - ubat anda
+    - lawatan anda ke doktor
+    - buku tekanan darah dan bacaan gula anda
+    - surat-surat anda
+    - kad kecemasan anda
+    - soalan anda kepada Nura
+    Priya boleh melihatnya sehingga anda minta ia dihentikan.
+    Anda boleh berhenti pada bila-bila masa.
+✓ Pa agreed, in his own words, and cut her key on it himself — no chief needed for his own
+✓ Priya signs in on her own account and her very first GET /doors already lists Pa: no reload, no second sign-in, no job to wait for
+✓ Priya asks against Pa's own record, in her own language, and reads back a cited answer: Your blood pressure on Wednesday 16 September was 138 over 84.
+✓ narrowing took effect on her very next ask: she is refused outside her parts, in the backend's own words, never a guess: Nura does not have that written down.
+✓ closing her key took Pa off Priya's doors at once, and her next ask was refused outright, on his trail
 checkpoint 13 passed: every step did what docs/checkpoints.md says
 ```
 
-**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 13 passed`. That is the whole of the criteria: a key is narrowed in place — fewer parts, a shorter window — on the chief's own yes and never widened (wider is a fresh consent from the patient and a new key); the patient can keep a part of his record to himself and every key on the profile stops opening it the same second, with the refused reach on his trail as a sentence he can read; the roster answers who is on duty on his wall clock, and a task is done only by the person it names; the family thread carries messages and health cards together and is read as a digest, every line through the plain-words verifier; a message to him is previewed exactly as he will see it and scheduled on a yes for those lines, and nothing is sent here; a paper behind a basis is kept by reference, tagged, and listed with what it backs. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
+**What "passed" means.** Every line is a ✓ and the last line says `checkpoint 13 passed`. That is the whole of the criteria: a key is narrowed in place — fewer parts, a shorter window — on the chief's own yes and never widened (wider is a fresh consent from the patient and a new key); the patient can keep a part of his record to himself and every key on the profile stops opening it the same second, with the refused reach on his trail as a sentence he can read; the roster answers who is on duty on his wall clock, and a task is done only by the person it names; the family thread carries messages and health cards together and is read as a digest, every line through the plain-words verifier; a message to him is previewed exactly as he will see it and scheduled on a yes for those lines, and nothing is sent here; a paper behind a basis is kept by reference, tagged, and listed with what it backs; and the owner's own rule (E12) is proven end to end — Pa adds Priya himself, on his own words, and the moment he does she can ask against his record on her own key, in her own language, over her own account, no reload, no second sign-in, no job to wait for; narrowing that key takes hold on her very next ask, and closing it takes Pa off her doors at once and refuses the ask outright, on Pa's trail. If you see a ✗, the line says what was asked, what came back (status and body) and what was expected; tell the operator and paste the line.
 
 **Two things to try by hand** at http://127.0.0.1:8000/docs, after a run, with the profile id and tokens from it:
 

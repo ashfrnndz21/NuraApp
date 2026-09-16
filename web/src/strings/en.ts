@@ -894,7 +894,7 @@ export const en = {
       // @patient
       wordsLead: "Please read these words.",
       // @patient phrase
-      agree: "I agree, let them in",
+      agree: "I agree, give them the key",
       // @patient
       done: "They can see those parts now.",
     },
@@ -1295,6 +1295,12 @@ export const en = {
     windowLabel: "For how long",
     // @patient phrase
     makeKey: "Make the key",
+    // @patient phrase
+    seeWords: "See the words",
+    // @patient
+    wordsLead: "Please read these words.",
+    // @patient phrase
+    agreeKey: "I agree, give them the key",
     // @patient phrase
     narrow: "Make it smaller",
     // @patient phrase
