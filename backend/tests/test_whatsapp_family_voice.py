@@ -205,7 +205,8 @@ async def test_a_voice_note_nothing_was_heard_in_is_kept_and_says_so(
     assert [r.text for r in kept.replies] == [
         (
             "Nura kept your voice note.\nNura could not hear this note.\n"
-            "If you feel unwell, call your family now."
+            # The notice to his chief went first, so the reply says who knows (#173).
+            "Mei knows now.\nIf you feel unwell, call your family now."
         )
     ]
     note = await sg.get(EventNote, kept.note_id)
@@ -394,7 +395,8 @@ async def test_a_voice_note_that_could_not_be_fetched_is_told_to_him(
     told = await home.inbound(sg, PA, media_id="pa-voice-market", content_type=OGG)
     assert told.outcome == "voice_note_not_heard" and told.note_id is None
     assert [r.text for r in told.replies] == [
-        "Nura could not hear your voice note.\nIf you feel unwell, call your family now."
+        "Nura could not hear your voice note.\n"
+        "Mei knows now.\nIf you feel unwell, call your family now."
     ]
 
 

@@ -1501,17 +1501,27 @@ async def _say_unheard(
 ) -> None:
     """The reply to a note Nura could not hear, with who the notice reached — and nobody named
     who was not told (#173): the plain line where it reached nobody, "Mei knows now." where it
-    reached one, "Mei and Kit know now." where it reached more."""
+    reached one, "Mei and Kit know now." where it reached more.
+
+    The notice goes first, so this can say who knows; and this runs in a savepoint of its own,
+    so a reply that fails is logged by name and never rolls the note or the notice back —
+    which would have the family told again on the provider's retry, and him told twice that
+    Nura could not hear him. It is the same rule the red flag's reply follows.
+    """
     names: list[str] = []
     for person_id in reached:
         person = await session.get(Person, person_id)
         if person is not None and person.display_name and person.display_name not in names:
             names.append(person.display_name)
-    if not names:
-        await _say(session, work, key)
-        return
-    told = f"{key}_told" if len(names) == 1 else f"{key}_told_many"
-    await _say(session, work, told, names=join_names(names, work.language))
+    told = key if not names else f"{key}_told" if len(names) == 1 else f"{key}_told_many"
+    params = {} if not names else {"names": join_names(names, work.language)}
+    try:
+        async with nested_unit_of_work(session):
+            await _say(session, work, told, **params)
+    except Exception as failed:  # noqa: BLE001 — the notice stands; the reply is logged by name
+        log.warning(
+            "whatsapp: the reply to an unheard voice note not sent: %s", type(failed).__name__
+        )
 
 
 async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
@@ -1521,7 +1531,7 @@ async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
     write what they said instead. Either way a person is told, so someone can call him."""
     if not work.context.is_owner:
         return await _note_unheard_from_someone_else(session, work)
-    await _refused_the_note(session, work)
+    await _refused_the_note(session, work.context)
     reached = await _tell_family_unheard(session, work, note_id=None)
     await _say_unheard(session, work, "voice_note_not_fetched", reached)
     return Handled(
@@ -1539,7 +1549,7 @@ async def _note_unheard_from_someone_else(session: AsyncSession, work: _Work) ->
     sender is told plainly and asked to write what she said; the line telling him to call his
     family is his, and is said to nobody else.
     """
-    await _refused_the_note(session, work)
+    await _refused_the_note(session, work.context)
     reached = await _tell_family_unheard(session, work, note_id=None)
     await _say_unheard(session, work, "note_unheard_other", reached)
     return Handled(
@@ -1547,11 +1557,11 @@ async def _note_unheard_from_someone_else(session: AsyncSession, work: _Work) ->
     )
 
 
-async def _refused_the_note(session: AsyncSession, work: _Work) -> None:
+async def _refused_the_note(session: AsyncSession, context: KeyContext) -> None:
     """A voice note nothing was kept of, on the trail by name and never by its words."""
     await record(
         session,
-        context=work.context,
+        context=context,
         action=Action.WRITE,
         scope=Scope.RECORDS,
         target="event_note",
@@ -1567,8 +1577,8 @@ UNHEARD = TriggerType.VOICE_NOTE_UNHEARD
 async def _tell_family_unheard(
     session: AsyncSession, work: _Work, *, note_id: uuid.UUID | None
 ) -> tuple[uuid.UUID, ...]:
-    """The same, for a message the thread is handling: `tell_family_unheard` for its work."""
-    return await tell_family_unheard(
+    """The same, for a message the thread is handling: `_tell_unheard` for its work."""
+    return await _tell_unheard(
         session,
         settings=work.settings,
         providers=work.providers,
@@ -1581,7 +1591,7 @@ async def _tell_family_unheard(
     )
 
 
-async def tell_family_unheard(
+async def _tell_unheard(
     session: AsyncSession,
     *,
     settings: Settings,
@@ -1663,17 +1673,8 @@ async def _unheard_unagreed(
     on their family page is written whatever else carried it. The sender gets one fixed line
     straight from the provider, written down as a share of a notice, content-free.
     """
-    await record(
-        session,
-        context=context,
-        action=Action.WRITE,
-        scope=Scope.RECORDS,
-        target="event_note",
-        outcome=Outcome.REFUSED,
-        refused_because="VoiceNoteNotHeard",
-        channel=Channel.WHATSAPP,
-    )
-    await tell_family_unheard(
+    await _refused_the_note(session, context)
+    await _tell_unheard(
         session,
         settings=settings,
         providers=providers,

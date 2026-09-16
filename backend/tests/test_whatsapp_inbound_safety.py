@@ -27,14 +27,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, AuditEntry, Channel
-from app.channels.whatsapp import inbound
+from app.channels.whatsapp import inbound, receipts
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.group import open_group
 from app.channels.whatsapp.inbound import Handled, handle_inbound
 from app.channels.whatsapp.models import WhatsAppReceipt
 from app.channels.whatsapp.proposals import Proposal
 from app.channels.whatsapp.provider import DevInbound
-from app.channels.whatsapp import receipts
 from app.channels.whatsapp.receipts import Received, receive
 from app.clock import FrozenClock
 from app.db import utcnow
@@ -278,10 +277,33 @@ async def test_telling_the_family_failing_never_takes_his_reply_or_his_note_back
 
     # Not a refusal: any failure in the telling leaves his note and his reply standing (#173).
     monkeypatch.setattr(inbound, "unheard_ladder", down)
-    kept = await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
-    assert kept.outcome == "voice_note" and kept.note_id is not None
+    message = DevInbound(from_e164=PA, media_id="pa-voice-mumbled", content_type=OGG).as_message(
+        utcnow()
+    )
+    kept: list[Handled] = []
+
+    async def handle() -> object:
+        handled = await handle_inbound(
+            sg,
+            settings=home.settings,
+            providers=home.providers,
+            number=home.number,
+            classifier=RuleClassifier(),
+            message=message,
+        )
+        kept.append(handled)
+        return handled
+
+    # The message is handled, so the provider never sends it again and he is never told
+    # twice that Nura could not hear him.
+    assert await receive(sg, message, handle) is Received.HANDLED
+    assert await receive(sg, message, handle) is Received.ALREADY
+    [handled] = kept
+    assert handled.outcome == "voice_note" and handled.note_id is not None
+    assert await sg.get(EventNote, handled.note_id) is not None
     # One reply, and it says nothing about who knows: nobody was told.
-    assert _said(kept) == [HIS_REPLY_ALONE]
+    assert _said(handled) == [HIS_REPLY_ALONE]
+    assert _told(home, PA) == [HIS_REPLY_ALONE]
     assert await _notices(sg) == []
 
 
@@ -292,7 +314,7 @@ async def test_the_unheard_notice_climbs_when_the_chief_does_not_say_she_has_it(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:
     home = await family(sg, tmp_path)
-    kit = await _kit_on_the_emergency_card(sg, home)
+    await _kit_on_the_emergency_card(sg, home)
     clock.set(datetime(2026, 9, 3, 2, 0, tzinfo=UTC))
     await home.inbound(sg, PA, media_id="pa-voice-mumbled", content_type=OGG)
     assert _told(home, MEI) == [LISTEN] and _told(home, KIT) == []
