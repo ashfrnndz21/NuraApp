@@ -23,11 +23,14 @@ from app.delivery.voice import (
     FixtureVoice,
     NoVoiceFor,
     TooLongToSay,
+    seconds_for_script,
     seconds_to_say,
+    voice_language,
     voiced,
     wav_seconds,
 )
 from app.ingestion.objects import LocalObjectStore
+from app.language.voice_script import script_for
 from app.memory.models import Artifact
 from app.regions import OutOfRegion, Region
 from tests.api import bearer, own_profile, register_by_phone
@@ -40,24 +43,39 @@ MEI = "+6591119902"
 
 async def test_the_fixture_says_a_card_as_silence_of_the_right_length() -> None:
     voice = FixtureVoice()
-    lines = "Your blood pressure today was 138 over 84.\nIt is in your blood pressure book."
-    said = await voice.speak(lines, "en")
+    lines = [
+        "Your blood pressure today was 138 over 84.",
+        "It is in your blood pressure book.",
+    ]
+    script = script_for(lines, "en")
+    said = await voice.speak(script)
     assert said.content_type == "audio/wav" and said.language == "en"
-    assert said.duration_seconds == seconds_to_say(lines, "en") == wav_seconds(said.audio)
+    assert said.duration_seconds == seconds_for_script(script) == wav_seconds(said.audio)
     assert said.duration_seconds < MAX_SECONDS
-    assert (await voice.speak(lines, "en")).audio == said.audio
+    assert (await voice.speak(script)).audio == said.audio
     for language in ("ms", "zh"):
-        assert (await voice.speak("您今天的血压是138比84。", language)).duration_seconds > 0
+        other = script_for(["您今天的血压是138比84。"], language)
+        assert (await voice.speak(other)).duration_seconds > 0
 
 
 async def test_hokkien_and_tamil_wait_for_t2_and_a_long_note_is_refused(tmp_path: Path) -> None:
     voice = FixtureVoice()
-    for later in ("nan", "ta"):
-        with pytest.raises(NoVoiceFor):
-            await voice.speak("Hello.", later)
     store = LocalObjectStore(tmp_path, Region.SG)
     import uuid
 
+    profile_id = uuid.uuid4()
+    for later in ("nan", "ta"):
+        with pytest.raises(NoVoiceFor):
+            voice_language(later)
+        with pytest.raises(NoVoiceFor):
+            await voiced(
+                store,
+                voice,
+                profile_id=profile_id,
+                region=Region.SG,
+                lines=["Hello."],
+                language=later,
+            )
     with pytest.raises(TooLongToSay):
         await voiced(
             store,
