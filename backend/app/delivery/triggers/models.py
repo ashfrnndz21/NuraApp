@@ -40,6 +40,11 @@ class TriggerType(StrEnum):
     DOSE = "dose"
     REORDER = "reorder"
     DOSES_UNTAPPED = "doses_untapped"
+    DOSES_LATE = "doses_late"
+    """Three or more tablets said Taken late in seven days (#198): a real finding about his
+    day that a plain untapped count would miss, since a late tap still counts as taken. A
+    count for the one on duty, never a diagnosis — the same shape as `DOSES_UNTAPPED`, read
+    off the taps' own stored `late` bit rather than re-derived."""
     FLAG = "flag"
     VISIT_TOMORROW = "visit_tomorrow"
     PAPERS = "papers"

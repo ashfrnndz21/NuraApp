@@ -1,6 +1,6 @@
-# ADR 0014 — A late "Taken" is recorded as late, not asked about, and the ladder tells whoever it reached that it stood down
+# ADR 0014 — A late "Taken" is recorded as late, not asked about, its own pattern signal, and the ladder tells whoever it reached that it stood down
 
-**Date** 2026-09-16 · **Status** accepted (owner's decision on #198) · **Decided by** the owner · **Stories** E11-06, E04-02 (and the trends/pattern signals that read a dose tap)
+**Date** 2026-09-16 · **Status** accepted (owner's decision on #198) · **Decided by** the owner · **Stories** E11-06, E04-02, E11-10 (the weekly pattern signal)
 
 ## Context
 
@@ -63,7 +63,20 @@ never told the second the tablet was tapped that she could stop worrying.
    lets a person — Mei, or a doctor reading the trend — draw that distinction themselves; Nura
    does not draw it for them from two words.
 
-4. **Whoever the ladder reached is told it stood down — once, through the ladder's own
+4. **The pattern signal reads lateness too, alongside the untapped count.** `_pattern`
+   (`app.delivery.triggers.engine`) already tells the one on duty when three or more tablets
+   have no Taken in seven days — arithmetic on the taps, a count and never a diagnosis. A late
+   tap is still a tap, so it was never in that count, and a week of doses consistently taken
+   two hours after their window looked exactly like a perfect week. `_late_pattern`, the same
+   shape beside it, counts taps whose stored `late` bit is true in the same seven-day window
+   and, at three or more, sends the one on duty the same kind of count
+   (`TriggerType.DOSES_LATE`, template `doses_late_count`, rule
+   `three_late_doses_in_seven_days`) through the same `deliver` and the same cap and quiet
+   hours as `DOSES_UNTAPPED`. It reads the stored bit rather than re-deriving it, and it does
+   not touch `_pattern`, `tapped_by`, or how an untapped dose is found — a late tap still
+   correctly never appears in that count, because it was taken.
+
+5. **Whoever the ladder reached is told it stood down — once, through the ladder's own
    delivery rules.** `acknowledge_dose` (the WhatsApp path's immediate close) and `climb`'s
    own answered-check (the engine's periodic close, for an app tap or any tap it notices on
    its own next run) both call a new `_notify_dose_resolved`. It reads the ladder's own
@@ -79,7 +92,7 @@ never told the second the tablet was tapped that she could stop worrying.
    reading the same `Delivery` rows the climb already wrote, and sending through the same
    `deliver` function.
 
-5. **The escalation stays in the record.** `close()` was already append-only — `closed_at` and
+6. **The escalation stays in the record.** `close()` was already append-only — `closed_at` and
    `closed_because` are set on the existing `Ladder` row, which is never deleted — so the
    ladder that climbed to Siti and told Mei is still there, closed, after a late tap. #198's
    "the escalation vanishes from the record" was true only in the sense that nothing *read* it
@@ -92,18 +105,16 @@ never told the second the tablet was tapped that she could stop worrying.
 - A dose tapped late is not "missed", is not asked about a second time, and is not silently
   rewritten as on-time. The Today card's `Slot` gains `taken_late: bool` (true only when
   `taken` is also true) so a client can show it without re-deriving the comparison; the API's
-  `SlotOut` and `TakenOut` carry it through. Nothing here builds a caregiver trend screen or a
-  new weekly pattern trigger — item 2 of the build asked to "make lateness visible to it", and
-  what exists to make visible today is the Today card and the API surface a future trend
-  reads; a dedicated late-doses pattern (alongside `DOSES_UNTAPPED`'s three-in-seven-days
-  count) is a follow-up, not built here, so as not to touch the trigger engine more than this
-  story needs to.
+  `SlotOut` and `TakenOut` carry it through. The weekly pattern signal reads it too: `DOSES_LATE`
+  (`_late_pattern`) tells the one on duty when three or more taps in seven days were late,
+  the same shape, cap and quiet hours as `DOSES_UNTAPPED` beside it — no new caregiver trend
+  screen, just the existing pattern machinery reading one more stored bit.
 - The WhatsApp reply that wrote a late tap says so, once, in his own words, after the normal
   confirmation: "This was written down later than usual." (`written_down_late` in
   `app.channels.whatsapp.strings`) — never "late" about him, never "missed", never twice.
-- `dose_resolved` is the twenty-third pending WhatsApp template (`approved=False`, like every
-  other one E11 added); a deployment's number carries it only once Meta approves it, same as
-  the rest.
+- `dose_resolved` and `doses_late_count` are two more pending WhatsApp templates
+  (`approved=False`, like every other one E11 added, twenty-four now in all); a deployment's
+  number carries either only once Meta approves it, same as the rest.
 - `acknowledge_dose` now takes `via: Via` as a required keyword argument — not defaulted,
   because a caller that closes a dose ladder without a way to notify would silently drop the
   notice for good (the ladder is already closed by the time anything downstream could notice).
@@ -112,4 +123,7 @@ never told the second the tablet was tapped that she could stop worrying.
   any existing check runs in. Nothing here makes the ladder less likely to escalate in any
   scenario: the fallback in `doses_for_reply` still lands a late reply on the same dose it did
   before, and every existing refusal (`NotOnTheLadder`, scope checks, consent, quiet hours for
-  a reminder, an alert's own never-quiet-never-capped rule) is unchanged.
+  a reminder, an alert's own never-quiet-never-capped rule) is unchanged. `_late_pattern` is
+  additive beside `_pattern`, in the same non-safety part of the engine (the weekly family
+  count, not the ladder); it does not change `tapped_by` or how `_pattern` finds an untapped
+  dose, so a late tap still correctly never counts as one.

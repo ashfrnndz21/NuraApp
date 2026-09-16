@@ -6,8 +6,9 @@ card, the reorder, the family digest, the feeling check-in, the red-flag notice 
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
 message (E11), the red-flag notice by tier and by the doctor's hours, the neutral urgent
 notice for when a tier's own template is not yet approved (#174), the pre-visit brief (B1),
-the notices of a voice note Nura could not hear (#158, #173), and the dose ladder standing
-down for whoever it reached (#198) — is one of these twenty-three,
+the notices of a voice note Nura could not hear (#158, #173), the dose ladder standing
+down for whoever it reached (#198), and the pattern's late twin, three or more taps in
+seven days taken after their window (#198) — is one of these twenty-four,
 submitted once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
@@ -227,6 +228,29 @@ DOSES_COUNT = Template(
     approved=False,
 )
 """The pattern (three or more in seven days), to the one on duty: a count, never a finding."""
+
+# @patient
+DOSES_LATE_COUNT = Template(
+    "doses_late_count",
+    ("name", "count"),
+    {
+        "en": (
+            "{name} said Taken {count} times late this week.\n"
+            "This is only a count.\n"
+            "You can see which ones in the app."
+        ),
+        "ms": (
+            "Minggu ini {name} kata Sudah ambil {count} kali lewat.\n"
+            "Ini hanya kiraan.\n"
+            "Anda boleh lihat yang mana dalam aplikasi."
+        ),
+        "zh": "这个星期，{name}有 {count} 次很晚才说“吃了”。\n这只是次数。\n您可以在应用里看是哪几次。",
+    },
+    approved=False,
+)
+"""The pattern's late twin (#198): three or more taps in seven days that were still taken, but
+after the window closed — a real finding a plain untapped count would hide, since a late tap
+is a tap. To the one on duty: a count, never a finding, the same shape as `DOSES_COUNT`."""
 
 # @patient
 PAPERS_WAITING = Template(
@@ -521,6 +545,7 @@ TEMPLATES: Mapping[str, Template] = {
         DOSE_RESOLVED,
         REORDER_FAMILY,
         DOSES_COUNT,
+        DOSES_LATE_COUNT,
         PAPERS_WAITING,
         FAMILY_NOTE,
         RED_FLAG_NOTICE_SELF,
@@ -537,10 +562,11 @@ TEMPLATES: Mapping[str, Template] = {
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All twenty-three, in the order they are submitted: E19's six (approved), then E11's ten
-(the dose ladder standing down, #198, among them), the red-flag notice by tier and by the
-doctor's hours with its neutral fallback (#174), the pre-visit brief (B1), and the three for
-a voice note nobody could hear (#158, #173) — all pending Meta's approval (`approved=False`)."""
+"""All twenty-four, in the order they are submitted: E19's six (approved), then E11's eleven
+(the dose ladder standing down and the late-doses count, both #198, among them), the red-flag
+notice by tier and by the doctor's hours with its neutral fallback (#174), the pre-visit brief
+(B1), and the three for a voice note nobody could hear (#158, #173) — all pending Meta's
+approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

@@ -919,7 +919,7 @@ async def _notify_dose_resolved(
     dosed = [ladder for ladder in ladders if ladder.subject is Subject.DOSE]
     if not dosed:
         return
-    taps, generic_of = await run.taps()
+    _, generic_of = await run.taps()
     for ladder in dosed:
         if ladder.line_id is None or ladder.anchor is None:
             continue

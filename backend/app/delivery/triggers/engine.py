@@ -138,6 +138,7 @@ async def run_due(
         await _morning(run)
         await _reorder(run, lines)
         await _pattern(run, lines)
+        await _late_pattern(run)
     await _visit_tomorrow(run)
     await _brief(run)
     await _papers(run)
@@ -395,6 +396,50 @@ async def _pattern(run: Run, lines: Sequence[LineView]) -> None:
             to_person=person,  # type: ignore[arg-type]
             kind="doses_count",
             params={"name": run.profile.display_name, "count": str(len(untapped))},
+            provider=run.via.providers.whatsapp,
+            number=run.via.number,
+            language=lang,
+            state=await run.state(),
+        )
+
+    await deliver(run, firing, family, Message(whatsapp=say))
+
+
+async def _late_pattern(run: Run) -> None:
+    """Three or more tablets said Taken late in seven days (#198): the one on duty is told the
+    count. A late tap is still a tap, so `_pattern` above never counts it as untapped — a week
+    of doses taken well after their window would otherwise look like a perfect week. Reads the
+    taps' own stored `late` bit (`app.medicines.service.record_dose_taken`); arithmetic on it,
+    never a finding about him."""
+    assert run.patient is not None
+    taps, generic_of = await run.taps()
+    cutoff = run.at - timedelta(days=PATTERN_DAYS)
+    late = [
+        tap
+        for tap in taps
+        if tap.late and as_utc(tap.taken_at) > cutoff and generic_of.get(tap.line_id) is not None
+    ]
+    if len(late) < PATTERN_AT_LEAST:
+        return
+    family = await stand_in_for(run, Scope.MEDICINES, exclude=(run.patient.id,))
+    if family is None:
+        return
+    year, week, _ = run.local.isocalendar()
+    firing = Firing(
+        type=TriggerType.DOSES_LATE,
+        dedupe_key=f"doses_late:{year}-W{week:02d}",
+        why={"count": len(late), "days": PATTERN_DAYS},
+    )
+
+    async def say(person: object) -> Delivered:
+        assert hasattr(person, "language")
+        lang = run.language_for(cast("Person", person))
+        return await send(
+            run.session,
+            context=run.acting,
+            to_person=person,  # type: ignore[arg-type]
+            kind="doses_late_count",
+            params={"name": run.profile.display_name, "count": str(len(late))},
             provider=run.via.providers.whatsapp,
             number=run.via.number,
             language=lang,
