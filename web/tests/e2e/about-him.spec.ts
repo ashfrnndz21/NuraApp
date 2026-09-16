@@ -4,12 +4,31 @@ import { seedHome } from "./homeSeed";
 
 /** A line that speaks to him about his own papers ("your tablets", "You have 5 left", "I am not
  *  feeling well"). "For you today" and "See more for you" speak to her, and are hers. */
-const TO_HIM = /\b(your|yours|you have|you took|you see|you saw|you told|you kept|you wrote|you can|you are|when you|I am)\b/i;
+test.use({ reducedMotion: "reduce" });
 
-/** Lines that speak to whoever is reading about their own doing, not about his record: the box
- *  where she writes her own message to the family is hers to fill, and says so, on his screens
- *  and on hers alike. These are the reader's, so the sweep lets them by. */
-const HERS = [/^Your message to the family$/];
+const TO_HIM = /\b(you|your|yours|I|I'm|me|my|mine)\b/i;
+
+/** Lines that speak to whoever is reading about their own doing, not about his record. On her
+ *  screens these are hers to act on, and they say "you" because they mean her: the feed's own
+ *  words for the reader, the box where she writes her own message to the family, and the two
+ *  lines that ask the person at the phone to describe, in their words, what they are reporting.
+ *  Every other "you" on a caregiver-density screen is a line about his record in the second
+ *  person, and this sweep fails on it. */
+const HERS = [
+  // The feed's own words for whoever is reading it.
+  /^For you today$/,
+  /^See more for you$/,
+  /^More for you$/,
+  // The box where she writes her own message to the family, and the choice to write her own
+  // lines rather than take one of the backend's templates.
+  /^Your message to the family$/,
+  /^My own words$/,
+  // A message she sends him: its name is the message, addressed to him because she is sending it.
+  /^Thinking of you$/,
+  // The one line that asks whoever is at the phone to describe, in their words, what they are
+  // reporting. What is described is said about him ("What Pa feels"); the describing is theirs.
+  /^Say it or type it in your own words\.$/,
+];
 
 const aboutHim = (line: string): boolean => TO_HIM.test(line) && !HERS.some((hers) => hers.test(line));
 
@@ -29,7 +48,7 @@ test("her Home, her Medicines and her Papers say his papers about him by name, n
   await expect(page.getByTestId("not-well")).toHaveText(/Pa is not feeling well/);
   await expect(page.getByTestId("home-hero")).toBeVisible();
   const home = await linesOn(page);
-  expect(home.filter((line) => TO_HIM.test(line))).toEqual([]);
+  expect(home.filter(aboutHim)).toEqual([]);
 
   for (const tab of ["tab-medicines", "tab-timeline"]) {
     await page.getByTestId(tab).click();
@@ -48,7 +67,10 @@ test("her Home, her Medicines and her Papers say his papers about him by name, n
  *  hers to act on ("For you today", "See more for you") speak to her and are hers: TO_HIM is
  *  written to catch the second person about his record, not every "you" on the phone. */
 test("no caregiver-density screen says a second-person line about his record", async ({ page, request }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(300_000);
+  // A screen this sweep cannot reach is a finding, not a reason to sit on the clock: every
+  // wait here is bounded, so a missing way in fails fast and says which one it was.
+  page.setDefaultTimeout(15_000);
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
@@ -56,13 +78,41 @@ test("no caregiver-density screen says a second-person line about his record", a
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 
   const seen: string[] = [];
+  const outside: string[] = [];
   const check = async (where: string) => {
     // Wait for what the screen drew, not for the network to fall idle: a screen that keeps a
     // request open (the family thread polls) never goes idle, and this reads as soon as there
-    // are lines to read.
-    await expect(page.getByTestId("shell-scroll")).toBeVisible();
-    await expect.poll(async () => (await linesOn(page)).length, { timeout: 10_000, intervals: [100, 200, 300, 500, 1_000] }).toBeGreaterThan(0);
-    const lines = await linesOn(page);
+    // are lines to read. A screen outside the shell has no tab bar under it, which is its own
+    // finding: it is named here rather than ending the sweep.
+    const inShell = await page
+      .getByTestId("shell-scroll")
+      .waitFor({ state: "visible", timeout: 8_000 })
+      .then(() => true, () => false);
+    expect.soft(inShell, `${where} is outside the shell: no tab bar under it`).toBe(true);
+    if (!inShell) {
+      outside.push(where);
+      return;
+    }
+    // Let the screen's own reads finish where they do. A screen that keeps a request open (the
+    // family thread polls) never goes idle, so this is bounded and the settle below is what
+    // the check really waits on.
+    await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+    // Settle on what the screen finally drew, not on its first frame: a screen whose cards
+    // arrive in a second read would otherwise be swept before its lines are there (the
+    // medicines list, whose cards carry the lines this test is looking for).
+    let lines = await linesOn(page);
+    await expect
+      .poll(
+        async () => {
+          const now = await linesOn(page);
+          const settled = now.length > 0 && now.length === lines.length && now.join("\n") === lines.join("\n");
+          lines = now;
+          return settled;
+        },
+        { timeout: 15_000, intervals: [200, 300, 500, 500, 1_000] },
+      )
+      .toBe(true)
+      .catch(() => undefined);
     seen.push(`${where} (${lines.length})`);
     expect.soft(lines.length, `${where} drew nothing`).toBeGreaterThan(0);
     expect.soft(lines.filter(aboutHim), where).toEqual([]);
@@ -99,26 +149,32 @@ test("no caregiver-density screen says a second-person line about his record", a
     await check(`family-${part}`);
   }
 
-  // The feed, one of its cards, the emergency card and the symptom log.
+  // The feed, the emergency card, the symptom log and the pill — reached the way she reaches
+  // them, through the tab bar, never by reloading the app: a reload puts her back through the
+  // doors and is not what this sweep is about.
   await tab("tab-today");
   await page.getByTestId("open-feed").click();
   await check("feed");
-  await page.goto("./");
-  await todayReady(page);
+
+  await tab("tab-today");
   await openMe(page);
+  // The sheet fills in what it reads (his proud number), which re-renders it: let that land
+  // before tapping, or the tap lands on a button that is about to be replaced.
+  await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
   await page.getByTestId("me-emergency").click();
   await expect(page.getByTestId("emergency-screen")).toBeVisible();
   await check("emergency");
-  await page.goto("./");
-  await todayReady(page);
+
+  await tab("tab-today");
   await page.getByTestId("open-symptoms").click();
   await check("symptoms");
 
   // The pill is about him, and it is the same button: it opens what it says it opens.
-  await page.goto("./");
-  await todayReady(page);
+  await tab("tab-today");
   await expect(page.getByTestId("not-well")).toHaveText(/Pa is not feeling well/);
   await page.getByTestId("not-well").click();
   await check("not-well");
+
   expect(seen.length).toBeGreaterThan(20);
+  expect(outside, "every screen the tab bar reaches is inside the shell").toEqual([]);
 });

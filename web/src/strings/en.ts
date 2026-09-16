@@ -623,10 +623,14 @@ export const en = {
     notWell: "I am not feeling well",
     // @patient headline
     notWellTitle: "Tell Nura how you feel",
+    // @patient headline
+    notWellTitleOther: "Tell Nura how {patient} feels",
     // @patient
     notWellLead: "Say it or type it in your own words.",
     // @patient phrase
     wordsLabel: "What you feel",
+    // @patient phrase
+    wordsLabelOther: "What {patient} feels",
     // @patient phrase
     send: "Tell Nura",
     // @patient phrase
@@ -651,6 +655,8 @@ export const en = {
     symptomsTitleOther: "How {name} has felt",
     // @patient
     symptomsLead: "Say what you feel, how bad it is and since when.",
+    // @patient
+    symptomsLeadOther: "Say what {patient} feels, how bad it is and since when.",
     // @patient phrase
     symptomsKeep: "Keep this",
     // @patient
@@ -1102,6 +1108,8 @@ export const en = {
     backOther: "Back to {patient}'s papers",
     // @patient
     sureYes: "You said yes to this.",
+    // @patient
+    sureYesOther: "{patient} said yes to this.",
     // @patient
     sureRead: "Nura read this clearly.",
     // @patient

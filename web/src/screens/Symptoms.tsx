@@ -4,9 +4,11 @@ import * as nura from "../api/nura";
 import type { Said, SymptomEntryOut, SymptomLogOut } from "../api/types";
 import { canRecord, saidOf, voiceRecorder } from "../day/voice";
 import { go } from "../flow";
-import { density, profile, token } from "../store/session";
+import { profile, token } from "../store/session";
 import { fill, language, t } from "../strings";
-import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { Header, Hear, Notice } from "../ui/components";
+import { PaperTile, PillButton } from "../ui/kit";
+import { Shell } from "./Shell";
 import { timer } from "../visit/model";
 
 /** How he has felt (E14-01): the week's symptoms in the backend's plain words — what, how bad,
@@ -79,21 +81,21 @@ export function SymptomsScreen(): JSX.Element {
   const title = own ? s.day.symptomsTitleSelf : fill(s.day.symptomsTitleOther, { name: papers?.display_name ?? "" });
   const lines = log?.lines.map((line) => line.text) ?? [];
   return (
-    <main class="screen" data-density={density()} data-testid="symptoms-screen" data-stage={stage}>
+    <Shell tab="today" testId="symptoms-screen" attrs={{ "data-stage": stage }} ask={false}>
       <Header title={title} onBack={stage === "ask" ? () => go({ name: "today" }) : undefined} />
       <Notice error={error} />
       {saved && (
-        <Tile paper role="status" testId="symptom-saved">
+        <PaperTile role="status" testId="symptom-saved">
           <p>{s.day.symptomsSaved}</p>
           <div class="lines">
             {saved.lines.map((line) => (
               <p key={line.id}>{line.text}</p>
             ))}
           </div>
-        </Tile>
+        </PaperTile>
       )}
       {stage === "ask" && (
-        <Tile paper testId="symptom-ask">
+        <PaperTile testId="symptom-ask">
           <p>{s.day.symptomsLead}</p>
           <label class="by-hand-label">
             <span class="label">{s.day.wordsLabel}</span>
@@ -106,50 +108,50 @@ export function SymptomsScreen(): JSX.Element {
               data-testid="symptom-words"
             />
           </label>
-          <Pill plum onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="symptom-keep">
+          <PillButton variant="primary" onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="symptom-keep">
             {s.day.symptomsKeep}
-          </Pill>
+          </PillButton>
           {unsent?.audio && (
-            <Pill onClick={() => void send(unsent)} testId="symptom-again">
+            <PillButton onClick={() => void send(unsent)} testId="symptom-again">
               {s.day.sendAgain}
-            </Pill>
+            </PillButton>
           )}
           {canRecord() && (
-            <Pill onClick={() => void listen()} testId="symptom-say">
+            <PillButton onClick={() => void listen()} testId="symptom-say">
               {s.day.sayIt}
-            </Pill>
+            </PillButton>
           )}
-        </Tile>
+        </PaperTile>
       )}
       {stage === "listening" && (
         <>
-          <Tile paper role="status" testId="listening">
+          <PaperTile role="status" testId="listening">
             <p class="recording">
               <span class="dot" aria-hidden="true" />
               <span class="timer">{timer(recorder.elapsed.value)}</span>
               <span>{s.visit.listening}</span>
             </p>
-          </Tile>
-          <Pill plum onClick={() => void stopAndSend()} testId="symptom-stop">
+          </PaperTile>
+          <PillButton variant="primary" onClick={() => void stopAndSend()} testId="symptom-stop">
             {s.day.stopAndSend}
-          </Pill>
+          </PillButton>
         </>
       )}
       {stage === "sending" && (
-        <Tile paper role="status" testId="sending">
+        <PaperTile role="status" testId="sending">
           <p>{s.day.sending}</p>
-        </Tile>
+        </PaperTile>
       )}
       {lines.length > 0 && (
-        <Tile paper testId="symptom-log">
+        <PaperTile testId="symptom-log">
           <div class="lines" data-testid="symptom-log-lines">
             {lines.map((line, at) => (
               <p key={at}>{line}</p>
             ))}
           </div>
           <Hear lines={lines} />
-        </Tile>
+        </PaperTile>
       )}
-    </main>
+    </Shell>
   );
 }

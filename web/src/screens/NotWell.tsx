@@ -8,9 +8,11 @@ import { whenNotReached } from "../day/redPath";
 import { canRecord, saidOf, voiceRecorder } from "../day/voice";
 import { go } from "../flow";
 import { bindingOf } from "../offline/todayCache";
-import { density, profile, token } from "../store/session";
+import { profile, token } from "../store/session";
 import { language, t } from "../strings";
-import { Header, Pill, Tile } from "../ui/components";
+import { Header } from "../ui/components";
+import { PaperTile, PillButton } from "../ui/kit";
+import { Shell } from "./Shell";
 import { timer } from "../visit/model";
 
 /** "I am not feeling well" (E13-02): he says it or types it, and the backend does the rest —
@@ -68,10 +70,10 @@ export function NotWellScreen(): JSX.Element {
   }, [stage]);
 
   return (
-    <main class="screen" data-density={density()} data-testid="not-well-screen" data-stage={stage}>
+    <Shell tab="today" testId="not-well-screen" attrs={{ "data-stage": stage }} ask={false}>
       <Header title={s.day.notWellTitle} onBack={stage === "ask" ? () => go({ name: "today" }) : undefined} />
       {stage === "ask" && (
-        <Tile paper testId="not-well-ask">
+        <PaperTile testId="not-well-ask">
           <p>{s.day.notWellLead}</p>
           <label class="by-hand-label">
             <span class="label">{s.day.wordsLabel}</span>
@@ -84,20 +86,20 @@ export function NotWellScreen(): JSX.Element {
               data-testid="not-well-words"
             />
           </label>
-          <Pill plum onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="not-well-send">
+          <PillButton variant="primary" onClick={() => void send({ words: words.trim() })} disabled={!words.trim()} testId="not-well-send">
             {s.day.send}
-          </Pill>
+          </PillButton>
           {canRecord() && (
-            <Pill onClick={() => void listen()} testId="not-well-say">
+            <PillButton onClick={() => void listen()} testId="not-well-say">
               {s.day.sayIt}
-            </Pill>
+            </PillButton>
           )}
           {noMic && <p data-testid="no-mic">{s.visit.noMic}</p>}
-        </Tile>
+        </PaperTile>
       )}
       {stage === "listening" && (
         <>
-          <Tile paper role="status" testId="listening">
+          <PaperTile role="status" testId="listening">
             <p class="recording">
               <span class="dot" aria-hidden="true" data-testid="red-dot" />
               <span class="timer" data-testid="timer">
@@ -105,17 +107,17 @@ export function NotWellScreen(): JSX.Element {
               </span>
               <span>{s.visit.listening}</span>
             </p>
-          </Tile>
-          <Pill plum onClick={() => void stopAndSend()} testId="not-well-stop">
+          </PaperTile>
+          <PillButton variant="primary" onClick={() => void stopAndSend()} testId="not-well-stop">
             {s.day.stopAndSend}
-          </Pill>
+          </PillButton>
         </>
       )}
       {stage === "sending" && (
-        <Tile paper role="status" testId="sending">
+        <PaperTile role="status" testId="sending">
           <p>{s.day.sending}</p>
-        </Tile>
+        </PaperTile>
       )}
-    </main>
+    </Shell>
   );
 }

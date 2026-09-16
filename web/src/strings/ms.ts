@@ -623,10 +623,14 @@ export const ms = {
     notWell: "Saya rasa tidak sihat",
     // @patient headline
     notWellTitle: "Beritahu Nura apa yang anda rasa",
+    // @patient headline
+    notWellTitleOther: "Beritahu Nura apa yang {patient} rasa",
     // @patient
     notWellLead: "Sebut atau taip dengan kata-kata anda sendiri.",
     // @patient phrase
     wordsLabel: "Apa yang anda rasa",
+    // @patient phrase
+    wordsLabelOther: "Apa yang {patient} rasa",
     // @patient phrase
     send: "Beritahu Nura",
     // @patient phrase
@@ -651,6 +655,8 @@ export const ms = {
     symptomsTitleOther: "Bagaimana perasaan {name}",
     // @patient
     symptomsLead: "Sebut apa yang anda rasa, teruk mana dan sejak bila.",
+    // @patient
+    symptomsLeadOther: "Sebut apa yang {patient} rasa, teruk mana dan sejak bila.",
     // @patient phrase
     symptomsKeep: "Simpan ini",
     // @patient
@@ -1100,6 +1106,8 @@ export const ms = {
     backOther: "Kembali ke surat {patient}",
     // @patient
     sureYes: "Anda sudah kata ya untuk ini.",
+    // @patient
+    sureYesOther: "{patient} sudah kata ya untuk ini.",
     // @patient
     sureRead: "Nura membaca ini dengan jelas.",
     // @patient

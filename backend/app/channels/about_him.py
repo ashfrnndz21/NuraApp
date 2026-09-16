@@ -89,6 +89,7 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (medicine_words.TAKEN, medicine_words.TAKEN_THEIRS),
         (medicine_words.COUNT, medicine_words.COUNT_THEIRS),
         (medicine_words.REORDER, medicine_words.REORDER_THEIRS),
+        (medicine_words.REORDER_ACTIONS, medicine_words.REORDER_ACTIONS_THEIRS),
         (medicine_words.SOURCE, medicine_words.SOURCE_THEIRS),
         (medicine_words.IF_FORGOTTEN, medicine_words.IF_FORGOTTEN_THEIRS),
         (state_words.POSTURE_LINE, state_words.POSTURE_LINE_THEIRS),

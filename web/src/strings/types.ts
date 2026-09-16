@@ -288,8 +288,10 @@ export interface Strings {
     topThree: string;
     notWell: string;
     notWellTitle: string;
+    notWellTitleOther: string;
     notWellLead: string;
     wordsLabel: string;
+    wordsLabelOther: string;
     send: string;
     sayIt: string;
     stopAndSend: string;
@@ -300,6 +302,7 @@ export interface Strings {
     symptomsTitleSelf: string;
     symptomsTitleOther: string;
     symptomsLead: string;
+    symptomsLeadOther: string;
     symptomsKeep: string;
     sendAgain: string;
     symptomsSaved: string;
@@ -495,6 +498,7 @@ export interface Strings {
     changes: string;
     back: string; backOther: string;
     sureYes: string;
+    sureYesOther: string;
     sureRead: string;
     disputed: string;
     twice: string; twiceOther: string;

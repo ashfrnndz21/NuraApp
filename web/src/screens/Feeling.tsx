@@ -7,9 +7,11 @@ import { whatToDoLines } from "../day/model";
 import { whenNotReached } from "../day/redPath";
 import { go } from "../flow";
 import { bindingOf } from "../offline/todayCache";
-import { density, profile, token } from "../store/session";
+import { profile, token } from "../store/session";
 import { language, t } from "../strings";
-import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { Hear, Notice } from "../ui/components";
+import { PaperTile, PillButton } from "../ui/kit";
+import { Shell } from "./Shell";
 
 /** One word tapped on the cloud, and the one thing it asks back (E17-02): the backend's
  *  question and its answers as buttons. His answer comes back as a note kept for the visit —
@@ -51,21 +53,21 @@ export function FeelingScreen({ tap }: { tap: FeelingOut }): JSX.Element {
 
   const boundary = note?.boundary ? note.boundary.split("\n") : [];
   return (
-    <main class="screen" data-density={density()} data-testid="feeling-screen">
+    <Shell tab="today" testId="feeling-screen" ask={false}>
       <Notice error={error} />
       {!note && question && (
-        <Tile paper testId="feeling-question">
+        <PaperTile testId="feeling-question">
           <h1 class="title">{question.words}</h1>
           {question.answers.map((one) => (
-            <Pill key={one.answer} onClick={() => void answer(one)} disabled={busy} testId={`answer-${one.answer}`}>
+            <PillButton key={one.answer} onClick={() => void answer(one)} disabled={busy} testId={`answer-${one.answer}`}>
               {one.label}
-            </Pill>
+            </PillButton>
           ))}
           <Hear lines={[question.words]} />
-        </Tile>
+        </PaperTile>
       )}
       {note && (
-        <Tile paper testId="feeling-note">
+        <PaperTile testId="feeling-note">
           <h1 class="title">{note.headline}</h1>
           <div class="lines" data-testid="note-lines">
             {note.lines.map((line, at) => (
@@ -81,11 +83,11 @@ export function FeelingScreen({ tap }: { tap: FeelingOut }): JSX.Element {
             </div>
           )}
           <Hear lines={note.voice} />
-        </Tile>
+        </PaperTile>
       )}
-      <Pill onClick={() => go({ name: "today" })} testId="back-today">
+      <PillButton onClick={() => go({ name: "today" })} testId="back-today">
         {s.day.backToday}
-      </Pill>
-    </main>
+      </PillButton>
+    </Shell>
   );
 }

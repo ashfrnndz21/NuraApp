@@ -536,6 +536,16 @@ REORDER_ACTIONS: Mapping[str, Mapping[str, str]] = {
 }
 
 # @patient phrase
+REORDER_ACTIONS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {"i_have_more": "There is more at home."},
+    "ms": {"i_have_more": "Ada lagi di rumah."},
+    "zh": {"i_have_more": "家里还有。"},
+}
+"""The same two buttons to someone else: "I have more at home." is his own voice, so on her
+screen it says what it is about instead. "Ask the family to order." asks the family for him
+either way, and is left as it is: its words are what the tap does."""
+
+# @patient phrase
 ORDER_TASK: Mapping[str, str] = {
     "en": "order more of {medicine}",
     "ms": "pesan lagi {medicine}",

@@ -1,8 +1,9 @@
 import type { JSX } from "preact";
 import { go } from "../flow";
-import { density } from "../store/session";
 import { t } from "../strings";
-import { Header, Hear, Pill, RefusalNotice, Tile } from "../ui/components";
+import { Header, Hear, RefusalNotice } from "../ui/components";
+import { PaperTile, PillButton } from "../ui/kit";
+import { Shell } from "./Shell";
 
 /** What to do now (E13-02): the card's lines exactly as the backend sent them, in its order —
  *  the reassurance first, the calls, the boundary last — never re-ordered, never trimmed.
@@ -10,25 +11,25 @@ import { Header, Hear, Pill, RefusalNotice, Tile } from "../ui/components";
 export function WhatToDoScreen({ lines, offline, refusal }: { lines: string[]; offline: "network" | "server" | null; refusal: string | null }): JSX.Element {
   const s = t();
   return (
-    <main class="screen" data-density={density()} data-testid="what-to-do-screen" data-offline={offline ?? "no"}>
+    <Shell tab="today" testId="what-to-do-screen" attrs={{ "data-offline": offline ?? "no" }} ask={false}>
       <Header title={s.day.whatToDo} />
       {offline && (
-        <Tile paper role="status" testId="offline-note">
+        <PaperTile role="status" testId="offline-note">
           <p>{offline === "network" ? s.today.offline : s.today.cannotReach}</p>
-        </Tile>
+        </PaperTile>
       )}
       <RefusalNotice refusal={refusal ?? undefined} />
-      <Tile paper role="alert" testId="what-to-do">
+      <PaperTile role="alert" testId="what-to-do">
         <div class="lines" data-testid="what-to-do-lines">
           {lines.map((line, at) => (
             <p key={at}>{line}</p>
           ))}
         </div>
         <Hear lines={lines} />
-      </Tile>
-      <Pill onClick={() => go({ name: "today" })} testId="back-today">
+      </PaperTile>
+      <PillButton onClick={() => go({ name: "today" })} testId="back-today">
         {s.day.backToday}
-      </Pill>
-    </main>
+      </PillButton>
+    </Shell>
   );
 }

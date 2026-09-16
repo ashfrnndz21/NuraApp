@@ -623,10 +623,14 @@ export const zh = {
     notWell: "我觉得不舒服",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
+    // @patient headline
+    notWellTitleOther: "告诉Nura{patient}的感觉",
     // @patient
     notWellLead: "用您自己的话说出来或打出来。",
     // @patient phrase
     wordsLabel: "您的感觉",
+    // @patient phrase
+    wordsLabelOther: "{patient}的感觉",
     // @patient phrase
     send: "告诉Nura",
     // @patient phrase
@@ -651,6 +655,8 @@ export const zh = {
     symptomsTitleOther: "{name}最近的感觉",
     // @patient
     symptomsLead: "说说您哪里不舒服、有多难受、从什么时候开始。",
+    // @patient
+    symptomsLeadOther: "说说{patient}哪里不舒服、有多难受、从什么时候开始。",
     // @patient phrase
     symptomsKeep: "保存",
     // @patient
@@ -1100,6 +1106,8 @@ export const zh = {
     backOther: "回到{patient}的文件",
     // @patient
     sureYes: "您已经确认了这一条。",
+    // @patient
+    sureYesOther: "{patient}已经确认了这一条。",
     // @patient
     sureRead: "Nura 看得很清楚。",
     // @patient
