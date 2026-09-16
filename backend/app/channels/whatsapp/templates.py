@@ -4,8 +4,10 @@ Outside the 24-hour customer-service window a business may send nothing but a te
 has approved, with its slots filled. So everything proactive — the morning card, the visit
 card, the reorder, the family digest, the feeling check-in, the red-flag notice (E19), and the
 ladder's two asks, the reorder to the family, the count, the papers waiting and a family
-message (E11), and the red-flag notice by tier and by the doctor's hours and the pre-visit
-brief (B1) — is one of these nineteen, submitted once and named here: its slots, and the words a patient reads in each
+message (E11), the red-flag notice by tier and by the doctor's hours, the pre-visit brief
+(B1), and the notice of a voice note Nura could not hear (#158) — is one of these twenty-one,
+submitted
+once and named here: its slots, and the words a patient reads in each
 language Nura speaks, written to `docs/plain-words.md` and checked by `make plain-words`.
 `render` fills a template; the send path verifies the filled text again at run time.
 """
@@ -389,6 +391,44 @@ VISIT_BRIEF = Template(
 """The pre-visit brief three days before a visit (E05-01), sent by E11's engine: the brief
 card's own lines — who and when, what it is about, what to bring — ending on its boundary.
 Every slot is one word or name on one line: a Meta template parameter holds no line break."""
+UNHEARD_NOTE_NOTICE = Template(
+    "unheard_note_notice",
+    ("name",),
+    {
+        "en": (
+            "{name} sent a voice note to Nura.\n"
+            "Nura could not hear this note.\n"
+            "Listen to it in the app, or call {name} now."
+        ),
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Dengar nota itu dalam aplikasi, atau telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n请在应用里听，或者现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""His voice note Nura could not hear, to his chief whose key opens his notes (#158): a red
+word in it could not be read, so a person listens. His words stay in his note, not here."""
+
+# @patient
+UNHEARD_NOTE_NOTICE_CALL = Template(
+    "unheard_note_notice_call",
+    ("name",),
+    {
+        "en": "{name} sent a voice note to Nura.\nNura could not hear this note.\nCall {name} now.",
+        "ms": (
+            "{name} hantar nota suara kepada Nura.\n"
+            "Nura tidak dapat mendengar nota ini.\n"
+            "Telefon {name} sekarang."
+        ),
+        "zh": "{name}给 Nura 发了一条语音留言。\nNura 听不清这段录音。\n现在就打电话给{name}。",
+    },
+    approved=False,
+)
+"""The same notice where there is nothing she can open — the note could not be fetched, or her
+key does not open his notes — so the one thing to do is to call him."""
 
 TEMPLATES: Mapping[str, Template] = {
     template.name: template
@@ -412,12 +452,14 @@ TEMPLATES: Mapping[str, Template] = {
         RED_FLAG_NOTICE_HOSPITAL,
         RED_FLAG_NOTICE_NIGHT,
         VISIT_BRIEF,
+        UNHEARD_NOTE_NOTICE,
+        UNHEARD_NOTE_NOTICE_CALL,
     )
 }
 TEMPLATE_NAMES: tuple[str, ...] = tuple(TEMPLATES)
-"""All nineteen, in the order they are submitted: E19's six (approved), then E11's nine and
-B1's four — the red-flag notice by tier and by the doctor's hours, and the brief — pending
-Meta's approval (`approved=False`)."""
+"""All twenty-one, in the order they are submitted: E19's six (approved), then E11's nine, the
+red-flag notice by tier and by the doctor's hours with the pre-visit brief (B1), and #158's two
+— all pending Meta's approval (`approved=False`)."""
 
 
 def language_of(asked: str | None) -> str:

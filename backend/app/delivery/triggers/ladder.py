@@ -717,24 +717,30 @@ async def acknowledge_dose(
 
 @dataclass(frozen=True, slots=True)
 class DoseAsked:
+    """One tablet at one moment of his day, as a "Taken" or "given" reply could mean it."""
+
     line_id: uuid.UUID
     anchor: str
     generic: str
+    strength: str = ""
 
 
-async def dose_for_reply(
+async def doses_for_reply(
     session: AsyncSession,
     *,
     context: KeyContext,
     registry: DrugRegistry,
     at: datetime | None = None,
     channel: Channel = Channel.WHATSAPP,
-) -> DoseAsked | None:
-    """Which tablet a "Taken" or "given" reply is about: the one the ladder last asked this
-    person about that day; else the one whose window is open at that moment and has no Taken
-    yet; else the latest one today whose moment has passed with none; else none — and then
-    nothing is written down. The moments are his routine's (E10-01). `at` is when the reply was sent (the
-    message's own time, as the provider stamps it); now when not given."""
+) -> list[DoseAsked]:
+    """Every tablet a "Taken" or "given" reply could be about at that moment (#162), never a
+    guess among them: each one the ladder has asked this person about that day and is still
+    open, and each one whose window is open and has no Taken yet; with neither, every tablet
+    at the latest moment today that has passed with none. Earliest moment first. One is
+    written down; more than one is asked about, by name, before anything is written
+    (`app.channels.whatsapp.inbound`); none, nothing. The moments are his routine's
+    (E10-01). `at` is when the reply was sent (the message's own time, as the provider stamps
+    it); now when not given."""
     zone = REGION_TZ[context.region]
     moment = as_utc(at) if at is not None else utcnow()
     local = moment.astimezone(zone)
@@ -755,33 +761,49 @@ async def dose_for_reply(
         and any(step["person_id"] == str(context.person_id) for step in ladder.rungs)
     ]
     slots = await doses_today(session, context=context, registry=registry)
-    generic_of = {slot.line.id: slot.line.generic for slot in slots}
-    if asked:
-        newest = max(asked, key=lambda ladder: as_utc(ladder.started_at))
-        assert newest.line_id is not None and newest.anchor is not None
-        generic = generic_of.get(newest.line_id)
-        if generic is not None:
-            return DoseAsked(line_id=newest.line_id, anchor=newest.anchor, generic=generic)
+    lines = {slot.line.id: slot.line for slot in slots}
     config = config_of(
         None,
         await current_routine(session, context=context),
         await breakfast_time(session, context=context),
     )
+    found: dict[tuple[uuid.UUID, str], DoseAsked] = {}
+
+    def one(line_id: uuid.UUID, anchor: str) -> None:
+        line = lines.get(line_id)
+        if line is not None and (line_id, anchor) not in found:
+            found[(line_id, anchor)] = DoseAsked(
+                line_id=line_id, anchor=anchor, generic=line.generic, strength=line.strength
+            )
+
+    for ladder in asked:
+        assert ladder.line_id is not None and ladder.anchor is not None
+        one(ladder.line_id, ladder.anchor)
     untapped = [slot for slot in slots if not slot.taken]
     for slot in untapped:
         opens, closes = config.window(local.date(), slot.anchor, zone)
         if opens <= local < closes:
-            return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
-    # Late: the latest tablet today whose moment has passed with no Taken yet.
-    passed = [
-        slot
-        for slot in untapped
-        if datetime.combine(local.date(), config.anchor_at(slot.anchor), zone) <= local
-    ]
-    if passed:
-        slot = max(passed, key=lambda one: config.anchor_at(one.anchor))
-        return DoseAsked(line_id=slot.line.id, anchor=slot.anchor, generic=slot.line.generic)
-    return None
+            one(slot.line.id, slot.anchor)
+    if not found:
+        # Late: the tablets at the latest moment today that has passed with no Taken yet.
+        passed = [
+            slot
+            for slot in untapped
+            if datetime.combine(local.date(), config.anchor_at(slot.anchor), zone) <= local
+        ]
+        if passed:
+            latest = max(config.anchor_at(slot.anchor) for slot in passed)
+            for slot in passed:
+                if config.anchor_at(slot.anchor) == latest:
+                    one(slot.line.id, slot.anchor)
+    order = {(slot.line.id, slot.anchor): index for index, slot in enumerate(slots)}
+    return sorted(
+        found.values(),
+        key=lambda dose: (
+            config.anchor_at(dose.anchor),
+            order.get((dose.line_id, dose.anchor), len(order)),
+        ),
+    )
 
 
 __all__ = [
@@ -793,7 +815,7 @@ __all__ = [
     "acknowledge_dose",
     "acknowledge_flag",
     "climb",
-    "dose_for_reply",
+    "doses_for_reply",
     "escalate_flag",
     "not_reached",
     "open_flags_for",

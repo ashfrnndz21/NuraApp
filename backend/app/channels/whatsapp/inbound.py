@@ -39,9 +39,10 @@ from app.channels.whatsapp.classifier import (
     Kind,
 )
 from app.channels.whatsapp.config import BusinessNumber
-from app.channels.whatsapp.group import group_for, is_member, sync_group
+from app.channels.whatsapp.group import is_member, sync_group
 from app.channels.whatsapp.models import (
     Direction,
+    DoseQuestion,
     MessageKind,
     WhatsAppMessage,
     WhatsAppThread,
@@ -56,7 +57,11 @@ from app.channels.whatsapp.proposals import (
 )
 from app.channels.whatsapp.provider import InboundMessage, Media, MediaTooLarge, NoSuchMedia
 from app.channels.whatsapp.strings import (
+    BOXED,
+    DOSE_CHOICE,
+    DOSE_CHOICE_BARE,
     FEELING_WORDS,
+    TOOK,
     YOU,
     YOUR_DOCTOR,
     join_names,
@@ -68,17 +73,28 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import NoConsent, require_consent
 from app.db import as_utc, nested_unit_of_work, unit_of_work, utcnow
 from app.delivery.strings import EMERGENCY_NUMBER, theirs
-from app.delivery.triggers.deliver import Via
+from app.delivery.triggers.deliver import (
+    Firing,
+    Message,
+    Recipient,
+    Via,
+    deliver,
+    open_run,
+    stand_in_for,
+)
 from app.delivery.triggers.ladder import (
+    DoseAsked,
     acknowledge_dose,
     acknowledge_flag,
     close,
-    dose_for_reply,
+    doses_for_reply,
     escalate_flag,
     medicine_words,
 )
-from app.delivery.triggers.models import Ladder
+from app.delivery.triggers.models import DeliveryOutcome, Ladder, TriggerType
+from app.delivery.triggers.rules import RULES
 from app.drafts import FactDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
@@ -96,10 +112,12 @@ from app.keys.context import (
     owned_profile,
     resolve_key_context,
 )
+from app.keys.handles import profile_for_group
 from app.keys.models import Key
-from app.keys.scopes import Scope, scope_for_subject
+from app.keys.scopes import KeyRole, Scope, scope_for_subject
 from app.medicines.service import record_dose_taken
-from app.medicines.strings import say_date
+from app.medicines.service import today as doses_today
+from app.medicines.strings import ANCHOR_WORDS, PLAIN_NAME, say_date
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import (
     Artifact,
@@ -535,8 +553,8 @@ async def _red_flag(session: AsyncSession, work: _Work) -> Handled:
             async with nested_unit_of_work(session):
                 await _say(session, work, key, **params)
             break
-        except Refusal as refusal:
-            log.warning("whatsapp: the red-flag reply %s refused %s", key, type(refusal).__name__)
+        except Exception as failed:  # noqa: BLE001 — the flag stands; the reply is logged
+            log.warning("whatsapp: the red-flag reply %s not sent: %s", key, type(failed).__name__)
     # The ladder (`delivery_ladder`, its `delivery` rows) is the one record of who is told
     # and who is still to be asked; nothing else is written beside it.
     return Handled(
@@ -842,55 +860,172 @@ async def _which_one(
     return Handled(outcome="which_one", profile_id=chosen.id)
 
 
-async def _taken(session: AsyncSession, work: _Work) -> Handled:
-    """ "Taken" from him, "given" from the helper: the Taken tap, said as a reply (E11-01).
+DOSE_QUESTION_FOR = timedelta(hours=2)
+"""How long "which tablet?" stays open for its answer (#162)."""
+ALL_OF_THEM = re.compile(
+    r"^\s*(?:(?:i\s+|he\s+|she\s+)?(?:took|gave|had|have taken|have given)\s+|"
+    r"(?:sudah|dah)\s+(?:ambil|beri|bagi|makan)\s+)?"
+    r"(?:both|all|both of them|all of them|semua|kedua-dua|kedua-duanya|"
+    r"都|都吃了|都给了|两个都|两种都|全部)\s*[.!。！]?\s*$",
+    re.IGNORECASE,
+)
+"""An answer to "which tablet?" that names every tablet it read out."""
+NUMBERS_ONLY = re.compile(
+    r"^\s*\d{1,2}(?:\s*(?:,|，|、|&|\+|\band\b|\bdan\b|和|\s)\s*\d{1,2})*\s*[.!。！]?\s*$",
+    re.IGNORECASE,
+)
+"""An answer made of the question's numbers and nothing else: "1", "2", "1 and 2"."""
+_POSSESSIVE = re.compile(r"^(?:your |the )|(?: anda)$|^您的")
+_QUOTES = re.compile(r"[\"'“”‘’「」『』]")
+NOT = re.compile(
+    r"(?<!\w)(?:not|no|never|didn'?t|did not|haven'?t|have not|tidak|tak|belum|bukan)(?!\w)"
+    r"|不|没",
+    re.IGNORECASE,
+)
+"""A "no" in an answer naming a tablet: it does not say which he took (#162)."""
 
-    It is about the tablet the ladder last asked this person about today, else the one whose
-    window is open now with no Taken yet; with neither, nothing is written and the reply says
-    so. The tap is written the way the app's button writes it — the tap is the yes, under
-    the medicines scope the helper's key holds — on the WhatsApp channel, and the ladder for
-    that tablet stops at once.
-    """
-    registry = work.providers.drug_registry
-    asked = await dose_for_reply(
-        session, context=work.context, registry=registry, at=work.message.at
-    )
-    if asked is None:
-        await _say(session, work, "taken_nothing_due")
-        return Handled(
-            outcome="nothing_due", replies=tuple(work.replies), profile_id=work.profile.id
+
+def _question_closes(moment: datetime, region: Region) -> datetime:
+    """When "which tablet?" stops taking an answer: two hours on, or at the end of his day if
+    that comes first — a tablet is his day's, and tomorrow's is another (#162)."""
+    zone = REGION_TZ[region]
+    local = as_utc(moment).astimezone(zone)
+    midnight = datetime.combine(local.date() + timedelta(days=1), time(0), zone)
+    return min(as_utc(moment) + DOSE_QUESTION_FOR, midnight.astimezone(UTC))
+
+
+def _medicine(work: _Work, dose: DoseAsked) -> str:
+    """His words for the tablet, said to whoever wrote: his own to him, "Pa's" to anyone else."""
+    words = medicine_words(work.providers.drug_registry, dose.generic, work.language)
+    if work.thread.is_patient:
+        return words
+    return theirs(words, work.profile.display_name, work.language)
+
+
+def _box_number(strength: str) -> str | None:
+    """The strength as the number on his box: "5 mg" is 5, "5/80 mg" is 5/80. None when
+    there is no number."""
+    found = re.match(r"\s*(\d+(?:[.,]\d+)?(?:\s*/\s*\d+(?:[.,]\d+)?)*)", strength or "")
+    return None if found is None else re.sub(r"\s+", "", found.group(1))
+
+
+def _named(work: _Work, dose: DoseAsked, listed: Sequence[DoseAsked]) -> str:
+    """The tablet as a reply names it: his words, and the number on its box too when another
+    tablet on the list goes by the same words, so the read-back says which one it was."""
+    words = _medicine(work, dose)
+    strength = _box_number(dose.strength)
+    clashes = any(other != dose and _medicine(work, other) == words for other in listed)
+    if not clashes or strength is None:
+        return words
+    return BOXED[work.language].format(medicine=words, strength=strength)
+
+
+def _dose_lines(work: _Work, doses: Sequence[DoseAsked]) -> str:
+    """The question's list, one line a tablet, numbered from 1 in the order it is read out."""
+    lines: list[str] = []
+    for number, dose in enumerate(doses, start=1):
+        strength = _box_number(dose.strength)
+        words = DOSE_CHOICE if strength is not None else DOSE_CHOICE_BARE
+        lines.append(
+            words[work.language].format(
+                number=str(number),
+                medicine=_medicine(work, dose),
+                strength=strength or "",
+                anchor=ANCHOR_WORDS[work.language][dose.anchor],
+            )
         )
+    return "\n".join(lines)
+
+
+def _which_key(work: _Work, doses: Sequence[DoseAsked]) -> str:
+    asked = "taken_which" if work.thread.is_patient else "given_which"
+    return asked if len(doses) == 2 else f"{asked}_all"
+
+
+async def _ask_which(session: AsyncSession, work: _Work, doses: Sequence[DoseAsked]) -> Handled:
+    """ "Which tablet?" — a "Taken" or "given" that could be about more than one tablet at that
+    moment (#162). Nothing is written down: the question is kept, with the tablets in the
+    order they were read out, under the medicines scope the reply's key holds, and each is
+    read out by number, in his words, with its strength and its moment."""
+    moment = utcnow()
+    # A new question closes any still open in this thread: only the newest is answered.
+    earlier = await _open_question(session, work)
+    if earlier is not None:
+        await _close_question(session, work, earlier)
+    await audited_write(
+        session,
+        DoseQuestion,
+        work.context,
+        Scope.MEDICINES,
+        channel=Channel.WHATSAPP,
+        thread_id=work.thread.id,
+        asked_at=moment,
+        expires_at=_question_closes(moment, work.context.region),
+        doses=[{"line_id": str(dose.line_id), "anchor": dose.anchor} for dose in doses],
+    )
+    await _say(
+        session,
+        work,
+        _which_key(work, doses),
+        doses=_dose_lines(work, doses),
+        name=work.profile.display_name,
+    )
+    return Handled(outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id)
+
+
+async def _write_taken(
+    session: AsyncSession,
+    work: _Work,
+    doses: Sequence[DoseAsked],
+    *,
+    listed: Sequence[DoseAsked] = (),
+    already: frozenset[tuple[uuid.UUID, str]] = frozenset(),
+) -> Handled:
+    """The Taken taps for exactly these tablets, the way the app's button writes each — the
+    tap is the yes, under the medicines scope the helper's key holds — on the WhatsApp
+    channel; the ladder stops for these and for no other (#162). One tapped since the
+    question was asked (`already`) is not tapped twice. The reply names them, each told apart
+    from the others on the list (`listed`) where their words are the same."""
+    listed = listed or doses
     artifact = await _keep_text(session, work=work, scope=Scope.MEDICINES)
     row = await _keep_row(session, work=work, kind=MessageKind.TAKEN, artifact=artifact)
-    await record_dose_taken(
-        session,
-        context=work.context,
-        line_id=asked.line_id,
-        anchor=asked.anchor,
-        source_channel=SourceChannel.WHATSAPP,
-        channel=Channel.WHATSAPP,
-    )
     day = as_utc(work.message.at).astimezone(REGION_TZ[work.context.region]).date().isoformat()
-    await acknowledge_dose(
-        session,
-        context=work.context,
-        line_id=asked.line_id,
-        anchor=asked.anchor,
-        day=day,
-        channel=Channel.WHATSAPP,
-    )
+    for dose in doses:
+        if (dose.line_id, dose.anchor) in already:
+            continue
+        await record_dose_taken(
+            session,
+            context=work.context,
+            line_id=dose.line_id,
+            anchor=dose.anchor,
+            source_channel=SourceChannel.WHATSAPP,
+            channel=Channel.WHATSAPP,
+        )
+        await acknowledge_dose(
+            session,
+            context=work.context,
+            line_id=dose.line_id,
+            anchor=dose.anchor,
+            day=day,
+            channel=Channel.WHATSAPP,
+        )
     if work.thread.is_patient:
+        took: list[str] = []
+        for anchor in dict.fromkeys(dose.anchor for dose in doses):
+            named = [_named(work, dose, listed) for dose in doses if dose.anchor == anchor]
+            took.append(
+                TOOK[work.language].format(
+                    medicine=join_names(named, work.language),
+                    anchor=ANCHOR_WORDS[work.language][anchor],
+                )
+            )
         who = await _who_checks(session, work)
         if who != YOU[work.language]:
-            await _say(session, work, "taken_patient", who=who)
+            await _say(session, work, "taken_patient", who=who, took="\n".join(took))
         else:
-            await _say(session, work, "taken_alone")
+            await _say(session, work, "taken_alone", took="\n".join(took))
     else:
-        medicine = theirs(
-            medicine_words(registry, asked.generic, work.language),
-            work.profile.display_name,
-            work.language,
-        )
+        medicine = join_names([_named(work, dose, listed) for dose in doses], work.language)
         await _say(session, work, "given", name=work.profile.display_name, medicine=medicine)
     return Handled(
         outcome="taken",
@@ -898,6 +1033,167 @@ async def _taken(session: AsyncSession, work: _Work) -> Handled:
         profile_id=work.profile.id,
         message_id=row.id,
         artifact_id=artifact.id,
+    )
+
+
+async def _taken(session: AsyncSession, work: _Work) -> Handled:
+    """ "Taken" from him, "given" from the helper: the Taken tap, said as a reply (E11-01).
+
+    It is about every tablet the ladder has asked this person about today and is still open,
+    and every one whose window is open now with no Taken yet (`doses_for_reply`). One is
+    written down at once, and named in the reply. More than one is never a guess (#162): he
+    is asked which, by number, and nothing is written until he answers. None: nothing is
+    written and the reply says so.
+    """
+    doses = await doses_for_reply(
+        session, context=work.context, registry=work.providers.drug_registry, at=work.message.at
+    )
+    if not doses:
+        await _say(session, work, "taken_nothing_due")
+        return Handled(
+            outcome="nothing_due", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    if len(doses) > 1:
+        return await _ask_which(session, work, doses)
+    return await _write_taken(session, work, doses)
+
+
+async def _open_question(session: AsyncSession, work: _Work) -> DoseQuestion | None:
+    """The newest "which tablet?" still open in this thread, if its key reads the medicines."""
+    if not work.context.allows(Scope.MEDICINES):
+        return None
+    found = await audited_read(
+        session,
+        DoseQuestion,
+        work.context,
+        Scope.MEDICINES,
+        where=(
+            DoseQuestion.thread_id == work.thread.id,
+            DoseQuestion.answered_at.is_(None),
+            DoseQuestion.expires_at > utcnow(),
+        ),
+        order_by=(DoseQuestion.asked_at.desc(),),
+        limit=1,
+        channel=Channel.WHATSAPP,
+    )
+    return found[0] if found else None
+
+
+def _words_for(registry: DrugRegistry, dose: DoseAsked) -> set[str]:
+    """What names one tablet in an answer: its generic name, and his words for it in every
+    language, without "your" or "the"."""
+    words = {dose.generic.lower()}
+    plain = registry.monograph(dose.generic).plain_name_id
+    for language in PLAIN_NAME.values():
+        said = language.get(plain)
+        if said:
+            words.add(_POSSESSIVE.sub("", said.lower()).strip())
+    return {word for word in words if word}
+
+
+def _chosen(
+    text: str, doses: Sequence[DoseAsked], registry: DrugRegistry
+) -> list[DoseAsked] | None:
+    """Exactly which tablets an answer to "which tablet?" says, or None when it does not say
+    exactly (#162): a number from the list, several numbers, "both" or "all", or the
+    tablet's own word. A number that is not on the list, or a word that names more than one
+    tablet on it, says nothing, and nothing is written."""
+    said = _QUOTES.sub("", text).strip().lower()
+    if ALL_OF_THEM.match(said):
+        return list(doses)
+    if NUMBERS_ONLY.match(said):
+        numbers = sorted({int(number) for number in re.findall(r"\d+", said)})
+        if numbers and all(1 <= number <= len(doses) for number in numbers):
+            return [doses[number - 1] for number in numbers]
+        return None
+    named: dict[str, set[int]] = {}
+    for index, dose in enumerate(doses):
+        for word in _words_for(registry, dose):
+            named.setdefault(word, set()).add(index)
+    found: set[int] = set()
+    for word, which in named.items():
+        if re.search(rf"(?<!\w){re.escape(word)}(?!\w)", said) or (
+            not word.isascii() and word in said
+        ):
+            if len(which) > 1:
+                return None
+            found |= which
+    # A name answers only when it names exactly one tablet, with no "not" beside it: "the
+    # aspirin, not the water pill" and "the aspirin and the water pill" say nothing sure.
+    if len(found) != 1 or NOT.search(said):
+        return None
+    return [doses[index] for index in sorted(found)]
+
+
+async def _answer_which(
+    session: AsyncSession, work: _Work, question: DoseQuestion, what: Classification
+) -> Handled | None:
+    """An answer to the open "which tablet?" (#162). Exactly which: the question is answered
+    and the Taken written for those tablets alone. Not exactly which: nothing is written, he
+    is told so and asked again. None when the message is not an answer at all."""
+    slots = await doses_today(session, context=work.context, registry=work.providers.drug_registry)
+    lines = {slot.line.id: slot.line for slot in slots}
+    doses = [
+        DoseAsked(
+            line_id=line.id, anchor=asked["anchor"], generic=line.generic, strength=line.strength
+        )
+        for asked in question.doses
+        if (line := lines.get(uuid.UUID(asked["line_id"]))) is not None
+    ]
+    if len(doses) != len(question.doses):
+        # A tablet it read out has left today's list since: its numbers no longer mean what
+        # was read to him. Nothing is written; he is asked again from what is open now.
+        await _close_question(session, work, question)
+        await _say(session, work, "which_not_sure")
+        fresh = await doses_for_reply(
+            session,
+            context=work.context,
+            registry=work.providers.drug_registry,
+            at=work.message.at,
+        )
+        if fresh:
+            return await _ask_which(session, work, fresh)
+        return Handled(
+            outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    chosen = _chosen(work.message.text or "", doses, work.providers.drug_registry)
+    if chosen is None:
+        if what.kind is not Kind.OTHER and not (
+            what.kind is Kind.HEALTH_EVENT
+            and what.event is not None
+            and what.event.subject == "medication"
+        ):
+            return None
+        await _say(session, work, "which_not_sure")
+        if doses:
+            await _say(
+                session,
+                work,
+                _which_key(work, doses),
+                doses=_dose_lines(work, doses),
+                name=work.profile.display_name,
+            )
+        return Handled(
+            outcome="which_tablet", replies=tuple(work.replies), profile_id=work.profile.id
+        )
+    await _close_question(session, work, question)
+    tapped = frozenset((slot.line.id, slot.anchor) for slot in slots if slot.taken)
+    return await _write_taken(session, work, chosen, listed=doses, already=tapped)
+
+
+async def _close_question(session: AsyncSession, work: _Work, question: DoseQuestion) -> None:
+    """The question's one change: answered, or asked again — it takes no answer after this."""
+    question.answered_at = utcnow()
+    await session.flush()
+    await record(
+        session,
+        context=work.context,
+        action=Action.WRITE,
+        scope=Scope.MEDICINES,
+        target=DoseQuestion.__tablename__,
+        target_id=question.id,
+        rows=1,
+        channel=Channel.WHATSAPP,
     )
 
 
@@ -1215,9 +1511,13 @@ async def _voice_note(session: AsyncSession, work: _Work) -> Handled:
         return await _other(session, work)
     view = await _keep_voice(session, work)
     row = await _keep_row(session, work=work, kind=MessageKind.VOICE_NOTE, artifact=view.artifact)
-    await _say(
-        session, work, "voice_note_kept" if view.transcript is not None else "voice_note_unheard"
-    )
+    if view.transcript is not None:
+        await _say(session, work, "voice_note_kept")
+    else:
+        # Nothing heard in it — a mumble, or the transcriber down: a red word in it could not
+        # be read (#158). He is told what to do if he feels unwell, and his chief to listen.
+        await _say(session, work, "voice_note_unheard")
+        await _tell_family_unheard(session, work, note_id=view.note.id)
     return Handled(
         outcome="voice_note",
         replies=tuple(work.replies),
@@ -1245,8 +1545,87 @@ async def _voice_not_heard(session: AsyncSession, work: _Work) -> Handled:
         channel=Channel.WHATSAPP,
     )
     await _say(session, work, "voice_note_not_fetched")
+    await _tell_family_unheard(session, work, note_id=None)
     return Handled(
         outcome="voice_note_not_heard", replies=tuple(work.replies), profile_id=work.profile.id
+    )
+
+
+UNHEARD = TriggerType.VOICE_NOTE_UNHEARD
+
+
+async def _tell_family_unheard(
+    session: AsyncSession, work: _Work, *, note_id: uuid.UUID | None
+) -> tuple[uuid.UUID, ...]:
+    """His voice note that Nura could not hear, told to his chief (#158), so a person listens.
+
+    A red word in it could not be read, so it goes the way a red flag's notice goes: an alert
+    under the emergency card (`RULES[VOICE_NOTE_UNHEARD]`), never capped and never held by
+    the quiet hours, on the rule's own channels whatever a setting says — WhatsApp, then the
+    app's content-free push — and every attempt a `Delivery` row. It goes to every chief of
+    his, or, with none, to whoever stands in for him now. It carries no word of the note and
+    none of its audio: the note stays private to him and a chief preset to his notes. Her
+    key opens them: she is told to listen in the app, or to call him; it does not, or the note
+    could not be fetched at all: she is told to call him. It runs in a savepoint of its own,
+    so a refusal here never takes his note or his reply with it. Who it reached."""
+    rule = RULES[UNHEARD]
+    handle = hashlib.sha256(work.message.provider_message_id.encode()).hexdigest()[:16]
+    firing = Firing(
+        type=UNHEARD,
+        dedupe_key=f"{UNHEARD.value}:{note_id or handle}",
+        why={"event_note_id": str(note_id)} if note_id is not None else {"note": "not_fetched"},
+    )
+    try:
+        async with nested_unit_of_work(session):
+            run = await open_run(
+                session,
+                via=Via(settings=work.settings, providers=work.providers, number=work.number),
+                profile_id=work.profile.id,
+                at=work.message.at,
+            )
+            chiefs: list[Recipient] = []
+            for key in await run.live_keys():
+                person = await run.person(key.holder_person_id)
+                if key.role is KeyRole.CHIEF and person is not None:
+                    chiefs.append(Recipient(person, "chief"))
+            if not chiefs:
+                stand_in = await stand_in_for(run, rule.scope)
+                chiefs = [] if stand_in is None else [stand_in]
+            for to in chiefs:
+                opens = note_id is not None and Scope.NOTES in await run.scopes_of(to.person)
+                kind = "unheard_note_notice" if opens else "unheard_note_notice_call"
+
+                async def say(person: Person, kind: str = kind) -> Delivered:
+                    return await send(
+                        run.session,
+                        context=run.acting,
+                        to_person=person,
+                        kind=kind,
+                        params={"name": run.profile.display_name},
+                        provider=run.via.providers.whatsapp,
+                        number=run.via.number,
+                        language=run.language_for(person),
+                        state=await run.state(),
+                    )
+
+                # Each chief on her own: one that fails never takes back another's notice.
+                try:
+                    async with nested_unit_of_work(session):
+                        await deliver(
+                            run, firing, to, Message(whatsapp=say, channels=rule.channels)
+                        )
+                except Exception as failed:  # noqa: BLE001 — logged by name; the others stand
+                    log.warning(
+                        "whatsapp: an unheard voice note not told to one: %s",
+                        type(failed).__name__,
+                    )
+    except Refusal as refusal:
+        log.warning("whatsapp: an unheard voice note not told: %s", type(refusal).__name__)
+        return ()
+    return tuple(
+        sent.delivery.to_person_id
+        for sent in run.report
+        if sent.delivery.outcome is DeliveryOutcome.SENT and sent.delivery.to_person_id is not None
     )
 
 
@@ -1324,6 +1703,13 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
             return await _group_message(session, work)
         # A photo or a file in the family's group is the family's, never one of his papers.
         return Handled(outcome="ignored", profile_id=work.profile.id)
+    if work.message.text and what.kind in (Kind.OTHER, Kind.HEALTH_EVENT):
+        # An answer to "which tablet?" (#162): a number, "both", or the tablet's own word.
+        question = await _open_question(session, work)
+        if question is not None:
+            answered = await _answer_which(session, work, question, what)
+            if answered is not None:
+                return answered
     if what.kind is Kind.DOCUMENT:
         return await _document(session, work)
     if what.kind is Kind.HEALTH_EVENT:
@@ -1383,7 +1769,11 @@ async def handle_inbound(
     region = settings.region
     # The family's group names its family (E11-01). A group this number does not keep is
     # not read, and nothing is said into any group from here.
-    group = None if message.group_id is None else await group_for(session, message.group_id)
+    group = (
+        None
+        if message.group_id is None
+        else await profile_for_group(session, region=region, provider_group_id=message.group_id)
+    )
     if message.group_id is not None and group is None:
         log.info("whatsapp: a message in a group this number does not keep")
         return Handled(outcome="ignored")
@@ -1419,7 +1809,7 @@ async def handle_inbound(
         log.info("whatsapp: ignored by request %s", _handle(person.id, message.from_e164))
         return Handled(outcome="ignored")
 
-    if group is not None and await closing_since(session, profile_id=group.profile_id) is not None:
+    if group is not None and await closing_since(session, profile_id=group) is not None:
         # The family's group of a closing account (#143) was emptied; a post that still
         # arrives is not taken in. A red word is answered, to the sender alone, with who to call.
         if flagged:
@@ -1432,7 +1822,7 @@ async def handle_inbound(
             )
         return Handled(outcome="ignored")
     reachable = (
-        [group.profile_id]
+        [group]
         if group is not None
         else await _profiles_reachable(session, region=region, person=person)
     )
