@@ -194,6 +194,9 @@ async def test_a_red_flag_writes_the_flag_first_tells_the_family_and_the_first_l
     # His WhatsApp agreement is for messages to him (#143): Mei is told on her own WhatsApp,
     # under the key his agreement to let her in rests on, though he never agreed to WhatsApp.
     rows = (await sg.scalars(select(Delivery).where(Delivery.ladder_id == ladder.id))).all()
+    names = {mei.person_id: "mei", lin.person_id: "lin", siti.person_id: "siti"}
+    for row in rows:
+        print("DBGROW", names.get(row.to_person_id, row.to_person_id), row.via, row.outcome, row.rung, row.template_name)
     # Every way she can be reached, and the notice on her family page besides (#162).
     assert {(row.to_person_id, row.via) for row in rows if row.via is DeliveryChannel.IN_APP} == {
         (mei.person_id, DeliveryChannel.IN_APP)
