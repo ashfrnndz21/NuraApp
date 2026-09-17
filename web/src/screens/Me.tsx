@@ -234,7 +234,13 @@ function Area(): JSX.Element | null {
     setBusy(true);
     setError(null);
     try {
-      setView(await nura.setArea(bearer, papers.profile_id, value));
+      // Once the graph is his own, this write takes his own yes (#184); the steward's
+      // pre-claim write is unchanged and needs none.
+      const confirmationId =
+        papers.standing === "owner"
+          ? (await nura.mintAreaConfirmation(bearer, papers.profile_id, value)).confirmation_id
+          : undefined;
+      setView(await nura.setArea(bearer, papers.profile_id, value, confirmationId));
       setAsking(null);
       setChoosing(false);
     } catch (failure) {
