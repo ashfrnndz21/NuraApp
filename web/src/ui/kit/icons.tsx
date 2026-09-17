@@ -14,11 +14,13 @@ import {
   Clock,
   FilePlus2,
   FileText,
+  Globe,
   HandHeart,
   Heart,
   HeartPulse,
   House,
   ListChecks,
+  Lock,
   MapPin,
   Menu,
   MessageSquare,
@@ -101,6 +103,9 @@ export const ICONS = {
   chevron: ChevronRight,
   back: ChevronLeft,
   note: MessageSquare,
+  // Profile (docs/design/nura-concept-board.html, the Profile screen).
+  language: Globe,
+  lock: Lock,
 } as const satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

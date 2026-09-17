@@ -95,10 +95,12 @@ for a first deploy: it needs no key, it cannot send anything anyone types to a t
 and it is what every checkpoint in `docs/checkpoints.md` was written and walked against.
 
 Each of the three has a Claude-backed adapter (`app.ingestion.claude_extract.ClaudeExtractor`
-and `app.delivery.feed.claude_adapters`) that only builds on a declared demo (ADR 0017): a
-laptop dev run cannot turn it on, only a deployment with `NURA_DEMO_MODE=1`, because
-Anthropic's first-party API does not process in Singapore or Malaysia and a demo is the one
-deployment where nothing shown to it claims to be a real family's data. To turn one on:
+and `app.delivery.feed.claude_adapters`) that only builds on a declared demo or a declared dev
+run (ADR 0017, and its 2026-09-17 addendum): on this Render deployment, that means only
+`NURA_DEMO_MODE=1`, because Anthropic's first-party API does not process in Singapore or
+Malaysia and a demo is the one deployment where nothing shown to it claims to be a real
+family's data. The dev-run half of the rule is for the owner's own laptop only, never this
+deployment — see `docs/run-real-on-your-laptop.md`. To turn one on here:
 
 1. Make sure `NURA_ANTHROPIC_API_KEY` is set (§2) — without it the adapter refuses to build.
 2. In the Render dashboard, on the `nura-sg` service's **Environment** tab, add

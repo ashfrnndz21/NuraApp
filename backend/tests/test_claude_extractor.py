@@ -5,9 +5,10 @@ invented. No live call: every test hands `ClaudeExtractor` a fake that answers i
 back — never a real API key, never a real request.
 
 `extractor_for` (`app.ingestion.extract_provider`) is the other half: `NURA_EXTRACTOR=claude`
-must refuse to build outside a declared demo (ADR 0017), because Anthropic's first-party API
-does not process in SG or MY and a demo is the only deployment where every document is demo
-or test data.
+must refuse to build outside a declared demo or a declared dev run (ADR 0017), because
+Anthropic's first-party API does not process in SG or MY, and only a demo (every document is
+demo or test data) or a dev run on the owner's own laptop (he is the one choosing to show it
+his own documents) admits the exception.
 """
 
 from __future__ import annotations
@@ -449,20 +450,20 @@ def test_the_fixture_extractor_refuses_without_a_fixtures_directory() -> None:
         extractor_for(_settings())
 
 
-def test_claude_refuses_to_build_outside_a_declared_demo() -> None:
+def test_claude_refuses_to_build_outside_a_declared_demo_and_dev_run() -> None:
     with pytest.raises(ClaudeExtractorOutsideDemo):
         extractor_for(_settings(extractor="claude", anthropic_api_key="sk-test-not-real"))
 
 
-def test_claude_refuses_to_build_on_a_plain_dev_run_too() -> None:
-    """The residency rule is stricter than the fixtures' own: a dev run alone is not enough,
-    only a declared demo is — a laptop's own test papers are not "test data by declaration"."""
-    with pytest.raises(ClaudeExtractorOutsideDemo):
-        extractor_for(
-            _settings(
-                extractor="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real"
-            )
+def test_claude_builds_on_a_declared_dev_run() -> None:
+    """The owner's own laptop, his own documents, his own key: a declared dev run is now
+    enough on its own, without also being a declared demo (ADR 0017 addendum)."""
+    extractor = extractor_for(
+        _settings(
+            extractor="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real"
         )
+    )
+    assert isinstance(extractor, ClaudeExtractor)
 
 
 def test_claude_builds_on_a_declared_demo() -> None:
