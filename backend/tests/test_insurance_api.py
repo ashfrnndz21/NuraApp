@@ -218,7 +218,7 @@ async def test_pre_visit_relevance_over_http_for_the_owner_and_a_narrower_key(
     )
     assert owner_view.status_code == 200, owner_view.text
     assert owner_view.json()["full"] is True
-    assert any("no insurance policy" in line for line in owner_view.json()["note"])
+    assert any("no insurance on file" in line for line in owner_view.json()["note"])
 
     pa_session = {"token": his["Authorization"].removeprefix("Bearer ")}
     lin = await _cut_a_key(deployment, pa_session, profile_id, LIN, ["profile", "visits"])

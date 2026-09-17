@@ -46,7 +46,7 @@ async def test_the_owner_sees_no_cover_on_file_when_there_is_none(sg: AsyncSessi
     assert shown.full is True
     assert shown.policies == ()
     assert shown.bring == ()
-    assert any("no insurance policy" in line.text for line in shown.note)
+    assert any("no insurance on file" in line.text for line in shown.note)
 
 
 async def test_a_helper_and_a_caregiver_are_refused_the_full_record_but_still_get_the_bring_card_line(

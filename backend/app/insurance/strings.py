@@ -49,33 +49,49 @@ insurer, no policy, no amount — only what to bring."""
 
 # @patient line
 HAS_COVER: Mapping[str, str] = {
-    "en": "{name} has insurance on file that may apply to this visit.",
-    "ms": "{name} ada insurans yang mungkin berkaitan dengan lawatan ini.",
-    "zh": "{name}有保险记录,可能适用于这次看诊。",
+    "en": "{name} has insurance on file.",
+    "ms": "{name} ada insurans direkod.",
+    "zh": "{name}有保险记录。",
 }
-"""Nura never says a visit *is* covered: this says cover may apply, on his own record —
-paired with `CONFIRM_WITH_INSURER`, which sends him to confirm it."""
+"""Nura never says a visit *is* covered: this says cover is on file, on his own record —
+paired with `MAY_APPLY` and `CONFIRM_WITH_INSURER`, which say it may apply and send him to
+confirm it. One idea a line (plain-words review, #1): "on file" and "may apply" were one
+sentence and are now two."""
+
+# @patient line
+MAY_APPLY: Mapping[str, str] = {
+    "en": "It may apply to this visit.",
+    "ms": "Ia mungkin berkaitan dengan lawatan ini.",
+    "zh": "可能适用于这次看诊。",
+}
 
 # @patient line
 CONFIRM_WITH_INSURER: Mapping[str, str] = {
-    "en": "Confirm with the insurer before the visit.",
+    "en": "Confirm with the insurance company before the visit.",
     "ms": "Sahkan dengan syarikat insurans sebelum lawatan itu.",
     "zh": "看诊前请向保险公司确认。",
 }
+"""His words for the insurer, the same in every language (plain-words review, #2): "the
+insurance company", not "the insurer" — the Malay and Chinese already said it this way."""
 
 # @patient line
 NO_COVER_ON_FILE: Mapping[str, str] = {
-    "en": "Nura has no insurance policy on file for {name}.",
-    "ms": "Nura tiada rekod polisi insurans untuk {name}.",
+    "en": "Nura has no insurance on file for {name}.",
+    "ms": "Nura tiada rekod insurans untuk {name}.",
     "zh": "Nura没有{name}的保险记录。",
 }
+"""The same words as `HAS_COVER` for the same idea (plain-words review, #13): "insurance on
+file", not "insurance policy on file" — a fact on file is not a fact-of-a-different-name
+depending on which line says it."""
 
 # @patient line
 CONFIRM_IF_ANY: Mapping[str, str] = {
-    "en": "Confirm with the insurer before the visit, if there is one.",
-    "ms": "Sahkan dengan syarikat insurans sebelum lawatan itu, jika ada.",
-    "zh": "看诊前请向保险公司确认一下,如果有保单的话。",
+    "en": "You can also confirm with the insurance company.",
+    "ms": "Anda juga boleh sahkan dengan syarikat insurans itu.",
+    "zh": "看诊前也可以向保险公司确认一下。",
 }
+"""Reframed from a conditional ("...if there is one.") that read as doubting the line just
+said ("no insurance on file") to an offered extra step (plain-words review, #9)."""
 
 # @patient line
 BRING_POLICY_CARD: Mapping[str, str] = {
@@ -88,7 +104,7 @@ BRING_POLICY_CARD: Mapping[str, str] = {
 BRING_GUARANTEE_LETTER: Mapping[str, str] = {
     "en": "Bring the insurance letter, if the insurer asks for one.",
     "ms": "Bawa surat insurans itu, jika syarikat insurans memintanya.",
-    "zh": "如果保险公司要求,带上保险信。",
+    "zh": "如果保险公司要求，带上保险信。",
 }
 """What the glossary calls a guarantee letter (docs/plain-words.md §4) is always said as
 "the insurance letter" — the same words `Scope.MONEY` already uses for it
@@ -97,6 +113,7 @@ BRING_GUARANTEE_LETTER: Mapping[str, str] = {
 TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.bring_card": BRING_CARD,
     "insurance.has_cover": HAS_COVER,
+    "insurance.may_apply": MAY_APPLY,
     "insurance.confirm_with_insurer": CONFIRM_WITH_INSURER,
     "insurance.no_cover_on_file": NO_COVER_ON_FILE,
     "insurance.confirm_if_any": CONFIRM_IF_ANY,

@@ -286,12 +286,16 @@ async def claims_for_appointment(
     return sorted(found, key=lambda row: (as_utc(row.filed_at), str(row.id)), reverse=True)
 
 
+@audited(Action.READ, CLAIM_SCOPE, TARGET)
 async def papers_for_claim(
     session: AsyncSession, *, context: KeyContext, claim_id: uuid.UUID
 ) -> Sequence[Attachment]:
     """The papers behind a claim: whatever is hung off the visit it is for, read the one way
     a paper ever joins a visit here (`app.memory.attach.attachments`). Not a claim-specific
-    read: a key that cannot see the visit's papers sees none of these either."""
+    read: a key that cannot see the visit's papers sees none of these either.
+
+    Wrapped so a `NoSuchClaim` lands on the trail like any other refusal here — `require_claim`
+    on its own raises outside any door (clinical-safety review)."""
     claim = await require_claim(session, context=context, claim_id=claim_id)
     return await attachments(session, context=context, appointment_id=claim.appointment_id)
 

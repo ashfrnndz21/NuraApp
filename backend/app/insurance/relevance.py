@@ -26,11 +26,14 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_profile_read
+from app.audit.access import audited_guard, audited_profile_read
+from app.audit.models import Action
 from app.insurance.policy import POLICY_SCOPE, Policy, PolicyStatus, PolicyType, current_policies
 from app.insurance.strings import render
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
 from app.memory.attach import require_appointment
+from app.memory.models import Appointment
 
 __all__ = ["Line", "PolicySummary", "PreVisitInsurance", "pre_visit_relevance"]
 
@@ -85,8 +88,17 @@ async def pre_visit_relevance(
 ) -> PreVisitInsurance:
     """What to prepare, for this visit, on the insurance record — narrowed to what this key
     may see (§ the module docstring). Refused (`OutOfScope`) for a key that cannot read the
-    visit at all, the same door `app.memory.attach.require_appointment` already keeps."""
-    await require_appointment(session, context=context, appointment_id=appointment_id)
+    visit at all, the same door `app.memory.attach.require_appointment` already keeps.
+
+    `require_appointment` raises `NoSuchAppointment` outside any door of its own; wrapped in
+    `audited_guard` here so that refusal lands on the trail too (clinical-safety review) —
+    `Refusal.written_down` keeps the `OutOfScope` case, already logged inside
+    `require_appointment`'s own read, from being written twice.
+    """
+    async with audited_guard(
+        session, context, Action.READ, Scope.VISITS, Appointment.__tablename__
+    ):
+        await require_appointment(session, context=context, appointment_id=appointment_id)
     profile = await audited_profile_read(session, context)
     lang = language or profile.language
     name = profile.display_name
@@ -101,7 +113,7 @@ async def pre_visit_relevance(
     active = [row for row in policies if row.status is PolicyStatus.ACTIVE]
 
     if not active:
-        note = (
+        no_cover_note: tuple[Line, ...] = (
             Line(
                 "insurance.no_cover_on_file",
                 render("insurance.no_cover_on_file", lang, name=name),
@@ -109,11 +121,12 @@ async def pre_visit_relevance(
             Line("insurance.confirm_if_any", render("insurance.confirm_if_any", lang)),
         )
         return PreVisitInsurance(
-            appointment_id=appointment_id, full=True, policies=(), note=note, bring=()
+            appointment_id=appointment_id, full=True, policies=(), note=no_cover_note, bring=()
         )
 
-    note = (
+    note: tuple[Line, ...] = (
         Line("insurance.has_cover", render("insurance.has_cover", lang, name=name)),
+        Line("insurance.may_apply", render("insurance.may_apply", lang)),
         Line("insurance.confirm_with_insurer", render("insurance.confirm_with_insurer", lang)),
     )
     bring_items = [
