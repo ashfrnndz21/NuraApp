@@ -17,6 +17,8 @@
     PATCH /profiles/{id}/search-jobs/{job}      pause or resume it
     GET  /profiles/{id}/area                    his area, coarse (owner, chief)
     PUT  /profiles/{id}/area                    set on his yes (owner, steward)
+    GET  /profiles/{id}/signals                 "What Nura uses": every family, on or off
+    PUT  /profiles/{id}/signals/{family}        switch one on or off (owner, chief)
     POST /profiles/{id}/find                    the ask bar's Web, Videos and Providers filters
 
 Every route takes the key context. The owner reads the patient's supply; a chief, caregiver
@@ -59,6 +61,8 @@ from app.channels.api.feed_schemas import (
     SearchJobOut,
     SearchJobPatchIn,
     SentOut,
+    SignalIn,
+    SignalsOut,
     SourceOut,
 )
 from app.channels.api.refusals import refused
@@ -85,6 +89,12 @@ from app.errors import Refusal
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.reasoning.signals import (
+    SignalFamily,
+    current_signal_use,
+    set_signal_use,
+    signals_may_be_set,
+)
 from app.search.narrate import NarratedStep
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
@@ -369,6 +379,27 @@ async def put_area(body: AreaIn, context: Context, session: Db) -> AreaOut:
     """Set his area on his yes — a town from the list or a postcode's first digits, never a
     street — or clear it. His own key, or the steward's before he claims."""
     return AreaOut.of(await set_area(session, context=context, area=body.area))
+
+
+@router.get("/{profile_id}/signals")
+async def signals(context: Context, session: Db) -> SignalsOut:
+    """"What Nura uses": food, sleep, steps, water, what he asks — each on or off, as he last
+    set it or the default (RE-05, docs/recommendation-engine.md §3.6). `may_set` says
+    whether this key may switch one; a caregiver reads them, only he or his chief sets them."""
+    uses = await current_signal_use(session, context=context)
+    return SignalsOut.of(uses, may_set=signals_may_be_set(context))
+
+
+@router.put("/{profile_id}/signals/{family}")
+async def put_signal(
+    family: SignalFamily, body: SignalIn, context: Context, session: Db
+) -> SignalsOut:
+    """Switch one family on or off, confirmed at the tap: his own key, or his chief's
+    (`NotTheirsToSetSignals`, 403, for anyone else). The fact and the write are on the trail
+    either way; State's preference dimension shows it on the next read."""
+    await set_signal_use(session, context=context, family=family, on=body.on)
+    uses = await current_signal_use(session, context=context)
+    return SignalsOut.of(uses, may_set=True)
 
 
 @router.post("/{profile_id}/find")

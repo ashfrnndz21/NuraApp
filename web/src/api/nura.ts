@@ -76,6 +76,8 @@ import type {
   SettingsOut,
   SharingIn,
   SharingPreviewOut,
+  SignalFamily,
+  SignalsOut,
   SlotOut,
   StateOut,
   StoryOut,
@@ -819,6 +821,14 @@ export const area = (token: string, profileId: string) => api<AreaOut>(`/profile
 /** Set his area on his yes, or clear it (null). */
 export const setArea = (token: string, profileId: string, value: string | null) =>
   api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+
+/** "What Nura uses" (RE-05): every family, on or off, and whether this key may set one. */
+export const signals = (token: string, profileId: string) =>
+  api<SignalsOut>(`/profiles/${profileId}/signals`, { token });
+
+/** Switch one family on or off: his own key, or his chief's. */
+export const setSignal = (token: string, profileId: string, family: SignalFamily, on: boolean) =>
+  api<SignalsOut>(`/profiles/${profileId}/signals/${family}`, { token, method: "PUT", body: { on } });
 
 /** The ask bar's Web, Videos and Providers filters. Records is `ask`. His words go in the
  *  body, never in the URL, where a log or the browser's history would keep them. */

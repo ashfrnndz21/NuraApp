@@ -50,9 +50,10 @@ class Settings:
     no in-region provider exists yet (ADR 0017) — a laptop dev run stays on the fixture. A
     name this build does not have refuses to start."""
     anthropic_api_key: str | None = None
-    """NURA_ANTHROPIC_API_KEY: the key the Claude extractor and narrator call the Anthropic
-    API with, from the platform's secrets, never the repo, never a log. Unset, the SDK's own
-    ANTHROPIC_API_KEY is used if the environment has it; with neither, the adapter refuses
+    """NURA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY): the one key every Claude-backed adapter —
+    the extractor, the narrator, `NURA_SEARCHER=claude`, `NURA_COMPRESSOR=claude` — calls the Anthropic API with,
+    from the platform's secrets, never the repo, never a log. Unset, the SDK's own
+    ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
     to build."""
     narrator: str = "fixture"
     """NURA_NARRATOR: what says Ask's and Find's trace steps aloud
@@ -77,9 +78,21 @@ class Settings:
     (`Unseparated`), which claims nothing it did not hear (E02-05)."""
     feed_fixtures: str | None = None
     """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
-    (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
-    call are later adapters behind the same two ports, and without either the process
-    refuses to start."""
+    (`app.delivery.feed.compress`), and the clip renderer's stills. Set on a laptop; a real
+    fetcher and a grounded model call are adapters behind the same two ports
+    (`NURA_SEARCHER`/`NURA_COMPRESSOR`), and without one of the two the process refuses to
+    start."""
+    searcher: str = "fixture"
+    """NURA_SEARCHER: which adapter answers the `Searcher` port (`app.delivery.feed.compress`).
+    `fixture` (the default) answers from NURA_FEED_FIXTURES; `claude` reads the allowlist for
+    real through Claude's web search and fetch tools (`app.delivery.feed.claude_adapters`) and
+    runs only on a declared demo (`NURA_DEMO_MODE=1`) with `ANTHROPIC_API_KEY` set — no
+    in-region provider exists yet. Any other name refuses to start."""
+    compressor: str = "fixture"
+    """NURA_COMPRESSOR: which adapter answers the `Compressor` port. `fixture` (the default)
+    answers from NURA_FEED_FIXTURES; `claude` grounds a plain-words card on the fetched page
+    through Claude's structured output (`app.delivery.feed.claude_adapters`), gated the same
+    way as NURA_SEARCHER=claude. Any other name refuses to start."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
@@ -273,11 +286,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
-        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or None,
+        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         narrator=source.get("NURA_NARRATOR", "fixture"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
+        searcher=source.get("NURA_SEARCHER", "fixture"),
+        compressor=source.get("NURA_COMPRESSOR", "fixture"),
         speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         web_dist=source.get("NURA_WEB_DIST") or None,
