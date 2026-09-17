@@ -1368,6 +1368,14 @@ export const en = {
     providersOther: "{patient}'s doctors and clinics",
     // @patient headline
     changes: "What changed",
+    // @patient headline
+    ledger: "Your insurance ledger",
+    // @patient headline
+    ledgerOther: "{patient}'s insurance ledger",
+    // @patient
+    ledgerWithheld: "This is kept to you.",
+    // @patient
+    ledgerWithheldOther: "This is kept to {patient}.",
     // @patient phrase
     back: "Back to your papers",
     // @patient phrase
@@ -1696,6 +1704,20 @@ export const en = {
     tableMedicines: "Medicines",
     // @patient headline
     tableReadings: "What to check",
+    // @patient phrase
+    ledgerTotals: "Totals for {year}",
+    // @patient phrase
+    ledgerClaimedLabel: "Claimed",
+    // @patient phrase
+    ledgerInsurerPaidLabel: "The insurance company paid",
+    // @patient phrase
+    ledgerPatientPaidLabel: "You paid",
+    // @patient phrase
+    ledgerPatientPaidLabelOther: "{patient} paid",
+    // @patient
+    ledgerNone: "No claims are on file yet.",
+    // @patient phrase
+    ledgerOn: "On {date}",
   },
   family: {
     // @patient headline

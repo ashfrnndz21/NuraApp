@@ -115,6 +115,17 @@ class InsuranceClaim(ProfileScoped, Base):
     appointment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("appointment.id"), index=True)
     claim_reference: Mapped[str | None] = mapped_column(String(REFERENCE_LENGTH), default=None)
     status: Mapped[ClaimStatus] = mapped_column(enum_column(ClaimStatus, "insurance_claim_status"))
+    claimed_amount_cents: Mapped[int | None] = mapped_column(default=None)
+    """What was claimed, in minor units (cents/sen) — his own word, typed at filing
+    (`0047_insurance_claim_amounts`, the ledger, `app.insurance.ledger`). Never edited once
+    set (`frozen`, below): a correction is filed as a new claim, the same rule a policy and
+    an insurer already keep."""
+    paid_by_insurer_cents: Mapped[int | None] = mapped_column(default=None)
+    """What the insurer paid, known once the claim is approved or partly approved — set
+    alongside a status move (`change_claim_status`), on the same yes."""
+    paid_by_patient_cents: Mapped[int | None] = mapped_column(default=None)
+    """What he paid himself, known once the claim is settled — set alongside a status move
+    (`change_claim_status`), on the same yes."""
     filed_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     confirmation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("confirmation.id"))
     filed_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
@@ -136,6 +147,8 @@ frozen(
             "status_changed_by_person_id",
             "status_changed_confirmation_id",
             "status_changed_at",
+            "paid_by_insurer_cents",
+            "paid_by_patient_cents",
         }
     ),
     only_when=_status_change_is_in_progress,
@@ -182,6 +195,11 @@ def _clean_reference(text: str | None) -> str | None:
     return one_line
 
 
+def _not_a_negative_amount(*amounts: int | None) -> None:
+    if any(one is not None and one < 0 for one in amounts):
+        raise NotAClaim("an amount is never negative")
+
+
 @audited(Action.WRITE, CLAIM_SCOPE, TARGET)
 async def file_a_claim(
     session: AsyncSession,
@@ -191,11 +209,16 @@ async def file_a_claim(
     appointment_id: uuid.UUID,
     claim_reference: str | None,
     confirmation_id: uuid.UUID,
+    claimed_amount_cents: int | None = None,
 ) -> InsuranceClaim:
     """File a claim against a policy, for a visit, on the typer's own yes for exactly these
-    words. The policy and the visit must both already be on this profile."""
+    words. The policy and the visit must both already be on this profile. `claimed_amount_
+    cents` is his own word for what he is claiming, in minor units — the ledger's first
+    number for this claim (`app.insurance.ledger`); left unset, the claim still files, the
+    amount to follow with a status move."""
     may_manage_a_claim(context)
     reference = _clean_reference(claim_reference)
+    _not_a_negative_amount(claimed_amount_cents)
     found_policy = await audited_read(
         session, Policy, context, CLAIM_SCOPE, where=(Policy.id == policy_id,)
     )
@@ -203,7 +226,10 @@ async def file_a_claim(
         raise NoSuchPolicy(f"no policy {policy_id} on profile {context.profile_id}")
     await require_appointment(session, context=context, appointment_id=appointment_id)
     draft = InsuranceClaimDraft(
-        policy_id=policy_id, appointment_id=appointment_id, claim_reference=reference
+        policy_id=policy_id,
+        appointment_id=appointment_id,
+        claim_reference=reference,
+        claimed_amount_cents=claimed_amount_cents,
     )
     yes = await consume_confirmation(session, context, confirmation_id, draft)
     return await audited_write(
@@ -215,6 +241,7 @@ async def file_a_claim(
         appointment_id=appointment_id,
         claim_reference=reference,
         status=ClaimStatus.SUBMITTED,
+        claimed_amount_cents=claimed_amount_cents,
         filed_by_person_id=yes.person_id,
         confirmation_id=yes.id,
         filed_at=utcnow(),
@@ -240,15 +267,29 @@ async def change_claim_status(
     claim_id: uuid.UUID,
     status: ClaimStatus,
     confirmation_id: uuid.UUID,
+    paid_by_insurer_cents: int | None = None,
+    paid_by_patient_cents: int | None = None,
 ) -> InsuranceClaim:
     """Move a claim one step along `CLAIM_STATUS_GOES_TO`, on a person's own word that the
-    insurer said so, confirmed like any other change here."""
+    insurer said so, confirmed like any other change here. The insurer's payout and what he
+    paid himself, in minor units, are set on the same yes when the step is the one that
+    learns them — never required, and never unset once given (`frozen`, above): a wrong
+    amount is corrected by filing a new claim, the same rule the amount claimed keeps."""
     may_manage_a_claim(context)
     claim = await require_claim(session, context=context, claim_id=claim_id)
     if status not in CLAIM_STATUS_GOES_TO[claim.status]:
         raise NotThatClaimStatusChange(f"a {claim.status} claim does not become {status}")
+    _not_a_negative_amount(paid_by_insurer_cents, paid_by_patient_cents)
     yes = await consume_confirmation(
-        session, context, confirmation_id, InsuranceClaimStatusDraft(claim_id=claim.id, status=status)
+        session,
+        context,
+        confirmation_id,
+        InsuranceClaimStatusDraft(
+            claim_id=claim.id,
+            status=status,
+            paid_by_insurer_cents=paid_by_insurer_cents,
+            paid_by_patient_cents=paid_by_patient_cents,
+        ),
     )
     session.info[STATUS_CHANGE_IN_PROGRESS] = claim.id
     try:
@@ -256,6 +297,10 @@ async def change_claim_status(
         claim.status_changed_by_person_id = yes.person_id
         claim.status_changed_confirmation_id = yes.id
         claim.status_changed_at = utcnow()
+        if paid_by_insurer_cents is not None:
+            claim.paid_by_insurer_cents = paid_by_insurer_cents
+        if paid_by_patient_cents is not None:
+            claim.paid_by_patient_cents = paid_by_patient_cents
         await session.flush()
     finally:
         session.info.pop(STATUS_CHANGE_IN_PROGRESS, None)

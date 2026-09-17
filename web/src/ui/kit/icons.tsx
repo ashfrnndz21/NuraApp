@@ -27,6 +27,7 @@ import {
   Pill,
   Play,
   Plus,
+  Receipt,
   Search,
   ShieldCheck,
   Smile,
@@ -101,6 +102,7 @@ export const ICONS = {
   chevron: ChevronRight,
   back: ChevronLeft,
   note: MessageSquare,
+  ledger: Receipt,
 } as const satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

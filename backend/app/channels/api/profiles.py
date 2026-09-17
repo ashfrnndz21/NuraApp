@@ -449,11 +449,17 @@ async def mint_confirmation(
             policy_id=body.policy_id,
             appointment_id=body.appointment_id,
             claim_reference=body.claim_reference,
+            claimed_amount_cents=body.claimed_amount_cents,
         )
         return ConfirmationOut.of(await confirm(session, context, filed))
     if isinstance(body, InsuranceClaimStatusConfirmIn):
         may_manage_a_claim(context)
-        moved = InsuranceClaimStatusDraft(claim_id=body.claim_id, status=body.status)
+        moved = InsuranceClaimStatusDraft(
+            claim_id=body.claim_id,
+            status=body.status,
+            paid_by_insurer_cents=body.paid_by_insurer_cents,
+            paid_by_patient_cents=body.paid_by_patient_cents,
+        )
         return ConfirmationOut.of(await confirm(session, context, moved))
     review = await review_draft_for(
         session,

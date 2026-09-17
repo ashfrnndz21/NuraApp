@@ -690,14 +690,18 @@ class InsuranceClaimConfirmIn(BaseModel):
     policy_id: uuid.UUID
     appointment_id: uuid.UUID
     claim_reference: str | None = Field(default=None, min_length=1, max_length=40)
+    claimed_amount_cents: int | None = Field(default=None, ge=0)
 
 
 class InsuranceClaimStatusConfirmIn(BaseModel):
-    """A yes to moving one claim one step (E13-03)."""
+    """A yes to moving one claim one step (E13-03), with the amounts that step learns
+    (T2, the insurance ledger)."""
 
     subject: Literal[ConfirmSubject.INSURANCE_CLAIM_STATUS]
     claim_id: uuid.UUID
     status: ClaimStatus
+    paid_by_insurer_cents: int | None = Field(default=None, ge=0)
+    paid_by_patient_cents: int | None = Field(default=None, ge=0)
 
 
 class CountCorrectionConfirmIn(BaseModel):

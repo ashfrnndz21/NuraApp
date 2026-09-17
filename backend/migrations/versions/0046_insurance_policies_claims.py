@@ -14,9 +14,10 @@ the door already reserved for "your insurance letters" and already preset to nob
 chief.
 
 Renumbered onto the shared chain at merge time: PR #225's `0044_consent_role_window` landed
-on main first, and PR #235 claims `0045` but had not pushed its rename onto that slug as of
-this merge, so this chains onto `0044` for now — the operator re-chains onto `0045` once
-that PR's migration is in (see the PR comment). The revision id is also shortened from the
+on main first. PR #235 once claimed `0045`, but as of the insurance ledger branch (T2) that
+slug is not on `main` — no `0045_scheduled_call` file exists to chain onto — so this chains
+directly onto `0044`, the actual head, rather than a revision that is not there; the operator
+re-chains again if `0045` lands before this does. The revision id is also shortened from the
 original `0040_insurance_policies_and_claims` (34 characters): `alembic_version.version_num`
 is `varchar(32)`, and the longer id failed both the `image` and `backend-postgres` CI jobs
 with `StringDataRightTruncationError`.
@@ -32,7 +33,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0046_insurance_policies_claims"
-down_revision = "0045_scheduled_call"
+down_revision = "0044_consent_role_window"
 branch_labels = None
 depends_on = None
 

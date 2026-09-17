@@ -937,6 +937,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
     Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
     Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
+    Walk("GET", f"{P}/insurance/ledger"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 

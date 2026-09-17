@@ -1612,3 +1612,52 @@ export interface FindOut {
   where: string;
   results: FindResultOut[];
 }
+
+/** One claim on the insurance ledger (T2): raw fields the screen lays out itself
+ *  (`visit_purpose`, `policy_name` — what a clinic or a person typed, not Nura's words) and
+ *  the numbers already said in his region's currency (`*_said`; `null` while not yet known). */
+export interface LedgerLineOut {
+  claim_id: string;
+  policy_id: string;
+  policy_name: string;
+  policy_type: string;
+  appointment_id: string;
+  visit_purpose: string;
+  visit_date: string;
+  visit_date_said: string;
+  status: string;
+  status_word: string;
+  claimed_amount_cents: number | null;
+  claimed_amount_said: string | null;
+  paid_by_insurer_cents: number | null;
+  paid_by_insurer_said: string | null;
+  paid_by_patient_cents: number | null;
+  paid_by_patient_said: string | null;
+}
+
+export interface PolicyTotalOut {
+  policy_id: string;
+  policy_name: string;
+  claimed_cents: number;
+  claimed_said: string;
+  paid_by_insurer_cents: number;
+  paid_by_insurer_said: string;
+  paid_by_patient_cents: number;
+  paid_by_patient_said: string;
+}
+
+/** His whole insurance ledger (T2): every claim ever filed, newest visit first, with the
+ *  year's totals overall and by policy. Money's one door (`Scope.MONEY`): a caregiver or a
+ *  viewer without it never reaches this — the backend refuses (`OutOfScope`, 403). */
+export interface LedgerOut {
+  year: number;
+  currency: string;
+  lines: LedgerLineOut[];
+  total_claimed_cents: number;
+  total_claimed_said: string;
+  total_paid_by_insurer_cents: number;
+  total_paid_by_insurer_said: string;
+  total_paid_by_patient_cents: number;
+  total_paid_by_patient_said: string;
+  by_policy: PolicyTotalOut[];
+}
