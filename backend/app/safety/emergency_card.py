@@ -394,24 +394,39 @@ def _medicines(
     return shown
 
 
+_MEDICINE_TEMPLATES: tuple[str, ...] = ("ec.medicine", "ec.high_risk")
+"""Every template a medicine's label fills (`compose_lines`). `_medicine_label` must probe all
+of them, not just `ec.medicine`: `ec.high_risk` wraps the same label in more words and sits
+closer to rule 3's 15-word hard fail, so a label that passes the shorter sentence is not
+proof it passes the longer one (clinical-safety review on #222's own PR, #229)."""
+
+
 def _medicine_label(medicine: Medicine, language: str, name: str) -> str:
     """The word for this medicine in his sentence: his plain name, with the register's name
-    small beside it in English ("the water pill (frusemide)") only when the whole sentence
-    still passes the plain-words standard with it there — true for the handful of chemical
-    names `GLOSSARY` already allows beside their plain name, false for most of the register
-    since #202 (measured: 26 of the register's 50 generics, `test_emergency_card.py`). The
-    parenthetical is opportunistic, never load-bearing: whichever label is chosen here, the
-    register's own name for the medicine is always on the card as `Medicine.generic`, data
-    beside the line for the stranger, exactly like the strength and the chief's phone number
-    (module doc) — so nothing a clinician needs is lost when the parenthetical cannot be said,
-    and the sentence naming the medicine is never withheld for carrying it (#222)."""
+    small beside it in English ("the water pill (frusemide)") only when *every* template that
+    uses this label — `_MEDICINE_TEMPLATES` — still passes the plain-words standard with it
+    there. True for the handful of chemical names `GLOSSARY` already allows beside their plain
+    name, false for most of the register since #202 (measured: 26 of the register's 50
+    generics, `test_emergency_card.py`). The parenthetical is opportunistic, never
+    load-bearing: whichever label is chosen here, the register's own name for the medicine is
+    always on the card as `Medicine.generic`, data beside the line for the stranger, exactly
+    like the strength and the chief's phone number (module doc) — so nothing a clinician needs
+    is lost when the parenthetical cannot be said, and the sentence naming the medicine is
+    never withheld for carrying it (#222).
+
+    `theirs()` is applied here, before the trial render, not by the caller afterwards: the
+    probe must check the exact string that ships, and `theirs()` can change a label's length
+    and words (English "your" becomes "{name}'s"), so probing the pre-`theirs()` string was
+    checking a sentence nobody ever sees (clinical-safety review on #229)."""
+    plain = theirs(medicine.plain_name, name, language)
     if language != "en" or not medicine.has_plain_name:
-        return medicine.plain_name
-    enriched = f"{medicine.plain_name} ({medicine.generic})"
+        return plain
+    enriched = theirs(f"{medicine.plain_name} ({medicine.generic})", name, language)
     try:
-        render("ec.medicine", language, name=name, medicine=enriched)
+        for template_id in _MEDICINE_TEMPLATES:
+            render(template_id, language, name=name, medicine=enriched)
     except NotPlainWords:
-        return medicine.plain_name
+        return plain
     return enriched
 
 
@@ -468,9 +483,11 @@ def compose_lines(
     if medicines:
         for medicine in medicines:
             # His words for a medicine carry his possessive; on his card it is said about him.
-            # The label is chosen so the sentence always passes (`_medicine_label`); the
-            # register's own name is on the card regardless, as `Medicine.generic`.
-            label = theirs(_medicine_label(medicine, lang, name), name, lang)
+            # `_medicine_label` applies `theirs()` itself, before it probes the label against
+            # every template that uses it, so the probe checks exactly what ships (#229) and
+            # the sentence always passes; the register's own name is on the card regardless,
+            # as `Medicine.generic`.
+            label = _medicine_label(medicine, lang, name)
             say("ec.medicine", name=name, medicine=label)
             say("ec.medicine_when", name=name, amount=medicine.amount, when=medicine.when)
             if medicine.high_risk:
@@ -504,10 +521,13 @@ def compose_lines(
     say("ec.boundary")
     if withheld:
         # Surfaced on the card, not only in the log (#222): these two lines are static and
-        # verified in every language (test_plain_words.py's catalogue check), so they cannot
-        # themselves join `withheld` and leave this silent a second time.
-        lines.append(Line("ec.render_issue", render("ec.render_issue", lang, name=name)))
-        lines.append(Line("ec.render_issue_family", render("ec.render_issue_family", lang)))
+        # verified in every language (test_plain_words.py's catalogue check), so in practice
+        # they always render. They still go through `say`, not a bare `render` call, so a
+        # future edit to either template degrades the same way every other line does —
+        # dropped and logged — rather than raising out of card generation entirely
+        # (clinical-safety review on #229's own PR).
+        say("ec.render_issue", name=name)
+        say("ec.render_issue_family")
     return lines
 
 

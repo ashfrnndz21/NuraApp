@@ -30,7 +30,14 @@ from app.memory.episodic import record_event
 from app.memory.models import EventKind, ProviderKind, SourceChannel
 from app.memory.spine import add_provider
 from app.regions import Region
-from app.safety.emergency_card import CARD_TARGET, _medicines, compose_lines, emergency_card
+from app.safety.emergency_card import (
+    CARD_TARGET,
+    Medicine,
+    _medicine_label,
+    _medicines,
+    compose_lines,
+    emergency_card,
+)
 from app.safety.models import CardFormat, EmergencyCard
 from app.state.service import StaleState, current_state
 from tests.medicines_support import add, label
@@ -339,6 +346,72 @@ def test_a_high_risk_medicine_with_no_story_still_appears_with_its_marker() -> N
         assert "ec.medicine" in ids and "ec.high_risk" in ids
         named = next(one.text for one in card_lines if one.id == "ec.medicine")
         assert "Oxymorphone" in named
+
+
+def test_ec_high_risk_is_probed_too_not_only_ec_medicine() -> None:
+    """#229 (review on #222's own PR): `_medicine_label` must probe every template the label
+    fills, not only `ec.medicine` — `ec.high_risk` wraps the same label in more words
+    ("{name}'s doctor watches {medicine} closely.") and sits closer to rule 3's 15-word hard
+    fail. The enriched label below passes `ec.medicine`'s probe (12 words: under it) but fails
+    `ec.high_risk`'s (16 words: over it) on word count alone — nothing to do with the chemical
+    name or the glossary. Before this was fixed, `ec.high_risk` — the marker a paramedic most
+    needs — could fail silently while `ec.medicine` still rendered, with no trace in
+    `withheld` and so no `ec.render_issue` either.
+
+    A long, realistic (multi-word Malaysian) patient name is used throughout, deliberately:
+    `theirs()` runs on it and the label before the probe now (not after, as it used to), and
+    the probe itself always checks word-count against a short stand-in name (`NAME_STAND_IN`,
+    "Ash") — a repo-wide property of `render()`, not specific to this fix — so the fallback
+    label (plain name alone, no parenthetical) is sized here to still pass both templates with
+    the *real* long name substituted in, not just the stand-in: that's what "never dropped"
+    means when a real person's card is actually rendered, not just when it's probed."""
+    plain = "the special morning tablet for weak tired hearts"
+    generic = "abc def ghi jkl"  # a synthetic multi-word "chemical name": only its word
+    # count matters here, not any real drug — it exists purely to push the *enriched* label
+    # over ec.high_risk's threshold without a single long word tripping rule 3 for the wrong
+    # reason (a real long generic name would trigger the same collision differently).
+    medicine = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic=generic,
+        brand=None,
+        strength="5 mg",
+        form="tablet",
+        plain_name=plain,
+        has_plain_name=True,
+        amount="1 tablet",
+        when="every morning",
+        high_risk=True,
+        high_risk_class="anticoagulant",
+    )
+    long_name = "Muhammad Firdaus Abdullah"
+    label = _medicine_label(medicine, "en", long_name)
+    assert label == plain, "the enriched label must fail ec.high_risk for this test to mean anything"
+    card_lines = compose_lines(
+        name=long_name,
+        language="en",
+        spoken_language="en",
+        age=None,
+        conditions=(),
+        medicines=[medicine],
+        allergies=(),
+        blood_type=None,
+        contacts=(),
+        clinic=None,
+        last_reading_at=None,
+        region=Region.SG,
+    )
+    assert_plain(card_lines)
+    ids = [one.id for one in card_lines]
+    # The point of the fix: ec.high_risk is never dropped, and the general safety net never
+    # had to fire for it — the label was chosen so both sentences always pass, real name and
+    # all, not just the "Ash" stand-in the probe itself checks against.
+    assert "ec.medicine" in ids and "ec.high_risk" in ids
+    assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+    medicine_text = next(one.text for one in card_lines if one.id == "ec.medicine")
+    high_risk_text = next(one.text for one in card_lines if one.id == "ec.high_risk")
+    assert medicine_text == f"{long_name} takes {plain}."
+    assert high_risk_text == f"{long_name}'s doctor watches {plain} closely."
 
 
 async def test_the_printable_page_and_the_live_card_show_the_same_medicines(
