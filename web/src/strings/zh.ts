@@ -64,7 +64,7 @@ export const zh = {
     // @patient headline
     tagline2: "您的家人，就在身边。",
     // @patient
-    lead: "Nura 帮您收好文件、药和血压本。",
+    lead: "Nura 帮您保存您的病历文件、您的药和您的血压本。",
     // @patient headline
     simple: "简单",
     // @patient phrase
@@ -104,7 +104,7 @@ export const zh = {
   },
   hub: {
     // @patient
-    howFeeling: "您今天感觉怎么样？",
+    howFeeling: "今天感觉怎么样？",
     // @patient
     howFeelingOther: "{patient}今天感觉怎么样？",
     // @patient headline
@@ -146,7 +146,7 @@ export const zh = {
     // @patient headline
     report: "加一份健康报告",
     // @patient phrase
-    reportLine: "PDF，或者一张纸的照片",
+    reportLine: "文件，或者一张纸的照片",
     // @patient headline
     upcoming: "快到了",
     // @patient phrase

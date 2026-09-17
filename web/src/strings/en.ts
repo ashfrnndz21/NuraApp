@@ -132,9 +132,9 @@ export const en = {
     // @patient phrase
     connectLine: "Family and friends",
     // @patient headline
-    activities: "Activities",
+    activities: "Things to do",
     // @patient phrase
-    activitiesLine: "Things to enjoy",
+    activitiesLine: "Stay busy and happy",
     // @patient headline
     care: "Care services",
     // @patient phrase
@@ -146,7 +146,7 @@ export const en = {
     // @patient headline
     report: "Add a health report",
     // @patient phrase
-    reportLine: "A PDF, or a photo of a paper",
+    reportLine: "A file, or a photo of a paper",
     // @patient headline
     upcoming: "Coming up",
     // @patient phrase

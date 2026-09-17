@@ -64,7 +64,7 @@ export const ms = {
     // @patient headline
     tagline2: "Keluarga anda, sentiasa dekat.",
     // @patient
-    lead: "Nura simpan surat anda, ubat anda dan buku tekanan darah anda.",
+    lead: "Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.",
     // @patient headline
     simple: "Mudah",
     // @patient phrase
@@ -80,7 +80,7 @@ export const ms = {
     // @patient phrase
     start: "Mula",
     // @patient phrase
-    signIn: "Saya sudah guna Nura. Log masuk",
+    signIn: "Saya sudah guna Nura. Daftar masuk",
   },
   talk: {
     // @patient phrase
@@ -104,7 +104,7 @@ export const ms = {
   },
   hub: {
     // @patient
-    howFeeling: "Apa khabar anda hari ini?",
+    howFeeling: "Apa khabar hari ini?",
     // @patient
     howFeelingOther: "Apa khabar {patient} hari ini?",
     // @patient headline
@@ -146,7 +146,7 @@ export const ms = {
     // @patient headline
     report: "Tambah laporan kesihatan",
     // @patient phrase
-    reportLine: "PDF, atau gambar sehelai surat",
+    reportLine: "Dokumen, atau gambar sehelai surat",
     // @patient headline
     upcoming: "Akan datang",
     // @patient phrase
