@@ -50,7 +50,7 @@ export function EmergencyCard({ kept }: { kept: KeptCard }): JSX.Element {
         <div class="medicine-data" data-testid="medicine-data">
           {card.medicines.map((medicine) => (
             <p key={medicine.line_id} class="caption" data-testid="medicine-chemical-name">
-              {medicine.plain_name} — {medicine.generic}, {medicine.strength}
+              {medicine.generic}{medicine.strength ? `, ${medicine.strength}` : ""}
               {medicine.high_risk && (
                 <strong data-testid="medicine-high-risk"> · high-risk</strong>
               )}
