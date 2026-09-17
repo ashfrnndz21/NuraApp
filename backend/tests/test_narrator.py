@@ -11,14 +11,19 @@ refuse to build outside a declared demo (ADR 0017), mirroring `extractor_for`'s 
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
+import anthropic
+import httpx
 import pytest
 
 from app.channels.about_him import Reader
 from app.regions import Region
+from app.search import claude_narrate
 from app.search.claude_narrate import ClaudeNarrator
 from app.search.narrate import FixtureNarrator, NarratedLine, NarratedStep
 from app.search.narrator_provider import (
@@ -102,16 +107,32 @@ async def test_the_fixture_narrator_on_no_steps_yields_nothing() -> None:
 
 
 async def test_a_rephrased_line_is_used_when_it_is_safe() -> None:
+    """A bare pronoun is not enough for a caregiver's voice: this candidate never names her
+    ("Pa"), only says "his", so it now falls back to the catalogue label; the request itself
+    is still shaped the way it should be."""
     client = _client_answering({"lines": [{"step": "medicines", "text": "Now checking his medicines."}]})
     steps = [NarratedStep(key="medicines", label="Checking his medicines.", count=4)]
 
     lines = await _narrated(client, steps, reader=HERS)
 
-    assert lines == [NarratedLine(key="medicines", text="Now checking his medicines.")]
+    assert lines == [NarratedLine(key="medicines", text="Checking his medicines.")]
     sent = client.messages.calls[0]
     assert sent["model"] == "claude-opus-5"
     assert "output_format" not in sent
     assert sent["output_config"]["format"]["type"] == "json_schema"
+
+
+async def test_an_honest_rephrase_that_names_her_and_keeps_the_count_is_used() -> None:
+    """The positive twin of the test above: a rephrase that names the patient and keeps the
+    step's own noun and count is the "safe" case the port exists to allow."""
+    client = _client_answering(
+        {"lines": [{"step": "medicines", "text": "Now checking Pa's medicines — 4 in all."}]}
+    )
+    steps = [NarratedStep(key="medicines", label="Checking his medicines.", count=4)]
+
+    lines = await _narrated(client, steps, reader=HERS)
+
+    assert lines == [NarratedLine(key="medicines", text="Now checking Pa's medicines — 4 in all.")]
 
 
 async def test_a_line_for_a_step_id_not_given_is_dropped() -> None:
@@ -130,7 +151,8 @@ async def test_a_line_for_a_step_id_not_given_is_dropped() -> None:
     lines = await _narrated(client, steps, reader=HERS)
 
     assert [line.key for line in lines] == ["medicines"]
-    assert lines[0].text == "Now checking his medicines."
+    # "his" is a bare pronoun, not her name ("Pa") — falls back to the catalogue label.
+    assert lines[0].text == "Checking his medicines."
 
 
 async def test_a_line_that_fails_plain_words_falls_back_to_the_catalogue_label() -> None:
@@ -142,6 +164,19 @@ async def test_a_line_that_fails_plain_words_falls_back_to_the_catalogue_label()
     lines = await _narrated(client, steps)
 
     assert lines[0].text == "Looking at your papers."
+
+
+@pytest.mark.parametrize("text", ["His pressure looks high.", "He should see a doctor."])
+async def test_a_line_that_states_a_finding_or_advice_falls_back(text: str) -> None:
+    """"Reads only" is enforced in code, not only asked for in the prompt: neither line names
+    what the step actually opened ("medicines"), and each also trips the conclusion/advice
+    blocklist, so both fall back to the catalogue label whatever the model said."""
+    client = _client_answering({"lines": [{"step": "medicines", "text": text}]})
+    steps = [NarratedStep(key="medicines", label="Checking your medicines.", count=4)]
+
+    lines = await _narrated(client, steps)
+
+    assert lines[0].text == "Checking your medicines."
 
 
 async def test_a_caregivers_line_that_speaks_to_him_directly_falls_back() -> None:
@@ -200,6 +235,52 @@ async def test_a_malformed_answer_falls_back_not_a_crash(text: str) -> None:
     lines = await _narrated(client, steps)
 
     assert lines[0].text == "Looking at your blood pressure book."
+
+
+async def test_a_timeout_falls_back_and_the_stream_continues() -> None:
+    """The call itself failing must never hold back a real step or kill the stream: every
+    step given still gets its line, from the catalogue, the same as a refusal already does."""
+
+    class _FailingMessages:
+        async def create(self, **kwargs: Any) -> _FakeMessage:
+            raise anthropic.APITimeoutError(
+                httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+            )
+
+    client = _FakeClient(messages=_FailingMessages())  # type: ignore[arg-type]
+    steps = [
+        NarratedStep(key="visits", label="Checking your visits.", count=1),
+        NarratedStep(key="medicines", label="Checking your medicines.", count=2),
+    ]
+
+    lines = await _narrated(client, steps)
+
+    assert [(line.key, line.text) for line in lines] == [
+        ("visits", "Checking your visits."),
+        ("medicines", "Checking your medicines."),
+    ]
+
+
+async def test_a_slow_call_falls_back_within_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A call slower than `NARRATE_DEADLINE_S` must never hold the real step back. The
+    deadline itself is mocked short here so the test stays fast rather than actually waiting
+    it out."""
+    monkeypatch.setattr(claude_narrate, "NARRATE_DEADLINE_S", 0.05)
+
+    class _SlowMessages:
+        async def create(self, **kwargs: Any) -> _FakeMessage:
+            await asyncio.sleep(5)
+            raise AssertionError("should have been cancelled at the deadline")
+
+    client = _FakeClient(messages=_SlowMessages())  # type: ignore[arg-type]
+    steps = [NarratedStep(key="medicines", label="Checking your medicines.", count=1)]
+
+    started = time.monotonic()
+    lines = await _narrated(client, steps)
+    elapsed = time.monotonic() - started
+
+    assert lines[0].text == "Checking your medicines."
+    assert elapsed < 1.0
 
 
 async def test_no_steps_makes_no_call_at_all() -> None:

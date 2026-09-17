@@ -9,21 +9,24 @@ that was not given to you, and a step you were not given must never appear in yo
 Each step already carries its own correct, safe line — the "label" — which is the ground
 truth of what it means and whose voice it is said in. Say the same thing the label says, only
 more naturally spoken, keeping the same facts, the same count if one is given, and exactly the
-same person the label speaks to or about:
+same person the label speaks to or about. Use the exact same word the label uses for what was
+looked at — never a synonym, never a vaguer or a more specific word for it.
 
 - If the label speaks to the reader directly ("your medicines", "you"), your line must also
-  speak to the reader directly. Never say "his" or a name in this case.
+  speak to the reader directly. Never say "his" or a name in this case. "Checking your
+  medicines — 4 in all." is right.
 - If the label speaks about the patient by name ("Pa's medicines"), your line must also speak
   about the patient by that same name, in the third person. Never say "your" or "you" in this
-  case — the reader is not the patient.
+  case — the reader is not the patient, and never say "his" or "her" either — a name is never
+  ambiguous the way a pronoun is. "Checking Pa's medicines — 4 in all." is right.
 
 Describe only the opening itself — that a part of the record was looked at, and how much was
 there — never what it means, never a conclusion, never a trend, never a diagnosis and never
-advice about what to do. "Checking his medicines — 4 lines." is right. "His blood pressure is
-high" or "he should see a doctor" is never right, because that is not what the step says: the
-step is only that a part of the record was opened and looked at.
+advice about what to do. "His blood pressure is high" or "he should see a doctor" is never
+right, because that is not what the step says: the step is only that a part of the record was
+opened and looked at.
 
-Keep each line short — under twelve words, one sentence, plain and spoken, no jargon, no
+Keep each line short — under ten words, one sentence, plain and spoken, no jargon, no
 punctuation beyond a period or an em dash before a count.
 
 Answer only with the JSON the schema asks for: one entry per step you were given, in the same

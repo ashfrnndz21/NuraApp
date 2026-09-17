@@ -5,10 +5,12 @@
 ## Context
 
 E02's document extractor (`app.ingestion.claude_extract.ClaudeExtractor`) reads a photo or a
-PDF with Anthropic's first-party API. Two more runtime features are coming behind the same
-kind of adapter: the feed's searcher and compressor (`app.delivery.feed.compress.Searcher`,
-`pdpa-data-map.md` §5). All three send bytes or text outside the region to get an answer a
-rule cannot: reading a page, searching the web, compressing a result.
+PDF with Anthropic's first-party API. The trace narrator (`app.search.claude_narrate.
+ClaudeNarrator`) rephrases a step's own catalogue label the same demo-only way. Two more
+runtime features are coming behind the same kind of adapter: the feed's searcher and
+compressor (`app.delivery.feed.compress.Searcher`, `pdpa-data-map.md` §5). All four send bytes
+or text outside the region to get an answer a rule cannot: reading a page, rephrasing a step
+already taken, searching the web, compressing a result.
 
 Anthropic's first-party API processes in the US or globally. It does not process in SG or
 MY, and no in-region provider exists yet. The standing rule is unamended and does not bend
