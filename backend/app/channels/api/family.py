@@ -45,7 +45,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import person_display_name
+from app.audit.access import person_display_name, person_phone_e164
 from app.channels.about_him import reader_of
 from app.channels.api.deps import ClosingContext, Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
@@ -384,8 +384,11 @@ async def _call_out(
     session: AsyncSession, context: KeyContext, call: ScheduledCall, language: str | None
 ) -> CallOut:
     name = await person_display_name(session, context, call.with_person_id)
+    phone = await person_phone_e164(session, context, call.with_person_id)
     words = call_join_words(name, call.call_link is not None, language)
-    return CallOut.of(call, with_person_name=name, join_words=words)
+    return CallOut.of(
+        call, with_person_name=name, with_person_phone_e164=phone, join_words=words
+    )
 
 
 # --- the trail and only me ----------------------------------------------------------------------

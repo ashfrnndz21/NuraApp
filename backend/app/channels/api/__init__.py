@@ -36,7 +36,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
@@ -60,12 +60,14 @@ from app.channels.api import (
     connectors,
     consent_words,
     delivery,
+    demo_signin,
     dev_clock,
     doors,
     family,
     feed,
     feelings,
     health_tab,
+    insurance,
     medicines,
     onboarding,
     profiles,
@@ -195,6 +197,7 @@ def _api() -> APIRouter:
     api.include_router(visits.router)
     api.include_router(recording_uploads.router)
     api.include_router(safety.router)
+    api.include_router(insurance.router)
     api.include_router(whatsapp.router)
     api.include_router(timeline.router)
     api.include_router(family.router)
@@ -210,6 +213,7 @@ def _api() -> APIRouter:
     api.include_router(account.router)
     api.include_router(review.router)
     api.include_router(dev_clock.router)
+    api.include_router(demo_signin.router)
 
     @api.get("/health")
     async def health() -> dict[str, str]:
@@ -247,14 +251,27 @@ Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
 
 
 def _demo_lifespan(
-    settings: Settings, sessions: async_sessionmaker[KeptSession], object_root: Path | None
+    settings: Settings,
+    sessions: async_sessionmaker[KeptSession],
+    object_root: Path | None,
+    seed: Callable[[], Awaitable[None]] | None,
 ) -> Lifespan:
-    """A demo checks for the night's wipe before it serves, then every few minutes."""
+    """A demo checks for the night's wipe before it serves, then every few minutes.
+
+    `seed`, given on a deployment with NURA_DEMO_SEED=1, runs once here regardless of
+    whether tonight's wipe was due — the fresh-deploy case, an empty database that is not
+    "due" for a wipe it has never had — and again every time `wipe_quietly`/`keep_wiping`
+    actually empties the tables (`app.demo.wipe_if_due`'s own `after_wipe`), so Pa's profile
+    and Mei as his chief are there again the moment the demo forgets them."""
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        await wipe_quietly(sessions, settings.region, object_root)
-        watch = asyncio.create_task(keep_wiping(sessions, settings.region, object_root))
+        await wipe_quietly(sessions, settings.region, object_root, after_wipe=seed)
+        if seed is not None:
+            await seed()
+        watch = asyncio.create_task(
+            keep_wiping(sessions, settings.region, object_root, after_wipe=seed)
+        )
         try:
             yield
         finally:
@@ -265,11 +282,28 @@ def _demo_lifespan(
     return lifespan
 
 
+def _seed_only_lifespan(seed: Callable[[], Awaitable[None]]) -> Lifespan:
+    """A dev run given NURA_DEMO_SEED=1 has no nightly wipe to hang a reseed off — only a
+    demo does (`app.demo`) — so it seeds once, here, before the app serves its first request."""
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await seed()
+        yield
+
+    return lifespan
+
+
 def create_app(
     settings: Settings,
     session_factory: async_sessionmaker[KeptSession],
     providers: Providers,
+    *,
+    seed: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
+    """`seed`, on a deployment with NURA_DEMO_SEED=1 (`main.providers_for`'s caller wires
+    it), seeds Pa's profile and Mei as his chief before the app serves — and, on a demo,
+    again after every night's wipe. Tests that build their own app pass none."""
     check_sender(settings, providers.code_sender)
     check_whatsapp_provider(settings, providers.whatsapp)
     check_fixtures(settings, providers)
@@ -278,9 +312,11 @@ def create_app(
         app = FastAPI(
             title="Nura (demo — not for real health information)",
             version="0.1.0",
-            lifespan=_demo_lifespan(settings, session_factory, object_root),
+            lifespan=_demo_lifespan(settings, session_factory, object_root, seed),
         )
         app.add_middleware(DemoNumbersOnly)
+    elif seed is not None:
+        app = FastAPI(title="Nura", version="0.1.0", lifespan=_seed_only_lifespan(seed))
     else:
         app = FastAPI(title="Nura", version="0.1.0")
     app.state.settings = settings

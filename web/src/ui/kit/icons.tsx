@@ -31,6 +31,7 @@ import {
   Mic,
   Moon,
   Palette,
+  Phone,
   Pill,
   Play,
   Plus,
@@ -117,6 +118,7 @@ export const ICONS = {
   gauge: Gauge,
   meal: UtensilsCrossed,
   comingUp: CalendarClock,
+  phone: Phone,
   // Profile (docs/design/nura-concept-board.html, the Profile screen).
   language: Globe,
   lock: Lock,

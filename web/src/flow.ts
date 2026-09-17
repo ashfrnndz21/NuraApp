@@ -67,6 +67,10 @@ export type Screen =
   | { name: "symptoms" }
   | { name: "brief"; appointmentId: string }
   | { name: "questions"; appointmentId: string }
+  /** Connect (docs/design/nura-concept-board.html, the Connect screen): the tab's own front
+   *  door — his family, his next call, what is near him, the family thread — before the
+   *  existing Family screens each row opens. */
+  | { name: "connect" }
   /** Family (E12, E00-02, E00-07, E17-05, E18-02): his circle and his trail first, then the
    *  parts the backend lets each person reach. */
   | { name: "family"; part?: FamilyPart };
@@ -84,6 +88,7 @@ export type FamilyPart =
   | "messages"
   | "metrics"
   | "calendar"
+  | "calls"
   | "deliveries"
   | "settings"
   | "documents";
@@ -96,8 +101,9 @@ export type SoonPlace = "activities" | "care" | "resources";
 /** Each tab's first screen — one tab set for everyone (nav.ts). Home is Today; Health is
  *  "This week", his readings, his day, his medicines and what is coming up
  *  (docs/design/nura-concept-board.html) — his papers, his blood tests and the rest of the
- *  Record (W5) are one tap further on, from its own row; Connect is Family; Services is his
- *  visits and getting ready for the next one; Profile is the person's own settings. */
+ *  Record (W5) are one tap further on, from its own row; Connect is its own overview, before
+ *  the Family screens each row of it opens; Services is his visits and getting ready for the
+ *  next one; Profile is the person's own settings. */
 export function openTab(tab: Tab): void {
   switch (tab) {
     case "home":
@@ -105,7 +111,7 @@ export function openTab(tab: Tab): void {
     case "health":
       return go({ name: "health" });
     case "connect":
-      return go({ name: "family", part: "home" });
+      return go({ name: "connect" });
     case "services":
       return go({ name: "visits" });
     case "profile":

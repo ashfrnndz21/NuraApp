@@ -8,6 +8,7 @@ import { PapersScreen } from "./screens/Papers";
 import { AskScreen } from "./screens/Ask";
 import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
+import { ConnectScreen } from "./screens/Connect";
 import { FamilyScreen } from "./screens/family/Family";
 import { HealthScreen } from "./screens/Health";
 import { FeedScreen } from "./screens/Feed";
@@ -125,6 +126,8 @@ function Route(): JSX.Element | null {
       return <QuestionsScreen appointmentId={current.appointmentId} />;
     case "card":
       return <CardScreen item={current.item} />;
+    case "connect":
+      return <ConnectScreen />;
     case "family":
       return <FamilyScreen part={current.part ?? "home"} />;
   }

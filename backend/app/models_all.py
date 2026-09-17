@@ -21,7 +21,9 @@ import app.identity.closure_models
 import app.identity.models
 import app.ingestion.connectors.models
 import app.ingestion.models
+import app.insurance.claim
 import app.insurance.insurer
+import app.insurance.policy
 import app.keys.confirm
 import app.keys.models
 import app.keys.privacy

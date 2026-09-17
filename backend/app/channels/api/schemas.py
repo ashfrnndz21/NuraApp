@@ -63,6 +63,8 @@ from app.ingestion.models import (
 from app.ingestion.notes import MAX_VOICE_BYTES, NoteView
 from app.ingestion.photos import MAX_PHOTO_BYTES
 from app.ingestion.review import Decision, Notice, notice_of
+from app.insurance.claim import ClaimStatus
+from app.insurance.policy import PolicyStatus, PolicyType
 from app.keys.confirm import Confirmation
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
@@ -673,6 +675,42 @@ class InsurerConfirmIn(BaseModel):
     policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
 
 
+class PolicyConfirmIn(BaseModel):
+    """A yes to a policy exactly as typed (E13-03): new, or a correction of one already held
+    (`supersedes_id`). The owner's decision: this door is money, not the emergency card's
+    (`app.insurance.policy`)."""
+
+    subject: Literal[ConfirmSubject.POLICY]
+    insurer_name: str = Field(min_length=1, max_length=120)
+    policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
+    policy_type: PolicyType
+    covered: str | None = Field(default=None, min_length=1, max_length=120)
+    covers: str | None = Field(default=None, min_length=1, max_length=400)
+    start_date: date | None = None
+    renewal_date: date | None = None
+    premium_due_date: date | None = None
+    status: PolicyStatus
+    guarantee_letter: bool = False
+    supersedes_id: uuid.UUID | None = None
+
+
+class InsuranceClaimConfirmIn(BaseModel):
+    """A yes to filing a claim against one policy, for one visit (E13-03)."""
+
+    subject: Literal[ConfirmSubject.INSURANCE_CLAIM]
+    policy_id: uuid.UUID
+    appointment_id: uuid.UUID
+    claim_reference: str | None = Field(default=None, min_length=1, max_length=40)
+
+
+class InsuranceClaimStatusConfirmIn(BaseModel):
+    """A yes to moving one claim one step (E13-03)."""
+
+    subject: Literal[ConfirmSubject.INSURANCE_CLAIM_STATUS]
+    claim_id: uuid.UUID
+    status: ClaimStatus
+
+
 class CountCorrectionConfirmIn(BaseModel):
     """A yes to adding tablets found at home to one medicine's count (E04-05): which line,
     how many, and the photo of the box or the label it rests on — exactly what `POST
@@ -773,6 +811,9 @@ ConfirmIn = Annotated[
     | ProposalConfirmIn
     | DriveConfirmIn
     | InsurerConfirmIn
+    | PolicyConfirmIn
+    | InsuranceClaimConfirmIn
+    | InsuranceClaimStatusConfirmIn
     | CallConfirmIn
     | AreaConfirmIn,
     Field(discriminator="subject"),
@@ -781,9 +822,9 @@ ConfirmIn = Annotated[
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18); his insurer on the emergency card (E13-01); a call with a
-family member on the calendar (design-direction.md, Connect's "Upcoming Call"); his own area,
-once the graph is his (E09-07, #184)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01); a policy and a
+claim against it (E13-03); a call with a family member on the calendar (design-direction.md,
+Connect's "Upcoming Call"); his own area, once the graph is his (E09-07, #184)."""
 
 
 class ConfirmationOut(BaseModel):
@@ -2765,11 +2806,14 @@ class CallScheduleIn(BaseModel):
 class CallOut(BaseModel):
     """One call on Connect's "Upcoming Call": with whom, when, how to join, and who put it
     on the calendar. `join_words` is the line "Join" opens: ringing the number, or opening
-    the link the family gave, already in his words and his language."""
+    the link the family gave, already in his words and his language. `with_person_phone_e164`
+    is the number Connect's own "Call" button dials through `tel:`, when the family member
+    signed in by phone; none when they signed in by email, or when a call link makes it moot."""
 
     call_id: uuid.UUID
     with_person_id: uuid.UUID
     with_person_name: str
+    with_person_phone_e164: str | None = None
     scheduled_at: datetime
     call_link: str | None
     label: str | None
@@ -2780,12 +2824,18 @@ class CallOut(BaseModel):
 
     @classmethod
     def of(
-        cls, call: ScheduledCall, *, with_person_name: str, join_words: str
+        cls,
+        call: ScheduledCall,
+        *,
+        with_person_name: str,
+        with_person_phone_e164: str | None,
+        join_words: str,
     ) -> CallOut:
         return cls(
             call_id=call.id,
             with_person_id=call.with_person_id,
             with_person_name=with_person_name,
+            with_person_phone_e164=with_person_phone_e164,
             scheduled_at=utc(call.scheduled_at),
             call_link=call.call_link,
             label=call.label,

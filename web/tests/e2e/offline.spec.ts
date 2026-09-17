@@ -379,6 +379,7 @@ test("an account closing: nothing of its papers stays on the phone, and the door
   expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);
 
   await page.getByTestId("tab-connect").click();
+  await page.getByTestId("connect-family-all").click();
   await page.getByTestId("open-consents").click();
   await page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" }).getByTestId("close-account").click();
   await page.getByTestId("close-yes").click();

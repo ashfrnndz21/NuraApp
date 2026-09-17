@@ -19,6 +19,7 @@ from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.feed.models import CardType, FeedItem, Source
 from app.delivery.feed.rank import item_json
 from app.delivery.feed.search import Engine, list_jobs
+from app.delivery.recommend.rules import RULE_DID_YOU_KNOW
 from app.keys.context import KeyContext
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
@@ -76,7 +77,19 @@ async def test_a_condition_he_told_starts_a_search_and_its_card_cites_its_page(
     [job] = [j for j in jobs if list(j.terms) == ["diabetes"] and j.kind.value == "explainer"]
     assert job.kind.value == "explainer" and job.reason["scope"] == "records"
     assert job.reason["fact_ids"]
-    [card] = [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
+    # "Did you know" (RE-07) is one extra learning job a day, not a second explainer: on a
+    # bare profile with only this one condition told, it is the day's only eligible topic, so
+    # it names the same term through its own `worth_knowing` job rather than crowding the
+    # explainer's. It must never change the explainer's own behaviour, so the explainer's
+    # card is picked out by its rule-less `why` (a broker-proposed card always names its
+    # rule, `app.delivery.feed.items.Why.rule`; a State-found gap's card never does).
+    [extra] = [j for j in jobs if list(j.terms) == ["diabetes"] and j.kind.value == "worth_knowing"]
+    assert extra.reason["rule"] == RULE_DID_YOU_KNOW
+    [card] = [
+        c
+        for c in await _learning(sg, context)
+        if c.why.get("gap") == "diabetes" and c.why.get("rule") is None
+    ]
     assert card.headline == "About your blood sugar"
     assert "This comes from HealthHub." in card.body
     line = boundary_line(Surface.LEARNING_CARD, "en")

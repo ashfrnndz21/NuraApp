@@ -98,7 +98,21 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
+from app.insurance.claim import (
+    NoSuchClaim,
+    NotAClaim,
+    NotThatClaimStatusChange,
+    NotTheirsToManageAClaim,
+)
 from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
+from app.insurance.policy import (
+    NoSuchPolicy,
+    NotAPolicy,
+    NotTheirsToSetAPolicy,
+)
+from app.insurance.policy import (
+    NotAPolicyReference as NotAPolicyReferenceInAPolicy,
+)
 from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import (
     KeyNotAsAgreed,
@@ -293,6 +307,16 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (EpisodeAlreadyOpen, 409),
     (EpisodeAlreadyClosed, 409),
     (NotThatStatusChange, 409),
+    # The fuller insurance record (E13-03): who may set a policy or file and move a claim,
+    # what a policy or a claim reference may not be, and what is not on the profile.
+    (NotTheirsToSetAPolicy, 403),
+    (NotAPolicy, 400),
+    (NotAPolicyReferenceInAPolicy, 400),
+    (NoSuchPolicy, 404),
+    (NotTheirsToManageAClaim, 403),
+    (NotAClaim, 400),
+    (NoSuchClaim, 404),
+    (NotThatClaimStatusChange, 409),
     (PhotoTooLarge, 413),
     # A visit's recording (E02-05): too big or too long to be one visit; no recording of that
     # artefact on this profile.

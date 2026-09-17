@@ -51,6 +51,8 @@ from app.ingestion.models import (
     ReviewCard,
     ReviewField,
 )
+from app.insurance.claim import InsuranceClaim
+from app.insurance.policy import Policy
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.keys.privacy import Privacy
@@ -166,6 +168,8 @@ TABLES: tuple[Table, ...] = (
     LastLooked.__table__,
     ConsultRecording.__table__,
     ConsultSegment.__table__,
+    Policy.__table__,
+    InsuranceClaim.__table__,
     ScheduledCall.__table__,
     DoseQuestion.__table__,
 )
@@ -247,7 +251,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0045_scheduled_call"]
+    assert heads == ["0046_insurance_policies_claims"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(
@@ -320,6 +324,8 @@ async def test_the_migrations_build_the_tables_the_models_declare(
             ConsultRecording,
             ConsultSegment,
             Task,
+            Policy,
+            InsuranceClaim,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

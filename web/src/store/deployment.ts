@@ -7,6 +7,11 @@ import { kvGet, kvSet } from "./kv";
  *  banner is there on every screen even when the home-screen app opens offline. */
 export const demo = signal(false);
 
+/** Whether this deployment is a declared dev run (`NURA_DEV_CODE_SENDER=1`). Not remembered
+ *  across a start the way `demo` is: a dev run is a laptop, always reachable when it matters,
+ *  and a phone should not go on showing dev-only doors once it is talking to somewhere else. */
+export const dev = signal(false);
+
 /** The Web Push key the home-screen app subscribes with, when this deployment has Web Push
  *  (ADR 0001); null otherwise, and then Me offers no reminders. Not remembered: it is asked
  *  each start, and a phone offline cannot subscribe anyway. */
@@ -26,6 +31,7 @@ export async function learnDeployment(): Promise<void> {
   try {
     const answer = await nura.deployment();
     demo.value = answer.demo;
+    dev.value = answer.dev ?? false;
     pushKey.value = answer.push_key ?? null;
     await kvSet(KEY, answer.demo);
   } catch {
