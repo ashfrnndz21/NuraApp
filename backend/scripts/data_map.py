@@ -49,6 +49,11 @@ CLASSIFICATIONS = (IDENTIFIER, HEALTH, CONSENT, AUDIT, OPERATIONAL)
 CLASSES: dict[str, str] = {
     "*.profile_id": IDENTIFIER,
     "*.region": OPERATIONAL,
+    # The write-order tiebreaker (#192/#218, `app.db.monotonic`): a row's position, not
+    # anything about a person or his health.
+    "*.seq": OPERATIONAL,
+    "seq_counters.name": OPERATIONAL,
+    "seq_counters.value": OPERATIONAL,
     # A row's own id is classified as the row: the id of a fact is a reference to health
     # data, the id of a person is an identifier, the id of a consent is the consent record.
     # Only a sign-in row's id points at nothing about a person.
@@ -406,6 +411,7 @@ CLASSES: dict[str, str] = {
     "feed_item.direction": HEALTH,
     "feed_item.colour": HEALTH,
     "feed_item.action": OPERATIONAL,
+    "feed_item.private_to": IDENTIFIER,
     # --- delivery (E11): the settings, every attempt to reach someone, the ladder -------------
     "delivery_settings.id": OPERATIONAL,
     "delivery_settings.skip_quiet_days": OPERATIONAL,
@@ -552,6 +558,7 @@ CLASSES: dict[str, str] = {
     "question.supersedes_id": HEALTH,
     "question.superseded_at": OPERATIONAL,
     "question.created_at": OPERATIONAL,
+    "question.written_scope": CONSENT,
     "memo.id": HEALTH,
     "memo.state_id": HEALTH,
     "memo.boundary": HEALTH,
@@ -982,6 +989,7 @@ CLASSES: dict[str, str] = {
     "feeling_note.answer": HEALTH,
     "feeling_note.language": OPERATIONAL,
     "feeling_note.headline": HEALTH,
+    "feeling_note.said": HEALTH,
     "feeling_note.lines": HEALTH,
     "feeling_note.then": HEALTH,
     "feeling_note.voice": HEALTH,

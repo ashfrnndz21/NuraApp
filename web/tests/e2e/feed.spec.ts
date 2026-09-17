@@ -15,6 +15,7 @@ import {
   setBackendClock,
   shotAs,
   signInThroughTheApp,
+  streamedEvents,
   todayReady,
   keptKeys,
 } from "./helpers";
@@ -394,14 +395,21 @@ test("Family sends a reading to the family thread by reference; a card it cannot
   await expect(asking).toContainText(headline!);
   await expect(asking).toHaveAttribute("data-mode", "voice");
   await asking.getByLabel("Your question").fill("What was my blood pressure?");
+  // Streamed (docs/design-direction.md "Conversation, waiting and thinking"): his question
+  // goes to E03's recall as he typed it, over `POST …/ask/stream`; the trace ticks over as
+  // each real part of his record is read, and the answer is the last event on the wire.
   const [asked, answered] = await Promise.all([
-    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
-    page.waitForResponse((res) => res.request().method() === "POST" && res.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask/stream`)),
+    page.waitForResponse((res) => res.request().method() === "POST" && res.url().endsWith(`/profiles/${pa.profileId}/ask/stream`)),
     asking.getByTestId("ask-send").click(),
   ]);
   expect(asked.postDataJSON()).toEqual({ question: "What was my blood pressure?", mode: "voice", language: "en" });
-  const reply = (await answered.json()) as { lines: { text: string }[]; honest: string[]; boundary: string[]; spoken: string[] };
+  const events = streamedEvents(await answered.text());
+  expect(events.map((event) => event.type)).toEqual(["step", "step", "step", "step", "answer"]);
+  const answerEvent = events.find((event) => event.type === "answer");
+  const reply = answerEvent!.answer as { lines: { text: string }[]; honest: string[]; boundary: string[]; spoken: string[] };
   const shown = asking.getByTestId("answer");
+  await expect(shown.getByTestId("ask-looked-at")).toContainText("What Nura looked at");
   expect(reply.lines.length).toBeGreaterThan(0);
   await expect(shown.getByTestId("answer-line").locator("p:not(.provenance)")).toHaveText(reply.lines.map((line) => line.text));
   await expect(shown.getByTestId("answer-source").first()).toHaveText("This comes from your papers.");
@@ -465,12 +473,18 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   const asking = page.getByTestId("ask-screen");
   await expect(asking).toHaveAttribute("data-mode", "text");
   await asking.getByLabel("Your question").fill("What was his blood pressure?");
-  const [asked] = await Promise.all([
-    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+  const [asked, answered] = await Promise.all([
+    page.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask/stream`)),
+    page.waitForResponse((res) => res.request().method() === "POST" && res.url().endsWith(`/profiles/${pa.profileId}/ask/stream`)),
     asking.getByTestId("ask-send").click(),
   ]);
   expect(asked.postDataJSON()).toMatchObject({ question: "What was his blood pressure?", mode: "text" });
   await expect(asking.getByTestId("answer").getByTestId("boundary")).toBeVisible();
+  // Her key is not his own: the trace speaks about him by name, never in his voice (D1,
+  // `app.channels.about_him`).
+  const steps = streamedEvents(await answered.text()).filter((event) => event.type === "step");
+  expect(steps.length).toBeGreaterThan(0);
+  for (const step of steps) expect(String(step.label)).toContain("Pa's");
 });
 
 test("quiet hours (both clocks at 22:30): the pager says Nura keeps quiet, with no card and no spinner", async ({ page, request }) => {

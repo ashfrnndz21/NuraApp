@@ -21,6 +21,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     ForeignKey,
@@ -32,7 +33,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, monotonic, utcnow
 from app.keys.scopes import KeyRole
 from app.memory.models import LABEL_LENGTH, _row_of_profile, _tied_to_profile
 from app.state.models import RenderedFromState
@@ -51,13 +52,17 @@ class CardKind(StrEnum):
     TASK = "task"
 
 
+@monotonic
 class ThreadMessage(ProfileScoped, Base):
     """One entry in the family thread: a short message from one person, or a card.
 
     A message row has `text` and no card; a card row names the State snapshot it was
     rendered from and which kind of card it is, and has no text. The table refuses a row
     that is both or neither. A message is the family's own words to each other: it is not
-    read for facts, and it is kept under the family scope, not the record's.
+    read for facts, and it is kept under the family scope, not the record's. The first
+    unread family message today — `posted_at`, tied by `seq` (#192/#218) — is what a
+    presence nudge is built from (`app.delivery.nudges.engine`), which stops at the first
+    match.
     """
 
     __tablename__ = "thread_message"
@@ -85,6 +90,7 @@ class ThreadMessage(ProfileScoped, Base):
     )
     # For a TASK card: which task. Other cards are rendered from the State alone.
     task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("task.id"), default=None)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
     @property
     def is_card(self) -> bool:

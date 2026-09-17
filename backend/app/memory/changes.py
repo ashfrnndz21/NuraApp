@@ -166,7 +166,9 @@ async def last_look(session: AsyncSession, *, context: KeyContext) -> LastLooked
         context,
         Scope.PROFILE,
         where=(LastLooked.person_id == context.person_id,),
-        order_by=(LastLooked.looked_at.desc(),),
+        # `.seq` breaks a tie in `looked_at` (#192/#218): the diff baseline is a decision,
+        # not a display order.
+        order_by=(LastLooked.looked_at.desc(), LastLooked.seq.desc()),
         limit=1,
     )
     return found[0] if found else None

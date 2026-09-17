@@ -15,10 +15,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.memory.models import EventKind, _row_of_profile, _tied_to_profile
 
 
@@ -162,6 +162,7 @@ class WhatsAppReceipt(Base):
     """The class name of what went wrong the last time, never its message."""
 
 
+@monotonic
 class DoseQuestion(ProfileScoped, Base):
     """ "Which tablet?" — asked when a "Taken" or "given" reply could be about more than one
     tablet at that moment (#162). Nothing is written down until the poster answers with one
@@ -171,6 +172,8 @@ class DoseQuestion(ProfileScoped, Base):
     moment of his day it was due at — so "1" means the first line that was read to him, not
     the first one of a list worked out again later. Written under the medicines scope, which
     the helper's key holds, on the thread it was asked in; it takes one change, its answer.
+    The open question a reply answers is the newest one — `asked_at`, tied by `seq`
+    (#192/#218) — for that thread.
     """
 
     __tablename__ = "whatsapp_dose_question"
@@ -186,6 +189,7 @@ class DoseQuestion(ProfileScoped, Base):
     doses: Mapped[list[dict[str, str]]] = mapped_column(JSON)
     """`[{"line_id": …, "anchor": …}, …]`, in the order the question read them out."""
     answered_at: Mapped[datetime | None] = mapped_column(default=None)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 class ProposalStatus(StrEnum):

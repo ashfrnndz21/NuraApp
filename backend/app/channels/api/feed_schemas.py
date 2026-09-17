@@ -26,6 +26,7 @@ from app.delivery.feed.models import (
     SourceKind,
 )
 from app.delivery.feed.rank import Page, Sent, item_json
+from app.reasoning.signals import SignalFamily, SignalUse
 
 
 class FeedItemOut(BaseModel):
@@ -260,6 +261,28 @@ class AreaOut(BaseModel):
     @classmethod
     def of(cls, view: AreaView) -> AreaOut:
         return cls(area=view.area, districts=list(view.districts), may_set=view.may_set)
+
+
+class SignalOut(BaseModel):
+    family: SignalFamily
+    on: bool
+    fact_id: str | None
+
+
+class SignalsOut(BaseModel):
+    signals: list[SignalOut]
+    may_set: bool
+
+    @classmethod
+    def of(cls, uses: Sequence[SignalUse], *, may_set: bool) -> SignalsOut:
+        return cls(
+            signals=[SignalOut(family=use.family, on=use.on, fact_id=use.fact_id) for use in uses],
+            may_set=may_set,
+        )
+
+
+class SignalIn(BaseModel):
+    on: bool
 
 
 class ResultOut(BaseModel):

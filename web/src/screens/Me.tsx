@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { AreaOut, MeSummaryOut, SearchJobOut } from "../api/types";
+import type { AreaOut, MeSummaryOut, SearchJobOut, SignalFamily, SignalsOut } from "../api/types";
 import { closeMe, go, meOpen, reloadDoors, signOutEverywhere } from "../flow";
 import { emergencyOnly } from "../offline/emergencyCache";
 import { wantsHomeScreenHint } from "../offline/register";
@@ -129,6 +129,7 @@ export function MeSheet(): JSX.Element | null {
         )}
       </Tile>
       <Area />
+      <WhatNuraUses />
       <Ramadan />
       <Reminders />
       {papers && (papers.standing === "owner" || papers.scopes.includes("emergency")) && (
@@ -277,6 +278,69 @@ function Area(): JSX.Element | null {
           {s.me.areaClear}
         </Pill>
       )}
+      <Notice error={error} />
+    </Tile>
+  );
+}
+
+const SIGNAL_FAMILIES: SignalFamily[] = ["food", "sleep", "steps", "water", "search_topics"];
+
+/** "What Nura uses" (RE-05, docs/recommendation-engine.md §3.6): food, sleep, steps, water,
+ *  what he asks — each a switch. Everyone who can open this profile reads them; only he or
+ *  his chief may flip one (`SignalsOut.may_set`), so a caregiver's view shows them read-only
+ *  and, through `t()`, says whose switches they are ("{patient}'s sleep"). Search-topic use
+ *  starts off (owner decision D3): every other family starts on. */
+function WhatNuraUses(): JSX.Element | null {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const [view, setView] = useState<SignalsOut | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState<SignalFamily | null>(null);
+  useEffect(() => {
+    if (!bearer || !papers) return setView(null);
+    nura.signals(bearer, papers.profile_id).then(setView, () => setView(null));
+  }, [bearer, papers?.profile_id]);
+  if (!bearer || !papers || !view) return null;
+  const flip = async (family: SignalFamily, on: boolean) => {
+    setBusy(family);
+    setError(null);
+    try {
+      setView(await nura.setSignal(bearer, papers.profile_id, family, on));
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <Tile paper testId="what-nura-uses">
+      <h2 class="title">{s.me.whatNuraUsesTitle}</h2>
+      <p>{s.me.whatNuraUsesLead}</p>
+      {!view.may_set && <p>{fill(s.me.whatNuraUsesReadOnly, { name: papers.display_name })}</p>}
+      {SIGNAL_FAMILIES.map((family) => {
+        const row = view.signals.find((one) => one.family === family);
+        const on = row?.on ?? false;
+        return (
+          <div key={family}>
+            <p class="label">{s.me.whatNuraUsesFamilies[family]}</p>
+            <div class="row" role="group" aria-label={s.me.whatNuraUsesFamilies[family]}>
+              {view.may_set ? (
+                <Pill
+                  chosen={on}
+                  onClick={() => void flip(family, !on)}
+                  disabled={busy !== null}
+                  testId={`signal-${family}`}
+                >
+                  {on ? s.me.whatNuraUsesOn : s.me.whatNuraUsesOff}
+                </Pill>
+              ) : (
+                <span data-testid={`signal-${family}`}>{on ? s.me.whatNuraUsesOn : s.me.whatNuraUsesOff}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
       <Notice error={error} />
     </Tile>
   );

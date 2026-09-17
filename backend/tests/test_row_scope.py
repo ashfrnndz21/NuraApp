@@ -43,7 +43,10 @@ from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
 from app.clock import now
 from app.consent.models import Consent
 from app.db import take_keepers
-from app.delivery.feed.models import FeedItem
+from app.delivery.feed.days import today_for
+from app.delivery.feed.items import Lines, Why, create_item
+from app.delivery.feed.models import CardType, DeliverTo, FeedItem
+from app.delivery.feed.rank import _visible_to, sent_this_week
 from app.drafts import InsuranceClaimDraft
 from app.insurance.claim import file_a_claim
 from app.insurance.policy import PolicyStatus, PolicyType, policy_draft, set_a_policy
@@ -77,10 +80,12 @@ from app.memory.working import open_episode
 from app.regions import Region
 from app.safety.red_flags import Flag
 from app.search.ask import Mode, recall
+from app.state.service import current_state
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import agree_to_recording, b64, confirm, decide, photo
 from tests.conftest import Deployment
 from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, placeholder_consult
+from tests.family_support import household
 from tests.medicines_support import add, label
 from tests.medicines_support import let_in as cut_key
 from tests.paper import LIPID_PANEL, PNG_SIGNATURE
@@ -801,6 +806,12 @@ class Walk:
     button: bool = False
     """The not-feeling-well button and the symptom log: the safety rules read the record as
     the system (`red_flags._system_read`), and nothing they read reaches the caller."""
+    stream: bool = False
+    """Server-Sent Events (docs/design-direction.md 'Conversation, waiting and thinking'): the
+    body is every `data:` line, parsed, as one list — the trace's steps and the final answer or
+    results, so a leak in a streamed step's label is caught exactly as one in the answer is.
+    The 200 already went out before a refusal mid-stream can raise, so a `refusal` event among
+    them is this walk's equivalent of a non-2xx status: skipped, not checked."""
 
 
 P = "/profiles/{profile_id}"
@@ -844,8 +855,10 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/{{item_id}}/clip/captions"),
     Walk("GET", f"{P}/feed/{{item_id}}/clip/video"),
     Walk("GET", f"{P}/area"),
+    Walk("GET", f"{P}/signals"),
     # The ask bar's filters: a read, sent as a POST so his words stay out of the URL.
     Walk("POST", f"{P}/find", json={"q": "blood pressure", "where": "web"}),
+    Walk("POST", f"{P}/find/stream", json={"q": "blood pressure", "where": "web"}, stream=True),
     Walk("GET", f"{P}/feed/{{item_id}}"),
     Walk("GET", f"{P}/closure"),
     Walk("GET", f"{P}/whatsapp-opt-in"),
@@ -871,6 +884,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/providers/{{provider_id}}"),
     Walk("GET", f"{P}/changes"),
     Walk("POST", f"{P}/ask", json={"question": "what papers do I have", "mode": "text"}),
+    Walk(
+        "POST",
+        f"{P}/ask/stream",
+        json={"question": "what papers do I have", "mode": "text"},
+        stream=True,
+    ),
     Walk("GET", f"{P}/grants"),
     Walk("GET", f"{P}/helpers"),
     Walk("GET", f"{P}/thread"),
@@ -954,6 +973,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("PATCH", f"{P}/search-jobs/{{job_id}}"): "pauses or resumes a search; returns the job",
     ("POST", f"{P}/feed/events"): "writes the phone's queue of what he did; returns their ids",
     ("PUT", f"{P}/area"): "sets his area on his yes; returns it",
+    ("PUT", f"{P}/signals/{{family}}"): "switches one family on or off; returns every family",
     ("POST", f"{P}/feelings"): "writes a feeling; returns the event and flag it wrote",
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",
@@ -1266,6 +1286,19 @@ async def _walk(
                     problems.append(f"{holder.name} {where}: {response.status_code}")
                 elif response.status_code < 300 and response.content:
                     kind = response.headers.get("content-type", "")
+                    if walk.stream and kind.startswith("text/event-stream"):
+                        events = [
+                            json.loads(line.removeprefix("data: "))
+                            for line in response.text.split("\n\n")
+                            if line.startswith("data: ")
+                        ]
+                        # The 200 is already on the wire by the time a refusal can raise
+                        # (SSE has no later chance at a status code), so a `refusal` event is
+                        # this walk's version of the non-2xx status every other route skips on.
+                        if any(event.get("type") == "refusal" for event in events):
+                            continue
+                        _check(where, holder, events, seeded, seen, problems, walk)
+                        continue
                     # Audio names nothing: a spoken twin answers for the card it speaks, a clip
                     # (E03-05) for the recording it is cut from.
                     body = (
@@ -1592,3 +1625,54 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
             c["name"] for c in inspect(connection).get_columns("artifact")
         }
     engine.dispose()
+
+
+# --- RE-01: a private card is on no other person's route --------------------------------------
+
+
+async def test_a_private_card_is_on_no_other_persons_route(sg: AsyncSession) -> None:
+    """A card resting on his own search history is his alone (RE-01,
+    docs/recommendation-engine.md §2.4, §3.5): `FeedItem.private_to` drops it from every other
+    person's route, however wide her scopes — a chief holding every scope, and a caregiver
+    holding `Scope.ASK` itself, are no exception."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    chief = await home.ctx(sg, home.mei)  # ALL_SCOPES, ASK included
+    caregiver = await home.ctx(sg, home.kit)  # her preset holds ASK too
+
+    state = await current_state(sg, context=owner)
+    lines = Lines(
+        language="en",
+        headline="What you asked about",
+        body=["This explains your kidney number in simple words."],
+        voice=["This explains your kidney number in simple words."],
+        why="You asked about this twice.",
+    )
+    card = await create_item(
+        sg,
+        context=owner,
+        state=state,
+        type=CardType.STORY,
+        lines=lines,
+        why=Why(kind="asked_topic", plain="You asked about this twice."),
+        scope=Scope.ASK,
+        deliver_to=DeliverTo.PATIENT,
+        day=today_for(owner).key,
+        dedupe_key="asked:kidney",
+        expires_at=now() + timedelta(days=7),
+        private_to=owner.person_id,
+    )
+    assert card.private_to == owner.person_id
+
+    # The choke point every read route funnels through (`feed_page`, `top_three`,
+    # `sent_this_week`, `cached_page` all call this): private to him, whatever the scope.
+    assert _visible_to([card], owner) == [card]
+    assert _visible_to([card], chief) == []
+    assert _visible_to([card], caregiver) == []
+
+    # And a real route: his own week carries it, his chief's does not — though her key covers
+    # `Scope.ASK`, the scope the card itself rests on.
+    his_week = {sent.item.id for sent in await sent_this_week(sg, context=owner)}
+    her_week = {sent.item.id for sent in await sent_this_week(sg, context=chief)}
+    assert card.id in his_week
+    assert card.id not in her_week

@@ -414,6 +414,12 @@ export const en = {
     sourceVisits: "This comes from your visits to the doctor.",
     // @patient
     askWithheld: "Some of the papers are not open to you.",
+    // @patient
+    askThinking: "Nura is looking.",
+    // @patient
+    askAnswered: "Nura answered.",
+    // @patient phrase
+    askLookedAt: "What Nura looked at: {parts}",
     // @patient phrase
     back: "Back to your cards",
     // @patient
@@ -544,6 +550,42 @@ export const en = {
     ramadanOn: "Nura will tell you before Ramadan.",
     // @patient phrase
     ramadanStop: "Stop telling me",
+    // @patient headline
+    whatNuraUsesTitle: "What Nura uses",
+    // @patient
+    whatNuraUsesLead: "Choose what Nura may use to suggest reads and videos for you.",
+    // @patient
+    whatNuraUsesLeadOther: "Choose what Nura may use to suggest reads and videos for {patient}.",
+    // @patient phrase
+    whatNuraUsesOn: "On",
+    // @patient phrase
+    whatNuraUsesOff: "Off",
+    // @patient
+    whatNuraUsesReadOnly: "Only {name} or the chief can change this.",
+    whatNuraUsesFamilies: {
+      // @patient phrase
+      food: "What you eat",
+      // @patient phrase
+      sleep: "Your sleep",
+      // @patient phrase
+      steps: "Your steps",
+      // @patient phrase
+      water: "Your water",
+      // @patient phrase
+      search_topics: "What you ask about",
+    },
+    whatNuraUsesFamiliesOther: {
+      // @patient phrase
+      food: "What {patient} eats",
+      // @patient phrase
+      sleep: "{patient}'s sleep",
+      // @patient phrase
+      steps: "{patient}'s steps",
+      // @patient phrase
+      water: "{patient}'s water",
+      // @patient phrase
+      search_topics: "What {patient} asks about",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1564,6 +1606,8 @@ export const en = {
     messageLabel: "Your message to the family",
     // @patient phrase
     sendMessage: "Send to the family",
+    // @patient phrase
+    sendingMessage: "Sending to the family",
     // @patient headline
     keys: "Change who can see what",
     // @patient headline

@@ -11,10 +11,10 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, utcnow
+from app.db import Base, ProfileScoped, enum_column, monotonic, utcnow
 from app.keys.scopes import KeyRole, Scope
 
 
@@ -43,11 +43,17 @@ class Channel(StrEnum):
     SYSTEM = "system"
 
 
+@monotonic
 class AuditEntry(ProfileScoped, Base):
     """One access to one profile, at one moment, by one person.
 
     `target` is the kind of thing touched — a table of the graph, or for a share the kind of
     copy that went out. `rows` is how many of them. Neither carries any of their content.
+
+    Read newest first, `at` tied by `seq` (#192/#218): the trail's whole purpose is telling
+    him, truthfully, what happened and in what order, so a merely stable-but-arbitrary
+    tiebreaker is not enough here the way it is for a plain listing — two touches in one
+    request, or any frozen clock, must still read back in the order they actually happened.
     """
 
     __tablename__ = "audit_entry"
@@ -81,3 +87,4 @@ class AuditEntry(ProfileScoped, Base):
         ForeignKey("person.id"), default=None
     )
     shared_with_label: Mapped[str | None] = mapped_column(String(120), default=None)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)

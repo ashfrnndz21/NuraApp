@@ -28,10 +28,10 @@ from app.consent.service import (
 )
 from app.delivery.feed.area import OnlyHeSetsHisArea
 from app.delivery.feed.clips import NoClipRenderer, NoExcerpt, NotAClipCard
-from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
+from app.delivery.feed.engagement import SecondsOnlyOnAPlay
 from app.delivery.feed.find import NotAFilter, NothingToFind
 from app.delivery.feed.local import NotACoarseArea, NotAHazard, NotASeason
-from app.delivery.feed.rank import NoCachedPage
+from app.delivery.feed.rank import NoCachedPage, NoSuchItem
 from app.delivery.feed.search import FastingIsHisToSay, NoSuchSearchJob, NotACadence
 from app.delivery.feed.sources import NotTheirsToManage
 from app.delivery.feed.twin import NotInThatLanguage
@@ -142,6 +142,7 @@ from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
 from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
+from app.reasoning.signals import NotTheirsToSetSignals
 from app.reasoning.trends import NoSuchAnalyte
 from app.reasoning.visits.brief import NoBriefYet
 from app.reasoning.visits.gaps import NoSuchAppointment as NoSuchVisit
@@ -198,6 +199,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheirsToChange, 403),
     # The day, and a calendar's proposals (E10-01, E18-02): reading them is not setting them.
     (NotTheirsToSet, 403),
+    # "What Nura uses" (RE-05): his own key, or his chief's; every other role reads the
+    # switches and never sets them.
+    (NotTheirsToSetSignals, 403),
     # His insurer (E13-01): typed by him or his chief; an identity card is not a policy.
     (NotTheirsToSetInsurer, 403),
     (NotAnInsurer, 400),

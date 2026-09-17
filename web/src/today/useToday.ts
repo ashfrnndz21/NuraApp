@@ -129,22 +129,27 @@ export function useToday() {
       const large = largeTextOf(state);
       if (large !== null) await setLargeText(large);
     }
-    const lines = await nura.medicines(bearer, id, language.value);
-    const slots = await nura.dosesToday(bearer, id, language.value);
-    const counted = await nura.proud(bearer, id);
-    const page = await nura.feed(bearer, id);
-    try {
-      setTopThree((await nura.feedToday(bearer, id)).items);
-    } catch {
-      setTopThree([]);
-    }
-    // The hero's number: the backend's count of what is due now, or next today.
-    let hero = null;
-    try {
-      hero = await nura.medicinesNow(bearer, id, language.value);
-    } catch {
-      hero = null;
-    }
+    // Together, not one at a time (#191 regression, CI run 35190070446): each of these is its
+    // own turn in `api/client.ts`'s queue regardless, so nothing here is ever really sent at
+    // once — but awaited one after another, the queue sits briefly empty between them, and a
+    // red word spoken in exactly that gap can reach the flag while nothing of Today's is on
+    // the wire to abort, so *his* call has nothing to overtake and a background read of this
+    // chain (`proud` did, once) finishes on its own, ahead of him. Firing them together closes
+    // every gap but the one after the last, the same protection `medicinesNow`/`feedToday`
+    // already had in spirit with their own catch.
+    const [lines, slots, counted, page, topThree, hero] = await Promise.all([
+      nura.medicines(bearer, id, language.value),
+      nura.dosesToday(bearer, id, language.value),
+      nura.proud(bearer, id),
+      nura.feed(bearer, id),
+      nura
+        .feedToday(bearer, id)
+        .then((read) => read.items)
+        .catch(() => [] as FeedItemOut[]),
+      // The hero's number: the backend's count of what is due now, or next today.
+      nura.medicinesNow(bearer, id, language.value).catch(() => null),
+    ]);
+    setTopThree(topThree);
     let chief: string | null = null;
     if (state?.posture === "act" && current.standing === "owner") {
       const holders = await nura.keys(bearer, id);

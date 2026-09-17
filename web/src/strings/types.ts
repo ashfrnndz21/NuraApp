@@ -178,6 +178,9 @@ export interface Strings {
     sourceMedicines: string;
     sourceVisits: string;
     askWithheld: string;
+    askThinking: string;
+    askAnswered: string;
+    askLookedAt: string;
     back: string;
     statusHeld: string;
     statusSent: string;
@@ -245,6 +248,14 @@ export interface Strings {
     ramadanYes: string;
     ramadanOn: string;
     ramadanStop: string;
+    whatNuraUsesTitle: string;
+    whatNuraUsesLead: string;
+    whatNuraUsesLeadOther: string;
+    whatNuraUsesOn: string;
+    whatNuraUsesOff: string;
+    whatNuraUsesReadOnly: string;
+    whatNuraUsesFamilies: Record<"food" | "sleep" | "steps" | "water" | "search_topics", string>;
+    whatNuraUsesFamiliesOther: Record<"food" | "sleep" | "steps" | "water" | "search_topics", string>;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */
@@ -684,6 +695,7 @@ export interface Strings {
     threadEarlier: string;
     messageLabel: string;
     sendMessage: string;
+    sendingMessage: string;
     keys: string;
     newKey: string;
     holderName: string;

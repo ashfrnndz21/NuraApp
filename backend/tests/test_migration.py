@@ -29,7 +29,7 @@ from alembic.operations import Operations
 from sqlalchemy import Connection, Inspector, Table, inspect, select, text
 
 from app.audit.models import AuditEntry
-from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
+from app.channels.whatsapp.models import DoseQuestion, Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.delivery.nudges.models import Nudge, NudgeResponse
@@ -163,6 +163,7 @@ TABLES: tuple[Table, ...] = (
     ConsultSegment.__table__,
     Policy.__table__,
     InsuranceClaim.__table__,
+    DoseQuestion.__table__,
 )
 
 
@@ -242,7 +243,11 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0040_insurance_policies_and_claims"]
+    # Pinned to the chain as it will read once PR #225 (0044) and PR #235 (0045, not yet
+    # renumbered as of this merge — see this migration's docstring) are both on main: this
+    # branch's own migration renumbered to 0046, chained onto 0044 for now. Fails locally
+    # until those two PRs land; see the note in this PR's comment.
+    assert heads == ["0046_insurance_policies_claims"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(

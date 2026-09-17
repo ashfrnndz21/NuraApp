@@ -414,6 +414,12 @@ export const zh = {
     sourceVisits: "这来自您看医生的安排。",
     // @patient
     askWithheld: "有些文件没有对您开放。",
+    // @patient
+    askThinking: "Nura正在查看。",
+    // @patient
+    askAnswered: "Nura回答了。",
+    // @patient phrase
+    askLookedAt: "Nura查看了：{parts}",
     // @patient phrase
     back: "回到您的卡",
     // @patient
@@ -544,6 +550,42 @@ export const zh = {
     ramadanOn: "斋戒月前 Nura 会告诉您。",
     // @patient phrase
     ramadanStop: "不用再告诉我",
+    // @patient headline
+    whatNuraUsesTitle: "Nura 使用什么",
+    // @patient
+    whatNuraUsesLead: "选择 Nura 可以用什么来为您推荐文章和视频。",
+    // @patient
+    whatNuraUsesLeadOther: "选择 Nura 可以用什么来为{patient}推荐文章和视频。",
+    // @patient phrase
+    whatNuraUsesOn: "开",
+    // @patient phrase
+    whatNuraUsesOff: "关",
+    // @patient
+    whatNuraUsesReadOnly: "只有{name}或负责的家人可以更改这个。",
+    whatNuraUsesFamilies: {
+      // @patient phrase
+      food: "您吃的东西",
+      // @patient phrase
+      sleep: "您的睡眠",
+      // @patient phrase
+      steps: "您的步数",
+      // @patient phrase
+      water: "您喝的水",
+      // @patient phrase
+      search_topics: "您问过的事",
+    },
+    whatNuraUsesFamiliesOther: {
+      // @patient phrase
+      food: "{patient}吃的东西",
+      // @patient phrase
+      sleep: "{patient}的睡眠",
+      // @patient phrase
+      steps: "{patient}的步数",
+      // @patient phrase
+      water: "{patient}喝的水",
+      // @patient phrase
+      search_topics: "{patient}问过的事",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1561,6 +1603,8 @@ export const zh = {
     messageLabel: "您给家人的消息",
     // @patient phrase
     sendMessage: "发给家人",
+    // @patient phrase
+    sendingMessage: "正在发给家人",
     // @patient headline
     keys: "改谁可以看什么",
     // @patient headline

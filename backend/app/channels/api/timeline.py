@@ -21,15 +21,19 @@ The yeses — for a visit, a step of its status, and hanging a paper — are min
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime
 
-from app.channels.about_him import reader_of
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.delivery import via_of
-from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.channels.api.feelings_schemas import FeelingOut
+from app.channels.api.refusals import refused
 from app.channels.api.timeline_schemas import (
     AnswerOut,
     AppointmentIn,
@@ -50,17 +54,38 @@ from app.channels.api.timeline_schemas import (
     StatusIn,
     TimelineOut,
 )
+from app.delivery.timeline_strings import ASK_STEP_NAMES, ASK_STEPS
+from app.errors import Refusal
 from app.memory.attach import attach_to_appointment, attach_to_episode
 from app.memory.changes import last_look, mark_looked, what_changed
 from app.memory.providers import directory, provider_history, write_chief_note
 from app.memory.spine import add_provider, book_appointment, change_appointment_status
-from app.memory.timeline import MAX_PAGE, PAGE_SIZE, episode_view, timeline
+from app.memory.timeline import MAX_PAGE, PAGE_SIZE, episode_view, language_for, timeline
 from app.memory.working import open_episode
 from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import detect
-from app.search.ask import recall
+from app.search.ask import AskStep, recall, recall_stream
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
+
+
+def _sse(payload: dict[str, object]) -> bytes:
+    """One Server-Sent Event: a `data:` line of JSON, blank line after. Never buffered —
+    written to the wire the instant the real work behind it finishes (docs/design-direction.md
+    'Conversation, waiting and thinking')."""
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+async def _refusal_event(request: Request, refusal: Refusal) -> bytes:
+    """A refusal mid-stream, in the same shape the non-streaming routes answer it in
+    (`app.channels.api.refusals.refused`) — reused, not duplicated, so the two can never say
+    a refusal two different ways. The stream's 200 has already gone out by the time a
+    generator can raise (SSE has no later chance at a status code), so the refusal travels as
+    an event instead and the web client turns it back into the same `Refused` it would get
+    from a plain call (`web/src/api/client.ts`)."""
+    response = await refused(request, refusal)
+    body = json.loads(bytes(response.body))
+    return _sse({"type": "refusal", "status": response.status_code, **body})
 
 Language = Query(default=None, min_length=2, max_length=16)
 
@@ -274,3 +299,74 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
         language=body.language,
     )
     return AnswerOut.of(answer)
+
+
+def _step_event(step: AskStep, lang: str, reader: Reader) -> bytes:
+    """One `AskStep` off `recall_stream`, in his words (or the caregiver's twin, by his
+    name): the label the trace shows while it works, and the short name the collapsed "What
+    Nura looked at" line joins. `key` is a part of `app.search.ask.STEP_KEYS` — never a row,
+    never a value off his record, so a step carries nothing beyond which part was read."""
+    return _sse(
+        {
+            "type": "step",
+            "key": step.key,
+            "label": reader.says(ASK_STEPS[lang][step.key]),
+            "name": ASK_STEP_NAMES[lang][step.key],
+        }
+    )
+
+
+@router.post("/{profile_id}/ask/stream")
+async def ask_stream(body: AskIn, request: Request, context: Context) -> StreamingResponse:
+    """`POST /{id}/ask`, streamed (docs/design-direction.md 'Conversation, waiting and
+    thinking'): a `step` event the instant each real part of his record is read
+    (`recall_stream`), then an `answer` event — the same `AnswerOut` the plain route gives.
+    The red-flag path is unchanged and streams nothing: it is answered before any part of the
+    record is looked up, same as `ask` above, so there is nothing to trace.
+
+    Opens its own session (`session_scope`), never `Depends(db)`: FastAPI closes a `yield`
+    dependency the moment this function returns the `StreamingResponse` object, well before
+    Starlette actually drives `events()` to send the body — a session from `Depends(db)` would
+    already be closed by the time a step tried to read with it (`app.channels.api.deps.
+    session_scope`)."""
+    outside = providers_of(request)
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                heard = detect(body.question)
+                if heard is not None:
+                    tapped = await record_tap(
+                        session,
+                        context=context,
+                        word=heard,
+                        registry=outside.drug_registry,
+                        store=outside.object_store,
+                        transcriber=outside.transcriber,
+                        via=via_of(request),
+                        language=body.language,
+                        said=body.question,
+                    )
+                    answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
+                    yield _sse({"type": "answer", "answer": answer_out.model_dump(mode="json")})
+                    return
+                lang = await language_for(session, context, body.language)
+                reader = await reader_of(session, context, body.language)
+                async for event in recall_stream(
+                    session,
+                    context=context,
+                    question=body.question,
+                    mode=body.mode,
+                    retriever=outside.retriever,
+                    store=outside.object_store,
+                    registry=outside.drug_registry,
+                    language=body.language,
+                ):
+                    if isinstance(event, AskStep):
+                        yield _step_event(event, lang, reader)
+                    else:
+                        yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
+        except Refusal as refusal:
+            yield await _refusal_event(request, refusal)
+
+    return StreamingResponse(events(), media_type="text/event-stream")

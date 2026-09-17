@@ -68,6 +68,11 @@ from app.safety.high_risk import high_risk_class
 
 CARD = ReviewCard.__tablename__
 FIELD = ReviewField.__tablename__
+EXTERNAL_MODEL_PROCESSOR = "external_model_processor"
+"""The audit target a reach outside the region is written under: a distinct target from
+`CARD`/`FIELD`, so a reader of the trail can tell a page read by an external model processor
+(e.g. `ClaudeExtractor.external_processor == "anthropic"`) apart from a fixture read, which
+writes no such line at all (`review_artifact`)."""
 
 MEDICINE_NAME = ("medicine", "name")
 """The field a label's drug is named in; what the high-risk lookup reads."""
@@ -103,12 +108,18 @@ class Notice(StrEnum):
 
     NOT_A_HEALTH_PAPER = "not_a_health_paper"
     NOT_A_MACHINE_SCREEN = "not_a_machine_screen"
+    PHOTO_KIND_NOT_READ = "photo_kind_not_read"
+    """A file of a kind the route accepted and this extractor never opened at all (E02-02):
+    distinct from a page that was looked at and not made out, so the card does not ask for
+    another photo of a kind that will fail again the same way."""
 
 
 def notice_of(card: ReviewCard) -> Notice | None:
     """The notice a card carries, from what the page was read as and what it was offered as."""
     if card.document_kind is DocumentKind.NOT_HEALTH:
         return Notice.NOT_A_HEALTH_PAPER
+    if card.document_kind is DocumentKind.UNSUPPORTED_FILE_TYPE:
+        return Notice.PHOTO_KIND_NOT_READ
     if (
         card.asked_as is DocumentKind.DEVICE_SCREEN
         and card.document_kind is not DocumentKind.DEVICE_SCREEN
@@ -173,6 +184,21 @@ async def review_artifact(
     hint and onto the card; `source` is where an imported PDF came from."""
     artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
     data = await store.get(artifact.storage_key)
+    if extractor.external_processor is not None:
+        # Written before the call, in the same unit of work as the card: a reach that sends
+        # the artefact's bytes outside the region is recorded whether or not the call that
+        # follows succeeds, distinct from the CARD/FIELD writes below so a reader of the
+        # trail can tell an external model processor's read apart from a fixture's.
+        await record(
+            session,
+            context=context,
+            action=Action.SHARE,
+            scope=Scope.RECORDS,
+            target=EXTERNAL_MODEL_PROCESSOR,
+            target_id=artifact.id,
+            rows=1,
+            shared_with_label=extractor.external_processor,
+        )
     extraction = await extractor.extract(
         data,
         artifact.content_type,
