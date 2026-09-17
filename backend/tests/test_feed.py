@@ -81,9 +81,10 @@ from app.delivery.feed.rank import (
 )
 from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
+from app.delivery.feed.why_sheet import why_lines
 from app.delivery.recommend import broker as broker_module
-from app.delivery.recommend.rules import RULE_NEW_MEDICINE_EXPLAINER
-from app.delivery.strings import Lines, learning_lines, needs_doctor_look_lines, render
+from app.delivery.recommend.rules import RULE_DID_YOU_KNOW, RULE_NEW_MEDICINE_EXPLAINER
+from app.delivery.strings import WHY_THEIRS, Lines, learning_lines, needs_doctor_look_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
@@ -1254,6 +1255,75 @@ async def test_a_private_candidates_card_is_unreadable_to_his_chief_and_readable
 
         with pytest.raises(NoSuchItem):
             await require_item(sg, context=chief, item_id=card.id)
+
+
+async def test_a_did_you_know_card_names_its_topic_and_coexists_with_a_same_day_safety_notice(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """The `did_you_know` rule (`app.delivery.recommend.rules`) becomes a card through the
+    same `JobKind.WORTH_KNOWING` pipeline every other broker READ candidate already does
+    (`why.rule`/`why.topic` name it, RE-07/RE-08): one card, evidence readable, and — because
+    a `CardType.NOTICE` is `DeliverTo.CAREGIVER` while a did-you-know card is `DeliverTo.
+    PATIENT` (never the same cap counter, `rank._patient_supply`) — never in competition with
+    the same day's safety notice on his own medicine (module doc, brief: "it never displaces a
+    safety notice").
+
+    Amlodipine is started well outside `NEW_MEDICINE_WINDOW` (14 days), so `did_you_know` is
+    the only rule proposing its topic that day — `new_medicine_explainer` no longer reads it as
+    new, and nothing else on this bare profile reads a visit or a tap — while it is still an
+    active line, so it is still in `did_you_know`'s own pool (module doc, `rules.
+    _did_you_know_pool`: a medicine he takes, not only a new one)."""
+    context = await _pa(sg)
+    await new_medicine(sg, context)  # amlodipine
+    clock.step(timedelta(days=15))  # past NEW_MEDICINE_WINDOW; still active
+    await _label(sg, context, name="Warfarin", strength=5, batch="230001")  # a SAFETY notice
+
+    # The ranked, capped page (`rank.feed_page`, which runs `refresh` itself) is where "at
+    # most one a day" actually lives (`rank._patient_supply`'s `CapsClass.ONE`) — a job can
+    # still turn up more than one page (an article and a clip both about the same medicine,
+    # here), so the cap is checked on what he is actually shown, not on every row `refresh`
+    # wrote.
+    page = await feed_page(sg, context=context, engine=ENGINE)
+    on_his_page = [item for item in page.items if item.why.get("rule") == RULE_DID_YOU_KNOW]
+    assert len(on_his_page) <= 1, "at most one did-you-know card a day"
+    assert on_his_page, "today did have one to show"
+    card = on_his_page[0]
+    assert card.type in (CardType.LEARNING, CardType.CLIP)
+    assert card.deliver_to is DeliverTo.PATIENT
+    assert card.why["topic"] == "medicine.blood_pressure_tablet"
+    assert card.why["fact_ids"], "the card cites the fact it rests on"
+    assert card.scope is Scope.MEDICINES
+
+    all_items = await _items(sg, context)
+    notice = next(item for item in all_items if item.type is CardType.NOTICE)
+    assert notice.deliver_to is DeliverTo.CAREGIVER
+    # Both cards exist from the same day's run: the did-you-know card never displaced the
+    # notice, nor the other way round — they were never on the same cap (patient vs.
+    # caregiver, `rank._patient_supply` vs. `rank._caregiver_supply`).
+    assert {card.id, notice.id} <= {item.id for item in all_items}
+
+    # The Why sheet (RE-08) explains the topic to a caregiver by his name when her key does
+    # not cover the scope its evidence rests on (`medicine.blood_pressure_tablet` is Scope.
+    # MEDICINES).
+    kit = await let_in(
+        sg,
+        context,
+        phone="+6591230088",
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER] - {Scope.MEDICINES},
+    )
+    assert not kit.allows(Scope.MEDICINES)
+    lines = why_lines(
+        card.why["plain"],
+        scope=card.scope,
+        context=kit,
+        language="en",
+        his=False,
+        patient_name="Pa",
+    )
+    assert lines == (WHY_THEIRS["en"]["withheld"].format(patient="Pa"),)
+    assert "Pa" in lines[0]
 
 
 async def test_a_candidate_without_private_to_is_unchanged(sg: AsyncSession) -> None:

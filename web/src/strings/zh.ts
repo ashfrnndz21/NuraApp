@@ -526,6 +526,8 @@ export const zh = {
     story: "您的故事",
     // @patient headline
     learning: "用简单的话说",
+    // @patient headline
+    didYouKnow: "您知道吗",
     // @patient phrase
     ask: "问",
     // @patient phrase

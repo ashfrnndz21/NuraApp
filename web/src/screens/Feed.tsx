@@ -368,8 +368,17 @@ interface FeedCardProps {
 function FeedCard({ entry, index, view, clips, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, onWhy, playing, reorder, said, preview, onAskToOrder, onOrderYes, onOrderNo }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
-  const section =
-    view.section === "now" ? s.today.now : view.section === "today" ? s.today.forYou : view.section === "story" ? s.feed.story : view.section === "learning" ? s.feed.learning : null;
+  const section = view.didYouKnow
+    ? s.feed.didYouKnow
+    : view.section === "now"
+      ? s.today.now
+      : view.section === "today"
+        ? s.today.forYou
+        : view.section === "story"
+          ? s.feed.story
+          : view.section === "learning"
+            ? s.feed.learning
+            : null;
   const paper = patient || view.variant === "flag" || view.action !== null;
   const actions = declined ? (["hear"] as const) : view.actions;
   return (

@@ -204,5 +204,14 @@
       "media": "video",
       "licence": null
     }
+  ],
+  "worth_knowing:diabetes": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/a-z/diseases-and-conditions/diabetes",
+      "title": "Diabetes",
+      "published_at": "2025-06-02",
+      "text": "Diabetes is a condition where there is too much sugar (glucose) in the blood. Being active helps the body use sugar: a short walk after meals is a good habit. Your doctor checks your blood sugar with a blood test such as HbA1c, usually every few months. Take your medicines as your doctor advised and bring your questions to your next visit."
+    }
   ]
 }
