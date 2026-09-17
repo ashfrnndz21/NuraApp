@@ -87,10 +87,14 @@ class NoteOutcome(StrEnum):
 class FeelingNote(RenderedFromState, ProfileScoped, Base):
     """What one tap and its answer were read into, as he was shown it.
 
-    `lines` are the things to tell the doctor (at most two) — plus, right after a line that
-    names a medicine, the two lines that keep it as it is and hand the decision to him
-    (`DO_NOT_STOP`, #157) — `then` who does the next thing, and `voice` the spoken twin —
-    headline, lines, then, and the boundary. `reasons` names
+    `said` is what he said and when, by name, not by position — always `lines[0]` too, but
+    read that way only here, in `app.reasoning.visits.questions.question_from_feeling` (PR
+    #233 review): the guarantee that a question never names a medicine without its
+    `DO_NOT_STOP` pair lives in how `compose_note` builds `lines`, not in `lines[0]` being safe
+    forever by coincidence of today's template order. `lines` are the things to tell the doctor
+    (at most two) — plus, right after a line that names a medicine, the two lines that keep it
+    as it is and hand the decision to him (`DO_NOT_STOP`, #157) — `then` who does the next
+    thing, and `voice` the spoken twin — headline, lines, then, and the boundary. `reasons` names
     what the tap was read against by id: the medicine line and the monograph rule, the facts
     of a direction in his blood pressure, the event of a visit or a discharge. A watched note
     still worth checking in on is picked newest first — `created_at`, tied by `seq`
@@ -110,6 +114,7 @@ class FeelingNote(RenderedFromState, ProfileScoped, Base):
     answer: Mapped[Answer] = mapped_column(enum_column(Answer, "feeling_answer"))
     language: Mapped[str] = mapped_column(String(16))
     headline: Mapped[str] = mapped_column(String(LINE_LENGTH))
+    said: Mapped[str] = mapped_column(String(LINE_LENGTH))
     lines: Mapped[list[str]] = mapped_column(JSON)
     then: Mapped[str] = mapped_column(String(LINE_LENGTH))
     voice: Mapped[list[str]] = mapped_column(JSON)

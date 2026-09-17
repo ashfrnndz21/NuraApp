@@ -6,14 +6,9 @@ raises `NoEvidence`. Every id it names is on this profile, and a candidate is sh
 key that may read every one of them — the one-door rule ADR 0004 already holds `Pattern` and
 `FeelingNote` to (`readable_by`).
 
-RE-01 (`app/delivery/feed/…`, PR #233) has not merged to `main` as this story starts — see the
-module doc of `app.delivery.recommend.broker` for why this file exists here rather than being
-imported from that PR. It is the same contract, vendored verbatim so RE-06 is not blocked on a
-62-file PR whose other changes (audit, consent, migrations) are outside this story's scope.
-
 This module is the types only: the broker that turns State, series and patterns into
 candidates (`app.delivery.recommend.broker`, RE-06), the rule catalogue (`rules.py`) and the
-`Ranker` port (`rank.py`) are the rest of this story.
+`Ranker` port (`rank.py`) are later stories. Nothing here reads the database or writes a row.
 """
 
 from __future__ import annotations
@@ -65,7 +60,7 @@ class SafetyClass(StrEnum):
 
 class Audience(StrEnum):
     """Who a candidate's output may reach. The broker sets this; nothing downstream widens
-    it (§3.2)."""
+    it (`tests/test_recommend_audience.py`, §3.2)."""
 
     PATIENT = "patient"
     CAREGIVER = "caregiver"
@@ -78,7 +73,8 @@ class Evidence:
 
     `kind` names what the id is: fact, event, tap, pattern, appointment, line, asked_topic or
     engagement (§2.4) — a string, not an enum, because the set of things that can be evidence
-    grows with every story that adds a new input and this module does not own that list.
+    grows with every story that adds a new input (readings today, lifestyle logs and asked
+    topics later) and this module does not own that list.
     """
 
     kind: str
@@ -97,13 +93,16 @@ class Candidate:
 
     `because` is never empty — `NoEvidence` at construction, not a filter later. `private_to`
     is set only when a candidate rests on his own private curiosity (search history, §3.5):
-    `readable_by` then refuses every key but his own, whatever her scopes.
+    `readable_by` then refuses every key but his own, whatever her scopes, the same rule
+    `FeedItem.private_to` holds the card it becomes to (RE-01, `app.delivery.feed.rank`).
     """
 
     rule_id: str
     output: OutputKind
     topic: str
-    """A topic code from the catalogue (RE-04, `app.delivery.recommend.topics`)."""
+    """A topic code from the catalogue (RE-04, `app.delivery.recommend.topics.TopicCode`,
+    not yet built): a plain string here so this module does not depend on a story that runs
+    in parallel with it (docs/recommendation-engine.md §6, Wave 0)."""
     because: tuple[Evidence, ...]
     safety: SafetyClass
     audience: frozenset[Audience]
@@ -127,5 +126,6 @@ class Candidate:
 def readable_by(evidence: Sequence[Evidence], context: KeyContext) -> bool:
     """Whether a key holds every scope a group of evidence rests on — the one-door rule
     (ADR 0004 decision 10) that already holds `Pattern` and `FeelingNote` to this, named as
-    its own function so a future multi-scope evidence check reads the same way everywhere."""
+    its own function so a future multi-scope evidence check (a candidate, a pattern, a note)
+    reads the same way everywhere."""
     return all(item.readable_by(context) for item in evidence)

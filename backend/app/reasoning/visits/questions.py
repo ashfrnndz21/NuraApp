@@ -24,7 +24,7 @@ from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read
-from app.audit.models import Action
+from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import QuestionDraft
@@ -34,6 +34,7 @@ from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import Appointment, AppointmentStatus, Provider
+from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
 from app.reasoning.visits.guard import may_change_visits, may_render_brief
 from app.reasoning.visits.memos import current_memos
@@ -60,16 +61,27 @@ from app.safety.red_flags import Flag, FlagKind
 from app.state.service import StateView, current_state, render_from_state
 
 QUESTION = Question.__tablename__
+NOTE = FeelingNote.__tablename__
 
 CARD_SIZE = 3
 """One card for him: the first three questions by priority, one screen."""
 
+FEELING_QUESTION_CAP = 2
+"""At most this many feeling notes become questions in one pass (PR #233 review, C): every one
+becomes a `PRIORITY_FEELING` question, ahead of a medicine gap, a record gap or a memo — with
+no cap, a quiet week of many small taps could push every one of those off `patient_card`'s
+first three. The rest are not lost: they still show, in full, beside the symptom log on the
+brief (`feeling_note_lines`) — capped only here, where a slot is scarcer."""
+
 PRIORITY_RED_FLAG = 0
 PRIORITY_MEDICINE_CHANGE = 1
-PRIORITY_PERSON = 2
-PRIORITY_MEDICINE_GAP = 3
-PRIORITY_RECORD_GAP = 4
-PRIORITY_MEMO = 5
+PRIORITY_FEELING = 2
+"""A cloud tap read against the record: his own words about how he feels, next to a medicine
+change and ahead of a gap the record itself raised (RE-02)."""
+PRIORITY_PERSON = 3
+PRIORITY_MEDICINE_GAP = 4
+PRIORITY_RECORD_GAP = 5
+PRIORITY_MEMO = 6
 
 GAP_PRIORITY: Mapping[GapKind, int] = {
     GapKind.INTERACTION_FLAGGED: PRIORITY_MEDICINE_GAP,
@@ -125,7 +137,13 @@ class Visit:
 
 @dataclass(frozen=True, slots=True)
 class Proposed:
-    """A question the loop proposes: which template, with what, from where, how urgent."""
+    """A question the loop proposes: which template, with what, from where, how urgent.
+
+    `text`, when set, is the line itself, already rendered and verified elsewhere (a
+    `FeelingNote`'s own words, RE-02): it is written as-is, never re-templated through
+    `key`/`slots`. Every other source still renders from `key` and `slots` through this
+    module's own templates.
+    """
 
     key: str
     slots: dict[str, Any]
@@ -133,6 +151,7 @@ class Proposed:
     source_kind: str
     source_ids: tuple[str, ...]
     priority: int
+    text: str | None = None
 
     def same_as(self, question: Question) -> bool:
         return question.key == self.key and _slots_json(question.slots) == _slots_json(self.slots)
@@ -253,6 +272,63 @@ def question_from_memo(memo: Memo) -> Proposed:
     )
 
 
+def question_from_feeling(note: FeelingNote) -> Proposed:
+    """A cloud tap read against the record becomes a question for this visit, in his own
+    words (RE-02): the note's own first line, already rendered and verified by the feelings
+    verifier (`app.reasoning.feelings.inference.compose_note`) — never re-templated here, so
+    the words he was shown are the words that reach the doctor. `key`/`slots` name the note,
+    not a template, so a question already written for this note is recognised and not
+    duplicated the next time the visit's questions are refreshed.
+
+    Reads `note.said` (PR #233 review, 3a): the line to ask is named, not positional —
+    `note.lines[0]` happens to hold the same value today only because `compose_note` builds it
+    first, and leaning on that ordering here, unstated, is how a medicine-naming sentence
+    could someday reach a `Question` without its `DO_NOT_STOP` pair (#157)."""
+    line = note.said or note.headline
+    if len(line) > LINE_LENGTH:
+        # The feelings verifier bounds a note's own line to its own budget (200), wider than a
+        # question's (120): never write a row a column would silently cut.
+        raise NotAQuestion(f"a question is one line of at most {LINE_LENGTH} characters")
+    return Proposed(
+        "feeling_note",
+        {"note_id": str(note.id)},
+        QuestionSource.FEELING,
+        "feeling",
+        (str(note.id), str(note.tap_id)),
+        PRIORITY_FEELING,
+        text=line,
+    )
+
+
+async def feeling_notes_for(
+    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+) -> Sequence[FeelingNote]:
+    """Every note kept for this visit (RE-02): a cloud tap read against the record, on this
+    appointment, that this key may read in full — the record's own scope, and any other scope
+    its reason rests on (ADR 0004). A key without `Scope.RECORDS` sees none: the notes are the
+    record's, the way the symptom log is (`app.safety.symptom_log`)."""
+    # A local import: `feelings.service` reaches, through the delivery engine and the API's
+    # own deps, back to this module (`summary.py` imports from here too), so importing it at
+    # module level would be a cycle — the same shape as `build_brief`'s own late import of
+    # `symptom_log.symptoms_since`.
+    from app.reasoning.feelings.service import note_scopes
+
+    if not context.allows(Scope.RECORDS):
+        return ()
+    found = await audited_read(
+        session,
+        FeelingNote,
+        context,
+        Scope.RECORDS,
+        where=(
+            FeelingNote.appointment_id == appointment_id,
+            FeelingNote.outcome == NoteOutcome.FOR_THE_DOCTOR,
+        ),
+        order_by=(FeelingNote.created_at.asc(),),
+    )
+    return [note for note in found if note_scopes(note) <= context.scopes]
+
+
 async def _previous_visit_at(
     session: AsyncSession, *, context: KeyContext, visit: Visit
 ) -> datetime | None:
@@ -308,11 +384,37 @@ async def propose_questions(
         session, context=context, registry=visit.registry, appointment_id=visit.appointment.id
     )
     memos = await current_memos(session, context=context)
+    notes = await feeling_notes_for(
+        session, context=context, appointment_id=visit.appointment.id
+    )
+    # Newest first, then capped (C): a quiet week of many small taps never crowds every gap
+    # and memo off the card, and the ones cut are not lost — the brief still lists all of them
+    # beside the symptom log (`feeling_note_lines`). `seq` (#192/#218), not `created_at`, so a
+    # tie under the frozen clock still picks one note over another the same way every time.
+    newest_first = sorted(notes, key=lambda n: n.seq, reverse=True)[:FEELING_QUESTION_CAP]
     proposed: list[Proposed] = []
     for flag in sorted(flags, key=lambda f: (as_utc(f.raised_at), str(f.id))):
         one = question_from_flag(flag, visit)
         if one is not None:
             proposed.append(one)
+    for note in newest_first:
+        try:
+            proposed.append(question_from_feeling(note))
+        except NotAQuestion as refusal:
+            # A note over the question's own budget (A, PR #233 review): skipped, not raised —
+            # raising here used to take down every question and the whole brief with it, for
+            # every key, for good. The skip has provenance on the trail rather than silently
+            # vanishing.
+            await record(
+                session,
+                context=context,
+                action=Action.READ,
+                scope=Scope.RECORDS,
+                target=NOTE,
+                target_id=note.id,
+                outcome=Outcome.REFUSED,
+                refused_because=str(refusal),
+            )
     proposed.extend(question_from_gap(gap, visit) for gap in gaps)
     proposed.extend(
         question_from_memo(memo)
@@ -359,6 +461,38 @@ async def current_questions(
     return _current(await _rows(session, context=context, appointment_id=appointment_id))
 
 
+async def _may_supersede_feeling(
+    session: AsyncSession, *, context: KeyContext, question: Question
+) -> bool:
+    """Whether this key may still read the feeling note a `QuestionSource.FEELING` question
+    came from, in full (PR #233 review, B).
+
+    `_write` writes the row under the record's own scope alone (`Scope.RECORDS`), narrower
+    than `feeling_notes_for`'s own read check (`note_scopes`, ADR 0004: a reason a note cites
+    rests under its own scope too). A key holding RECORDS and VISITS but not, say, MEDICINES
+    therefore still sees a `new_medicine` note's question row here — `written_scope` is
+    satisfied — while `feeling_notes_for` already withholds the note itself from it, so the
+    same key can never propose that question again. Without this check `questions_for` reads
+    that as the source having gone and marks it superseded: his words taken down by a key that
+    was never allowed to read them.
+    """
+    from app.reasoning.feelings.service import note_scopes
+
+    if not question.source_ids:
+        return True
+    found = await audited_read(
+        session,
+        FeelingNote,
+        context,
+        Scope.RECORDS,
+        where=(FeelingNote.id == uuid.UUID(question.source_ids[0]),),
+    )
+    if not found:
+        # The note itself is gone (or was never on this profile): nothing left to protect.
+        return True
+    return note_scopes(found[0]) <= context.scopes
+
+
 @audited(Action.WRITE, Scope.VISITS, QUESTION)
 async def questions_for(
     session: AsyncSession,
@@ -388,24 +522,31 @@ async def questions_for(
 
     generated = [q for q in current if q.source is not QuestionSource.PERSON]
     for question in generated:
-        if not any(one.same_as(question) for one in proposed):
-            question.superseded_at = moment
-            await session.flush()
-            await record(
-                session,
-                context=context,
-                action=Action.WRITE,
-                scope=Scope.VISITS,
-                target=QUESTION,
-                target_id=question.id,
-                rows=1,
-            )
+        if any(one.same_as(question) for one in proposed):
+            continue
+        if question.source is QuestionSource.FEELING and not await _may_supersede_feeling(
+            session, context=context, question=question
+        ):
+            # A key that cannot read the note in full cannot propose it again either (B,
+            # PR #233 review) — so it must not take the words down as if it could.
+            continue
+        question.superseded_at = moment
+        await session.flush()
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=question.written_scope,
+            target=QUESTION,
+            target_id=question.id,
+            rows=1,
+        )
     for one in proposed:
         if (one.key, _slots_json(one.slots)) in removed_marks:
             continue
         if any(one.same_as(question) for question in generated):
             continue
-        await _write(session, context=context, visit=visit, state=state, proposed=one)
+        await _write(session, context=context, visit=visit, state=state, proposed=one, text=one.text)
     return _current(await _rows(session, context=context, appointment_id=appointment_id))
 
 
@@ -429,11 +570,19 @@ async def _write(
         if proposed.source_kind == GapKind.INTERACTION_FLAGGED.value
         else Surface.QUESTIONS
     )
+    # Every question is written under the visits' own scope but one: a question from a
+    # feeling note rests on the record (RE-02, ADR 0004 decision 10), so it is written under
+    # `Scope.RECORDS` — the row's `written_scope` (`RowScoped`, #120) — and `scoped_select`
+    # then narrows every read of it, `current_questions`/`patient_card` included, to a key
+    # that holds the record. Writing it here always succeeds: `feeling_notes_for` (the only
+    # source of a `QuestionSource.FEELING` proposal) already refuses to read the note at all
+    # for a context without `Scope.RECORDS`, so this write is never reached without it.
+    written_under = Scope.RECORDS if proposed.source is QuestionSource.FEELING else Scope.VISITS
     return await render_from_state(
         session,
         Question,
         context,
-        Scope.VISITS,
+        written_under,
         state=state,
         surface=surface,
         boundary=boundary_line(surface, visit.language, doctor=visit.doctor),
@@ -466,6 +615,17 @@ async def _current_question(
     rows = await _rows(session, context=context, appointment_id=appointment_id)
     for question in _current(rows):
         if question.id == question_id:
+            if question.source is QuestionSource.FEELING and not await _may_supersede_feeling(
+                session, context=context, question=question
+            ):
+                # Same guard as `questions_for`'s auto-supersede loop (B, PR #233 review),
+                # but here it protects every change path — edit, remove, or draft — not just
+                # the refresh. `change_questions` and `question_draft_for` both resolve the
+                # question through this function, so a key that holds `written_scope`
+                # (RECORDS) but not every scope the note itself rests on cannot take his
+                # words down: it gets the same not-found refusal a genuinely missing id
+                # would, so the refusal does not itself reveal the row exists.
+                break
             return question
     raise NoSuchQuestion(f"no current question {question_id} on appointment {appointment_id}")
 
@@ -557,7 +717,7 @@ async def change_questions(
             session,
             context=context,
             action=Action.WRITE,
-            scope=Scope.VISITS,
+            scope=old.written_scope,
             target=QUESTION,
             target_id=old.id,
             rows=1,
@@ -595,9 +755,11 @@ __all__ = [
     "Visit",
     "change_questions",
     "current_questions",
+    "feeling_notes_for",
     "patient_card",
     "propose_questions",
     "question_draft_for",
+    "question_from_feeling",
     "questions_for",
     "render",
     "require_visit",

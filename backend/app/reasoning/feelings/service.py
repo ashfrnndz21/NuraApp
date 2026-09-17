@@ -388,6 +388,7 @@ async def _render_note(
         answer=answer,
         language=composed.language,
         headline=composed.headline,
+        said=composed.said,
         lines=list(composed.lines),
         then=composed.then,
         voice=list(composed.voice),
