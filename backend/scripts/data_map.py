@@ -1037,6 +1037,41 @@ CLASSES: dict[str, str] = {
     "review_item.decided_by": OPERATIONAL,
     "review_item.created_at": OPERATIONAL,
     "review_item.decided_at": OPERATIONAL,
+    # The fuller insurance record (E13-03), beside the one field `insurer` already keeps for
+    # the emergency card: a policy's insurer, reference and who and what it covers all point
+    # at him or say something about his cover, so all are identifiers; the type, the dates
+    # and the status describe the policy, not a person directly, but sit beside an identifier
+    # closely enough to be read the same way; who typed it is an identifier, the yes a
+    # consent record, when operational.
+    "policy.id": IDENTIFIER,
+    "policy.insurer_name": IDENTIFIER,
+    "policy.policy_reference": IDENTIFIER,
+    "policy.policy_type": IDENTIFIER,
+    "policy.covered": IDENTIFIER,
+    "policy.covers": IDENTIFIER,
+    "policy.start_date": IDENTIFIER,
+    "policy.renewal_date": IDENTIFIER,
+    "policy.premium_due_date": IDENTIFIER,
+    "policy.status": IDENTIFIER,
+    "policy.guarantee_letter": IDENTIFIER,
+    "policy.supersedes_id": IDENTIFIER,
+    "policy.superseded_at": OPERATIONAL,
+    "policy.set_by_person_id": IDENTIFIER,
+    "policy.confirmation_id": CONSENT,
+    "policy.set_at": OPERATIONAL,
+    # A claim names a policy and a visit, both identifiers by the same rule, and carries the
+    # insurer's own claim number on the same terms as a policy reference.
+    "insurance_claim.id": IDENTIFIER,
+    "insurance_claim.policy_id": IDENTIFIER,
+    "insurance_claim.appointment_id": IDENTIFIER,
+    "insurance_claim.claim_reference": IDENTIFIER,
+    "insurance_claim.status": IDENTIFIER,
+    "insurance_claim.filed_by_person_id": IDENTIFIER,
+    "insurance_claim.confirmation_id": CONSENT,
+    "insurance_claim.filed_at": OPERATIONAL,
+    "insurance_claim.status_changed_by_person_id": IDENTIFIER,
+    "insurance_claim.status_changed_confirmation_id": CONSENT,
+    "insurance_claim.status_changed_at": OPERATIONAL,
 }
 
 

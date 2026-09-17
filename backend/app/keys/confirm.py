@@ -39,10 +39,13 @@ from app.drafts import (
     Draft,
     DriveDraft,
     FactDraft,
+    InsuranceClaimDraft,
+    InsuranceClaimStatusDraft,
     InsurerDraft,
     KeyChangeDraft,
     OnlyMeDraft,
     OrderDraft,
+    PolicyDraft,
     ProposalDraft,
     PushDraft,
     ReviewDraft,
@@ -95,6 +98,10 @@ def scope_of(draft: Draft) -> Scope:
     if isinstance(draft, InsurerDraft):
         # The insurer is on the emergency card, the part every role holds (E13-01).
         return Scope.EMERGENCY
+    if isinstance(draft, PolicyDraft | InsuranceClaimDraft | InsuranceClaimStatusDraft):
+        # A policy and a claim are money: the owner's decision (§ app.insurance.policy) is
+        # that nobody but a chief is preset to this door.
+        return Scope.MONEY
     if isinstance(draft, ProposalDraft):
         # A calendar proposal becomes a visit on the spine (E18-02).
         return Scope.VISITS

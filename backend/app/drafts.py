@@ -44,6 +44,9 @@ class ConfirmSubject(StrEnum):
     COUNT_CORRECTION = "count_correction"
     CLOSE_ACCOUNT = "close_account"
     ORDER = "order"
+    POLICY = "policy"
+    INSURANCE_CLAIM = "insurance_claim"
+    INSURANCE_CLAIM_STATUS = "insurance_claim_status"
 
 
 @dataclass(frozen=True, slots=True)
@@ -525,6 +528,97 @@ class InsurerDraft:
 
 
 @dataclass(frozen=True, slots=True)
+class PolicyDraft:
+    """A policy about to be written (his insurance, fuller than the card's one field):
+    everything a person or his chief typed, or a correction of a policy already held
+    (`supersedes_id`). The yes binds to every field at once, so a date changed after the
+    draft was shown is a different yes (`app.insurance.policy`)."""
+
+    insurer_name: str
+    policy_reference: str | None
+    policy_type: str
+    covered: str | None
+    covers: str | None
+    start_date: date | None
+    renewal_date: date | None
+    premium_due_date: date | None
+    status: str
+    guarantee_letter: bool
+    supersedes_id: uuid.UUID | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.POLICY
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.supersedes_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "insurer_name": self.insurer_name,
+            "policy_reference": self.policy_reference,
+            "policy_type": self.policy_type,
+            "covered": self.covered,
+            "covers": self.covers,
+            "start_date": self.start_date,
+            "renewal_date": self.renewal_date,
+            "premium_due_date": self.premium_due_date,
+            "status": self.status,
+            "guarantee_letter": self.guarantee_letter,
+            "supersedes_id": self.supersedes_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class InsuranceClaimDraft:
+    """A claim about to be filed against one policy, for one visit (`app.insurance.claim`):
+    which policy, which visit, and the insurer's own claim number where there is one
+    already. The papers behind it are the visit's own attachments
+    (`app.memory.attach.attachments`), not part of this draft: nothing here duplicates the
+    one upload path."""
+
+    policy_id: uuid.UUID
+    appointment_id: uuid.UUID
+    claim_reference: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.INSURANCE_CLAIM
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "policy_id": self.policy_id,
+            "appointment_id": self.appointment_id,
+            "claim_reference": self.claim_reference,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class InsuranceClaimStatusDraft:
+    """A claim about to move one step: which claim, to what (`app.insurance.claim`), the same
+    shape as a visit's own `StatusChange`."""
+
+    claim_id: uuid.UUID
+    status: str
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.INSURANCE_CLAIM_STATUS
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return self.claim_id
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"claim_id": self.claim_id, "status": self.status}
+
+
+@dataclass(frozen=True, slots=True)
 class CountCorrectionDraft:
     """More of one medicine found at home, about to be added to its count (E04-05, "I have
     more at home"): which line, and how many. The yes binds to the number, so a yes for 20
@@ -593,6 +687,9 @@ Draft = (
     | CountCorrectionDraft
     | CloseDraft
     | OrderDraft
+    | PolicyDraft
+    | InsuranceClaimDraft
+    | InsuranceClaimStatusDraft
 )
 
 

@@ -37,6 +37,8 @@ from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.connectors.models import AppointmentProposal, Connector
+from app.insurance.claim import InsuranceClaim
+from app.insurance.policy import Policy
 from app.ingestion.models import (
     ConsultRecording,
     ConsultSegment,
@@ -159,6 +161,8 @@ TABLES: tuple[Table, ...] = (
     LastLooked.__table__,
     ConsultRecording.__table__,
     ConsultSegment.__table__,
+    Policy.__table__,
+    InsuranceClaim.__table__,
 )
 
 
@@ -238,7 +242,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0039_feeling_question_marker"]
+    assert heads == ["0040_insurance_policies_and_claims"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(
@@ -311,6 +315,8 @@ async def test_the_migrations_build_the_tables_the_models_declare(
             ConsultRecording,
             ConsultSegment,
             Task,
+            Policy,
+            InsuranceClaim,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

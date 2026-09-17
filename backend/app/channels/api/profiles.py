@@ -54,6 +54,8 @@ from app.channels.api.schemas import (
     ConsentOut,
     CountCorrectionConfirmIn,
     DriveConfirmIn,
+    InsuranceClaimConfirmIn,
+    InsuranceClaimStatusConfirmIn,
     InsurerConfirmIn,
     KeyChangeConfirmIn,
     KeyGrant,
@@ -63,6 +65,7 @@ from app.channels.api.schemas import (
     NoteOut,
     OnlyMeConfirmIn,
     OrderConfirmIn,
+    PolicyConfirmIn,
     ProfileCreate,
     ProfileForSomeone,
     ProfileOut,
@@ -102,7 +105,14 @@ from app.consent.service import (
 from app.consent.texts import named_words
 from app.consent.withdrawal import stop_lines, stopped_lines
 from app.db import as_utc, utcnow
-from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
+from app.drafts import (
+    AppointmentDraft,
+    AttachDraft,
+    FactDraft,
+    InsuranceClaimDraft,
+    InsuranceClaimStatusDraft,
+    StatusChange,
+)
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
 from app.family.pushes import preview_push, push_draft
@@ -119,7 +129,9 @@ from app.identity.models import Person, Stewardship
 from app.identity.service import create_own_profile, invitee_by_phone
 from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
+from app.insurance.claim import may_manage_a_claim
 from app.insurance.insurer import insurer_draft, may_set_insurer
+from app.insurance.policy import may_set_a_policy, policy_draft
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
@@ -406,6 +418,35 @@ async def mint_confirmation(
         may_set_insurer(context)
         typed = insurer_draft(body.name, body.policy_reference)
         return ConfirmationOut.of(await confirm(session, context, typed))
+    if isinstance(body, PolicyConfirmIn):
+        # The fuller insurance record (E13-03): money, not the emergency card's door.
+        may_set_a_policy(context)
+        policy = policy_draft(
+            insurer_name=body.insurer_name,
+            policy_reference=body.policy_reference,
+            policy_type=body.policy_type,
+            covered=body.covered,
+            covers=body.covers,
+            start_date=body.start_date,
+            renewal_date=body.renewal_date,
+            premium_due_date=body.premium_due_date,
+            status=body.status,
+            guarantee_letter=body.guarantee_letter,
+            supersedes_id=body.supersedes_id,
+        )
+        return ConfirmationOut.of(await confirm(session, context, policy))
+    if isinstance(body, InsuranceClaimConfirmIn):
+        may_manage_a_claim(context)
+        filed = InsuranceClaimDraft(
+            policy_id=body.policy_id,
+            appointment_id=body.appointment_id,
+            claim_reference=body.claim_reference,
+        )
+        return ConfirmationOut.of(await confirm(session, context, filed))
+    if isinstance(body, InsuranceClaimStatusConfirmIn):
+        may_manage_a_claim(context)
+        moved = InsuranceClaimStatusDraft(claim_id=body.claim_id, status=body.status)
+        return ConfirmationOut.of(await confirm(session, context, moved))
     review = await review_draft_for(
         session,
         context=context,

@@ -78,6 +78,18 @@ from app.ingestion.chunks import (
     UploadClosed,
 )
 from app.ingestion.connectors.calendar import CalendarTooLarge
+from app.insurance.claim import (
+    NoSuchClaim,
+    NotAClaim,
+    NotThatClaimStatusChange,
+    NotTheirsToManageAClaim,
+)
+from app.insurance.policy import (
+    NoSuchPolicy,
+    NotAPolicy,
+    NotAPolicyReference as NotAPolicyReferenceInAPolicy,
+    NotTheirsToSetAPolicy,
+)
 from app.ingestion.connectors.service import (
     AlreadyDecided,
     NoSuchConnector,
@@ -273,6 +285,16 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (EpisodeAlreadyOpen, 409),
     (EpisodeAlreadyClosed, 409),
     (NotThatStatusChange, 409),
+    # The fuller insurance record (E13-03): who may set a policy or file and move a claim,
+    # what a policy or a claim reference may not be, and what is not on the profile.
+    (NotTheirsToSetAPolicy, 403),
+    (NotAPolicy, 400),
+    (NotAPolicyReferenceInAPolicy, 400),
+    (NoSuchPolicy, 404),
+    (NotTheirsToManageAClaim, 403),
+    (NotAClaim, 400),
+    (NoSuchClaim, 404),
+    (NotThatClaimStatusChange, 409),
     (PhotoTooLarge, 413),
     # A visit's recording (E02-05): too big or too long to be one visit; no recording of that
     # artefact on this profile.
