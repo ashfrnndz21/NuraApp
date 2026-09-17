@@ -22,6 +22,24 @@ dev: export NURA_SPEAKER_FIXTURES ?= tests/fixtures/speakers
 dev: export NURA_FEED_FIXTURES ?= tests/fixtures/feed
 # The logging code sender prints login codes to the terminal. Local runs only; see settings.py.
 dev: export NURA_DEV_CODE_SENDER = 1
+# Which reader/searcher/compressor/narrator/asker this laptop runs on: `fixture` (the safe
+# default) unless your own shell already exported one of these as `claude` — this only passes
+# it through, it does not turn anything on by itself. `claude` builds here now that this is a
+# declared dev run (`NURA_DEV_CODE_SENDER=1` above), by `app/llm/residency.py`'s shared gate
+# (ADR 0017's addendum): your own documents, your own key, your own choice — never this
+# repo's public deployment, which stays on `NURA_DEMO_MODE=1` and the fixtures. See
+# docs/run-real-on-your-laptop.md. NURA_ASKER has no adapter yet (a companion PR adds one);
+# passed through anyway so unset still means the default once it lands.
+dev: export NURA_EXTRACTOR ?= fixture
+dev: export NURA_SEARCHER ?= fixture
+dev: export NURA_COMPRESSOR ?= fixture
+dev: export NURA_NARRATOR ?= fixture
+dev: export NURA_ASKER ?= fixture
+# The one key every Claude-backed adapter calls the Anthropic API with, from your own shell's
+# environment — never written to this repo, never given a default here. Unused while every
+# switch above stays on `fixture`.
+dev: export NURA_ANTHROPIC_API_KEY ?=
+dev: export ANTHROPIC_API_KEY ?=
 # A dev run shows the red-flag tiers (ADR 0010); a deployment sets it only once a clinician signs them.
 dev: export NURA_RED_FLAG_TIERS ?= 1
 # NURA_FROZEN_CLOCK=2026-09-14T10:00:00+08:00 stands the dev run's clock still (end-to-end runs:
