@@ -342,7 +342,7 @@ export const en = {
     // @patient headline
     comingUpTitle: "Coming up",
     // @patient phrase
-    addReading: "Write down a reading",
+    addReading: "Write down a blood pressure",
   },
   signIn: {
     // @patient headline
@@ -881,11 +881,11 @@ export const en = {
     // @patient
     covers: "It covers {value}.",
     // @patient
-    renews: "Renews on {date}.",
+    renews: "It renews on {date}.",
     // @patient
     premiumDue: "The next payment is due on {date}.",
     // @patient
-    reference: "Policy number {reference}.",
+    reference: "The policy number is {reference}.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

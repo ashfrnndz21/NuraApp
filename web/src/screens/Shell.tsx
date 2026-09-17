@@ -116,6 +116,15 @@ function BoardTopBar({ spec }: { spec: TopBarSpec }): JSX.Element {
             </button>
           )}
         </span>
+        {/* Whose papers are open (product-reset.md §6): a real, load-bearing control the
+            board's own single-profile mock never had to draw — kept here, as it was in the
+            old global header, even though the board's Home topbar itself has no room for it.
+            "Switch profile" on the Profile tab (`ProfileNav`) is the fuller, second way in. */}
+        {papers && (
+          <span class="head-whose">
+            <ProfileSwitcher />
+          </span>
+        )}
       </header>
     );
   }

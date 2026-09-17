@@ -218,7 +218,7 @@ export const zh = {
   },
   activity: {
     // @patient headline
-    title: "今天要做的事",
+    title: "可以做的事",
     // @patient headline
     weekTitle: "本周",
     // @patient phrase
@@ -232,7 +232,7 @@ export const zh = {
     // @patient phrase
     waterSkip: "今天没有喝水",
     // @patient
-    saved: "Nura 已经记下了。",
+    saved: "Nura 记下来了。",
     // @patient headline
     mealsTitle: "您今天的餐点",
     // @patient headline
@@ -242,9 +242,9 @@ export const zh = {
     // @patient phrase
     skipMeal: "没有吃这个",
     // @patient
-    skipped: "您没有吃这个。",
+    skipped: "您没有吃这一餐。",
     // @patient
-    skippedOther: "{patient}没有吃这个。",
+    skippedOther: "{patient}没有吃这一餐。",
   },
   places: {
     // @patient headline
@@ -342,7 +342,7 @@ export const zh = {
     // @patient headline
     comingUpTitle: "接下来",
     // @patient phrase
-    addReading: "写下新的读数",
+    addReading: "写下血压读数",
   },
   signIn: {
     // @patient headline

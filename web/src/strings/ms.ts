@@ -342,7 +342,7 @@ export const ms = {
     // @patient headline
     comingUpTitle: "Akan datang",
     // @patient phrase
-    addReading: "Tulis bacaan baharu",
+    addReading: "Tulis tekanan darah",
   },
   signIn: {
     // @patient headline
@@ -857,9 +857,9 @@ export const ms = {
     // @patient headline
     titleOther: "Insurans {patient}",
     // @patient
-    none: "Nura tiada rekod insurans untuk anda lagi.",
+    none: "Nura tiada surat insurans untuk anda lagi.",
     // @patient
-    noneOther: "Nura tiada rekod insurans untuk {patient} lagi.",
+    noneOther: "Nura tiada surat insurans untuk {patient} lagi.",
     type: {
       // @patient phrase
       hospital: "Perlindungan hospital",
@@ -881,11 +881,11 @@ export const ms = {
     // @patient
     covers: "Ia melindungi {value}.",
     // @patient
-    renews: "Diperbaharui pada {date}.",
+    renews: "Ia diperbaharui pada {date}.",
     // @patient
     premiumDue: "Bayaran seterusnya perlu dibayar pada {date}.",
     // @patient
-    reference: "Nombor polisi {reference}.",
+    reference: "Nombor polisinya {reference}.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

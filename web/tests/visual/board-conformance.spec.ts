@@ -60,6 +60,10 @@ for (const who of ["pa", "mei"] as const) {
     await shot(page, `connect-${who}`);
 
     await tab(page, "tab-services");
+    // Visits and Help at home read their own way, after the shell's own "busy" clears
+    // (`VisitList`, `ServiceCards`): worth a wait of its own, so the shot is never taken
+    // before the home-care grid or the visit card has drawn.
+    await page.getByTestId("home-care-grid").waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
     await shot(page, `services-${who}`);
 
     await tab(page, "tab-profile");
