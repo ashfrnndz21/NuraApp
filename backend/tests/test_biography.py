@@ -300,7 +300,7 @@ async def test_refusals_are_named_and_on_his_trail(deployment: Deployment) -> No
     kit = await register_by_phone(deployment, KIT, "Kit")
     profile_id = await own_profile(deployment, pa, language="en")
     his, kits = pa["token"], kit["token"]
-    await let_in(deployment, pa, profile_id, KIT, ["records", "medicines", "visits"], "son")
+    await let_in(deployment, pa, profile_id, KIT, ["records", "medicines", "visits"], "son", role="caregiver")
     await call(
         deployment,
         "POST",

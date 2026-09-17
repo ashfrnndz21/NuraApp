@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { API, fixClock, nothingDrawnOverLines, openMe, signInThroughTheApp, todayReady } from "./helpers";
+import { API, fixClock, nothingDrawnOverLines, openMe, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** D1, the design pass: his Today and her Home as designed, on the patient's phone and a small
@@ -9,9 +9,6 @@ import { seedHome } from "./homeSeed";
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
 });
-
-/** One tab set, the same for everyone (docs/product-reset.md §6, the owner's decision). */
-const TAB_SET = ["Today", "Medicines", "Papers", "Visits", "Family"];
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
 
@@ -72,7 +69,7 @@ for (const [label, viewport] of [
 
       // One tab set (D1, the reset), his ask bar, the family's note, the visit, and the coral
       // pill under the hero.
-      await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
+      await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
       await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask Nura a question");
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
@@ -93,7 +90,7 @@ for (const [label, viewport] of [
       for (const id of ["lang-en", "density-patient", "switch-profile", "me-emergency", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
       // Family is a tab for everyone now (D1, the reset), so the sheet no longer carries it.
       await expect(sheet.getByTestId("me-family")).toHaveCount(0);
-      await expect(page.getByTestId("tab-family")).toBeVisible();
+      await expect(page.getByTestId("tab-connect")).toBeVisible();
       // The chosen language and look are outlined, not filled: at most one Plum button in the sheet.
       await expect(sheet.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
       expect(await sheet.locator("button.plum").count()).toBeLessThanOrEqual(1);
@@ -129,23 +126,24 @@ for (const [label, viewport] of [
       await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
       expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
 
-      // "What changed" is not on her Home: `GET /changes` is itself the looking — it writes the
-      // look on his trail and the next read counts from it — so it lives on the Record's own
-      // screen, where looking is what she came to do.
-      await expect(page.getByTestId("what-changed")).toHaveCount(0);
+      // "What changed" is back on her Home (#207): `GET /changes?peek=true` answers the same
+      // words without spending his look, so the tile draws without writing his trail — it is
+      // visible, not absent (§3).
+      await expect(page.getByTestId("what-changed")).toBeVisible();
       await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");
 
       // The same list for her: density changes the look, never the tabs.
-      await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
+      await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
       await expect(page.locator(".shell-ask").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask about Pa");
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label" })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
       // "Ask about Pa" stays on her other screens, and asks.
-      await page.getByTestId("tab-medicines").click();
+      await page.getByTestId("tab-health").click();
+      await page.getByTestId("record-medicines").click();
       await expect(page.getByTestId("medicine-line").first()).toBeVisible();
       await page.locator(".shell-ask").getByTestId("ask-input").fill("When is his next visit?");
       await page.locator(".shell-ask").getByTestId("ask-input").press("Enter");

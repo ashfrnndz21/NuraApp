@@ -73,6 +73,7 @@ PRIORITY: dict[CardType, int] = {
     CardType.MEMO: 65,
     CardType.REORDER: 60,
     CardType.NOTICE: 75,
+    CardType.RECALL_ACTION: 75,
     CardType.READING: 50,
     CardType.GATE: 40,
     CardType.DUTY: 40,
@@ -97,6 +98,10 @@ SURFACE_OF: dict[CardType, Surface] = {
     CardType.LOCAL: Surface.LEARNING_CARD,
     CardType.SEASONAL: Surface.LEARNING_CARD,
     CardType.FOOD: Surface.LEARNING_CARD,
+    # The one card built from a notice (#183): its words are the catalogue's own, never the
+    # notice's compressed page, but the notice is still what State surfaced that made this
+    # card exist, so it carries the same line the notice would have.
+    CardType.RECALL_ACTION: Surface.LEARNING_CARD,
 }
 """The feed's inferring surfaces (E16-01, `app.safety.boundary`). A learning card is an
 explanation chosen for him from State and compressed from an allowlisted page; a notice is
@@ -174,6 +179,15 @@ class Why:
     gap: str | None = None
     suppressed: str | None = None
     boosts: tuple[str, ...] = field(default=())
+    rule: str | None = None
+    """The recommendation rule this card came from (RE-07, `app.delivery.recommend.rules`):
+    set only for a card the broker's slate proposed, never invented by a search job of its
+    own — the broker writes no words, only this reference to the rule that found it."""
+    topic: str | None = None
+    """The catalogue topic (RE-04) this card is about, for a broker-proposed card only: the
+    same code `app.delivery.recommend.models.Candidate.topic` carried, kept here so "not for
+    me" can be read back at the topic he actually declined (`app.delivery.feed.engagement`),
+    with no new column — `why` is already a JSON field every card writes."""
 
     def as_json(self) -> dict[str, Any]:
         return {

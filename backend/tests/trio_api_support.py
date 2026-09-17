@@ -89,7 +89,7 @@ async def caregiver(
     scopes: list[str],
     role: str = "caregiver",
 ) -> None:
-    await let_in(deployment, owner, profile_id, phone, scopes, "daughter")
+    await let_in(deployment, owner, profile_id, phone, scopes, "daughter", role=role)
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": role, "scopes": scopes},

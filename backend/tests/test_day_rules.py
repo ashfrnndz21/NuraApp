@@ -299,7 +299,7 @@ async def test_the_notice_counts_only_what_her_key_opens(
         sg, region=Region.SG, display_name="Kit", phone_e164=KIT, language="en"
     )
     narrow = frozenset({Scope.FAMILY, Scope.READINGS})
-    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
+    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son", role=KeyRole.CHIEF)
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
     # Today: a feeling of his (the record) and a blood pressure Mei sent and confirmed.
     await _he_says(sg, h, clock, at(12), "tired")
@@ -340,7 +340,7 @@ async def test_the_log_shows_a_notice_only_to_its_chief_and_a_flag_hold_only_to_
         sg, region=Region.SG, display_name="Kit", phone_e164=KIT, language="en"
     )
     narrow = frozenset({Scope.FAMILY, Scope.READINGS})
-    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
+    await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son", role=KeyRole.CHIEF)
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
     kits, meis = await h.ctx(sg, kit), await h.ctx(sg, h.mei)
 

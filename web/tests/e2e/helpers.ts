@@ -12,6 +12,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEV_LOG = process.env.NURA_DEV_LOG ?? resolve(HERE, "../../../backend/.dev.log");
 const CODE_LINE = /login code for (\+[0-9]+): ([0-9]{6})/g;
 
+/** The five tabs, in the board's own order and labels (`docs/design/nura-concept-board.html`'s
+ *  `.tabbar`, and `web/src/nav.ts`'s `tabsFor`): the one list every spec must check against,
+ *  rather than each hand-typing its own — a hand-typed list is the defect that recurred on the
+ *  member list, the consent twins and the emergency card (#186, #215), and a tab set is no
+ *  different. */
+export const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"] as const;
+
+/** A key cut with only the medicines scope (`nav.ts`'s `NEEDS`): no Connect (needs `family`), no
+ *  Services (needs `visits`) — Home and Profile always show. */
+export const TAB_SET_MEDICINES_ONLY = ["Home", "Health", "Profile"] as const;
+
 /** A demo deployment (ADR 0008) takes test numbers only (+65 0…) and signs every one in with
  *  the operator's code, which it never prints. With `NURA_E2E_DEMO_CODE` set to that code the
  *  suite walks against a demo: its numbers in the test range, its code instead of the log's. */
@@ -111,8 +122,19 @@ export async function seedMedicine(
 }
 
 /** Sign in through the app's own screens: phone → code (from the log) → doors. */
+/** Past the welcome a phone shows before its first sign-in (docs/design-direction.md), to the
+ *  phone number: Get started when the welcome is there, nothing when this phone has seen it. */
+export async function pastWelcome(page: Page): Promise<void> {
+  const welcome = page.getByTestId("welcome-screen");
+  const phone = page.getByLabel("Your phone number");
+  await expect(welcome.or(phone)).toBeVisible();
+  if (await welcome.isVisible()) await page.getByTestId("welcome-start").click();
+  await expect(phone).toBeVisible();
+}
+
 export async function signInThroughTheApp(page: Page, phone: string, name: string): Promise<void> {
   await page.goto("./");
+  await pastWelcome(page);
   await page.getByLabel("Your phone number").fill(phone);
   await page.getByLabel("Your name").fill(name);
   const before = codesSoFar(phone);
@@ -293,7 +315,7 @@ export async function cutKey(
   const his = { Authorization: `Bearer ${owner.token}` };
   const letIn = await request.post(`${API}/profiles/${owner.profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, relationship: "neighbour", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, role, window: "always", relationship: "neighbour", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${owner.profileId}/keys`, { headers: his, data: { holder_phone_e164: phone, role, scopes } });
@@ -629,7 +651,7 @@ export async function seedVisitDay(
   const meiId = ((await (await request.get(`${API}/me`, { headers: hers })).json()) as { person_id: string }).person_id;
   const letIn = await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, role: "chief", window: "always", relationship: "daughter", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${profileId}/keys`, { headers: his, data: { holder_phone_e164: meiPhone, role: "chief" } });
@@ -710,7 +732,12 @@ export async function nothingDrawnOverLines(
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
       }
     }
+    // `clear()` brings each line and control to the centre of the screen in turn, which can
+    // leave the shell's own scroll region (D1: the page scrolls in its own region, not the
+    // window) sitting wherever the last one needed. Reset both, so a check run straight after
+    // this one starts from the top the way this one did.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     return problems;
   }, settings);
 }
@@ -720,9 +747,10 @@ export async function todayReady(page: Page): Promise<void> {
   await expect(page.getByTestId("today-ready")).toBeAttached();
 }
 
-/** Open the Me sheet from the header's avatar. */
+/** Open the Me sheet from the header's avatar. By testid, not its accessible name: the Profile
+ *  tab is named "Me" too now (plain words), so "Me" alone no longer picks out one button. */
 export async function openMe(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByTestId("me-sheet")).toBeVisible();
 }
 

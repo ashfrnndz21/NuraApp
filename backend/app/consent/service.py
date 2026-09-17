@@ -50,7 +50,7 @@ from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
-from app.keys.scopes import Scope
+from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.memory.models import Artifact
 from app.regions import Region
 
@@ -121,6 +121,12 @@ class WordingNotOnFile(Refusal):
     """No such words were ever shown for this purpose, at this version, in this language."""
 
 
+class RoleWindowNeedCurrentWording(Refusal):
+    """The role and the window are named only in the current wording (#185): a version
+    before it renders neither, so recording them against an older version would enforce a
+    constraint the words he actually read never stated."""
+
+
 class NotTheCurrentWording(Refusal):
     """Opening a record is agreed to in today's words, not in words that have moved on."""
 
@@ -147,12 +153,19 @@ class RecordConsent:
 @dataclass(frozen=True)
 class SharingWords:
     """Everything the words for letting one person in are rendered from: the name they use,
-    who that person is to him, and the parts. The preview and the consent both render from
-    this through `words_for`, so what he reads first and what is kept cannot differ."""
+    who that person is to him, the parts, the role and the window. The preview and the
+    consent both render from this through `words_for`, so what he reads first and what is
+    kept cannot differ. `role` and `window` name what the key cut under this agreement will
+    be cut as (#185): the words say so, so the trail can show he agreed to them, and
+    `app.keys.grants.grant_key` refuses a key that asks for anything else. Both are always
+    given — there is no way to let someone in without saying what they are to him and for
+    how long."""
 
     name: str
     relationship: str | None
     scopes: frozenset[Scope]
+    role: KeyRole
+    window: KeyWindow
 
 
 def words_for(
@@ -172,17 +185,23 @@ def words_for(
         name=about.name,
         relationship=about.relationship,
         scopes=about.scopes,
+        role=about.role,
+        window=about.window,
         language=language,
     )
 
 
 @dataclass(frozen=True, slots=True)
 class Sharing:
-    """Who is being let in, to which parts, and — only if the granter says — who they are to
-    him ("your daughter", "the clinic"). The words the patient reads are rendered from this."""
+    """Who is being let in, to which parts, as what role and for how long, and — only if the
+    granter says — who they are to him ("your daughter", "the clinic"). The words the
+    patient reads are rendered from this. `role` and `window` are required (#185): letting
+    someone in without saying what they are to him and for how long is not a thing."""
 
     holder: Person
     scopes: frozenset[Scope]
+    role: KeyRole
+    window: KeyWindow
     relationship: str | None = None
     """Who they are to him, in the language of the words, or nothing. The words decide how
     to say it (`app.consent.texts.named_words`); nothing is baked into the name."""
@@ -199,7 +218,13 @@ class Sharing:
 
     @property
     def words(self) -> SharingWords:
-        return SharingWords(name=self.name, relationship=self.relationship, scopes=self.scopes)
+        return SharingWords(
+            name=self.name,
+            relationship=self.relationship,
+            scopes=self.scopes,
+            role=self.role,
+            window=self.window,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -208,6 +233,9 @@ class ConsentCheck:
 
     Who gave it and on what basis stay in the record, which only the owner and his chief read.
     `scopes` is what a per-holder consent lets the person see, so a key is cut no wider.
+    `role` and `window` are what the words named for a `SHARE_WITH_PERSON` agreement (#185),
+    or None for a purpose that carries neither: `app.keys.grants.grant_key` refuses a key
+    that asks for a different role or a longer window than these.
     """
 
     consent_id: uuid.UUID
@@ -215,6 +243,8 @@ class ConsentCheck:
     text_version: str
     granted_at: datetime
     scopes: frozenset[Scope] | None = None
+    role: KeyRole | None = None
+    window: KeyWindow | None = None
 
 
 def check_opening_words(consent: RecordConsent, region: Region) -> None:
@@ -328,6 +358,15 @@ async def grant_consent(
             refusal = NotAgreedPerPerson(f"{purpose} is for the whole profile")
         elif sharing is not None and not sharing.name:
             refusal = HolderNeedsAName(f"{purpose} names the person, and there is no name")
+        elif sharing is not None and version != current_version(purpose):
+            # `sharing` always names a role and a window (#185); only the current wording has
+            # `{role_line}`/`{window_line}` to render them into. An older version would still
+            # take them onto the row (`grant_key` would then enforce them) without the words
+            # ever having named them — capturing a past `SHARE_WITH_PERSON` agreement at an
+            # older version is not offered once #185 shipped.
+            refusal = RoleWindowNeedCurrentWording(
+                f"{purpose} version {version} does not name a role or a window"
+            )
         elif rendered is None:
             refusal = WordingNotOnFile(f"{purpose} version {version} was never shown in {language}")
         else:
@@ -350,6 +389,8 @@ async def grant_consent(
         purpose=purpose,
         holder_person_id=sharing.holder.id if sharing is not None else None,
         scopes=sorted(scope.value for scope in sharing.scopes) if sharing is not None else None,
+        role=sharing.role if sharing is not None else None,
+        window=sharing.window if sharing is not None else None,
         text_version=version,
         language=language,
         wording_text=words,
@@ -501,6 +542,8 @@ async def require_consent(
                     if row.scopes is not None
                     else None
                 ),
+                role=row.role,
+                window=row.window,
             )
 
     refusal: NoConsent

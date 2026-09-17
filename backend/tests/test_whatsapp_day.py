@@ -335,7 +335,7 @@ class Day:
         self.profile_id = await own_profile(self.deployment, self.pa, language="en")
         his = bearer(self.pa["token"])
         self.mei = await register_by_phone(self.deployment, SCHED_MEI, "Mei", language="en")
-        await let_in(self.deployment, self.pa, self.profile_id, SCHED_MEI, EVERY_PART, "daughter")
+        await let_in(self.deployment, self.pa, self.profile_id, SCHED_MEI, EVERY_PART, "daughter", role="chief")
         await _ok(
             await self.client.post(
                 f"/profiles/{self.profile_id}/keys",
@@ -353,6 +353,7 @@ class Day:
             HELPER,
             "helper",
             holder_display_name="Siti",
+            role="helper",
         )
         await _ok(
             await self.client.post(

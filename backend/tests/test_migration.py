@@ -243,10 +243,6 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    # Pinned to the chain as it will read once PR #225 (0044) and PR #235 (0045, not yet
-    # renumbered as of this merge — see this migration's docstring) are both on main: this
-    # branch's own migration renumbered to 0046, chained onto 0044 for now. Fails locally
-    # until those two PRs land; see the note in this PR's comment.
     assert heads == ["0046_insurance_policies_claims"]
 
 

@@ -45,6 +45,8 @@ def _ask(**overrides: object) -> dict[str, object]:
         "holder_phone_e164": MEI,
         "holder_display_name": "Mei",
         "scopes": PARTS,
+        "role": "caregiver",
+        "window": "always",
         "relationship": "daughter",
         "language": "en",
     }
@@ -253,6 +255,7 @@ async def test_a_chief_key_does_not_preview_words_it_cannot_give(deployment: Dep
         EVERYTHING,
         relationship="daughter",
         holder_display_name="Mei",
+        role="chief",
     )
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
@@ -286,6 +289,7 @@ async def test_a_refused_caller_leaves_no_account_behind(deployment: Deployment)
         ["medicines"],
         relationship="daughter",
         holder_display_name="Mei",
+        role="caregiver",
     )
     carer = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
@@ -314,6 +318,7 @@ async def test_a_refused_caller_leaves_no_account_behind(deployment: Deployment)
         EVERYTHING,
         relationship="son",
         holder_display_name="Kit",
+        role="chief",
     )
     chief = await deployment.client.post(
         f"/profiles/{profile_id}/keys",

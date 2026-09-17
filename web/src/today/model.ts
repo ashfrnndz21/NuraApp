@@ -270,6 +270,14 @@ export function homeHero(
   return { word: page.word ?? null, line: homeHeroWords(page, on, s), drivers: !on.kept };
 }
 
+/** Safety check 5: whether the Hero's furniture — its wave, its "How is he feeling?" question,
+ *  its illustration — and the daily check-in card may draw. Never while a red-flag card is on
+ *  the page: a wave and a smiling illustration over a flag read as reassurance exactly the way a
+ *  State word would, so they follow the same rule as `homeHero`, on both densities. */
+export function heroFurnitureAllowed(on: { flagged: boolean }): boolean {
+  return !on.flagged;
+}
+
 /** The day of the week in full, in his language: "Thursday", never "Thu" (plain words, rule 5). */
 export function weekdayOf(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);

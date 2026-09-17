@@ -33,6 +33,14 @@ export const en = {
     timeline: "Papers",
     // @patient headline
     plan: "Plan",
+    // @patient headline
+    health: "Health",
+    // @patient headline
+    connect: "Connect",
+    // @patient headline
+    services: "Services",
+    // @patient headline
+    profile: "Profile",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,132 @@ export const en = {
     voiceSaid2: "Then say your question.",
     // @patient phrase
     close: "Close",
+    // @patient phrase
+    bell: "More for you",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "Your health, kept together.",
+    // @patient headline
+    tagline2: "Your family, close by.",
+    // @patient
+    lead: "Nura keeps your medicines and your papers in one place.",
+    // @patient headline
+    remember: "Remember",
+    // @patient line
+    rememberLine: "Nura remembers your medicines and your papers.",
+    // @patient headline
+    share: "Share",
+    // @patient line
+    shareLine: "You choose who in your family can see them.",
+    // @patient headline
+    prepare: "Prepare",
+    // @patient line
+    prepareLine: "Nura gets you ready before you see the doctor.",
+    // @patient phrase
+    start: "Get started",
+  },
+  talk: {
+    // @patient phrase
+    you: "You asked",
+    // @patient phrase
+    nura: "Nura said",
+    // @patient
+    working: "Nura is looking.",
+    // @patient
+    answered: "Nura has an answer.",
+    // @patient headline
+    lookedAt: "What Nura looked at",
+    // @patient
+    slow: "This is taking longer than usual.",
+    // @patient
+    failed: "Nura could not answer just now.",
+    // @patient phrase
+    tryAgain: "Try again",
+    // @patient phrase
+    loading: "Nura is getting your Today page ready.",
+  },
+  hub: {
+    // @patient
+    howFeeling: "How are you feeling today?",
+    // @patient
+    howFeelingOther: "How is {patient} feeling today?",
+    // @patient headline
+    checkTitle: "How you feel today",
+    // @patient headline
+    checkTitleOther: "How {patient} feels today",
+    // @patient line
+    checkLine: "Tell Nura how you feel today.",
+    // @patient phrase
+    checkLineOther: "Tell Nura how {patient} feels today",
+    // @patient phrase
+    checkIn: "Tell Nura",
+    // @patient
+    doTitle: "What would you like to do?",
+    // @patient
+    doTitleOther: "What to do for {patient}.",
+    // @patient headline
+    health: "Health",
+    // @patient line
+    healthLine: "Your blood pressure book and your papers.",
+    // @patient line
+    healthLineOther: "{patient}'s blood pressure book and papers.",
+    // @patient headline
+    medicines: "Medicines",
+    // @patient line
+    medicinesLine: "Your tablets, and when to take them.",
+    // @patient line
+    medicinesLineOther: "{patient}'s tablets, and when to take them.",
+    // @patient headline
+    connect: "Connect",
+    // @patient line
+    connectLine: "See your family and friends.",
+    // @patient line
+    connectLineOther: "See {patient}'s family and friends.",
+    // @patient headline
+    activities: "Things to do",
+    // @patient line
+    activitiesLine: "Something to do today.",
+    // @patient headline
+    care: "Help at home",
+    // @patient line
+    careLine: "Someone can come and help you at home.",
+    // @patient line
+    careLineOther: "Someone can come and help {patient} at home.",
+    // @patient headline
+    resources: "Things to read",
+    // @patient line
+    resourcesLine: "Nura explains things in plain words.",
+    // @patient headline
+    report: "Add a paper",
+    // @patient line
+    reportLine: "Take a photo of it, or choose the one your doctor sent you.",
+    // @patient line
+    reportLineOther: "Take a photo of it, or choose the one {patient}'s doctor sent.",
+    // @patient line
+    reportNote: "Nura will read it and show you what it found.",
+    // @patient line
+    reportNoteOther: "Nura will read it and show what it found.",
+    // @patient line
+    reportReady: "Nura will not send this until you say so.",
+    // @patient phrase
+    reportReadyOther: "Nura will not send this for {patient} until you say so.",
+    // @patient phrase
+    reportSend: "Send it",
+    // @patient headline
+    upcoming: "Next visit",
+    // @patient phrase
+    seeAll: "See all",
+    // @patient phrase
+    seeAllVisits: "See all visits",
+    // @patient
+    soonLine1: "Nura cannot do this yet.",
+    // @patient
+    soonLine2: "We are still making it.",
+    // @patient phrase
+    backHome: "Back to your Today page",
+    // @patient phrase
+    backHomeOther: "Back to {patient}'s Today page",
   },
   home: {
     // @patient headline
@@ -55,6 +189,8 @@ export const en = {
     whatChanged: "What changed",
     // @patient headline
     nextVisit: "Next visit",
+    // @patient phrase
+    atTime: "At {time}.",
     // @patient headline
     buyMore: "Buy more",
     // @patient headline
@@ -388,6 +524,10 @@ export const en = {
     shared: "Your family can see this card now.",
     // @patient phrase
     fromPublisher: "From {publisher}",
+    // @patient phrase
+    whyLink: "Why am I seeing this?",
+    // @patient headline
+    whyTitle: "Why am I seeing this?",
     // @patient
     cannotShare: "Nura cannot send this card to your family yet.",
     // @patient
@@ -2095,6 +2235,10 @@ export const en = {
     NoSuchProvider: "That doctor is not in your list.",
     StaleState: ["Nura is still catching up.", "Please try again."],
     NotIdentified: "Nura could not find this medicine.",
+    StrengthNotRead: [
+      "Nura found the medicine but not how strong it is.",
+      "Take another photo showing how strong it is.",
+    ],
     DoseNotRead: "Please type how to take it, as the label says.",
     NotADose: "Nura did not understand how to take it.",
     WouldWiden: ["Nura cannot make this wider.", "The owner must agree to more first."],

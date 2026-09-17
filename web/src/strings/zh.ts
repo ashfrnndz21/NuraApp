@@ -33,6 +33,14 @@ export const zh = {
     timeline: "文件",
     // @patient headline
     plan: "计划",
+    // @patient headline
+    health: "健康",
+    // @patient headline
+    connect: "联系",
+    // @patient headline
+    services: "服务",
+    // @patient headline
+    profile: "我的",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,132 @@ export const zh = {
     voiceSaid2: "然后说出您的问题。",
     // @patient phrase
     close: "关闭",
+    // @patient phrase
+    bell: "更多给您的",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "您的健康，都收在一起。",
+    // @patient headline
+    tagline2: "您的家人，就在身边。",
+    // @patient
+    lead: "Nura 把您的药和文件都放在一个地方。",
+    // @patient headline
+    remember: "记住",
+    // @patient line
+    rememberLine: "Nura 记住您的药和文件。",
+    // @patient headline
+    share: "分享",
+    // @patient line
+    shareLine: "您选家里的谁可以看。",
+    // @patient headline
+    prepare: "准备",
+    // @patient line
+    prepareLine: "看医生之前，Nura 帮您准备好。",
+    // @patient phrase
+    start: "开始",
+  },
+  talk: {
+    // @patient phrase
+    you: "您问了",
+    // @patient phrase
+    nura: "Nura 回答了",
+    // @patient
+    working: "Nura 正在找。",
+    // @patient
+    answered: "Nura 有答案了。",
+    // @patient headline
+    lookedAt: "Nura 看了什么",
+    // @patient
+    slow: "这次比平时久一点。",
+    // @patient
+    failed: "Nura 现在回答不了。",
+    // @patient phrase
+    tryAgain: "再试一次",
+    // @patient phrase
+    loading: "Nura 正在准备您的“今天”页面。",
+  },
+  hub: {
+    // @patient
+    howFeeling: "今天感觉怎么样？",
+    // @patient
+    howFeelingOther: "{patient}今天感觉怎么样？",
+    // @patient headline
+    checkTitle: "您今天的感觉",
+    // @patient headline
+    checkTitleOther: "{patient}今天的感觉",
+    // @patient line
+    checkLine: "告诉 Nura 您今天的感觉。",
+    // @patient phrase
+    checkLineOther: "告诉 Nura {patient}今天的感觉",
+    // @patient phrase
+    checkIn: "告诉 Nura",
+    // @patient
+    doTitle: "您想做什么？",
+    // @patient
+    doTitleOther: "要为{patient}做什么。",
+    // @patient headline
+    health: "健康",
+    // @patient line
+    healthLine: "您的血压本和文件。",
+    // @patient line
+    healthLineOther: "{patient}的血压本和文件。",
+    // @patient headline
+    medicines: "药",
+    // @patient line
+    medicinesLine: "您的药，和什么时候吃。",
+    // @patient line
+    medicinesLineOther: "{patient}的药，和什么时候吃。",
+    // @patient headline
+    connect: "联系",
+    // @patient line
+    connectLine: "看看您的家人和朋友。",
+    // @patient line
+    connectLineOther: "看看{patient}的家人和朋友。",
+    // @patient headline
+    activities: "可以做的事",
+    // @patient line
+    activitiesLine: "今天可以做点什么。",
+    // @patient headline
+    care: "上门帮忙",
+    // @patient line
+    careLine: "有人可以上门帮您。",
+    // @patient line
+    careLineOther: "有人可以上门帮{patient}。",
+    // @patient headline
+    resources: "可以读的东西",
+    // @patient line
+    resourcesLine: "Nura 用简单的话说明。",
+    // @patient headline
+    report: "加一份文件",
+    // @patient line
+    reportLine: "拍张照片，或者选医生发给您的那一份。",
+    // @patient line
+    reportLineOther: "拍张照片，或者选医生发给{patient}的那一份。",
+    // @patient line
+    reportNote: "Nura 会读一读，再告诉您它看到了什么。",
+    // @patient line
+    reportNoteOther: "Nura 会读一读，再说说它看到了什么。",
+    // @patient line
+    reportReady: "您说可以之前，Nura 不会发这个。",
+    // @patient phrase
+    reportReadyOther: "您说可以之前，Nura 不会替{patient}发这个。",
+    // @patient phrase
+    reportSend: "发这份",
+    // @patient headline
+    upcoming: "下次看诊",
+    // @patient phrase
+    seeAll: "看全部",
+    // @patient phrase
+    seeAllVisits: "看所有看诊的日子",
+    // @patient
+    soonLine1: "Nura 现在还做不到这个。",
+    // @patient
+    soonLine2: "我们还在做。",
+    // @patient phrase
+    backHome: "回到“今天”页面",
+    // @patient phrase
+    backHomeOther: "回到{patient}的“今天”页面",
   },
   home: {
     // @patient headline
@@ -55,6 +189,8 @@ export const zh = {
     whatChanged: "有什么变化",
     // @patient headline
     nextVisit: "下次看诊",
+    // @patient phrase
+    atTime: "时间是 {time}。",
     // @patient headline
     buyMore: "再买一些",
     // @patient headline
@@ -388,6 +524,10 @@ export const zh = {
     shared: "您的家人现在能看到这张卡。",
     // @patient phrase
     fromPublisher: "来自 {publisher}",
+    // @patient phrase
+    whyLink: "我为什么会看到这个？",
+    // @patient headline
+    whyTitle: "我为什么会看到这个？",
     // @patient
     cannotShare: "Nura 还不能把这张卡发给您的家人。",
     // @patient
@@ -415,7 +555,7 @@ export const zh = {
     // @patient
     askWithheld: "有些文件没有对您开放。",
     // @patient
-    askThinking: "Nura正在查看。",
+    askThinking: "Nura 正在找。",
     // @patient
     askAnswered: "Nura回答了。",
     // @patient phrase
@@ -2090,6 +2230,7 @@ export const zh = {
     NoSuchProvider: "这位医生不在您的名单上。",
     StaleState: ["Nura 还在更新。", "请再试一次。"],
     NotIdentified: "Nura 找不到这个药。",
+    StrengthNotRead: ["Nura 找到了这个药，但不知道它有多强。", "请再拍一张照片，清楚拍到它有多强。"],
     DoseNotRead: "请照标签打怎么吃。",
     NotADose: "Nura 看不懂怎么吃。",
     WouldWiden: ["Nura 不能把这个放宽。", "文件的主人要先同意更多。"],

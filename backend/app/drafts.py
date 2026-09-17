@@ -47,6 +47,7 @@ class ConfirmSubject(StrEnum):
     POLICY = "policy"
     INSURANCE_CLAIM = "insurance_claim"
     INSURANCE_CLAIM_STATUS = "insurance_claim_status"
+    AREA = "area"
 
 
 @dataclass(frozen=True, slots=True)
@@ -667,6 +668,27 @@ class OrderDraft:
         return {"line_id": self.line_id, "person_id": self.person_id}
 
 
+@dataclass(frozen=True, slots=True)
+class AreaDraft:
+    """His area about to be set, once the graph is his (E09-07, #184): the coarse value
+    `app.delivery.feed.area.set_area` will keep, exactly as `area_draft_for` checked it. The
+    steward may still set it before his claim on the declared basis, without a yes — this is
+    for his own write, once he owns the graph."""
+
+    area: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.AREA
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {"area": self.area}
+
+
 Draft = (
     FactDraft
     | AppointmentDraft
@@ -690,6 +712,7 @@ Draft = (
     | PolicyDraft
     | InsuranceClaimDraft
     | InsuranceClaimStatusDraft
+    | AreaDraft
 )
 
 

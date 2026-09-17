@@ -592,7 +592,7 @@ async def test_only_the_phone_that_opened_it_sends_to_it_and_only_the_family_hea
 
     # Kit, a viewer who reads the visits: he cannot open one, and cannot hear what was kept.
     kit = await register_by_phone(deployment, KIT, "Kit")
-    await let_in(deployment, house.pa, house.profile_id, KIT, ["visits"], relationship="son", holder_display_name="Kit")
+    await let_in(deployment, house.pa, house.profile_id, KIT, ["visits"], relationship="son", holder_display_name="Kit", role="viewer")
     await _ok(
         await deployment.client.post(
             house.at("/keys"),

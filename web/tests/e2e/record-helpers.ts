@@ -74,7 +74,7 @@ export async function letIn(request: APIRequestContext, pa: Pick<Papers, "token"
   const person = await signUp(request, uniquePhone(), name);
   const agreed = await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
     ...auth(pa.token),
-    data: { holder_phone_e164: person.phone, holder_display_name: name, scopes, relationship: null, language: "en", captured_via: "app" },
+    data: { holder_phone_e164: person.phone, holder_display_name: name, scopes, role, window: "always", relationship: null, language: "en", captured_via: "app" },
   });
   expect(agreed.status(), await agreed.text()).toBe(201);
   const key = await request.post(`${API}/profiles/${pa.profileId}/keys`, { ...auth(pa.token), data: { holder_phone_e164: person.phone, role, scopes } });
@@ -162,7 +162,7 @@ export async function signInAs(page: Page, person: Pick<Person, "phone">, name: 
 /** The Record's first screen from the tab bar. One tab set for everyone (D1, the reset): the
  *  Papers tab opens the Record's own first screen in either density. */
 export async function openRecord(page: Page): Promise<void> {
-  await page.getByTestId("tab-records").click();
+  await page.getByTestId("tab-health").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
 }
 
