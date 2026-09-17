@@ -16,17 +16,17 @@ function opens(papers: ProfileOut | null, scope: string): boolean {
   return papers !== null && (papers.standing === "owner" || papers.scopes.includes(scope));
 }
 
-/** The daily check-in: a title, one line, Check in, and the friendly face. Check in opens the
- *  existing way to say how he feels (E14-01) — said or typed, a red flag in it escalating on the
- *  backend exactly as the button does. A key that cannot write to his papers has no check-in. */
+/** The daily check-in, as the board draws it: "Daily check-in", one line, Check in, and the round
+ *  friendly face. Check in opens the existing way to say how he feels (E14-01) — said or typed,
+ *  a red flag in it escalating on the backend exactly as the button does. */
 export function CheckInCard({ papers }: { papers: ProfileOut | null }): JSX.Element | null {
   const s = t();
   if (!opens(papers, "records")) return null;
   return (
-    <TintCard tint="lavender" testId="daily-check-in" extra="check-in">
+    <TintCard tint="peach" testId="daily-check-in" extra="check-in">
       <div class="check-in-text">
         <h2 class="card-title">{s.hub.checkTitle}</h2>
-        <p>{s.hub.checkLine}</p>
+        <p class="card-line">{s.hub.checkLine}</p>
         <PillButton variant="primary" compact onClick={() => go({ name: "symptoms" })} testId="open-symptoms">
           {s.hub.checkIn}
         </PillButton>
@@ -53,12 +53,12 @@ export function DoGrid({ papers }: { papers: ProfileOut | null }): JSX.Element {
   const h = s.hub;
   const soon = (place: SoonPlace) => () => go({ name: "soon", place });
   const places: (Place | false)[] = [
-    { id: "health", icon: "health", tint: "blush", label: h.health, line: h.healthLine, open: () => openTab("health") },
-    opens(papers, "medicines") && { id: "medicines", icon: "medication", tint: "lavender", label: h.medicines, line: h.medicinesLine, open: () => go({ name: "record", at: { name: "medicines" } }) },
+    { id: "health", icon: "track", tint: "blush", label: h.health, line: h.healthLine, open: () => openTab("health") },
+    opens(papers, "medicines") && { id: "medicines", icon: "medication", tint: "sky", label: h.medicines, line: h.medicinesLine, open: () => go({ name: "record", at: { name: "medicines" } }) },
     opens(papers, "family") && { id: "connect", icon: "connect", tint: "sage", label: h.connect, line: h.connectLine, open: () => openTab("connect") },
-    { id: "activities", icon: "activities", tint: "butter", label: h.activities, line: h.activitiesLine, open: soon("activities") },
-    { id: "care", icon: "care", tint: "sky", label: h.care, line: h.careLine, open: soon("care") },
-    { id: "resources", icon: "resources", tint: "peach", label: h.resources, line: h.resourcesLine, open: soon("resources") },
+    { id: "activities", icon: "activities", tint: "lavender", label: h.activities, line: h.activitiesLine, open: soon("activities") },
+    { id: "care", icon: "care", tint: "peach", label: h.care, line: h.careLine, open: soon("care") },
+    { id: "resources", icon: "resources", tint: "butter", label: h.resources, line: h.resourcesLine, open: soon("resources") },
   ];
   return (
     <section class="do-section" aria-labelledby="do-title">
@@ -91,14 +91,14 @@ export function AddReport({ papers }: { papers: ProfileOut | null }): JSX.Elemen
     go({ name: "papers", report: true });
   };
   return (
-    <label class="action-row" data-tint="peach" data-testid="add-report">
-      <IconBadge icon="report" tint="paper" />
+    <label class="action-row report" data-testid="add-report">
+      <IconBadge icon="upload" tint="lavender" />
       <span class="action-text">
         <span class="action-title">{s.hub.report}</span>
         <span class="action-line">{s.hub.reportLine}</span>
       </span>
       <span class="action-go" aria-hidden="true">
-        <Icon name="add" />
+        <Icon name="chevron" />
       </span>
       <input type="file" accept="application/pdf,image/*" onChange={chosen} data-testid="report-input" />
     </label>

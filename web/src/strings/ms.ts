@@ -60,27 +60,29 @@ export const ms = {
   },
   welcome: {
     // @patient headline
-    tagline1: "Kesihatan anda, dibuat mudah.",
+    tagline1: "Kesihatan anda, tersimpan bersama.",
     // @patient headline
     tagline2: "Keluarga anda, sentiasa dekat.",
     // @patient
-    lead: "Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.",
+    lead: "Teman yang prihatin untuk warga emas dan keluarga yang menjaga mereka.",
     // @patient headline
-    simple: "Mudah",
+    remember: "Ingat",
     // @patient phrase
-    simpleLine: "Huruf besar, satu perkara pada satu masa",
+    rememberLine: "Ubat dan surat",
     // @patient headline
-    family: "Keluarga",
+    share: "Kongsi",
     // @patient phrase
-    familyLine: "Keluarga membantu bila anda setuju",
+    shareLine: "Dengan keluarga pilihan anda",
     // @patient headline
-    private: "Peribadi",
+    prepare: "Bersedia",
     // @patient phrase
-    privateLine: "Surat anda kekal milik anda",
+    prepareLine: "Untuk setiap lawatan",
     // @patient phrase
     start: "Mula",
     // @patient phrase
-    signIn: "Saya sudah guna Nura. Daftar masuk",
+    haveAccount: "Sudah ada akaun?",
+    // @patient phrase
+    signIn: "Daftar masuk",
   },
   talk: {
     // @patient phrase
@@ -108,13 +110,13 @@ export const ms = {
     // @patient
     howFeelingOther: "Apa khabar {patient} hari ini?",
     // @patient headline
-    checkTitle: "Bagaimana hari ini",
-    // @patient
-    checkLine: "Ambil seminit untuk kata apa yang anda rasa.",
-    // @patient
-    checkLineOther: "Ambil seminit untuk kata apa yang {patient} rasa.",
+    checkTitle: "Semakan harian",
     // @patient phrase
-    checkIn: "Beritahu Nura",
+    checkLine: "Beritahu Nura apa yang anda rasa hari ini",
+    // @patient phrase
+    checkLineOther: "Beritahu Nura apa yang {patient} rasa hari ini",
+    // @patient phrase
+    checkIn: "Semak",
     // @patient
     doTitle: "Apa yang anda mahu buat?",
     // @patient headline
@@ -122,11 +124,11 @@ export const ms = {
     // @patient headline
     health: "Kesihatan",
     // @patient phrase
-    healthLine: "Surat dan ujian darah",
+    healthLine: "Pantau dan semak",
     // @patient headline
     medicines: "Ubat",
     // @patient phrase
-    medicinesLine: "Ubat dan masanya",
+    medicinesLine: "Ubat dan peringatan",
     // @patient headline
     connect: "Hubungi",
     // @patient phrase
@@ -134,19 +136,19 @@ export const ms = {
     // @patient headline
     activities: "Aktiviti",
     // @patient phrase
-    activitiesLine: "Perkara yang menyeronokkan",
+    activitiesLine: "Kekal aktif",
     // @patient headline
-    care: "Bantuan di rumah",
+    care: "Khidmat jagaan",
     // @patient phrase
-    careLine: "Orang yang boleh membantu",
+    careLine: "Bantuan di rumah",
     // @patient headline
-    resources: "Dalam kata-kata mudah",
+    resources: "Panduan",
     // @patient phrase
-    resourcesLine: "Bacaan pendek",
+    resourcesLine: "Baca dan belajar",
     // @patient headline
     report: "Tambah laporan kesihatan",
     // @patient phrase
-    reportLine: "Dokumen, atau gambar sehelai surat",
+    reportLine: "PDF, atau gambar sehelai surat",
     // @patient headline
     upcoming: "Akan datang",
     // @patient phrase

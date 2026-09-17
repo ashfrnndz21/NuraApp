@@ -32,7 +32,7 @@ import {
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
-import { ArrowButton, Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
+import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
 import { CoupleIllustration } from "../ui/illustrations";
 import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
 import { AskField, Shell } from "./Shell";
@@ -58,7 +58,6 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const hero = page?.hero ?? null;
   return (
     <Shell tab="home" testId="today-screen">
-      <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
         wave
@@ -85,7 +84,6 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             ))}
             {stateAt === "top" && <StateCard v={v} />}
             <CheckInCard papers={papers} />
-            <DoseSection v={v} />
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
             {nextVisit && !fromPhone && (
@@ -93,6 +91,10 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
                 <VisitTile visit={nextVisit} />
               </Upcoming>
             )}
+            {/* His doses now, and Ask Nura, under what the approved board puts first
+                (docs/design/nura-concept-board.html). */}
+            <DoseSection v={v} />
+            <AskField placeholder={s.shell.askNura} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
               <TopThree items={top} />
@@ -440,9 +442,9 @@ function VisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const spoken = card?.lines.map((line) => line.spoken).filter(Boolean) ?? [];
   return (
     <TintCard tint="peach" testId="visit-tile" extra="visit-card">
-      <div class="card-head">
+      <div class="card-row">
         <IconBadge icon="calendar" tint="paper" />
-        <h3 class="card-title">{when?.text ?? s.visit.title}</h3>
+        <h3 class="card-title grow">{when?.text ?? s.visit.title}</h3>
       </div>
       {about.length > 0 && (
         <div class="lines visit-lines">
@@ -574,21 +576,22 @@ function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
   const locale = LOCALE[language.value];
   const at = new Date(visit.scheduled_at);
+  // One row, as the board draws "Coming up": who and where, then the day and the time; the whole
+  // card is the way into the visit. The weekday is said once (never twice).
   return (
     <TintCard tint="peach" testId="next-visit-tile" extra="visit-card">
-      <div class="card-head">
+      <button type="button" class="card-row card-button" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="open-visit">
         <IconBadge icon="calendar" tint="paper" />
-        <div class="card-head-text">
-          {/* The weekday once, large; the day and month and the time under it (never the weekday twice). */}
-          <h3 class="card-title">{weekdayOf(at, locale)}</h3>
-          <p class="source-line" data-testid="next-visit-date">
-            {dayMonthLine(at, locale)}
-          </p>
-          <p class="source-line">{timeLine(at, locale)}</p>
-        </div>
-        <ArrowButton label={s.visit.open} onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} testId="open-visit" />
-      </div>
-      {visit.purpose && <p>{visit.purpose}</p>}
+        <span class="grow">
+          <span class="card-title">{visit.doctor || weekdayOf(at, locale)}</span>
+          <span class="card-line">
+            {visit.doctor && `${weekdayOf(at, locale)} `}
+            <span data-testid="next-visit-date">{dayMonthLine(at, locale)}</span> · {timeLine(at, locale)}
+          </span>
+        </span>
+        <Icon name="chevron" />
+      </button>
+      {visit.purpose && <p class="card-line">{visit.purpose}</p>}
     </TintCard>
   );
 }

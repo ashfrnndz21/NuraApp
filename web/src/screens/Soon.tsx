@@ -5,7 +5,7 @@ import { SeedlingIllustration } from "../ui/illustrations";
 import { PillButton, TintCard } from "../ui/kit";
 import { Shell } from "./Shell";
 
-/** A place Home's grid offers that Nura has not built yet (Things to do, Help at home, In simple words).
+/** A place Home's grid offers that Nura has not built yet (Activities, Care services, Guides).
  *  Said plainly — Nura cannot do this yet — with the way back, so a tile is never a dead tap and
  *  never pretends there is something behind it. */
 export function SoonScreen({ place }: { place: SoonPlace }): JSX.Element {

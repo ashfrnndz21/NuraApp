@@ -53,20 +53,27 @@ export function ShellHeader(): JSX.Element {
   const bell = papers !== null && !emergencyOnly(papers);
   return (
     <header class="shell-head">
-      <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
-        <Icon name="menu" />
-      </button>
+      <span class="head-start">
+        <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
+      </span>
       <span class="head-mark">
-        <Wordmark name={s.appName} />
+        <Wordmark name={s.appName} mark={false} />
       </span>
       <span class="head-end">
-        {papers && <ProfileSwitcher />}
         {bell && (
           <button type="button" class="head-button" aria-label={s.shell.bell} onClick={() => go({ name: "feed" })} data-testid="bell">
             <Icon name="bell" />
           </button>
         )}
       </span>
+      {/* Whose papers are open, on every screen, just under the bar. */}
+      {papers && (
+        <span class="head-whose">
+          <ProfileSwitcher />
+        </span>
+      )}
     </header>
   );
 }

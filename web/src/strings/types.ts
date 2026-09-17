@@ -29,13 +29,14 @@ export interface Strings {
     tagline1: string;
     tagline2: string;
     lead: string;
-    simple: string;
-    simpleLine: string;
-    family: string;
-    familyLine: string;
-    private: string;
-    privateLine: string;
+    remember: string;
+    rememberLine: string;
+    share: string;
+    shareLine: string;
+    prepare: string;
+    prepareLine: string;
     start: string;
+    haveAccount: string;
     signIn: string;
   };
   /** Conversation and waiting (docs/design-direction.md): the words every ask, search and

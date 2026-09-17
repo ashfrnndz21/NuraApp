@@ -104,20 +104,27 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
     { key: "visits", text: "Checking the visits", done: false },
   ];
 
-  it("shows only the steps it is given, each in progress or done", () => {
-    const trace = one(<StepTrace steps={steps} answered={false} summary={words.lookedAt} />);
+  it("shows only the steps it is given, each in progress or done, under Nura is looking", () => {
+    const trace = one(<StepTrace steps={steps} working={words.working} />);
+    expect(text(all(trace, hasClass("thinking-line")))).toBe(words.working);
     expect(all(trace, byType("li")).map((li) => [text(li), li.props["data-done"]])).toEqual([
       ["Reading the medicines", "true"],
       ["Checking the visits", "false"],
     ]);
-    expect(render0(<StepTrace steps={[]} answered={false} summary={words.lookedAt} />)).toBeNull();
+    expect(all(trace, hasClass("trace-tick")).length).toBe(1);
+    expect(all(trace, hasClass("trace-spin")).length).toBe(1);
+    expect(all(one(<StepTrace steps={[]} working={words.working} />), byType("li"))).toEqual([]);
   });
 
-  it("folds the steps into one expandable line once the answer is there", () => {
-    const trace = one(<StepTrace steps={steps} answered summary={words.lookedAt} />);
-    expect(trace.type).toBe("details");
-    expect(text(all(trace, byType("summary")))).toBe("What Nura looked at");
-    expect(all(trace, byType("li")).length).toBe(2);
+  it("folds the steps into What Nura looked at under the answer, with its sources and boundary", () => {
+    const exchange = one(<Exchange question="Q" steps={steps} status="answered" answer="A" sources={["Medicines", "Visit, 2 Sep"]} boundary={["Nura does not decide what is wrong."]} lookedAt="What Nura looked at: medicines, visits" words={words} />);
+    const answer = all(exchange, byTestId("exchange-answer"))[0]!;
+    expect(all(answer, hasClass("source-chip")).map((chip) => text(chip))).toEqual(["Medicines", "Visit, 2 Sep"]);
+    expect(text(all(answer, byTestId("answer-boundary")))).toBe("Nura does not decide what is wrong.");
+    const looked = all(answer, byType("details"))[0]!;
+    expect(text(all(looked, byType("summary")))).toBe("What Nura looked at: medicines, visits");
+    expect(all(looked, byType("li")).length).toBe(2);
+    expect(all(exchange, hasClass("thinking"))).toEqual([]);
   });
 
   it("shows an answer the moment it is given, even while the caller still says working", () => {
@@ -152,7 +159,8 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
     (all(failed, byTestId("exchange-retry"))[0]!.props.onClick as () => void)();
     expect(retry).toHaveBeenCalledOnce();
     const slow = one(<Exchange question="Q" steps={[]} status="slow" words={words} onRetry={retry} />);
-    expect(text(all(slow, byTestId("exchange-slow")))).toBe(words.slow);
+    expect(text(all(slow, byTestId("exchange-slow")))).toContain(words.slow);
+    expect(all(slow, byTestId("exchange-retry")).length).toBe(1);
   });
 
   it("the thinking indicator's dots are decorative and give way to the brand mark's motion", () => {

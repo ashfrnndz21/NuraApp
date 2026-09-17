@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bell,
   BookOpen,
+  BriefcaseMedical,
   CalendarDays,
   Camera,
   Check,
@@ -36,6 +37,8 @@ import {
   TrendingUp,
   Users,
   Volume2,
+  Upload,
+  User,
   X,
   type IconNode,
 } from "lucide";
@@ -48,17 +51,19 @@ import {
  *  meaning alone: every place that draws one puts a word beside it. */
 
 export const ICONS = {
-  // The five tabs.
+  // The five tabs, as the approved board draws them (docs/design/nura-concept-board.html).
   home: House,
-  health: HeartPulse,
+  health: Heart,
   connect: Users,
-  services: Stethoscope,
-  profile: CircleUserRound,
+  services: BriefcaseMedical,
+  profile: User,
   // The Home grid.
+  track: Activity,
   medication: Pill,
-  activities: Palette,
+  activities: BookOpen,
   care: HandHeart,
-  resources: BookOpen,
+  resources: FileText,
+  upload: Upload,
   // The header and the cards.
   menu: Menu,
   bell: Bell,
@@ -66,6 +71,8 @@ export const ICONS = {
   clock: Clock,
   place: MapPin,
   report: FilePlus2,
+  palette: Palette,
+  stethoscope: Stethoscope,
   arrow: ArrowRight,
   heart: Heart,
   privacy: ShieldCheck,

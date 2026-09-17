@@ -15,7 +15,7 @@ test("the welcome shows once a phone: Sign in reaches the phone number, and it i
   const welcome = page.getByTestId("welcome-screen");
   await expect(welcome).toBeVisible();
   await expect(welcome.locator("h1")).toHaveText("Nura");
-  await expect(welcome.locator(".welcome-tagline")).toHaveText("Your health, kept simple. Your family, close by.");
+  await expect(welcome.locator(".welcome-tagline")).toHaveText("Your health, kept together. Your family, close by.");
   await expect(welcome.locator(".value-tile")).toHaveCount(3);
   await expect(welcome.locator("[data-illustration]")).toHaveAttribute("aria-hidden", "true");
   await page.getByTestId("welcome-sign-in").click();
@@ -59,8 +59,8 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   }
   for (const [tile, words] of [
     ["do-activities", "Things to do"],
-    ["do-care", "Help at home"],
-    ["do-resources", "In simple words"],
+    ["do-care", "Care services"],
+    ["do-resources", "Guides"],
   ] as const) {
     await page.getByTestId(tile).click();
     const soon = page.getByTestId("soon-screen");
@@ -92,7 +92,7 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await todayReady(page);
   const add = page.getByTestId("add-report");
   await expect(add).toContainText("Add a health report");
-  await expect(add).toContainText("A file, or a photo of a paper");
+  await expect(add).toContainText("A PDF, or a photo of a paper");
   await expect(page.getByTestId("report-input")).toHaveAttribute("accept", "application/pdf,image/*");
   // No `capture`: the phone offers its files, its photos and its camera.
   expect(await page.getByTestId("report-input").getAttribute("capture")).toBeNull();
@@ -122,7 +122,7 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   const hero = page.getByTestId("home-hero");
   await expect(hero.locator(".hero-greeting")).toHaveText("Good morning, Mei.");
   await expect(hero.locator(".hero-ask")).toHaveText("How is Pa feeling today?");
-  await expect(page.getByTestId("daily-check-in")).toContainText("Take a minute to say how Pa feels.");
+  await expect(page.getByTestId("daily-check-in")).toContainText("Tell Nura how Pa feels today");
   await expect(page.locator("#do-title")).toHaveText("Places to go");
   const tiles = await page.getByTestId("do-grid").locator("button").evaluateAll((all) => all.map((each) => each.getAttribute("data-testid")));
   expect(tiles[0]).toBe("do-health");

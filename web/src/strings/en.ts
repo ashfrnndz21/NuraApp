@@ -60,27 +60,29 @@ export const en = {
   },
   welcome: {
     // @patient headline
-    tagline1: "Your health, kept simple.",
+    tagline1: "Your health, kept together.",
     // @patient headline
     tagline2: "Your family, close by.",
     // @patient
-    lead: "Nura keeps your papers, your medicines and your blood pressure book.",
+    lead: "A caring companion for older adults and the family who look after them.",
     // @patient headline
-    simple: "Simple",
+    remember: "Remember",
     // @patient phrase
-    simpleLine: "Big letters, one thing at a time",
+    rememberLine: "Medicines and papers",
     // @patient headline
-    family: "Family",
+    share: "Share",
     // @patient phrase
-    familyLine: "Your family helps when you say yes",
+    shareLine: "With family you choose",
     // @patient headline
-    private: "Private",
+    prepare: "Prepare",
     // @patient phrase
-    privateLine: "Your papers stay yours",
+    prepareLine: "For every visit",
     // @patient phrase
     start: "Get started",
     // @patient phrase
-    signIn: "I already use Nura. Sign in",
+    haveAccount: "Already have an account?",
+    // @patient phrase
+    signIn: "Sign in",
   },
   talk: {
     // @patient phrase
@@ -108,13 +110,13 @@ export const en = {
     // @patient
     howFeelingOther: "How is {patient} feeling today?",
     // @patient headline
-    checkTitle: "How today is going",
-    // @patient
-    checkLine: "Take a minute to say how you feel.",
-    // @patient
-    checkLineOther: "Take a minute to say how {patient} feels.",
+    checkTitle: "Daily check-in",
     // @patient phrase
-    checkIn: "Tell Nura",
+    checkLine: "Tell Nura how you feel today",
+    // @patient phrase
+    checkLineOther: "Tell Nura how {patient} feels today",
+    // @patient phrase
+    checkIn: "Check in",
     // @patient
     doTitle: "What would you like to do?",
     // @patient headline
@@ -122,31 +124,31 @@ export const en = {
     // @patient headline
     health: "Health",
     // @patient phrase
-    healthLine: "Papers and blood tests",
+    healthLine: "Track and check",
     // @patient headline
     medicines: "Medicines",
     // @patient phrase
-    medicinesLine: "Tablets and times",
+    medicinesLine: "Tablets and reminders",
     // @patient headline
     connect: "Connect",
     // @patient phrase
     connectLine: "Family and friends",
     // @patient headline
-    activities: "Things to do",
+    activities: "Activities",
     // @patient phrase
-    activitiesLine: "Stay busy and happy",
+    activitiesLine: "Stay busy",
     // @patient headline
-    care: "Help at home",
+    care: "Care services",
     // @patient phrase
-    careLine: "People who can help",
+    careLine: "Help at home",
     // @patient headline
-    resources: "In simple words",
+    resources: "Guides",
     // @patient phrase
-    resourcesLine: "Short reads",
+    resourcesLine: "Read and learn",
     // @patient headline
     report: "Add a health report",
     // @patient phrase
-    reportLine: "A file, or a photo of a paper",
+    reportLine: "A PDF, or a photo of a paper",
     // @patient headline
     upcoming: "Coming up",
     // @patient phrase

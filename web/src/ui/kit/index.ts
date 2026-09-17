@@ -24,4 +24,4 @@ export { FeatureTile, IconBadge, StatusPill, TintCard, type Tint } from "./Tint"
 export { ArrowButton, ListRow, MetricRow, SectionHeader } from "./Rows";
 export { ProgressRing } from "./ProgressRing";
 export { Wordmark } from "./Wordmark";
-export { Exchange, MessageBubble, SkeletonCard, StepTrace, ThinkingIndicator, type ExchangeStatus, type ExchangeWords, type TraceStep } from "./Conversation";
+export { Exchange, LookedAt, MessageBubble, SkeletonCard, StepTrace, ThinkingIndicator, TraceSteps, type ExchangeStatus, type ExchangeWords, type TraceStep } from "./Conversation";

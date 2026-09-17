@@ -60,27 +60,29 @@ export const zh = {
   },
   welcome: {
     // @patient headline
-    tagline1: "您的健康，简简单单。",
+    tagline1: "您的健康，都收在一起。",
     // @patient headline
     tagline2: "您的家人，就在身边。",
     // @patient
-    lead: "Nura 帮您保存您的病历文件、您的药和您的血压本。",
+    lead: "陪伴长者，也陪伴照顾他们的家人。",
     // @patient headline
-    simple: "简单",
+    remember: "记住",
     // @patient phrase
-    simpleLine: "字很大，一次一件事",
+    rememberLine: "药和文件",
     // @patient headline
-    family: "家人",
+    share: "分享",
     // @patient phrase
-    familyLine: "您同意了，家人就可以帮忙",
+    shareLine: "给您选的家人",
     // @patient headline
-    private: "私密",
+    prepare: "准备",
     // @patient phrase
-    privateLine: "您的文件只属于您",
+    prepareLine: "每次看诊前",
     // @patient phrase
     start: "开始",
     // @patient phrase
-    signIn: "我已经在用 Nura。登录",
+    haveAccount: "已经有账号了？",
+    // @patient phrase
+    signIn: "登录",
   },
   talk: {
     // @patient phrase
@@ -108,13 +110,13 @@ export const zh = {
     // @patient
     howFeelingOther: "{patient}今天感觉怎么样？",
     // @patient headline
-    checkTitle: "每天问一问",
-    // @patient
-    checkLine: "花一分钟，说说您的感觉。",
-    // @patient
-    checkLineOther: "花一分钟，说说{patient}的感觉。",
+    checkTitle: "每日问候",
     // @patient phrase
-    checkIn: "告诉 Nura",
+    checkLine: "告诉 Nura 您今天的感觉",
+    // @patient phrase
+    checkLineOther: "告诉 Nura {patient}今天的感觉",
+    // @patient phrase
+    checkIn: "说一说",
     // @patient
     doTitle: "您想做什么？",
     // @patient headline
@@ -122,11 +124,11 @@ export const zh = {
     // @patient headline
     health: "健康",
     // @patient phrase
-    healthLine: "文件和验血",
+    healthLine: "记录和查看",
     // @patient headline
     medicines: "药",
     // @patient phrase
-    medicinesLine: "药和吃药时间",
+    medicinesLine: "吃药和提醒",
     // @patient headline
     connect: "联系",
     // @patient phrase
@@ -134,19 +136,19 @@ export const zh = {
     // @patient headline
     activities: "活动",
     // @patient phrase
-    activitiesLine: "开心的事",
+    activitiesLine: "保持忙碌",
     // @patient headline
-    care: "上门帮忙",
+    care: "照护服务",
     // @patient phrase
-    careLine: "可以来帮忙的人",
+    careLine: "上门帮忙",
     // @patient headline
-    resources: "用简单的话说",
+    resources: "指南",
     // @patient phrase
-    resourcesLine: "简短的说明",
+    resourcesLine: "读一读，学一学",
     // @patient headline
     report: "加一份健康报告",
     // @patient phrase
-    reportLine: "文件，或者一张纸的照片",
+    reportLine: "PDF，或者一张纸的照片",
     // @patient headline
     upcoming: "快到了",
     // @patient phrase

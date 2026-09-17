@@ -20,14 +20,17 @@ export function line(token: string, width = 2.5): JSX.CSSProperties {
 export interface IlloProps {
   /** More classes: where the screen places and sizes it. */
   class?: string;
+  /** Fill the box the screen gives it, cropping the edges, rather than fit inside it. */
+  cover?: boolean;
   testId?: string;
 }
 
-export function Illo({ viewBox, children, class: extra, testId, name }: IlloProps & { viewBox: string; children: ComponentChildren; name: string }): JSX.Element {
+export function Illo({ viewBox, children, class: extra, testId, name, cover }: IlloProps & { viewBox: string; children: ComponentChildren; name: string }): JSX.Element {
   return (
     <svg
       class={["illo", extra].filter(Boolean).join(" ")}
       viewBox={viewBox}
+      preserveAspectRatio={cover ? "xMidYMid slice" : undefined}
       aria-hidden="true"
       focusable="false"
       role="presentation"

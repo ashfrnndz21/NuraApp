@@ -1,8 +1,9 @@
-/* The warm style (docs/design-direction.md): Nura's plum, Eldora's warmth. A cream ground, soft
-   pastel-tinted cards with large radii and barely-there shadows, a serif display face, line
-   icons on tinted rounds, illustrations. Every value is a token (tokens.css); the two densities
-   move only type and targets. Loaded after design.css, so where the two speak of one thing, this
-   is the newer word. */
+/* The warm style, as the owner's approved board draws it (docs/design/nura-concept-board.html,
+   docs/design-direction.md): Nura's plum on a cream ground; cards on a warm card colour with a
+   hairline, or on a soft pastel tint of their own; a serif for the wordmark, the greeting and the
+   welcome; line icons in Plum on tinted rounded squares; illustrations. Every value is a token
+   (tokens.css); the two densities move only type and targets. Loaded after design.css, so where
+   the two speak of one thing, this is the newer word. */
 
 /* --- The ground and the display face -------------------------------------------------------- */
 html {
@@ -10,14 +11,13 @@ html {
 }
 .hero-greeting,
 .display-title,
-.section-title,
-.card-title,
 .place-title,
 .wordmark-word,
-.welcome-tagline {
+.welcome-word,
+.welcome-tagline,
+.ring-number {
   font-family: var(--font-display);
   font-optical-sizing: auto;
-  letter-spacing: -0.01em;
 }
 .display-title {
   font-size: calc(var(--text-title) * 1.3);
@@ -25,21 +25,33 @@ html {
   line-height: 1.15;
   color: var(--ink);
 }
-.section-title {
-  font-size: calc(var(--text-title) * 1.05);
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--ink);
-}
-.card-title {
-  font-size: var(--text-title);
-  font-weight: 600;
-  line-height: 1.2;
-  color: var(--ink);
-}
 .place-title {
   font-size: calc(var(--text-title) * 1.25);
   font-weight: 600;
+}
+/* A section's heading and a card's title: the body face, bold, as on the board. */
+.section-title {
+  font-size: calc(var(--text-body) * 1.05);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.card-title {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.card-line {
+  display: block;
+  font-size: var(--text-caption);
+  line-height: 1.35;
+  color: var(--ink-quiet);
+}
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* --- Tints: each card and tile its own soft colour -------------------------------------------- */
@@ -56,15 +68,17 @@ html {
 .tint-card,
 .feature-tile,
 .value-tile,
-.action-row {
+.action-row,
+.bubble,
+.trace {
   --ink-quiet: var(--ink-on-tint);
 }
 
-/* --- Icons on a tinted round ---------------------------------------------------------------- */
+/* --- Icons on a tinted rounded square ------------------------------------------------------- */
 .icon-badge {
   flex: none;
-  width: calc(var(--icon-size) + 20px);
-  height: calc(var(--icon-size) + 20px);
+  width: calc(var(--icon-size) + 18px);
+  height: calc(var(--icon-size) + 18px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -76,40 +90,61 @@ html {
   border-radius: 50%;
 }
 .icon-badge.small {
-  width: calc(var(--icon-size) + 12px);
-  height: calc(var(--icon-size) + 12px);
-  border-radius: 12px;
+  width: calc(var(--icon-size) + 10px);
+  height: calc(var(--icon-size) + 10px);
+  border-radius: 11px;
 }
 .icon-badge.large {
   width: calc(var(--icon-size) + 32px);
   height: calc(var(--icon-size) + 32px);
 }
+.icon,
 .icon-badge .icon {
-  stroke-width: 1.75px;
+  stroke-width: 1.8px;
 }
 
-/* --- The tinted card ------------------------------------------------------------------------- */
+/* --- Cards: a warm card with a hairline, or a tint with none ----------------------------------- */
 .tint-card {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--tile-pad);
-  border-radius: var(--radius-card);
+  padding: 16px;
+  border-radius: var(--radius-tile);
   background: var(--tint, var(--tint-paper));
-  box-shadow: var(--card-shadow);
+  border: 1px solid transparent;
   color: var(--ink);
+}
+.tint-card[data-tint="paper"] {
+  border-color: var(--card-line);
 }
 .tint-card .source-line,
 .tint-card .caption {
   color: var(--ink-quiet);
 }
-.tint-card .card-head {
-  align-items: flex-start;
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-.card-head-text {
-  flex: 1 1 auto;
-  min-width: 0;
+.card-button {
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.card-button > .icon {
+  color: var(--ink-quiet);
+}
+.card-button:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 4px;
+  border-radius: 12px;
 }
 
 /* --- Section heading with See all ------------------------------------------------------------ */
@@ -119,7 +154,7 @@ html {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0 var(--space-2);
-  margin: var(--space-2) 4px 0;
+  margin: var(--space-1) 2px 0;
 }
 .view-all {
   min-height: var(--target);
@@ -127,19 +162,16 @@ html {
   border: 0;
   background: none;
   font: inherit;
-  font-size: var(--text-body);
-  font-weight: 500;
-  color: var(--plum);
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
   cursor: pointer;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 4px;
 }
 .view-all:focus-visible,
 .feature-tile:focus-visible,
 .arrow-button:focus-visible,
 .list-row:focus-visible,
 .head-button:focus-visible,
+.link-button:focus-visible,
 .action-row:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
@@ -149,36 +181,36 @@ html {
 .do-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 10px;
 }
 .do-section > .section-title {
-  margin: var(--space-2) 4px 0;
+  margin: var(--space-1) 2px 0;
 }
 .do-grid {
   display: grid;
-  /* Three across on a phone in her density; in his, and whenever the writing is large, as many
-     as fit whole — a tile's word is never cut or broken to keep a column. */
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.25rem), 1fr));
-  gap: var(--tile-gap);
+  /* Three across, as the board draws it; when the writing is large, as many as fit whole — a
+     tile's word is never cut or broken to keep a column. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
+  gap: 10px;
 }
 :root[data-density="patient"] .do-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 8.5rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.5rem), 1fr));
 }
 .feature-tile {
   min-width: 0;
   min-height: var(--target);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: flex-start;
   gap: 4px;
-  padding: 14px 12px 14px;
+  padding: 14px 6px 12px;
   border: 0;
-  border-radius: var(--radius-tile);
+  border-radius: 18px;
   background: var(--tint);
-  box-shadow: var(--card-shadow);
   font: inherit;
   color: var(--ink);
-  text-align: start;
+  text-align: center;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -187,26 +219,28 @@ html {
 .feature-tile:active {
   transform: scale(0.98);
 }
-.feature-tile .icon-badge {
-  margin-bottom: 6px;
+.feature-tile .icon {
+  width: 28px;
+  height: 28px;
+  color: var(--plum);
+  margin-bottom: 4px;
 }
 .feature-label {
-  font-size: var(--text-body);
-  font-weight: 600;
+  font-size: 0.9375rem;
+  font-weight: 700;
   line-height: 1.2;
-  overflow-wrap: normal;
-  hyphens: manual;
 }
 .feature-caption {
-  font-size: var(--text-caption);
-  line-height: 1.3;
+  font-size: 0.8125rem;
+  line-height: 1.25;
   color: var(--ink-quiet);
 }
-:root[data-density="caregiver"] .feature-label {
-  font-size: 0.9375rem;
+:root[data-density="patient"] .feature-label {
+  font-size: 1.0625rem;
 }
-:root[data-density="caregiver"] .feature-caption {
-  font-size: 0.75rem;
+:root[data-density="patient"] .feature-caption {
+  font-size: 0.9375rem;
+  color: var(--ink);
 }
 
 /* --- Rows: a list, a metric ------------------------------------------------------------------ */
@@ -227,7 +261,7 @@ button.list-row {
   cursor: pointer;
 }
 .list-row + .list-row {
-  border-top: var(--hairline);
+  border-top: 1px solid var(--card-line);
 }
 .list-lead {
   flex: none;
@@ -240,7 +274,7 @@ button.list-row {
   flex-direction: column;
 }
 .list-title {
-  font-weight: 600;
+  font-weight: 700;
 }
 .list-line {
   font-size: var(--text-caption);
@@ -256,8 +290,8 @@ button.list-row {
 .metric-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: var(--target);
+  gap: 10px;
+  min-height: 40px;
 }
 .metric-label {
   flex: 1 1 auto;
@@ -268,7 +302,7 @@ button.list-row {
 .metric-value {
   flex: none;
   font-size: var(--text-body);
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: var(--numeric);
 }
 .metric-unit {
@@ -288,7 +322,6 @@ button.list-row {
   border: 0;
   border-radius: 50%;
   background: var(--tint-paper);
-  box-shadow: var(--card-shadow);
   color: var(--plum);
   cursor: pointer;
   touch-action: manipulation;
@@ -303,7 +336,7 @@ button.list-row {
   padding: 2px 12px;
   border-radius: var(--radius-pill);
   font-size: var(--text-caption);
-  font-weight: 600;
+  font-weight: 700;
 }
 .status-pill[data-tone="good"] {
   background: var(--good-bg);
@@ -311,7 +344,7 @@ button.list-row {
 }
 .status-pill[data-tone="watch"] {
   background: var(--cream);
-  color: #6b420c;
+  color: var(--coral-pill-ink);
 }
 .status-pill[data-tone="act"] {
   background: var(--coral-pill-bg);
@@ -321,7 +354,7 @@ button.list-row {
 /* --- The progress ring ------------------------------------------------------------------------ */
 .ring {
   position: relative;
-  width: min(100%, 11rem);
+  width: min(100%, 8.5rem);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -353,8 +386,9 @@ button.list-row {
 }
 .ring-number {
   font-size: var(--text-tile-number);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
+  color: var(--plum-deep);
   font-variant-numeric: var(--numeric);
 }
 .ring-label {
@@ -363,18 +397,39 @@ button.list-row {
   line-height: 1.2;
 }
 
-/* --- Solid and quiet buttons, in the warm style ----------------------------------------------- */
-.pill.plum {
-  box-shadow: 0 6px 16px rgba(78, 58, 120, 0.22);
-}
+/* --- Buttons: solid Plum, small or full width; quiet ------------------------------------------ */
 .pill {
   background: var(--tint-paper);
+}
+.pill.plum {
+  font-weight: 600;
+}
+.pill.plum.compact {
+  min-height: 44px;
+  padding: 0 20px;
+}
+:root[data-density="patient"] .pill.plum.compact {
+  min-height: var(--target);
+}
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--plum);
+  cursor: pointer;
 }
 
 /* --- The avatar: their photo, or their initial on a tint -------------------------------------- */
 .avatar.tinted {
   background: var(--tint);
-  color: var(--plum);
+  color: var(--plum-deep);
+  font-family: var(--font-display);
+  border: 2px solid var(--white);
 }
 .avatar.large {
   width: 64px;
@@ -385,12 +440,16 @@ img.avatar {
   object-fit: cover;
 }
 
-/* --- The header: menu, wordmark, whose papers, bell ------------------------------------------- */
+/* --- The header: menu, the wordmark centred, whose papers, bell ------------------------------- */
 .shell-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-1);
+}
+.head-start {
+  display: flex;
+  justify-content: flex-start;
 }
 .head-button {
   width: var(--target);
@@ -416,26 +475,40 @@ img.avatar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
+}
+.head-whose {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-top: -4px;
 }
 .shell-head .switcher {
+  max-width: 100%;
   min-width: 0;
+  min-height: 40px;
   background: var(--tint-paper);
-  border: 0;
-  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-line);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   font-size: var(--text-caption);
-  padding: 4px 8px 4px 4px;
-  gap: 6px;
+  padding: 2px 6px 2px 2px;
+  gap: 4px;
+}
+:root[data-density="patient"] .shell-head .switcher {
+  min-height: var(--target);
 }
 .shell-head .switcher .avatar {
-  width: 32px;
-  height: 32px;
-  font-size: 0.9375rem;
+  width: 30px;
+  height: 30px;
+  font-size: 0.875rem;
 }
 .shell-head .switcher .icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 .wordmark {
   display: inline-flex;
@@ -450,7 +523,7 @@ img.avatar {
 }
 /* The wordmark is a logotype: a fixed size, so the page's own words get the room at 200%. */
 .wordmark.small .wordmark-word {
-  font-size: 24px;
+  font-size: 27px;
   font-weight: 600;
   line-height: 1;
 }
@@ -459,76 +532,69 @@ img.avatar {
   font-weight: 600;
   line-height: 1;
 }
-.shell-head .brand-mark {
-  width: 28px;
-  height: 28px;
-}
-:root[data-writing="large"] .shell-head .wordmark-word,
-:root[data-text="large"] .shell-head .wordmark-word {
-  display: none;
-}
 @media (max-width: 359px) {
   .shell-head .wordmark-word {
     display: none;
   }
 }
 
-/* --- The tab bar: a line icon above each word, the one open in Plum --------------------------- */
+/* --- The tab bar: flat on the card colour, a line icon above each word, the one open in Plum -- */
 .tabbar {
   margin: 0;
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+  border-radius: 0;
   background: var(--tint-paper);
   border: 0;
-  box-shadow: 0 -6px 24px rgba(80, 50, 40, 0.07);
+  border-top: 1px solid var(--card-line);
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  gap: 0;
 }
-.tabbar button {
-  border-radius: 14px;
-  gap: 4px;
+.tabbar button,
+.tabbar button[aria-current="page"] {
+  border-radius: 12px;
+  gap: 3px;
+  background: none;
 }
 .tabbar button[aria-current="page"] {
-  background: none;
   color: var(--plum);
-  font-weight: 600;
+  font-weight: 700;
 }
 .tabbar button[aria-current="page"] .icon {
-  stroke-width: 2.1px;
+  stroke-width: 2.2px;
 }
 
 /* --- The hero: greeting, question, illustration ----------------------------------------------- */
 .hero-block {
-  padding: var(--space-1) 4px var(--space-1);
+  padding: var(--space-1) 2px 0;
 }
 .hero-top {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: flex-end;
+  gap: var(--space-1);
 }
 .hero-text {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
-/* The wave follows the greeting's last word on its line, never a line of its own. */
+/* The wave follows the greeting's last word on its line. */
 .hero-hello {
   display: block;
 }
 .hero-hello .hero-greeting {
   display: inline;
 }
-.hero-wave {
-  margin-inline-start: 6px;
-}
 .hero-greeting {
-  font-size: calc(var(--text-title) * 1.15);
+  font-size: calc(var(--text-title) * 1.25);
   font-weight: 600;
   line-height: 1.15;
 }
 .hero-wave {
+  margin-inline-start: 6px;
   font-size: var(--text-title);
   line-height: 1;
 }
@@ -542,14 +608,14 @@ img.avatar {
 }
 .hero-art {
   flex: 0 0 auto;
-  width: clamp(104px, 38%, 160px);
+  width: clamp(110px, 36%, 150px);
 }
 .illo {
   display: block;
   width: 100%;
   height: auto;
 }
-/* At large writing the words take the row and the picture steps below them, smaller. */
+/* At large writing the words take the row and the picture steps below them. */
 :root[data-writing="large"] .hero-top,
 :root[data-text="large"] .hero-top {
   flex-direction: column;
@@ -574,14 +640,14 @@ img.avatar {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 6px;
+  gap: 2px;
 }
 .check-in-text .pill {
-  margin-top: 4px;
+  margin-top: 10px;
 }
 .check-in-face {
   flex: none;
-  width: clamp(64px, 24%, 96px);
+  width: clamp(64px, 22%, 88px);
 }
 :root[data-writing="large"] .check-in,
 :root[data-text="large"] .check-in {
@@ -595,12 +661,16 @@ img.avatar {
   align-items: center;
   gap: var(--space-2);
   min-height: var(--target);
-  padding: 14px var(--tile-pad);
-  border-radius: var(--radius-card);
-  background: var(--tint);
-  box-shadow: var(--card-shadow);
+  padding: 14px 16px;
+  border-radius: var(--radius-tile);
+  background: var(--tint, var(--tint-paper));
   color: var(--ink);
   cursor: pointer;
+}
+/* "Add a health report": a dashed card on the ground, as the board draws it. */
+.action-row.report {
+  background: transparent;
+  border: 1.5px dashed #cfc1d9;
 }
 .action-row input[type="file"] {
   position: absolute;
@@ -618,7 +688,7 @@ img.avatar {
   gap: 2px;
 }
 .action-title {
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--text-body);
   line-height: 1.25;
 }
@@ -628,19 +698,8 @@ img.avatar {
 }
 .action-go {
   flex: none;
-  width: 40px;
-  height: 40px;
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--plum);
-  color: var(--white);
-}
-.action-go .icon {
-  width: 22px;
-  height: 22px;
-  stroke-width: 2px;
+  color: var(--ink-quiet);
 }
 
 .upcoming {
@@ -648,8 +707,8 @@ img.avatar {
   flex-direction: column;
   gap: var(--space-1);
 }
-.visit-card .card-head {
-  gap: var(--space-2);
+.visit-card .icon-badge[data-tint="paper"] {
+  background: var(--tint-paper);
 }
 
 /* --- The screen a place not built yet opens --------------------------------------------------- */
@@ -664,52 +723,54 @@ img.avatar {
   width: min(70%, 220px);
 }
 
-/* --- Welcome ---------------------------------------------------------------------------------- */
+/* --- Welcome, as the board draws it ------------------------------------------------------------ */
 .screen.welcome {
-  padding: 0 0 calc(var(--space-4) + env(safe-area-inset-bottom));
-  gap: 0;
-  background: var(--ground);
   min-height: 100dvh;
+  gap: 16px;
+  padding-top: calc(22px + env(safe-area-inset-top));
+  background: linear-gradient(180deg, var(--peach) 0%, var(--ground-warm) 55%, var(--ground) 100%);
 }
 .welcome-art {
   overflow: hidden;
-  border-radius: 0 0 var(--radius-sheet) var(--radius-sheet);
+  border-radius: 22px;
   background: var(--peach);
+  height: clamp(168px, 26vh, 240px);
 }
 .welcome-illo {
   width: 100%;
-  max-height: 44vh;
-  object-fit: cover;
+  height: 100%;
 }
-.welcome-body {
+.welcome-brand {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--gutter) 0;
+  align-items: flex-start;
+  gap: 2px;
+  color: var(--plum);
 }
-.welcome-body > .wordmark {
-  align-self: center;
-  margin-top: calc(-1 * var(--space-4));
-  padding: 10px 20px;
-  border-radius: var(--radius-pill);
-  background: var(--tint-paper);
-  box-shadow: var(--card-shadow);
+.welcome-heart .icon {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.8px;
+}
+.welcome-word {
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--plum);
+  margin: 0;
 }
 .welcome-tagline {
-  text-align: center;
-  font-size: calc(var(--text-title) * 1.25);
+  font-size: calc(var(--text-title) * 1.3);
   font-weight: 500;
-  line-height: 1.25;
-  color: var(--ink);
-}
-.welcome-tagline span {
-  display: block;
+  line-height: 1.18;
+  color: var(--plum-deep);
+  margin: 0;
+  text-wrap: balance;
 }
 .welcome-lead {
-  text-align: center;
-  color: var(--ink-quiet);
+  margin-top: -6px;
   font-size: var(--text-body);
+  color: var(--ink-quiet);
 }
 :root[data-density="patient"] .welcome-lead {
   color: var(--ink);
@@ -717,9 +778,8 @@ img.avatar {
 .value-tiles {
   list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.25rem), 1fr));
-  gap: var(--space-1);
-  margin: var(--space-1) 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  gap: 8px;
 }
 .value-tile {
   display: flex;
@@ -727,148 +787,201 @@ img.avatar {
   align-items: center;
   text-align: center;
   gap: 4px;
-  padding: 14px 8px;
-  border-radius: var(--radius-tile);
-  background: var(--tint);
+  padding: 12px 6px;
+  border-radius: 16px;
+  background: var(--tint-paper);
 }
 .value-tile .icon-badge {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .value-title {
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--text-body);
   line-height: 1.2;
 }
 .value-line {
   font-size: var(--text-caption);
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--ink-quiet);
 }
 :root[data-density="patient"] .value-line,
-:root[data-density="patient"] .feature-caption,
-:root[data-density="patient"] .action-line {
+:root[data-density="patient"] .action-line,
+:root[data-density="patient"] .card-line {
   color: var(--ink);
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .feature-tile,
-  .feature-tile:active {
-    transition: none;
-    transform: none;
-  }
+.welcome > .pill.plum {
+  border-radius: 16px;
+  min-height: calc(var(--target) + 4px);
+}
+.welcome-signin {
+  text-align: center;
+  color: var(--ink-quiet);
 }
 
-/* --- Conversation, waiting and "thinking" (docs/design-direction.md) --------------------------- */
+/* --- Conversation, waiting and "thinking", as the board's Ask Nura screen draws them ------------ */
 .exchange {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
 }
 .bubble {
-  max-width: 88%;
-  padding: 12px 16px;
-  border-radius: 22px;
-  box-shadow: var(--card-shadow);
+  max-width: 86%;
+  padding: 12px 15px;
+  border-radius: 18px;
   overflow-wrap: break-word;
+  line-height: 1.4;
 }
 .bubble[data-from="person"] {
   align-self: flex-end;
-  border-bottom-right-radius: 8px;
+  border-bottom-right-radius: 6px;
   background: var(--plum);
   color: var(--white);
 }
 .bubble[data-from="nura"] {
   align-self: flex-start;
-  border-bottom-left-radius: 8px;
+  border-bottom-left-radius: 6px;
   background: var(--tint-paper);
+  border: 1px solid var(--card-line);
   color: var(--ink);
 }
 .bubble p + p {
   margin-top: 4px;
 }
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.source-chip {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  background: var(--plum-wash);
+  color: var(--plum);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+}
+.answer-boundary {
+  margin-top: 8px;
+  font-size: var(--text-caption);
+  font-style: italic;
+  color: var(--ink-quiet);
+}
+.looked {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--card-line);
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.looked summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  cursor: pointer;
+  list-style: none;
+}
+.looked summary::-webkit-details-marker {
+  display: none;
+}
+.looked summary .icon {
+  width: 16px;
+  height: 16px;
+}
+.looked summary:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.looked .trace-steps {
+  margin-top: 6px;
+}
+.trace {
+  align-self: flex-start;
+  width: min(100%, 86%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 15px;
+  border-radius: 18px;
+  border-bottom-left-radius: 6px;
+  background: var(--tint-paper);
+  border: 1px solid var(--card-line);
+}
 .thinking {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px var(--space-1);
-  align-self: flex-start;
-  color: var(--ink-quiet);
+  gap: 4px 8px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--plum);
 }
 .thinking-mark {
   flex: none;
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
 }
 .thinking-dots {
   display: inline-flex;
-  gap: 5px;
-  padding: 10px 14px;
-  border-radius: var(--radius-pill);
-  background: var(--tint-paper);
-  box-shadow: var(--card-shadow);
+  gap: 4px;
 }
-.thinking-dots span {
-  width: 8px;
-  height: 8px;
+.thinking-dots i {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--plum);
   opacity: 0.35;
   animation: nura-pulse 1.2s ease-in-out infinite;
 }
-.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+.thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes nura-pulse {
   0%, 100% { opacity: 0.3; transform: translateY(0); }
   50% { opacity: 1; transform: translateY(-2px); }
-}
-.trace {
-  font-size: var(--text-caption);
-  color: var(--ink-quiet);
-}
-.trace-summary {
-  min-height: var(--target);
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  color: var(--plum);
-  font-weight: 500;
-}
-.trace-summary:focus-visible {
-  outline: 3px solid var(--plum);
-  outline-offset: 2px;
 }
 .trace-steps {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .trace-step {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-1);
+  gap: 8px;
+  color: var(--ink);
 }
-.trace-state {
+.trace-step[data-done="true"] {
+  color: var(--ink-quiet);
+}
+.trace-tick,
+.trace-spin {
   flex: none;
-  width: 20px;
-  height: calc(1em * var(--line-height));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--good);
-}
-.trace-state .icon {
   width: 18px;
   height: 18px;
-  stroke-width: 2.2px;
-}
-.trace-pending {
-  width: 10px;
-  height: 10px;
+  margin-top: 0.15em;
   border-radius: 50%;
-  border: 2px solid var(--plum);
-  opacity: 0.6;
+}
+.trace-tick {
+  display: grid;
+  place-items: center;
+  background: var(--tint-sage);
+  color: var(--good);
+}
+.trace-tick .icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.8px;
+}
+.trace-spin {
+  border: 2px solid var(--plum-wash);
+  border-top-color: var(--plum);
+  animation: nura-spin 0.9s linear infinite;
+}
+@keyframes nura-spin {
+  to { transform: rotate(360deg); }
 }
 .trace-text {
   min-width: 0;
@@ -880,20 +993,23 @@ img.avatar {
   gap: var(--space-1);
   color: var(--ink);
 }
+
+/* --- Skeletons -------------------------------------------------------------------------------- */
 .skeleton {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: var(--tile-pad);
-  border-radius: var(--radius-card);
+  padding: 16px;
+  border-radius: var(--radius-tile);
   background: var(--tint-paper);
-  box-shadow: var(--card-shadow);
+  border: 1px solid var(--card-line);
 }
 .skeleton[data-shape="tile"] {
-  min-height: 7rem;
+  min-height: 6.5rem;
+  border-radius: 18px;
 }
 .skeleton[data-shape="row"] {
-  padding: 12px var(--tile-pad);
+  padding: 12px 16px;
 }
 .skeleton-bar {
   display: block;
@@ -918,17 +1034,25 @@ img.avatar {
 }
 .home-skeleton .skeleton-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.25rem), 1fr));
-  gap: var(--tile-gap);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
+  gap: 10px;
 }
+
+/* --- Reduce Motion: nothing pulses, turns or shimmers ----------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .thinking-dots span {
+  .thinking-dots i {
     animation: none;
     opacity: 0.7;
     transform: none;
   }
+  .trace-spin,
   .skeleton-bar {
     animation: none;
+  }
+  .feature-tile,
+  .feature-tile:active {
+    transition: none;
+    transform: none;
   }
 }
 
@@ -942,7 +1066,9 @@ img.avatar {
 .home-skeleton,
 .skeleton,
 .exchange,
-.hero-block {
+.hero-block,
+.welcome-art,
+.value-tiles {
   flex-shrink: 0;
 }
 

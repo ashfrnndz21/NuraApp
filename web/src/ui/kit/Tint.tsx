@@ -46,13 +46,13 @@ interface FeatureTileProps {
   testId?: string;
 }
 
-/** The square feature tile (Home's "What would you like to do?"): its own tint, a line icon, a
- *  bold word and a small caption. The whole tile is the button, and its name is the word and
- *  the caption together. */
+/** The square feature tile (Home's "What would you like to do?", as the approved board draws it):
+ *  its own tint, a line icon in Plum, a bold word and a small caption, centred. The whole tile is
+ *  the button, and its name is the word and the caption together. */
 export function FeatureTile({ icon, tint, label, caption, onClick, testId }: FeatureTileProps): JSX.Element {
   return (
     <button type="button" class="feature-tile" data-tint={tint} onClick={onClick} data-testid={testId}>
-      <IconBadge icon={icon} tint="paper" shape="circle" />
+      <Icon name={icon} />
       <span class="feature-label">{label}</span>
       <span class="feature-caption">{caption}</span>
     </button>
