@@ -16,8 +16,8 @@ Every row written before this column existed was written the one way `_write` al
 one until now: under the visits' own scope. `visits` is not a guess for the backfill; it is
 what actually happened.
 
-Revision ID: 0041_question_written_scope
-Revises: 0040_feed_item_private_to
+Revision ID: 0042_question_written_scope
+Revises: 0041_feed_item_private_to
 Create Date: 2026-09-17
 """
 
@@ -26,8 +26,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0041_question_written_scope"
-down_revision = "0040_feed_item_private_to"
+revision = "0042_question_written_scope"
+down_revision = "0041_feed_item_private_to"
 branch_labels = None
 depends_on = None
 

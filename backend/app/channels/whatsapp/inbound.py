@@ -1097,7 +1097,9 @@ async def _open_question(session: AsyncSession, work: _Work) -> DoseQuestion | N
             DoseQuestion.answered_at.is_(None),
             DoseQuestion.expires_at > utcnow(),
         ),
-        order_by=(DoseQuestion.asked_at.desc(),),
+        # `.seq` breaks a tie in `asked_at` (#192/#218): which question a reply answers is a
+        # decision, not a display order.
+        order_by=(DoseQuestion.asked_at.desc(), DoseQuestion.seq.desc()),
         limit=1,
         channel=Channel.WHATSAPP,
     )

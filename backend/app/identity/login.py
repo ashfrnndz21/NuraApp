@@ -83,7 +83,9 @@ async def _open_challenges(
             column == address,
             LoginChallenge.consumed_at.is_(None),
         )
-        .order_by(LoginChallenge.issued_at.desc())
+        # `.seq` breaks a tie in `issued_at` (#192/#218): `_verify` takes `open_challenges[0]`
+        # as the one a code is checked against — a decision, not a display order.
+        .order_by(LoginChallenge.issued_at.desc(), LoginChallenge.seq.desc())
     )
     return list(found)
 

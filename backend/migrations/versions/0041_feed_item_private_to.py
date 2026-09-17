@@ -6,7 +6,7 @@ person id is the one exception a `Scope` cannot express (`app.delivery.feed.rank
 Rows written before this carry no value, and are visible to everyone their scope already let
 in, exactly as before.
 
-Revision ID: 0040_feed_item_private_to
+Revision ID: 0041_feed_item_private_to
 Revises: 0039_feeling_question_marker
 Create Date: 2026-09-17
 """
@@ -16,8 +16,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0040_feed_item_private_to"
-down_revision = "0039_feeling_question_marker"
+revision = "0041_feed_item_private_to"
+down_revision = "0040_monotonic_tiebreak"
 branch_labels = None
 depends_on = None
 

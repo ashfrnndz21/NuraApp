@@ -18,11 +18,11 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import BigInteger, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.consent.models import ConsentBasis
-from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
+from app.db import Base, ProfileScoped, as_utc, enum_column, monotonic, utcnow
 from app.regions import Region
 
 
@@ -113,13 +113,16 @@ class LoginChannel(StrEnum):
     EMAIL = "email"
 
 
+@monotonic
 class LoginChallenge(Base):
     """One request to sign in: a hashed secret, a window, a count of tries, and who it became.
 
     The code itself is never written down. What is stored is a hash keyed by the challenge's
     own id, so two people sent the same six digits do not share a row that could be matched.
     A challenge is one use: `consumed_at` closes it, and so does a newer one for the same
-    address. `person_id` is filled in on the verify that succeeded, and by nothing else.
+    address — the newest open one, `issued_at` tied by `seq` (#192/#218), is the one a code is
+    checked against. `person_id` is filled in on the verify that succeeded, and by nothing
+    else.
     """
 
     __tablename__ = "login_challenge"
@@ -138,6 +141,7 @@ class LoginChallenge(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     consumed_at: Mapped[datetime | None] = mapped_column(default=None)
     person_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("person.id"), default=None)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 class LoginSession(Base):

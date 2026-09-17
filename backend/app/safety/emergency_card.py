@@ -304,7 +304,9 @@ async def _projection(session: AsyncSession, *, context: KeyContext) -> Projecti
             Event.label == BLOOD_PRESSURE_LABEL,
             Event.occurred_at > moment - READING_HORIZON,
         ),
-        order_by=(Event.occurred_at.desc(),),
+        # `.seq` breaks a tie in `occurred_at` (#192/#218): which reading is "the" latest
+        # one on the card is a decision, not a display order.
+        order_by=(Event.occurred_at.desc(), Event.seq.desc()),
         limit=1,
     )
     # His insurer, as typed on a yes: the newest row in force, under the same scope.

@@ -130,6 +130,16 @@ class Settings:
     """NURA_ACCOUNT_RETENTION_DAYS: how long a closed account's papers wait before they are
     deleted, while his yes can still undo the closing (#143). 30 until counsel says otherwise
     (docs/trust/account-closure.md)."""
+    review_origin: str | None = None
+    """NURA_REVIEW_ORIGIN: the hostname (`review.nura.example`, no scheme, no path) the
+    pharmacist's review queue is served from once a deployment holds real data (#145,
+    docs/adr/0008-demo-mode.md "Before real data"). Unset — every demo and every laptop run —
+    `/app/review` and `/review/*` stay on the same origin as the patient app, W6 (#137)'s
+    posture, fine while nothing behind either is real. Named, `ReviewOrigin` (`app.channels.api`)
+    splits the two by the Host header alone: the review surface answers only on this host, the
+    rest of the app answers on every other host, and a request for either from the wrong one
+    is refused — so no patient-origin script or storage can ever reach a staff session, and a
+    review-origin page never serves the patient app."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -174,6 +184,28 @@ def database_url_for(url: str) -> str:
 class BadStaffTokens(RuntimeError):
     """The review queue's staff list is malformed, or carries a laptop's token outside a dev
     run. The process must not start on it."""
+
+
+class BadReviewOrigin(RuntimeError):
+    """NURA_REVIEW_ORIGIN is not a bare hostname: no scheme, no path, no port, lowercase."""
+
+
+_HOSTNAME = re.compile(
+    r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+)
+
+
+def _review_origin(value: str | None) -> str | None:
+    """NURA_REVIEW_ORIGIN, read strictly: a bare hostname with at least one dot (#145) — a
+    scheme, a path, a port or an IP address is refused rather than silently stripped."""
+    if value is None or not value.strip():
+        return None
+    origin = value.strip().lower()
+    if not _HOSTNAME.match(origin):
+        raise BadReviewOrigin(
+            "NURA_REVIEW_ORIGIN is a bare hostname (review.nura.example), no scheme or path"
+        )
+    return origin
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -244,6 +276,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
+        review_origin=_review_origin(source.get("NURA_REVIEW_ORIGIN")),
     )
 
 

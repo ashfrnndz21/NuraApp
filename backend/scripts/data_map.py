@@ -49,6 +49,11 @@ CLASSIFICATIONS = (IDENTIFIER, HEALTH, CONSENT, AUDIT, OPERATIONAL)
 CLASSES: dict[str, str] = {
     "*.profile_id": IDENTIFIER,
     "*.region": OPERATIONAL,
+    # The write-order tiebreaker (#192/#218, `app.db.monotonic`): a row's position, not
+    # anything about a person or his health.
+    "*.seq": OPERATIONAL,
+    "seq_counters.name": OPERATIONAL,
+    "seq_counters.value": OPERATIONAL,
     # A row's own id is classified as the row: the id of a fact is a reference to health
     # data, the id of a person is an identifier, the id of a consent is the consent record.
     # Only a sign-in row's id points at nothing about a person.

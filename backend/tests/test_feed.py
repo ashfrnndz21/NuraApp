@@ -2,15 +2,19 @@
 
 A card names its State or is not written; a card with a failing line is not written and the
 refusal is on the trail; a learning card from outside the allowlist is not written; a
-medicine on the list starts an explainer and a daily safety job, and a notice that does not
-match the batch on his pack is held for the caregiver and never delivered to him.
+medicine on the list starts an explainer and a daily safety job, and a notice — whether or
+not it matches the batch on his pack — is held for the caregiver, or rerouted to the memo as
+a doctor question, and never delivered to him (#181; `items.NoticeNotForPatient` refuses one
+built for `DeliverTo.PATIENT` outright).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -21,11 +25,13 @@ from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.delivery.feed.compose import Day, plain_day, refresh, today_for
 from app.delivery.feed.compress import (
+    Compressed,
     FixtureCompressor,
     FixtureSearcher,
+    Found,
     changes_treatment,
 )
-from app.delivery.feed.items import SURFACE_OF, NotPlainWords, Why, create_item
+from app.delivery.feed.items import SURFACE_OF, NoticeNotForPatient, NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
@@ -51,15 +57,19 @@ from app.delivery.strings import Lines, learning_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
-from app.keys.scopes import Scope
+from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import store_artifact
 from app.memory.models import ArtifactKind, SourceChannel
 from app.memory.semantic import assert_fact
+from app.reasoning.visits.memos import current_memos
+from app.reasoning.visits.models import MemoKind
+from app.reasoning.visits.questions import question_from_memo
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line
 from app.state.models import NotRenderedFromState
 from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
+from tests.medicines_support import let_in
 from tests.support import OPENING_CONSENT
 
 MONDAY = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
@@ -390,17 +400,181 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     ]
 
 
-async def test_a_notice_that_matches_the_batch_on_his_pack_is_a_card_for_today(
+async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
     sg: AsyncSession,
 ) -> None:
+    """#181: a batch match no longer earns a notice a place in his feed (spec §0, §9). It is
+    still hers to act on — `Supply.TODAY`, same as before — and still not suppressed (a match
+    is relevant, just never a card he reads); it is simply never `DeliverTo.PATIENT`."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
     notice = next(item for item in made if item.type is CardType.NOTICE)
-    assert notice.deliver_to is DeliverTo.PATIENT and notice.supply is Supply.TODAY
+    assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
+    assert notice.why["suppressed"] is None
     assert notice.body[1] == "Look for the batch number 240077 on your box."
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert [item.type for item in page.items][:3] == [CardType.NOW, CardType.NOTICE, CardType.GATE]
+    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert [item.type for item in page.items][:4] == [
+        CardType.NOW,
+        CardType.GATE,
+        CardType.STORY,  # the label photo is one of his papers
+        CardType.LEARNING,
+    ]
+
+
+async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_patient(
+    sg: AsyncSession,
+) -> None:
+    """The choke point holds even if a future job or caller gets the routing wrong: `create_item`
+    refuses a `CardType.NOTICE` built for `DeliverTo.PATIENT` before it looks at its words."""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    lines = learning_lines(
+        "en",
+        headline="A notice about one batch of your blood thinner",
+        body=("Look for the batch number 240077 on your box.",),
+        topic="your blood thinner",
+        source_name="Health Sciences Authority",
+        doctor="your doctor",
+    )
+    with pytest.raises(NoticeNotForPatient):
+        await create_item(
+            sg,
+            context=context,
+            state=state,
+            type=CardType.NOTICE,
+            lines=lines,
+            why=Why(kind="notice", plain=lines.why),
+            scope=Scope.MEDICINES,
+            deliver_to=DeliverTo.PATIENT,
+            day="2026-09-03",
+            dedupe_key="notice:refused",
+            expires_at=MONDAY,
+        )
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.MEDICINES)
+    refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
+    assert refusals and refusals[-1].refused_because == "NoticeNotForPatient"
+    assert not [item for item in await _items(sg, context) if item.type is CardType.NOTICE]
+
+
+class _TreatyNoticeSearcher:
+    """A safety notice whose words would change treatment — never the fixture data other
+    tests share, so this scenario cannot leak into theirs."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "safety" or "notices.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="notices.example.sg",
+                url="https://notices.example.sg/warfarin-stop-240077",
+                title="Stop taking this batch of warfarin",
+                published_at="2026-09-01",
+                text=(
+                    "Stop taking tablets from batch 240077 of warfarin immediately and "
+                    "return them to your pharmacy."
+                ),
+                batch="240077",
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyNoticeCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="A notice about your blood thinner",
+            body=(
+                "Stop taking tablets from this batch immediately.",
+                "Return them to your pharmacy.",
+            ),
+            why_topic="your blood thinner",
+            passage=text,
+        )
+
+
+async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chief(
+    sg: AsyncSession,
+) -> None:
+    """#224 (review finding on #181's own PR): the most dangerous version of a safety notice
+    — one that matches the batch on his own box *and* reads as a reason to start, stop or
+    change a medicine — used to reach nobody. A `continue` after the treatment-change reroute
+    skipped the caregiver notice entirely, and the reroute itself wrote a `CardType.QUESTION`
+    `FeedItem` with `deliver_to=DeliverTo.MEMO` that nothing reads: `rank._patient_supply`
+    excludes anything not `DeliverTo.PATIENT`, `rank._caregiver_supply` excludes anything not
+    `PATIENT`/`CAREGIVER`, and no route ever queried `FeedItem` for `deliver_to == MEMO`.
+
+    Fixed both ways: the caregiver notice is now unconditional (batch match and
+    treatment-change reroute are independent, not exclusive), and the reroute files a real
+    doctor question through `reasoning.visits.memos.write_memo` — the same door the post-visit
+    summary uses — never a `FeedItem`. This test proves delivery through the real paths both
+    land on, not that a row merely exists: his chief's own `feed_page` (a second, independently
+    resolved `KeyContext`, not a `deliver_to` field read off the row) for the notice, and
+    `current_memos` (what `brief.py` and `questions.py` themselves call) for the question."""
+    context = await _pa(sg)
+    await _label(sg, context, name="Warfarin", strength=5, batch="240077")
+    source = Source(
+        name="Notices Example",
+        domain="notices.example.sg",
+        kind=SourceKind.REGULATOR,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyNoticeSearcher(),
+        compressor=_TreatyNoticeCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    _, made = await refresh(sg, context=context, engine=engine)
+
+    # The caregiver notice: still made, still hers, and the match is on it — this is the
+    # confirmed-his-own-box case, not a maybe.
+    assert CardType.QUESTION not in {item.type for item in made}, "no orphaned FeedItem question"
+    notice = next(item for item in made if item.type is CardType.NOTICE)
+    assert notice.deliver_to is DeliverTo.CAREGIVER
+    assert notice.why["suppressed"] is None, "the batch matches: this is not held back as unrelated"
+    assert notice.cite is not None and notice.cite["batch"] == "240077"
+
+    # Delivery, not existence: his chief's own key, resolved independently of Pa's, actually
+    # reads it back through the real feed page.
+    mei = await let_in(
+        sg, context, phone="+6591230099", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.MEDICINES}
+    )
+    her_page = await feed_page(sg, context=mei, engine=engine)
+    assert notice.id in {item.id for item in her_page.items}
+
+    # His own feed carries neither the notice nor any question — spec §0, §9.
+    his_page = await feed_page(sg, context=context, engine=engine)
+    assert {item.type for item in his_page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+
+    # The doctor question: a real Memo, read back through the same function the post-visit
+    # brief and the pre-visit question loop both call — not a raw table query.
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_safety_notice"
+    assert memo.slots == {
+        "doctor": "your doctor",
+        "medicine": "the blood thinner tablet (warfarin)",
+    }
+    assert memo.text == (
+        "Ask your doctor about the notice on the blood thinner tablet (warfarin)."
+    )
+    assert memo.appointment_id is None, "a standing question, not tied to one visit yet"
+    # The words of the notice itself never reach the memo: only that there is one to ask
+    # about, the same discipline the caregiver notice already keeps.
+    assert "stop" not in memo.text.lower() and "240077" not in memo.text
+    # It becomes a real question, the way `questions.questions_for` would pick it up.
+    proposed = question_from_memo(memo)
+    assert proposed.key == "ask_safety_notice" and proposed.slots == memo.slots
 
 
 async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:

@@ -552,7 +552,9 @@ async def cached_page(session: AsyncSession, *, context: KeyContext) -> Page:
         context,
         Scope.PROFILE,
         where=(FeedPage.person_id == context.person_id,),
-        order_by=(FeedPage.rendered_at.desc(),),
+        # `.seq` breaks a tie in `rendered_at` (#192/#218): which page is "the" cached one
+        # is a decision, not a display order.
+        order_by=(FeedPage.rendered_at.desc(), FeedPage.seq.desc()),
         limit=1,
     )
     if not pages:

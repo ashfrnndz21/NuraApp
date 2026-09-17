@@ -1,16 +1,19 @@
 """The one way a feed item is written.
 
-Five things happen here and nowhere else. The lines are checked against the plain-words
-standard in the profile's language — headline, body, voice and why, every one — and a card
-with a failing line is not made (`NotPlainWords`, written to the trail). A learning card is
-checked against the allowlist: no source, or one that is not usable, and it is not made
-(`SourceNotAllowlisted`). A card of an inferring surface (`SURFACE_OF`: a learning card, a
-notice) ends on the boundary line it carries, or it is not made (`NoBoundaryLine`, E16-01).
-And the row is written through `render_from_state`, which stamps the State it was rendered
-from, refuses a State the record has moved past, and writes the line on the row — refusing
-it on a card that infers nothing. And the card grammar is checked (E11-03, `grammar`): one
-number, one direction, one colour — the State wash — and one action, written as columns. `autoplay` is written false, always: the schema carries
-the promise the pager keeps.
+Six things happen here and nowhere else. A safety notice is refused outright for the patient
+(`NoticeNotForPatient`, #181): it is held for the chief or rerouted to the memo, never a card
+he reads, whichever job asked for it and whatever a caller sets `deliver_to` to. The lines are
+checked against the plain-words standard in the profile's language — headline, body, voice
+and why, every one — and a card with a failing line is not made (`NotPlainWords`, written to
+the trail). A learning card is checked against the allowlist: no source, or one that is not
+usable, and it is not made (`SourceNotAllowlisted`). A card of an inferring surface
+(`SURFACE_OF`: a learning card, a notice) ends on the boundary line it carries, or it is not
+made (`NoBoundaryLine`, E16-01). And the row is written through `render_from_state`, which
+stamps the State it was rendered from, refuses a State the record has moved past, and writes
+the line on the row — refusing it on a card that infers nothing. And the card grammar is
+checked (E11-03, `grammar`): one number, one direction, one colour — the State wash — and one
+action, written as columns. `autoplay` is written false, always: the schema carries the
+promise the pager keeps.
 """
 
 from __future__ import annotations
@@ -122,6 +125,14 @@ class NotPlainWords(Refusal):
         self.findings = tuple(findings)
 
 
+class NoticeNotForPatient(Refusal):
+    """A safety notice is never a card in the patient's feed, batch match or not (#181,
+    docs/health-feed-spec.md §0 and §9): it is held for the chief, or rerouted to the memo as
+    a doctor question. This is the one place every card is written, so it is the one place
+    this is refused — a caller cannot route a notice to `DeliverTo.PATIENT` by mistake or by
+    a later change to a search job. The card was not made."""
+
+
 @dataclass(frozen=True, slots=True)
 class Why:
     """Why am I seeing this, by id: what the card was built from, and the plain sentence."""
@@ -197,6 +208,8 @@ async def create_item(
     other person, whatever her scopes — the one exception a `Scope` cannot express.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
+        if type is CardType.NOTICE and deliver_to is DeliverTo.PATIENT:
+            raise NoticeNotForPatient(f"a {type.value} card is never delivered to the patient")
         if deliver_to is DeliverTo.PATIENT:
             failing = failures_in(lines)
             if failing:
