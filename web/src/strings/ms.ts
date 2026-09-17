@@ -144,17 +144,17 @@ export const ms = {
     // @patient headline
     activities: "Perkara untuk dibuat",
     // @patient line
-    activitiesLine: "Sesuatu untuk dibuat hari ini.",
+    activitiesLine: "Kekal aktif.",
     // @patient headline
-    care: "Bantuan di rumah",
+    care: "Perkhidmatan penjagaan",
     // @patient line
-    careLine: "Seseorang boleh datang membantu anda di rumah.",
+    careLine: "Bantuan di rumah.",
     // @patient line
-    careLineOther: "Seseorang boleh datang membantu {patient} di rumah.",
+    careLineOther: "Bantuan untuk {patient} di rumah.",
     // @patient headline
-    resources: "Bahan bacaan",
+    resources: "Panduan",
     // @patient line
-    resourcesLine: "Nura terangkan dalam kata-kata mudah.",
+    resourcesLine: "Baca dan belajar.",
     // @patient headline
     report: "Tambah surat",
     // @patient line

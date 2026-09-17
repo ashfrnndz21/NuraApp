@@ -144,17 +144,17 @@ export const en = {
     // @patient headline
     activities: "Things to do",
     // @patient line
-    activitiesLine: "Something to do today.",
+    activitiesLine: "Stay busy.",
     // @patient headline
-    care: "Help at home",
+    care: "Care services",
     // @patient line
-    careLine: "Someone can come and help you at home.",
+    careLine: "Help at home.",
     // @patient line
-    careLineOther: "Someone can come and help {patient} at home.",
+    careLineOther: "Help {patient} at home.",
     // @patient headline
-    resources: "Things to read",
+    resources: "Guides",
     // @patient line
-    resourcesLine: "Nura explains things in plain words.",
+    resourcesLine: "Read and learn.",
     // @patient headline
     report: "Add a paper",
     // @patient line

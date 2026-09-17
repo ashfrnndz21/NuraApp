@@ -144,17 +144,17 @@ export const zh = {
     // @patient headline
     activities: "可以做的事",
     // @patient line
-    activitiesLine: "今天可以做点什么。",
+    activitiesLine: "保持忙碌。",
     // @patient headline
-    care: "上门帮忙",
+    care: "照护服务",
     // @patient line
-    careLine: "有人可以上门帮您。",
+    careLine: "上门帮忙。",
     // @patient line
-    careLineOther: "有人可以上门帮{patient}。",
+    careLineOther: "上门帮{patient}。",
     // @patient headline
-    resources: "可以读的东西",
+    resources: "指南",
     // @patient line
-    resourcesLine: "Nura 用简单的话说明。",
+    resourcesLine: "阅读并学习。",
     // @patient headline
     report: "加一份文件",
     // @patient line
