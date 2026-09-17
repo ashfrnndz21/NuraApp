@@ -28,6 +28,7 @@ describe("the Welcome screen's demo/dev sign-in shortcuts", () => {
     const tree = render(<DemoSignIn show={true} onTry={() => {}} busy="pa" error={null} />);
     const [pa] = all(tree, byTestId("welcome-try-pa"));
     const [mei] = all(tree, byTestId("welcome-try-mei"));
+    if (pa === undefined || mei === undefined) throw new Error("both demo buttons render");
     expect(pa.props.disabled).toBe(true);
     expect(mei.props.disabled).toBe(true);
   });
