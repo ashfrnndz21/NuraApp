@@ -12,7 +12,7 @@ import pytest
 from app.channels.about_him import LANGUAGES, TO_HIM, Reader, twins
 from app.consent.texts import CONSENT_THEIRS, TEXTS, ConsentText
 from app.safety.boundary import BOUNDARY_THEIRS, Surface, boundary_line
-from tests.api import bearer, let_in, own_profile, register_by_phone
+from tests.api import CONSENT, bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 
 PA = "+6598760451"
@@ -261,3 +261,85 @@ async def test_grants_and_consents_are_said_about_him_by_name_on_a_key_that_is_n
         for consent in his_consents.json()
         for consent_line in consent["wording_text"].split("\n")
     ), "his own key still reads his own words"
+
+
+async def test_consent_voice_follows_the_actor_not_the_reader(deployment: Deployment) -> None:
+    """#214, "whose act was it": the voice of a consent's shown wording follows who gave it
+    (`Consent.person_id`), never who is reading it. Mei records `HOLD_HEALTH_RECORD` for Pa
+    under a lasting power of attorney before he claims the graph: her act stays hers, read on
+    either key, and his own act — once he claims and agrees for himself — stays his."""
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    hers = bearer(mei["token"])
+    evidence = {
+        "kind": "pdf",
+        "storage_key": "sg/lpa/pa.pdf",
+        "content_type": "application/pdf",
+        "sha256": "a" * 64,
+        "captured_at": "2026-09-01T00:00:00+00:00",
+    }
+    opened = await deployment.client.post(
+        "/profiles/for-someone",
+        json={
+            "patient_phone_e164": PA,
+            "display_name": "Pa",
+            "language": "en",
+            "consent": CONSENT,
+            "basis": "lpa",
+            "relationship": "daughter",
+            "evidence": evidence,
+        },
+        headers=hers,
+    )
+    assert opened.status_code == 201, opened.text
+    profile_id = opened.json()["profile_id"]
+
+    # Mei reads her own act, on her own key: the words stand exactly as she read them.
+    her_consents = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=hers)
+    assert her_consents.status_code == 200, her_consents.text
+    [her_view] = her_consents.json()
+    assert her_view["person_id"] == mei["person_id"]
+    assert TO_HIM["en"].search(her_view["wording_text"]), "her own act stays in her own words"
+
+    # Pa registers, finds the graph waiting, and claims it.
+    pa = await register_by_phone(deployment, PA, "Pa")
+    his = bearer(pa["token"])
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "claim", "language": "en"},
+        headers=his,
+    )
+    assert minted.status_code == 201, minted.text
+    claimed = await deployment.client.post(
+        f"/profiles/{profile_id}/claim",
+        json={"confirmation_id": minted.json()["confirmation_id"], "language": "en"},
+        headers=his,
+    )
+    assert claimed.status_code == 200, claimed.text
+
+    his_consents = await deployment.client.get(f"/profiles/{profile_id}/consents", headers=his)
+    assert his_consents.status_code == 200, his_consents.text
+    rows = his_consents.json()
+
+    # Pa reads Mei's act, on his own key: it was hers, said about her by name — never left
+    # to read as if he had agreed to it himself (the harm #214 reported).
+    [her_act] = [c for c in rows if c["basis"] == "lpa"]
+    assert her_act["person_id"] == mei["person_id"]
+    assert not TO_HIM["en"].search(her_act["wording_text"]), her_act["wording_text"]
+    assert "Mei" in her_act["wording_text"]
+
+    # His own act, once he claims and agrees for himself: unchanged, on his own key.
+    [his_own] = [
+        c for c in rows if c["purpose"] == "hold_health_record" and c["basis"] == "owner"
+    ]
+    assert his_own["person_id"] == pa["person_id"]
+    assert TO_HIM["en"].search(his_own["wording_text"])
+
+    # The audit trail already names the actor: assert it directly, not just the wording.
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    assert trail.status_code == 200, trail.text
+    write = next(
+        e
+        for e in trail.json()
+        if e["target"] == "consent" and e["target_id"] == her_act["consent_id"]
+    )
+    assert write["actor_person_id"] == mei["person_id"]

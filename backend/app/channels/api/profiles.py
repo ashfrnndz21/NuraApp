@@ -29,7 +29,7 @@ from app.audit.access import (
 )
 from app.audit.models import Action
 from app.audit.trail import read_audit
-from app.channels.about_him import reader_of
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import (
     ClosingContext,
@@ -102,6 +102,7 @@ from app.consent.service import (
 from app.consent.texts import named_words
 from app.consent.withdrawal import stop_lines, stopped_lines
 from app.db import as_utc, utcnow
+from app.delivery.strings import language_for
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
@@ -548,15 +549,24 @@ async def consents(context: ClosingContext, session: Db) -> list[ConsentOut]:
     Read under the family scope: the owner's and his chief's. While his account is closing
     (#143) it stays his to read, and nobody else's.
 
-    Each wording is the words he read, verbatim — a consent record's whole value is being
-    unambiguous about who agreed to what. On his own key that is what he reads; on a key
-    that is not his, the same words are said about him by name, never left to read as if
-    they were the reader's own (#214)."""
+    Each wording's voice follows who gave it (`Consent.person_id`), not who is reading: the
+    reader's own act stays exactly the words he read, verbatim; a row someone else gave —
+    a chief acting for him on a proxy basis, or his own act read back on a key that is not
+    his — is said about that other person by name, the catalogues' `*_THEIRS` twins, never
+    left to read as if it were the reader's own (#214, "whose act was it")."""
     await only_the_owner_while_closing(session, context)
-    reader = await reader_of(session, context, None)
-    return [
-        reader.model(ConsentOut.of(row)) for row in await all_consents(session, context=context)
-    ]
+    profile = await audited_profile_read(session, context)
+    language = language_for(profile.language)
+    heard: list[ConsentOut] = []
+    for row in await all_consents(session, context=context):
+        out = ConsentOut.of(row)
+        if row.person_id == context.person_id:
+            # His own act: the words stand exactly as he read them.
+            heard.append(out)
+            continue
+        actor_name = await person_display_name(session, context, row.person_id)
+        heard.append(Reader(his=False, name=actor_name, language=language).model(out))
+    return heard
 
 
 @router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
