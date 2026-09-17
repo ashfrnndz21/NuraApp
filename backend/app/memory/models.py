@@ -158,6 +158,10 @@ class EventKind(StrEnum):
     SUPPLY = "supply"
     """A person said there are more of a medicine at home (E04-05, "I have more at home"):
     the moment the count correction's fact rests on, under the medicines' part."""
+    SETTING = "setting"
+    """He (or his chief) changed a preference about how Nura works for him, after setup
+    (RE-05, "What Nura uses"): a signal switched on or off. The moment that preference fact
+    rests on, the way an onboarding choice rests on ONBOARDING."""
 
 
 @monotonic

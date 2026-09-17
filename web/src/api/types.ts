@@ -625,7 +625,8 @@ export type DocumentKind =
   | "insurance_letter"
   | "device_screen"
   | "not_health"
-  | "unknown";
+  | "unknown"
+  | "unsupported_file_type";
 
 /** Where an imported PDF came from, in the backend's words (E02-03). */
 export type DocumentSource = "portal" | "email" | "share";
@@ -1566,6 +1567,20 @@ export interface SearchJobOut {
 export interface AreaOut {
   area: string | null;
   districts: string[];
+  may_set: boolean;
+}
+
+/** "What Nura uses" (RE-05): the everyday series the recommendation engine may read. */
+export type SignalFamily = "food" | "sleep" | "steps" | "water" | "search_topics";
+
+export interface SignalOut {
+  family: SignalFamily;
+  on: boolean;
+  fact_id: string | null;
+}
+
+export interface SignalsOut {
+  signals: SignalOut[];
   may_set: boolean;
 }
 

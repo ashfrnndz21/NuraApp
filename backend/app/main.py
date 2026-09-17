@@ -4,12 +4,19 @@ Settings are read once, here, and nowhere else. The code sender comes from
 `code_sender_for`: the logging fixture when the deployment is a declared dev run
 (`NURA_DEV_CODE_SENDER=1`, which `make dev` sets), and otherwise the process refuses to
 start, because there is no real provider yet and the fixture prints login codes. The object
-store is the local one under NURA_OBJECT_STORE, pinned to this region; the extractor is the
-fixture one over NURA_PAPER_FIXTURES until the real one exists (E02); the transcriber is the
+store is the local one under NURA_OBJECT_STORE, pinned to this region; the extractor is
+chosen by NURA_EXTRACTOR (`app.ingestion.extract_provider.extractor_for`) — the fixture one
+over NURA_PAPER_FIXTURES by default, or the Claude-backed one (E02), which only builds on a
+declared demo because Anthropic's API does not process in SG or MY; the transcriber is the
 fixture one over NURA_VOICE_FIXTURES, pinned to this region, until a speech provider exists
 (E02-06); the drug registry is the fixture one (`NURA_DRUG_REGISTRY=fixture`) until a licensed
 client exists (E04); the summariser is the fixture one over NURA_VISIT_FIXTURES until a model
-in the region does (E05); the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`,
+in the region does (E05); the feed's searcher and compressor are the fixture ones over
+NURA_FEED_FIXTURES by default (`NURA_SEARCHER`/`NURA_COMPRESSOR=fixture`), or Claude's own web
+search, fetch and structured output when both are set to `claude` — which runs only on a
+declared demo, `NURA_DEMO_MODE=1`, with `ANTHROPIC_API_KEY` set, because there is no in-region
+provider yet (`app.delivery.feed.claude_adapters`); the WhatsApp provider is the fixture
+(`NURA_WHATSAPP_PROVIDER=fixture`,
 signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19); so
 does the fixture voice that says a card aloud (E11-04), and the app push reaches nobody until
 the app registers devices (E11-05).
@@ -27,13 +34,13 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import whatsapp_provider_for
 from app.clock import install_frozen
 from app.db import make_engine, make_session_factory
+from app.delivery.feed.claude_adapters import compressor_for, searcher_for
 from app.delivery.feed.clips import FixtureClipRenderer
-from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.push import push_sender_for
 from app.delivery.voice import voice_for
 from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
-from app.ingestion.extract import FixtureExtractor
+from app.ingestion.extract_provider import extractor_for
 from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
@@ -50,21 +57,21 @@ def providers_for(settings: Settings) -> Providers:
     bytes, or nothing to read them with, refuses to start rather than guess. Every provider
     here but the store's bucket is a fixture, and `create_app` refuses them all outside a
     declared dev run or demo (`app.fixtures`)."""
-    if settings.paper_fixtures is None:
-        raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
     if settings.visit_fixtures is None:
         raise MissingSetting("NURA_VISIT_FIXTURES is not set and there is no other summariser yet")
     if settings.voice_fixtures is None:
         raise MissingSetting("NURA_VOICE_FIXTURES is not set and there is no other transcriber yet")
     if settings.feed_fixtures is None:
-        raise MissingSetting("NURA_FEED_FIXTURES is not set and there is no other searcher yet")
+        raise MissingSetting(
+            "NURA_FEED_FIXTURES is not set and there is no other clip still to show"
+        )
     return Providers(
         code_sender=code_sender_for(settings),
         object_store=object_store_for(settings),
-        extractor=FixtureExtractor(Path(settings.paper_fixtures)),
+        extractor=extractor_for(settings),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
-        searcher=FixtureSearcher(Path(settings.feed_fixtures)),
-        compressor=FixtureCompressor(Path(settings.feed_fixtures)),
+        searcher=searcher_for(settings),
+        compressor=compressor_for(settings),
         drug_registry=drug_registry_for(settings),
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
