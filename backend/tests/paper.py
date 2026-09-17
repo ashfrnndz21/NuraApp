@@ -45,6 +45,22 @@ BP_CUFF = "bp-cuff-2026-09-14"
 GLUCOMETER = "glucometer-2026-09-14"
 """A glucometer's screen, 14 September 2026 at 6.55: 6.8 mmol/L."""
 
+LAB_REPORT_VITALS = "lab-report-vitals-2026-09-10"
+"""A lab report naming one vital in a unit the app already knows (blood sugar, mmol/L)
+beside an ordinary lipid row and a header field, 10 September 2026."""
+
+LAB_REPORT_RED_FLAG = "lab-report-red-flag-2026-09-11"
+"""A lab report whose facility remark names a red-flag word, 11 September 2026."""
+
+CLINIC_LETTER_HYPERTENSION = "clinic-letter-hypertension-2026-09-12"
+"""A clinic slip naming a condition in the clinician's own words, 12 September 2026."""
+
+INSURANCE_POLICY = "insurance-policy-2026-09-13"
+"""A policy schedule, 13 September 2026."""
+
+INSURANCE_CLAIM = "insurance-claim-2026-09-14"
+"""A claim letter, 14 September 2026."""
+
 PDF_HEADER = b"%PDF-1.4\n"
 
 

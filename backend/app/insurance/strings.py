@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from app.errors import Refusal
+from app.regions import Region
 from app.safety.plain_words import verify
 
 LANGUAGES = ("en", "ms", "zh")
@@ -22,6 +23,62 @@ DEFAULT_LANGUAGE = "en"
 
 NAME_SLOTS: frozenset[str] = frozenset({"name"})
 NAME_STAND_IN = "Ash"
+
+CURRENCY_BY_REGION: Mapping[Region, str] = {
+    Region.SG: "S$",
+    Region.MY: "RM",
+}
+"""His own currency symbol, from the region his profile is pinned to (`app.regions.Region`) —
+never a symbol hard-coded at a call site (the ledger, `app.insurance.ledger`): a policy
+carries no currency of its own, so the region is the one source of truth for it."""
+
+
+def say_money(cents: int, region: Region) -> str:
+    """An amount in minor units, in his own currency: 'S$420', 'S$420.50' — cents in, never a
+    float, never a bare number with nothing to say what it is."""
+    symbol = CURRENCY_BY_REGION[region]
+    sign = "-" if cents < 0 else ""
+    whole, remainder = divmod(abs(cents), 100)
+    if remainder:
+        return f"{sign}{symbol}{whole}.{remainder:02d}"
+    return f"{sign}{symbol}{whole}"
+
+
+# @patient phrase
+CLAIM_STATUS_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "submitted": "filed",
+        "in_review": "being checked",
+        "approved": "approved",
+        "partially_approved": "partly approved",
+        "rejected": "not approved",
+        "paid": "paid",
+    },
+    "ms": {
+        "submitted": "difailkan",
+        "in_review": "sedang disemak",
+        "approved": "diluluskan",
+        "partially_approved": "diluluskan sebahagian",
+        "rejected": "tidak diluluskan",
+        "paid": "telah dibayar",
+    },
+    "zh": {
+        "submitted": "已提交",
+        "in_review": "审核中",
+        "approved": "已批准",
+        "partially_approved": "部分批准",
+        "rejected": "未批准",
+        "paid": "已付款",
+    },
+}
+"""The ledger's own word for a claim's status (`app.insurance.ledger`), short and plain — not
+the enum value, which is never shown to him."""
+
+
+def claim_status_word(status: str, language: str) -> str:
+    lang = language_of(language)
+    by_status = CLAIM_STATUS_WORDS.get(lang, CLAIM_STATUS_WORDS[DEFAULT_LANGUAGE])
+    return by_status.get(status) or CLAIM_STATUS_WORDS[DEFAULT_LANGUAGE][status]
 
 
 class NotPlainWords(Refusal):

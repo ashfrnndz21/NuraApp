@@ -67,10 +67,15 @@ from app.state.models import Dimension, StateTrigger
 from app.state.service import current_state
 from tests.paper import (
     BP_CUFF,
+    CLINIC_LETTER_HYPERTENSION,
     CLINIC_SLIP,
     DISCHARGE_LETTER,
     GLUCOMETER,
     HANDWRITTEN_PRESCRIPTION,
+    INSURANCE_CLAIM,
+    INSURANCE_POLICY,
+    LAB_REPORT_RED_FLAG,
+    LAB_REPORT_VITALS,
     LIPID_PANEL,
     LIPID_PANEL_2025,
     PAPER,
@@ -188,9 +193,12 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     """The extractor answers by digest, so a fixture whose digest drifted is a page it would
     never recognise. Nine fixtures are here: the lipid panel and the warfarin label (E02-01),
     the clinic slip and the prescription by hand (E02-02), the hospital letter and the receipt
-    as PDFs (E02-03), two machines' screens (E02-08), and the second lipid panel
-    the lab trend reads (E09-01). The labelled answers beside them
-    (`*.expected.json`) are the accuracy harness's and name no digest."""
+    as PDFs (E02-03), two machines' screens (E02-08), the second lipid panel the lab trend
+    reads (E09-01), and five wholly synthetic papers for lab reports and insurance documents
+    (documents-lab-reports-and-insurance: a known-unit vital, a red-flag word, a clinician's
+    condition, a policy and a claim — none redacted from a real paper, since none ever was
+    one). The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
+    name no digest."""
     labels = papers()
     assert set(labels) == {
         LIPID_PANEL,
@@ -202,12 +210,19 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         BP_CUFF,
         GLUCOMETER,
         LIPID_PANEL_2025,
+        LAB_REPORT_VITALS,
+        LAB_REPORT_RED_FLAG,
+        CLINIC_LETTER_HYPERTENSION,
+        INSURANCE_POLICY,
+        INSURANCE_CLAIM,
     }
     for label in labels:
         paper = fixture(label)
         assert paper["placeholder"] == label
         assert paper["sha256"] == hashlib.sha256(placeholder_of(label)).hexdigest()
-        assert "redacted" in paper["note"].lower()
+        # Every fixture says plainly that nothing real is in it: redacted from a real paper,
+        # or — the five added for lab reports and insurance — synthetic from the start.
+        assert "redacted" in paper["note"].lower() or "synthetic" in paper["note"].lower()
     assert all("sha256" not in json.loads(p.read_text()) for p in PAPER.glob("*.expected.json"))
 
 

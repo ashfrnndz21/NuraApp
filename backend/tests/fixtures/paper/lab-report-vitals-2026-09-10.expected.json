@@ -1,0 +1,11 @@
+{
+  "placeholder": "lab-report-vitals-2026-09-10",
+  "note": "What the synthetic paper says, matching the fixture exactly: nothing here is a deliberate misread.",
+  "document_kind": "lab_report",
+  "fields": [
+    { "subject": "blood_sugar", "attribute": "glucose", "value": 5.6, "unit": "mmol/L" },
+    { "subject": "lipid_panel", "attribute": "ldl", "value": 140, "unit": "mg/dL" },
+    { "subject": "lipid_panel", "attribute": "ldl_reference_range", "value": "<130", "unit": null },
+    { "subject": "lab_report", "attribute": "facility", "value": "Bukit Lab", "unit": null }
+  ]
+}

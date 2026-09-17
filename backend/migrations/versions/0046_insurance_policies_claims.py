@@ -14,15 +14,15 @@ the door already reserved for "your insurance letters" and already preset to nob
 chief.
 
 Renumbered onto the shared chain at merge time: PR #225's `0044_consent_role_window` landed
-on main first, and PR #235 claims `0045` but had not pushed its rename onto that slug as of
-this merge, so this chains onto `0044` for now — the operator re-chains onto `0045` once
-that PR's migration is in (see the PR comment). The revision id is also shortened from the
-original `0040_insurance_policies_and_claims` (34 characters): `alembic_version.version_num`
+on main first, and PR #235's `0045_scheduled_call` has now landed on top of it, so this
+chains onto `0045`, the actual head, rather than the `0044` this once pointed at while
+`0045` was still off main. The revision id is also shortened from the original
+`0040_insurance_policies_and_claims` (34 characters): `alembic_version.version_num`
 is `varchar(32)`, and the longer id failed both the `image` and `backend-postgres` CI jobs
 with `StringDataRightTruncationError`.
 
 Revision ID: 0046_insurance_policies_claims
-Revises: 0044_consent_role_window
+Revises: 0045_scheduled_call
 Create Date: 2026-09-17
 """
 

@@ -1,0 +1,14 @@
+{
+  "placeholder": "clinic-letter-hypertension-2026-09-12",
+  "note": "What the synthetic paper says, matching the fixture exactly.",
+  "document_kind": "clinic_slip",
+  "fields": [
+    {
+      "subject": "hypertension",
+      "attribute": "control",
+      "value": "Hypertension, well controlled on current medication",
+      "unit": null
+    },
+    { "subject": "follow_up", "attribute": "date", "value": "2026-12-12", "unit": null }
+  ]
+}

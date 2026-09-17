@@ -8,11 +8,14 @@
     GET  /profiles/{id}/insurance/claims/{claim_id}/papers          the papers behind it
     GET  /profiles/{id}/insurance/pre-visit/{appointment_id}        what to prepare, narrowed
                                                                      to what this key may see
+    GET  /profiles/{id}/insurance/ledger                            every claim, with totals
+                                                                     (T2, `app.insurance.ledger`)
 
 A policy and a claim open only under `Scope.MONEY`: a helper, a viewer, an emergency-only key
-and a clinic key are refused (`OutOfScope`, 403) reaching any route above but the last.
+and a clinic key are refused (`OutOfScope`, 403) reaching any route above but the last two.
 `pre-visit` is open to any key that can read the visit at all (`Scope.VISITS`); what it
-returns then narrows by the same door (`app.insurance.relevance`).
+returns then narrows by the same door (`app.insurance.relevance`). `ledger` has one door,
+money's own, the same as a policy and a claim: no narrower tier, on or off.
 """
 
 from __future__ import annotations
@@ -27,9 +30,12 @@ from app.channels.api.insurance_schemas import (
     ClaimOut,
     ClaimPaperOut,
     ClaimStatusIn,
+    LedgerLineOut,
+    LedgerOut,
     PolicyIn,
     PolicyOut,
     PolicySummaryOut,
+    PolicyTotalOut,
     PreVisitInsuranceOut,
 )
 from app.insurance.claim import (
@@ -38,6 +44,7 @@ from app.insurance.claim import (
     file_a_claim,
     papers_for_claim,
 )
+from app.insurance.ledger import insurance_ledger
 from app.insurance.policy import current_policies, set_a_policy
 from app.insurance.relevance import pre_visit_relevance
 
@@ -72,6 +79,9 @@ def _claim_out(row) -> ClaimOut:  # type: ignore[no-untyped-def]
         appointment_id=row.appointment_id,
         claim_reference=row.claim_reference,
         status=row.status,
+        claimed_amount_cents=row.claimed_amount_cents,
+        paid_by_insurer_cents=row.paid_by_insurer_cents,
+        paid_by_patient_cents=row.paid_by_patient_cents,
         filed_by_person_id=row.filed_by_person_id,
         filed_at=row.filed_at,
         status_changed_by_person_id=row.status_changed_by_person_id,
@@ -119,6 +129,7 @@ async def write_claim(body: ClaimIn, context: Context, session: Db) -> ClaimOut:
         appointment_id=body.appointment_id,
         claim_reference=body.claim_reference,
         confirmation_id=body.confirmation_id,
+        claimed_amount_cents=body.claimed_amount_cents,
     )
     return _claim_out(row)
 
@@ -142,6 +153,8 @@ async def write_claim_status(
         claim_id=claim_id,
         status=body.status,
         confirmation_id=body.confirmation_id,
+        paid_by_insurer_cents=body.paid_by_insurer_cents,
+        paid_by_patient_cents=body.paid_by_patient_cents,
     )
     return _claim_out(row)
 
@@ -186,4 +199,59 @@ async def pre_visit(
         ],
         note=[line.text for line in shown.note],
         bring=[line.text for line in shown.bring],
+    )
+
+
+@router.get("/{profile_id}/insurance/ledger")
+async def ledger(context: Context, session: Db, language: str | None = Language) -> LedgerOut:
+    """His whole ledger (T2, `app.insurance.ledger`): every claim ever filed, newest visit
+    first, with the year's totals overall and by policy, in his language and his region's
+    currency. Money's one door: refused (`OutOfScope`, 403) for a key that does not hold
+    `Scope.MONEY` — no narrower tier, the same as a policy and a claim."""
+    shown = await insurance_ledger(
+        session, context=context, language=language or "en"
+    )
+    return LedgerOut(
+        year=shown.year,
+        currency=shown.currency,
+        lines=[
+            LedgerLineOut(
+                claim_id=one.claim_id,
+                policy_id=one.policy_id,
+                policy_name=one.policy_name,
+                policy_type=one.policy_type,
+                appointment_id=one.appointment_id,
+                visit_purpose=one.visit_purpose,
+                visit_date=one.visit_date,
+                visit_date_said=one.visit_date_said,
+                status=one.status,
+                status_word=one.status_word,
+                claimed_amount_cents=one.claimed_amount_cents,
+                claimed_amount_said=one.claimed_amount_said,
+                paid_by_insurer_cents=one.paid_by_insurer_cents,
+                paid_by_insurer_said=one.paid_by_insurer_said,
+                paid_by_patient_cents=one.paid_by_patient_cents,
+                paid_by_patient_said=one.paid_by_patient_said,
+            )
+            for one in shown.lines
+        ],
+        total_claimed_cents=shown.total_claimed_cents,
+        total_claimed_said=shown.total_claimed_said,
+        total_paid_by_insurer_cents=shown.total_paid_by_insurer_cents,
+        total_paid_by_insurer_said=shown.total_paid_by_insurer_said,
+        total_paid_by_patient_cents=shown.total_paid_by_patient_cents,
+        total_paid_by_patient_said=shown.total_paid_by_patient_said,
+        by_policy=[
+            PolicyTotalOut(
+                policy_id=one.policy_id,
+                policy_name=one.policy_name,
+                claimed_cents=one.claimed_cents,
+                claimed_said=one.claimed_said,
+                paid_by_insurer_cents=one.paid_by_insurer_cents,
+                paid_by_insurer_said=one.paid_by_insurer_said,
+                paid_by_patient_cents=one.paid_by_patient_cents,
+                paid_by_patient_said=one.paid_by_patient_said,
+            )
+            for one in shown.by_policy
+        ],
     )

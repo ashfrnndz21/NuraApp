@@ -1086,6 +1086,12 @@ CLASSES: dict[str, str] = {
     "insurance_claim.appointment_id": IDENTIFIER,
     "insurance_claim.claim_reference": IDENTIFIER,
     "insurance_claim.status": IDENTIFIER,
+    # The three amounts the ledger sums (0047, T2 `app.insurance.ledger`): what money moved
+    # for his care, the same standing as a medicine's dose or a reading's number — health,
+    # not an identifier and not merely operational.
+    "insurance_claim.claimed_amount_cents": HEALTH,
+    "insurance_claim.paid_by_insurer_cents": HEALTH,
+    "insurance_claim.paid_by_patient_cents": HEALTH,
     "insurance_claim.filed_by_person_id": IDENTIFIER,
     "insurance_claim.confirmation_id": CONSENT,
     "insurance_claim.filed_at": OPERATIONAL,

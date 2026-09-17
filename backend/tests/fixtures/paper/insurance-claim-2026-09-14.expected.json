@@ -1,0 +1,12 @@
+{
+  "placeholder": "insurance-claim-2026-09-14",
+  "note": "What the synthetic paper says, matching the fixture exactly.",
+  "document_kind": "insurance_claim",
+  "fields": [
+    { "subject": "insurance_claim", "attribute": "insurer", "value": "Great Eastern", "unit": null },
+    { "subject": "insurance_claim", "attribute": "claim_number", "value": "CLM-98765", "unit": null },
+    { "subject": "insurance_claim", "attribute": "status", "value": "submitted", "unit": null },
+    { "subject": "insurance_claim", "attribute": "amount", "value": 1500, "unit": "MYR" },
+    { "subject": "insurance_claim", "attribute": "for", "value": "hospital stay", "unit": null }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "placeholder": "lab-report-vitals-2026-09-10",
+  "sha256": "f3ee854bc460dc33d5c5aa85432daf5b4250781b597e2a54016ccba5dd564d84",
+  "note": "Synthetic fixture (no real patient): a lab report that carries one vital in a unit the app already knows how to read as a number (blood sugar, mmol/L), beside an ordinary lipid row with its own reference range as a sibling field, and a header field naming the facility. Written for the documents-lab-reports-and-insurance story: `blood_sugar.glucose` at mmol/L should become a reading proposal on confirm; `lipid_panel.ldl` and its `_reference_range` sibling, and the header field, stay plain paper facts.",
+  "document_kind": "lab_report",
+  "document_date": "2026-09-10",
+  "fields": [
+    {
+      "subject": "blood_sugar",
+      "attribute": "glucose",
+      "value": 5.6,
+      "unit": "mmol/L",
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.2, "x1": 0.5, "y1": 0.24, "page": 1 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 140,
+      "unit": "mg/dL",
+      "confidence": 0.93,
+      "span": { "x0": 0.1, "y0": 0.3, "x1": 0.5, "y1": 0.34, "page": 1 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl_reference_range",
+      "value": "<130",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.55, "y0": 0.3, "x1": 0.8, "y1": 0.34, "page": 1 }
+    },
+    {
+      "subject": "lab_report",
+      "attribute": "facility",
+      "value": "Bukit Lab",
+      "unit": null,
+      "confidence": 0.92,
+      "span": { "x0": 0.1, "y0": 0.05, "x1": 0.6, "y1": 0.1, "page": 1 }
+    }
+  ]
+}

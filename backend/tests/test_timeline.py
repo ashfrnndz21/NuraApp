@@ -236,7 +236,10 @@ async def test_each_part_is_read_under_its_own_scope_and_withheld_by_name(
     page = await timeline(sg, context=kit)
     assert [item.kind for item in page.items] == ["appointment", "appointment"]
     assert all(not item.hanging.artifacts and not item.hanging.facts for item in page.items)
-    assert set(page.withheld) == {Scope.RECORDS, Scope.READINGS, Scope.MEDICINES}
+    # MONEY joined FACT_SCOPES (documents-lab-reports-and-insurance): a policy or claim
+    # document read through the review card sits there, so a key without it is withheld
+    # from it too, the same as RECORDS, READINGS and MEDICINES.
+    assert set(page.withheld) == {Scope.RECORDS, Scope.READINGS, Scope.MEDICINES, Scope.MONEY}
     # The spine is the visits'; a key without them is refused, and it is written down.
     siti = await let_in(
         sg,

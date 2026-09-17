@@ -583,6 +583,9 @@ class InsuranceClaimDraft:
     policy_id: uuid.UUID
     appointment_id: uuid.UUID
     claim_reference: str | None
+    claimed_amount_cents: int | None = None
+    """What he is claiming, in minor units — the ledger's first number for this claim
+    (`0047_insurance_claim_amounts`, `app.insurance.ledger`); unset, the claim still files."""
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -597,6 +600,7 @@ class InsuranceClaimDraft:
             "policy_id": self.policy_id,
             "appointment_id": self.appointment_id,
             "claim_reference": self.claim_reference,
+            "claimed_amount_cents": self.claimed_amount_cents,
         }
 
 
@@ -607,6 +611,11 @@ class InsuranceClaimStatusDraft:
 
     claim_id: uuid.UUID
     status: str
+    paid_by_insurer_cents: int | None = None
+    """What the insurer paid, in minor units, when this step is the one that learns it
+    (`0047_insurance_claim_amounts`, `app.insurance.ledger`)."""
+    paid_by_patient_cents: int | None = None
+    """What he paid himself, in minor units, when this step is the one that learns it."""
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -617,7 +626,12 @@ class InsuranceClaimStatusDraft:
         return self.claim_id
 
     def confirmed_content(self) -> dict[str, Any]:
-        return {"claim_id": self.claim_id, "status": self.status}
+        return {
+            "claim_id": self.claim_id,
+            "status": self.status,
+            "paid_by_insurer_cents": self.paid_by_insurer_cents,
+            "paid_by_patient_cents": self.paid_by_patient_cents,
+        }
 
 
 @dataclass(frozen=True, slots=True)

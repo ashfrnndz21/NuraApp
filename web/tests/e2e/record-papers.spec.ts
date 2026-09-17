@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { hubEntries } from "../../src/record/model";
 import { API, fixClock, openMe, seedMedicine, TAB_SET } from "./helpers";
 import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, openRecord, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
@@ -64,7 +65,10 @@ for (const look of LOOKS) {
     await signInAs(page, reader, look === "patient" ? "Pa" : "Mei", look === "caregiver");
     await lookAs(page, look);
     const entries = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")!));
-    expect(entries.length).toBe(7);
+    // Every entry the screen registry (record/model.ts) opens for this density on every
+    // part: the registry names the Record's screens, not a count typed here by hand.
+    const registered = hubEntries(look === "patient" ? "patient" : "caregiver", EVERY_PART);
+    expect(entries).toEqual(registered.map((entry) => `record-${entry}`));
 
     // Pa closes his account (#151) on his yes while the Record is open: every key and his own
     // reads are refused by name.
