@@ -187,6 +187,8 @@ def let_in_and_cut(
             "holder_phone_e164": holder.phone_e164,
             "holder_display_name": holder.name,
             "scopes": scopes,
+            "role": role,
+            "window": "always",
             "relationship": "daughter" if role == "chief" else "neighbour",
             "language": "en",
             "captured_via": "app",

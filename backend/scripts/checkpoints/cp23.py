@@ -264,6 +264,8 @@ def the_voice(client: httpx.Client, dev_log: Path) -> tuple[Person, str, int, in
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": scopes,
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",

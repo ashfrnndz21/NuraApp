@@ -422,6 +422,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             "holder_phone_e164": mei.phone_e164,
             "holder_display_name": mei.name,
             "scopes": EVERY_PART,
+            "role": "chief",
+            "window": "always",
             "relationship": "daughter",
             "language": "en",
             "captured_via": "app",
