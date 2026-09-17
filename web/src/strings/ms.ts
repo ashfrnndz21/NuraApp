@@ -1354,11 +1354,19 @@ export const ms = {
       // @patient
       kindInsuranceLetter: "Ini surat insurans.",
       // @patient
+      kindInsurancePolicy: "Ini polisi insurans.",
+      // @patient
+      kindInsuranceClaim: "Ini tuntutan insurans.",
+      // @patient
       kindDeviceScreen: "Ini skrin sebuah mesin.",
+      // @patient
+      kindOther: "Ini surat kesihatan.",
       // @patient
       unreadable: "Nura tidak dapat membaca yang ini.",
       // @patient
       typeIt: "Sila taip apa yang tertulis pada surat itu.",
+      // @patient
+      fromPage: "Daripada muka surat {page} surat ini.",
       // @patient
       kindUnknown: "Nura tidak dapat membaca halaman ini.",
       // @patient
@@ -1464,11 +1472,13 @@ export const ms = {
         total_cholesterol: "Jumlah kolesterol",
         hdl: "Kolesterol baik",
         ldl: "Kolesterol jahat",
+        ldl_reference_range: "Julat normal kolesterol jahat",
         triglycerides: "Lemak dalam darah",
         vldl: "Satu lagi nombor lemak darah",
         tc_hdl_ratio: "Nisbah kolesterol",
         non_hdl_cholesterol: "Kolesterol tanpa bahagian baik",
       },
+      full_blood_count: { hemoglobin: "Nombor kiraan darah" },
       device: { kind: "Mesin itu" },
       blood_pressure: { systolic: "Nombor atas", diastolic: "Nombor bawah" },
       heart_rate: { pulse: "Degupan jantung" },
@@ -1480,8 +1490,17 @@ export const ms = {
         reason: "Mengapa anda di hospital",
         weight_at_discharge: "Berat anda semasa pulang",
       },
+      follow_up: { date: "Bila hendak kembali" },
+      hypertension: { control: "Apa yang doktor tulis tentang tekanan darah anda" },
       blood_sugar: { glucose: "Nombor gula" },
-      lab_report: { lab: "Tempat darah diuji" },
+      lab_report: {
+        lab: "Tempat darah diuji",
+        facility: "Tempat ia diuji",
+        remark: "Apa yang laporan itu kata selain nombor",
+        patient_name: "Nama pada laporan",
+        patient_id: "Nombor pesakit pada laporan",
+        ordering_doctor: "Doktor mana yang memintanya",
+      },
       person: { birth_year: "Tahun lahir", sex: "Lelaki atau perempuan" },
       medicine: {
         name: "Ubat itu",
@@ -1491,6 +1510,22 @@ export const ms = {
         quantity: "Berapa banyak yang diberi",
         dispensed_at: "Bila ia diberi",
         prescriber: "Doktor mana yang menulisnya",
+      },
+      insurance_policy: {
+        insurer: "Syarikat insurans",
+        policy_number: "Nombor polisi",
+        plan: "Pelan itu",
+        holder: "Siapa yang dilindungi polisi ini",
+        start_date: "Bila ia bermula",
+        end_date: "Bila ia tamat",
+      },
+      insurance_claim: {
+        insurer: "Syarikat insurans",
+        claim_number: "Nombor tuntutan",
+        status: "Status tuntutan itu",
+        amount: "Jumlah wang",
+        date: "Tarikh",
+        for: "Untuk apa tuntutan itu",
       },
     },
   },
@@ -1526,6 +1561,14 @@ export const ms = {
     providersOther: "Doktor dan klinik {patient}",
     // @patient headline
     changes: "Apa yang berubah",
+    // @patient headline
+    ledger: "Wang insurans anda",
+    // @patient headline
+    ledgerOther: "Wang insurans {patient}",
+    // @patient
+    ledgerWithheld: "Ini disimpan untuk anda sahaja.",
+    // @patient
+    ledgerWithheldOther: "Ini disimpan untuk {patient} sahaja.",
     // @patient phrase
     back: "Kembali ke surat anda",
     // @patient phrase
@@ -1854,6 +1897,20 @@ export const ms = {
     tableMedicines: "Ubat",
     // @patient headline
     tableReadings: "Apa yang perlu diperiksa",
+    // @patient phrase
+    ledgerTotals: "Jumlah untuk {year}",
+    // @patient phrase
+    ledgerClaimedLabel: "Dituntut",
+    // @patient phrase
+    ledgerInsurerPaidLabel: "Syarikat insurans bayar",
+    // @patient phrase
+    ledgerPatientPaidLabel: "Anda bayar",
+    // @patient phrase
+    ledgerPatientPaidLabelOther: "{patient} bayar",
+    // @patient
+    ledgerNone: "Belum ada tuntutan lagi.",
+    // @patient phrase
+    ledgerOn: "Pada {date}",
   },
   family: {
     // @patient headline

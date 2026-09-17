@@ -127,12 +127,15 @@ real-looking providers per category, near Pa's own seeded area.
 | — (not on the board) | a "days with tablets taken" streak card | added beyond the board — a real, existing feature |
 | — (not on the board) | an Insurance row, opening his policies (`screens/Insurance.tsx`) | added beyond the board, gated on the same `money` scope "Insurance letters" already uses — a real feature the board's own mock has no row for |
 
-**Insurance, in full:** the row opens the policy list alone (`GET
-/profiles/{id}/insurance/policies`, already on `main`) — insurer, cover type, status, what it
-covers, when it renews, when the next payment is due, the policy number, every line the
-backend's own words. **The Ledger (claim amounts, #260) is not built here**: #260 was still an
-open PR, not merged, when this round started, so its claim-amount data has no backend on this
-branch to read honestly. This is the one named gap this round leaves — see below.
+**Insurance, in full:** the row opens the policy list (`GET
+/profiles/{id}/insurance/policies`) — insurer, cover type, status, what it covers, when it
+renews, when the next payment is due, the policy number, every line the backend's own words —
+and, under it, a way to the Ledger (claim amounts, #260's `screens/record/Ledger.tsx`, already
+on `main` under the Record hub). #260 merged into `main` after this round started against
+`0046_insurance_policies_claims`; this branch re-chains its own migration
+(`0048_provider_category`) onto #260's `0047_insurance_claim_amounts` rather than rebuild the
+Ledger screen a second time — one Ledger, reached from Profile now as well as from the Record
+hub.
 
 ## Topbar pattern — resolved (owner's decision, 2026-09-17)
 
@@ -167,9 +170,9 @@ global header, switcher included: only the five tab-root screens pass `topBar`.
   any more).
 - `backend/app/memory/models.py`, `spine.py`, `channels/api/timeline_schemas.py`: a
   `HomeCareCategory` enum and `Provider.category` column (migration
-  `0047_provider_category`, after `0046_insurance_policies_claims` — `0047_insurance_claim_amounts`
-  from #260 was not on `main` when this branch started, so this chains onto `0046` directly);
-  classified in `scripts/data_map.py` and regenerated into `docs/trust/pdpa-data-map.md`.
+  `0048_provider_category`, chained onto `0047_insurance_claim_amounts` (#260), which merged
+  into `main` partway through this round); classified in `scripts/data_map.py` and
+  regenerated into `docs/trust/pdpa-data-map.md`.
 - `backend/app/demo_seed.py`: `_seed_home_care`, two providers per category near Pa's area.
 - `web/src/screens/tabs.tsx`: `HomeCareGrid`, and `CareBody`'s providers now exclude
   categorised (home-care) ones, so the two sections never mix.
@@ -180,7 +183,8 @@ global header, switcher included: only the five tab-root screens pass `topBar`.
   `Chip`/`ChipRow`.
 - `web/src/screens/Insurance.tsx` (new), `ProfileParts.tsx`, `Me.tsx`, `api/nura.ts`,
   `api/types.ts`: the Profile tab's own rows (Emergency, Insurance, Keys, Consents, "Only
-  me"), reading the real `GET /profiles/{id}/insurance/policies`.
+  me"), reading the real `GET /profiles/{id}/insurance/policies`, with a row down to the
+  Ledger (#260's existing `screens/record/Ledger.tsx`, not rebuilt).
 - `docs/design-direction.md`: "Reference B's top bar" section updated — the board wins over
   the old global-header choice (owner's decision, 2026-09-17).
 - `web/src/strings/en.ts`, `ms.ts`, `zh.ts`, `types.ts`: every new patient-facing string above,
@@ -191,12 +195,13 @@ global header, switcher included: only the five tab-root screens pass `topBar`.
 
 ## Named gaps left after round 2
 
-1. **Profile's Insurance Ledger** (claim amounts, #260): not built — #260 was not merged when
-   this round started, so there is no backend to read claim amounts from honestly. The policy
-   list itself (insurer, cover, renewal, premium due) is built and real.
-2. **Ask's "What Nura looked at"**: left as a line rather than the board's pill chips, per the
+1. **Ask's "What Nura looked at"**: left as a line rather than the board's pill chips, per the
    brief — the source chips above it were the requested fix.
-3. **Health's "Today's Tip" card**: conditional on feed content; not confirmed present for
+2. **Health's "Today's Tip" card**: conditional on feed content; not confirmed present for
    this seed (round 1's finding, unchanged).
-4. **Profile's text size row**: not confirmed in this screen's scroll depth captured (round
+3. **Profile's text size row**: not confirmed in this screen's scroll depth captured (round
    1's finding, unchanged).
+
+(#260 merged into `main` during this round, closing what would otherwise have been the one
+remaining gap here — Profile's Insurance row now reaches the Ledger too; see "Insurance, in
+full" above.)

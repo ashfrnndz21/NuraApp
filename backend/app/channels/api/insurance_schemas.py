@@ -55,13 +55,17 @@ class ClaimIn(BaseModel):
     policy_id: uuid.UUID
     appointment_id: uuid.UUID
     claim_reference: str | None = None
+    claimed_amount_cents: int | None = None
     confirmation_id: uuid.UUID
 
 
 class ClaimStatusIn(BaseModel):
-    """A yes to moving one claim one step (subject `insurance_claim_status`)."""
+    """A yes to moving one claim one step (subject `insurance_claim_status`), with the
+    amounts that step learns (T2, the insurance ledger)."""
 
     status: ClaimStatus
+    paid_by_insurer_cents: int | None = None
+    paid_by_patient_cents: int | None = None
     confirmation_id: uuid.UUID
 
 
@@ -71,6 +75,9 @@ class ClaimOut(BaseModel):
     appointment_id: uuid.UUID
     claim_reference: str | None
     status: ClaimStatus
+    claimed_amount_cents: int | None
+    paid_by_insurer_cents: int | None
+    paid_by_patient_cents: int | None
     filed_by_person_id: uuid.UUID
     filed_at: datetime
     status_changed_by_person_id: uuid.UUID | None
@@ -103,3 +110,54 @@ class PreVisitInsuranceOut(BaseModel):
     policies: list[PolicySummaryOut]
     note: list[str]
     bring: list[str]
+
+
+class LedgerLineOut(BaseModel):
+    """One claim on the ledger (T2): raw fields the screen lays out itself
+    (`visit_purpose`, `policy_name` — what a clinic or a person typed, not Nura's words) and
+    the words and numbers already said in his language and his region's currency."""
+
+    claim_id: uuid.UUID
+    policy_id: uuid.UUID
+    policy_name: str
+    policy_type: PolicyType
+    appointment_id: uuid.UUID
+    visit_purpose: str
+    visit_date: date
+    visit_date_said: str
+    status: ClaimStatus
+    status_word: str
+    claimed_amount_cents: int | None
+    claimed_amount_said: str | None
+    paid_by_insurer_cents: int | None
+    paid_by_insurer_said: str | None
+    paid_by_patient_cents: int | None
+    paid_by_patient_said: str | None
+
+
+class PolicyTotalOut(BaseModel):
+    policy_id: uuid.UUID
+    policy_name: str
+    claimed_cents: int
+    claimed_said: str
+    paid_by_insurer_cents: int
+    paid_by_insurer_said: str
+    paid_by_patient_cents: int
+    paid_by_patient_said: str
+
+
+class LedgerOut(BaseModel):
+    """His whole ledger (T2, `app.insurance.ledger`): every claim ever filed, newest visit
+    first, and the year's totals — overall and by policy. Money's one door: refused
+    (`OutOfScope`, 403) for a key that does not hold `Scope.MONEY`."""
+
+    year: int
+    currency: str
+    lines: list[LedgerLineOut]
+    total_claimed_cents: int
+    total_claimed_said: str
+    total_paid_by_insurer_cents: int
+    total_paid_by_insurer_said: str
+    total_paid_by_patient_cents: int
+    total_paid_by_patient_said: str
+    by_policy: list[PolicyTotalOut]

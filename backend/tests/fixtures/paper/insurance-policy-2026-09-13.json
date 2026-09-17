@@ -1,0 +1,41 @@
+{
+  "placeholder": "insurance-policy-2026-09-13",
+  "sha256": "3960a7abdeb5d18d3dd9cc1b729cf104f6487f275058dfa4001c0d9089332d0f",
+  "note": "Synthetic fixture (no real patient, no real insurer): a policy schedule. Written for the documents-lab-reports-and-insurance story: routes into insurance_policy-subject facts (Scope.MONEY, never RECORDS), a proposal for the person's own separate yes on the fuller policy record (`app.insurance.policy`) — the review card never writes a Policy row directly.",
+  "document_kind": "insurance_policy",
+  "document_date": "2026-09-13",
+  "fields": [
+    {
+      "subject": "insurance_policy",
+      "attribute": "insurer",
+      "value": "Great Eastern",
+      "unit": null,
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.14, "page": 1 }
+    },
+    {
+      "subject": "insurance_policy",
+      "attribute": "policy_number",
+      "value": "GE-HS-12345",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.16, "x1": 0.5, "y1": 0.2, "page": 1 }
+    },
+    {
+      "subject": "insurance_policy",
+      "attribute": "plan",
+      "value": "Hospital Shield",
+      "unit": null,
+      "confidence": 0.92,
+      "span": { "x0": 0.1, "y0": 0.22, "x1": 0.5, "y1": 0.26, "page": 1 }
+    },
+    {
+      "subject": "insurance_policy",
+      "attribute": "start_date",
+      "value": "2026-01-01",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.28, "x1": 0.5, "y1": 0.32, "page": 1 }
+    }
+  ]
+}

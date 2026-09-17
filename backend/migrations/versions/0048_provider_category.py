@@ -7,8 +7,12 @@ column, `category` (`app.memory.models.HomeCareCategory`: `nursing`, `physio`, `
 `transport`), null for every existing row and for every provider added through the ordinary
 directory API, and set only by the demo seed's four home-care tiles.
 
-Revision ID: 0047_provider_category
-Revises: 0046_insurance_policies_claims
+Chained onto `0047_insurance_claim_amounts` (#260), which landed on `main` first; this
+branch started against `0046_insurance_policies_claims` and is re-chained here at merge
+time, the same practice `0046` and `0047_insurance_claim_amounts` themselves already used.
+
+Revision ID: 0048_provider_category
+Revises: 0047_insurance_claim_amounts
 Create Date: 2026-09-18
 """
 
@@ -17,8 +21,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0047_provider_category"
-down_revision = "0046_insurance_policies_claims"
+revision = "0048_provider_category"
+down_revision = "0047_insurance_claim_amounts"
 branch_labels = None
 depends_on = None
 

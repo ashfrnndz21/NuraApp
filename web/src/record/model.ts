@@ -26,10 +26,12 @@ import type { HubEntry } from "./places";
 
 /** In his density the Record opens on his medicines, his papers and his day, one a screen;
  *  in hers, on what changed and the visits. */
-export const PATIENT_HUB: readonly HubEntry[] = ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"];
-export const CAREGIVER_HUB: readonly HubEntry[] = ["changes", "timeline", "medicines", "papers", "trends", "routine", "providers"];
+export const PATIENT_HUB: readonly HubEntry[] = ["medicines", "papers", "routine", "timeline", "trends", "providers", "ledger", "changes"];
+export const CAREGIVER_HUB: readonly HubEntry[] = ["changes", "timeline", "medicines", "papers", "trends", "routine", "providers", "ledger"];
 
-/** The part of the papers each entry reads, so a key that does not open it is not offered it. */
+/** The part of the papers each entry reads, so a key that does not open it is not offered it.
+ *  `ledger` reads "money" (`Scope.MONEY`, the same door a policy and a claim already stand
+ *  behind): a helper, a viewer, an emergency-only key and a clinic key never see the entry. */
 const PART: Record<HubEntry, string | null> = {
   medicines: "medicines",
   papers: "records",
@@ -38,6 +40,7 @@ const PART: Record<HubEntry, string | null> = {
   trends: "records",
   providers: "visits",
   changes: null,
+  ledger: "money",
 };
 
 export function hubEntries(density: Density, scopes: readonly string[]): HubEntry[] {

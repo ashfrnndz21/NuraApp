@@ -36,6 +36,7 @@ import {
   Pill,
   Play,
   Plus,
+  Receipt,
   Search,
   ShieldCheck,
   Smile,
@@ -120,6 +121,7 @@ export const ICONS = {
   meal: UtensilsCrossed,
   transport: Bus,
   comingUp: CalendarClock,
+  ledger: Receipt,
   phone: Phone,
   // Profile (docs/design/nura-concept-board.html, the Profile screen).
   language: Globe,

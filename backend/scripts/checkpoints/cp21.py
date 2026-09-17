@@ -40,6 +40,20 @@ HOLD_WORDING = "1"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 WALL = ZoneInfo("Asia/Singapore")
 """`make dev` serves Singapore (NURA_REGION=SG): his wall clock."""
+MS_DAYS = ("Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "Sabtu", "Ahad")
+MS_MONTHS = (
+    "Januari", "Februari", "Mac", "April", "Mei", "Jun",
+    "Julai", "Ogos", "September", "Oktober", "November", "Disember",
+)
+"""Mirrors `app.medicines.strings.DAY_NAMES`/`MONTH_NAMES` ("ms") — kept here, not imported,
+since this module is a client and nothing more."""
+
+
+def say_date_ms(day: datetime) -> str:
+    """`Weekday D Month`, in Malay, the way `app.medicines.strings.say_date` renders it (PR
+    #233 review): `FeelingNote.lines` anchors "since yesterday" to the day he answered, fixed
+    at compose time, so a note read back later never goes stale or false."""
+    return f"{MS_DAYS[day.weekday()]} {day.day} {MS_MONTHS[day.month - 1]}"
 EVERY_PART = [
     "medicines",
     "visits",
@@ -216,6 +230,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
             "holder_phone_e164": mei.phone_e164,
             "holder_display_name": mei.name,
             "scopes": EVERY_PART,
+            "role": "chief",
+            "window": "always",
             "relationship": "daughter",
             "language": "en",
             "captured_via": "app",
@@ -362,10 +378,15 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         "Pa answers since yesterday",
     )
     note = answered["note"]
+    # PR #233 review: a note may be read back on a day that is not the day he answered, so
+    # `compose_note` anchors "since yesterday" to that day instead — `TELL_ON`, day-anchored,
+    # never `TELL`'s "sejak semalam", which is only ever true the moment the cloud replies.
+    # `{date}` is fixed at compose time (the day he answered, here: today).
+    said_on = say_date_ms(datetime.now(WALL))
     if (
         note is None
         or note["headline"] != "Perkara untuk diberitahu kepada Dr Tan"
-        or note["lines"][0] != "Beritahu Dr Tan bahawa anda rasa pening sejak semalam."
+        or note["lines"][0] != f"Beritahu Dr Tan bahawa anda rasa pening pada {said_on}."
         or not note["lines"][1].startswith("Ini boleh berlaku kerana ubat tekanan darah anda")
         or note["voice"][-2:] != ["Ini bukan nasihat doktor.", "Tanya Dr Tan."]
         or note["reasons"][0]["code"] != "new_medicine"

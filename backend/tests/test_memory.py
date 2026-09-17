@@ -571,7 +571,8 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
     assert events <= {(Action.READ, Scope.RECORDS), (Action.WRITE, Scope.READINGS)}
     # A fact is written under its subject's scope — a blood-pressure reading is a reading —
     # and the whole record, read with no subject named, is read one scope at a time, each
-    # under its own, for the scopes the key holds: the owner holds all three.
+    # under its own, for the scopes the key holds: the owner holds all four (insurance facts
+    # rest under money, #257).
     assert {e.scope for e in trail if e.target == "fact" and e.action is Action.WRITE} == {
         Scope.READINGS
     }
@@ -579,6 +580,7 @@ async def test_every_row_is_pinned_to_the_profile_and_every_write_is_in_the_trai
         Scope.RECORDS,
         Scope.READINGS,
         Scope.MEDICINES,
+        Scope.MONEY,
     }
     assert {e.scope for e in trail if e.target in {"provider", "appointment"}} == {Scope.VISITS}
     assert any(e.action is Action.READ and e.target == "fact" for e in trail)

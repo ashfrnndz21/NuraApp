@@ -1,0 +1,49 @@
+{
+  "placeholder": "insurance-claim-2026-09-14",
+  "sha256": "3b8da9e5c194a438c28f4c96fdec11ca8da0a8e9bdeb570c3febc5110d41cf9a",
+  "note": "Synthetic fixture (no real patient, no real insurer): a claim letter. Written for the documents-lab-reports-and-insurance story: routes into insurance_claim-subject facts (Scope.MONEY), a proposal for the person's own separate yes on the fuller claim record (`app.insurance.claim`) — the review card never writes a claim row directly.",
+  "document_kind": "insurance_claim",
+  "document_date": "2026-09-14",
+  "fields": [
+    {
+      "subject": "insurance_claim",
+      "attribute": "insurer",
+      "value": "Great Eastern",
+      "unit": null,
+      "confidence": 0.94,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.14, "page": 1 }
+    },
+    {
+      "subject": "insurance_claim",
+      "attribute": "claim_number",
+      "value": "CLM-98765",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.16, "x1": 0.5, "y1": 0.2, "page": 1 }
+    },
+    {
+      "subject": "insurance_claim",
+      "attribute": "status",
+      "value": "submitted",
+      "unit": null,
+      "confidence": 0.92,
+      "span": { "x0": 0.1, "y0": 0.22, "x1": 0.5, "y1": 0.26, "page": 1 }
+    },
+    {
+      "subject": "insurance_claim",
+      "attribute": "amount",
+      "value": 1500,
+      "unit": "MYR",
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.28, "x1": 0.5, "y1": 0.32, "page": 1 }
+    },
+    {
+      "subject": "insurance_claim",
+      "attribute": "for",
+      "value": "hospital stay",
+      "unit": null,
+      "confidence": 0.88,
+      "span": { "x0": 0.1, "y0": 0.34, "x1": 0.5, "y1": 0.38, "page": 1 }
+    }
+  ]
+}

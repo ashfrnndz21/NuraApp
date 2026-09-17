@@ -102,6 +102,7 @@ const PLACE: Record<HubEntry, RecordAt> = {
   trends: { name: "trends" },
   providers: { name: "providers" },
   changes: { name: "changes" },
+  ledger: { name: "ledger" },
 };
 
 /** In her density, the Record's places as glass chips under the title: every one of them two

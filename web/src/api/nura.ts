@@ -44,6 +44,7 @@ import type {
   JobKind,
   KeyOut,
   LabelIn,
+  LedgerOut,
   LineOut,
   LogisticsOut,
   MeOut,
@@ -272,6 +273,12 @@ export const feeling = (token: string, profileId: string, word: string, language
 /** The emergency card, rendered now from State, in his language (E13-01). */
 export const emergencyCard = (token: string, profileId: string, language: string) =>
   api<EmergencyCardOut>(`/profiles/${profileId}/emergency-card`, { token, query: { language } });
+
+/** His whole insurance ledger (T2): every claim ever filed, with the year's totals, in his
+ *  language and his region's currency. Money's one door: a caregiver or a viewer without it
+ *  is refused (`OutOfScope`, 403). */
+export const insuranceLedger = (token: string, profileId: string, language: string) =>
+  api<LedgerOut>(`/profiles/${profileId}/insurance/ledger`, { token, query: { language } });
 
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>

@@ -7,13 +7,14 @@ import { profile, token } from "../store/session";
 import { fill, LOCALE, language, t } from "../strings";
 import { dateLine } from "../today/model";
 import { Header, Notice, Tile } from "../ui/components";
+import { Icon, PaperTile } from "../ui/kit";
 import { Shell } from "./Shell";
 
 /** Profile's Insurance row (E13-03, `GET /profiles/{id}/insurance/policies`): every policy on
- *  his profile, newest of each lineage, in plain words — the policy list only. The Ledger
- *  (claim amounts, #260) is a later screen; this one names what he is covered under, what it
- *  covers, when it renews and when the next payment is due, nothing invented. Reached only by
- *  a key that opens `Scope.MONEY` (`ProfileNav`'s own gate, same as "Insurance letters"). */
+ *  his profile, newest of each lineage, in plain words, and the way to the Ledger (#260,
+ *  claim amounts — `screens/record/Ledger.tsx`'s existing `LedgerScreen`, not rebuilt here).
+ *  Reached only by a key that opens `Scope.MONEY` (`ProfileNav`'s own gate, same door
+ *  "Insurance letters" and the Ledger already use). */
 export function InsuranceScreen(): JSX.Element {
   const s = t();
   const papers = profile.value;
@@ -43,6 +44,15 @@ export function InsuranceScreen(): JSX.Element {
         </Tile>
       )}
       {policies?.map((policy) => <PolicyTile key={policy.policy_id} policy={policy} locale={locale} />)}
+      <PaperTile testId="insurance-ledger-link">
+        <nav class="place-rows" aria-label={s.record.ledger}>
+          <button type="button" class="place-row" onClick={() => go({ name: "record", at: { name: "ledger" } })} data-testid="open-ledger">
+            <Icon name="ledger" />
+            <span class="place-word">{s.record.ledger}</span>
+            <Icon name="chevron" />
+          </button>
+        </nav>
+      </PaperTile>
     </Shell>
   );
 }

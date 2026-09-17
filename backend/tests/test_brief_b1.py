@@ -131,8 +131,9 @@ async def test_a_key_without_the_record_reads_the_brief_without_how_he_feels(
         sg, context, phone="+6593330084", name="Kit", role=KeyRole.VIEWER, scopes={Scope.VISITS}
     )
     shown, withheld = lines_for(brief, viewer)
-    # This key holds the visits alone, so every scope a fact can sit under is named.
-    assert withheld == [Scope.READINGS, Scope.MEDICINES, Scope.RECORDS]
+    # This key holds the visits alone, so every scope a fact can sit under is named. MONEY
+    # joined FACT_SCOPES (documents-lab-reports-and-insurance).
+    assert withheld == [Scope.READINGS, Scope.MEDICINES, Scope.RECORDS, Scope.MONEY]
     assert not any(line["key"].startswith("symptom") for line in shown)
     assert all(line["sources"] == [] for line in shown)
     mine, none = lines_for(brief, context)

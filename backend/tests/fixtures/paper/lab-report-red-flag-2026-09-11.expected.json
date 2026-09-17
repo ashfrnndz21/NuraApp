@@ -1,0 +1,14 @@
+{
+  "placeholder": "lab-report-red-flag-2026-09-11",
+  "note": "What the synthetic paper says, matching the fixture exactly.",
+  "document_kind": "lab_report",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "remark",
+      "value": "Patient reported breathlessness at rest during collection",
+      "unit": null
+    },
+    { "subject": "full_blood_count", "attribute": "hemoglobin", "value": 13.2, "unit": "g/dL" }
+  ]
+}

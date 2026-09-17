@@ -21,7 +21,8 @@ export type RecordAt =
   | { name: "changes" }
   | { name: "trends"; analyte?: string }
   | { name: "routine" }
-  | { name: "builder" };
+  | { name: "builder" }
+  | { name: "ledger" };
 
 /** The Record's entries, each one screen. */
-export type HubEntry = "medicines" | "papers" | "routine" | "timeline" | "trends" | "providers" | "changes";
+export type HubEntry = "medicines" | "papers" | "routine" | "timeline" | "trends" | "providers" | "changes" | "ledger";
