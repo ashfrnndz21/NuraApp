@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp, todayReady } from "./helpers";
+import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
 import { auth, caregiverScreenOk, cutKey, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
@@ -36,13 +36,10 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-/** One tab set, the same for everyone (docs/product-reset.md §6). */
-const TAB_SET = ["Today", "Health", "Family", "Visits", "Me"];
-
 test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   // Whose papers are open is on every screen, in the header, by name — his own name on his own
   // phone; "Your own papers" is what the switcher's own label and its sheet say.
   await expect(page.getByTestId("whose-name")).toHaveText("Pa");
@@ -51,7 +48,7 @@ test("the nav (D1, the reset): one tab set, the same for the owner and for a key
   await signIn(hers, family.mei, false);
   // The same list for her: one app, one account. What differs is the density and whose papers
   // the switcher says she is in.
-  await expect(hers.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  await expect(hers.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
   await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
 });

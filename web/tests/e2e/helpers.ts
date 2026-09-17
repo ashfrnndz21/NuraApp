@@ -12,6 +12,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DEV_LOG = process.env.NURA_DEV_LOG ?? resolve(HERE, "../../../backend/.dev.log");
 const CODE_LINE = /login code for (\+[0-9]+): ([0-9]{6})/g;
 
+/** The five tabs, in the board's own order and labels (`docs/design/nura-concept-board.html`'s
+ *  `.tabbar`, and `web/src/nav.ts`'s `tabsFor`): the one list every spec must check against,
+ *  rather than each hand-typing its own — a hand-typed list is the defect that recurred on the
+ *  member list, the consent twins and the emergency card (#186, #215), and a tab set is no
+ *  different. */
+export const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"] as const;
+
+/** A key cut with only the medicines scope (`nav.ts`'s `NEEDS`): no Connect (needs `family`), no
+ *  Services (needs `visits`) — Home and Profile always show. */
+export const TAB_SET_MEDICINES_ONLY = ["Home", "Health", "Profile"] as const;
+
 /** A demo deployment (ADR 0008) takes test numbers only (+65 0…) and signs every one in with
  *  the operator's code, which it never prints. With `NURA_E2E_DEMO_CODE` set to that code the
  *  suite walks against a demo: its numbers in the test range, its code instead of the log's. */

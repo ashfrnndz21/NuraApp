@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, fixClock, openMe, seedMedicine } from "./helpers";
+import { API, fixClock, openMe, seedMedicine, TAB_SET } from "./helpers";
 import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, openRecord, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
@@ -16,7 +16,7 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
 
   await signInAs(page, pa, "Pa");
   await expect(page.getByTestId("tab-health")).toHaveText("Health");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Health", "Family", "Visits", "Me"]);
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual([...TAB_SET]);
   await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
