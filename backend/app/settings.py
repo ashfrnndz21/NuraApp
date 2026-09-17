@@ -136,6 +136,12 @@ class Settings:
     """NURA_DEMO_LOGIN_CODE: six digits, a secret in the platform's store. On a demo it is the
     code that signs a test number in (`app.identity.providers.DemoCodeSender`); the operator
     gives it to the people he invites. Required with NURA_DEMO_MODE=1, refused without it."""
+    demo_seed: bool = False
+    """NURA_DEMO_SEED=1: at startup, and again after the night's wipe, Pa's profile and Mei as
+    his chief are seeded from the fixtures (`app.demo_seed.seed_demo`), so a fresh sign-in
+    opens onto a living record. Runs only on a declared demo (NURA_DEMO_MODE=1) or a declared
+    dev run (NURA_DEV_CODE_SENDER=1); given without either, the process refuses to start, the
+    same gate every other fixture is held to (`app.fixtures.fixtures_allowed`)."""
     object_bucket_url: str | None = None
     """NURA_OBJECT_BUCKET_URL: the bucket artefact bytes go to, as its https base URL
     (`https://<bucket>.s3.ap-southeast-1.amazonaws.com`, or path-style
@@ -267,6 +273,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise MissingSetting("NURA_DEMO_MODE=1 needs NURA_DEMO_LOGIN_CODE: six digits, a secret")
     if not demo_mode and demo_login_code is not None:
         raise MissingSetting("NURA_DEMO_LOGIN_CODE is for a demo only (NURA_DEMO_MODE=1)")
+    demo_seed = source.get("NURA_DEMO_SEED", "") == "1"
+    if demo_seed and not (demo_mode or dev_code_sender):
+        raise MissingSetting(
+            "NURA_DEMO_SEED=1 runs only on a declared dev run (NURA_DEV_CODE_SENDER=1) "
+            "or demo (NURA_DEMO_MODE=1)"
+        )
     vapid = {name: source.get(f"NURA_VAPID_{name}") or None for name in VAPID}
     if any(vapid.values()) and not all(vapid.values()):
         raise MissingSetting(
@@ -304,6 +316,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         frozen_clock=frozen_clock,
         demo_mode=demo_mode,
         demo_login_code=demo_login_code,
+        demo_seed=demo_seed,
         object_bucket_url=source.get("NURA_OBJECT_BUCKET_URL") or None,
         object_bucket_region=source.get("NURA_OBJECT_BUCKET_REGION") or None,
         object_access_key_id=source.get("NURA_OBJECT_ACCESS_KEY_ID") or None,

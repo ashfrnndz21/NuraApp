@@ -79,6 +79,10 @@ export const en = {
     prepareLine: "Nura gets you ready before you see the doctor.",
     // @patient phrase
     start: "Get started",
+    // @patient phrase
+    tryAsPa: "Try it as Pa",
+    // @patient phrase
+    tryAsMei: "Try it as Mei",
   },
   talk: {
     // @patient phrase

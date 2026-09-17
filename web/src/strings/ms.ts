@@ -79,6 +79,10 @@ export const ms = {
     prepareLine: "Nura sediakan anda sebelum jumpa doktor.",
     // @patient phrase
     start: "Mula",
+    // @patient phrase
+    tryAsPa: "Cuba sebagai Pa",
+    // @patient phrase
+    tryAsMei: "Cuba sebagai Mei",
   },
   talk: {
     // @patient phrase

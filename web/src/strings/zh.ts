@@ -79,6 +79,10 @@ export const zh = {
     prepareLine: "看医生之前，Nura 帮您准备好。",
     // @patient phrase
     start: "开始",
+    // @patient phrase
+    tryAsPa: "以爸爸身份试用",
+    // @patient phrase
+    tryAsMei: "以美试用",
   },
   talk: {
     // @patient phrase

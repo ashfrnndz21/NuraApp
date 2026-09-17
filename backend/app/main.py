@@ -28,6 +28,7 @@ Logging is set up so that, on a dev run, the code line is seen.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from app.channels.api import Providers, create_app
@@ -38,6 +39,7 @@ from app.delivery.feed.claude_adapters import compressor_for, searcher_for
 from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.push import push_sender_for
 from app.delivery.voice import voice_for
+from app.demo_seed import seed_demo
 from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
 from app.ingestion.extract_provider import extractor_for
@@ -101,4 +103,14 @@ if (
         settings.frozen_clock.isoformat(),
     )
 engine = make_engine(settings.database_url)
-app = create_app(settings, make_session_factory(engine), providers_for(settings))
+session_factory = make_session_factory(engine)
+providers = providers_for(settings)
+
+
+async def _seed() -> None:
+    async with session_factory() as seeding_session:
+        await seed_demo(seeding_session, settings, providers)
+
+
+seed: Callable[[], Awaitable[None]] | None = _seed if settings.demo_seed else None
+app = create_app(settings, session_factory, providers, seed=seed)

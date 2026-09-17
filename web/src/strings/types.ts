@@ -36,6 +36,10 @@ export interface Strings {
     prepare: string;
     prepareLine: string;
     start: string;
+    /** Demo/dev only (`GET /deployment`): sign in at once as the seeded Pa or Mei
+     *  (`app.demo_seed`), no phone number or code typed. */
+    tryAsPa: string;
+    tryAsMei: string;
   };
   /** Conversation and waiting (docs/design-direction.md): the words every ask, search and
    *  message composer uses while Nura works. The steps themselves are the backend's lines. */

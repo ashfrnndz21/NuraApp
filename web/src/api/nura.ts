@@ -123,6 +123,12 @@ export const startPhone = (phone_e164: string, display_name: string | null, lang
 export const verifyPhone = (phone_e164: string, code: string) =>
   api<SessionOut>("/auth/phone/verify", { method: "POST", body: { phone_e164, code } });
 
+/** "Try it as Pa"/"Try it as Mei" on the Welcome screen, demo/dev only (`GET /deployment`):
+ *  signs in as the number `app.demo_seed` seeded, without the phone number and the code a
+ *  real sign-in asks for. Answers 404 wherever the deployment has not seeded them. */
+export const quickSignIn = (as: "pa" | "mei") =>
+  api<SessionOut>("/dev/quick-signin", { method: "POST", body: { as } });
+
 export const startEmail = (email: string, display_name: string | null, language: string) =>
   api<{ expires_in_seconds: number }>("/auth/email/start", {
     method: "POST",

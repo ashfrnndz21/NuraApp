@@ -827,6 +827,13 @@ img.avatar {
   text-align: center;
   color: var(--ink-quiet);
 }
+/* Demo/dev only (docs/deploy-demo.md): "Try it as Pa"/"Try it as Mei", under Get started. */
+.welcome-demo-signin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
 
 /* --- Conversation, waiting and "thinking", as the board's Ask Nura screen draws them ------------ */
 .exchange {
