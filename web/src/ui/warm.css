@@ -931,3 +931,28 @@ img.avatar {
     animation: none;
   }
 }
+
+/* In a page's column, a warm block is as tall as what is in it: a `min-height` never lets the
+   column squeeze it shorter than its words at a large text size (they would spill over the next). */
+.tint-card,
+.action-row,
+.do-section,
+.upcoming,
+.section-head,
+.home-skeleton,
+.skeleton,
+.exchange,
+.hero-block {
+  flex-shrink: 0;
+}
+
+/* At large writing a tab's word is whole, on one row: the word steps down only as far as the
+   phone's width needs, so the bar never grows a second row that would squeeze the page above it. */
+:root[data-writing="large"] .tabbar[data-count="5"] button,
+:root[data-text="large"] .tabbar[data-count="5"] button {
+  font-size: min(var(--text-tab), 3.9vw);
+}
+:root[data-writing="large"] .tabbar .tab-word,
+:root[data-text="large"] .tabbar .tab-word {
+  text-overflow: clip;
+}
