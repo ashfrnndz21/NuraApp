@@ -24,8 +24,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
+from app.db import utcnow
 from app.delivery.feed import search as search_module
-from app.delivery.feed.compose import Day, around_for, plain_day, refresh, today_for
+from app.delivery.feed.compose import (
+    DECLINED_TOPIC,
+    Day,
+    _broker_wanted,
+    _declined_topics,
+    around_for,
+    plain_day,
+    refresh,
+    today_for,
+)
 from app.delivery.feed.compress import (
     Compressed,
     FixtureCompressor,
@@ -33,6 +43,7 @@ from app.delivery.feed.compress import (
     Found,
     changes_treatment,
 )
+from app.delivery.feed.engagement import record_engagement
 from app.delivery.feed.items import (
     SURFACE_OF,
     NoticeNotForPatient,
@@ -44,6 +55,7 @@ from app.delivery.feed.items import (
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
+    EngagementKind,
     FeedItem,
     JobKind,
     JobStatus,
@@ -64,14 +76,15 @@ from app.delivery.feed.rank import (
 )
 from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
+from app.delivery.recommend.rules import RULE_NEW_MEDICINE_EXPLAINER
 from app.delivery.strings import Lines, learning_lines, needs_doctor_look_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.language.models import ReviewItem
-from app.memory.episodic import store_artifact
-from app.memory.models import ArtifactKind, SourceChannel
+from app.memory.episodic import record_event, store_artifact
+from app.memory.models import ArtifactKind, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import MemoKind
@@ -82,6 +95,7 @@ from app.safety.plain_words import verify
 from app.state.models import NotRenderedFromState
 from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
+from tests.feelings_support import new_medicine
 from tests.medicines_support import let_in
 from tests.support import OPENING_CONSENT
 
@@ -1019,6 +1033,144 @@ async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:
     _, first = await refresh(sg, context=context, engine=ENGINE)
     _, second = await refresh(sg, context=context, engine=ENGINE)
     assert first and second == []
+
+
+# --- RE-07: the feed consumes the slate --------------------------------------------------
+
+
+async def test_a_new_medicines_explainer_and_its_clip_lead_the_learning_supply_that_week(
+    sg: AsyncSession,
+) -> None:
+    """docs/recommendation-engine.md §2.6: `_learning`'s `wanted` gains the slate's READ and
+    CLIP topics first, already ranked by `RuleRanker` — so a medicine he just started leads
+    this week's learning supply, ahead of a gap State already knew about (his diabetes, told
+    at onboarding, which starts its own explainer the old way, `_gaps`)."""
+    context = await _pa(sg)
+    told = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.ONBOARDING,
+        occurred_at=utcnow(),
+        label="the conditions he told",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject="condition",
+        attribute="diabetes",
+        value=True,
+        confidence=1.0,
+        event_id=told.id,
+    )
+    await new_medicine(sg, context)  # amlodipine, started now — inside the 14-day window
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+
+    supply = [item for item in made if item.type in (CardType.LEARNING, CardType.CLIP)]
+    assert len(supply) >= 3, "the medicine's explainer, its clip, and the diabetes explainer"
+    leaders = supply[:2]
+    assert {item.type for item in leaders} == {CardType.LEARNING, CardType.CLIP}
+    for item in leaders:
+        assert item.why["rule"] == RULE_NEW_MEDICINE_EXPLAINER
+        assert item.why["topic"] == "medicine.blood_pressure_tablet"
+        assert "recent_evidence" in item.why["boosts"]
+    # The diabetes gap (an older story, `_gaps`) still runs — just behind the slate's own.
+    trailing = supply[2:]
+    assert any(item.why.get("gap") == "diabetes" for item in trailing)
+    assert not any(item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER for item in trailing)
+
+    jobs = {(job.kind, tuple(job.terms), job.cadence) for job in await list_jobs(sg, context=context)}
+    assert (JobKind.WORTH_KNOWING, ("amlodipine",), "weekly") in jobs
+
+
+async def test_a_dismissed_topic_comes_back_no_sooner_than_30_days(sg: AsyncSession) -> None:
+    """The topic-level "not for me" (`app.delivery.feed.engagement._decline_topic_for_30_days`)
+    is a Fact with a validity window, read back by `_declined_topics` — distinct from
+    `rank.DECLINED`, which is per card type and holds only for the rest of his day. Checked at
+    two levels: the window itself (a hand-written fact, so this does not depend on any one
+    rule's own freshness window still holding thirty days out), and the real wiring — declining
+    a card the broker's slate proposed keeps that topic out of `_broker_wanted` right away."""
+    context = await _pa(sg)
+    topic = "medicine.blood_pressure_tablet"
+    now = utcnow()
+
+    # The window itself: still declined ten days on, not declined on day thirty-one.
+    moment = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.ENGAGEMENT,
+        occurred_at=now,
+        label="not for me: a topic",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject=DECLINED_TOPIC,
+        attribute=topic,
+        value={"item_id": "test"},
+        confidence=1.0,
+        event_id=moment.id,
+        valid_from=now,
+        valid_to=now + timedelta(days=30),
+    )
+    assert topic in await _declined_topics(sg, context=context, at=now + timedelta(days=10))
+    assert topic not in await _declined_topics(sg, context=context, at=now + timedelta(days=31))
+
+    # The real wiring: a card the slate proposed, dismissed, and the slate stops proposing it.
+    other = await _pa(sg, phone="+6591310099")
+    await new_medicine(sg, other)
+    state = await current_state(sg, context=other)
+    day = today_for(other)
+    around = await around_for(sg, context=other, engine=ENGINE, state=state, day=day)
+    before = await _broker_wanted(
+        sg, context=other, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert ("amlodipine",) in {terms for _, terms, *_ in before}
+
+    _, made = await refresh(sg, context=other, engine=ENGINE)
+    [card] = [
+        item
+        for item in made
+        if item.type is CardType.LEARNING and item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER
+    ]
+    await record_engagement(sg, context=other, item_id=card.id, kind=EngagementKind.DISMISSED)
+
+    after = await _broker_wanted(
+        sg, context=other, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert ("amlodipine",) not in {terms for _, terms, *_ in after}
+
+
+async def test_a_candidate_on_a_withheld_scope_never_becomes_a_card_for_that_key(
+    sg: AsyncSession,
+) -> None:
+    """A key without MEDICINES never sees a medicine topic's card, whatever the slate proposes
+    to the owner: the broker itself drops what `Candidate.readable_by` refuses before
+    `slate()` ever returns it (`test_recommend_broker.
+    test_a_key_without_records_never_sees_what_rests_on_it_named_as_withheld`), so
+    `_broker_wanted` never queues the job for a narrower key — not a card filtered after the
+    fact, a candidate that never reached the wanted list in the first place."""
+    context = await _pa(sg)
+    await new_medicine(sg, context)  # amlodipine, on Pa's own key
+    kit = await let_in(
+        sg,
+        context,
+        phone="+6591230099",
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER] - {Scope.MEDICINES},
+    )
+    assert not kit.allows(Scope.MEDICINES)
+
+    state = await current_state(sg, context=kit)
+    day = today_for(kit)
+    around = await around_for(sg, context=kit, engine=ENGINE, state=state, day=day)
+    assert "amlodipine" not in around.medicines, "a scope she does not hold names no medicine"
+    wanted = await _broker_wanted(
+        sg, context=kit, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert not wanted, "the withheld scope leaves the broker nothing to propose to her"
 
 
 def test_the_dedupe_key_is_job_aware_so_two_jobs_cannot_race_on_one_page() -> None:

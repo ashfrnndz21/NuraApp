@@ -677,13 +677,16 @@ async def test_a_medicine_running_low_makes_a_reorder_card_from_the_count(
     assert reorder["scope"] == "medicines" and reorder["caps_class"] == "one"
     now = page["items"][0]
     assert now["scope"] == "medicines" and added.json()["fact_id"] in now["why"]["fact_ids"]
-    # The medicine also started an explainer and a daily safety job by its generic name.
+    # The medicine also started an explainer and a daily safety job by its generic name, and
+    # (RE-07) the broker's own `new_medicine_explainer` candidate — inside its 14-day window —
+    # starts the weekly watch the slate leads with.
     jobs = (
         await deployment.client.get(f"/profiles/{profile_id}/search-jobs", headers=bearer(his))
     ).json()
     assert {(job["kind"], job["cadence"]) for job in jobs if job["terms"] == ["amlodipine"]} == {
         ("explainer", "on_change"),
         ("safety", "daily"),
+        ("worth_knowing", "weekly"),
     }
     # A key without the medicines scope sees neither card.
     mei = await register_by_phone(deployment, MEI, "Mei")

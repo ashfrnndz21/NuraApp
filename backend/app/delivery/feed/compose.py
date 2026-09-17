@@ -68,7 +68,7 @@ from app.delivery.strings import (
     test_name,
 )
 from app.delivery.voice import MAX_SECONDS, seconds_to_say, voiced
-from app.drugs.registry import DrugRegistry, LabelFields
+from app.drugs.registry import DrugRegistry, LabelFields, UnknownDrug
 from app.errors import Refusal
 from app.family.photos import photos_for_his_feed
 from app.family.roster import who_is_on_duty
@@ -1659,6 +1659,117 @@ CONDITION_TERMS: Mapping[str, str] = {"high_blood_pressure": "blood pressure"}
 condition's code in words ("diabetes", "kidneys"), except where the record already searches
 for the same thing under another name — high blood pressure is the blood pressure search."""
 
+DECLINED_TOPIC = "declined_topic"
+"""The subject of the topic-level "not for me" fact (RE-07): the attribute is the catalogue
+topic code (`app.delivery.recommend.models.Candidate.topic`), the value idle, and the window
+thirty days — a Fact with a validity window and a confidence state (CLAUDE.md), not a new
+column. `app.delivery.feed.engagement` writes it; `_declined_topics` below reads it back.
+Distinct from `rank.DECLINED`, which is per card *type* and holds only for the rest of his
+day — this is per *topic* and holds for thirty days, so a rule that would otherwise keep
+proposing the same topic every week stays quiet about it that long."""
+
+DECLINED_TOPIC_WINDOW = timedelta(days=30)
+
+
+async def _declined_topics(
+    session: AsyncSession, *, context: KeyContext, at: datetime
+) -> frozenset[str]:
+    """The topic codes he said "not for me" to, still inside their thirty days at `at`
+    (`current_facts` already answers only what is inside its window)."""
+    facts = await current_facts(session, context=context, subject=DECLINED_TOPIC, at=at)
+    return frozenset(fact.attribute for fact in facts)
+
+
+def _topic_term(topic: str, *, medicines_by_plain_id: Mapping[str, str]) -> tuple[str, str] | None:
+    """The plain search term and scope word a broker topic (RE-04 code) asks the allowlist
+    about — the same words `_gaps` already asks for a medicine or a condition, so a broker-
+    found gap and a State-found gap share one card rather than drifting into two searches for
+    the same thing. `None` for a topic this function cannot place a search for (a sensitive
+    topic, or a medicine this key's own lines do not name — never guessed)."""
+    family, _, code = topic.partition(".")
+    if family == "medicine":
+        term = medicines_by_plain_id.get(code)
+        return (term, "medicines") if term else None
+    if family == "condition":
+        return (CONDITION_TERMS.get(code, code.replace("_", " ")), "records")
+    return None
+
+
+def _plain_name_ids(registry: DrugRegistry, medicines: Sequence[str]) -> dict[str, str]:
+    """Which of his own medicine generics answer which licensed `plain_name_id` (module doc
+    of `app.delivery.recommend.rules`): the one lookup `_topic_term` needs to turn a
+    `medicine.<plain_name_id>` topic back into the generic his record actually holds."""
+    by_id: dict[str, str] = {}
+    for generic in medicines:
+        try:
+            monograph = registry.monograph(generic)
+        except UnknownDrug:
+            continue
+        if monograph.plain_name_id:
+            by_id.setdefault(monograph.plain_name_id, generic)
+    return by_id
+
+
+async def _broker_wanted(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    engine: Engine,
+    state: StateView,
+    around: Around,
+    moment: datetime,
+) -> list[tuple[JobKind, tuple[str, ...], str, list[str], dict[str, Any]]]:
+    """The slate's READ and CLIP candidates, turned into `_learning`'s `wanted` shape (RE-07,
+    docs/recommendation-engine.md §2.6: "`wanted` gains the slate's READ topics"). Ranked
+    first, so they lead: the broker's own `RuleRanker` has already ordered `result.candidates`
+    best first, deterministically (its own tie-break), and this function only ever narrows
+    that order — drops what he has said "not for me" to in the last thirty days, and collapses
+    a rule's READ and its CLIP for the same topic into one watch, keeping the higher-ranked
+    entry's rule id and boosts. It never widens what the broker already dropped: every
+    candidate here already passed `Candidate.readable_by(context)` inside `slate()` itself, so
+    nothing a withheld scope rests on ever reaches this list, let alone a card.
+
+    Imported here, not at module level: `app.delivery.recommend` reaches `app.onboarding`
+    (for the topic catalogue), and `app.onboarding.settings` reaches back to this module for
+    `FORMAT_SUBJECT`/`FORMAT_ATTRIBUTE` — a real cycle a top-level import would hit the moment
+    either module loaded first. Deferring it here, at call time, is enough: by then every
+    module involved has finished initialising."""
+    from app.delivery.recommend.broker import slate as recommend_slate
+    from app.delivery.recommend.models import OutputKind as RecommendOutputKind
+
+    result = await recommend_slate(
+        session, context=context, state=state, registry=engine.registry, now=moment
+    )
+    declined = await _declined_topics(session, context=context, at=moment)
+    by_plain_id = _plain_name_ids(engine.registry, around.medicines)
+    wanted: list[tuple[JobKind, tuple[str, ...], str, list[str], dict[str, Any]]] = []
+    queued: set[str] = set()
+    for candidate in result.candidates:
+        if candidate.output not in (RecommendOutputKind.READ, RecommendOutputKind.CLIP):
+            continue
+        if candidate.topic in declined or candidate.topic in queued:
+            continue
+        mapped = _topic_term(candidate.topic, medicines_by_plain_id=by_plain_id)
+        if mapped is None:
+            continue
+        term, scope_word = mapped
+        queued.add(candidate.topic)
+        fact_ids = sorted({f"{item.kind}:{item.id}" for item in candidate.because})
+        wanted.append(
+            (
+                JobKind.WORTH_KNOWING,
+                (term,),
+                scope_word,
+                fact_ids,
+                {
+                    "rule": candidate.rule_id,
+                    "boosts": list(candidate.boosts),
+                    "topic": candidate.topic,
+                },
+            )
+        )
+    return wanted
+
 
 def _gaps(state: StateView, medicines: Sequence[LineView] = ()) -> list[tuple[str, str, list[str]]]:
     """What the record holds that deserves an explainer: (term, scope word, fact ids). A
@@ -1822,30 +1933,44 @@ async def _learning(
         profile=house.profile,
         medicines=medicines,
     )
-    wanted: list[tuple[JobKind, tuple[str, ...], str, list[str]]] = []
+    wanted: list[tuple[JobKind, tuple[str, ...], str, list[str], dict[str, Any]]] = []
+    # RE-07: the broker's slate leads — its READ and CLIP candidates are already ranked best
+    # first (`RuleRanker`), so queuing them ahead of the plain gaps below is what makes a new
+    # medicine's explainer and clip lead this week's learning supply, not an accident of dict
+    # or set order (the "hard-won rule" on tie-breaks, CLAUDE.md).
+    wanted.extend(
+        await _broker_wanted(
+            session,
+            context=context,
+            engine=engine,
+            state=state,
+            around=around,
+            moment=day.now,
+        )
+    )
     for term, scope_word, fact_ids in _gaps(state, medicines):
-        wanted.append((JobKind.EXPLAINER, (term,), scope_word, fact_ids))
+        wanted.append((JobKind.EXPLAINER, (term,), scope_word, fact_ids, {}))
         if scope_word == "medicines":
             # Any medicine on the list starts a daily safety-notice job (spec §9).
-            wanted.append((JobKind.SAFETY, (term,), scope_word, fact_ids))
+            wanted.append((JobKind.SAFETY, (term,), scope_word, fact_ids, {}))
     for hazard in HAZARDS:
         reasons = relevant_to(hazard, around.conditions, around.medicines)
         if reasons:
             ids = sorted({one for reason in reasons for one in around.fact_ids.get(reason, ())})
-            wanted.append((JobKind.LOCAL, (hazard,), "records", ids))
+            wanted.append((JobKind.LOCAL, (hazard,), "records", ids, {}))
     for season in SEASONS:
         if season.planned and season.conditions & set(around.conditions):
             ids = sorted(
                 {one for code in season.conditions for one in around.fact_ids.get(code, ())}
             )
-            wanted.append((JobKind.SEASONAL, (season.term,), "records", ids))
+            wanted.append((JobKind.SEASONAL, (season.term,), "records", ids, {}))
     food = tuple(sorted({FOOD_TERMS[code] for code in around.conditions if code in FOOD_TERMS}))
     if food:
         ids = sorted({one for code in FOOD_TERMS for one in around.fact_ids.get(code, ())})
-        wanted.append((JobKind.FOOD, food, "records", ids))
+        wanted.append((JobKind.FOOD, food, "records", ids, {}))
     found: list[FeedItem] = []
     ran: set[uuid.UUID] = set()
-    for kind, terms, scope_word, fact_ids in wanted:
+    for kind, terms, scope_word, fact_ids, extra in wanted:
         if (kind, terms) in have:
             continue
         if kind is JobKind.FOOD:
@@ -1863,6 +1988,7 @@ async def _learning(
                 "fact_ids": fact_ids,
                 "scope": scope_word,
                 "planned": True,
+                **extra,
             },
         )
         have.add((kind, terms))

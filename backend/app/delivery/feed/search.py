@@ -596,6 +596,13 @@ async def run_job(
             )
         )
         scope = _scope_of(job, reasons, around, engine.registry)
+        # RE-07: a job the broker's slate proposed (`compose._broker_wanted`) carries its
+        # rule id, boosts and topic in its own `reason` — never guessed back from the words,
+        # which the broker never writes (module doc). A job the state's own gaps proposed
+        # carries none of these, and `Why.rule`/`Why.topic` are `None` for it, as before.
+        rule = job.reason.get("rule")
+        boosts = tuple(job.reason.get("boosts") or ())
+        topic = job.reason.get("topic")
         if treatment_changing:
             memo_id = await _ask_the_doctor(
                 session,
@@ -628,6 +635,8 @@ async def run_job(
                     gap=job.terms[0],
                     fact_ids=fact_ids,
                     memo_id=memo_id,
+                    rule=rule,
+                    topic=topic,
                 ),
                 scope=scope,
                 deliver_to=DeliverTo.CAREGIVER,
@@ -653,6 +662,9 @@ async def run_job(
                         source_id=str(source.id),
                         gap=job.terms[0],
                         fact_ids=fact_ids,
+                        boosts=boosts,
+                        rule=rule,
+                        topic=topic,
                     ),
                     scope=scope,
                     deliver_to=DeliverTo.PATIENT,

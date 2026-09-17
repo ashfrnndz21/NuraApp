@@ -1,0 +1,29 @@
+{
+  "en": {
+    "headline": "Your blood pressure tablet",
+    "body": [
+      "It helps your blood vessels relax.",
+      "Tell your doctor if your ankles swell."
+    ],
+    "why_topic": "your blood pressure tablet",
+    "passage": "Amlodipine helps to relax your blood vessels so blood moves more easily."
+  },
+  "ms": {
+    "headline": "Ubat tekanan darah anda",
+    "body": [
+      "Ubat ini membantu saluran darah anda mengendur.",
+      "Beritahu doktor anda jika buku lali anda bengkak."
+    ],
+    "why_topic": "ubat tekanan darah anda",
+    "passage": "Amlodipine helps to relax your blood vessels so blood moves more easily."
+  },
+  "zh": {
+    "headline": "您的降血压药",
+    "body": [
+      "它让您的血管放松。",
+      "如果脚踝肿了，告诉您的医生。"
+    ],
+    "why_topic": "您的降血压药",
+    "passage": "Amlodipine helps to relax your blood vessels so blood moves more easily."
+  }
+}

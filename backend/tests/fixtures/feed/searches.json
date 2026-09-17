@@ -186,5 +186,23 @@
       "published_at": "2025-06-30",
       "text": "Deep-fried food adds saturated fat, which raises blood cholesterol. Choose steamed, boiled or grilled dishes, such as steamed fish instead of fried fish."
     }
+  ],
+  "worth_knowing:amlodipine": [
+    {
+      "domain": "healthhub.sg",
+      "url": "https://www.healthhub.sg/a-z/medications/amlodipine-what-to-know",
+      "title": "Amlodipine, what to know",
+      "published_at": "2025-02-17",
+      "text": "Amlodipine helps to relax your blood vessels so blood moves more easily. It is usually taken once a day, at the same time each day. Some people get swollen ankles, flushing or a headache. Tell your doctor if your ankles swell."
+    },
+    {
+      "domain": "nhcs.com.sg",
+      "url": "https://www.nhcs.com.sg/patient-care/videos/amlodipine-in-brief",
+      "title": "Amlodipine, in a few seconds",
+      "published_at": "2025-05-12",
+      "text": "[0:00] Amlodipine relaxes your blood vessels. [0:05] This helps to keep your numbers steady.",
+      "media": "video",
+      "licence": null
+    }
   ]
 }
