@@ -134,6 +134,10 @@ class MemoSource(StrEnum):
     VISIT = "visit"
     CONVERSATION = "conversation"
     PERSON = "person"
+    SEARCH = "search"
+    """A search job found something worth asking the doctor (#181/#224) — a safety notice
+    whose words would change treatment, rerouted here rather than shown as a card. Stored as
+    plain `VARCHAR` (`enum_column`), so this needed no migration."""
 
 
 class Memo(RenderedFromState, ProfileScoped, Base):

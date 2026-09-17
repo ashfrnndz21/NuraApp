@@ -50,8 +50,9 @@ class CardType(StrEnum):
     REORDER = "reorder"
     """A medicine running low (E04 works the date out; the card repeats it)."""
     NOTICE = "notice"
-    """A safety notice from a regulator matching a medicine. Sent to him only when it matches
-    the batch on his pack and there is something to do; otherwise held for the caregiver."""
+    """A safety notice from a regulator matching a medicine. Never his card, batch match or
+    not (#181): held for the chief, or rerouted as a `QUESTION` to the memo when its words
+    would change treatment. `app/delivery/feed/items.py` refuses one built for the patient."""
     GATE = "gate"
     """That is all that is new. Keep going?"""
     STORY = "story"
