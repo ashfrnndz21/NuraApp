@@ -85,7 +85,7 @@ from app.channels.api.schemas import (
 )
 from app.channels.printable import PrintableConsentRenderer
 from app.channels.whatsapp.group import group_of, sync_group
-from app.channels.whatsapp.opt_in import said_no
+from app.channels.whatsapp.opt_in import newest_answer
 from app.consent.export import export_consent_record
 from app.consent.models import Consent, ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import (
@@ -660,9 +660,9 @@ async def _what_whatsapp_changes(
     flag still reaches — each live key holding the emergency card, named as the words name
     them, with who they are to him when a stewardship says (the relationship code, in his
     language): first those it reaches on WhatsApp, then those it reaches only in the app,
-    who said no to WhatsApp or have no number (#163); and whether anyone at all holds a live key,
-    card or not, who hears nothing else about him on WhatsApp now. Nothing for any other
-    agreement."""
+    who said no to WhatsApp, have no number, or have never opted in (#148, #163); and whether
+    anyone at all holds a live key, card or not, who hears nothing else about him on WhatsApp
+    now. Nothing for any other agreement."""
     if row.purpose is not ConsentPurpose.WHATSAPP:
         return False, [], [], False
     in_group = await group_of(session, context=context) is not None
@@ -690,11 +690,12 @@ async def _what_whatsapp_changes(
         name = await person_display_name(session, context, key.holder_person_id)
         words = named_words(name, said.get(key.holder_person_id), language)
         holder = await session.get(Person, key.holder_person_id)
-        reachable = (
-            holder is not None
-            and bool(holder.phone_e164)
-            and not await said_no(session, context=context, person_id=key.holder_person_id)
+        answer = (
+            await newest_answer(session, context=context, person_id=key.holder_person_id)
+            if holder is not None and holder.phone_e164
+            else None
         )
+        reachable = answer is not None and answer.said_yes
         (on_whatsapp if reachable else in_app).append(words)
     return in_group, on_whatsapp, in_app, family
 

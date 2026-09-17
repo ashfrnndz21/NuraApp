@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import MessageKind, WhatsAppMessage
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.clock import FrozenClock
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.delivery.triggers.models import Delivery, DeliveryChannel, DeliveryOutcome, Ladder
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import resolve_key_context
@@ -43,6 +45,19 @@ async def _kit_on_the_emergency_card(sg: AsyncSession, home: object) -> object:
     kit = await register_person(sg, region=Region.SG, display_name="Kit", phone_e164=KIT)
     await agree_to_family_sharing(sg, home.owner, kit, scopes={Scope.EMERGENCY})  # type: ignore[attr-defined]
     await grant_key(sg, context=home.owner, holder=kit, role=KeyRole.EMERGENCY)  # type: ignore[attr-defined]
+    # Kit's own answer at the key-accept step (#148, Meta's per-recipient opt-in): without it
+    # a red-flag notice would reach him only by app push and the family page, not WhatsApp.
+    kit_context = await resolve_key_context(
+        sg, region=Region.SG, person_id=kit.id, profile_id=home.profile.id  # type: ignore[attr-defined]
+    )
+    await record_opt_in(
+        sg,
+        context=kit_context,
+        messages=True,
+        joins_group=False,
+        wording_version=OPT_IN_VERSION,
+        language="en",
+    )
     return kit
 
 

@@ -11,8 +11,14 @@ holder never waits on either.
 Since #163 a no is kept to (`said_no`): nobody who answered no is sent a WhatsApp message
 Nura starts — not even a red-flag notice, which reaches them by app push and on their family
 page instead (`app.delivery.triggers.deliver`). A reply to a message they wrote to the number
-themselves still answers them there. What stays open for Meta's per-recipient opt-in is #148:
-asking the members who have not answered, and needing a yes rather than the absence of a no.
+themselves still answers them there.
+
+Since #148, Meta's own rule: each recipient's own opt-in, not the absence of a no. `said_yes`
+is the one a send checks — no answer at all is not read as a yes, the same as an explicit no,
+though `newest_answer` tells the two apart so the chief can see who has not been asked yet
+(`app.delivery.reach`) rather than who refused. A red-flag notice waits on neither more than
+any other WhatsApp message does: someone who has not opted in reaches it by app push and on
+their family page instead, exactly as someone who said no does.
 """
 
 from __future__ import annotations
@@ -109,6 +115,28 @@ async def answers_of(session: AsyncSession, *, context: KeyContext) -> WhatsAppO
     return max(rows, key=lambda row: (as_utc(row.said_at), not row.joins_group))
 
 
+async def newest_answer(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    channel: Channel = Channel.APP,
+) -> WhatsAppOptIn | None:
+    """This person's newest answer about this profile, any wording and any key: none before
+    he has ever answered. Two at the same instant: the one that says no."""
+    rows = await audited_read(
+        session,
+        WhatsAppOptIn,
+        context,
+        Scope.PROFILE,
+        where=(WhatsAppOptIn.person_id == person_id,),
+        channel=channel,
+    )
+    if not rows:
+        return None
+    return max(rows, key=lambda row: (as_utc(row.said_at), not row.said_yes))
+
+
 async def said_no(
     session: AsyncSession,
     *,
@@ -119,15 +147,21 @@ async def said_no(
     """Whether this person's newest answer about this profile says no to WhatsApp messages from
     Nura (#163). Any wording and any key: a no stands until they say yes, and is never read as a
     yes because the words or the key changed since. No answer at all is not a no (#148)."""
-    rows = await audited_read(
-        session,
-        WhatsAppOptIn,
-        context,
-        Scope.PROFILE,
-        where=(WhatsAppOptIn.person_id == person_id,),
-        channel=channel,
-    )
-    if not rows:
-        return False
-    newest = max(rows, key=lambda row: (as_utc(row.said_at), not row.said_yes))
-    return not newest.said_yes
+    newest = await newest_answer(session, context=context, person_id=person_id, channel=channel)
+    return newest is not None and not newest.said_yes
+
+
+async def said_yes(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    channel: Channel = Channel.APP,
+) -> bool:
+    """Whether this person's newest answer about this profile is an explicit yes to WhatsApp
+    messages from Nura (#148, Meta's per-recipient opt-in). No answer at all is not read as a
+    yes — the same rule a no already had (#163) — so a send needs this, not merely `not
+    said_no`. Told apart from `said_no` by `newest_answer` returning None: absence is not
+    refusal, and the chief is shown the two differently (`app.delivery.reach`)."""
+    newest = await newest_answer(session, context=context, person_id=person_id, channel=channel)
+    return newest is not None and newest.said_yes

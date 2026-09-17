@@ -22,8 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.classifier import RuleClassifier
 from app.channels.whatsapp.inbound import Handled, handle_inbound
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.channels.whatsapp.provider import DevInbound, FixtureProvider
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import grant_consent
 from app.db import utcnow
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
@@ -130,6 +132,7 @@ async def home(
     whatsapp: bool = True,
     quantity: int = 30,
     roster: bool = True,
+    opted_in: bool = True,
 ) -> Home:
     via = via_for(Region.SG, tmp_path)
     pa = await register_person(
@@ -162,6 +165,22 @@ async def home(
             basis=ConsentBasis.OWNER,
             language="en",
         )
+    if opted_in:
+        # Each family member's own answer at the key-accept step (#143, #148, Meta's
+        # per-recipient opt-in): without it Nura may send neither on WhatsApp, a red flag
+        # included, and `opted_in=False` is how a test asks for a member nobody has asked yet.
+        for holder, language in ((mei, "en"), (siti, "ms")):
+            holder_context = await resolve_key_context(
+                session, region=Region.SG, person_id=holder.id, profile_id=profile.id
+            )
+            await record_opt_in(
+                session,
+                context=holder_context,
+                messages=True,
+                joins_group=True,
+                wording_version=OPT_IN_VERSION,
+                language=language,
+            )
     if roster:
         await add_slot(
             session,

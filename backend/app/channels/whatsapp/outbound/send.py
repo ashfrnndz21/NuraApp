@@ -28,7 +28,7 @@ from app.channels.whatsapp.models import (
     WhatsAppMessage,
     WhatsAppThread,
 )
-from app.channels.whatsapp.opt_in import said_no
+from app.channels.whatsapp.opt_in import newest_answer
 from app.channels.whatsapp.provider import WhatsAppProvider
 from app.channels.whatsapp.strings import REPLIES, reply
 from app.channels.whatsapp.templates import TEMPLATES, language_of, render
@@ -155,6 +155,16 @@ class SaidNoToWhatsApp(Refusal):
     on their family page. A reply to a message they wrote themselves still goes."""
 
 
+class NotOptedInToWhatsApp(Refusal):
+    """This person has never answered "Nura may message you on WhatsApp." at the key-accept
+    step (#148, Meta's own rule: each recipient's own opt-in). No answer at all is not read as
+    a yes — the same as `SaidNoToWhatsApp`, and told apart from it only so the chief can see
+    who has not been asked yet rather than who refused (`app.delivery.reach`). Nura starts
+    nothing with them on WhatsApp until they answer, a red-flag notice included: that reaches
+    them by app push and on their family page instead. A reply to a message they wrote
+    themselves still goes."""
+
+
 RED_FLAG_NOTICE = "red_flag_notice"
 """Every notice a red flag sends is named for it: the approved one, the self and ambiguous
 variants, the tiered ones (the ambulance, the hospital now, the number if worse, #147), their
@@ -177,16 +187,18 @@ def is_red_flag_notice(kind: str | None) -> bool:
 async def _may_message(
     session: AsyncSession, *, context: KeyContext, person: Person, kind: str | None
 ) -> None:
-    """Whether Nura may message this person about the profile (#143, #163). `kind` is the
+    """Whether Nura may message this person about the profile (#143, #148, #163). `kind` is the
     template or the reply key; None for a voice note.
 
     The patient's WhatsApp agreement is for messages to him. Anyone else must hold a key his
     agreement to let them in rests on. A message Nura starts with them — a template or a voice
-    note — needs two things more: that they did not answer no to WhatsApp (`SaidNoToWhatsApp`),
-    and, unless it is a red-flag notice, that his WhatsApp agreement stands. So after he stops
-    WhatsApp his family hears about him there only when he is unwell, which is what his stop
-    lines say (`app.consent.withdrawal.STILL_TOLD`). A reply answers something they wrote, and
-    the inbound door has asked his agreement before it (or it is a red flag's fixed line)."""
+    note — needs two things more: their own opt-in to WhatsApp, their newest answer and a yes
+    (`NotOptedInToWhatsApp` before they have ever answered, `SaidNoToWhatsApp` once they have
+    said no), and, unless it is a red-flag notice, that his WhatsApp agreement stands. So after
+    he stops WhatsApp his family hears about him there only when he is unwell, which is what
+    his stop lines say (`app.consent.withdrawal.STILL_TOLD`). A reply answers something they
+    wrote, and the inbound door has asked his agreement before it (or it is a red flag's fixed
+    line)."""
     profile = await session.get(Profile, context.profile_id)
     assert profile is not None  # the context was resolved from this row
     patient = profile.owner_person_id == person.id or (
@@ -209,10 +221,14 @@ async def _may_message(
     ):
         if not await holds_the_profile(session, profile_id=context.profile_id, person_id=person.id):
             raise NotLetInHere(f"person {person.id} holds no key here")
-        if starts and await said_no(
-            session, context=context, person_id=person.id, channel=Channel.WHATSAPP
-        ):
-            raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
+        if starts:
+            answer = await newest_answer(
+                session, context=context, person_id=person.id, channel=Channel.WHATSAPP
+            )
+            if answer is None:
+                raise NotOptedInToWhatsApp(f"person {person.id} has not opted in to WhatsApp")
+            if not answer.said_yes:
+                raise SaidNoToWhatsApp(f"person {person.id} said no to WhatsApp")
     if starts and not is_red_flag_notice(kind):
         await require_consent(
             session,

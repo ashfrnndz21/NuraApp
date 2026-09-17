@@ -28,8 +28,9 @@ reached, and the ladder moves on at once (`ladder.climb`).
 Who may be sent WhatsApp (#163): the patient on his own agreement; anyone else on the key his
 agreement to let them in rests on, and — for anything but a red flag — only while his WhatsApp
 agreement stands (`told_without_his_agreement`; a voice note nobody could hear is an alert but
-not a red flag, so without his agreement it reaches them through the app). Someone who
-answered no to WhatsApp at the key-accept step is sent none, red flags included: those reach
+not a red flag, so without his agreement it reaches them through the app). Someone who has not
+recorded their own yes at the key-accept step — whether they said no or have never answered
+(#148, Meta's per-recipient opt-in) — is sent none, red flags included: those reach
 them by app push and on their family page.
 
 Everything here runs as Nura itself with the reach of the profile's owner (the steward before a
@@ -54,7 +55,7 @@ from app.audit.access import audited_read, audited_write, record_share
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber, business_number_for
-from app.channels.whatsapp.opt_in import said_no
+from app.channels.whatsapp.opt_in import WhatsAppOptIn, newest_answer
 from app.channels.whatsapp.outbound.send import Delivered
 from app.channels.whatsapp.templates import language_of
 from app.consent.models import ConsentPurpose
@@ -183,7 +184,7 @@ class Run:
     _ladders: list[Ladder] | None = None
     _taps: tuple[list[DoseTaken], dict[uuid.UUID, str]] | None = None
     _scopes: dict[uuid.UUID, frozenset[Scope]] = field(default_factory=dict)
-    _said_no: dict[uuid.UUID, bool] = field(default_factory=dict)
+    _whatsapp_answer: dict[uuid.UUID, WhatsAppOptIn | None] = field(default_factory=dict)
     said_language: str | None = None
     """His language as his settings say it (`his_language`), read once for the run."""
 
@@ -226,13 +227,14 @@ class Run:
             )
         return self._whatsapp
 
-    async def said_no_to_whatsapp(self, person: Person) -> bool:
-        """Whether this person answered no to WhatsApp messages from Nura (#163)."""
-        if person.id not in self._said_no:
-            self._said_no[person.id] = await said_no(
+    async def whatsapp_answer(self, person: Person) -> WhatsAppOptIn | None:
+        """This person's newest answer to "Nura may message you on WhatsApp.", or None before
+        they have ever answered (#148)."""
+        if person.id not in self._whatsapp_answer:
+            self._whatsapp_answer[person.id] = await newest_answer(
                 self.session, context=self.acting, person_id=person.id, channel=Channel.SYSTEM
             )
-        return self._said_no[person.id]
+        return self._whatsapp_answer[person.id]
 
     async def deliveries(self) -> list[Delivery]:
         if self._deliveries is None:
@@ -414,14 +416,20 @@ async def _no_whatsapp(run: Run, person: Person, type: TriggerType) -> str | Non
     """Why this person cannot be sent this on WhatsApp, if they cannot. His WhatsApp agreement
     is for messages to him (#143); anyone else is told under the key his agreement to let
     them in rests on, whose scope was checked for this message before any channel — and, for
-    anything but an alert, only while his agreement stands (#163). Nobody who said no to
-    WhatsApp is sent it, an alert included. The send door checks the same (`send`)."""
+    anything but an alert, only while his agreement stands (#163). Nobody without their own
+    recorded yes is sent it, an alert included: someone who has never answered is held back
+    the same as someone who said no (#148, Meta's per-recipient opt-in), told apart only so
+    the chief can see who has not been asked (`app.delivery.reach`). The send door checks the
+    same (`send`)."""
     if not person.phone_e164:
         return "no number"
     to_him = run.patient is not None and person.id == run.patient.id
     if to_him:
         return None if await run.whatsapp_agreed() else "not agreed"
-    if await run.said_no_to_whatsapp(person):
+    answer = await run.whatsapp_answer(person)
+    if answer is None:
+        return "not opted in"
+    if not answer.said_yes:
         return "said no"
     if not told_without_his_agreement(type) and not await run.whatsapp_agreed():
         return "not agreed"

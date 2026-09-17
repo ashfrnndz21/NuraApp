@@ -17,7 +17,12 @@ from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
 from app.channels.whatsapp.outbound.level0 import NoPatientYet
-from app.channels.whatsapp.outbound.send import NotLetInHere, OutsideTheWindow, SaidNoToWhatsApp
+from app.channels.whatsapp.outbound.send import (
+    NotLetInHere,
+    NotOptedInToWhatsApp,
+    OutsideTheWindow,
+    SaidNoToWhatsApp,
+)
 from app.channels.whatsapp.provider import NotAWebhook, WebhookTooLarge
 from app.consent.service import (
     NoConsent,
@@ -378,6 +383,9 @@ _SHAPE: tuple[type[Refusal], ...] = (
     # He said no to WhatsApp at the key-accept step (#163): Nura starts nothing with that
     # person on it, a red-flag notice included.
     SaidNoToWhatsApp,
+    # He has never answered the WhatsApp opt-in question at the key-accept step (#148, Meta's
+    # per-recipient opt-in): no answer is not read as a yes, the same as a no.
+    NotOptedInToWhatsApp,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""

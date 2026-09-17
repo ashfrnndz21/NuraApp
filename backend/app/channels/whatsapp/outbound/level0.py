@@ -14,9 +14,10 @@ the family notice from `day`); the dev-only routes call `run_morning` and
 - the visit card: the next visit on the spine, with who takes him;
 - the family notice: to each chief, in the evening, how many things were written down this
   week, counted over what her key opens (`app.delivery.triggers.day.family_notice`) — only
-  while his WhatsApp agreement stands, and never to a chief who said no to WhatsApp (#163);
-  the digest is read in the app either way. `run_family_notice` below is the same message
-  sent by hand, for the dev route and the checkpoints, unscoped by chief.
+  while his WhatsApp agreement stands, and never to a chief who said no to WhatsApp (#163) or
+  has not opted in yet (#148); the digest is read in the app either way. `run_family_notice`
+  below is the same message sent by hand, for the dev route and the checkpoints, unscoped by
+  chief.
 
 Every one goes through `send`: the profile's WHATSAPP consent, a template outside the
 window, plain words, a SHARE line. All of it runs in the owner's own key context — the
@@ -38,6 +39,7 @@ from app.channels.api.deps import Providers
 from app.channels.whatsapp.config import BusinessNumber
 from app.channels.whatsapp.outbound.send import (
     Delivered,
+    NotOptedInToWhatsApp,
     SaidNoToWhatsApp,
     send,
     send_voice_note,
@@ -367,7 +369,7 @@ async def run_family_notice(
                     state=state,
                 )
             )
-        except (NoConsent, SaidNoToWhatsApp):
+        except (NoConsent, SaidNoToWhatsApp, NotOptedInToWhatsApp):
             continue
     return sent
 
