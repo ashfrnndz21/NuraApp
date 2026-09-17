@@ -1,6 +1,7 @@
-# ADR 0015 — A sharing consent's role and window are checked only when the caller names them
+# ADR 0015 — A sharing consent's role and window are required, not optional
 
-**Date** 2026-09-17 · **Status** accepted · **Decided by** the builder session, on #185's own text · **Stories** #185, #184
+**Date** 2026-09-17 · **Status** accepted (superseding an earlier, rejected draft of this ADR) ·
+**Decided by** the operator, overriding the builder session's first attempt · **Stories** #185, #184
 
 ## Context
 
@@ -10,54 +11,75 @@ reads should name "Mei, your daughter, can see your medicines and your visits, f
 days," and `app.keys.grants.grant_key` should refuse a key cut for a different role or for a
 window that outlasts the one named.
 
-The most literal reading makes `role` and `window` required on `SharingConsentIn` and
-`SharingPreviewIn`, and required on the internal `Sharing`/`SharingWords` dataclasses `grant_
-consent` renders from. Doing that surfaced a second effect of the same story: `grant_consent`'s
-default `text_version` is always `current_version(SHARE_WITH_PERSON)`, and bumping that
-version to 3 (the one that names role and window) means **every** caller that does not pin an
-older version now renders the version-3 template — including the two call sites inside this
-codebase that always did (`app.identity.doors._hand_over`, the claim flow, which already names
-CHIEF/ALWAYS) and, more consequentially, every test helper that calls `grant_consent` or `POST
-/consents/sharing` without naming a role or a window at all. `tests/support.py`'s `agree_to_
-family_sharing` (28 files) and `tests/api.py`'s `let_in` (55 files, 106 call sites) are exactly
-that: a consent is agreed once, and a key is then cut in whatever role the individual test is
-actually exercising — caregiver here, chief there, viewer elsewhere. Making role required at
-the wire layer meant every one of those ~130 call sites would need an audited, matching role
-(and, transitively, `require_consent`'s exact-version match meant even a caller who correctly
-supplied a role but pinned the old wording version would still be refused `ConsentOutOfDate`).
+**First attempt, rejected.** The builder session's first pass made `role` and `window`
+optional everywhere — `SharingConsentIn`, `SharingPreviewIn`, and the internal `Sharing`/
+`SharingWords` dataclasses — reasoning that making them required would force every one of the
+~130 test call sites across 55 files that agree to sharing and then cut a key (`tests/
+support.py::agree_to_family_sharing`, `tests/api.py::let_in`) to name a matching role, since
+`grant_consent`'s default `text_version` always renders the current wording, and the current
+wording (version 3) is the one that names role and window.
+
+That reasoning was sound about the mechanical cost and wrong about the conclusion. Optional at
+the API boundary meant the *real client never had to send them* — and it didn't:
+`web/src/api/family.ts`'s `SharingBody`, used by both `previewSharing` and `letSomeoneIn`, had
+no `role` or `window` field. So every consent given through the actual Family screen was
+unconstrained, exactly as before #185, and the story's own acceptance line — "his yes should
+bind the role and the window" — was unmet for any real family. The enforcement existed only in
+tests that deliberately exercised it. A binding the real client never sends is no binding.
 
 ## Decision
 
-1. **`role` and `window` are optional on `SharingConsentIn`, `SharingPreviewIn`, `Sharing` and
-   `SharingWords`, default `None`.** A caller that does not state them gets exactly today's
-   behaviour: the consent constrains neither, and `grant_key` never raises `KeyNotAsAgreed`
-   for a `None` field on the consent it reads (`app.keys.grants.grant_key`, guarded on
-   `consent.role is not None` / `consent.window is not None`). A caller that does state them —
-   the current app always will — gets the full story: the words name both, the row keeps
-   both, and a key cut differently is refused.
-2. **The rendered words are backward-identical when role and window are not given.**
-   `render_sharing` (`app.consent.texts`) treats a missing `window` as `KeyWindow.ALWAYS` for
-   rendering purposes only (never for storage) — "until you say stop" is what an unstated
-   window always meant, even before this story had a word for it — and drops the blank line a
-   missing `role` would otherwise leave, rather than showing it empty. The result: a consent
-   agreed with neither field renders byte-for-byte the same lines version 2 always did, so
-   `test_the_preview_is_the_words_the_consent_keeps` and every other content-sensitive
-   assertion holds without change.
-3. **Not done:** making the fields required. That is the more literal reading of the issue and
-   is a smaller, more mechanical follow-up now that the seam exists — thread `role=`/`window=`
-   through `agree_to_family_sharing` and `let_in` (both already accept the parts and the
-   relationship as parameters; the pattern is the same) and drop the `None` branch in
-   `render_sharing` and the two `Optional`s. Left as a deliberate follow-up rather than done
-   here because it touches roughly 130 call sites across 55 files for a change with no
-   behavioural difference for the real client, which already names both.
+1. **`role: KeyRole` and `window: KeyWindow` are required, no default**, on `SharingConsentIn`,
+   `SharingPreviewIn`, and the internal `Sharing` and `SharingWords` dataclasses
+   (`app.consent.service`). Omitting either from `POST /consents/sharing` or its preview is a
+   422 at the door. `render_sharing` (`app.consent.texts`) no longer has an `Optional` branch:
+   every `SHARE_WITH_PERSON` consent, at the current wording, names the role and the window in
+   the words, full stop.
+2. **The web client sends both.** `web/src/screens/family/Keys.tsx`'s `NewKey` already has a
+   role picker (`ROLES`) and a window picker (`WindowChoices`) and already discards a stale
+   preview when either changes (`choose()` for role, `changed(setWindow)` for window, both
+   already bumping the same `generation` counter the parts and the person do) — it only needed
+   to actually put `role`/`window` on the wire, in `asked()`. `web/src/screens/onboarding/
+   Invite.tsx`'s gap has no picker at all: it always invites a caregiver, for `ALWAYS` (the
+   same fixed shape `nura.cutKey` already hardcoded), so its `asked()` states that fixed pair
+   rather than offering a choice.
+3. **Every test call site now states a role.** `agree_to_family_sharing` takes `role: KeyRole`
+   required and `window: KeyWindow = KeyWindow.ALWAYS` (window has a safe default — `ALWAYS` is
+   never "outlasted" by a narrower key, so only tests that specifically exercise a shorter
+   window need to override it; role has none, since `KeyNotAsAgreed` checks exact identity).
+   `let_in` (`tests/api.py`) takes the same shape at the HTTP/string level. Every call site
+   across the suite was threaded to match whatever role the same holder's key is actually cut
+   as right after — done by hand, file by file (not delegated: a delegated pass at this size
+   was interrupted mid-way by an unrelated session stop and left the work half-finished, which
+   is its own lesson). A few tests that agreed once and then cut two different roles for the
+   same holder (`test_keys.py`) now agree twice, once per role, before each key cut — the new
+   rule working as intended, not a workaround.
+4. **A real mismatch, not just a missing field, turned up in the process:**
+   `test_state_api.py`'s local `_key()` helper hardcodes `"role": "caregiver"` in the key-cut
+   body it always sends; an earlier pass had given the paired `let_in()` call `role="helper"`,
+   misreading a `HELPER` *scopes list* constant as if it named the role. Both now say
+   `caregiver`. This is exactly the class of bug `KeyNotAsAgreed` exists to catch — it just
+   needed the enforcement to actually be reachable to catch it.
+5. **`RoleWindowNeedCurrentWording` stands, and matters more now.** Found by the
+   clinical-safety reviewer before role/window were made required: `SharingConsentIn.
+   wording_version` is independently settable, and `grant_consent` allows an older version for
+   capturing a past agreement. Since role and window are now always given, this refusal is what
+   stops every `SHARE_WITH_PERSON` consent from silently being pinnable to a wording version
+   that never actually said what role or window it was recording.
 
 ## Consequences
 
-- The web/mobile client can adopt `role`/`window` on `POST /consents/sharing` immediately;
-  every existing integration that does not is unaffected.
-- A reviewer reading only `grant_key`'s new check might expect it to fire unconditionally;
-  it fires only when the consent it reads was itself given a role and a window. This ADR, and
-  the docstrings on `Sharing`, `SharingWords` and `grant_key`, say so.
-- The gap named above (required fields, `tests/support.py` and `tests/api.py` threaded
-  through) is real follow-up work, not a hidden shortcut — flagged in the PR that carries this
-  ADR.
+- `POST /consents/sharing` and its preview are a breaking change for any caller that does not
+  send `role`/`window` — by design. There is no such caller left: the web client sends both,
+  and every test does too, verified by a full multi-line scan of every
+  `agree_to_family_sharing(`/`let_in(`/`Sharing(` call site in `tests/`.
+- `test_sharing_role_window.py::test_role_and_window_are_required_to_let_someone_in` and
+  `test_family_api.spec.ts` (`web/tests/e2e`, added alongside this decision) both go through
+  the *real* request shape — the Pydantic schema and the actual web client code, respectively —
+  and prove a key cut for a different role, or a longer window, than the one agreed is refused.
+  That is the test the first attempt's own reviewer said would have caught the gap; it now
+  exists on both ends of the wire.
+- A `SHARE_WITH_PERSON` consent can now only ever be recorded at the current wording version
+  (see point 5): capturing one at an older version, a capability `text_version` still offers
+  other purposes, is not offered here any more. Consistent with role and window now always
+  being part of what is agreed, and what the older wording never said.

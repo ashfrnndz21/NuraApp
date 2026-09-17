@@ -280,7 +280,7 @@ export async function cutKey(
   const his = { Authorization: `Bearer ${owner.token}` };
   const letIn = await request.post(`${API}/profiles/${owner.profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, relationship: "neighbour", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, role, window: "always", relationship: "neighbour", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${owner.profileId}/keys`, { headers: his, data: { holder_phone_e164: phone, role, scopes } });

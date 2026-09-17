@@ -45,6 +45,8 @@ def _ask(**overrides: object) -> dict[str, object]:
         "holder_phone_e164": MEI,
         "holder_display_name": "Mei",
         "scopes": PARTS,
+        "role": "caregiver",
+        "window": "always",
         "relationship": "daughter",
         "language": "en",
     }
