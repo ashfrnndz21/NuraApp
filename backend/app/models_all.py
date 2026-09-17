@@ -13,6 +13,7 @@ import app.audit.models
 import app.channels.whatsapp.models
 import app.channels.whatsapp.opt_in
 import app.consent.models
+import app.delivery.content.models
 import app.delivery.feed.models
 import app.delivery.nudges.models
 import app.delivery.triggers.models

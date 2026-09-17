@@ -312,6 +312,25 @@ def test_the_pages_he_is_shown_keep_their_compressed_words() -> None:
         assert card_type not in KEPT_AS_WRITTEN, f"{card_type} is his record's own words"
 
 
+def test_the_content_library_is_reviewed_like_every_other_card() -> None:
+    """The content library (activities, care services, resources, community: E22 growth) is
+    curated copy, never generated from his own record, so it is queued and kept as written
+    like a learning card — the guard that catches a new content type that skips the queue
+    (`test_every_card_type_he_is_shown_is_reviewed` already fails if one is only in
+    `SUPPLY_OF` and not here; this pins the list by name so the failure names the type)."""
+    content_types = (
+        CardType.ACTIVITY,
+        CardType.CARE_SERVICE,
+        CardType.RESOURCE,
+        CardType.LOCAL_EVENT,
+        CardType.VOLUNTEER,
+        CardType.SUPPORT_GROUP,
+    )
+    for card_type in content_types:
+        assert card_type in REVIEWED_TYPES, f"{card_type} is shown to him and skips the queue"
+        assert card_type in KEPT_AS_WRITTEN, f"{card_type} is curated copy, not his own record"
+
+
 async def test_a_type_shows_a_flag_until_its_first_fifty_are_decided(sg: AsyncSession) -> None:
     status = {t.card_type: t for t in (await review.status(sg)).card_types}
     assert set(status) == {t.value for t in REVIEWED_TYPES}

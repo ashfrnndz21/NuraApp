@@ -82,6 +82,24 @@ class CardType(StrEnum):
     with anything about his tablets as a question for his doctor."""
     FOOD = "food"
     """Food and habit (spec §2): weekly, by his conditions, one concrete choice."""
+    ACTIVITY = "activity"
+    """A curated activity suited to him, in the content library's "Stay engaged" section
+    (design-direction.md: Reference B's Activities tile). Never generated from his record;
+    a pharmacist reads it once, like a learning card, before it is offered at all."""
+    CARE_SERVICE = "care_service"
+    """A directory listing of professional help — home nursing, physiotherapy, meal
+    delivery, transport, day care ("Professional help") — reviewed the same way, because it
+    is advice about where to get help."""
+    RESOURCE = "resource"
+    """A short plain-words guide ("Guides & support")."""
+    LOCAL_EVENT = "local_event"
+    """A community listing: something happening near him (design-direction.md's Community
+    tile, "Local Events")."""
+    VOLUNTEER = "volunteer"
+    """A community listing: a volunteering opportunity ("Volunteer")."""
+    SUPPORT_GROUP = "support_group"
+    """A community listing: a support group ("Support Groups"). Which one a person opens can
+    say something about his condition, so this is never left off the review queue."""
 
 
 class Supply(StrEnum):
@@ -116,6 +134,12 @@ SUPPLY_OF: dict[CardType, Supply] = {
     CardType.CLIP: Supply.LEARNING,
     CardType.SEASONAL: Supply.LEARNING,
     CardType.FOOD: Supply.LEARNING,
+    CardType.ACTIVITY: Supply.LEARNING,
+    CardType.CARE_SERVICE: Supply.LEARNING,
+    CardType.RESOURCE: Supply.LEARNING,
+    CardType.LOCAL_EVENT: Supply.LEARNING,
+    CardType.VOLUNTEER: Supply.LEARNING,
+    CardType.SUPPORT_GROUP: Supply.LEARNING,
     CardType.QUESTION: Supply.HELD,
 }
 
@@ -164,6 +188,12 @@ CAPS_OF: dict[CardType, CapsClass] = {
     CardType.CLIP: CapsClass.SUPPLY,
     CardType.SEASONAL: CapsClass.SUPPLY,
     CardType.FOOD: CapsClass.SUPPLY,
+    CardType.ACTIVITY: CapsClass.SUPPLY,
+    CardType.CARE_SERVICE: CapsClass.SUPPLY,
+    CardType.RESOURCE: CapsClass.SUPPLY,
+    CardType.LOCAL_EVENT: CapsClass.SUPPLY,
+    CardType.VOLUNTEER: CapsClass.SUPPLY,
+    CardType.SUPPORT_GROUP: CapsClass.SUPPLY,
     CardType.QUESTION: CapsClass.HELD,
 }
 

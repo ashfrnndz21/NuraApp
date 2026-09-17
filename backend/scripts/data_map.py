@@ -365,6 +365,27 @@ CLASSES: dict[str, str] = {
     "source.allowlisted": OPERATIONAL,
     "source.review_status": OPERATIONAL,
     "source.added_at": OPERATIONAL,
+    # --- the content library (Activities, Care Services, Resources, Community) ----------------
+    # Global like the allowlist above, not about any one person: curated copy shown to every
+    # profile in the region, not a fact about anyone's health. Deliberately not classified
+    # health: unlike a support group a real person joined, this table only names what a
+    # pharmacist has reviewed for showing, region by region. Which item a profile actually
+    # opens is not stored here or in any new table by this story — a support group's name can
+    # say something about a condition (E22 growth), so `app.delivery.content.service` writes
+    # no row-level audit entry for a read; the only trace is the existing, already-classified
+    # `audit_entry.target_id` (AUDIT, above) on the route itself, never on a specific item.
+    "content_item.id": OPERATIONAL,
+    "content_item.content_type": OPERATIONAL,
+    "content_item.language": OPERATIONAL,
+    "content_item.slug": OPERATIONAL,
+    "content_item.category": OPERATIONAL,
+    "content_item.title": OPERATIONAL,
+    "content_item.summary": OPERATIONAL,
+    "content_item.body": OPERATIONAL,
+    "content_item.meta": OPERATIONAL,
+    "content_item.review_status": OPERATIONAL,
+    "content_item.review_item_id": OPERATIONAL,
+    "content_item.created_at": OPERATIONAL,
     # A self-search is about his medicines: its terms, its reason and what it found are health.
     "search_job.kind": OPERATIONAL,
     "search_job.terms": HEALTH,

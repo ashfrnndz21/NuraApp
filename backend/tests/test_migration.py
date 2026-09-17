@@ -31,6 +31,7 @@ from sqlalchemy import Connection, Inspector, Table, inspect, select, text
 from app.audit.models import AuditEntry
 from app.channels.whatsapp.models import Proposal, WhatsAppMessage, WhatsAppThread
 from app.consent.models import Consent
+from app.delivery.content.models import ContentItem
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.delivery.nudges.models import Nudge, NudgeResponse
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder
@@ -159,6 +160,7 @@ TABLES: tuple[Table, ...] = (
     LastLooked.__table__,
     ConsultRecording.__table__,
     ConsultSegment.__table__,
+    ContentItem.__table__,
 )
 
 
@@ -238,7 +240,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0039_feeling_question_marker"]
+    assert heads == ["0040_content_library"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(

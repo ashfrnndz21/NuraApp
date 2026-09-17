@@ -26,6 +26,7 @@ from app.consent.service import (
     NotTheirConsentToWithdraw,
     StopsByClosingTheAccount,
 )
+from app.delivery.content.service import NoSuchContentItem
 from app.delivery.feed.area import OnlyHeSetsHisArea
 from app.delivery.feed.clips import NoClipRenderer, NoExcerpt, NotAClipCard
 from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
@@ -335,6 +336,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoSuchNudge, 404),
     (AlreadyAnswered, 409),
     (NothingToHandOver, 409),
+    # The content library (Activities, Care Services, Resources, Community): missing,
+    # still pending review, or another region's all answer the same way.
+    (NoSuchContentItem, 404),
 )
 """Every other refusal is a 400: the request was well formed and the answer is no. The
 high-risk rule is one of those — `HighRiskNeedsLabelPhoto`, 400, naming the class — and so

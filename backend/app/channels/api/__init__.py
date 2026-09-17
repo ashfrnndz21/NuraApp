@@ -50,6 +50,7 @@ from app.channels.api import (
     capture,
     connectors,
     consent_words,
+    content,
     delivery,
     dev_clock,
     doors,
@@ -113,6 +114,7 @@ def _api() -> APIRouter:
     api.include_router(delivery.router)
     api.include_router(account.router)
     api.include_router(review.router)
+    api.include_router(content.router)
     api.include_router(dev_clock.router)
 
     @api.get("/health")

@@ -78,6 +78,12 @@ REVIEWED_TYPES: tuple[CardType, ...] = (
     CardType.LOCAL,
     CardType.SEASONAL,
     CardType.FOOD,
+    CardType.ACTIVITY,
+    CardType.CARE_SERVICE,
+    CardType.RESOURCE,
+    CardType.LOCAL_EVENT,
+    CardType.VOLUNTEER,
+    CardType.SUPPORT_GROUP,
 )
 """The card types a patient is shown. The doctor questions held for the memo never reach him,
 so they are not his cards to review here; the caregiver's duty card is hers, not his.
@@ -96,12 +102,22 @@ KEPT_AS_WRITTEN: frozenset[CardType] = frozenset(
         CardType.LOCAL,
         CardType.SEASONAL,
         CardType.FOOD,
+        CardType.ACTIVITY,
+        CardType.CARE_SERVICE,
+        CardType.RESOURCE,
+        CardType.LOCAL_EVENT,
+        CardType.VOLUNTEER,
+        CardType.SUPPORT_GROUP,
     }
 )
 """Cards whose lines not from the catalogue are compressed from a public, allowlisted page —
 the words the pharmacist most needs to read — and so are kept (with any name still taken
 out). On every other card a line not from the catalogue is his record's own words (a memo,
-a note, a letter, his own week) and is not kept at all."""
+a note, a letter, his own week) and is not kept at all.
+
+The content-library types (`app.delivery.content`) are kept for the same reason: an
+activity, a care service, a resource or a community listing is curated copy, never a line
+from his own record, so the pharmacist reads it as written, with any name still scrubbed."""
 
 NOT_THE_CATALOGUES = "{words from his papers, not kept}"
 """What stands in a sample for a line that is his record's words rather than Nura's."""
