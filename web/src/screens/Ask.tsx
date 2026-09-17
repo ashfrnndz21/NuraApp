@@ -94,7 +94,7 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   const view = answer ? answerView(answer) : null;
   const locale = LOCALE[language.value];
   return (
-    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
+    <Shell tab="home" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
       <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
       {item && (
         <Tile paper>

@@ -53,7 +53,7 @@ export function FeelingScreen({ tap }: { tap: FeelingOut }): JSX.Element {
 
   const boundary = note?.boundary ? note.boundary.split("\n") : [];
   return (
-    <Shell tab="today" testId="feeling-screen" ask={false}>
+    <Shell tab="home" testId="feeling-screen" ask={false}>
       <Notice error={error} />
       {!note && question && (
         <PaperTile testId="feeling-question">

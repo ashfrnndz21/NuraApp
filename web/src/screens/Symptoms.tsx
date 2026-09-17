@@ -81,7 +81,7 @@ export function SymptomsScreen(): JSX.Element {
   const title = own ? s.day.symptomsTitleSelf : fill(s.day.symptomsTitleOther, { name: papers?.display_name ?? "" });
   const lines = log?.lines.map((line) => line.text) ?? [];
   return (
-    <Shell tab="today" testId="symptoms-screen" attrs={{ "data-stage": stage }} ask={false} bar={stage === "ask"}>
+    <Shell tab="home" testId="symptoms-screen" attrs={{ "data-stage": stage }} ask={false} bar={stage === "ask"}>
       <Header title={title} onBack={stage === "ask" ? () => go({ name: "today" }) : undefined} />
       <Notice error={error} />
       {saved && (

@@ -1,0 +1,120 @@
+import type { ComponentChildren, JSX } from "preact";
+import type { ProfileOut } from "../api/types";
+import { batch } from "../capture/session";
+import { go, openTab, type SoonPlace } from "../flow";
+import { t } from "../strings";
+import { CheckInFace } from "../ui/illustrations";
+import { FeatureTile, Icon, IconBadge, PillButton, SectionHeader, TintCard, type IconName, type Tint } from "../ui/kit";
+
+/** Home's warm parts (docs/design-direction.md, Reference B's Home): the daily check-in, "What
+ *  would you like to do?", adding a health report, and what is coming up. Both densities draw the
+ *  same parts; the density moves only their type and their targets. Every one of them opens
+ *  something real, or says plainly that it is not built yet. */
+
+/** Whether a key opens a scope: the owner opens everything; a key, what it was cut for. */
+function opens(papers: ProfileOut | null, scope: string): boolean {
+  return papers !== null && (papers.standing === "owner" || papers.scopes.includes(scope));
+}
+
+/** The daily check-in: a title, one line, Check in, and the friendly face. Check in opens the
+ *  existing way to say how he feels (E14-01) — said or typed, a red flag in it escalating on the
+ *  backend exactly as the button does. A key that cannot write to his papers has no check-in. */
+export function CheckInCard({ papers }: { papers: ProfileOut | null }): JSX.Element | null {
+  const s = t();
+  if (!papers?.scopes.includes("records")) return null;
+  return (
+    <TintCard tint="lavender" testId="daily-check-in" extra="check-in">
+      <div class="check-in-text">
+        <h2 class="card-title">{s.hub.checkTitle}</h2>
+        <p>{s.hub.checkLine}</p>
+        <PillButton variant="primary" compact onClick={() => go({ name: "symptoms" })} testId="open-symptoms">
+          {s.hub.checkIn}
+        </PillButton>
+      </div>
+      <CheckInFace class="check-in-face" />
+    </TintCard>
+  );
+}
+
+interface Place {
+  id: string;
+  icon: IconName;
+  tint: Tint;
+  label: string;
+  line: string;
+  open: () => void;
+}
+
+/** "What would you like to do?": six places, each its own tint. A place this key does not open
+ *  is not offered (tapping it would only reach the backend's no); a place Nura has not built
+ *  yet opens a screen that says so, never a dead tap. */
+export function DoGrid({ papers }: { papers: ProfileOut | null }): JSX.Element {
+  const s = t();
+  const h = s.hub;
+  const soon = (place: SoonPlace) => () => go({ name: "soon", place });
+  const places: (Place | false)[] = [
+    { id: "health", icon: "health", tint: "blush", label: h.health, line: h.healthLine, open: () => openTab("health") },
+    opens(papers, "medicines") && { id: "medicines", icon: "medication", tint: "lavender", label: h.medicines, line: h.medicinesLine, open: () => go({ name: "record", at: { name: "medicines" } }) },
+    opens(papers, "family") && { id: "connect", icon: "connect", tint: "sage", label: h.connect, line: h.connectLine, open: () => openTab("connect") },
+    { id: "activities", icon: "activities", tint: "butter", label: h.activities, line: h.activitiesLine, open: soon("activities") },
+    { id: "care", icon: "care", tint: "sky", label: h.care, line: h.careLine, open: soon("care") },
+    { id: "resources", icon: "resources", tint: "peach", label: h.resources, line: h.resourcesLine, open: soon("resources") },
+  ];
+  return (
+    <section class="do-section" aria-labelledby="do-title">
+      <h2 class="section-title" id="do-title">
+        {h.doTitle}
+      </h2>
+      <div class="do-grid" data-testid="do-grid">
+        {places.filter((place): place is Place => place !== false).map((place) => (
+          <FeatureTile key={place.id} icon={place.icon} tint={place.tint} label={place.label} caption={place.line} onClick={place.open} testId={`do-${place.id}`} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** "Add a health report": a PDF, or a photo of a paper. The phone's own chooser opens — files,
+ *  photos, and on a phone the camera too (no `capture`, so it offers all three). The report goes
+ *  through the one upload path there is (E18-01's batch, `capture/batch.ts`) and opens on the
+ *  review card every paper has. A key that cannot add to his papers is not offered it. */
+export function AddReport({ papers }: { papers: ProfileOut | null }): JSX.Element | null {
+  const s = t();
+  if (!papers || !(papers.standing === "owner" || papers.scopes.includes("records"))) return null;
+  const chosen = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    batch.forget();
+    batch.pick([file]);
+    go({ name: "papers", report: true });
+  };
+  return (
+    <label class="action-row" data-tint="peach" data-testid="add-report">
+      <IconBadge icon="report" tint="paper" />
+      <span class="action-text">
+        <span class="action-title">{s.hub.report}</span>
+        <span class="action-line">{s.hub.reportLine}</span>
+      </span>
+      <span class="action-go" aria-hidden="true">
+        <Icon name="add" />
+      </span>
+      <input type="file" accept="application/pdf,image/*" onChange={chosen} data-testid="report-input" />
+    </label>
+  );
+}
+
+/** "Coming up", with See all when this key opens his visits, over the card the screen gives. */
+export function Upcoming({ papers, children }: { papers: ProfileOut | null; children: ComponentChildren }): JSX.Element {
+  const s = t();
+  return (
+    <section class="upcoming" data-testid="upcoming">
+      <SectionHeader
+        title={s.hub.upcoming}
+        action={opens(papers, "visits") ? { word: s.hub.seeAll, label: s.hub.seeAllVisits, onClick: () => openTab("services"), testId: "upcoming-all" } : undefined}
+      />
+      {children}
+    </section>
+  );
+}

@@ -33,6 +33,14 @@ export const zh = {
     timeline: "文件",
     // @patient headline
     plan: "计划",
+    // @patient headline
+    health: "健康",
+    // @patient headline
+    connect: "联系",
+    // @patient headline
+    services: "服务",
+    // @patient headline
+    profile: "我的",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,90 @@ export const zh = {
     voiceSaid2: "然后说出您的问题。",
     // @patient phrase
     close: "关闭",
+    // @patient phrase
+    bell: "新消息",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "您的健康，简简单单。",
+    // @patient headline
+    tagline2: "您的家人，就在身边。",
+    // @patient
+    lead: "Nura 帮您收好文件、药和血压本。",
+    // @patient headline
+    simple: "简单",
+    // @patient phrase
+    simpleLine: "字大，一次一件事",
+    // @patient headline
+    family: "家人",
+    // @patient phrase
+    familyLine: "您让进来的人可以帮忙",
+    // @patient headline
+    private: "私密",
+    // @patient phrase
+    privateLine: "您的文件只属于您",
+    // @patient phrase
+    start: "开始",
+    // @patient phrase
+    signIn: "我已经在用 Nura。登录",
+  },
+  hub: {
+    // @patient
+    howFeeling: "您今天感觉怎么样？",
+    // @patient
+    howFeelingOther: "{patient}今天感觉怎么样？",
+    // @patient headline
+    checkTitle: "每天问一问",
+    // @patient
+    checkLine: "花一分钟，说说您的感觉。",
+    // @patient
+    checkLineOther: "花一分钟，说说{patient}的感觉。",
+    // @patient phrase
+    checkIn: "说一说",
+    // @patient
+    doTitle: "您想做什么？",
+    // @patient headline
+    doTitleOther: "可以去的地方",
+    // @patient headline
+    health: "健康",
+    // @patient phrase
+    healthLine: "文件和检查",
+    // @patient headline
+    medicines: "药",
+    // @patient phrase
+    medicinesLine: "药和吃药时间",
+    // @patient headline
+    connect: "联系",
+    // @patient phrase
+    connectLine: "家人和朋友",
+    // @patient headline
+    activities: "活动",
+    // @patient phrase
+    activitiesLine: "开心的事",
+    // @patient headline
+    care: "照护服务",
+    // @patient phrase
+    careLine: "找人帮忙",
+    // @patient headline
+    resources: "指南",
+    // @patient phrase
+    resourcesLine: "可以读的东西",
+    // @patient headline
+    report: "加一份健康报告",
+    // @patient phrase
+    reportLine: "PDF，或者一张纸的照片",
+    // @patient headline
+    upcoming: "快到了",
+    // @patient phrase
+    seeAll: "看全部",
+    // @patient phrase
+    seeAllVisits: "看全部看诊",
+    // @patient
+    soonLine1: "Nura 现在还做不到这个。",
+    // @patient
+    soonLine2: "我们还在做。",
+    // @patient phrase
+    backHome: "回到首页",
   },
   home: {
     // @patient headline

@@ -77,6 +77,9 @@
   --sky: #dbe7f1;
   /* A pale tint for a card that sits on the ground rather than in a grid. */
   --tint-paper: #fffdfb;
+  /* Secondary words on a tint: deeper than Ink soft, so a caption holds 4.5:1 on every tint in
+     her density too (his holds 7:1 already). */
+  --ink-on-tint: #57505f;
   /* The soft green of a good signal's pill, with its ink (Reference A's "Good"). */
   --good-bg: #e2efe6;
   --good-ink: #24503a;
@@ -97,6 +100,13 @@
   --illo-trunk: #b88a6a;
   --illo-plum-soft: #8c76b5;
   --illo-rose: #e9a7b8;
+  --illo-cardigan: #b4a3da;
+  --illo-cardigan-deep: #9985c6;
+  --illo-sweater: #8fbf9f;
+  --illo-sweater-deep: #76a887;
+  --illo-pot: #e59a82;
+  --illo-pot-deep: #cf8069;
+  --illo-cloud: #ffffff;
   /* Onboarding (W3): a word the last tap revealed, and the two answered read-back buttons.
      Each pair is 7:1 or better (tests/unit/contrast.test.ts). */
   --chip-fresh: #f3eef8;

@@ -101,8 +101,19 @@ export async function seedMedicine(
 }
 
 /** Sign in through the app's own screens: phone → code (from the log) → doors. */
+/** Past the welcome a phone shows before its first sign-in (docs/design-direction.md), to the
+ *  phone number: Get started when the welcome is there, nothing when this phone has seen it. */
+export async function pastWelcome(page: Page): Promise<void> {
+  const welcome = page.getByTestId("welcome-screen");
+  const phone = page.getByLabel("Your phone number");
+  await expect(welcome.or(phone)).toBeVisible();
+  if (await welcome.isVisible()) await page.getByTestId("welcome-start").click();
+  await expect(phone).toBeVisible();
+}
+
 export async function signInThroughTheApp(page: Page, phone: string, name: string): Promise<void> {
   await page.goto("./");
+  await pastWelcome(page);
   await page.getByLabel("Your phone number").fill(phone);
   await page.getByLabel("Your name").fill(name);
   const before = codesSoFar(phone);

@@ -33,6 +33,14 @@ export const en = {
     timeline: "Papers",
     // @patient headline
     plan: "Plan",
+    // @patient headline
+    health: "Health",
+    // @patient headline
+    connect: "Connect",
+    // @patient headline
+    services: "Services",
+    // @patient headline
+    profile: "Profile",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,90 @@ export const en = {
     voiceSaid2: "Then say your question.",
     // @patient phrase
     close: "Close",
+    // @patient phrase
+    bell: "What is new",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "Your health, kept simple.",
+    // @patient headline
+    tagline2: "Your family, close by.",
+    // @patient
+    lead: "Nura keeps your papers, your medicines and your blood pressure book.",
+    // @patient headline
+    simple: "Simple",
+    // @patient phrase
+    simpleLine: "Big words, one thing at a time",
+    // @patient headline
+    family: "Family",
+    // @patient phrase
+    familyLine: "The people you let in can help",
+    // @patient headline
+    private: "Private",
+    // @patient phrase
+    privateLine: "Your papers stay yours",
+    // @patient phrase
+    start: "Get started",
+    // @patient phrase
+    signIn: "I already use Nura. Sign in",
+  },
+  hub: {
+    // @patient
+    howFeeling: "How are you feeling today?",
+    // @patient
+    howFeelingOther: "How is {patient} feeling today?",
+    // @patient headline
+    checkTitle: "Daily check-in",
+    // @patient
+    checkLine: "Take a minute to say how you feel.",
+    // @patient
+    checkLineOther: "Take a minute to say how {patient} feels.",
+    // @patient phrase
+    checkIn: "Check in",
+    // @patient
+    doTitle: "What would you like to do?",
+    // @patient headline
+    doTitleOther: "Places to go",
+    // @patient headline
+    health: "Health",
+    // @patient phrase
+    healthLine: "Papers and tests",
+    // @patient headline
+    medicines: "Medicines",
+    // @patient phrase
+    medicinesLine: "Tablets and times",
+    // @patient headline
+    connect: "Connect",
+    // @patient phrase
+    connectLine: "Family and friends",
+    // @patient headline
+    activities: "Activities",
+    // @patient phrase
+    activitiesLine: "Things to enjoy",
+    // @patient headline
+    care: "Care services",
+    // @patient phrase
+    careLine: "Help from people",
+    // @patient headline
+    resources: "Guides",
+    // @patient phrase
+    resourcesLine: "Things to read",
+    // @patient headline
+    report: "Add a health report",
+    // @patient phrase
+    reportLine: "A PDF, or a photo of a paper",
+    // @patient headline
+    upcoming: "Coming up",
+    // @patient phrase
+    seeAll: "See all",
+    // @patient phrase
+    seeAllVisits: "See all visits",
+    // @patient
+    soonLine1: "Nura cannot do this yet.",
+    // @patient
+    soonLine2: "We are still making it.",
+    // @patient phrase
+    backHome: "Back to Home",
   },
   home: {
     // @patient headline

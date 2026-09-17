@@ -33,6 +33,14 @@ export const ms = {
     timeline: "Surat",
     // @patient headline
     plan: "Rancangan",
+    // @patient headline
+    health: "Kesihatan",
+    // @patient headline
+    connect: "Hubungi",
+    // @patient headline
+    services: "Khidmat",
+    // @patient headline
+    profile: "Profil",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,90 @@ export const ms = {
     voiceSaid2: "Kemudian sebut soalan anda.",
     // @patient phrase
     close: "Tutup",
+    // @patient phrase
+    bell: "Apa yang baru",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "Kesihatan anda, dibuat mudah.",
+    // @patient headline
+    tagline2: "Keluarga anda, sentiasa dekat.",
+    // @patient
+    lead: "Nura simpan surat anda, ubat anda dan buku tekanan darah anda.",
+    // @patient headline
+    simple: "Mudah",
+    // @patient phrase
+    simpleLine: "Tulisan besar, satu perkara pada satu masa",
+    // @patient headline
+    family: "Keluarga",
+    // @patient phrase
+    familyLine: "Orang yang anda benarkan boleh membantu",
+    // @patient headline
+    private: "Peribadi",
+    // @patient phrase
+    privateLine: "Surat anda kekal milik anda",
+    // @patient phrase
+    start: "Mula",
+    // @patient phrase
+    signIn: "Saya sudah guna Nura. Log masuk",
+  },
+  hub: {
+    // @patient
+    howFeeling: "Apa khabar anda hari ini?",
+    // @patient
+    howFeelingOther: "Apa khabar {patient} hari ini?",
+    // @patient headline
+    checkTitle: "Semakan harian",
+    // @patient
+    checkLine: "Ambil seminit untuk kata apa yang anda rasa.",
+    // @patient
+    checkLineOther: "Ambil seminit untuk kata apa yang {patient} rasa.",
+    // @patient phrase
+    checkIn: "Mula semak",
+    // @patient
+    doTitle: "Apa yang anda mahu buat?",
+    // @patient headline
+    doTitleOther: "Tempat untuk dituju",
+    // @patient headline
+    health: "Kesihatan",
+    // @patient phrase
+    healthLine: "Surat dan ujian",
+    // @patient headline
+    medicines: "Ubat",
+    // @patient phrase
+    medicinesLine: "Ubat dan masanya",
+    // @patient headline
+    connect: "Hubungi",
+    // @patient phrase
+    connectLine: "Keluarga dan kawan",
+    // @patient headline
+    activities: "Aktiviti",
+    // @patient phrase
+    activitiesLine: "Perkara yang menyeronokkan",
+    // @patient headline
+    care: "Khidmat jagaan",
+    // @patient phrase
+    careLine: "Bantuan daripada orang",
+    // @patient headline
+    resources: "Panduan",
+    // @patient phrase
+    resourcesLine: "Bahan untuk dibaca",
+    // @patient headline
+    report: "Tambah laporan kesihatan",
+    // @patient phrase
+    reportLine: "PDF, atau gambar sehelai surat",
+    // @patient headline
+    upcoming: "Akan datang",
+    // @patient phrase
+    seeAll: "Lihat semua",
+    // @patient phrase
+    seeAllVisits: "Lihat semua lawatan",
+    // @patient
+    soonLine1: "Nura belum boleh buat ini.",
+    // @patient
+    soonLine2: "Kami masih membuatnya.",
+    // @patient phrase
+    backHome: "Kembali ke Utama",
   },
   home: {
     // @patient headline
