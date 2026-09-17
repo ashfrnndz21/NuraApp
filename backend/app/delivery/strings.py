@@ -879,6 +879,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "How {patient}'s blood pressure moved",
         "story_trend": "{patient}'s blood test over time",
         "needs_doctor_look": "Nura kept this about {patient} for {doctor}",
+        "recall_action": "{patient}'s {medicine} was recalled",
     },
     "ms": {
         "recap": "Minggu {patient}, dalam 30 saat",
@@ -891,6 +892,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "Bagaimana tekanan darah {patient} berubah",
         "story_trend": "Ujian darah {patient} dari masa ke masa",
         "needs_doctor_look": "Nura simpan ini tentang {patient} untuk {doctor}",
+        "recall_action": "{medicine} {patient} ditarik balik",
     },
     "zh": {
         "recap": "30秒看{patient}的这一周",
@@ -903,6 +905,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "{patient}的血压有什么变化",
         "story_trend": "{patient}的验血结果",
         "needs_doctor_look": "Nura 为{doctor}留下了关于{patient}的这个",
+        "recall_action": "{patient}的{medicine}被召回了",
     },
 }
 """A card's headline said about him by name."""
@@ -968,6 +971,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura found something about {patient} that needs {doctor}'s look.",
             "Nura already saved a question for {doctor}.",
         ),
+        "recall_action": (
+            "Take {patient}'s {medicine} to the pharmacist today.",
+            "The pharmacist will tell {patient} what to do next.",
+        ),
     },
     "ms": {
         "now_quiet": ("Tiada yang baru menunggu {patient} hari ini.", "Leret ke atas untuk dengar lagi."),
@@ -1020,6 +1027,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura jumpa sesuatu tentang {patient} yang perlu dilihat {doctor}.",
             "Nura sudah simpan soalan untuk {doctor}.",
         ),
+        "recall_action": (
+            "Bawa {medicine} {patient} kepada ahli farmasi hari ini.",
+            "Ahli farmasi akan beritahu {patient} apa yang perlu dibuat seterusnya.",
+        ),
     },
     "zh": {
         "now_quiet": ("今天没有新的事情等着{patient}。", "想多看的时候，请向上滑。"),
@@ -1066,6 +1077,7 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura 发现了关于{patient}、需要{doctor}查看的事。",
             "Nura 已经给{doctor}留了一个问题。",
         ),
+        "recall_action": ("今天把{patient}的{medicine}带去给药剂师。", "药剂师会告诉{patient}接下来要怎么做。"),
     },
 }
 """A card's lines said about him by name, place for place with `LINES`."""
@@ -1091,6 +1103,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who} chose to share this photo with {patient}.",
         "learning": "This is about {topic}, which is on {patient}'s papers.",
         "needs_doctor_look": "Nura found something about {patient} to ask {doctor} about.",
+        "recall_action": "{patient}'s {medicine} was named in a safety notice.",
     },
     "ms": {
         "gate": "Semua yang baru hari ini sudah dilihat.",
@@ -1111,6 +1124,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who} memilih untuk berkongsi gambar ini dengan {patient}.",
         "learning": "Ini tentang {topic}, yang ada dalam surat-surat {patient}.",
         "needs_doctor_look": "Nura jumpa sesuatu tentang {patient} untuk ditanya kepada {doctor}.",
+        "recall_action": "{medicine} {patient} disebut dalam satu notis keselamatan.",
     },
     "zh": {
         "gate": "今天新的都看过了。",
@@ -1131,6 +1145,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who}选择了和{patient}分享这张照片。",
         "learning": "这是关于{topic}的，它在{patient}的文件里。",
         "needs_doctor_look": "Nura 发现了关于{patient}、需要问{doctor}的事。",
+        "recall_action": "一个安全通知提到了{patient}的{medicine}。",
     },
 }
 """Why a card is there, said about him by name."""
