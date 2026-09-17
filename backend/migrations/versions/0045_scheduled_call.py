@@ -13,19 +13,14 @@ Events, in the shapes those tables already have, so no schema change for them, a
 `docs/trust/pdpa-data-map.md` was regenerated for the one table this migration does add.
 
 Revision ID: 0045_scheduled_call
-Revises: 0043_feeling_note_said
+Revises: 0044_consent_role_window
 Create Date: 2026-09-17
 
 Renumbered from 0040 at merge time (#235): main's chain moved to 0043_feeling_note_said
-while this branch sat behind it, and PR #225 has since claimed 0044_consent_role_window,
-which is not on main yet.
-
-Re-pinned to 0043_feeling_note_said for this PR (the Health screen board, `health-screen-
-board`): it merges main, #237 and #235 only, not #225, so 0044 does not exist in this tree
-and a `Revises: 0044_consent_role_window` chain does not resolve — `alembic upgrade heads`
-raises `KeyError` on it, not a graceful "not found". Whoever merges #225 too re-pins this
-one revision back ahead of 0044, the same renumbering this file has already been through
-once; nothing else here depends on the choice.
+while this branch sat behind it, and PR #225 had claimed 0044_consent_role_window, not yet
+on main. Re-pinned ahead of 0043 for that reason until #225 merged; now that #225 is on
+main (0044_consent_role_window is its head), this migration is re-pinned back onto 0044,
+as the note above always said it would be.
 """
 
 from __future__ import annotations
@@ -34,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0045_scheduled_call"
-down_revision = "0043_feeling_note_said"
+down_revision = "0044_consent_role_window"
 branch_labels = None
 depends_on = None
 
