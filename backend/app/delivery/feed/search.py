@@ -61,14 +61,14 @@ from app.delivery.strings import (
     season_name,
 )
 from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
-from app.drugs.registry import DrugRegistry
+from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
 from app.reasoning.ranges import ReferenceRanges
-from app.reasoning.visits.memos import write_memo
+from app.reasoning.visits.memos import MEMO, write_memo
 from app.reasoning.visits.models import MemoKind, MemoSource
 from app.reasoning.visits.strings import medicine_words
 from app.state.models import Dimension
@@ -572,8 +572,18 @@ async def run_job(
         # This replaces a `CardType.QUESTION`/`DeliverTo.MEMO` `FeedItem` that used to stand
         # here — nothing reads `DeliverTo.MEMO` (`rank.py`'s two supplies exclude it, no route
         # queries it), so that card reached nobody at all.
+        #
+        # #236: whether a real drug name is known cannot be read off `job.reason["scope"]` —
+        # a watch added by hand (`add_search_job`) builds `reason={"asked": ..., "by": ...}`
+        # with no `"scope"` at all, so a chief who names a medicine he takes got no doctor
+        # question when its finding changed treatment. Decided instead from whether the job's
+        # own first term actually is a medicine on his list (`_medicine_he_takes`), which is
+        # true for every planner-made job too (`compose._gaps` only ever names his own
+        # medicines with a `"medicines"` reason), so this changes nothing for those.
         treatment_changing = changes_treatment([compressed.headline, *compressed.body])
-        is_medicine_job = bool(job.terms) and job.reason.get("scope") == "medicines"
+        is_medicine_job = bool(job.terms) and _medicine_he_takes(
+            job.terms[0], around, engine.registry
+        )
         if treatment_changing and is_medicine_job:
             memo_id = await _ask_the_doctor(
                 session,
@@ -626,7 +636,7 @@ async def run_job(
                     gap=job.terms[0],
                     fact_ids=fact_ids,
                 ),
-                scope=_scope_of(job, reasons, around),
+                scope=_scope_of(job, reasons, around, engine.registry),
                 deliver_to=deliver_to,
                 day=day.key,
                 dedupe_key=key,
@@ -657,7 +667,7 @@ async def run_job(
                     gap=job.terms[0],
                     suppressed="original_words_failed_plain_words",
                 ),
-                scope=_scope_of(job, reasons, around),
+                scope=_scope_of(job, reasons, around, engine.registry),
                 deliver_to=DeliverTo.CAREGIVER,
                 day=day.key,
                 dedupe_key=key,
@@ -717,14 +727,35 @@ def _expiry(kind: JobKind, day: Day, moment: datetime, season: Any) -> datetime:
     return moment + LEARNING_LIFETIME
 
 
-def _scope_of(job: SearchJob, reasons: Sequence[str], around: Around) -> Scope:
+def _medicine_he_takes(term: str, around: Around, registry: DrugRegistry) -> bool:
+    """Whether a job's first term names a medicine he actually takes: his own list first
+    (`around.medicines`, already the licensed register's generic — `compose.around_for`), then
+    the register's generic for whatever name the term was written as, for a term that names
+    the same medicine by a different name (a brand, a salt) the register still resolves.
+
+    #236: this is the one source of truth for "is this a medicine job" — `job.reason["scope"]`
+    is not, because a watch added by hand (`add_search_job`) never sets it. Every job the
+    planner itself makes with a `"medicines"` reason already names one of his own medicines as
+    its first term (`compose._gaps`), so this agrees with the old check for all of those."""
+    written = term.strip().lower()
+    if written in around.medicines:
+        return True
+    matches = registry.identify(LabelFields(generic=written))
+    return bool(matches) and matches[0].generic.strip().lower() in around.medicines
+
+
+def _scope_of(
+    job: SearchJob, reasons: Sequence[str], around: Around, registry: DrugRegistry
+) -> Scope:
     """The part of the record a card was built from: a local alert made relevant by a medicine
     alone is the medicines'; one made relevant by a condition, and every other card, the
     record's — unless the gap it fills was a medicine's."""
     if job.kind is JobKind.LOCAL:
         by_condition = any(reason in around.conditions for reason in reasons)
         return Scope.RECORDS if by_condition else Scope.MEDICINES
-    return Scope.MEDICINES if job.reason.get("scope") == "medicines" else Scope.RECORDS
+    if job.terms and _medicine_he_takes(job.terms[0], around, registry):
+        return Scope.MEDICINES
+    return Scope.RECORDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -843,9 +874,9 @@ async def _ask_the_doctor(
 
     In a savepoint of its own, the way a review sample sits beside a card
     (`items._sample`): whatever goes wrong here — a name the register does not carry, a line
-    that fails the verifier, the database — is logged and rolled back. It must never cost him
-    the caregiver notice this always runs alongside; that is written by the caller regardless
-    of what happens here.
+    that fails the verifier, the database — is logged, written to the audit trail as a
+    refusal, and rolled back. It must never cost him the caregiver notice this always runs
+    alongside; that is written by the caller regardless of what happens here.
     """
     try:
         async with nested_unit_of_work(session):
@@ -866,4 +897,16 @@ async def _ask_the_doctor(
             return str(memo.id)
     except Exception as skipped:  # noqa: BLE001 — nothing here may cost him the notice
         log.warning("safety-notice question skipped: %s", type(skipped).__name__)
+        # A filing failure is silent to him by design (the caregiver notice still lands
+        # regardless), but it must never be silent on the trail: the same discipline
+        # `create_job`'s own refusals already keep (#236).
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.VISITS,
+            target=MEMO,
+            outcome=Outcome.REFUSED,
+            refused_because=type(skipped).__name__,
+        )
         return None

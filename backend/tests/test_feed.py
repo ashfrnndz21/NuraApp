@@ -23,7 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
-from app.delivery.feed.compose import Day, plain_day, refresh, today_for
+from app.delivery.feed import search as search_module
+from app.delivery.feed.compose import Day, around_for, plain_day, refresh, today_for
 from app.delivery.feed.compress import (
     Compressed,
     FixtureCompressor,
@@ -51,7 +52,7 @@ from app.delivery.feed.rank import (
     feed_page,
     in_quiet_hours,
 )
-from app.delivery.feed.search import Engine, list_jobs
+from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
 from app.delivery.strings import Lines, learning_lines, notice_fallback_lines, render
 from app.drugs.fixture import FixtureRegistry
@@ -758,6 +759,168 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     # It becomes a real question, the way `questions.questions_for` would pick it up.
     proposed = question_from_memo(memo)
     assert proposed.key == "ask_safety_notice" and proposed.slots == memo.slots
+
+
+class _TreatyMedicineSearcher:
+    """A page about a medicine he actually takes, found by a watch added by hand — the
+    `add_search_job` shape (`reason={"asked": ..., "by": ...}`, no `"scope"` key at all)."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "explainer" or "medicine.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="medicine.example.sg",
+                url="https://medicine.example.sg/warfarin-update",
+                title="An update about warfarin",
+                published_at="2026-09-01",
+                text="Stop taking warfarin for two days before your next blood test.",
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyMedicineCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="An update about your warfarin",
+            body=("Stop taking your warfarin for two days before your next blood test.",),
+            why_topic="your warfarin",
+            passage=text,
+        )
+
+
+async def _hand_added_warfarin_job(sg: AsyncSession, context: KeyContext) -> tuple[Engine, Any]:
+    """A watch on a medicine he takes, added the way `add_search_job` adds one — `create_job`
+    directly, never `refresh()`'s planner — against a page that would change treatment."""
+    await _label(sg, context, name="Warfarin", strength=5)
+    source = Source(
+        name="Medicine Example",
+        domain="medicine.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyMedicineSearcher(),
+        compressor=_TreatyMedicineCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    job = await create_job(
+        sg,
+        context=context,
+        kind=JobKind.EXPLAINER,
+        terms=["warfarin"],
+        # The exact shape `add_search_job` builds (feed.py:254-262): no `"scope"` key.
+        reason={"asked": "what is this pill for", "by": str(context.person_id)},
+    )
+    return engine, job
+
+
+async def test_a_hand_added_watch_on_a_medicine_he_takes_files_a_real_doctor_question(
+    sg: AsyncSession,
+) -> None:
+    """#236: `is_medicine_job`/`_scope_of` used to decide whether a real drug name was known
+    by reading `job.reason["scope"] == "medicines"` — but a watch added by hand
+    (`app.channels.api.feed.add_search_job`) builds `reason={"asked": ..., "by": ...}` with no
+    `"scope"` at all. A chief who added a watch naming a medicine he actually takes therefore
+    got no doctor question when its finding changed treatment — the record fixed for the
+    planner's own jobs (#224) stayed broken for hers. Fixed by deciding it from whether the
+    job's own first term is a medicine on his list instead (`_medicine_he_takes`), so this
+    proves it through `create_job` directly — not the auto-generated `refresh()` path, which
+    always carries a `"scope"` and so never exercised the bug."""
+    context = await _pa(sg)
+    engine, job = await _hand_added_warfarin_job(sg, context)
+    state = await current_state(sg, context=context)
+    around = await around_for(
+        sg, context=context, engine=engine, state=state, day=today_for(context)
+    )
+    made = await run_job(
+        sg,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    card = next(item for item in made if item.type is CardType.LEARNING)
+    assert card.deliver_to is DeliverTo.CAREGIVER, "a treatment-changing finding is never his"
+    assert card.scope is Scope.MEDICINES, "a real drug name was known, from his own list"
+
+    # A real doctor question, filed through the same door #224 built for a safety notice.
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_safety_notice"
+    assert memo.slots == {"doctor": "your doctor", "medicine": "the blood thinner tablet (warfarin)"}
+
+    # Delivery, not existence: his chief's own, independently resolved key reads the card.
+    mei = await let_in(
+        sg,
+        context,
+        phone="+6591230098",
+        name="Mei",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.MEDICINES},
+    )
+    her_page = await feed_page(sg, context=mei, engine=engine)
+    assert card.id in {item.id for item in her_page.items}
+    # His own feed carries neither the card nor a question — spec §0, §9.
+    his_page = await feed_page(sg, context=context, engine=engine)
+    assert card.id not in {item.id for item in his_page.items}
+    assert CardType.QUESTION not in {item.type for item in his_page.items}
+
+
+async def test_a_failed_doctor_question_filing_still_leaves_an_audit_record(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#236: `_ask_the_doctor`'s blanket `except Exception` used to only call `log.warning` —
+    a filing failure was invisible anywhere a caregiver, an auditor or a reviewer could see
+    it. It must still never cost him the caregiver notice (the sibling test above proves that
+    path on its own); this proves the other half a forced failure of `write_memo` is written
+    to the audit trail as a refusal before it is swallowed."""
+    context = await _pa(sg)
+    engine, job = await _hand_added_warfarin_job(sg, context)
+    state = await current_state(sg, context=context)
+    around = await around_for(
+        sg, context=context, engine=engine, state=state, day=today_for(context)
+    )
+
+    async def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("memo store unreachable")
+
+    monkeypatch.setattr(search_module, "write_memo", _boom)
+    made = await run_job(
+        sg,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    # The caregiver notice never depends on the question filing: it still lands.
+    card = next(item for item in made if item.type is CardType.LEARNING)
+    assert card.deliver_to is DeliverTo.CAREGIVER
+    # No question was filed...
+    memos = await current_memos(sg, context=context)
+    assert not [one for one in memos if one.kind is MemoKind.ASK]
+    # ...but the failure did not vanish into a log line: it is on the trail.
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.VISITS)
+    refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
+    assert refusals and refusals[-1].refused_because == "RuntimeError"
 
 
 async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:
