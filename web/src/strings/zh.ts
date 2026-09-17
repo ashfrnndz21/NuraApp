@@ -145,6 +145,12 @@ export const zh = {
     reportLine: "拍张照片，或者选医生发给您的那一份。",
     // @patient line
     reportNote: "Nura 会读一读，再告诉您它看到了什么。",
+    // @patient line
+    reportReady: "您说可以之前，Nura 不会发这个。",
+    // @patient phrase
+    reportReadyOther: "您说可以之前，Nura 不会替{patient}发这个。",
+    // @patient phrase
+    reportSend: "发这份",
     // @patient headline
     upcoming: "下次看诊",
     // @patient phrase
@@ -527,7 +533,7 @@ export const zh = {
     // @patient
     askWithheld: "有些文件没有对您开放。",
     // @patient
-    askThinking: "Nura正在查看。",
+    askThinking: "Nura 正在找。",
     // @patient
     askAnswered: "Nura回答了。",
     // @patient phrase

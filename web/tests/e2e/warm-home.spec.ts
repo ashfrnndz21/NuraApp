@@ -97,8 +97,14 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   // No `capture`: the phone offers its files, its photos and its camera.
   expect(await page.getByTestId("report-input").getAttribute("capture")).toBeNull();
 
-  // A report Nura can read: its review card, the same as every paper's.
+  // Choosing the file only picks it: its name is shown, and nothing goes until his own "Send it"
+  // (reviewer #237 item 6 — a chosen file is never sent on its own).
   await page.getByTestId("report-input").setInputFiles(paperPdf("discharge-letter-2026-08-20"));
+  await expect(page.getByTestId("report-confirm-name")).toContainText("discharge-letter-2026-08-20");
+  expect(sent).toEqual([]);
+  await page.getByTestId("report-send").click();
+
+  // A report Nura can read: its review card, the same as every paper's.
   await expect(page.getByTestId("review-card")).toContainText("This is a hospital letter.");
   expect(sent).toEqual(["imports"]);
   await page.getByTestId("looks-right").click();
@@ -108,6 +114,7 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await page.getByTestId("papers-finish").click();
   await todayReady(page);
   await page.getByTestId("report-input").setInputFiles(paperPhoto("receipt-2026-09-01"));
+  await page.getByTestId("report-send").click();
   const result = page.getByTestId("paper-result");
   await expect(result).toHaveAttribute("data-outcome", "notHealth");
   await expect(result.getByTestId("paper-not-health")).not.toBeEmpty();

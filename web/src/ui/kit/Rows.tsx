@@ -61,8 +61,14 @@ export function ListRow({ lead, title, line, trailing, onClick, testId }: ListRo
 }
 
 /** A metric row (Health Overview): an icon in its own tinted square, the label, and the value —
- *  big and bold where it is the point of the row. */
-export function MetricRow({ icon, tint, label, value, unit, testId }: { icon: IconName; tint: Tint; label: string; value: string; unit?: string; testId?: string }): JSX.Element {
+ *  big and bold where it is the point of the row — with the plain line under it saying where
+ *  the value came from ("From his readings, 12 Sep"), the backend's own words.
+ *
+ *  Required, never optional: a reading is only ever drawn with the line that grounds it, so a
+ *  caller cannot show a number with nothing behind it — an empty `source` draws nothing at all
+ *  rather than a bare, ungrounded value. */
+export function MetricRow({ icon, tint, label, value, unit, source, testId }: { icon: IconName; tint: Tint; label: string; value: string; unit?: string; source: string; testId?: string }): JSX.Element | null {
+  if (!source.trim()) return null;
   return (
     <div class="metric-row" data-testid={testId}>
       <IconBadge icon={icon} tint={tint} size="small" />
@@ -70,6 +76,9 @@ export function MetricRow({ icon, tint, label, value, unit, testId }: { icon: Ic
       <span class="metric-value">
         {value}
         {unit && <span class="metric-unit"> {unit}</span>}
+      </span>
+      <span class="metric-source" data-testid={testId ? `${testId}-source` : "metric-source"}>
+        {source}
       </span>
     </div>
   );

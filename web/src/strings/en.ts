@@ -145,6 +145,12 @@ export const en = {
     reportLine: "Take a photo of it, or choose the one your doctor sent you.",
     // @patient line
     reportNote: "Nura will read it and show you what it found.",
+    // @patient line
+    reportReady: "Nura will not send this until you say so.",
+    // @patient phrase
+    reportReadyOther: "Nura will not send this for {patient} until you say so.",
+    // @patient phrase
+    reportSend: "Send it",
     // @patient headline
     upcoming: "Next visit",
     // @patient phrase

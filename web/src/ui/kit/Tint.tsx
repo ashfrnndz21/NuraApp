@@ -61,11 +61,23 @@ export function FeatureTile({ icon, tint, label, caption, onClick, testId }: Fea
 
 /** How a reading sits, as a small pill ("Good"). Only where the reading's own range backs it
  *  (docs/design-direction.md, "The one rule"): the screen decides that, never this pill. The
- *  word is always there; the colour only repeats it. */
-export function StatusPill({ tone, children, testId }: { tone: "good" | "watch" | "act"; children: ComponentChildren; testId?: string }): JSX.Element {
+ *  word is always there; the colour only repeats it — and so is the plain line under it saying
+ *  where the reading it repeats came from ("From your readings on 12 Sep"), the backend's own
+ *  words.
+ *
+ *  Required, never optional: a "Good" is only ever drawn with the line that grounds it, so a
+ *  caller cannot show the word with nothing behind it — an empty `source` draws nothing at all
+ *  rather than a bare, ungrounded pill. */
+export function StatusPill({ tone, children, source, testId }: { tone: "good" | "watch" | "act"; children: ComponentChildren; source: string; testId?: string }): JSX.Element | null {
+  if (!source.trim()) return null;
   return (
-    <span class="status-pill" data-tone={tone} data-testid={testId}>
-      {children}
+    <span class="status-pill-wrap" data-testid={testId ? `${testId}-wrap` : undefined}>
+      <span class="status-pill" data-tone={tone} data-testid={testId}>
+        {children}
+      </span>
+      <span class="status-source" data-testid={testId ? `${testId}-source` : "status-source"}>
+        {source}
+      </span>
     </span>
   );
 }

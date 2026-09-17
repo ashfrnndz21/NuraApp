@@ -18,17 +18,17 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
   const [reviewing, setReviewing] = useState<ReviewCardOut | null>(null);
   useEffect(() => () => batch.forget(), []);
   // One report from Home's "Add a health report" (docs/design-direction.md): choosing the file
-  // there was the yes, so it goes at once, and a paper that was read opens on its review card —
-  // the same card as every other paper. One that could not be read stays on the list, saying so
-  // in the backend's own words; nothing claims it was read.
+  // there only picked it — it does not go until he says so here, on its own confirm card naming
+  // the file and giving him "Send it" (reviewer #237 item 6: a chosen file is never sent on its
+  // own). A paper that was read then opens on its review card — the same card as every other
+  // paper. One that could not be read stays on the list, saying so in the backend's own words;
+  // nothing claims it was read.
   const [opened, setOpened] = useState(false);
-  useEffect(() => {
-    if (report && batch.stage.value === "choosing") void batch.send();
-  }, [report]);
+  const items = batch.items.value;
+  const reportPicked = report && batch.stage.value === "choosing" && items.length === 1 ? items[0]! : null;
   const done = batch.stage.value === "done";
   useEffect(() => {
     if (!report || opened || !done) return;
-    const items = batch.items.value;
     const only = items.length === 1 ? items[0]!.outcome : null;
     if (only?.kind === "card" && !only.checked) {
       setOpened(true);
@@ -47,6 +47,23 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
         }}
         onBack={() => setReviewing(null)}
       />
+    );
+  }
+  if (reportPicked) {
+    // His one yes for this file: its name, plain, and one button — nothing goes before he taps
+    // it (reviewer #237 item 6). Leaving the screen (the back arrow, the tab bar) lets it go
+    // unsent, the same as leaving the many-photo grid before its own Send.
+    return (
+      <Shell tab={null} testId="papers-screen" attrs={{ "data-stage": "confirm" }}>
+        <Header title={s.papers.title} onBack={() => go({ name: "today" })} />
+        <p class="lead" data-testid="report-confirm-name">
+          {reportPicked.name}
+        </p>
+        <p class="lead">{s.hub.reportReady}</p>
+        <Pill plum onClick={() => void batch.send()} testId="report-send">
+          {s.hub.reportSend}
+        </Pill>
+      </Shell>
     );
   }
   return (

@@ -63,6 +63,11 @@ export interface Strings {
     report: string;
     reportLine: string;
     reportNote: string;
+    /** Before the file he picked goes: its name (raw, not this line) plus this line, and the
+     *  "Send it" button — his one yes, so a chosen file is never sent on its own. */
+    reportReady: string;
+    reportReadyOther: string;
+    reportSend: string;
     upcoming: string;
     seeAll: string;
     seeAllVisits: string;

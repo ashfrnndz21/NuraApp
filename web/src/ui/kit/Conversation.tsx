@@ -114,10 +114,15 @@ interface ExchangeProps {
   status: ExchangeStatus;
   /** Nura's answer, when it is there: shown the moment it is given, whatever the status says. */
   answer?: ComponentChildren;
-  /** The parts of his papers the answer rests on, as chips under it ("Medicines", "Visit, 2 Sep"). */
-  sources?: readonly string[];
-  /** The boundary line under the answer, in the backend's words ("Nura does not decide what is wrong."). */
-  boundary?: readonly string[];
+  /** The parts of his papers the answer rests on, as chips under it ("Medicines", "Visit, 2 Sep").
+   *  Required — pass `[]` when the answer cites nothing — so a caller cannot forget to think
+   *  about what it rests on; an empty list is a choice, not an omission. */
+  sources: readonly string[];
+  /** The boundary line under the answer, in the backend's words ("Nura does not decide what is
+   *  wrong."). Required, and never empty in practice: an answer with no boundary line is not
+   *  drawn at all (see `answered` below), so a caller cannot show medical-adjacent content
+   *  without it. */
+  boundary: readonly string[];
   /** The one line under the answer: "What Nura looked at: medicines, visits", filled by the caller
    *  from what the backend says it read. Defaults to `words.lookedAt`. */
   lookedAt?: string;
@@ -131,10 +136,11 @@ interface ExchangeProps {
 /** One question and its answer. The screen reader hears two things through the polite live
  *  region — that Nura started, and that the answer is there (or that it failed) — never each
  *  step, never a frame. A long wait or a failure is said plainly, with Try again. */
-export function Exchange({ question, steps, status, answer, sources = [], boundary = [], lookedAt, words, onRetry, mark, testId }: ExchangeProps): JSX.Element {
-  const answered = answer !== undefined && answer !== null;
-  // "Answered" is the answer being there, never a status alone: with no answer given, Nura is
-  // still working, and nothing says it has answered.
+export function Exchange({ question, steps, status, answer, sources, boundary, lookedAt, words, onRetry, mark, testId }: ExchangeProps): JSX.Element {
+  // "Answered" is the answer being there AND its boundary line being there, never a status
+  // alone: with no answer given, or an answer with no boundary line under it, Nura is still
+  // working, and nothing says it has answered. An answer never renders without a boundary line.
+  const answered = answer !== undefined && answer !== null && boundary.length > 0;
   const shown: ExchangeStatus = answered ? "answered" : status === "answered" ? "working" : status;
   const announce = shown === "answered" ? words.answered : shown === "failed" ? words.failed : words.working;
   return (

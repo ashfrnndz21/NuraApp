@@ -75,9 +75,11 @@ export function DoGrid({ papers }: { papers: ProfileOut | null }): JSX.Element {
 }
 
 /** "Add a health report": a PDF, or a photo of a paper. The phone's own chooser opens — files,
- *  photos, and on a phone the camera too (no `capture`, so it offers all three). The report goes
- *  through the one upload path there is (E18-01's batch, `capture/batch.ts`) and opens on the
- *  review card every paper has. A key that cannot add to his papers is not offered it. */
+ *  photos, and on a phone the camera too (no `capture`, so it offers all three). Choosing the
+ *  file only picks it: it goes through the one upload path there is (E18-01's batch,
+ *  `capture/batch.ts`), but not before its own confirm card on the Papers screen names the
+ *  file and asks his own "Send it" (reviewer #237 item 6) — then opens on the review card every
+ *  paper has. A key that cannot add to his papers is not offered it. */
 export function AddReport({ papers }: { papers: ProfileOut | null }): JSX.Element | null {
   const s = t();
   if (!papers || !(papers.standing === "owner" || papers.scopes.includes("records"))) return null;
@@ -96,8 +98,8 @@ export function AddReport({ papers }: { papers: ProfileOut | null }): JSX.Elemen
       <span class="action-text">
         <span class="action-title">{s.hub.report}</span>
         <span class="action-line">{s.hub.reportLine}</span>
-        {/* Choosing the file *is* the yes — it uploads with no second confirm (`chosen`, above)
-            — so the caption says so plainly, rather than leaving him to discover it. */}
+        {/* Choosing the file only picks it (`chosen`, above): the Papers screen shows its name
+            and his own "Send it" before it goes (reviewer #237 item 6). */}
         <span class="action-line">{s.hub.reportNote}</span>
       </span>
       <span class="action-go" aria-hidden="true">

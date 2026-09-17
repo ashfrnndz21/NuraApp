@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { recordTab, tabsFor } from "../../src/nav";
 import { stringsFor } from "../../src/strings";
 import { CheckInFace, CoupleIllustration, ParkIllustration, SeedlingIllustration, WelcomeIllustration } from "../../src/ui/illustrations";
@@ -7,6 +7,10 @@ import { byTestId } from "./ui/render";
 import { all, byType, hasClass, one, render as renderAll, text } from "./ui/render";
 
 const en = stringsFor("en");
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("the five tabs (docs/design-direction.md)", () => {
   it("are Today, Health, Family, Visits and Me for the owner, in either density", () => {
@@ -71,11 +75,18 @@ describe("the warm components", () => {
     expect(text(all(hero, hasClass("hero-ask")))).toBe("How are you feeling today?");
   });
 
-  it("the ring shows a real count as text, the ring itself decorative", () => {
-    const ring = one(<ProgressRing done={12} of={14} figure="12" label="doses taken this week" testId="ring" />);
+  it("the ring shows a real count as text, the ring itself decorative, grounded by its source line", () => {
+    const ring = one(<ProgressRing done={12} of={14} figure="12" label="doses taken this week" source="From his readings, 12 Sep" testId="ring" />);
     expect(all(ring, byType("svg"))[0]!.props["aria-hidden"]).toBe("true");
     expect(text(all(ring, hasClass("ring-number")))).toBe("12");
     expect(text(all(ring, hasClass("ring-label")))).toBe("doses taken this week");
+    expect(text(all(ring, hasClass("ring-source")))).toBe("From his readings, 12 Sep");
+  });
+
+  it("draws no ring, no metric row and no status pill without their source line", () => {
+    expect(render0(<ProgressRing done={12} of={14} figure="12" label="doses taken this week" source="" testId="ring" />)).toBeNull();
+    expect(render0(<MetricRow icon="pulse" tint="sky" label="Blood pressure" value="138/84" source="" />)).toBeNull();
+    expect(render0(<StatusPill tone="good" source="">Good</StatusPill>)).toBeNull();
   });
 
   it("a section header is a heading, and its See all names what it opens", () => {
@@ -91,9 +102,28 @@ describe("the warm components", () => {
     expect(initial.props["data-tint"]).toBe("sage");
   });
 
-  it("a metric row and a status pill carry their words, not just a colour", () => {
-    expect(text(one(<MetricRow icon="pulse" tint="sky" label="Blood pressure" value="138/84" />))).toBe("Blood pressure138/84");
-    expect(text(one(<StatusPill tone="good">Good</StatusPill>))).toBe("Good");
+  it("only draws a photo from the app's own place, or blob:/data:, else falls back to the initial (#237 item 7)", () => {
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:8124" } });
+    // Allowed: the phone's own file (blob:/data:), and a path on the app's own origin.
+    expect(one(<Avatar name="Mei" photo="blob:http://127.0.0.1:8124/mei" />).type).toBe("img");
+    expect(one(<Avatar name="Mei" photo="data:image/png;base64,aa==" />).type).toBe("img");
+    expect(one(<Avatar name="Mei" photo="/photos/mei.jpg" />).type).toBe("img");
+    expect(one(<Avatar name="Mei" photo="http://127.0.0.1:8124/photos/mei.jpg" />).type).toBe("img");
+    // Refused: another site, however it is spelled — the initial is drawn instead, never the img.
+    for (const photo of ["https://evil.example/mei.jpg", "//evil.example/mei.jpg", "javascript:alert(1)"]) {
+      const drawn = one(<Avatar name="Mei" photo={photo} />);
+      expect(drawn.type).toBe("span");
+      expect(text(drawn)).toBe("M");
+    }
+  });
+
+  it("a metric row and a status pill carry their words, not just a colour, grounded by their source line", () => {
+    const metric = one(<MetricRow icon="pulse" tint="sky" label="Blood pressure" value="138/84" source="From your readings on 12 Sep" />);
+    expect(text(metric)).toBe("Blood pressure138/84From your readings on 12 Sep");
+    expect(text(all(metric, hasClass("metric-source")))).toBe("From your readings on 12 Sep");
+    const pill = one(<StatusPill tone="good" source="From your readings on 12 Sep">Good</StatusPill>);
+    expect(text(pill)).toBe("GoodFrom your readings on 12 Sep");
+    expect(text(all(pill, hasClass("status-source")))).toBe("From your readings on 12 Sep");
   });
 });
 
@@ -128,25 +158,34 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
   });
 
   it("shows an answer the moment it is given, even while the caller still says working", () => {
-    const exchange = one(<Exchange question="When is my next visit?" steps={steps} status="working" answer={<p>Monday at half past 10.</p>} words={words} />);
+    const exchange = one(
+      <Exchange question="When is my next visit?" steps={steps} status="working" answer={<p>Monday at half past 10.</p>} sources={[]} boundary={["Nura does not decide what is wrong."]} words={words} />,
+    );
     expect(exchange.props["data-status"]).toBe("answered");
     expect(all(exchange, byTestId("thinking"))).toEqual([]);
     expect(text(all(exchange, byTestId("exchange-answer")))).toContain("Monday at half past 10.");
   });
 
+  it("never renders an answer without a boundary line, even when one is given", () => {
+    const noBoundary = one(<Exchange question="Q" steps={steps} status="answered" answer="A" sources={["Medicines"]} boundary={[]} words={words} />);
+    expect(noBoundary.props["data-status"]).toBe("working");
+    expect(text(all(noBoundary, byTestId("exchange-live")))).toBe(words.working);
+    expect(all(noBoundary, byTestId("exchange-answer"))).toEqual([]);
+  });
+
   it("announces the start and the answer through one polite region, never a step", () => {
-    const working = one(<Exchange question="Q" steps={steps} status="working" words={words} />);
+    const working = one(<Exchange question="Q" steps={steps} status="working" sources={[]} boundary={[]} words={words} />);
     const live = all(working, byTestId("exchange-live"));
     expect(live.length).toBe(1);
     expect(live[0]!.props["aria-live"]).toBe("polite");
     expect(text(live)).toBe(words.working);
     for (const li of all(working, byType("li"))) expect(li.props["aria-live"]).toBeUndefined();
-    const answered = one(<Exchange question="Q" steps={steps} status="answered" answer="A" words={words} />);
+    const answered = one(<Exchange question="Q" steps={steps} status="answered" answer="A" sources={[]} boundary={["Nura does not decide what is wrong."]} words={words} />);
     expect(text(all(answered, byTestId("exchange-live")))).toBe(words.answered);
   });
 
   it("never says it has answered when no answer was given", () => {
-    const empty = one(<Exchange question="Q" steps={steps} status="answered" words={words} />);
+    const empty = one(<Exchange question="Q" steps={steps} status="answered" sources={[]} boundary={[]} words={words} />);
     expect(empty.props["data-status"]).toBe("working");
     expect(text(all(empty, byTestId("exchange-live")))).toBe(words.working);
     expect(all(empty, byTestId("exchange-answer"))).toEqual([]);
@@ -154,11 +193,11 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
 
   it("says a long wait or a failure plainly and offers Try again", () => {
     const retry = vi.fn();
-    const failed = one(<Exchange question="Q" steps={[]} status="failed" words={words} onRetry={retry} />);
+    const failed = one(<Exchange question="Q" steps={[]} status="failed" sources={[]} boundary={[]} words={words} onRetry={retry} />);
     expect(text(all(failed, byTestId("exchange-failed")))).toContain(words.failed);
     (all(failed, byTestId("exchange-retry"))[0]!.props.onClick as () => void)();
     expect(retry).toHaveBeenCalledOnce();
-    const slow = one(<Exchange question="Q" steps={[]} status="slow" words={words} onRetry={retry} />);
+    const slow = one(<Exchange question="Q" steps={[]} status="slow" sources={[]} boundary={[]} words={words} onRetry={retry} />);
     expect(text(all(slow, byTestId("exchange-slow")))).toContain(words.slow);
     expect(all(slow, byTestId("exchange-retry")).length).toBe(1);
   });

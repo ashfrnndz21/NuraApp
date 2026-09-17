@@ -145,6 +145,12 @@ export const ms = {
     reportLine: "Ambil gambarnya, atau pilih yang doktor hantar kepada anda.",
     // @patient line
     reportNote: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
+    // @patient line
+    reportReady: "Nura tidak akan hantar ini sehingga anda kata boleh.",
+    // @patient phrase
+    reportReadyOther: "Nura tidak akan hantar ini untuk {patient} sehingga anda kata boleh.",
+    // @patient phrase
+    reportSend: "Hantar ini",
     // @patient headline
     upcoming: "Lawatan seterusnya",
     // @patient phrase
@@ -527,7 +533,7 @@ export const ms = {
     // @patient
     askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
     // @patient
-    askThinking: "Nura sedang melihat.",
+    askThinking: "Nura sedang mencari.",
     // @patient
     askAnswered: "Nura sudah menjawab.",
     // @patient phrase
