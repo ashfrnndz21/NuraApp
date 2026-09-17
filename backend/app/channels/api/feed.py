@@ -356,8 +356,14 @@ async def area(context: Context, session: Db) -> AreaOut:
 @router.put("/{profile_id}/area")
 async def put_area(body: AreaIn, context: Context, session: Db) -> AreaOut:
     """Set his area on his yes — a town from the list or a postcode's first digits, never a
-    street — or clear it. His own key, or the steward's before he claims."""
-    return AreaOut.of(await set_area(session, context=context, area=body.area))
+    street — or clear it. Once the graph is his, `body.confirmation_id` must be minted for
+    exactly this area (`POST /confirmations`, subject `area`, `AreaNotConfirmed` without
+    one). His own key, or the steward's before he claims, which takes no confirmation."""
+    return AreaOut.of(
+        await set_area(
+            session, context=context, area=body.area, confirmation_id=body.confirmation_id
+        )
+    )
 
 
 @router.post("/{profile_id}/find")

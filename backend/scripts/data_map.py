@@ -150,6 +150,8 @@ CLASSES: dict[str, str] = {
     "consent.purpose": CONSENT,
     "consent.holder_person_id": IDENTIFIER,
     "consent.scopes": CONSENT,
+    "consent.role": CONSENT,
+    "consent.window": CONSENT,
     "consent.text_version": CONSENT,
     "consent.language": CONSENT,
     "consent.wording_text": CONSENT,

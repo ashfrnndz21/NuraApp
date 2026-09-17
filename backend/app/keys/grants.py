@@ -25,7 +25,15 @@ from app.identity.models import Person
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.models import Key
 from app.keys.privacy import only_me_scopes
-from app.keys.scopes import DEFAULT_WINDOW, ROLE_SCOPES, KeyRole, KeyWindow, Scope, window_ends_at
+from app.keys.scopes import (
+    DEFAULT_WINDOW,
+    ROLE_SCOPES,
+    KeyRole,
+    KeyWindow,
+    Scope,
+    window_ends_at,
+    window_outlasts,
+)
 
 
 class NotTheirKeyToCut(Refusal):
@@ -42,6 +50,12 @@ class WouldWiden(Refusal):
 
 class NothingToNarrow(Refusal):
     """The key already opens exactly this, for exactly this long."""
+
+
+class KeyNotAsAgreed(Refusal):
+    """The words he agreed to named a different role, or a window this key would outlast
+    (#185): a key rests on the consent naming exactly what it is cut as, not only who it is
+    for and what parts it opens."""
 
 
 async def may_cut_keys(session: AsyncSession, context: KeyContext) -> None:
@@ -88,6 +102,11 @@ async def grant_key(
     what versioned consent means, and shipping new words is paired with asking. The
     emergency role is not exempt: the emergency card is health data too.
 
+    The words he read also named the role and the window (#185, version 3 of the wording):
+    a key cut for a different role, or for a window that would outlast the one named, is
+    refused (`KeyNotAsAgreed`) before anything is written — a consent from before role and
+    window were tracked names neither, and carries no such limit.
+
     Cutting a key is a share of the graph, so it goes into the audit trail as one (E00-07).
     """
     await may_cut_keys(session, context)
@@ -99,6 +118,31 @@ async def grant_key(
         scope=Scope.FAMILY,
         holder_person_id=holder.id,
     )
+    asked_window = window or DEFAULT_WINDOW[role]
+    if consent.role is not None and consent.role is not role:
+        refusal = KeyNotAsAgreed(f"the consent named {consent.role}, not {role}")
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.FAMILY,
+            target=Key.__tablename__,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refusal).__name__,
+        )
+        raise refusal
+    if consent.window is not None and window_outlasts(asked_window, consent.window):
+        refusal = KeyNotAsAgreed(f"the consent named {consent.window}, not {asked_window}")
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.FAMILY,
+            target=Key.__tablename__,
+            outcome=Outcome.REFUSED,
+            refused_because=type(refusal).__name__,
+        )
+        raise refusal
     asked = frozenset(scopes) if scopes is not None else ROLE_SCOPES[role]
     # Every key opens the face of the graph it is cut on: narrowing never removes PROFILE.
     granted = (asked | {Scope.PROFILE}) & context.scopes
@@ -125,7 +169,7 @@ async def grant_key(
         consent_id=consent.consent_id,
         granted_by_person_id=context.person_id,
         granted_at=moment,
-        expires_at=window_ends_at(window or DEFAULT_WINDOW[role], moment),
+        expires_at=window_ends_at(asked_window, moment),
     )
     await record_share(
         session,

@@ -9,9 +9,11 @@ do not exist.
 
 Letting one person in is agreed to in words that name that person and what they will see:
 the wording for `SHARE_WITH_PERSON` is a template with `{named}` (the person, with who they
-are to him if the granter said), `{name}` (the person again) and `{parts}` (one line per
-part of the record, in his words — `SCOPE_WORDS`), rendered at the moment of agreement and
-kept on the row as rendered, one line per idea.
+are to him if the granter said), `{name}` (the person again), `{parts}` (one line per
+part of the record, in his words — `SCOPE_WORDS`) and, from version 3 (#185), `{role_line}`
+and `{window_line}` (what they are cut a key as, and for how long, in the family screen's
+own words — `app.family.strings.ROLE_IS`, `WINDOW_LINES`) — rendered at the moment of
+agreement and kept on the row as rendered, one line per idea.
 
 The summaries are what the patient reads, so they follow `docs/plain-words.md`: whole
 sentences, one idea per line, his words for things ("your papers", "your blood pressure
@@ -27,7 +29,8 @@ from dataclasses import dataclass
 
 from app.consent.models import ConsentPurpose
 from app.family.relationships import relationship_words
-from app.keys.scopes import Scope
+from app.family.strings import ROLE_IS, ROLE_WORDS, WINDOW_LINES
+from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.regions import Region
 
 # @patient phrase
@@ -211,6 +214,45 @@ TEXTS: tuple[ConsentText, ...] = (
         "{name} 可以一直看，直到您说停。\n"
         "您可以随时停止。",
     ),
+    # Version 3 (#185) names the role and the window, not only the person and the parts: a
+    # key cut under this consent is refused if it asks for a different role or a window that
+    # runs longer than the one named here (`app.keys.grants.grant_key`). `{role_line}` and
+    # `{window_line}` are rendered with the family screen's own words for a role
+    # (`app.family.strings.ROLE_IS`) and a window (`WINDOW_LINES`), so what the patient reads
+    # here is what the family screen says the key opens.
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "en",
+        "You are letting {named} see some of your record.\n"
+        "{role_line}\n"
+        "{name} can see these parts:\n"
+        "{parts}\n"
+        "{window_line}\n"
+        "You can stop this at any time.",
+    ),
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "ms",
+        "Anda membenarkan {named} melihat sebahagian daripada rekod anda.\n"
+        "{role_line}\n"
+        "{name} boleh melihat bahagian ini:\n"
+        "{parts}\n"
+        "{window_line}\n"
+        "Anda boleh berhenti pada bila-bila masa.",
+    ),
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "zh",
+        "您让{named}看您记录里的一部分。\n"
+        "{role_line}\n"
+        "{name} 可以看这些：\n"
+        "{parts}\n"
+        "{window_line}\n"
+        "您可以随时停止。",
+    ),
     # --- recording the visit ---------------------------------------------------------------
     ConsentText(
         ConsentPurpose.RECORDING,
@@ -366,8 +408,21 @@ def render_sharing(
     name: str,
     relationship: str | None,
     scopes: Iterable[Scope],
+    role: KeyRole,
+    window: KeyWindow,
     language: str,
 ) -> str:
-    """Fill the sharing template with the person and the parts, as the patient will read it."""
+    """Fill the sharing template with the person, the parts, the role and the window, as the
+    patient will read it (#185). `role` and `window` are always given — a version that does
+    not name them (version 1 and 2, kept as history) simply never reads `{role_line}` or
+    `{window_line}`, so filling them in is never wrong."""
     parts = "\n".join(f"- {part}" for part in what_lines(scopes, language))
-    return template.format(named=named_words(name, relationship, language), name=name, parts=parts)
+    role_line = ROLE_IS[language].format(name=name, role=ROLE_WORDS[language][role])
+    window_line = WINDOW_LINES[language][window].format(name=name)
+    return template.format(
+        named=named_words(name, relationship, language),
+        name=name,
+        parts=parts,
+        role_line=role_line,
+        window_line=window_line,
+    )

@@ -249,7 +249,13 @@ class SentOut(BaseModel):
 
 
 class AreaIn(BaseModel):
+    """Set his area, or clear it (`area: None`). Once the graph is his, this is his own
+    write and takes his own yes: `confirmation_id` from `POST /profiles/{id}/confirmations`
+    with subject `area` and this same `area` (#184). Before his claim the steward sets it on
+    the declared basis without one, and `confirmation_id` is not asked for on that path."""
+
     area: str | None = Field(default=None, max_length=40)
+    confirmation_id: uuid.UUID | None = None
 
 
 class AreaOut(BaseModel):
