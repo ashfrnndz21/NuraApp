@@ -1,0 +1,25 @@
+{
+  "placeholder": "lab-report-red-flag-2026-09-11",
+  "sha256": "d55a75964f69e5c44144d4188be57c886a11e323f807745c6b8e0730cea1c300",
+  "note": "Synthetic fixture (no real patient): a lab report whose facility remark names a red-flag word ('breathlessness at rest', RED_FLAG_TERMS' 'breathless'). Written for the documents-lab-reports-and-insurance story: a lab_report field naming a red word must go through the red-flag path before the card is even shown, exactly like typed free text.",
+  "document_kind": "lab_report",
+  "document_date": "2026-09-11",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "remark",
+      "value": "Patient reported breathlessness at rest during collection",
+      "unit": null,
+      "confidence": 0.88,
+      "span": { "x0": 0.1, "y0": 0.6, "x1": 0.8, "y1": 0.66, "page": 1 }
+    },
+    {
+      "subject": "full_blood_count",
+      "attribute": "hemoglobin",
+      "value": 13.2,
+      "unit": "g/dL",
+      "confidence": 0.94,
+      "span": { "x0": 0.1, "y0": 0.3, "x1": 0.5, "y1": 0.34, "page": 1 }
+    }
+  ]
+}

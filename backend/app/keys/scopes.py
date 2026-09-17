@@ -83,6 +83,12 @@ _SUBJECT_SCOPES: dict[str, Scope] = {
     "oxygen": Scope.READINGS,
     "temperature": Scope.READINGS,
     "weight": Scope.READINGS,
+    "insurance_policy": Scope.MONEY,
+    "insurance_claim": Scope.MONEY,
+    # A policy or a claim document read through the review card (`app.ingestion.review`)
+    # writes facts under this subject: money, the same door `app.insurance.policy` and
+    # `app.insurance.claim` already read and write their own rows under, never RECORDS — a
+    # clinic key holds RECORDS and must not see a policy or a claim number a chief typed.
     "steps": Scope.READINGS,
     "sleep": Scope.READINGS,
     "water": Scope.READINGS,
@@ -104,9 +110,11 @@ NAMED_SUBJECTS = frozenset(_SUBJECT_SCOPES)
 """Every subject this module names a scope for; any other sits under RECORDS."""
 
 
-FACT_SCOPES: tuple[Scope, ...] = (Scope.READINGS, Scope.MEDICINES, Scope.RECORDS)
+FACT_SCOPES: tuple[Scope, ...] = (Scope.READINGS, Scope.MEDICINES, Scope.RECORDS, Scope.MONEY)
 """The scopes a fact can sit under (`scope_for_subject`). A reader of more than one subject
-reads each on its own, under its own scope, and names the ones the key does not hold."""
+reads each on its own, under its own scope, and names the ones the key does not hold. MONEY
+joined this tuple for the insurance subjects above: a policy or claim document read through
+the review card sits here, the same door `app.insurance.policy`/`app.insurance.claim` use."""
 
 
 def subjects_under(scope: Scope) -> frozenset[str]:

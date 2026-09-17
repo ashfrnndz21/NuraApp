@@ -1254,11 +1254,19 @@ export const en = {
       // @patient
       kindInsuranceLetter: "This is an insurance letter.",
       // @patient
+      kindInsurancePolicy: "This is an insurance policy.",
+      // @patient
+      kindInsuranceClaim: "This is an insurance claim.",
+      // @patient
       kindDeviceScreen: "This is the screen of a machine.",
+      // @patient
+      kindOther: "This is a health paper.",
       // @patient
       unreadable: "Nura could not read this one.",
       // @patient
       typeIt: "Please type what the paper says.",
+      // @patient
+      fromPage: "Nura read this from page {page} of the paper.",
       // @patient
       kindUnknown: "Nura could not read this page.",
       // @patient
@@ -1366,11 +1374,13 @@ export const en = {
         total_cholesterol: "The total cholesterol",
         hdl: "The good cholesterol",
         ldl: "The bad cholesterol",
+        ldl_reference_range: "The normal range for the bad cholesterol",
         triglycerides: "The blood fats",
         vldl: "Another blood fat number",
         tc_hdl_ratio: "The cholesterol ratio",
         non_hdl_cholesterol: "The cholesterol without the good part",
       },
+      full_blood_count: { hemoglobin: "The blood count number" },
       device: { kind: "The machine" },
       blood_pressure: { systolic: "The top number", diastolic: "The bottom number" },
       heart_rate: { pulse: "The heartbeat" },
@@ -1382,8 +1392,17 @@ export const en = {
         reason: "Why you were in hospital",
         weight_at_discharge: "Your weight when you came home",
       },
+      follow_up: { date: "When to go back" },
+      hypertension: { control: "What the doctor wrote about your blood pressure" },
       blood_sugar: { glucose: "The sugar number" },
-      lab_report: { lab: "Where the blood was tested" },
+      lab_report: {
+        lab: "Where the blood was tested",
+        facility: "Where it was tested",
+        remark: "What the report says beside the numbers",
+        patient_name: "The name on the report",
+        patient_id: "The patient number on the report",
+        ordering_doctor: "Which doctor asked for it",
+      },
       person: { birth_year: "The year of birth", sex: "Male or female" },
       medicine: {
         name: "The medicine",
@@ -1393,6 +1412,22 @@ export const en = {
         quantity: "How many were given",
         dispensed_at: "When it was given",
         prescriber: "Which doctor wrote it",
+      },
+      insurance_policy: {
+        insurer: "The insurance company",
+        policy_number: "The policy number",
+        plan: "The plan",
+        holder: "Who the policy is for",
+        start_date: "When it started",
+        end_date: "When it ends",
+      },
+      insurance_claim: {
+        insurer: "The insurance company",
+        claim_number: "The claim number",
+        status: "Where the claim stands",
+        amount: "The amount",
+        date: "The date",
+        for: "What the claim was for",
       },
     },
   },
@@ -1428,6 +1463,14 @@ export const en = {
     providersOther: "{patient}'s doctors and clinics",
     // @patient headline
     changes: "What changed",
+    // @patient headline
+    ledger: "Your insurance ledger",
+    // @patient headline
+    ledgerOther: "{patient}'s insurance ledger",
+    // @patient
+    ledgerWithheld: "This is kept to you.",
+    // @patient
+    ledgerWithheldOther: "This is kept to {patient}.",
     // @patient phrase
     back: "Back to your papers",
     // @patient phrase
@@ -1756,6 +1799,20 @@ export const en = {
     tableMedicines: "Medicines",
     // @patient headline
     tableReadings: "What to check",
+    // @patient phrase
+    ledgerTotals: "Totals for {year}",
+    // @patient phrase
+    ledgerClaimedLabel: "Claimed",
+    // @patient phrase
+    ledgerInsurerPaidLabel: "The insurance company paid",
+    // @patient phrase
+    ledgerPatientPaidLabel: "You paid",
+    // @patient phrase
+    ledgerPatientPaidLabelOther: "{patient} paid",
+    // @patient
+    ledgerNone: "No claims are on file yet.",
+    // @patient phrase
+    ledgerOn: "On {date}",
   },
   family: {
     // @patient headline

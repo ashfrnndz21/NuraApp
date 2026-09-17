@@ -262,6 +262,7 @@ async def test_a_narrow_key_is_told_which_parts_were_withheld(sg: AsyncSession) 
         Scope.RECORDS,
         Scope.EMERGENCY,
         Scope.FAMILY,
+        Scope.MONEY,  # insurance facts rest under money (#257), so a key without it is told
     }
     assert {line.section for line in found.lines} <= {"look", "visits", "facts"}
 

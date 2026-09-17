@@ -944,6 +944,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/medication-reminder"),
     Walk("GET", f"{P}/metrics/{{kind}}"),
     Walk("GET", f"{P}/food"),
+    # The fuller insurance record (E13-03): money, not the emergency card's EMERGENCY.
+    Walk("GET", f"{P}/insurance/policies"),
+    Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
+    Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
+    Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
+    Walk("GET", f"{P}/insurance/ledger"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
