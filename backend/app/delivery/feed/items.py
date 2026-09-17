@@ -179,6 +179,15 @@ class Why:
     gap: str | None = None
     suppressed: str | None = None
     boosts: tuple[str, ...] = field(default=())
+    rule: str | None = None
+    """The recommendation rule this card came from (RE-07, `app.delivery.recommend.rules`):
+    set only for a card the broker's slate proposed, never invented by a search job of its
+    own — the broker writes no words, only this reference to the rule that found it."""
+    topic: str | None = None
+    """The catalogue topic (RE-04) this card is about, for a broker-proposed card only: the
+    same code `app.delivery.recommend.models.Candidate.topic` carried, kept here so "not for
+    me" can be read back at the topic he actually declined (`app.delivery.feed.engagement`),
+    with no new column — `why` is already a JSON field every card writes."""
 
     def as_json(self) -> dict[str, Any]:
         return {

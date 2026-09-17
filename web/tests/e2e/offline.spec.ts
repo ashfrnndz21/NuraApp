@@ -105,7 +105,7 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
 
-  await page.getByTestId("tab-records").click();
+  await page.getByTestId("tab-health").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
   await page.getByTestId("record-medicines").click();
   await page.getByTestId("add-medicine").click();
@@ -130,7 +130,7 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
 
   // Offline from here on: what the phone kept is all there is left to read.
   await context.setOffline(true);
-  await page.getByTestId("tab-today").click();
+  await page.getByTestId("tab-home").click();
   await page.getByTestId("open-emergency").click();
   await expect(page.getByTestId("emergency-card").getByTestId("emergency-lines")).toContainText(line!);
   await context.setOffline(false);

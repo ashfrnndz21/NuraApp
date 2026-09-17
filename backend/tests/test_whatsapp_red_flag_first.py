@@ -41,7 +41,9 @@ FIXED = (
 
 async def _kit_on_the_emergency_card(sg: AsyncSession, home: object) -> object:
     kit = await register_person(sg, region=Region.SG, display_name="Kit", phone_e164=KIT)
-    await agree_to_family_sharing(sg, home.owner, kit, scopes={Scope.EMERGENCY})  # type: ignore[attr-defined]
+    await agree_to_family_sharing(
+        sg, home.owner, kit, scopes={Scope.EMERGENCY}, role=KeyRole.EMERGENCY  # type: ignore[attr-defined]
+    )
     await grant_key(sg, context=home.owner, holder=kit, role=KeyRole.EMERGENCY)  # type: ignore[attr-defined]
     return kit
 
@@ -148,7 +150,7 @@ async def test_a_red_flag_from_someone_on_two_lists_is_raised_on_both_and_a_name
         sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
     )
     await agree_to_family_sharing(
-        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter", role=KeyRole.CHIEF
     )
     await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
 
@@ -212,7 +214,7 @@ async def test_on_two_lists_chest_pain_tells_each_family_the_ambulance_before_it
         sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
     )
     await agree_to_family_sharing(
-        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter", role=KeyRole.CHIEF
     )
     await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
     # The ambiguous template is approved here: a fall on two lists sends it (above).
@@ -247,7 +249,7 @@ async def test_on_two_lists_a_fall_said_with_shaky_and_sweaty_is_the_fall_on_eac
         sg, region=Region.SG, person_id=ma.id, profile_id=ma_profile.id
     )
     await agree_to_family_sharing(
-        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter"
+        sg, ma_owner, home.mei, scopes=ALL_SCOPES, relationship="daughter", role=KeyRole.CHIEF
     )
     await grant_key(sg, context=ma_owner, holder=home.mei, role=KeyRole.CHIEF)
 

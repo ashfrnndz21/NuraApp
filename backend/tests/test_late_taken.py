@@ -110,7 +110,7 @@ async def test_whoever_was_told_is_told_it_resolved_and_someone_not_told_is_not(
     h = await home(sg, tmp_path)
     # Kit holds a key, but not to the medicines: never on this ladder, never reached.
     kit = await register_person(sg, region=Region.SG, display_name="Kit", phone_e164=KIT)
-    await agree_to_family_sharing(sg, h.owner, kit, scopes={Scope.VISITS})
+    await agree_to_family_sharing(sg, h.owner, kit, scopes={Scope.VISITS}, role=KeyRole.CHIEF)
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes={Scope.VISITS})
 
     await _escalate_to_the_roster(sg, h, clock)

@@ -422,6 +422,10 @@ async def _claimable(session: AsyncSession, *, context: KeyContext, language: st
             name=steward.display_name,
             relationship=stewardship.relationship,
             scopes=scopes,
+            # The claim always hands the steward a CHIEF key for ALWAYS (`_hand_over` below):
+            # the preview reads the same way the consent it is agreeing to will be recorded.
+            role=KeyRole.CHIEF,
+            window=KeyWindow.ALWAYS,
             language=language,
         ),
     )
@@ -534,10 +538,17 @@ async def _hand_over(
         captured_via=captured_via,
         basis=ConsentBasis.OWNER,
         language=language,
-        sharing=Sharing(holder=steward, scopes=scopes, relationship=stewardship.relationship),
+        sharing=Sharing(
+            holder=steward,
+            scopes=scopes,
+            role=KeyRole.CHIEF,
+            window=KeyWindow.ALWAYS,
+            relationship=stewardship.relationship,
+        ),
         text_version=draft.sharing_wording_version,
     )
-    # `grant_key` closes the steward's key and cuts the chief key that rests on the consent.
+    # `grant_key` closes the steward's key and cuts the chief key that rests on the consent,
+    # as CHIEF for ALWAYS — the same role and window the consent just above was given for.
     await grant_key(
         session,
         context=owner,

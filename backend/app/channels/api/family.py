@@ -46,6 +46,7 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import person_display_name, person_phone_e164
+from app.channels.about_him import reader_of
 from app.channels.api.deps import ClosingContext, Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
     CallOut,
@@ -151,8 +152,13 @@ async def grant_list(
     session: Db,
     language: str | None = Query(default=None, min_length=2, max_length=16),
 ) -> list[GrantOut]:
+    """Every live key as a grant, in his words — or, on a key that is not his, about him by
+    name (#210): who each holder is to him and the parts their key opens, never said to
+    anyone but him as if they were hers."""
+    reader = await reader_of(session, context, language)
     return [
-        GrantOut.of(grant) for grant in await grants(session, context=context, language=language)
+        reader.model(GrantOut.of(grant))
+        for grant in await grants(session, context=context, language=language)
     ]
 
 

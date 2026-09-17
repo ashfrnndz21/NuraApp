@@ -68,10 +68,19 @@ async def household(
     owner = await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
-    await agree_to_family_sharing(session, owner, mei, scopes=ALL_SCOPES, relationship="daughter")
-    await agree_to_family_sharing(session, owner, kit, scopes=kit_scopes, relationship="son")
     await agree_to_family_sharing(
-        session, owner, siti, scopes=ROLE_SCOPES[KeyRole.HELPER], relationship="helper"
+        session, owner, mei, scopes=ALL_SCOPES, relationship="daughter", role=KeyRole.CHIEF
+    )
+    await agree_to_family_sharing(
+        session, owner, kit, scopes=kit_scopes, relationship="son", role=KeyRole.CAREGIVER
+    )
+    await agree_to_family_sharing(
+        session,
+        owner,
+        siti,
+        scopes=ROLE_SCOPES[KeyRole.HELPER],
+        relationship="helper",
+        role=KeyRole.HELPER,
     )
     mei_key = await grant_key(
         session, context=owner, holder=mei, role=KeyRole.CHIEF, window=KeyWindow.ALWAYS

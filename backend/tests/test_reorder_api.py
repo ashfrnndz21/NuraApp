@@ -77,7 +77,7 @@ async def _key(
     parts: list[str],
 ) -> dict[str, str]:
     holder = await register_by_phone(deployment, phone, name)
-    await let_in(deployment, pa, profile_id, phone, parts, None, holder_display_name=name)
+    await let_in(deployment, pa, profile_id, phone, parts, None, holder_display_name=name, role=role)
     cut = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_person_id": holder["person_id"], "role": role, "scopes": parts},

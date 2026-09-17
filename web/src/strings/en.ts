@@ -524,6 +524,10 @@ export const en = {
     shared: "Your family can see this card now.",
     // @patient phrase
     fromPublisher: "From {publisher}",
+    // @patient phrase
+    whyLink: "Why am I seeing this?",
+    // @patient headline
+    whyTitle: "Why am I seeing this?",
     // @patient
     cannotShare: "Nura cannot send this card to your family yet.",
     // @patient

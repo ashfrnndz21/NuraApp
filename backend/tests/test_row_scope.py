@@ -363,7 +363,7 @@ async def _holder(
     """Register this number, let it in to these parts, and cut it a key: the role's preset,
     or narrowed to the parts."""
     who = await register_by_phone(deployment, phone, f"{role} {phone[-3:]}")
-    await let_in(deployment, owner, profile_id, phone, scopes)
+    await let_in(deployment, owner, profile_id, phone, scopes, role=role)
     body: dict[str, Any] = {"holder_phone_e164": phone, "role": role}
     if not preset:
         body["scopes"] = scopes
@@ -390,7 +390,7 @@ async def _seed(deployment: Deployment) -> Seeded:
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART)
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",

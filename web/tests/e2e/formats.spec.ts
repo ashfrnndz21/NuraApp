@@ -108,7 +108,9 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   await openFeed(page);
   await pageUntil(page, "clip");
   const card = page.locator("article.feed-card[data-type=clip]").first();
-  await expect(card.locator("h2.title")).toHaveText("Your blood pressure, in 30 seconds");
+  // RE-07: the broker leads the learning supply with the new medicine's own clip that week, so
+  // the first clip is the tablet's, not the general blood-pressure one.
+  await expect(card.locator("h2.title")).toHaveText("Your blood pressure tablet, in 30 seconds");
   const still = card.getByTestId("clip-poster");
   await expect(still).toBeVisible();
   expect(await still.getAttribute("src")).toMatch(/^blob:/);
@@ -119,7 +121,7 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   // The whole video is on the heart centre's own site: a link he taps, in a tab of its own.
   const link = card.getByTestId("watch-whole");
   await expect(link).toHaveText("Watch the whole video at National Heart Centre Singapore");
-  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/understanding-high-blood-pressure");
+  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/amlodipine-in-brief");
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   // Every card keeps Hear and Not for me.
@@ -206,13 +208,10 @@ test.describe("the caregiver density at 360 by 640", () => {
       expect(["now", "gate", "duty"]).not.toContain(type);
     }
     await expect(sent.getByTestId("sent-status").first()).toHaveText(/^(This was on the page Pa sees\.|Pa opened this card\.|Pa heard this card\.|Nura kept this back from Pa\.)$/);
-    // A card a watch found: where it came from, Hear, and Stop watching for this for now.
-    const clip = rows.filter({ hasText: "Your blood pressure, in 30 seconds" }).first();
-    await expect(clip).toContainText("From National Heart Centre Singapore");
-    await expect(clip.getByTestId("hear")).toBeVisible();
-    await clip.getByTestId("sent-pause").click();
-    await expect(explainer).toHaveAttribute("data-enabled", "false");
-    await expect(clip.getByTestId("sent-pause")).toHaveCount(0);
+    // The NHCS clip is a watch's find, but its only words are the compressor's free text, with
+    // no *_THEIRS twin to say them about him by name (#210) — it is silently left off her list,
+    // the same as the backend's own week-accounting test (test_feed_formats.py) now asserts.
+    await expect(rows.filter({ hasText: "Your blood pressure, in 30 seconds" })).toHaveCount(0);
     await shotAs(page, "cp28-sent");
   });
 
