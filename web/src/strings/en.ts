@@ -2037,13 +2037,13 @@ export const en = {
     // @patient headline
     nearYouTitleOther: "Near {patient}",
     // @patient line
-    noNearYou: "Nothing near you yet.",
+    noNearYou: "There is nothing near you yet.",
     // @patient line
-    noNearYouOther: "Nothing near {patient} yet.",
+    noNearYouOther: "There is nothing near {patient} yet.",
     // @patient headline
     messagesTitle: "Messages",
     // @patient line
-    noMessages: "No messages yet.",
+    noMessages: "There are no messages yet.",
     // @patient phrase
     seeAllFamily: "See everyone with a key",
     // @patient phrase

@@ -42,7 +42,7 @@ describe("Connect (docs/design/nura-concept-board.html, the Connect screen), on 
     expect(t().connect.noFamily).toBe("No one has a key to Pa's papers yet.");
     expect(t().connect.noCall).toBe("No call with Pa is on the calendar yet.");
     expect(t().connect.nearYouTitle).toBe("Near Pa");
-    expect(t().connect.noNearYou).toBe("Nothing near Pa yet.");
+    expect(t().connect.noNearYou).toBe("There is nothing near Pa yet.");
     language.value = "ms";
     expect(t().connect.familyTitle).toBe("Keluarga Pa");
     language.value = "zh";
