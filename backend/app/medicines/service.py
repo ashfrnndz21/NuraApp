@@ -39,6 +39,7 @@ from app.drugs.registry import (
     LabelFields,
     NotIdentified,
     ReviewState,
+    StrengthNotRead,
 )
 from app.errors import Refusal
 from app.ingestion.models import CONFIDENCE_THRESHOLD
@@ -188,11 +189,24 @@ def _one_product(matches: Sequence[DrugMatch]) -> DrugMatch:
     happens to collide with a real product's name is not silently taken as identifying it —
     the same floor a document field (`app.ingestion.models`) and a WhatsApp voice transcript
     (E19) are already held to before either is trusted.
+
+    Two strengths on file for one generic is ambiguous either way, but not the same refusal
+    (#211): for a high-risk generic (`DrugMatch.high_risk`) it is `StrengthNotRead` — the
+    register has heard of the drug, and a label photo proves a photo exists, not that the
+    strength on it was read, so the fix is a photo that shows the strength. Two generics
+    matching at once, or two strengths of a generic that is not high-risk, stay the plain
+    `NotIdentified` this always was.
     """
     if not matches:
         raise NotIdentified("the label matched no product in the register")
     distinct = {(m.generic, m.strength, m.form) for m in matches}
     if len(distinct) > 1:
+        generics = {m.generic for m in matches}
+        if len(generics) == 1 and any(m.high_risk for m in matches):
+            raise StrengthNotRead(
+                f"the label matched {next(iter(generics))} at more than one strength; a "
+                "label photo does not by itself prove the strength on it was read"
+            )
         raise NotIdentified("the label matched more than one product; the strength decides")
     if matches[0].confidence < CONFIDENCE_THRESHOLD:
         raise NotIdentified(

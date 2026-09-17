@@ -20,6 +20,7 @@ export type Variant =
   | "reorder"
   | "visit"
   | "notice"
+  | "recallAction"
   | "clip"
   | "recap"
   | "local"
@@ -41,6 +42,8 @@ const VARIANTS: Record<string, Variant> = {
   // The logistics card, the day before a visit and on the day (E05-03): a visit card.
   visit_logistics: "visit",
   notice: "notice",
+  // His own pack is one of a recall's batches (#183): what he can do about it today.
+  recall_action: "recallAction",
   // The feed's richer formats (F1): a compressed video, his week in 30 seconds, a local
   // alert, a season coming, and the week's food choice.
   clip: "clip",

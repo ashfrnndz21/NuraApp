@@ -37,7 +37,10 @@ export interface Replayed {
   stopped: boolean;
 }
 
-/** Hold one tap. A red feeling word is refused here (`null`): it is never held. */
+/** Hold one tap. A red feeling word is refused here (`null`): it is never held. So is a feeling
+ *  tap with no moment of its own (#171) — every tap the queue holds, *taken* or *feeling*
+ *  alike, must carry its own `at`, the way `Taken` already does, or a replay would have nothing
+ *  truer to write it under than whatever day the network happens to come back on. */
 export async function hold(
   profileId: string,
   tap: Tap,
@@ -46,7 +49,7 @@ export async function hold(
   zone: string,
   red = false,
 ): Promise<Tap[] | null> {
-  if (tap.kind === "feeling" && red) return null;
+  if (tap.kind === "feeling" && (red || !tap.at)) return null;
   const kept = await load(profileId, binding, now);
   const entry: KeptTaps = kept
     ? { ...kept, taps: [...kept.taps, tap] }
