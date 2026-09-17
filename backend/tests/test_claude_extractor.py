@@ -284,6 +284,22 @@ def test_claude_builds_on_a_declared_demo() -> None:
     assert isinstance(extractor, ClaudeExtractor)
 
 
+def test_claude_refuses_to_build_without_a_key_even_on_a_demo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(MissingSetting):
+        extractor_for(_settings(extractor="claude", demo_mode=True, demo_login_code="123456"))
+
+
+def test_claude_builds_on_the_sdks_own_anthropic_api_key_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-not-real")
+    extractor = extractor_for(
+        _settings(extractor="claude", demo_mode=True, demo_login_code="123456")
+    )
+    assert isinstance(extractor, ClaudeExtractor)
+
+
 def test_an_unknown_extractor_name_refuses_to_start() -> None:
     with pytest.raises(NoExtractor):
         extractor_for(_settings(extractor="ocr-3000"))

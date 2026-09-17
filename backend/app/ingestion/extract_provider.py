@@ -16,6 +16,7 @@ nothing above this module changes.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from anthropic import AsyncAnthropic
@@ -50,6 +51,11 @@ def extractor_for(settings: Settings) -> Extractor:
                 "Anthropic's first-party API does not process in SG or MY (ADR 0008), and a "
                 "demo is the only deployment where every document is test data by "
                 "declaration. Use NURA_EXTRACTOR=fixture (the default) anywhere else."
+            )
+        if settings.anthropic_api_key is None and not os.environ.get("ANTHROPIC_API_KEY"):
+            raise MissingSetting(
+                "NURA_EXTRACTOR=claude needs NURA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY) "
+                "set; from the platform's secrets, never the repo"
             )
         return ClaudeExtractor(AsyncAnthropic(api_key=settings.anthropic_api_key))
     raise NoExtractor(
