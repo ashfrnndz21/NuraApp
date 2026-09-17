@@ -35,12 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_write
 from app.audit.models import Channel
-from app.db import unit_of_work
 from app.channels.api.deps import Providers
 from app.clock import now
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import RecordConsent, Sharing, grant_consent
 from app.consent.texts import current_version
+from app.db import unit_of_work
 from app.delivery.feed.area import area_draft_for, set_area
 from app.delivery.triggers.deliver import Via
 from app.demo_numbers import DEMO_NUMBERS
@@ -48,8 +48,8 @@ from app.drafts import AppointmentDraft, AreaDraft, FactDraft, StatusChange
 from app.drugs.registry import DrugRegistry
 from app.identity.models import Person
 from app.identity.service import create_own_profile, find_person_by_phone, register_person
-from app.keys.context import KeyContext, owned_profile, resolve_key_context
 from app.keys.confirm import confirm
+from app.keys.context import KeyContext, owned_profile, resolve_key_context
 from app.keys.grants import grant_key
 from app.keys.scopes import ALL_SCOPES, KeyRole, KeyWindow, Scope
 from app.medicines.dose import Dose, parse_dose_text
