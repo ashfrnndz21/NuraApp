@@ -83,7 +83,7 @@ async def test_his_state_to_him_and_about_him_to_his_daughter(deployment: Deploy
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
     scopes = ["medicines", "records", "family"]
-    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter")
+    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": scopes},
@@ -225,7 +225,7 @@ async def test_grants_and_consents_are_said_about_him_by_name_on_a_key_that_is_n
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
     scopes = ["medicines", "records", "family"]
-    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter")
+    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter", role="chief")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "chief", "scopes": scopes},

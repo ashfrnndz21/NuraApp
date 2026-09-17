@@ -145,6 +145,48 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   await priyaPage.context().close();
 });
 
+test("the Family Keys screen's own request names the role and the window, and a key cut for a different role than agreed is refused (#185)", async ({ page, request }) => {
+  // #185's own regression: the real client (web/src/api/family.ts's SharingBody) used to send
+  // neither role nor window on the sharing agreement, so nothing was actually bound for any
+  // real family — only tests exercised the backend's enforcement. This walks the real screen,
+  // reads the real outgoing request bodies, and then proves the backend's own refusal fires
+  // against a key asked for a role the agreement never named.
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const priyaPhone = freshPhone("+659778");
+  await page.getByTestId("tab-family").click();
+  await page.getByTestId("open-keys").click();
+  await page.getByLabel("Their name").fill("Priya");
+  await page.getByLabel("Their phone number").fill(priyaPhone);
+  await page.getByTestId("role-caregiver").click();
+
+  const previewUrl = /\/consents\/sharing\/preview$/;
+  const previewed = page.waitForRequest((req) => req.method() === "POST" && previewUrl.test(req.url()));
+  await page.getByTestId("see-words").click();
+  expect((await previewed).postDataJSON()).toMatchObject({ role: "caregiver", window: "always" });
+
+  const agreedUrl = /\/consents\/sharing$/;
+  const agreed = page.waitForRequest((req) => req.method() === "POST" && agreedUrl.test(req.url()));
+  const keyUrl = /\/keys$/;
+  const cut = page.waitForRequest((req) => req.method() === "POST" && keyUrl.test(req.url()));
+  await page.getByTestId("agree-key").click();
+  expect((await agreed).postDataJSON()).toMatchObject({ role: "caregiver", window: "always" });
+  expect((await cut).postDataJSON()).toMatchObject({ role: "caregiver" });
+  await expect(page.getByTestId("grant").filter({ hasText: "Priya" })).toBeVisible();
+
+  // Nobody on the real screen can ask for a mismatched role — the role picker drives both the
+  // words and the key as one choice. A caller that tries anyway, straight over the API, is the
+  // backend's own refusal: the words Pa read named caregiver, not viewer.
+  const mismatched = await request.post(`${API}/profiles/${pa.profileId}/keys`, {
+    headers: auth(pa.token),
+    data: { holder_phone_e164: priyaPhone, role: "viewer" },
+  });
+  expect(mismatched.status()).toBe(403);
+  expect((await mismatched.json()) as { refusal: string }).toEqual({ refusal: "KeyNotAsAgreed" });
+});
+
 test("changing what a key would open while the words for it are still on the wire never leaves a stale preview on screen", async ({ page, request }) => {
   // The name, phone, parts and window are disabled the moment the request is sent — so this
   // walks the one thing that is still reachable while it is in flight: the role pills, which

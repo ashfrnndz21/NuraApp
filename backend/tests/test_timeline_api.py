@@ -231,7 +231,7 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
 
     # Mei, his chief: a note about the place, and one that names a medicine.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",
@@ -325,7 +325,7 @@ async def test_a_peek_at_what_changed_marks_no_look_and_writes_no_trail_entry(
     profile_id = await own_profile(deployment, pa)
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",

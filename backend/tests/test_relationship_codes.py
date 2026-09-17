@@ -26,6 +26,8 @@ async def test_the_words_of_letting_someone_in_say_the_code_in_their_language(
         "holder_phone_e164": MEI,
         "holder_display_name": "Mei",
         "scopes": ["medicines"],
+        "role": "caregiver",
+        "window": "always",
         "relationship": "daughter",
     }
     said = {}

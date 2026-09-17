@@ -221,10 +221,13 @@ class ConsentIn(BaseModel):
 
 
 class SharingConsentIn(BaseModel):
-    """The owner lets one person in: who, to which parts, and who they are to him.
+    """The owner lets one person in: who, to which parts, as what role and for how long, and
+    who they are to him (#185).
 
-    The words the patient reads are rendered with that name and those parts and kept as
-    read. A key for this person can only be cut once this is in force, and never wider.
+    The words the patient reads are rendered with that name, those parts, that role and that
+    window, and kept as read. A key for this person can only be cut once this is in force,
+    never wider, and never as a different role or for a window it did not name
+    (`app.keys.grants.grant_key`, `KeyNotAsAgreed`).
     """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
@@ -234,6 +237,8 @@ class SharingConsentIn(BaseModel):
     phone (`HolderNeedsAName` without it). A number that is not an account yet keeps it until
     the person signs in and gives his own."""
     scopes: list[Scope] = Field(min_length=1)
+    role: KeyRole
+    window: KeyWindow
     relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
     captured_via: ConsentChannel
@@ -249,13 +254,15 @@ class SharingConsentIn(BaseModel):
 
 
 class SharingPreviewIn(BaseModel):
-    """The words the owner would agree to by `POST /consents/sharing`, for this person and
-    these parts, before he agrees: the same fields, nothing kept."""
+    """The words the owner would agree to by `POST /consents/sharing`, for this person, these
+    parts, this role and this window (#185), before he agrees: the same fields, nothing kept."""
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
     holder_person_id: uuid.UUID | None = None
     holder_display_name: str | None = Field(default=None, max_length=80)
     scopes: list[Scope] = Field(min_length=1)
+    role: KeyRole
+    window: KeyWindow
     relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
 
@@ -621,6 +628,15 @@ class OnlyMeConfirmIn(BaseModel):
     only_me: bool = True
 
 
+class AreaConfirmIn(BaseModel):
+    """His yes to setting his area to exactly this value, or clearing it (`area: None`), once
+    the graph is his (#184). The draft is recomputed from `area` the same way `PUT
+    .../area` will check it, so the yes binds to exactly the coarse value kept."""
+
+    subject: Literal[ConfirmSubject.AREA]
+    area: str | None = Field(default=None, max_length=40)
+
+
 class CloseConfirmIn(BaseModel):
     """The owner's yes to closing his account, to the lines shown in `language` (#143). The
     draft is recomputed from the words and the day, so nothing here can change them."""
@@ -745,14 +761,16 @@ ConfirmIn = Annotated[
     | RoutineConfirmIn
     | ProposalConfirmIn
     | DriveConfirmIn
-    | InsurerConfirmIn,
+    | InsurerConfirmIn
+    | AreaConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18); his insurer on the emergency card (E13-01)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01); his own area,
+once the graph is his (E09-07, #184)."""
 
 
 class ConfirmationOut(BaseModel):
@@ -835,7 +853,10 @@ class KeyGrant(BaseModel):
     """Cut a key: for whom, as what, over which parts, for how long.
 
     The key rests on the sharing consent the owner gave for this person
-    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused.
+    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused. `role` here
+    must match what that consent named exactly, and `window` must not outlast it
+    (`KeyNotAsAgreed`, 403, #185) — a consent given before #185 tracked neither constrains
+    neither.
     """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)

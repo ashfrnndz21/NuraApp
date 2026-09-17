@@ -240,7 +240,7 @@ async def test_a_family_photo_is_on_his_story_with_the_sharers_yes_for_the_famil
     his = bearer(pa_["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
     hers = bearer(mei["token"])
-    await let_in(deployment, pa_, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa_, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     cut = await client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "chief"},
@@ -256,6 +256,7 @@ async def test_a_family_photo_is_on_his_story_with_the_sharers_yes_for_the_famil
         ["records", "readings"],
         relationship="son",
         holder_display_name="Kit",
+        role="caregiver",
     )
     cut = await client.post(
         f"/profiles/{profile_id}/keys",

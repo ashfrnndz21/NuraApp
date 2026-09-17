@@ -67,7 +67,7 @@ async def _reading(
 async def _caregiver_key(
     deployment: Deployment, owner: dict[str, str], profile_id: str, phone: str, scopes: list[str]
 ) -> None:
-    await let_in(deployment, owner, profile_id, phone, scopes, "daughter")
+    await let_in(deployment, owner, profile_id, phone, scopes, "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": "caregiver", "scopes": scopes},

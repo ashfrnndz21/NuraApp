@@ -1,4 +1,5 @@
 import type { Relationship } from "../strings/types";
+import type { KeyRole, KeyWindow } from "./familyTypes";
 /** The API's answers, as the backend's pydantic schemas name them
  *  (`backend/app/channels/api/schemas.py`). Only the fields the client reads are typed. */
 
@@ -870,6 +871,12 @@ export interface SharingIn {
   /** The name the words use for the person, as he calls them (`HolderNeedsAName` without it). */
   holder_display_name: string;
   scopes: Part[];
+  /** The role and the window `cutKey` will cut the key as (#185): stated here too, so the
+   *  words he agrees to and the key that rests on them always name the same thing. This
+   *  onboarding gap has no role or window picker — it always invites a caregiver, for as
+   *  long as he says nothing more (`app/keys/scopes.py::DEFAULT_WINDOW`). */
+  role: KeyRole;
+  window: KeyWindow;
   relationship: Relationship | null;
   language: string;
 }

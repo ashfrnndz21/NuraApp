@@ -820,9 +820,24 @@ export const pauseSearchJob = (token: string, profileId: string, jobId: string, 
 /** His area and the towns it may be (owner, chief). */
 export const area = (token: string, profileId: string) => api<AreaOut>(`/profiles/${profileId}/area`, { token });
 
-/** Set his area on his yes, or clear it (null). */
-export const setArea = (token: string, profileId: string, value: string | null) =>
-  api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+/** The owner's own yes to setting his area to exactly this value, or to clearing it (#184):
+ *  minted for the area shown, spent by setArea. The steward's pre-claim write takes none. */
+export const mintAreaConfirmation = (token: string, profileId: string, value: string | null) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "area", area: value },
+  });
+
+/** Set his area on his yes, or clear it (null). Once the graph is his, `confirmationId` must
+ *  be minted for exactly this value (`mintAreaConfirmation`); the steward's pre-claim write
+ *  takes none. */
+export const setArea = (token: string, profileId: string, value: string | null, confirmationId?: string) =>
+  api<AreaOut>(`/profiles/${profileId}/area`, {
+    token,
+    method: "PUT",
+    body: { area: value, confirmation_id: confirmationId ?? null },
+  });
 
 /** "What Nura uses" (RE-05): every family, on or off, and whether this key may set one. */
 export const signals = (token: string, profileId: string) =>

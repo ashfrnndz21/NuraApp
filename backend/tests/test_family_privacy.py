@@ -127,7 +127,7 @@ async def test_chief_reads_his_notes_a_viewer_and_a_helper_are_refused_on_his_tr
         sg, region=Region.SG, display_name="Priya", phone_e164="+6598880005"
     )
     await agree_to_family_sharing(
-        sg, pa, priya, scopes=ROLE_SCOPES[KeyRole.VIEWER], relationship="niece"
+        sg, pa, priya, scopes=ROLE_SCOPES[KeyRole.VIEWER], relationship="niece", role=KeyRole.VIEWER
     )
     await grant_key(sg, context=pa, holder=priya, role=KeyRole.VIEWER, window=KeyWindow.THIRTY_DAYS)
     priya_ctx = await h.ctx(sg, priya)

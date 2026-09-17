@@ -315,7 +315,7 @@ export async function cutKey(
   const his = { Authorization: `Bearer ${owner.token}` };
   const letIn = await request.post(`${API}/profiles/${owner.profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, relationship: "neighbour", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: phone, holder_display_name: holder.name, scopes, role, window: "always", relationship: "neighbour", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${owner.profileId}/keys`, { headers: his, data: { holder_phone_e164: phone, role, scopes } });
@@ -651,7 +651,7 @@ export async function seedVisitDay(
   const meiId = ((await (await request.get(`${API}/me`, { headers: hers })).json()) as { person_id: string }).person_id;
   const letIn = await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     headers: his,
-    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: meiPhone, holder_display_name: "Mei", scopes: EVERY_PART, role: "chief", window: "always", relationship: "daughter", language: "en", captured_via: "app" },
   });
   if (letIn.status() !== 201) throw new Error(`sharing: ${letIn.status()} ${await letIn.text()}`);
   const key = await request.post(`${API}/profiles/${profileId}/keys`, { headers: his, data: { holder_phone_e164: meiPhone, role: "chief" } });

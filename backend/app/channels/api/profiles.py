@@ -42,6 +42,7 @@ from app.channels.api.deps import (
 from app.channels.api.schemas import (
     WITHHELD_TARGET,
     AppointmentConfirmIn,
+    AreaConfirmIn,
     AttachConfirmIn,
     AuditOut,
     ClaimableOut,
@@ -102,6 +103,7 @@ from app.consent.service import (
 from app.consent.texts import named_words
 from app.consent.withdrawal import stop_lines, stopped_lines
 from app.db import as_utc, utcnow
+from app.delivery.feed.area import area_draft_for
 from app.delivery.strings import language_for
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
@@ -318,6 +320,11 @@ async def mint_confirmation(
         return ConfirmationOut.of(
             await confirm(session, context, only_me_draft(body.scope, only_me=body.only_me))
         )
+    if isinstance(body, AreaConfirmIn):
+        # His own area (#184): the draft is recomputed from `area` the way `PUT .../area`
+        # will check it, so the yes binds to exactly the coarse value kept.
+        _, area_draft = await area_draft_for(session, context=context, area=body.area)
+        return ConfirmationOut.of(await confirm(session, context, area_draft))
     if isinstance(body, DriveConfirmIn):
         # Who drives him to a visit (E05-03): the chief's yes, recomputed from the visit and
         # the person, so it cannot be minted for a visit that has been or a stranger.
@@ -765,6 +772,8 @@ async def let_someone_in(
         sharing=Sharing(
             holder=holder,
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
+            role=body.role,
+            window=body.window,
             relationship=body.relationship,
             named=named or None,
         ),
@@ -804,6 +813,8 @@ async def preview_letting_in(
             name=name,
             relationship=body.relationship,
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
+            role=body.role,
+            window=body.window,
         ),
         language=body.language,
     )

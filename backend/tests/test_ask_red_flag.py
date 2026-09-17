@@ -78,7 +78,7 @@ async def test_a_family_red_word_about_him_takes_the_same_path_or_is_refused_as_
     mei = await register_by_phone(deployment, MEI, "Mei")
     hers = bearer(mei["token"])
     scopes = ["medicines", "records", "family", "ask"]
-    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter")
+    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": scopes},
@@ -106,7 +106,7 @@ async def test_a_family_red_word_about_him_takes_the_same_path_or_is_refused_as_
     # Ah Kow, his son, holds the emergency card as well: his words raise the flag.
     kow = await register_by_phone(deployment, KOW, "Ah Kow")
     with_card = [*scopes, "emergency"]
-    await let_in(deployment, pa, profile_id, KOW, with_card, "son", holder_display_name="Ah Kow")
+    await let_in(deployment, pa, profile_id, KOW, with_card, "son", holder_display_name="Ah Kow", role="caregiver")
     granted_card = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": KOW, "role": "caregiver", "scopes": with_card},
@@ -133,7 +133,7 @@ async def test_a_helper_holding_the_card_but_not_ask_still_gets_the_urgent_card(
     profile_id = await own_profile(deployment, pa)
     siti = await register_by_phone(deployment, SITI, "Siti")
     scopes = ["medicines", "emergency"]
-    await let_in(deployment, pa, profile_id, SITI, scopes, "helper", holder_display_name="Siti")
+    await let_in(deployment, pa, profile_id, SITI, scopes, "helper", holder_display_name="Siti", role="helper")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": SITI, "role": "helper", "scopes": scopes},
