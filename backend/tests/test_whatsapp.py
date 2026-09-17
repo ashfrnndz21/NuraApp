@@ -38,6 +38,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
 from app.memory.models import Artifact, ArtifactKind, Event, EventKind, Fact, SourceChannel
 from app.memory.semantic import assert_fact, current_facts
+from app.reasoning.feelings.strings import PROMPT
 from app.regions import Region
 from app.state.service import current_state
 from tests.support import OPENING_CONSENT, refused_unit
@@ -262,6 +263,161 @@ async def test_a_third_partys_feeling_word_is_a_proposal(sg: AsyncSession, tmp_p
     assert (
         handled.replies[0].text == "Did I get this right?\nPa is feeling tired.\nAnswer yes or no."
     )
+
+
+# --- his "OK" after whatever asked him the feeling question (#205) -------------------------------
+
+
+async def test_the_days_nudge_opens_his_answer_the_same_way_the_plain_check_in_does(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """#205: on a day the plain check-in stands down because the day's smart nudge already
+    asked the feeling question (W7, E17-03), his "OK" back is read as its answer — because
+    `WhatsAppMessage.asks_feeling` is set from what the nudge actually said, not from its
+    template's name, `nudge`, which is not `feeling_check_in`."""
+    home = await family(sg, tmp_path)
+    state = await current_state(sg, context=home.owner)
+    sent = await send(
+        sg,
+        context=home.owner,
+        to_person=home.pa,
+        kind="nudge",
+        params={"message": f"You told Nura you felt tired last week.\n{PROMPT['en']}"},
+        provider=home.providers.whatsapp,
+        number=home.number,
+        language="en",
+        state=state,
+    )
+    assert sent.template_name == "nudge"
+    row = await sg.get(WhatsAppMessage, sent.message_id)
+    assert row is not None and row.asks_feeling is True
+
+    handled = await home.inbound(sg, PA, "ok")
+    assert handled.outcome == "check_in_answer" and handled.fact_id is not None
+    fact = await sg.get(Fact, handled.fact_id)
+    assert fact is not None and fact.subject == "feeling" and fact.value == "ok"
+    assert handled.replies[0].text == "Thank you for telling me.\nI wrote it down."
+
+
+async def test_a_nudge_that_does_not_ask_the_feeling_question_never_opens_the_check_in(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The care in #205: the marker follows the words he was actually sent, so it must not
+    widen to every nudge. One that says something else — the number that only goes up, a
+    week of taps kept — never opens his answer window; his "OK" to it still gets the general
+    refusal, exactly as an unrelated "OK" to a dose ask or a proposal still would."""
+    home = await family(sg, tmp_path)
+    state = await current_state(sg, context=home.owner)
+    sent = await send(
+        sg,
+        context=home.owner,
+        to_person=home.pa,
+        kind="nudge",
+        params={"message": "You have taken your morning tablet every day this week."},
+        provider=home.providers.whatsapp,
+        number=home.number,
+        language="en",
+        state=state,
+    )
+    row = await sg.get(WhatsAppMessage, sent.message_id)
+    assert row is not None and row.asks_feeling is False
+
+    handled = await home.inbound(sg, PA, "ok")
+    assert handled.outcome == "nothing_open"
+    assert list(await sg.scalars(select(Fact))) == []
+
+
+async def test_both_askers_on_one_day_cannot_double_count_his_one_answer(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """A day the plain check-in and the day's nudge both ask him — which the engine's own
+    stand-down rule (`app.delivery.triggers.day._the_nudge_asked_today`) exists to prevent,
+    but a delivery is never the only way a row could come to exist — still writes down
+    exactly the one feeling his one reply carries, never one for each asker."""
+    home = await family(sg, tmp_path)
+    await run_feeling_check_in(
+        sg,
+        settings=home.settings,
+        providers=home.providers,
+        number=home.number,
+        profile_id=home.profile.id,
+    )
+    state = await current_state(sg, context=home.owner)
+    await send(
+        sg,
+        context=home.owner,
+        to_person=home.pa,
+        kind="nudge",
+        params={"message": PROMPT["en"]},
+        provider=home.providers.whatsapp,
+        number=home.number,
+        language="en",
+        state=state,
+    )
+    asking = [
+        row for row in (await sg.scalars(select(WhatsAppMessage))).all() if row.asks_feeling
+    ]
+    assert len(asking) == 2  # both askers reached him
+
+    handled = await home.inbound(sg, PA, "ok")
+    assert handled.outcome == "check_in_answer"
+    feelings = [f for f in (await sg.scalars(select(Fact))).all() if f.subject == "feeling"]
+    assert len(feelings) == 1
+
+
+async def test_his_answer_to_yesterdays_nudge_does_not_land_on_todays_feeling(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The day boundary is unchanged by this fix: a question asked yesterday, on his wall
+    clock, stays yesterday's — his "OK" today answers nothing of it."""
+    home = await family(sg, tmp_path)
+    state = await current_state(sg, context=home.owner)
+    await send(
+        sg,
+        context=home.owner,
+        to_person=home.pa,
+        kind="nudge",
+        params={"message": PROMPT["en"]},
+        provider=home.providers.whatsapp,
+        number=home.number,
+        language="en",
+        state=state,
+    )
+    # SGT is UTC+8; nine hours on from the frozen 08:00 UTC start crosses into his next day.
+    clock.step(timedelta(hours=9))
+    handled = await home.inbound(sg, PA, "ok")
+    assert handled.outcome == "nothing_open"
+    assert list(await sg.scalars(select(Fact))) == []
+
+
+@pytest.mark.parametrize(("language", "his_word"), (("en", "ok"), ("ms", "ok"), ("zh", "好")))
+async def test_his_ok_to_the_nudge_is_read_in_every_language_the_check_in_speaks(
+    sg: AsyncSession, tmp_path: Path, language: str, his_word: str
+) -> None:
+    """The feeling question and the word offered back for it are the nudge's own words in
+    en/ms/zh alike (#205): "OK" is kept as itself even in the Malay template, and "好" is the
+    Chinese template's own word for it. Whichever language asked, his one word back opens
+    and answers the same way the plain check-in's does."""
+    home = await family(sg, tmp_path)
+    state = await current_state(sg, context=home.owner)
+    sent = await send(
+        sg,
+        context=home.owner,
+        to_person=home.pa,
+        kind="nudge",
+        params={"message": PROMPT[language]},
+        provider=home.providers.whatsapp,
+        number=home.number,
+        language=language,
+        state=state,
+    )
+    row = await sg.get(WhatsAppMessage, sent.message_id)
+    assert row is not None and row.asks_feeling is True
+
+    handled = await home.inbound(sg, PA, his_word)
+    assert handled.outcome == "check_in_answer" and handled.fact_id is not None
+    fact = await sg.get(Fact, handled.fact_id)
+    assert fact is not None and fact.subject == "feeling" and fact.value == "ok"
 
 
 # --- coordination, other, ignore ----------------------------------------------------------------

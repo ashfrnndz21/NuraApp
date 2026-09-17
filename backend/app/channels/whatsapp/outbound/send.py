@@ -41,6 +41,7 @@ from app.identity.models import Person, Profile
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope
+from app.reasoning.feelings.strings import asks_about_feeling
 from app.safety.plain_words import verify
 from app.state.service import StateView
 
@@ -303,6 +304,9 @@ async def send(
         template_name=template_name,
         catalogue_key=catalogue_key,
         state_id=state_id,
+        # A fact about what he was actually sent, not about which template sent it (#205):
+        # whatever carries the feeling question's own words opens his answer window.
+        asks_feeling=asks_about_feeling(text, lang),
     )
     await record_share(
         session,
