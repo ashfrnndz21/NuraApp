@@ -311,7 +311,11 @@ test("a tap in the first second after reopening lands where it was aimed, never 
   const gate = new Promise<void>((resolve) => {
     releaseDoors = resolve;
   });
-  await page.route("**/api/doors", async (route) => {
+  // The glob needs its own trailing `**`: `doors` is called with `?language=…` (`api/nura.ts`),
+  // and a glob with no wildcard after "doors" only matches that exact suffix, never a URL with a
+  // query string after it — so a bare "**/api/doors" never matches, the gate is never held, and
+  // the race this test means to control by hand runs free (the flake behind #142's own CI reruns).
+  await page.route("**/api/doors**", async (route) => {
     await gate;
     await route.continue();
   });
