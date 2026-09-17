@@ -36,8 +36,9 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-/** One tab set, the same for everyone (docs/product-reset.md §6). */
-const TAB_SET = ["Today", "Health", "Family", "Visits", "Me"];
+/** One tab set, the same for everyone (docs/product-reset.md §6), the five the approved board
+ *  draws (docs/design/nura-concept-board.html): Home, Health, Connect, Services, Profile. */
+const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"];
 
 test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
@@ -54,6 +55,36 @@ test("the nav (D1, the reset): one tab set, the same for the owner and for a key
   await expect(hers.locator("nav.tabbar button")).toHaveText(TAB_SET);
   await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
   await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
+});
+
+test("Profile (docs/design/nura-concept-board.html, the Profile screen): his own name, the language picker, What Nura uses, and the way to the family's keys — a chief sees her own name there, never his", async ({ page, browser, request }) => {
+  const family = await seedFamily(request);
+  await signIn(page, family.pa, true);
+  await page.getByTestId("tab-profile").click();
+  await expect(page.getByTestId("profile-screen")).toBeVisible();
+  // His own Profile names him, not whoever else can see his papers.
+  await expect(page.getByTestId("profile-me")).toContainText("Pa");
+  // "What Nura uses" (RE-05) is the same section Health's signals settings already hold — not
+  // rebuilt here, just reused — so its switches are on Profile too.
+  await expect(page.getByTestId("what-nura-uses")).toBeVisible();
+  await expect(page.getByTestId("signal-food")).toBeVisible();
+  // The language picker works from the tab, the same as from the Me sheet.
+  await page.getByTestId("lang-ms").click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "ms");
+  await page.getByTestId("lang-en").click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  // "Change who can see what" opens the family's keys — a real screen, not a decoration.
+  await page.getByTestId("profile-keys").click();
+  await expect(page.getByTestId("family-keys")).toBeVisible();
+
+  // A chief opening Profile sees her own name — never his, even though his papers are the ones
+  // she holds a key to (docs/product-reset.md §6, one account, always plainly whose).
+  const hers = await secondPhone(browser);
+  await signIn(hers, family.mei, false);
+  await hers.getByTestId("tab-profile").click();
+  await expect(hers.getByTestId("profile-screen")).toBeVisible();
+  await expect(hers.getByTestId("profile-me")).toContainText("Mei");
+  await expect(hers.getByTestId("profile-me")).not.toContainText("Pa");
 });
 
 test("Pa's Family, one thing a screen: his circle, his trail, a part kept to himself, and Mei refused on his trail", async ({ page, request }) => {
