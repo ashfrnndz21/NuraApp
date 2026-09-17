@@ -26,6 +26,7 @@ import {
   MessageSquare,
   Mic,
   Palette,
+  Phone,
   Pill,
   Play,
   Plus,
@@ -105,6 +106,7 @@ export const ICONS = {
   back: ChevronLeft,
   note: MessageSquare,
   ledger: Receipt,
+  phone: Phone,
   // Profile (docs/design/nura-concept-board.html, the Profile screen).
   language: Globe,
   lock: Lock,

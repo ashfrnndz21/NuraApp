@@ -79,6 +79,10 @@ export const en = {
     prepareLine: "Nura gets you ready before you see the doctor.",
     // @patient phrase
     start: "Get started",
+    // @patient phrase
+    tryAsPa: "Try it as Pa",
+    // @patient phrase
+    tryAsMei: "Try it as Mei",
   },
   talk: {
     // @patient phrase
@@ -522,6 +526,8 @@ export const en = {
     story: "Your story",
     // @patient headline
     learning: "In simple words",
+    // @patient headline
+    didYouKnow: "Did you know",
     // @patient phrase
     ask: "Ask",
     // @patient phrase
@@ -2050,6 +2056,64 @@ export const en = {
     chooseDocument: "Choose a file or a photo",
     // @patient phrase
     whatPaper: "What kind of paper",
+  },
+  connect: {
+    // @patient headline
+    familyTitle: "Your family",
+    // @patient headline
+    familyTitleOther: "{patient}'s family",
+    // @patient phrase
+    addPerson: "Add",
+    // @patient phrase
+    addPersonLine: "Someone new",
+    // @patient line
+    noFamily: "No one has a key to your papers yet.",
+    // @patient line
+    noFamilyOther: "No one has a key to {patient}'s papers yet.",
+    // @patient headline
+    nextCallTitle: "Next call",
+    // @patient phrase
+    call: "Call",
+    // @patient phrase
+    change: "Change",
+    // @patient line
+    noCall: "No call is on your calendar yet.",
+    // @patient line
+    noCallOther: "No call with {patient} is on the calendar yet.",
+    // @patient headline
+    nearYouTitle: "Near you",
+    // @patient headline
+    nearYouTitleOther: "Near {patient}",
+    // @patient line
+    noNearYou: "There is nothing near you yet.",
+    // @patient line
+    noNearYouOther: "There is nothing near {patient} yet.",
+    // @patient headline
+    messagesTitle: "Messages",
+    // @patient line
+    noMessages: "There are no messages yet.",
+    // @patient phrase
+    seeAllFamily: "See everyone with a key",
+    // @patient phrase
+    seeAllNearYou: "See everything near you",
+    // @patient phrase
+    seeAllMessages: "See all messages",
+    // @patient headline
+    callsTitle: "Calls",
+    // @patient phrase
+    scheduleCall: "Schedule a call",
+    // @patient phrase
+    cancelCallButton: "Cancel this call",
+    // @patient line
+    cancelledCall: "This call is cancelled.",
+    // @patient phrase
+    personLabel: "Who",
+    // @patient phrase
+    whenLabel: "When",
+    // @patient phrase
+    linkLabel: "Call link, if there is one",
+    // @patient phrase
+    callLabelLabel: "What to call it",
   },
   review: {
     // @patient headline

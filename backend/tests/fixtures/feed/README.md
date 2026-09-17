@@ -24,3 +24,7 @@ stand. Add a page by adding both files.
 - The `explainer:diabetes` page is HealthHub's consumer page on diabetes, for a profile that told
   the condition when it was set up (E01): the learning supply is made per condition as well as
   per medicine (E21-06). Its compression speaks English, Malay and Chinese.
+- `worth_knowing:diabetes` reuses that same HealthHub page's text (its own compression fixture
+  is found by the text's sha256, so nothing new is added there) under the broker's own job
+  kind, for the `did_you_know` rule's own topic pick when it lands on a condition rather than
+  a medicine (`app.delivery.recommend.rules.did_you_know`).

@@ -183,11 +183,15 @@ test("no caregiver-density screen says a second-person line about his record", a
     await check(`record-${entry}`);
   }
 
-  // Every part of Family her key opens.
+  // Every part of Family her key opens: Connect's own overview first (its "See everyone with
+  // a key" is the way in now, not the tab itself), then each row.
   await tab("tab-connect");
+  await page.getByTestId("connect-family-all").click();
+  await check("family-home");
   const parts = ["trail", "keys", "roster", "thread", "messages", "metrics", "calendar", "deliveries", "settings", "documents", "consents", "onlyMe"];
   for (const part of parts) {
     await tab("tab-connect");
+    await page.getByTestId("connect-family-all").click();
     const pill = page.getByTestId(`open-${part}`);
     if (!(await pill.isVisible().catch(() => false))) continue;
     await pill.click();
@@ -251,6 +255,7 @@ test("her Family screen says what a key opens about him by name", async ({ page,
   await page.getByTestId("door-key").click();
   await todayReady(page);
   await page.getByTestId("tab-connect").click();
+  await page.getByTestId("connect-family-all").click();
   await expect(page.getByTestId("grant-lines").first()).toBeVisible();
   const lines = (await page.getByTestId("grant-lines").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
   expect(lines.filter(aboutHim)).toEqual([]);
@@ -271,6 +276,7 @@ test("her Family consents screen names whose words the quote is", async ({ page,
   await page.getByTestId("door-key").click();
   await todayReady(page);
   await page.getByTestId("tab-connect").click();
+  await page.getByTestId("connect-family-all").click();
   await page.getByTestId("open-consents").click();
   await expect(page.getByTestId("consent-words").first()).toBeVisible();
   const words = page.getByTestId("consent-words");

@@ -37,6 +37,7 @@ const ABOUT_HIM = {
   day: ["notWell", "symptomsOpen", "notWellTitle", "wordsLabel", "symptomsLead", "briefOpen", "questionsOpen"],
   places: ["visitsOwn"],
   hub: ["howFeeling", "checkTitle", "checkLine", "doTitle", "healthLine", "medicinesLine", "connectLine", "careLine", "reportLine", "reportNote", "reportReady", "backHome"],
+  connect: ["familyTitle", "noFamily", "noCall", "nearYouTitle", "noNearYou"],
   record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes", "notSet", "setDay", "dayAsk", "ledger", "ledgerWithheld", "ledgerPatientPaidLabel"],
   reading: ["title"],
   visit: ["open"],
