@@ -102,23 +102,70 @@ they theme with the tokens and stay crisp at any size. Every illustration is dec
 **Avatars.** A family member's own uploaded photo when they have one; otherwise their initials on
 a tinted circle. Never a stock face.
 
-## What Nura must not copy
+## Everything in Reference B is added — the owner's instruction
 
-These parts of the references would break Nura's own rules. Keep the look, change the substance.
+After seeing the first draft of this document, the owner added: **"look at all the icons, the
+buttons, the features display — whatever's here should be added. Whatever it is, it needs to
+look like this."** So this is not a restyle of Nura's existing screens. **Every screen, feature,
+icon, button and tile in Reference B is in scope**, built for Nura. Where a feature needs a
+service Nura does not have yet, the screen is still built, working on Nura's own data or on
+entries the person makes, and the missing service is listed as an external dependency. It is
+never left off.
 
-- **No invented health score.** Eldora's ring shows a "Wellness Score 85 — Good". Nura does not
-  make up a number that judges someone's health, and "Nura does not decide what is wrong" is a
-  line it says to patients. Use the ring for **something real and his own**: doses taken this week
-  (12 of 14), or days he checked in. A number he can check against what he did.
-- **No verdict badges on readings** unless the reading's own reference range backs them, and
-  never a colour that implies a clinical judgement Nura has not made. Reference A's "Good" pill is
-  fine only where a real range says so.
-- **No metrics Nura does not have.** Steps, heart rate, sleep and water are Eldora's. Show what
-  Nura actually holds: his medicines and doses, his readings, his visits, his papers, his feelings.
-- **No emoji as the only carrier of meaning.** The waving hand and the smiling face are
-  decoration; the words must stand on their own for a screen reader and at 200% text.
-- **Density still decides type and targets, never the tabs** (#194). The five tabs stay the same
-  for the owner and every key-holder.
+### The bottom navigation
+
+Reference B's five tabs are the app's five tabs, each with a line icon above its label. They
+hold Nura's content as follows. Density still changes type and targets, never the tabs (#194).
+
+| Tab | Holds (Nura content) |
+|---|---|
+| **Home** | Today: the greeting, the daily check-in, "What would you like to do?", Upcoming |
+| **Health** | His medicines and doses, readings, papers and reports, insights, tips |
+| **Connect** | Family & friends (keys and grants), calls, messages (the family thread), community |
+| **Services** | Visits and doctors, care services, resources |
+| **Profile** | Him, his settings, consents, language, text size, privacy |
+
+### Every feature, and how Nura does it
+
+| In Reference B | Nura builds | Needs from outside |
+|---|---|---|
+| Welcome screen, serif tagline, three value tiles, Get Started, Sign in link | Yes, with an illustration | — |
+| Menu, centred wordmark, bell with notifications | Yes | — |
+| Greeting "Good morning, {name} 👋" + "How are you feeling today?" + couple illustration | Yes | — |
+| **Daily Wellness** card with a Check in button and a friendly face | Yes: opens the feeling check-in | — |
+| **What would you like to do?** — 3×2 tile grid | Yes: Health, Medication, Connect, Activities, Care Services, Resources | — |
+| **Upcoming** — doctor appointment card | Yes: from his visits and calendar | — |
+| **Health Overview** — ring with a big number, four metric rows | Yes. The ring shows a real figure of his own (see the rule below). Metric rows show what he logs: readings, doses, and steps, heart rate, sleep and water entered by him | Automatic steps, heart rate and sleep need a phone or watch health connection |
+| **Health Insights** — headline, detail, illustration | Yes: from his own records | — |
+| **Medication Reminder** — icon, medicine, instruction, time | Yes: from his medicines and dose times | — |
+| **Today's Tip** — advice with an illustration | Yes: through the pharmacist review queue, like every card | — |
+| **Family & Friends** — round avatars, names, relationships, "+ Add More" | Yes: the people he has let in; "+ Add" cuts a key | — |
+| **Upcoming Call** — call card with illustration and a Join button | Yes: a scheduled call on the calendar; Join rings the person or opens the call link | In-app video calling needs a video provider |
+| **Community** — Local Events, Volunteer, Support Groups tiles | Yes: curated listings, reviewed before they show | A live events source for his area |
+| **Messages** — avatar, name, one line, time | Yes: the family thread and care-team messages | — |
+| **Activities** — "Stay engaged" | Yes: curated activities, reviewed | — |
+| **Care Services** — "Professional help" | Yes: a directory of services, reviewed | A live directory for his area |
+| **Resources** — "Guides & support" | Yes: guides, reviewed | — |
+| Value tiles: Privacy First, AI Companion, Future Ready, Health Trends, Easy to Use | Yes: on the welcome screen and an "About Nura" screen | — |
+
+### The one rule that changes the substance, not the look
+
+**The ring never shows an invented health score.** Reference B's ring reads "Wellness Score 85 —
+Good". Nura does not make up a number that grades someone's health; "Nura does not decide what
+is wrong" is a line it says to patients, and a score would contradict it on the same screen. The
+ring looks exactly as in Reference B, and holds **a real number he can check against what he
+did**: doses taken this week ("12 of 14"), or days he checked in. The label under it says what
+the number is, in plain words.
+
+Likewise: a pill like Reference A's "Good" appears on a reading only where that reading's own
+reference range backs it. And emoji decorate, they never carry meaning on their own — the words
+must stand alone for a screen reader and at 200% text.
+
+### Icons
+
+One consistent **line icon** set throughout, matching Reference B's thin rounded strokes, in the
+accent colour on a pastel-tinted rounded square or circle. Use a permissively licensed library
+(for example Lucide, ISC) rather than hand-drawing icons, and record its licence in the repo.
 
 ## What does not change
 
